@@ -264,7 +264,7 @@ function summary(payload: Record<string, unknown>) {
 	};
 }
 
-type TranslatedEntry =
+export type TranslatedEntry =
 	| { source: string; zoteroItem: Record<string, unknown> }
 	| { message: string; source: string };
 
@@ -310,12 +310,20 @@ export async function previewImportRecords(
 		translateDois(input.dois, translationUrl),
 		translateFiles(input.files, translationUrl),
 	]);
-	// Attachments, notes and annotations belong to a parent record and are
-	// out of scope for imports.
-	const entries = [
+	return previewEntries(db, [
 		...doiEntries.flat().map((entry) => ({ ...entry, method: "doi" as const })),
 		...fileEntries.flat().map((entry) => ({ ...entry, method: "file" as const })),
-	].filter(
+	]);
+}
+
+/** Validates translated entries and marks the ones the library already has. */
+export async function previewEntries(
+	db: Executor,
+	translated: readonly (TranslatedEntry & { method: "doi" | "file" })[],
+): Promise<AdminImportPreviewResponse> {
+	// Attachments, notes and annotations belong to a parent record and are
+	// out of scope for imports.
+	const entries = translated.filter(
 		(entry) =>
 			!("zoteroItem" in entry) ||
 			isTopLevelAdminItemType(String(entry.zoteroItem.itemType)),

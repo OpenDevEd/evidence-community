@@ -117,6 +117,35 @@ export type AdminImportPreviewResponse = {
 	records: AdminImportPreviewRecord[];
 };
 
+export const PDF_IMPORT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const PDF_IMPORT_MAX_CRITERIA = 20;
+export const PDF_IMPORT_MAX_CRITERION_LENGTH = 300;
+
+export type PdfCheckResult = {
+	criterion: string;
+	page: number | null;
+	quote: string | null;
+	recommendation: string | null;
+	result: "met" | "not_met" | "unclear";
+};
+
+export type AdminPdfReadResponse = {
+	checks: PdfCheckResult[];
+	costUsd: number | null;
+	inputTokens: number | null;
+	ms: number;
+	outputTokens: number | null;
+	record: AdminImportPreviewRecord;
+};
+
+/** One check per line; blank lines are dropped. */
+export function parseCriteria(text: string) {
+	return text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+}
+
 export type AdminImportCommitResult = {
 	existingKey?: string;
 	fields?: AdminFieldErrors;

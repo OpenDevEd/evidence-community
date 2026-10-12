@@ -77,6 +77,7 @@ import { SourceProviderIcon } from "./SourceProviderIcon";
 import { ButtonGroup } from "@nextui-org/react";
 import { ADMIN_BUTTON_GROUP, ADMIN_GROUP_BUTTON, ADMIN_GROUP_DIVIDER, DraftPreviewPortal, type DraftPreview, type PreviewReview } from "./DraftPreviewPane";
 import { InspectorSection as Section } from "./InspectorSection";
+import { ImportChecksSection } from "./AdminPdfImport";
 import { InspectorListRow, InspectorListRemove } from "./InspectorListRow";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type {
@@ -1954,6 +1955,7 @@ export function AdminInspector({
 					/>
 				)}
 				{editorNotice}
+				{!detail.parentItem ? <ImportChecksSection itemKey={detail.key} /> : null}
 				{!detail.parentItem ? (
 					<Section
 						icon={CheckmarkBadge01Icon}

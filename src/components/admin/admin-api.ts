@@ -42,6 +42,7 @@ import type {
 	AdminImportCommitResponse,
 	AdminImportPreviewRequest,
 	AdminImportPreviewResponse,
+	AdminPdfReadResponse,
 } from "@/lib/admin/item-import-contract";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
@@ -607,6 +608,19 @@ export function previewAdminImport(
 		body: JSON.stringify({ action: "preview", ...input }),
 		method: "POST",
 	});
+}
+
+/** Reads one PDF into an import row and checks it against the library's criteria. */
+export async function readAdminImportPdf(file: File, criteria: readonly string[]) {
+	const body = new FormData();
+	body.append("file", file);
+	body.append("criteria", JSON.stringify(criteria));
+	const response = await fetch("/api/admin/items/import/pdf", { body, cache: "no-store", method: "POST" });
+	if (!response.ok) {
+		const payload = (await response.json().catch(() => null)) as AdminErrorPayload | null;
+		throw new AdminApiError(parsedError(payload?.error, response.status), response.status);
+	}
+	return response.json() as Promise<AdminPdfReadResponse>;
 }
 
 /** Creates native drafts for the chosen import candidates in one server call. */

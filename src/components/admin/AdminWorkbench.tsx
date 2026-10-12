@@ -2770,6 +2770,11 @@ export default function AdminWorkbench({
 					await loadItems();
 					setBulkKeys(new Set(itemKeys));
 				}}
+				onOpenRecord={(itemKey) => {
+					setImportOpen(false);
+					setSelectedKey(itemKey);
+					setMobilePane("inspector");
+				}}
 				sources={library.sources}
 			/>
 

@@ -8,7 +8,7 @@ import {
 	ModalFooter,
 	ModalHeader,
 } from "@nextui-org/react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -29,10 +29,21 @@ import {
 import type { AdminSource } from "@/lib/admin/types";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
-import { AdminApiError, commitAdminImport, previewAdminImport } from "./admin-api";
+import { PdfInputPanel, PdfPreviewTable, PdfReadProgress, type AttachState } from "./AdminPdfImport";
+import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
+import { uploadPdfFile } from "./admin-pdf";
 import {
 	doiPreviewRequest,
 	filePreviewRequest,
+	IMPORT_STATE_TONE,
+	pendingPdfReads,
+	readPdfs,
+	storeCheckResults,
+	storeCriteria,
+	storedCriteria,
+	validateCriteria,
+	validatePdfFiles,
+	type PdfRead,
 	importRowCells,
 	importRowStatus,
 	importStage,
@@ -43,17 +54,10 @@ import {
 	validateImportFiles,
 } from "./admin-import";
 
-type ImportTab = "dois" | "files";
+type ImportTab = "dois" | "files" | "pdfs";
 type ImportStage = "done" | "input" | "preview";
 type ImportPreview = { importId: string; records: AdminImportPreviewRecord[] };
-
-const stateTone: Record<AdminImportPreviewRecord["state"], string> = {
-	attention: "text-amber-700 dark:text-amber-400",
-	existing: "text-black/55 dark:text-white/55",
-	ready: "text-emerald-700 dark:text-emerald-400",
-	repeated: "text-black/55 dark:text-white/55",
-	unresolved: "text-danger",
-};
+type PdfImport = { criteriaCount: number; importId: string; reads: PdfRead[] };
 
 function errorMessage(error: unknown) {
 	if (error instanceof AdminApiError) {
@@ -63,10 +67,14 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function importInputError(tab: ImportTab, doiText: string, files: readonly File[]): string | null {
+function importInputError(tab: ImportTab, doiText: string, files: readonly File[], pdfs: readonly File[], criteriaText: string): string | null {
 	try {
 		if (tab === "dois") doiPreviewRequest(doiText);
-		else validateImportFiles(files);
+		else if (tab === "files") validateImportFiles(files);
+		else {
+			validatePdfFiles(pdfs);
+			validateCriteria(criteriaText);
+		}
 		return null;
 	} catch (error) {
 		return errorMessage(error);
@@ -74,18 +82,22 @@ function importInputError(tab: ImportTab, doiText: string, files: readonly File[
 }
 
 /**
- * Import records from a pasted DOI list or bibliography files. Both paths
- * return one preview; the chosen rows become native drafts in one call.
+ * Import records from a pasted DOI list, bibliography files or PDFs. Each
+ * path returns one preview; the chosen rows become native drafts in one call.
+ * PDFs are read by AI, which fills their metadata and runs the library's
+ * checks, and each PDF is attached to its draft.
  */
 export function AdminImportDialog({
 	isOpen,
 	onClose,
 	onImported,
+	onOpenRecord,
 	sources,
 }: {
 	isOpen: boolean;
 	onClose: () => void;
 	onImported: (itemKeys: string[]) => Promise<void> | void;
+	onOpenRecord: (itemKey: string) => void;
 	sources: readonly AdminSource[];
 }) {
 	return (
@@ -99,7 +111,7 @@ export function AdminImportDialog({
 		>
 			<ModalContent>
 				{isOpen ? (
-					<ImportForm onClose={onClose} onImported={onImported} sources={sources} />
+					<ImportForm onClose={onClose} onImported={onImported} onOpenRecord={onOpenRecord} sources={sources} />
 				) : null}
 			</ModalContent>
 		</DialogModal>
@@ -109,23 +121,29 @@ export function AdminImportDialog({
 function ImportForm({
 	onClose,
 	onImported,
+	onOpenRecord,
 	sources,
 }: {
 	onClose: () => void;
 	onImported: (itemKeys: string[]) => Promise<void> | void;
+	onOpenRecord: (itemKey: string) => void;
 	sources: readonly AdminSource[];
 }) {
 	const [tab, setTab] = useState<ImportTab>("dois");
 	const [doiText, setDoiText] = useState("");
 	const [files, setFiles] = useState<File[]>([]);
+	const [pdfs, setPdfs] = useState<File[]>([]);
+	const [criteriaText, setCriteriaText] = useState(storedCriteria);
+	const [pdfImport, setPdfImport] = useState<PdfImport | null>(null);
+	const [attach, setAttach] = useState<ReadonlyMap<string, AttachState>>(new Map());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<ImportPreview | null>(null);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [collections, setCollections] = useState<string[]>([]);
 	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
-	const stage: ImportStage = importStage(preview, results);
-	const inputError = importInputError(tab, doiText, files);
+	const stage: ImportStage = importStage(preview ?? pdfImport, results);
+	const inputError = importInputError(tab, doiText, files, pdfs, criteriaText);
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -139,6 +157,45 @@ function ImportForm({
 		}
 	};
 
+	const runPdfReads = () =>
+		run(async () => {
+			const criteria = validateCriteria(criteriaText);
+			storeCriteria(criteriaText);
+			const reads = pendingPdfReads(pdfs);
+			setSelected(new Set());
+			setPdfImport({ criteriaCount: criteria.length, importId: crypto.randomUUID(), reads });
+			await readPdfs(
+				reads,
+				(file) => readAdminImportPdf(file, criteria),
+				(row) => {
+					setPdfImport((current) => current && { ...current, reads: current.reads.map((other) => (other.id === row.id ? row : other)) });
+					if (row.record?.state === "ready") setSelected((current) => new Set(current).add(row.id));
+				},
+				errorMessage,
+			);
+		});
+
+	const attachPdfs = async (created: AdminImportCommitResult[]) => {
+		const readById = new Map(pdfImport?.reads.map((read) => [read.id, read]));
+		const mark = (id: string, state: AttachState) => setAttach((current) => new Map(current).set(id, state));
+		await Promise.all(
+			created.map(async ({ id, itemKey }) => {
+				const read = readById.get(id);
+				if (!read || !itemKey) return;
+				storeCheckResults(itemKey, read.checks);
+				mark(id, "attaching");
+				try {
+					const attachment = await createAdminDraft({ collections: [], itemType: "attachment", parentItem: itemKey, tags: [], title: read.file.name });
+					await uploadPdfFile(attachment.itemKey, read.file, () => undefined);
+					mark(id, "attached");
+				} catch (error) {
+					console.error("Attaching the PDF failed", read.file.name, error);
+					mark(id, "failed");
+				}
+			}),
+		);
+	};
+
 	const runPreview = () =>
 		run(async () => {
 			const request = tab === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files);
@@ -149,13 +206,15 @@ function ImportForm({
 
 	const runCommit = () =>
 		run(async () => {
-			if (!preview) return;
+			const current = preview ?? (pdfImport && { importId: pdfImport.importId, records: pdfImport.reads.flatMap(({ record }) => (record ? [record] : [])) });
+			if (!current) return;
 			const response = await commitAdminImport({
 				collections,
-				importId: preview.importId,
-				records: selectedImportRecords(preview.records, selected),
+				importId: current.importId,
+				records: selectedImportRecords(current.records, selected),
 			});
 			setResults(response.results);
+			if (pdfImport) await attachPdfs(response.results.filter(({ outcome }) => outcome === "created"));
 			const summary = summarizeImportResults(response.results);
 			await onImported(summary.createdKeys);
 			(summary.failed ? toast.warning : toast.success)(summary.message);
@@ -170,23 +229,50 @@ function ImportForm({
 				</span>
 			</ModalHeader>
 			<ModalBody className="gap-3">
-				{preview ? (
+				{preview || pdfImport ? (
 					<ImportPreviewPanel
-						busy={busy}
 						collections={collections}
 						onCollectionsChange={setCollections}
-						onSelectedChange={setSelected}
-						preview={preview}
 						results={results}
-						selected={selected}
 						sources={sources}
-					/>
+					>
+						{pdfImport ? (
+							<>
+								<PdfReadProgress criteriaCount={pdfImport.criteriaCount} reads={pdfImport.reads} />
+								<PdfPreviewTable
+									attach={attach}
+									criteriaCount={pdfImport.criteriaCount}
+									locked={busy || results !== null}
+									onOpenRecord={onOpenRecord}
+									onSelectedChange={setSelected}
+									reads={pdfImport.reads}
+									results={results}
+									selected={selected}
+								/>
+							</>
+						) : preview ? (
+							<PreviewTable
+								locked={busy || results !== null}
+								onSelectedChange={setSelected}
+								records={preview.records}
+								results={results}
+								selected={selected}
+							/>
+						) : null}
+					</ImportPreviewPanel>
 				) : (
 					<ImportInputPanel
 						busy={busy}
+						criteriaText={criteriaText}
 						doiText={doiText}
 						files={files}
 						inputError={inputError}
+						onCriteriaChange={setCriteriaText}
+						onPdfsChange={(value) => {
+							setPdfs(value);
+							setError(null);
+						}}
+						pdfs={pdfs}
 						onDoiTextChange={(value) => {
 							setDoiText(value);
 							setError(null);
@@ -213,11 +299,13 @@ function ImportForm({
 				canPreview={inputError === null}
 				onBack={() => {
 					setPreview(null);
+					setPdfImport(null);
 					setError(null);
 				}}
 				onClose={onClose}
 				onCommit={() => void runCommit()}
-				onPreview={() => void runPreview()}
+				onPreview={() => void (tab === "pdfs" ? runPdfReads() : runPreview())}
+				previewLabel={tab === "pdfs" ? `Read ${pdfs.length || ""} ${pdfs.length === 1 ? "PDF" : "PDFs"}`.replace("  ", " ") : "Preview"}
 				selectedCount={selected.size}
 				stage={stage}
 			/>
@@ -227,21 +315,29 @@ function ImportForm({
 
 function ImportInputPanel({
 	busy,
+	criteriaText,
 	doiText,
 	files,
 	inputError,
+	onCriteriaChange,
 	onDoiTextChange,
 	onFilesChange,
+	onPdfsChange,
 	onTabChange,
+	pdfs,
 	tab,
 }: {
 	busy: boolean;
+	criteriaText: string;
 	doiText: string;
 	files: File[];
 	inputError: string | null;
+	onCriteriaChange: (value: string) => void;
 	onDoiTextChange: (value: string) => void;
 	onFilesChange: (files: File[]) => void;
+	onPdfsChange: (files: File[]) => void;
 	onTabChange: (tab: ImportTab) => void;
+	pdfs: File[];
 	tab: ImportTab;
 }) {
 	return (
@@ -268,6 +364,16 @@ function ImportInputPanel({
 			</Tab>
 			<Tab key="files" title="Bibliography files">
 				<BibliographyFileInput busy={busy} files={files} inputError={inputError} onFilesChange={onFilesChange} />
+			</Tab>
+			<Tab key="pdfs" title="PDFs">
+				<PdfInputPanel
+					busy={busy}
+					criteriaText={criteriaText}
+					files={pdfs}
+					inputError={inputError}
+					onCriteriaChange={onCriteriaChange}
+					onFilesChange={onPdfsChange}
+				/>
 			</Tab>
 		</Tabs>
 	);
@@ -311,34 +417,21 @@ function BibliographyFileInput({ busy, files, inputError, onFilesChange }: {
 }
 
 function ImportPreviewPanel({
-	busy,
+	children,
 	collections,
 	onCollectionsChange,
-	onSelectedChange,
-	preview,
 	results,
-	selected,
 	sources,
 }: {
-	busy: boolean;
+	children: ReactNode;
 	collections: string[];
 	onCollectionsChange: (keys: string[]) => void;
-	onSelectedChange: (selected: Set<string>) => void;
-	preview: ImportPreview;
 	results: AdminImportCommitResult[] | null;
-	selected: Set<string>;
 	sources: readonly AdminSource[];
 }) {
-	const locked = busy || results !== null;
 	return (
 		<>
-			<PreviewTable
-				locked={locked}
-				onSelectedChange={onSelectedChange}
-				records={preview.records}
-				results={results}
-				selected={selected}
-			/>
+			{children}
 			{results === null ? (
 				<div>
 					<p className="mb-1 text-xs font-medium text-black/70 dark:text-white/70">
@@ -475,7 +568,7 @@ function PreviewRow({
 			<td className="max-w-40 p-2">
 				<TruncatedText text={record.source} focusable />
 			</td>
-			<td className={`p-2 ${stateTone[status.tone]}`}>
+			<td className={`p-2 ${IMPORT_STATE_TONE[status.tone]}`}>
 				{status.label}
 				{status.detail ? (
 					<span className="block text-black/55 dark:text-white/55">{status.detail}</span>
@@ -492,6 +585,7 @@ function ImportFooter({
 	onClose,
 	onCommit,
 	onPreview,
+	previewLabel,
 	selectedCount,
 	stage,
 }: {
@@ -501,6 +595,7 @@ function ImportFooter({
 	onClose: () => void;
 	onCommit: () => void;
 	onPreview: () => void;
+	previewLabel: string;
 	selectedCount: number;
 	stage: ImportStage;
 }) {
@@ -519,6 +614,7 @@ function ImportFooter({
 				canPreview={canPreview}
 				onCommit={onCommit}
 				onPreview={onPreview}
+				previewLabel={previewLabel}
 				selectedCount={selectedCount}
 				stage={stage}
 			/>
@@ -531,6 +627,7 @@ function PrimaryAction({
 	canPreview,
 	onCommit,
 	onPreview,
+	previewLabel,
 	selectedCount,
 	stage,
 }: {
@@ -538,6 +635,7 @@ function PrimaryAction({
 	canPreview: boolean;
 	onCommit: () => void;
 	onPreview: () => void;
+	previewLabel: string;
 	selectedCount: number;
 	stage: ImportStage;
 }) {
@@ -545,7 +643,7 @@ function PrimaryAction({
 	if (stage === "input") {
 		return (
 			<Button color="accent" isDisabled={!canPreview} isLoading={busy} onPress={onPreview} size="xs" variant="solid">
-				Preview
+				{previewLabel}
 			</Button>
 		);
 	}
