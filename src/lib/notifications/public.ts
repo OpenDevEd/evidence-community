@@ -6,6 +6,8 @@ import { notificationEdition, notificationState } from "@/db/schema/notification
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { citedKeys } from "./digest-text";
+import { keysOfTypes, typeCountsIn, typeCountsOf } from "@/lib/readings/mock";
+import { SYNTHESIS_TYPES, type StudyTypeKey } from "@/lib/readings/study-types";
 import { digestPeriod, nextDigestDate, type DigestPeriod } from "./schedule";
 import type { DigestSigner } from "./types";
 
@@ -25,7 +27,7 @@ export type DigestSummary = {slug: string; period: DigestPeriod; title: string; 
  * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
  * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
  */
-export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; /** The day its publications were counted and listed, so a reader knows what came later is not in it. */ counted: string; /** How many publications the writer read: the list as it was made, before any was hidden. */ read: number; /** How many publications its text cites. */ cited: number};
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; /** The day its publications were counted and listed, so a reader knows what came later is not in it. */ counted: string; /** How many publications the writer read: the list as it was made, before any was hidden. */ read: number; /** How many publications its text cites. */ cited: number; /** How many of each study type the list holds, and the period. */ types: {listed: Partial<Record<StudyTypeKey, number>>; period: Partial<Record<StudyTypeKey, number>>}};
 /**
  * One page of an edition's meta-analyses and reviews, which are a list of their own with its own pages when the
  * edition has any. `keys` on the edition then holds the other publications; `listed` still counts both.
@@ -131,25 +133,30 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
     FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS stored(entry, position)
     JOIN ${item} ON ${item.key} = stored.entry->>'key'
     WHERE ${notificationEdition.id} = ${uuid} AND ${publicParentVisibility(db, config.content.tags.hidden)}`;
-  // A record read as a meta-analysis or a review. One nobody has read yet is listed with the others.
-  const review = sql`coalesce(stored.entry->>'kind' IN ('meta-analysis', 'review'), false)`;
+  // A review or synthesis, by its study type, and the synthesis types in the order readers start from.
+  // ponytail: mock. The real lists read the type from the reading table; here they come from the mock readings' keys.
+  const keysIn = (keys: string[]) => sql`(stored.entry->>'key') = ANY(ARRAY[${keys.length ? sql.join(keys.map(key => sql`${key}`), sql`, `) : sql`NULL`}]::text[])`;
+  const review = keysIn(keysOfTypes(SYNTHESIS_TYPES));
+  const typeOrder = sql`CASE ${sql.join(SYNTHESIS_TYPES.map((type, index) => sql`WHEN ${keysIn(keysOfTypes([type]))} THEN ${index}`), sql` `)} ELSE ${SYNTHESIS_TYPES.length} END`;
   const list = async (which: SQL, wanted: number) => {
     const {rows: [{listed}]} = await db.execute<{listed: number}>(sql`SELECT count(*)::int AS listed ${listedNow} ${which}`);
     const pages = Math.max(1, Math.ceil(listed / EDITION_PAGE_SIZE));
     const current = Math.min(wanted, pages);
     const {rows: keys} = await db.execute<{key: string}>(sql`
       SELECT stored.entry->>'key' AS key ${listedNow} ${which}
-      ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
+      ORDER BY ${typeOrder}, stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
     return {listed, page: current, pages, keys: keys.map(entry => entry.key)};
   };
   const summary = editionSummary(row, locale, config);
   // The list is counted and made just before the writer is asked for its text; an edition with no record of that asking has the day it was published.
   const counted = (row.requestedAt ?? row.publishedAt!).toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: config.notifications.schedule.timezone});
   const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, counted, read: row.read, cited: citedKeys(row.markdown!).length};
+  const {rows: all} = await db.execute<{key: string}>(sql`SELECT stored.entry->>'key' AS key ${listedNow}`);
+  const types = {listed: typeCountsOf(all.map(entry => entry.key)), period: typeCountsIn(summary.period.first, summary.period.last)};
   const reviews = await list(sql`AND ${review}`, reviewsPage);
-  if (!reviews.listed) return {...edition, ...await list(sql``, page)};
+  if (!reviews.listed) return {...edition, types, ...await list(sql``, page)};
   const others = await list(sql`AND NOT ${review}`, page);
-  return {...edition, ...others, listed: others.listed + reviews.listed, reviews};
+  return {...edition, types, ...others, listed: others.listed + reviews.listed, reviews};
 }
 
 export async function getNextDigestEdition(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestDate | null> {

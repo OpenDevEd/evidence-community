@@ -9,11 +9,13 @@ import { getCachedCollections } from "../../cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "../types";
+import { readingOf } from "@/lib/readings/mock";
 
 export async function getItemRaw(key: string, config?: LibraryServerConfig) {
 	const libraryConfig = config ?? (await getLibraryConfig());
 	const database = await getDatabaseForConfig(libraryConfig);
-	return { item: await readPublicItem(database, key, libraryConfig) };
+	const item = await readPublicItem(database, key, libraryConfig);
+	return { item: item && { ...item, reading: readingOf(item.key) } };
 }
 
 export async function getItem(key: string) {

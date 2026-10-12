@@ -18,7 +18,9 @@ import type {
 	LibraryPublicConfig,
 	LibraryServerConfig,
 } from "@/config/library-config/schema";
-import { FacetDistribution } from "meilisearch";
+import { FacetDistribution, type Index } from "meilisearch";
+import { keysOfTypes, readingOf } from "./readings/mock";
+import { STUDY_TYPES } from "./readings/study-types";
 import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
@@ -141,6 +143,7 @@ export function toLightweightItem(
 ): ListItem {
 	return {
 		...item,
+		reading: readingOf(item.key),
 		attachmentsData: itemPageAttachments(
 			filterPublicAttachments(item.attachmentsData, tags),
 			tags.publish,
@@ -173,6 +176,8 @@ type SearchFilterInput = {
 	scope: string;
 	/** Item types, any of them. */
 	type?: readonly string[];
+	/** Study types, any of them. */
+	study?: readonly string[];
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -196,6 +201,7 @@ function buildSearchFilters({
 	range,
 	scope,
 	type = [],
+	study = [],
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -206,6 +212,8 @@ function buildSearchFilters({
 		...createCountryFilters(country),
 		author ? meilisearchEquals("fullNames", author) : null,
 		type.length ? meilisearchIn("itemType", type) : null,
+		// ponytail: mock. The real filter is meilisearchIn("studyType", study) on the indexed reading.
+		study.length ? `key IN ${JSON.stringify(keysOfTypes(study))}` : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
@@ -232,6 +240,7 @@ export function resolveSearchRequest(
 		author: searchParams.author || "",
 		collections: searchParams.collections || [],
 		type: searchParams.type ?? [],
+		study: searchParams.study ?? [],
 		country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
@@ -406,6 +415,21 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 	return items;
 }
 
+/**
+ * How many results there are of each study type, counted without the study type filter, as item types are.
+ * ponytail: mock. One search per type over the read records' keys; the real count is a facet on `studyType`.
+ */
+async function studyTypeCounts(index: Index, search: string, attributesToSearchOn: string[] | undefined, filters: string[]) {
+	const [base, ...counts] = await Promise.all([
+		index.search(search, { offset: 0, limit: 0, attributesToSearchOn, filter: filters }),
+		...STUDY_TYPES.map(async ({ key }) => {
+			const result = await index.search(search, { offset: 0, limit: 0, attributesToSearchOn, filter: [...filters, `key IN ${JSON.stringify(keysOfTypes([key]))}`] });
+			return [key, result.estimatedTotalHits ?? 0] as const;
+		}),
+	]);
+	return { counts: Object.fromEntries(counts.filter(([, count]) => count > 0)), total: base.estimatedTotalHits ?? 0 };
+}
+
 export async function getPublicFacets(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 ): Promise<SearchFacetsResult> {
@@ -447,6 +471,7 @@ export async function getPublicFacets(
 			}),
 		),
 	]);
+	const studyTypes = await studyTypeCounts(index, search, attributesToSearchOn, resolveSearchRequest({ ...searchParams, study: [] }, libraryConfig, topicNodes).finalFilters);
 	const totals: FacetTotals = { "*": searchResults.estimatedTotalHits ?? 0 };
 	if (topicResults) totals.topicAncestors = topicResults.estimatedTotalHits ?? 0;
 	ownFilters.forEach(({ facet }, index) => {
@@ -457,7 +482,9 @@ export async function getPublicFacets(
 		searchResults.facetDistribution,
 		topicResults?.facetDistribution,
 		...ownResults.map((result) => result.facetDistribution),
+		{ studyType: studyTypes.counts },
 	);
+	totals.studyType = studyTypes.total;
 
 	return {
 		facetDistribution: publicFacetDistribution(

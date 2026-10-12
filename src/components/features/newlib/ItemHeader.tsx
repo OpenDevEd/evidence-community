@@ -29,6 +29,7 @@ import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { FuturePublicationHint } from "@/components/features/items/FuturePublicationHint";
+import { StudyTypeLabel } from "@/components/features/items/StudyTypeLabel";
 import { isFuturePublication } from "@/lib/bibliographic-date";
 
 function getCitationCount(item: Item | undefined) {
@@ -245,6 +246,11 @@ export default function ItemHeader({
 							/>
 							{item?.itemType ? tItemType(item?.itemType) : "-"}
 						</HeaderSection>
+						{item?.reading && (
+							<HeaderSection>
+								<StudyTypeLabel reading={item.reading} className="gap-2 text-base" />
+							</HeaderSection>
+						)}
 					</div>
 					<ItemHeaderActions
 						item={item}

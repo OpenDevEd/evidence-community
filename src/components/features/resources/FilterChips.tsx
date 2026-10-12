@@ -1,4 +1,5 @@
 "use client";
+import { studyType } from "@/lib/readings/study-types";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
@@ -105,6 +106,7 @@ export function getFilterChipState(
 		topicFilters.length +
 		(queryParams.author ? 1 : 0) +
 		(queryParams.type?.length || 0) +
+		(queryParams.study?.length || 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
@@ -269,6 +271,25 @@ export function FilterChips() {
 								group={t("typeLabel")}
 								title={itemTypeName.has(type) ? itemTypeName(type) : type}
 								callback={() => itemsContext.handleTypeSelect(type)}
+								classNames={{
+									button: "bg-success/80 dark:bg-success/80",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					))}
+					{itemsContext.queryParams.study.map((study) => (
+						<motion.div
+							key={"study-" + study}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								group="Study type"
+								title={studyType(study)?.label ?? study}
+								callback={() => itemsContext.handleStudySelect(study)}
 								classNames={{
 									button: "bg-success/80 dark:bg-success/80",
 									title: "text-white dark:text-white",

@@ -40,6 +40,10 @@ export const searchParamsLoader = {
 	type: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
+	/** Study types, any of them, as Jev read each record. */
+	study: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 };
@@ -49,7 +53,7 @@ export const serializeSearchParams = createSerializer(searchParamsLoader);
 export const loadSearchParams = createLoader(searchParamsLoader);
 
 type SearchParams = inferParserType<typeof searchParamsLoader>;
-export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author", "collections", "topics", "type"] as const;
+export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author", "collections", "topics", "type", "study"] as const;
 
 /** The params that decide which results a search returns, so a cache keyed on them ignores page, order and where the reader came from. */
 export function resultParams(params: SearchParams) {

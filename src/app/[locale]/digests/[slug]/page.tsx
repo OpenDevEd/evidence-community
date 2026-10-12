@@ -8,6 +8,7 @@ import DigestPages, { type EditionCardsData } from "@/components/digests/DigestP
 import SubscriptionAction from "@/components/digests/SubscriptionAction";
 import type { Preferences } from "@/components/digests/Subscription";
 import { readDigests } from "../read";
+import { readingOf } from "@/lib/readings/mock";
 
 type Props = {params: Promise<{locale: string; slug: string}>; searchParams: Promise<{token?: string; page?: string; reviews?: string}>};
 export default async function Page({params, searchParams}: Props) {
@@ -27,7 +28,7 @@ export default async function Page({params, searchParams}: Props) {
 
 async function readEditionCards(db: Database, config: LibraryServerConfig, keys: string[]): Promise<EditionCardsData> {
   const items = await readPublicItems(db, keys, config);
-  const cards = items.map(({fullTextPDFs: _text, attachmentsData: _files, ...card}) => card);
+  const cards = items.map(({fullTextPDFs: _text, attachmentsData: _files, ...card}) => ({...card, reading: readingOf(card.key)}));
   return {cards, profiles: await readAuthorProfiles(cards.flatMap(card => card.creators ?? []).flatMap(creator => creator.authorProfileId ? [creator.authorProfileId] : []))};
 }
 

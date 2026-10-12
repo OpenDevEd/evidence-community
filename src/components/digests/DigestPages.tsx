@@ -12,6 +12,8 @@ import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { Pagination } from "@/components/nextui/Pagination";
 import { describeDigestSchedule, timeZoneLabel, type DigestPeriod } from "@/lib/notifications/schedule";
+import { STUDY_LEVELS, STUDY_TYPES, STUDY_TYPE_METHOD } from "@/lib/readings/study-types";
+import { studyTone } from "@/components/features/collections/ResultsOverview";
 import { DIGEST_SIGNER_ROLE } from "@/lib/notifications/types";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -407,24 +409,33 @@ function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition:
     </li>)}</ul>
   </SidebarCard>;
 }
-/** The edition's lists as rows: its meta-analyses and reviews and its other publications, or one list when it has no review. */
-function shareRows({reviews, listed}: DigestEdition) {
-  if (!reviews) return [{href: "#publications", label: "Publications", count: listed, tone: "bg-accent/45"}];
-  return [
-    {href: "#reviews", label: "Meta-analyses and reviews", count: reviews.listed, tone: "bg-accent"},
-    {href: "#other-publications", label: "Other publications", count: listed - reviews.listed, tone: "bg-accent/45"},
-  ].filter(row => row.count > 0);
-}
+/**
+ * The edition's list by study type under the three levels of evidence: for each type, how many are listed of how many
+ * the period has. The bar is the listed records by type; its empty track is the rest of the period.
+ */
 function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
-  const rows = shareRows(edition);
   const total = edition.publicationCount;
+  const {listed, period} = edition.types;
+  const types = STUDY_TYPES.filter(type => (period[type.key] ?? 0) > 0 || (listed[type.key] ?? 0) > 0);
+  const n = (count: number) => count.toLocaleString(locale);
   return <SidebarCard title="Publications" band={<>
-    <HeadFigure value={edition.listed.toLocaleString(locale)} label={edition.listed < total ? `listed of ${total.toLocaleString(locale)} in this period` : "listed, every one in this period"} />
-    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.map(row => <span key={row.label} className={`h-full min-w-[3px] ${row.tone}`} style={{width: `${(row.count / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
+    <HeadFigure value={n(edition.listed)} label={edition.listed < total ? `listed of ${n(total)} in this period` : "listed, every one in this period"} />
+    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{types.map(type => (listed[type.key] ?? 0) > 0 && <span key={type.key} className={`h-full min-w-[3px] ${studyTone(type.key)}`} style={{width: `${((listed[type.key] ?? 0) / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
   </>}>
-    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.label}>
-      <a href={row.href} className={railRow}><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></a>
-    </li>)}</ul>
+    <div className="-mx-3 -my-2 flex flex-col gap-3">{STUDY_LEVELS.map(level => {
+      const rows = types.filter(type => type.level === level.key);
+      if (!rows.length) return null;
+      return <section key={level.key} aria-label={level.label}>
+        <h5 className={`px-3 pb-1 text-xs ${muted}`}>{level.label}</h5>
+        <ul className="flex flex-col">{rows.map(type => <li key={type.key}>
+          <a href={level.key === "synthesis" ? "#reviews" : "#other-publications"} className={railRow}>
+            <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${studyTone(type.key)}`} />
+            <span className="min-w-0 flex-1 truncate">{type.plural}</span>
+            <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{n(listed[type.key] ?? 0)}</span><span className={muted}> of {n(period[type.key] ?? 0)}</span></span>
+          </a>
+        </li>)}</ul>
+      </section>;
+    })}</div>
   </SidebarCard>;
 }
 
@@ -448,7 +459,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
   // A record hidden after the edition was written leaves its list, so the list can be shorter than what was read.
   const hidden = edition.read - edition.listed;
   const steps: {title: string; text: string; score?: true}[] = [
-    {title: "Meta-analyses and reviews", text: "An AI model reads each paper whose title, abstract or OpenAlex type suggests a review, and says whether it is a meta-analysis, a review or a single study. It reads up to 300 per edition; the rest are ranked with the other papers."},
+    {title: "Reviews and syntheses", text: "Reviews of reviews, then meta-analyses, systematic reviews, other literature reviews and bibliometric studies, by the study type Jev gave each record when it came in."},
     {title: "An abstract of 200 characters or more", text: "The writer works from abstracts, so papers with one come before papers without."},
     {title: "A score", text: "Then papers are ranked by the sum of:", score: true},
   ];
@@ -466,6 +477,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
       </div>
     </li>)}</ol>
     <p className={`mt-5 text-sm leading-6 ${muted}`}>Never counted or listed: retracted papers, as Retraction Watch reports them through OpenAlex, and journal front matter. Two records with the same title, 25 characters or longer, and the same first author's surname count as one paper, such as a preprint and its article under one title.</p>
+    <p className={`mt-4 text-sm leading-6 ${muted}`}>{STUDY_TYPE_METHOD}</p>
     <p className="mt-4 text-sm leading-6 text-black/70 dark:text-white/70">AI wrote the text from these titles and abstracts, not from the full papers. Once it is written, OpenScholar asks a second AI model, from another company, to check each sentence about a paper against that paper's title and abstract, and the writer corrects or removes what it flags.{edition.by && ` ${edition.by.name} checked the text before it was published.`}</p>
   </div>;
 }
@@ -478,7 +490,7 @@ function EditionLists({edition, records, path, locale}: {edition: DigestEdition;
   </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
-    <ListHeading id="reviews" title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
+    <ListHeading id="reviews" title="Reviews and syntheses" count={reviews.listed} locale={locale} />
     {list("reviews", reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
     <div className="mt-12"><ListHeading id="other-publications" title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
     {list("other-publications", edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}

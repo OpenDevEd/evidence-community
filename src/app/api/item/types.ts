@@ -1,3 +1,4 @@
+import type { StudyReading } from "@/lib/readings/study-types";
 import type { TopicTree } from "@/lib/topics/contract";
 import { InferSelectModel } from "drizzle-orm";
 import type { SourceProvider } from "@opendeved/evidence-library-core";
@@ -20,6 +21,8 @@ export type ItemLinks = {
 };
 
 export type Item = InferSelectModel<typeof item> & {
+	/** What kind of work the record is, as Jev read it when it came in. None until it has been read. */
+	reading?: StudyReading;
 	provider?: SourceProvider;
 	links?: ItemLinks;
 	citationMetrics?: SourceCitationMetric[];
