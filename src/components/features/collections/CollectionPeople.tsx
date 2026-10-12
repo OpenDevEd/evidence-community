@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger, ModalBody, ModalContent } from "@nextui-org/react";
@@ -62,12 +62,22 @@ export function useSentInvitations(enabled: boolean) {
 }
 
 /**
- * While the Share dialog is open, who a collection is shared with is read again when the owner comes back to the
- * tab: an invitation accepted meanwhile moves from waiting to the members.
+ * Who a collection is shared with, read again: the members and the invitations waiting, so an invitation accepted
+ * meanwhile moves from one to the other. While the Share dialog is open this also runs when the owner comes back to
+ * the tab. The lists' own hooks don't follow focus, and SWR sends focus only to a key's first hook.
  */
-function useFreshWhileSharing() {
-	useSWR("/reader", fetcher, { revalidateOnFocus: true });
-	return useSWR<{ invitations: PendingCollectionInvitation[] }>(SENT_INVITATIONS, fetcher, { revalidateOnFocus: true });
+function useSharingReload() {
+	const { refresh } = useReaderData();
+	const { mutate, error } = useSentInvitations(true);
+	const reload = () => Promise.all([refresh(), mutate()]);
+	const onFocus = useEffectEvent(() => void reload().catch((failure: unknown) => console.error("Reloading who a collection is shared with failed", failure)));
+	// The browser's focus event, for as long as the dialog is open.
+	useEffect(() => {
+		const listener = () => onFocus();
+		window.addEventListener("focus", listener);
+		return () => window.removeEventListener("focus", listener);
+	}, []);
+	return { reload, refresh, error };
 }
 
 /** A copy of a set of row IDs with one added or taken out. */
@@ -260,8 +270,7 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const { reader } = useReaderSession();
-	const { refresh } = useReaderData();
-	const { mutate, error: unread } = useFreshWhileSharing();
+	const { reload, refresh, error: unread } = useSharingReload();
 	const waiting = (invitations ?? []).filter((invitation) => invitation.collectionId === collection.id);
 	// The rows there when the dialog opened; any other row arrived since, and slides open.
 	const [opened] = useState(() => new Set([...collection.members.map((member) => member.id), ...waiting.map((invitation) => invitation.id)]));
@@ -292,12 +301,12 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 			: change(member.id, () => send(`${people}/${member.id}`, "DELETE"), refresh, true);
 	const changeInvitation = (invitation: PendingCollectionInvitation, body: object | null) =>
 		body
-			? change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "PATCH", body), () => mutate())
-			: change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "DELETE"), () => mutate(), true);
+			? change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "PATCH", body), reload)
+			: change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "DELETE"), reload, true);
 
 	return (
 		<ModalBody className="gap-5 px-6 pb-6 pt-0">
-			<InviteForm collectionId={collection.id} onInvited={() => mutate()} />
+			<InviteForm collectionId={collection.id} onInvited={reload} />
 			<ul className="-my-2 flex max-h-[min(26rem,55vh)] flex-col overflow-y-auto">
 				{reader ? (
 					<PersonRow
@@ -364,13 +373,13 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 					/>
 				))}
 				{/* The invitations waiting couldn't be read: say so, rather than show none. */}
-				{unread && !invitations ? (
+				{unread ? (
 					<li className="flex items-center justify-between gap-3 py-2">
 						<span className="flex min-w-0 items-center gap-1.5 text-small text-danger">
 							<HugeiconsIcon icon={Alert02Icon} className="size-4 shrink-0" aria-hidden />
 							{t("invitationsUnread")}
 						</span>
-						<Button variant="transparent" onPress={() => void mutate()} className="h-9 shrink-0 px-3 text-small font-medium">
+						<Button variant="transparent" onPress={() => void reload()} className="h-9 shrink-0 px-3 text-small font-medium">
 							{t("tryAgain")}
 						</Button>
 					</li>
