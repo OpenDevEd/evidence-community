@@ -283,6 +283,8 @@
     "collapseFilters": "折叠筛选器",
     "expandFilters": "展开筛选器",
     "internal": "内部的",
+    "openAccess": "开放获取",
+    "closedAccess": "非开放获取",
     "openDocument": "打开文档",
     "databaseStatistics": "数据库统计",
     "databaseStatisticsDescription": "对我们研究数据库的全面见解，包括机构、出版物、引用和数据完整性指标。",

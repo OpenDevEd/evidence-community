@@ -24,6 +24,7 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
+import { readOpenAccess } from "./open-access";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
@@ -381,9 +382,10 @@ async function buildSearchProjectionPlanForKeys(
 		institutionRows.filter((row) => row.source === "record"),
 	);
 	const connectedInstitutionsOf = institutionNamesByItem(institutionRows);
-	const [linksByItem, citationMetricsByItem] = await Promise.all([
+	const [linksByItem, citationMetricsByItem, openAccessOf] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
+		readOpenAccess(database, activeParentKeys),
 	]);
 	const childrenByParent = new Map<string, ItemRow[]>();
 	for (const child of children) {
@@ -449,26 +451,27 @@ async function buildSearchProjectionPlanForKeys(
 				}))
 				.filter((entry) => entry.fullTextPDF.length > 0);
 			const publicationIdentifiers = identifiersByItem.get(parent.key);
+			const doi = resolvePublicDoi({
+				...parent,
+				publicationIdentifiers,
+				attachments: parentChildren
+					.filter(
+						(child) =>
+							child.deleted !== 1 &&
+							!hasAnyTag(
+								tagsByItem.get(child.key),
+								hiddenTags,
+							),
+					)
+					.map((child) => ({
+						url: child.url,
+						tags: tagsByItem.get(child.key),
+					})),
+			});
 
 			return {
 				...cleanRow(parent),
-				DOI: resolvePublicDoi({
-					...parent,
-					publicationIdentifiers,
-					attachments: parentChildren
-						.filter(
-							(child) =>
-								child.deleted !== 1 &&
-								!hasAnyTag(
-									tagsByItem.get(child.key),
-									hiddenTags,
-								),
-						)
-						.map((child) => ({
-							url: child.url,
-							tags: tagsByItem.get(child.key),
-						})),
-				}),
+				DOI: doi,
 				// A stored PDF or a linked one: the AI can read either, even
 				// when no text was extracted. The library's hidden tags always
 				// apply, because the search filter cannot see attachment tags.
@@ -508,6 +511,7 @@ async function buildSearchProjectionPlanForKeys(
 				],
 				links,
 				metadataSearch: metadataSearchValues(parent),
+				openAccess: openAccessOf(parent.key, doi),
 				topicAncestors: topicAncestry(parent.topics),
 				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
 				key: parent.key,

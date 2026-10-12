@@ -7,7 +7,9 @@ import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
+import { shownOpenAccess, type OpenAccessLabel as OpenAccessLabelSetting } from "@/lib/open-access";
 import { hasAnyTag } from "@/lib/tags";
+import { OpenAccessLabel } from "./OpenAccessLabel";
 
 type Formatter = ReturnType<typeof useFormatter>;
 type Institutions = LibraryPublicConfig["institutions"];
@@ -21,6 +23,8 @@ export type PublicationPreviewData = {
 	institution: ReturnType<typeof findInstitutionWithLogo>;
 	isComingSoon: boolean;
 	isInternal: boolean;
+	/** The access the record's label names, or null when the library shows none for it. */
+	openAccess: boolean | null;
 };
 
 function formatFullDate(item: any, formatter: Formatter): string {
@@ -73,11 +77,13 @@ export function publicationPreviewData(
 		etAl,
 		formatter,
 		institutions,
+		openAccessLabel,
 	}: {
 		contentTags: ContentTags;
 		etAl: string;
 		formatter: Formatter;
 		institutions: Institutions;
+		openAccessLabel: OpenAccessLabelSetting;
 	},
 ): PublicationPreviewData {
 	return {
@@ -88,6 +94,7 @@ export function publicationPreviewData(
 		institution: findInstitutionWithLogo(institutions, item?.institution),
 		isComingSoon: hasAnyTag(item?.tags, contentTags.comingSoon),
 		isInternal: hasAnyTag(item?.tags, contentTags.internal),
+		openAccess: shownOpenAccess(item?.openAccess, openAccessLabel),
 	};
 }
 
@@ -160,8 +167,8 @@ function PreviewByline({
 	preview: PublicationPreviewData;
 	institutionAlt: (name: string) => string;
 }) {
-	const { authors, fullDate, institution } = preview;
-	if (![institution, authors, fullDate].some(Boolean)) return null;
+	const { authors, fullDate, institution, openAccess } = preview;
+	if (![institution, authors, fullDate].some(Boolean) && openAccess === null) return null;
 
 	return (
 		<div className="flex items-center gap-1.5">
@@ -179,6 +186,7 @@ function PreviewByline({
 					{fullDate}
 				</span>
 			)}
+			<OpenAccessLabel openAccess={openAccess} className="ms-1 gap-1" iconClassName="size-3.5" />
 		</div>
 	);
 }
@@ -191,7 +199,7 @@ export function hasPreviewDetails(preview: PublicationPreviewData) {
 		preview.fullDate,
 		preview.isComingSoon,
 		preview.isInternal,
-	].some(Boolean);
+	].some(Boolean) || preview.openAccess !== null;
 }
 
 export function hasBylineDetails(preview: PublicationPreviewData) {
@@ -200,7 +208,7 @@ export function hasBylineDetails(preview: PublicationPreviewData) {
 		preview.authors,
 		preview.isComingSoon,
 		preview.isInternal,
-	].some(Boolean);
+	].some(Boolean) || preview.openAccess !== null;
 }
 
 export function PublicationHoverPreview({

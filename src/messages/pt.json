@@ -283,6 +283,8 @@
     "collapseFilters": "Recolher Filtros",
     "expandFilters": "Expandir Filtros",
     "internal": "Interno",
+    "openAccess": "Acesso aberto",
+    "closedAccess": "Acesso restrito",
     "openDocument": "Abrir Documento",
     "databaseStatistics": "Estatísticas do Banco de Dados",
     "databaseStatisticsDescription": "Informações abrangentes sobre nosso banco de dados de pesquisa, incluindo instituições, publicações, citações e métricas de integridade dos dados.",

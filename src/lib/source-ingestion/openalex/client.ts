@@ -1,3 +1,4 @@
+import { normalizeDoi } from "@/lib/doi";
 import { readBoundedResponse } from "../read-bounded-response";
 import {
 	OPENALEX_MAX_PAGE_SIZE,
@@ -7,6 +8,7 @@ import {
 	type OpenAlexPage,
 	type OpenAlexQuery,
 } from "./schema";
+import { workIsOpenAccess } from "./work";
 
 /** OpenAlex refuses more ids than this in one filter. */
 export const OPENALEX_MAX_IDS_PER_FILTER = 100;
@@ -193,6 +195,27 @@ export class OpenAlexClient {
 		if (!query.oql) url.searchParams.set("group_by", "publication_year");
 		const { group_by } = openAlexGroupsSchema.parse(await this.read(url, grouped.oql));
 		return group_by.flatMap(({ key, count }) => (/^\d{4}$/.test(key) ? [{ year: Number(key), count }] : []));
+	}
+
+	/**
+	 * Whether each DOI's work is open access, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` normalised DOIs. A DOI OpenAlex
+	 * does not know is left out; one it holds several works for is open when any of them is.
+	 */
+	async openAccessByDoi(dois: readonly string[]) {
+		if (!dois.length || dois.length > OPENALEX_MAX_IDS_PER_FILTER) {
+			throw new Error(`An OpenAlex DOI filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} DOIs`);
+		}
+		// A cursor makes OpenAlex answer with `next_cursor`, which the page schema reads.
+		const url = worksUrl({ filter: `doi:${dois.join("|")}` }, "*", OPENALEX_MAX_PAGE_SIZE, this.options.apiKey);
+		url.searchParams.set("select", "doi,open_access");
+		const { results } = openAlexPageSchema.parse(await this.read(url, undefined));
+		const open = new Map<string, boolean>();
+		for (const work of results) {
+			const doi = normalizeDoi((work as { doi?: string | null } | null)?.doi);
+			const isOa = workIsOpenAccess(work);
+			if (doi && isOa !== null) open.set(doi, open.get(doi) === true || isOa);
+		}
+		return open;
 	}
 
 	/**

@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 
 import { openLibraryDatabaseProcess } from "../src/config/library-config/process";
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
+import { runOpenAccessLookups } from "../src/lib/open-access-lookup";
 import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import {
 	releaseWorkerLeases,
@@ -147,9 +148,10 @@ async function runConfiguredSweep(
 type WorkerOptions = Parameters<typeof runActiveSourceConnections>[0];
 
 /**
- * The lanes a watching worker runs beside its sweep: requested sources, and
- * status reports to OpenScholar. Stopping waits for both, then reports once
- * more, so work that finished while stopping still reaches OpenScholar.
+ * The lanes a watching worker runs beside its sweep: requested sources, status
+ * reports to OpenScholar, and open-access lookups when the library has an
+ * OpenAlex key. Stopping waits for them all, then reports once more, so work
+ * that finished while stopping still reaches OpenScholar.
  */
 function startWatchLanes(
 	config: LibraryServerConfig,
@@ -182,6 +184,17 @@ function startWatchLanes(
 			report,
 			signal: reporting.signal,
 		}),
+		...(config.services.openAlex
+			? [
+					runOpenAccessLookups({
+						database,
+						config,
+						apiKey: config.services.openAlex.apiKey,
+						onError: (error) => console.error(`Open-access lookup failed: ${errorMessage(error)}`),
+						signal: stopping,
+					}),
+				]
+			: []),
 	];
 	return {
 		async stop() {

@@ -47,6 +47,7 @@ import {
 	publicationPreviewData,
 	type PublicationPreviewData,
 } from "@/components/features/items/PublicationHoverPreview";
+import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -125,6 +126,7 @@ function SuggestionByline({
 				size="small"
 			/>
 			{authors && <span className="min-w-0 truncate">{authors}</span>}
+			<OpenAccessLabel openAccess={preview.openAccess} className="gap-1" iconClassName="size-3.5" />
 			<PublicationStatusBadges
 				comingSoon={isComingSoon}
 				internal={isInternal}
@@ -485,6 +487,8 @@ export default function NavbarSearch() {
 															formatter,
 															institutions:
 																configuredInstitutions,
+															openAccessLabel:
+																content.openAccessLabel,
 														},
 													);
 												const isCurrent =

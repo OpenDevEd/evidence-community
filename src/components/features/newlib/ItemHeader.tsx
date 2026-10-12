@@ -30,6 +30,7 @@ import { useLibraryItemUrl } from "@/hooks/useLibraryItemUrl";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { FuturePublicationHint } from "@/components/features/items/FuturePublicationHint";
 import { isFuturePublication } from "@/lib/bibliographic-date";
+import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -245,6 +246,7 @@ export default function ItemHeader({
 							/>
 							{item?.itemType ? tItemType(item?.itemType) : "-"}
 						</HeaderSection>
+						<OpenAccessLabel openAccess={item?.openAccess} className="gap-2" />
 					</div>
 					<ItemHeaderActions
 						item={item}

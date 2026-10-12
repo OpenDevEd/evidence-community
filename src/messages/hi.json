@@ -283,6 +283,8 @@
     "collapseFilters": "फ़िल्टरों को बंद करें",
     "expandFilters": "फ़िल्टर विस्तृत करें",
     "internal": "आंतरिक",
+    "openAccess": "मुक्त पहुँच",
+    "closedAccess": "सीमित पहुँच",
     "openDocument": "दस्तावेज़ खोलें",
     "databaseStatistics": "डेटाबेस आँकड़े",
     "databaseStatisticsDescription": "हमारे शोध डेटाबेस में व्यापक जानकारी, जिसमें संस्थान, प्रकाशन, उद्धरण और डेटा पूर्णता मेट्रिक्स शामिल हैं।",

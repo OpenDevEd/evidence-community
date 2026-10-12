@@ -1,4 +1,5 @@
 import { updateOpenAlexReferences } from "./openalex/references";
+import { readOpenAccess } from "@/lib/search-index/open-access";
 import { isOpenAlexWorkProvider, OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { itemSourceValue, sourceTopicAssignment } from "@/db/schema/topics";
 import { sourceOverridesByItem } from "@/lib/admin/source-fields";
@@ -2456,6 +2457,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				? [itemKey]
 				: [];
 		});
+		// The open-access label reads the newest stored copy of an OpenAlex work, so a copy that changed, or became the
+		// newest one, can change it: those records are indexed again.
+		const openAccessBefore = await readOpenAccess(transaction, batchItemKeys);
 		await insertInChunks(snapshotRows, RELATION_CHUNK_SIZE, (rowChunk) =>
 			transaction
 				.insert(sourceSnapshot)
@@ -2492,6 +2496,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							inArray(sourceSnapshot.itemKey, keyChunk),
 						),
 					),
+		);
+		const openAccessAfter = await readOpenAccess(transaction, batchItemKeys);
+		const openAccessChangedItemKeys = batchItemKeys.filter(
+			(key) => openAccessBefore(key, null) !== openAccessAfter(key, null),
 		);
 		await updateItemSourceLinkVersions(
 			transaction,
@@ -2576,6 +2584,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			if (oldParent) affectedParentKeys.add(oldParent);
 		}
 		for (const key of citationMetricChangedItemKeys) affectedParentKeys.add(key);
+		for (const key of openAccessChangedItemKeys) affectedParentKeys.add(key);
 		// A new link changes both records' public pages but neither record, so
 		// records outside this batch are queued for search again instead of
 		// taking a new revision. In a large import that is thousands of records

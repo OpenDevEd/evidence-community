@@ -12,6 +12,11 @@ Every top-level search document contains:
 - normalized tags and direct collection keys;
 - current collection ancestry;
 - derived author names, institutions, countries, year, and sortable date;
+- open access: the `is_oa` of the most recently fetched copy of the record's
+  OpenAlex work, else what OpenAlex said about the DOI the record shows
+  (`itemOpenAccessLookup`), else null. The source worker looks at records from
+  other sources when they change and asks OpenAlex about a new DOI, 100 DOIs
+  a request, and about every DOI again after 30 days;
 - child attachment metadata; and
 - active attachment full text split into page records. The page text is
   indexed only when the library has full-text search on; otherwise only the
