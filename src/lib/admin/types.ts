@@ -1,3 +1,4 @@
+import type { StudyReading } from "@/lib/readings/study-types";
 import type { SourceStatus } from "@/lib/source-ingestion/source-status";
 
 import type { SourceFieldConflict } from "./source-field-contract";
@@ -134,6 +135,8 @@ export type AdminItemDetail = AdminItemSummary & {
 	links: AdminItemLinks;
 	/** What OpenAlex says about a published record's open access, whatever an editor chose; null when it has no answer. */
 	openAccessFromSources: boolean | null;
+	/** What the reading found the record to be, whatever an editor chose; null before it is read. */
+	readingStudyType: StudyReading | null;
 	parentItem: string | null;
 	parentState: AdminRecordState | null;
 	published: Record<string, unknown> | null;

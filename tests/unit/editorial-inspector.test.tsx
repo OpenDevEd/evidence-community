@@ -66,6 +66,7 @@ const submitted: AdminReviewSnapshot = {
 	filePublication: null,
 	fileRemovalPending: false,
 	openAccessFromSources: null,
+	readingStudyType: null,
 	sourceFileUrl: null,
 	links: {
 		fromSources: [],

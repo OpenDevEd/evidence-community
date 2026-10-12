@@ -23,7 +23,8 @@ import {
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
-import type { StudyReading, StudyTypeKey } from "@/lib/readings/study-types";
+import { studyReadingOf } from "@/lib/readings/reading";
+import type { StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
@@ -69,11 +70,10 @@ type CollectionRow = Pick<
 type ItemRow = typeof item.$inferSelect;
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
-/** A record's study type for its search document: none until it has been read. */
-function readingFields(row: { type: StudyTypeKey; confidence: number; by: StudyReading["by"]; input: StudyReading["input"] } | undefined) {
-	if (!row) return {};
-	const reading: StudyReading = { type: row.type, confidence: row.confidence, by: row.by, input: row.input };
-	return { studyType: row.type, reading };
+/** A record's study type for its search document: an editor's correction, else the reading's; none until either. */
+function readingFields(row: Parameters<typeof studyReadingOf>[0], corrected: StudyTypeKey | null) {
+	const reading = studyReadingOf(row, corrected);
+	return reading ? { studyType: reading.type, reading } : {};
 }
 
 function uniqueSorted(values: Iterable<string>) {
@@ -322,8 +322,8 @@ async function buildSearchProjectionPlanForKeys(
 	const readings = new Map(
 		(await database
 			.select({
-				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, type: itemReading.studyType,
-				confidence: itemReading.typeConfidence, by: itemReading.typedBy, input: itemReading.input,
+				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, studyType: itemReading.studyType,
+				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input,
 			})
 			.from(itemReading)
 			.where(inArray(itemReading.itemKey, topLevelKeys)))
@@ -539,7 +539,7 @@ async function buildSearchProjectionPlanForKeys(
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
 				revision: parent.revision,
 				// What kind of work it is, once read: filtered and counted by `studyType`, shown from `reading`.
-				...readingFields(readings.get(parent.key)),
+				...readingFields(readings.get(parent.key), parent.studyType),
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,
 				sourceRecordKey: parent.sourceRecordKey,

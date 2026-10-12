@@ -617,6 +617,13 @@
       "when": 1791831914045,
       "tag": "0087_screening-status-detail",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1791841362299,
+      "tag": "0088_item-study-type",
+      "breakpoints": true
     }
   ]
 }

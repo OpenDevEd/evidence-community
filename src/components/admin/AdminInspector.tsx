@@ -15,6 +15,8 @@ import { SourceConflictEditor, type SourceResolution } from "./SourceConflictEdi
 import { describeCountryFocus } from "@/lib/country-focus";
 import { CountryFocusInput } from "./CountryFocusInput";
 import { OpenAccessInput } from "./OpenAccessInput";
+import { StudyTypeInput } from "./StudyTypeInput";
+import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
@@ -560,6 +562,51 @@ const OpenAccessEditor = memo(function OpenAccessEditor({
 	);
 });
 
+const StudyTypeEditor = memo(function StudyTypeEditor({
+	value,
+	reading,
+	change,
+	onChange,
+	readOnly,
+	error,
+}: {
+	value: unknown;
+	reading: StudyReading | null;
+	change: AdminDraftDiff["studyType"];
+	onChange: (payload: Record<string, unknown>) => void;
+	readOnly: boolean;
+	error?: string;
+}) {
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel
+				action={
+					change && !readOnly ? (
+						<ChangedMarker
+							label="study type"
+							publishedValue={describeStudyTypeChoice(change.previous)}
+							onRevert={() => onChange({ studyType: change.previous })}
+						/>
+					) : null
+				}
+			>
+				Study type
+			</FieldLabel>
+			<StudyTypeInput
+				disabled={readOnly}
+				value={typeof value === "string" ? (value as StudyTypeKey) : null}
+				reading={reading}
+				onChange={(studyType) => onChange({ studyType })}
+			/>
+			{error && (
+				<p role="alert" className="text-xs text-danger">
+					{error}
+				</p>
+			)}
+		</div>
+	);
+});
+
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
 	const titleField =
@@ -754,6 +801,14 @@ function MetadataEditor({
 											onChange={onChange}
 											readOnly={readOnly}
 											error={errors.openAccess}
+										/>
+										<StudyTypeEditor
+											value={payload.studyType}
+											reading={detail.readingStudyType}
+											change={diff.studyType}
+											onChange={onChange}
+											readOnly={readOnly}
+											error={errors.studyType}
 										/>
 									</>
 								)}

@@ -1038,9 +1038,10 @@
     "notRead": "Bado hazijasomwa",
     "chip": "Aina ya utafiti",
     "uncertain": "haina uhakika",
+    "editor": "Imewekwa na mhariri wa maktaba hii.",
     "metadata": "Aina imetambuliwa kutoka kwenye rekodi yenyewe.",
     "ai": "Imesomwa na Jev kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, yes {, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
-    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Jev, kiainishaji cha AI, husoma kichwa na muhtasari wake na kuchagua mojawapo ya aina hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Aina ambayo Jev ana uhakika nayo chini ya 60% huwekwa alama ya kutokuwa na uhakika, na husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo.",
+    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Jev, kiainishaji cha AI, husoma kichwa na muhtasari wake na kuchagua mojawapo ya aina hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Aina ambayo Jev ana uhakika nayo chini ya 60% huwekwa alama ya kutokuwa na uhakika, na husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo. Mhariri anaweza kusahihisha aina yoyote.",
     "levels": {
       "synthesis": "Mapitio na usanisi",
       "primary": "Tafiti za msingi",

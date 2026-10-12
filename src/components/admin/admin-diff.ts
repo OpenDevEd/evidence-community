@@ -13,6 +13,8 @@ export type AdminDraftDiff = {
 	countryFocus: { previous: string[] | null } | null;
 	/** The published choice when the draft changed it: true, false, or null for OpenAlex. */
 	openAccess: { previous: boolean | null } | null;
+	/** The published study type when the draft changed it, or null for the reading's. */
+	studyType: { previous: string | null } | null;
 	collections: string[] | null;
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
@@ -25,6 +27,7 @@ export type AdminDraftDiff = {
 export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
 	countryFocus: null,
 	openAccess: null,
+	studyType: null,
 	collections: null,
 	creators: null,
 	fields: {},
@@ -102,6 +105,11 @@ function countryFocusDiff(current: unknown, previous: unknown) {
 	return { previous: Array.isArray(previous) ? previous as string[] : null };
 }
 
+function studyTypeDiff(current: unknown, previous: unknown) {
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: typeof previous === "string" ? previous : null };
+}
+
 function openAccessDiff(current: unknown, previous: unknown) {
 	if (sameValue(current ?? null, previous ?? null)) return null;
 	return { previous: typeof previous === "boolean" ? previous : null };
@@ -154,6 +162,7 @@ export function computeAdminDraftDiff(
 	return {
 		countryFocus: countryFocusDiff(payload.countryFocus, published.countryFocus),
 		openAccess: openAccessDiff(payload.openAccess, published.openAccess),
+		studyType: studyTypeDiff(payload.studyType, published.studyType),
 		collections: collectionsChanged ? originalCollections : null,
 		creators: creatorsChanged ? originalCreators : null,
 		fields,

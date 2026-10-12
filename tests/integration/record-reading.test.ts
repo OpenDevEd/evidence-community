@@ -100,6 +100,12 @@ it("reads the type of every record a library with a key brings in, grades only f
 		// Readers see the type on the record: its search document carries it.
 		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toEqual({ type: "meta-analysis", confidence: 0.91, by: "ai", input: "abstract" });
 
+		// An editor's correction wins over the reading, and a later read of new text leaves it.
+		await client.query(`UPDATE item SET "studyType" = 'commentary' WHERE key = 'TYPEAAA2'`);
+		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 52 trials.", 2);
+		await runReadingCycle(db, unscreened, undefined, jev(answering).request);
+		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toEqual({ type: "commentary", by: "editor" });
+
 		await publish(client, "KEYLESS2", "Coastal flooding in Lagos", "Flood risk across 40 wards.");
 		const keyless = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [{ ...source, screening: { enabled: false } }] });
 		const none = jev(answering);

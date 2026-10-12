@@ -1,3 +1,4 @@
+import { readStudyReading } from "@/lib/readings/reading";
 import { readSourceFields } from "./source-fields";
 import { sourceTopicAssignment } from "@/db/schema/topics";
 import "server-only";
@@ -414,9 +415,10 @@ export async function getAdminItemDetail(
 	const payload = draft
 		? applyItemDraftPatch(basePayload, draft.patch)
 		: basePayload;
-	const fromSources = published && isTopLevelAdminItemType(published.itemType)
-		? await readOpenAccessFromSourcesFor(db, itemKey, payload)
-		: null;
+	const topLevel = published && isTopLevelAdminItemType(published.itemType);
+	const [fromSources, readingStudyType] = topLevel
+		? await Promise.all([readOpenAccessFromSourcesFor(db, itemKey, payload), readStudyReading(db, itemKey)])
+		: [null, null];
 	const draftTags = draft ? payloadStringList(payload, "tags") : null;
 	const draftCollections = draft
 		? payloadStringList(payload, "collections")
@@ -489,6 +491,7 @@ export async function getAdminItemDetail(
 		fileRemovalPending: Boolean(removal),
 		links,
 		openAccessFromSources: fromSources,
+		readingStudyType,
 		parentItem,
 		parentState:
 			parentItem && (parentPublished || parentDraft)

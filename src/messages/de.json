@@ -1037,9 +1037,10 @@
     "notRead": "Noch nicht bestimmt",
     "chip": "Studientyp",
     "uncertain": "unsicher",
+    "editor": "Von einer Redakteurin oder einem Redakteur dieser Bibliothek festgelegt.",
     "metadata": "Aus dem Eintrag selbst bestimmt.",
     "ai": "Von Jev anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
-    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Jev, ein KI-Klassifikator, liest Titel und Abstract und wählt einen dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem Jev zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat.",
+    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Jev, ein KI-Klassifikator, liest Titel und Abstract und wählt einen dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem Jev zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren.",
     "levels": {
       "synthesis": "Reviews und Synthesen",
       "primary": "Primärstudien",
