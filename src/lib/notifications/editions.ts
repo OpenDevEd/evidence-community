@@ -10,8 +10,8 @@ import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
-import { LIKELY_REVIEWS_READ, publicationKindsSchema, publicationMarks, reviewStanding, savePublicationKinds, startDigestRequest } from "./kinds";
-import type { NotificationPublication, NotificationStream, PublicationKind } from "./types";
+import { isSynthesis, publicationTypes, recordStudyType } from "./digest-types";
+import type { DigestTypeCounts, NotificationPublication, NotificationStream } from "./types";
 
 function digestMetadata(card: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>) {
   return { key: card.key, title: (card.title || "Untitled publication").slice(0, 2000), creators: (card.creators ?? []).slice(0, 100).map(c => (c.name || [c.firstName, c.lastName].filter(Boolean).join(" ")).slice(0, 500)).filter(Boolean), date: card.date?.slice(0, 100) ?? null, abstract: card.abstractNote?.slice(0, 16000) ?? null, publicationType: card.itemType, doi: card.DOI?.slice(0, 500) ?? null };
@@ -50,13 +50,12 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
 }
 
 /**
- * Counts a digest's publications and picks the ones it lists. Every
- * meta-analysis and review is picked first, then the likely ones nobody has read
- * yet, as many as one request has read. The rest follow best first: a real abstract, then a
- * score of the journal's standing, references, known institutions and
- * citations. `keys` is the order they are picked in, which a size limit cuts from the end; `ranked` is the same
- * publications best first, the order the edition lists them in, so each of its lists keeps that order once the
- * likely reviews are read. A retracted record is left out. The journal and withdrawal flags
+ * Counts a digest's publications, by study type too, and picks the ones it lists. Every review and synthesis is
+ * picked first, by the type an editor gave it or its reading found. The rest follow best first: a real abstract, then
+ * a score of the journal's standing, references, known institutions and citations. `keys` is the order they are
+ * picked in, which a size limit cuts from the end; `ranked` is the same publications best first, the order the
+ * edition lists them in. `types` counts every publication the period has, so it adds up to `total`. A retracted
+ * record is left out. The journal and withdrawal flags
  * come from the OpenAlex record, so other sources score on the rest. A preprint and its
  * article, or two deposits of one upload, count once: records with one title
  * and first author's surname are one work. The record with an abstract stands
@@ -64,9 +63,9 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
  * or both lack one, the published record does.
  */
 async function rankPublications(db: DatabaseTransaction, candidates: SQL | undefined) {
-  const { rows: [result] } = await db.execute<{ total: number; keys: string[] | null; ranked: string[] | null }>(sql`
+  const { rows: [result] } = await db.execute<{ total: number; types: DigestTypeCounts; keys: string[] | null; ranked: string[] | null }>(sql`
     WITH candidate AS (
-      SELECT ${item.key} AS key, ${reviewStanding} AS standing, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
+      SELECT ${item.key} AS key, ${recordStudyType} AS type, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract, coalesce(metric.refs, 0) AS refs,
         ${item.itemType}::text IN ('Preprint', 'Dataset', 'ComputerProgram') AS deposit,
         CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
           THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
@@ -90,26 +89,22 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
-      -- One record stands for a work. Its own title, abstract and type say whether it is a likely review, since it is the one sent to be read.
-      SELECT DISTINCT ON (work) key, standing, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
+      -- One record stands for a work, and its study type is the work's.
+      SELECT DISTINCT ON (work) key, type, abstract, score, refs FROM candidate ORDER BY work, abstract DESC, deposit, score DESC, refs DESC, key
     ), ranked AS (
-      -- Every meta-analysis and review of the period is picked first, so a size limit never cuts one. Likely ones nobody
-      -- has read come next, but only as many as one request has read: a library with more of them in a period than that
-      -- would otherwise list nothing else. The rest of the likely ones take their place by rank, and are read by a later
-      -- digest that lists them. The edition lists what is picked best first (ranked, below).
-      SELECT key, abstract, score, refs, CASE
-          WHEN standing = 2 THEN 2
-          WHEN standing = 1 AND row_number() OVER (PARTITION BY standing ORDER BY abstract DESC, score DESC, refs DESC, key) <= ${LIKELY_REVIEWS_READ} THEN 1
-          ELSE 0 END AS first
+      -- Every review and synthesis of the period is picked first, so a size limit never cuts one. The edition lists what
+      -- is picked best first (ranked, below).
+      SELECT key, abstract, score, refs, CASE WHEN ${isSynthesis(sql`type`)} THEN 1 ELSE 0 END AS first
       FROM chosen
     ), listed AS (
       SELECT key, abstract, score, refs, first FROM ranked ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key LIMIT ${EDITION_LISTED_LIMIT}
     )
     SELECT (SELECT count(*)::int FROM chosen) AS total,
+      (SELECT coalesce(jsonb_object_agg(coalesce(type, 'unread'), works), '{}'::jsonb) FROM (SELECT type, count(*)::int AS works FROM chosen GROUP BY type) counted) AS types,
       ARRAY(SELECT key FROM listed ORDER BY first DESC, abstract DESC, score DESC, refs DESC, key) AS keys,
       ARRAY(SELECT key FROM listed ORDER BY abstract DESC, score DESC, refs DESC, key) AS ranked
   `);
-  return { total: result.total, keys: result.keys ?? [], ranked: result.ranked ?? [] };
+  return { total: result.total, types: result.types, keys: result.keys ?? [], ranked: result.ranked ?? [] };
 }
 
 /**
@@ -143,13 +138,14 @@ async function listPublications(db: DatabaseTransaction, config: LibraryServerCo
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
   const cards = new Map((await getPublicItemCards(db, keys, config)).map(card => [card.key, card]));
-  const marks = await publicationMarks(db, keys);
+  const types = await publicationTypes(db, keys);
   for (const key of keys) {
     const card = cards.get(key);
     if (!card) continue;
-    const metadata = { ...digestMetadata(card), ...marks.get(key) };
-    // The limit covers the serialized array, so count its brackets and commas too, and the answer a likely review gets once it is read.
-    metadataBytes += Buffer.byteLength(JSON.stringify(metadata.candidate ? { kind: "meta-analysis", ...metadata } : metadata)) + (publications.length ? 1 : 2);
+    const type = types.get(key);
+    const metadata = { ...digestMetadata(card), ...(type ? { studyType: type } : {}) };
+    // The limit covers the serialized array, so count its brackets and commas too.
+    metadataBytes += Buffer.byteLength(JSON.stringify(metadata)) + (publications.length ? 1 : 2);
     if (metadataBytes > 1_500_000) break;
     publications.push({ ...metadata, item: card });
   }
@@ -178,7 +174,7 @@ function notificationWindows(state: typeof notificationState.$inferSelect, diges
 }
 
 /** How many publications the edition covers, and the keys of those it lists. */
-async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string): Promise<{ total: number; keys: string[]; ranked?: string[] }> {
+async function editionPublications(tx: DatabaseTransaction, config: LibraryServerConfig, after: Date, window: NotificationWindow, editionId: string): Promise<{ total: number; keys: string[]; ranked?: string[]; types?: DigestTypeCounts }> {
   // Additions are marked as covered whatever a digest covers, so a library that
   // later switches to additions starts from this edition.
   const additions = await coverCandidates(tx, config, after, window, editionId);
@@ -204,7 +200,7 @@ async function prepareWindow(
     await tx.update(notificationState).set(cursor);
     return { status: "empty" };
   }
-  const { total, keys, ranked } = await editionPublications(tx, config, after, window, editionId);
+  const { total, keys, ranked, types } = await editionPublications(tx, config, after, window, editionId);
   const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
   let result: DigestPreparation = { status: "empty" };
   if (!publications.length) {
@@ -212,7 +208,7 @@ async function prepareWindow(
     if (manualDigest) return result;
   } else {
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
-    await tx.update(notificationEdition).set({ publications, publicationCount: total, cover }).where(eq(notificationEdition.id, editionId));
+    await tx.update(notificationEdition).set({ publications, publicationCount: total, studyTypes: types ?? null, cover }).where(eq(notificationEdition.id, editionId));
     if (window.stream === "digest") result = { status: "queued", editionId, publicationCount: total };
   }
   await tx.update(notificationState).set(cursor);
@@ -309,12 +305,12 @@ export async function prepareDigestForPeriod(db: Database, config: LibraryServer
     const [existing] = await tx.select({ id: notificationEdition.id, draft: notificationEdition.draft, ai: notificationEdition.ai, note: notificationEdition.note, publishedAt: notificationEdition.publishedAt }).from(notificationEdition)
       .where(and(eq(notificationEdition.stream, "digest"), eq(notificationEdition.windowEnd, period.end))).for("update");
     if (existing && await draftIsEdited(tx, existing)) throw new AdminValidationError("This digest has changes that are not published. Publish them, or change its text back, before rewriting it.");
-    const { total, keys, ranked } = await rankPublications(tx, publishedIn(tx, config, period));
+    const { total, keys, ranked, types } = await rankPublications(tx, publishedIn(tx, config, period));
     const publications = inRankOrder(await listPublications(tx, config, keys), ranked);
     if (!publications.length) return { status: "empty" };
     const cover = publications.find(publication => publication.item.PDFCoverPageImage)?.item.PDFCoverPageImage ?? null;
     // The worker compares the next attempt with the database's clock, so that clock sets it.
-    const edition = { windowStart: period.start, publications, publicationCount: total, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null, requestedAt: null };
+    const edition = { windowStart: period.start, publications, publicationCount: total, studyTypes: types, cover, attempts: 0, nextAttemptAt: sql<Date>`now()`, leaseToken: null, leaseExpiresAt: null, lastError: null, requestedAt: null };
     // A new edition for a past period is marked silent, so it emails nobody even when a person publishes it later.
     // One the schedule made keeps its mark, and its readers, through a rewrite.
     const [{ id }] = await tx.insert(notificationEdition).values({ stream: "digest", windowEnd: period.end, silent: true, ...edition })
@@ -350,9 +346,9 @@ function writtenEdition(edition: typeof notificationEdition.$inferSelect, words:
 async function editionOutput(db: Database, config: LibraryServerConfig, edition: typeof notificationEdition.$inferSelect, signal?: AbortSignal) {
   if (edition.stream !== "digest") {
     const summary = `${edition.publicationCount} new ${edition.publicationCount === 1 ? "publication" : "publications"}`;
-    return { title: "New publications", summary, markdown: null, model: null, reasoning: null, kinds: undefined };
+    return { title: "New publications", summary, markdown: null, model: null, reasoning: null };
   }
-  if (!edition.requestedAt) edition.publications = await startDigestRequest(db, edition.id);
+  if (!edition.requestedAt) await db.update(notificationEdition).set({ requestedAt: sql`now()` }).where(eq(notificationEdition.id, edition.id));
   return requestDigest(config, edition, signal);
 }
 
@@ -378,8 +374,7 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
       return true;
     }
     await db.transaction(async tx => {
-      const { model, reasoning, kinds, ...words } = output;
-      await savePublicationKinds(tx, edition, kinds);
+      const { model, reasoning, ...words } = output;
       const { ai, held, changes } = writtenEdition(edition, words, config.notifications.approval);
       const saved = await tx.update(notificationEdition)
         .set({ model, reasoning, ai, nextAttemptAt: null, leaseToken: null, leaseExpiresAt: null, lastError: null, ...changes })
@@ -391,8 +386,6 @@ export async function generateNotificationEdition(db: Database, config: LibraryS
   } catch (error) {
     const attempts = edition.attempts + 1;
     const message = error instanceof Error ? error.message : String(error);
-    // What OpenScholar read before its writer failed is kept, so the next attempt sends it and nothing is read twice.
-    if (error instanceof DigestRequestError) await savePublicationKinds(db, edition, error.kinds).catch(saveError => console.error("Digest publication kinds were not saved", { editionId: edition.id, error: String(saveError) }));
     await db.update(notificationEdition).set({ attempts, nextAttemptAt: attempts < 6 ? new Date(Date.now() + Math.min(3_600_000, 60_000 * 2 ** attempts)) : null, leaseToken: null, leaseExpiresAt: null, lastError: message.slice(0, 2000), requestedAt: null }).where(owned);
     console.error("Digest generation failed", { editionId: edition.id, error: message });
   }
@@ -410,7 +403,7 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
   if (response.status === 429) return { wait: digestWait(response), started: false };
   if (!response.ok) {
     const body = await response.text();
-    throw new DigestRequestError(`OpenScholar digest generation returned ${response.status}: ${body.slice(0, 500)}`, failureKinds(body));
+    throw new Error(`OpenScholar digest generation returned ${response.status}: ${body.slice(0, 500)}`);
   }
   const output: unknown = await response.json();
   return z.object({ digest: digestResponseSchema }).parse(output).digest;
@@ -425,16 +418,5 @@ function digestWait(response: Response) {
   return Math.min(3_600_000, Math.max(DIGEST_CHECK_MS, (seconds > 0 ? seconds : 60) * 1000));
 }
 
-/** A digest OpenScholar could not write. It may still have read the edition's likely reviews, and says what each is. */
-class DigestRequestError extends Error {
-  constructor(message: string, readonly kinds: Record<string, PublicationKind> | undefined) { super(message); }
-}
-function failureKinds(body: string) {
-  try {
-    return z.object({ kinds: publicationKindsSchema }).safeParse(JSON.parse(body)).data?.kinds;
-  } catch {
-    return undefined;
-  }
-}
 import { z } from "zod";
-const digestResponseSchema = z.object({ title: z.string().min(1), summary: z.string().min(1), markdown: z.string().min(1), model: z.string().min(1), reasoning: z.literal("max"), kinds: publicationKindsSchema.optional() });
+const digestResponseSchema = z.object({ title: z.string().min(1), summary: z.string().min(1), markdown: z.string().min(1), model: z.string().min(1), reasoning: z.literal("max") });

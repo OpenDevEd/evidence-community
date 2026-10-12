@@ -280,14 +280,14 @@ it("does not rewrite a digest under a person's unpublished changes, and replaces
 it("offers the edition's publications a page at a time, searched, narrowed and sorted, and only those readers can open", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const entries = [
-      { key: "PAPAAAAA", title: "Maize under heat", creators: ["Ada Mills"], date: "2026-08-03", kind: "study" },
-      { key: "PAPAAAAB", title: "Drought: a systematic review", creators: ["Ben Okoro", "Cy Adu"], date: "2026-08-20", kind: "review" },
-      { key: "PAPAAAAC", title: "Adaptation pooled", creators: ["Dee Zhang", "Eli Abebe", "Fay Noor"], date: "2026-08-11", kind: "meta-analysis" },
+      { key: "PAPAAAAA", title: "Maize under heat", creators: ["Ada Mills"], date: "2026-08-03", studyType: "rct" },
+      { key: "PAPAAAAB", title: "Drought: a systematic review", creators: ["Ben Okoro", "Cy Adu"], date: "2026-08-20", studyType: "systematic-review" },
+      { key: "PAPAAAAC", title: "Adaptation pooled", creators: ["Dee Zhang", "Eli Abebe", "Fay Noor"], date: "2026-08-11", studyType: "meta-analysis" },
       // Saved by an older release, with a creator that is not a name.
       { key: "PAPAAAAD", title: "Flood maps", creators: [null], date: null },
-      { key: "PAPAAAAE", title: "Heat in cities", creators: ["Gil Baker"], date: "2026-08-30", kind: "study" },
-      { key: "PAPAAAAF", title: "Hidden since", creators: ["Hal Cole"], date: "2026-08-12", kind: "study" },
-      { key: "PAPAAAAG", title: "Water storage", creators: ["Ivy Diaz"], date: "2026-08-05", kind: "study" },
+      { key: "PAPAAAAE", title: "Heat in cities", creators: ["Gil Baker"], date: "2026-08-30", studyType: "rct" },
+      { key: "PAPAAAAF", title: "Hidden since", creators: ["Hal Cole"], date: "2026-08-12", studyType: "rct" },
+      { key: "PAPAAAAG", title: "Water storage", creators: ["Ivy Diaz"], date: "2026-08-05", studyType: "rct" },
     ];
     for (const entry of entries) await publication(client, entry.key, entry.date ?? "2026", entry.title);
     await client.query(`UPDATE item SET deleted = 1 WHERE key = 'PAPAAAAF'`);

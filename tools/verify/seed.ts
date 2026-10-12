@@ -226,19 +226,21 @@ function digestRow(week: number): string {
 }
 
 /**
- * What the admin's digest pages need to be tried on: each edition lists thirty of the seeded publications and cites
- * three, its text is kept as AI's with a first step in its history, the newest edition waits unpublished as AI wrote
+ * What the admin's digest pages need to be tried on: each edition lists thirty of the seeded publications, each with
+ * its reading's study type, out of forty-five in its period, and cites three; its text is kept as AI's with a first step in its history, the newest edition waits unpublished as AI wrote
  * it, and the one before has a creator's changes waiting for review. Written in SQL over the rows above, so it draws
  * nothing from the seed's random sequence.
  */
 function digestEditorialRows(): string[] {
 	const edition = (week: number) => sql(`00000000-0000-4000-8000-${pad(week, 12)}`);
 	const label = `coalesce(i.creators->0->>'lastName', 'Unknown') || ', ' || left(i.date, 4)`;
-	const listed = `(SELECT i.*, row_number() OVER (ORDER BY i.key) AS n FROM item i WHERE i.deleted = 0 AND i."parentItem" IS NULL AND i."itemType" NOT IN ('Attachment', 'Note') ORDER BY i.key LIMIT 30) i`;
+	const inPeriod = (limit: number) => `(SELECT i.*, row_number() OVER (ORDER BY i.key) AS n FROM item i WHERE i.deleted = 0 AND i."parentItem" IS NULL AND i."itemType" NOT IN ('Attachment', 'Note') ORDER BY i.key LIMIT ${limit}) i`;
+	const listed = inPeriod(30);
+	const period = `(SELECT coalesce(r."studyType", 'unread') AS type, count(*)::int AS publications FROM ${inPeriod(45)} LEFT JOIN "itemReading" r ON r."itemKey" = i.key GROUP BY 1) counted`;
 	const creator = `'{"id": "user_acceptance_creator", "name": "Verify creator", "photo": null}'::jsonb`;
 	const editor = `'{"id": "user_acceptance_editor", "name": "Verify editor", "photo": null, "role": "editor"}'::jsonb`;
 	return [
-		`UPDATE "notificationEdition" SET "publicationCount" = 30, "publications" = (SELECT jsonb_agg(jsonb_build_object('key', i.key, 'title', i.title, 'creators', (SELECT coalesce(jsonb_agg(named.name) FILTER (WHERE named.name <> ''), '[]'::jsonb) FROM jsonb_array_elements(coalesce(i.creators, '[]'::jsonb)) c, LATERAL (SELECT coalesce(nullif(c->>'name', ''), concat_ws(' ', c->>'firstName', c->>'lastName')) AS name) named), 'date', i.date, 'abstract', i."abstractNote", 'publicationType', i."itemType", 'doi', i."DOI", 'kind', CASE WHEN i.n % 11 = 0 THEN 'meta-analysis' WHEN i.n % 4 = 0 THEN 'review' ELSE 'study' END) ORDER BY i.n) FROM ${listed}) WHERE "stream" = 'digest';`,
+		`UPDATE "notificationEdition" SET "publicationCount" = 45, "studyTypes" = (SELECT jsonb_object_agg(type, publications) FROM ${period}), "publications" = (SELECT jsonb_agg(jsonb_build_object('key', i.key, 'title', i.title, 'creators', (SELECT coalesce(jsonb_agg(named.name) FILTER (WHERE named.name <> ''), '[]'::jsonb) FROM jsonb_array_elements(coalesce(i.creators, '[]'::jsonb)) c, LATERAL (SELECT coalesce(nullif(c->>'name', ''), concat_ws(' ', c->>'firstName', c->>'lastName')) AS name) named), 'date', i.date, 'abstract', i."abstractNote", 'publicationType', i."itemType", 'doi', i."DOI") || coalesce((SELECT jsonb_build_object('studyType', "studyType") FROM "itemReading" WHERE "itemKey" = i.key), '{}'::jsonb) ORDER BY i.n) FROM ${listed}) WHERE "stream" = 'digest';`,
 		`UPDATE "notificationEdition" SET "markdown" = "markdown" || E'\n\n## Publications to start with\n\n' || (SELECT string_agg('One study adds to this [' || ${label} || '](/lib/' || i.key || ').', ' ' ORDER BY i.n) FROM ${listed} WHERE i.n <= 3) WHERE "stream" = 'digest';`,
 		`UPDATE "notificationEdition" SET "ai" = jsonb_build_object('title', "title", 'summary', "summary", 'markdown', "markdown") WHERE "stream" = 'digest';`,
 		`INSERT INTO "notificationEditionEvent" ("editionId", "at", "kind") SELECT "id", "publishedAt", 'written' FROM "notificationEdition" WHERE "stream" = 'digest';`,
