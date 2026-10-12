@@ -5,6 +5,9 @@ import remarkGfm from "remark-gfm";
 import { Link } from "@/i18n/routing";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import type { HomeContent, HomeRich } from "./HomePage";
+import { defaultContent } from "./home-content";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 type Rendered = { children?: ReactNode; node?: Element };
 
@@ -37,4 +40,13 @@ function HomeRichText({ text, baseUrl, statement = false }: { text: string; base
 export function homeRich(about: HomeContent, baseUrl: string): HomeRich {
 	const render = (text: string | undefined, statement = false) => (text?.trim() ? <HomeRichText text={text} baseUrl={baseUrl} statement={statement} /> : undefined);
 	return { intro: render(about.intro), curation: render(about.curation?.text, true), team: render(about.team, true), extra: render(about.extra?.text) };
+}
+
+/**
+ * What the home page's placeholder needs from the server, null while the library has none. The browser's copy of the
+ * settings gives it the rest of the hero, but not the intro, which sets how tall the hero is.
+ */
+export function homePlaceholderContent(config: LibraryServerConfig) {
+	if (!isLibraryFeatureEnabled(config.features, "homePage")) return null;
+	return { intro: homeRich({ intro: (config.home ?? defaultContent(config.identity.name)).intro }, config.identity.baseUrl).intro };
 }
