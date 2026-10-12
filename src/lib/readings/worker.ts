@@ -123,10 +123,16 @@ async function recordFacts(database: Database, keys: string[]) {
 	}));
 }
 
-/** Leaves a queued record done, unless it was queued again while it was being read. */
+/**
+ * Leaves a queued record done with nothing to read, unless it was queued again meanwhile, and decides again in the same
+ * transaction whether it is screened out: a source that stopped holding it may have been what let it in.
+ */
 async function finish(database: Database, key: string, token: string) {
-	await database.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
-		WHERE "itemKey" = ${key} AND "leaseToken" = ${token}`);
+	await database.transaction(async (tx) => {
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "requested" = false, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+			WHERE "itemKey" = ${key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
+		if (owned.rows.length) await refreshScreenedOut(tx, sql`SELECT ${key}::varchar`);
+	});
 }
 
 async function fail(database: Database, job: { itemKey: string; attempts: number }, token: string, error: unknown) {
@@ -178,7 +184,8 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 	await database.transaction(async (tx) => {
 		// A record with grades still to ask, or a type to ask from its PDF, stays queued for the next call.
 		const again = plan.more || askFromPdf(record, plan, read);
-		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = ${again ? sql`now()` : sql`NULL`}, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = ${again ? sql`now()` : sql`NULL`}, "requested" = ${again ? sql`"requested"` : sql`false`},
+			"leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
 		if (!owned.rows.length) return;
 		if (!plan.fresh) {
@@ -189,6 +196,8 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 				.where(sql`${itemReading.itemKey} = ${record.key}`);
 		}
 		for (const [index, subject] of plan.graded.entries()) await saveGrade(tx, record.key, subject, read.scores[index]!);
+		// Decided with the grades it rests on, so a crash cannot leave the two apart.
+		await refreshScreenedOut(tx, sql`SELECT ${record.key}::varchar`);
 	});
 }
 
@@ -251,9 +260,9 @@ async function release(database: Database, keys: string[], token: string) {
 /**
  * Reads the records waiting in the queue, a batch at a time, for up to `CYCLE_MS`; no call starts after that, and the
  * records it did not reach are handed back. Each record is read once by Jev on the library's own key: its study type
- * and details when its text changed, and its grade against each screening source whose subject changed. After each
- * batch, its records are decided again as screened out or not, and after the cycle a source whose records are all
- * graded against its new subject swaps the new grades in. Returns whether it read anything.
+ * and details when its text changed, and its grade against each screening source whose subject changed, and is decided
+ * again as screened out or not. After the cycle, a source whose records are all graded against its new subject swaps
+ * the new grades in. Returns whether it read anything.
  */
 export async function runReadingCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request?: typeof fetch) {
 	const apiKey = readingKey(config);
@@ -278,10 +287,9 @@ export async function runReadingCycle(database: Database, config: LibraryServerC
 			}
 		}));
 		await release(database, jobs.slice(next).map((job) => job.itemKey), token);
-		const read = jobs.slice(0, next).map((job) => job.itemKey);
-		if (read.length) await database.transaction((tx) => refreshScreenedOut(tx, sql`SELECT unnest(${keyArray(read)})`));
 	}
-	if (worked) await settleScreening(database);
+	// Every cycle, so grades a crashed cycle finished are still swapped in.
+	await settleScreening(database);
 	return worked;
 }
 

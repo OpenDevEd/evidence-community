@@ -5,6 +5,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemGrade, itemReading, itemReadingQueue, readingSpend } from "@/db/schema/readings";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readScreeningStatuses, requestGrading, saveSourceScreening } from "@/lib/readings/screening";
+import { readSourceStatuses } from "@/lib/source-ingestion/source-status";
 import { runReadingCycle, trySubject } from "@/lib/readings/worker";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -152,6 +153,7 @@ it("screens a record out only while every source holding it keeps its grade out"
 		await store(db, config);
 		await runReadingCycle(db, config, undefined, jev((questions) => scoring(0.2)(questions)).request);
 		expect(await visible(db)).toEqual([]);
+		expect((await readSourceStatuses(db, { hiddenTags: [] })).find((status) => status.key === source.key)?.searchable).toBe(0);
 
 		// A source that does not screen brings the record in.
 		await linkSecond(client, "FFTPCAA2");
@@ -178,6 +180,8 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 		await runReadingCycle(db, before, undefined, jev(scoring(2.8)).request);
 
 		const after = configWith("Urban housing policy");
+		// Until the workers store the new subject, a request to grade against it is refused.
+		expect(await requestGrading(db, after, source.key)).toBe("not_ready");
 		await store(db, after);
 		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({ grades: { about: 2, touches: 0, passing: 0, notAbout: 0 }, ungraded: 2, grading: null });
 		expect(await requestGrading(db, after, source.key)).toEqual({ queued: 2 });
@@ -193,6 +197,16 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({ grades: { about: 0, touches: 0, passing: 0, notAbout: 2 }, ungraded: 0, grading: null });
 		expect(await visible(db)).toEqual([]);
 		expect(await db.select({ pending: itemGrade.pendingSubjectHash }).from(itemGrade)).toEqual([{ pending: null }, { pending: null }]);
+
+		// A request is spend on one subject: a new subject takes back what it queued.
+		const third = configWith("Coastal fisheries");
+		await store(db, third);
+		expect(await requestGrading(db, third, source.key)).toEqual({ queued: 2 });
+		await store(db, configWith("Inland fisheries"));
+		const withdrawn = jev(answering);
+		await runReadingCycle(db, configWith("Inland fisheries"), undefined, withdrawn.request);
+		expect(withdrawn.asked).toEqual([]);
+		expect((await readScreeningStatuses(db)).get(source.key)).toMatchObject({ ungraded: 2, grading: null });
 	});
 }, 120_000);
 

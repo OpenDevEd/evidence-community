@@ -48,21 +48,37 @@ export async function refreshScreenedOut(tx: DatabaseTransaction, keys: SQL) {
 }
 
 /**
+ * Takes back the records an owner's grading request queued for these sources, unless another source's request still
+ * wants them: a request is spend on one subject, so a new subject, or screening turned off, ends it.
+ */
+async function withdrawRequests(tx: DatabaseTransaction, sources: string[]) {
+	await tx.execute(sql`UPDATE "itemReadingQueue" q SET "nextAttemptAt" = NULL, "requested" = false
+		WHERE q."requested" AND q."nextAttemptAt" IS NOT NULL AND (q."leaseExpiresAt" IS NULL OR q."leaseExpiresAt" < now())
+			AND EXISTS (SELECT 1 FROM "itemSourceLink" l WHERE l."itemKey" = q."itemKey" AND l."sourceConnectionKey" = ANY(${keyArray(sources)}))
+			AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" l JOIN "sourceScreening" s ON s."sourceConnectionKey" = l."sourceConnectionKey"
+				WHERE l."itemKey" = q."itemKey" AND NOT l."remoteDeleted" AND s."gradingOf" IS NOT NULL)`);
+}
+
+/**
  * Stores each source's screening as the configuration sets it. A source whose kept-out grades changed, or that started
  * or stopped screening, has its records decided again; an owner's request to grade ends when the subject changes.
  */
 export async function saveSourceScreening(tx: DatabaseTransaction, sources: LibraryServerConfig["sources"]) {
 	const before = new Map((await tx.select().from(sourceScreening)).map((row) => [row.sourceConnectionKey, row]));
 	const wanted = new Map(sources.filter(screens).map((source) => [source.key, { subjectHash: hash(source.screening.subject), keptOut: [...source.screening.keptOut].sort() }]));
-	const changed = [...before.keys()].filter((key) => !wanted.has(key));
-	for (const key of changed) await tx.delete(sourceScreening).where(eq(sourceScreening.sourceConnectionKey, key));
+	const stopped = [...before.keys()].filter((key) => !wanted.has(key));
+	const changed = [...stopped];
+	const ended = [...stopped];
+	for (const key of stopped) await tx.delete(sourceScreening).where(eq(sourceScreening.sourceConnectionKey, key));
 	for (const [key, screening] of wanted) {
 		const old = before.get(key);
 		if (old?.subjectHash === screening.subjectHash && old.keptOut.join() === screening.keptOut.join()) continue;
 		await tx.insert(sourceScreening).values({ sourceConnectionKey: key, ...screening })
 			.onConflictDoUpdate({ target: sourceScreening.sourceConnectionKey, set: { ...screening, gradingOf: sql`CASE WHEN ${sourceScreening.subjectHash} = ${screening.subjectHash} THEN ${sourceScreening.gradingOf} END` } });
 		if (old?.keptOut.join() !== screening.keptOut.join()) changed.push(key);
+		if (old && old.subjectHash !== screening.subjectHash) ended.push(key);
 	}
+	if (ended.length) await withdrawRequests(tx, ended);
 	if (changed.length) await refreshScreenedOut(tx, sql`SELECT "itemKey" FROM "itemSourceLink" WHERE "sourceConnectionKey" = ANY(${keyArray(changed)})`);
 }
 
@@ -79,18 +95,20 @@ const ungradedRecords = (key: string, subjectHash: string) => sql`
  * transaction, so a new subject's grades never show one by one, and the owner's request to grade ends.
  */
 export async function settleScreening(database: Database) {
-	for (const source of await database.select().from(sourceScreening)) {
-		const pending = await database.execute(sql`SELECT 1 FROM "itemGrade" WHERE "sourceConnectionKey" = ${source.sourceConnectionKey} AND "pendingSubjectHash" = ${source.subjectHash} LIMIT 1`);
-		if (source.gradingOf === null && !pending.rows.length) continue;
-		const waiting = await database.execute(sql`SELECT 1 FROM (${ungradedRecords(source.sourceConnectionKey, source.subjectHash)}) w LIMIT 1`);
-		if (waiting.rows.length) continue;
+	const { rows } = await database.execute<{ key: string }>(sql`SELECT s."sourceConnectionKey" AS key FROM "sourceScreening" s
+		WHERE s."gradingOf" IS NOT NULL OR EXISTS (SELECT 1 FROM "itemGrade" g WHERE g."sourceConnectionKey" = s."sourceConnectionKey" AND g."pendingSubjectHash" IS NOT NULL)`);
+	for (const { key } of rows) {
 		await database.transaction(async (tx) => {
+			// The lock holds the subject still while the grades are checked and swapped; a new subject waits for it.
+			const [source] = await tx.select().from(sourceScreening).where(eq(sourceScreening.sourceConnectionKey, key)).for("update");
+			if (!source) return;
+			const waiting = await tx.execute(sql`SELECT 1 FROM (${ungradedRecords(key, source.subjectHash)}) w LIMIT 1`);
+			if (waiting.rows.length) return;
 			await tx.execute(sql`UPDATE "itemGrade" SET "score" = "pendingScore", "grade" = "pendingGrade", "subjectHash" = "pendingSubjectHash",
 				"pendingScore" = NULL, "pendingGrade" = NULL, "pendingSubjectHash" = NULL
-				WHERE "sourceConnectionKey" = ${source.sourceConnectionKey} AND "pendingSubjectHash" = ${source.subjectHash}`);
-			await tx.update(sourceScreening).set({ gradingOf: null })
-				.where(sql`${sourceScreening.sourceConnectionKey} = ${source.sourceConnectionKey} AND ${sourceScreening.subjectHash} = ${source.subjectHash}`);
-			await refreshScreenedOut(tx, sql`SELECT "itemKey" FROM "itemSourceLink" WHERE "sourceConnectionKey" = ${source.sourceConnectionKey}`);
+				WHERE "sourceConnectionKey" = ${key} AND "pendingSubjectHash" = ${source.subjectHash}`);
+			await tx.update(sourceScreening).set({ gradingOf: null }).where(eq(sourceScreening.sourceConnectionKey, key));
+			await refreshScreenedOut(tx, sql`SELECT "itemKey" FROM "itemSourceLink" WHERE "sourceConnectionKey" = ${key}`);
 		});
 	}
 }
@@ -105,11 +123,15 @@ export async function requestGrading(database: Database, config: LibraryServerCo
 	if (!readingKey(config)) return "no_key" as const;
 	const subjectHash = hash(source.screening.subject);
 	return database.transaction(async (tx) => {
-		// The configuration this request was authorised with is the one stored, so the request counts against it.
-		await saveSourceScreening(tx, config.sources);
+		// The workers store a new configuration when they start with it; until then this subject is not the source's.
+		const [stored] = await tx.select().from(sourceScreening).where(eq(sourceScreening.sourceConnectionKey, key)).for("update");
+		if (stored?.subjectHash !== subjectHash) return "not_ready" as const;
+		// A record already waiting for its own reasons stays queued as it was; one queued only by this request is marked
+		// so, and a new subject takes it back.
 		const { rows } = await tx.execute(sql`
-			INSERT INTO "itemReadingQueue" ("itemKey", "revision") SELECT "itemKey", revision FROM (${ungradedRecords(key, subjectHash)}) w
+			INSERT INTO "itemReadingQueue" ("itemKey", "revision", "requested") SELECT "itemKey", revision, true FROM (${ungradedRecords(key, subjectHash)}) w
 			ON CONFLICT ("itemKey") DO UPDATE SET "generation" = "itemReadingQueue"."generation" + 1,
+				"requested" = "itemReadingQueue"."requested" OR "itemReadingQueue"."nextAttemptAt" IS NULL,
 				"attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			RETURNING "itemKey"`);
 		await tx.update(sourceScreening).set({ gradingOf: rows.length || null }).where(eq(sourceScreening.sourceConnectionKey, key));

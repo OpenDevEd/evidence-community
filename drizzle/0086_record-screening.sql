@@ -13,6 +13,8 @@ ALTER TABLE "itemGrade" ADD COLUMN "pendingScore" real;--> statement-breakpoint
 ALTER TABLE "itemGrade" ADD COLUMN "pendingGrade" text;--> statement-breakpoint
 ALTER TABLE "itemGrade" ADD COLUMN "pendingSubjectHash" text;--> statement-breakpoint
 ALTER TABLE "itemReading" ADD COLUMN "screenedOut" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "itemReadingQueue" ADD COLUMN "requested" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "itemGrade_pending_idx" ON "itemGrade" USING btree ("sourceConnectionKey") WHERE "itemGrade"."pendingSubjectHash" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "sourceScreening" ADD CONSTRAINT "sourceScreening_sourceConnectionKey_sourceConnection_key_fk" FOREIGN KEY ("sourceConnectionKey") REFERENCES "public"."sourceConnection"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 -- A PDF's text arriving queues its record, so a type the abstract left uncertain is asked again from the PDF.
 CREATE OR REPLACE FUNCTION enqueue_item_reading() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -25,14 +27,14 @@ BEGIN
     IF pdf THEN
       INSERT INTO "itemReadingQueue" ("itemKey", "revision") SELECT p.key, p.revision FROM "item" p WHERE p.key = parent
       ON CONFLICT ("itemKey") DO UPDATE SET
-        "generation" = "itemReadingQueue"."generation" + 1,
+        "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
         "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL;
     END IF;
     RETURN NEW;
   END IF;
   INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."entityKey", NEW."revision")
   ON CONFLICT ("itemKey") DO UPDATE SET
-    "revision" = EXCLUDED."revision", "generation" = "itemReadingQueue"."generation" + 1,
+    "revision" = EXCLUDED."revision", "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
     "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
   WHERE "itemReadingQueue"."revision" < EXCLUDED."revision";
   RETURN NEW;
@@ -52,7 +54,7 @@ BEGIN
   IF revision IS NULL THEN RETURN NEW; END IF;
   INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."itemKey", revision)
   ON CONFLICT ("itemKey") DO UPDATE SET
-    "generation" = "itemReadingQueue"."generation" + 1,
+    "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
     "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL;
   RETURN NEW;
 END;

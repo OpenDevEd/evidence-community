@@ -2359,6 +2359,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "itemGrade_pending_idx": {
+          "name": "itemGrade_pending_idx",
+          "columns": [
+            {
+              "expression": "sourceConnectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"itemGrade\".\"pendingSubjectHash\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2515,6 +2531,13 @@
           "primaryKey": false,
           "notNull": true,
           "default": 1
+        },
+        "requested": {
+          "name": "requested",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "revision": {
           "name": "revision",

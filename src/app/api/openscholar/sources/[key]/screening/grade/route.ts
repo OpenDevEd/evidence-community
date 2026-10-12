@@ -7,6 +7,7 @@ type Context = { params: Promise<{ key: string }> };
 
 const REFUSED = {
 	no_key: { message: "The library has no OpenRouter key to read records with.", status: 409 },
+	not_ready: { message: "The library is still applying this subject. Try again in a minute.", status: 409 },
 	not_screening: { message: "This source does not screen its records.", status: 409 },
 } as const;
 

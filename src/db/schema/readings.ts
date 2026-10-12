@@ -49,12 +49,17 @@ export const itemGrade = pgTable("itemGrade", {
 	primaryKey({ columns: [table.itemKey, table.sourceConnectionKey] }),
 	foreignKey({ columns: [table.itemKey, table.sourceConnectionKey], foreignColumns: [itemSourceLink.itemKey, itemSourceLink.sourceConnectionKey] }).onDelete("cascade").onUpdate("cascade"),
 	index("itemGrade_source_idx").on(table.sourceConnectionKey),
+	index("itemGrade_pending_idx").on(table.sourceConnectionKey).where(sql`${table.pendingSubjectHash} IS NOT NULL`),
 ]);
 
-/** Records waiting to be read: new and changed ones from the outbox, leased, retried with backoff. */
+/**
+ * Records waiting to be read: new and changed ones from the outbox, leased, retried with backoff. `requested` marks a
+ * record queued only by the owner's request to grade, which a later subject change withdraws.
+ */
 export const itemReadingQueue = pgTable("itemReadingQueue", {
 	itemKey: varchar("itemKey", { length: 8 }).primaryKey(),
 	generation: bigint("generation", { mode: "number" }).notNull().default(1),
+	requested: boolean("requested").notNull().default(false),
 	...associationDeliveryColumns,
 }, (table) => [index("itemReadingQueue_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
 

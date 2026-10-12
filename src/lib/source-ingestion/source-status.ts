@@ -24,6 +24,7 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { itemReading } from "@/db/schema/readings";
 import { readScreeningStatuses, type ScreeningStatus } from "@/lib/readings/screening";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
@@ -524,6 +525,7 @@ async function countSearchable(
 				sql`coalesce(${item.deleted}, 0) = 0`,
 				isNull(item.parentItem),
 				notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
+				notExists(database.select({ itemKey: itemReading.itemKey }).from(itemReading).where(and(eq(itemReading.itemKey, item.key), eq(itemReading.screenedOut, true)))),
 				hiddenTags.length > 0
 					? notExists(
 							database
