@@ -188,11 +188,14 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 		await runReadingCycle(db, before, undefined, jev(scoring(2.8)).request);
 
 		const after = configWith("Urban housing policy");
-		// Until the workers store the new subject, a request to grade against it is refused.
+		// Until the workers store the new subject, a request to grade against it is refused, and one for a subject the
+		// source no longer screens against is refused outright.
 		expect(await requestGrading(db, after, source.key)).toBe("not_ready");
 		await store(db, after);
+		expect(await requestGrading(db, after, source.key, "Climate adaptation in farming")).toBe("subject_changed");
 		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({
 			subject: "Urban housing policy",
+			records: 2,
 			grades: { about: 2, touches: 0, passing: 0, notAbout: 0 },
 			examples: { about: expect.stringMatching(/^Irrigation in (Kenya|Malawi)$/u), touches: null, passing: null, notAbout: null },
 			ungraded: 2,
@@ -282,6 +285,10 @@ it("grades a record an owner's request queued for the requesting source only", a
 		const changed = both("Urban housing policy", "Coastal fisheries");
 		await store(db, changed);
 		expect(await requestGrading(db, changed, source.key)).toEqual({ queued: 1 });
+		// Queued for the first source only: the reading shows there, not on the second.
+		const queued = await readScreeningStatuses(db);
+		expect(queued.get(source.key)?.reading).toMatchObject({ left: 1 });
+		expect(queued.get(second.key)?.reading).toBeNull();
 		const asked = jev(scoring(0.1));
 		await runReadingCycle(db, changed, undefined, asked.request);
 		expect(asked.asked).toEqual([["grade_0"]]);

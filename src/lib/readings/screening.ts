@@ -131,10 +131,12 @@ export async function settleScreening(database: Database) {
  * Queues every record of a screening source not graded against its current subject, on the owner's request: the
  * records it held before it screened, and all of them after a new subject. Reading them is the owner's spend to start.
  */
-export async function requestGrading(database: Database, config: LibraryServerConfig, key: string) {
+export async function requestGrading(database: Database, config: LibraryServerConfig, key: string, asked?: string) {
 	const source = config.sources.find((candidate) => candidate.key === key);
 	if (!source || !screens(source)) return "not_screening" as const;
 	if (!readingKey(config)) return "no_key" as const;
+	// A request for a subject the library no longer screens against would spend on one nobody asked for.
+	if (asked !== undefined && asked.trim() !== source.screening.subject.trim()) return "subject_changed" as const;
 	const current = subjectHash(source.screening.subject);
 	return database.transaction(async (tx) => {
 		// The workers store a new configuration when they start with it; until then this subject is not the source's.
@@ -168,6 +170,8 @@ type ByGrade<T> = { about: T; touches: T; passing: T; notAbout: T };
  */
 export type ScreeningStatus = {
 	subject: string;
+	/** Every record the source holds, graded or not. */
+	records: number;
 	grades: ByGrade<number>;
 	examples: ByGrade<string | null>;
 	ungraded: number;
@@ -186,19 +190,22 @@ const latestTitle = (grade: string | null) => sql`(SELECT left(i.title, ${TITLE_
 
 /** The screening report of each source that screens, by source key. */
 export async function readScreeningStatuses(database: Pick<Database, "execute">) {
-	type Row = ByGrade<number> & { key: string; subject: string; gradingOf: number | null; ungraded: number; left: number; latest: string | null }
+	type Row = ByGrade<number> & { key: string; subject: string; gradingOf: number | null; records: number; ungraded: number; left: number; latest: string | null }
 		& { [Example in `${keyof ByGrade<number>}Example`]: string | null };
 	const { rows } = await database.execute<Row>(sql`
 		SELECT s."sourceConnectionKey" AS key, s."subject", s."gradingOf",
 			${sql.join(Object.entries(GRADE_COLUMNS).map(([column, grade]) => sql`${latestTitle(grade)} AS ${sql.identifier(`${column}Example`)}`), sql`, `)},
 			${latestTitle(null)} AS latest,
-			-- Records of the source waiting for their first try: the reading under way.
+			-- Records of the source waiting to be read for it, retries included: the reading under way. One an owner's request
+			-- queued for another source is not read for this one.
 			(SELECT count(*) FROM "itemReadingQueue" q JOIN "itemSourceLink" w ON w."itemKey" = q."itemKey" AND NOT w."remoteDeleted"
-				WHERE w."sourceConnectionKey" = s."sourceConnectionKey" AND q."nextAttemptAt" IS NOT NULL AND q."attempts" = 0)::int AS "left",
+				WHERE w."sourceConnectionKey" = s."sourceConnectionKey" AND q."nextAttemptAt" IS NOT NULL
+					AND (q."requestedFor" IS NULL OR s."sourceConnectionKey" = ANY(q."requestedFor")))::int AS "left",
 			count(g."itemKey") FILTER (WHERE g."grade" = 'about')::int AS about,
 			count(g."itemKey") FILTER (WHERE g."grade" = 'touches')::int AS touches,
 			count(g."itemKey") FILTER (WHERE g."grade" = 'passing')::int AS passing,
 			count(g."itemKey") FILTER (WHERE g."grade" = 'not-about')::int AS "notAbout",
+			count(l."itemKey")::int AS records,
 			count(l."itemKey") FILTER (WHERE g."itemKey" IS NULL
 				OR (g."subjectHash" IS DISTINCT FROM s."subjectHash" AND g."pendingSubjectHash" IS DISTINCT FROM s."subjectHash"))::int AS ungraded
 		FROM "sourceScreening" s
@@ -208,10 +215,12 @@ export async function readScreeningStatuses(database: Pick<Database, "execute">)
 		GROUP BY s."sourceConnectionKey", s."subject", s."gradingOf"`);
 	return new Map(rows.map((row): [string, ScreeningStatus] => [row.key, {
 		subject: row.subject,
+		records: row.records,
 		grades: { about: row.about, touches: row.touches, passing: row.passing, notAbout: row.notAbout },
 		examples: { about: row.aboutExample, touches: row.touchesExample, passing: row.passingExample, notAbout: row.notAboutExample },
 		ungraded: row.ungraded,
 		grading: row.gradingOf === null ? null : { done: Math.max(0, row.gradingOf - row.ungraded), of: row.gradingOf },
-		reading: row.left > 0 && row.latest !== null ? { title: row.latest, left: row.left } : null,
+		// A record may have no title; the reading is under way all the same.
+		reading: row.left > 0 ? { title: row.latest ?? "", left: row.left } : null,
 	}]));
 }
