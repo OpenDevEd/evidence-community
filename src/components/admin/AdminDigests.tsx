@@ -30,6 +30,7 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { Face } from "@/components/digests/DigestPrimitives";
 import { AIMarkdown } from "@/components/features/markdown/Markdown";
+import { CitedPublications } from "@/components/features/markdown/Citation";
 import { Button } from "@/components/nextui/Button";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
@@ -350,9 +351,10 @@ function EditionBody({ digests, shown, words, changed, tools }: { digests: Diges
 	if (digests.missing) return <p className={`py-24 text-center text-[13px] ${muted}`}>This digest is no longer available.</p>;
 	if (!digest) return loading;
 	if (!words) return <NoText digest={digest} />;
-	if (shown === "changes") return <ChangesView changed={changed} words={words} />;
 	if (shown === "write" && session) return <WriteView session={session} words={words} tools={tools} />;
-	return <PreviewView digest={digest} words={words} />;
+	return <CitedPublications value={digest.cited}>
+		{shown === "changes" ? <ChangesView changed={changed} words={words} /> : <PreviewView digest={digest} words={words} />}
+	</CitedPublications>;
 }
 
 /** The middle pane: every edition, or the one that is open, as text to write, as readers will see it, or against AI's text. */

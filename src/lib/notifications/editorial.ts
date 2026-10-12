@@ -6,6 +6,7 @@ import { item } from "@/db/schema/tables/item";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { ItemMutationConflictError, ItemNotFoundError } from "@/lib/admin/native-item-service";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { projectPublicItems } from "@/lib/search-index/projection";
 import { checkedDigestDraft, citedKeys, digestDraftSchema } from "./digest-text";
 import { getNextDigestEdition } from "./public";
 import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner } from "./types";
@@ -154,13 +155,15 @@ export async function readAdminDigest(db: Database | DatabaseTransaction, config
       .where(and(eq(notificationDelivery.editionId, id), eq(notificationDelivery.status, "sent"))),
   ]);
   const published = publishedWords(edition);
+  const words = workingWords(edition);
   return {
     id: edition.id, ...when(config, edition), publicationCount: edition.publicationCount,
     state: editionState(edition),
     // A published digest can be waiting for AI to write it again.
     writing: edition.nextAttemptAt !== null,
     revision: edition.draftRevision,
-    words: workingWords(edition),
+    words,
+    cited: await citedPublications(db, config, [words, published, edition.ai]),
     // Why the edition has no text, when the writer gave up on it.
     error: edition.nextAttemptAt === null && !edition.ai && !edition.publishedAt ? edition.lastError : null,
     published,
@@ -173,6 +176,14 @@ export async function readAdminDigest(db: Database | DatabaseTransaction, config
     events: events.map(event => ({ kind: event.kind, at: event.at.toISOString(), actor: event.actor })),
     sent: sent.readers ? { readers: sent.readers, at: new Date(sent.at!).toISOString() } : null,
   };
+}
+
+/** Whether each record the texts cite is open access, as readers see it, so the preview's citation links show it. */
+async function citedPublications(db: Database | DatabaseTransaction, config: LibraryServerConfig, texts: ({ markdown: string } | null)[]) {
+  const keys = [...new Set(texts.flatMap(text => text ? citedKeys(text.markdown) : []))];
+  if (!keys.length) return {};
+  const items = await db.transaction(tx => projectPublicItems(tx, keys, config));
+  return Object.fromEntries(items.map(record => [record.key, { openAccess: record.openAccess }]));
 }
 
 async function lockEdition(tx: DatabaseTransaction, id: string, expectedRevision: number) {

@@ -37,6 +37,7 @@ import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon,
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { tonesFrom } from "./home-tones";
 
 // Below the fold and heavy: the citation formatter with its styles. It loads when the reader nears it (see WhenNear),
 // not with the page.
@@ -1373,21 +1374,42 @@ export default function HomePage(props: Props) {
 	);
 }
 
-function Hero({ name, intro, data, tone, shapes }: { name: string; intro?: React.ReactNode; data: Promise<HomeData>; tone: Tone; shapes: MapShape[] }) {
+/** The inside band before the figures arrive, at the height its sections take. */
+const insidePlaceholder = <div className="h-[220rem] lg:h-[124.3rem]" />;
+
+/**
+ * The home page while the server is still sending it, on a first load or on Back: the hero with its map, its words
+ * holding their place unseen, and the first band at its height. The words then rise in with the page as on any load,
+ * and the footer never shows under the bar.
+ */
+export function HomePlaceholder({ intro }: { intro?: React.ReactNode }) {
+	const { identity, theme } = useLibraryConfig();
+	const { tones } = tonesFrom(theme.colors);
+	return (
+		<PageContainer className="flex flex-col py-0 lg:py-0 xl:py-0">
+			<Hero name={identity.name} intro={intro} tone={tones.page} shapes={[]} />
+			<Band tone={tones.card} previous={tones.page} sections>{insidePlaceholder}</Band>
+		</PageContainer>
+	);
+}
+
+/** Without `data` it is the placeholder's hero: no figures, and the words unseen. */
+function Hero({ name, intro, data, tone, shapes }: { name: string; intro?: React.ReactNode; data?: Promise<HomeData>; tone: Tone; shapes: MapShape[] }) {
 	const ref = useRef<HTMLElement>(null);
 	usePauseOffscreen(ref);
 	return (
 		<section ref={ref} className={`relative isolate pb-16 pt-10 lg:pb-24 lg:pt-16 ${toneClass}`} style={toneStyle(tone)}>
 			<HeroBackdrop data={data} shapes={shapes} />
-			<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroShelf data={figures} />}</WithData></Suspense>
-			<HeroText name={name} intro={intro} />
+			{data && <Suspense fallback={null}><WithData data={data}>{(figures) => <HeroShelf data={figures} />}</WithData></Suspense>}
+			<HeroText name={name} intro={intro} unseen={!data} />
 		</section>
 	);
 }
 
 /** The map behind the hero, the row of first pages below xl, and the wash that keeps the text readable over them. */
-function HeroBackdrop({ data, shapes }: { data: Promise<HomeData>; shapes: MapShape[] }) {
+function HeroBackdrop({ data, shapes }: { data?: Promise<HomeData>; shapes: MapShape[] }) {
 	const reduce = useLessMotion();
+	const map = (countries: Record<string, number>) => <HomeMap shapes={shapes} countries={countries} cover className="absolute inset-0 text-accent opacity-40" />;
 	// The map behind the hero drifts at a fraction of the scroll, so the page reads as layered.
 	const { scrollY } = useScroll();
 	const drift = useTransform(scrollY, [0, 900], [0, reduce ? 0 : -120]);
@@ -1395,11 +1417,9 @@ function HeroBackdrop({ data, shapes }: { data: Promise<HomeData>; shapes: MapSh
 		<div aria-hidden className={`pointer-events-none absolute inset-y-0 left-1/2 -z-10 w-screen -translate-x-1/2 overflow-hidden ${toneClass}`}>
 			{/* The map fills the hero and drifts up as the page scrolls, so its southern coasts are never pushed out of view. */}
 			<motion.div className="absolute inset-0" style={{ y: drift }}>
-				<Suspense fallback={<HomeMap shapes={shapes} countries={{}} cover className="absolute inset-0 text-accent opacity-40" />}>
-					<WithData data={data}>{(figures) => <HomeMap shapes={shapes} countries={figures.countries} cover className="absolute inset-0 text-accent opacity-40" />}</WithData>
-				</Suspense>
+				{data ? <Suspense fallback={map({})}><WithData data={data}>{(figures) => map(figures.countries)}</WithData></Suspense> : map({})}
 			</motion.div>
-			<Suspense fallback={null}><WithData data={data}>{(figures) => <HeroRow data={figures} />}</WithData></Suspense>
+			{data && <Suspense fallback={null}><WithData data={data}>{(figures) => <HeroRow data={figures} />}</WithData></Suspense>}
 			{/* A wash of the page colour behind the text, so the map shows only faintly where people read; it fades out before the covers. */}
 			<div className="absolute inset-0 bg-[linear-gradient(to_right,var(--band-bg)_0%,var(--band-bg)_22%,transparent_62%)] dark:bg-[linear-gradient(to_right,var(--band-bg-dark)_0%,var(--band-bg-dark)_22%,transparent_62%)] opacity-90 max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg)_14rem)] max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_10rem,var(--band-bg-dark)_14rem)] sm:max-xl:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg)_21rem)] sm:max-xl:dark:bg-[linear-gradient(to_bottom,transparent_0%,transparent_18rem,var(--band-bg-dark)_21rem)]" />
 		</div>
@@ -1407,12 +1427,12 @@ function HeroBackdrop({ data, shapes }: { data: Promise<HomeData>; shapes: MapSh
 }
 
 /** Name and tagline read as one unit; the intro is supporting text, set apart and softer; then the actions. */
-function HeroText({ name, intro }: { name: string; intro?: React.ReactNode }) {
+function HeroText({ name, intro, unseen = false }: { name: string; intro?: React.ReactNode; unseen?: boolean }) {
 	const { identity, notifications } = useLibraryConfig();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
 	const ownLogo = hasOwnLogo(identity.assets);
 	return (
-		<div className="relative flex min-h-[26rem] flex-col items-start justify-end pt-44 sm:pt-60 lg:min-h-[32rem] xl:pt-36">
+		<div className={`relative flex min-h-[26rem] flex-col items-start justify-end pt-44 sm:pt-60 lg:min-h-[32rem] xl:pt-36 ${unseen ? "invisible" : ""}`}>
 			<div className="flex flex-col gap-5">
 				{/* With its own logo, the logo is the heading; the name stays the page's heading for screen readers and search. */}
 				{ownLogo ? (
@@ -1446,7 +1466,7 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 			tone: tones.card,
 			sections: true,
 			body: (
-				<Suspense fallback={<div className="h-[220rem] lg:h-[124.3rem]" />}>
+				<Suspense fallback={insidePlaceholder}>
 					<WithData data={data}>{(figures) => <Inside data={figures} surface={tones.tertiary} questions={about.questions} />}</WithData>
 				</Suspense>
 			),

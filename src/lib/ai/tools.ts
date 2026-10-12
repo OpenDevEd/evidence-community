@@ -48,6 +48,7 @@ const SEARCH_ATTRIBUTES = [
 	"DOI",
 	"url",
 	"collections",
+	"openAccess",
 	PDF_PRESENCE_ATTRIBUTE,
 ] as const;
 
@@ -84,6 +85,7 @@ function searchHitToModelHit(hit: SearchHit) {
 		DOI: hit.DOI,
 		url: hit.url,
 		hasPdf: hit[PDF_PRESENCE_ATTRIBUTE] === true,
+		openAccess: typeof hit.openAccess === "boolean" ? hit.openAccess : null,
 		citation: `/lib/${String(hit.key)}`,
 	};
 }

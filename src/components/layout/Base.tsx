@@ -21,8 +21,9 @@ import { PLATFORM_FONTS } from "@/components/library/platform-fonts";
 import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { getSignedInReader } from "@/lib/readers/session";
-import PageFallback from "@/components/pages/PageFallback";
+import PageFallback, { LoadPageFallback } from "@/components/pages/PageFallback";
 import { isEmailChannelEnabled } from "@/lib/nodemailer";
+import { homePlaceholderContent } from "@/components/pages/HomeRichText";
 
 async function BaseContent({
 	children,
@@ -94,6 +95,7 @@ export default async function Base({
 	const dir = getLangDir(locale);
 	// Only the library's own fonts are set on the page, so only those are preloaded.
 	const fontVariables = themeGoogleFonts(libraryConfig.theme).map((family) => PLATFORM_FONTS[family].variable);
+	const fallback = { contactForm: isEmailChannelEnabled(serverConfig, "contact"), home: homePlaceholderContent(serverConfig) };
 	return (
 		<html lang={locale} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
 			<body>
@@ -123,7 +125,8 @@ export default async function Base({
 						 * Its fallback shows while the page is on its way: on a
 						 * first load, and on Back when the page is read again.
 						 */}
-						<Suspense fallback={<PageFallback contactForm={isEmailChannelEnabled(serverConfig, "contact")} />}>{children}</Suspense>
+						<LoadPageFallback {...fallback} />
+						<Suspense fallback={<PageFallback {...fallback} />}>{children}</Suspense>
 					</BaseContent>
 				</LibraryConfigProvider>
 			</body>

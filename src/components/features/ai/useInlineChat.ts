@@ -9,7 +9,7 @@ import {
 	useInlineChatDraft,
 	useInlineChatLayout,
 } from "@/context/InlineChatLayout";
-import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { bucketEntriesFromMessages, openAccessFromMessages } from "@/lib/ai/context-bucket";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import { isAnswering } from "@/lib/ai/chat-request";
 import type { AIModelId } from "@/lib/ai/models";
@@ -212,6 +212,8 @@ export function useInlineChat({
 			modelId,
 			pdfSources: publications.pdfSources,
 		}),
+		// What its citation links say about open access: the search hits, then the publications once they load.
+		cited: { ...openAccessFromMessages(conversation.messages), ...publications.byKey },
 		conversationStarted: conversation.messages.length > 1,
 		isComposerFocused,
 		isDeepResearchEnabled,

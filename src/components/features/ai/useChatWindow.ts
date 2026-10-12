@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
-import { bucketEntriesFromMessages } from "@/lib/ai/context-bucket";
+import { bucketEntriesFromMessages, openAccessFromMessages } from "@/lib/ai/context-bucket";
 import { isAnswering } from "@/lib/ai/chat-request";
 import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
@@ -218,9 +218,10 @@ export function useChatWindow({
 	};
 	const composer = useChatComposer({ isBusy, onSend: ask });
 	// Page links work for every publication the conversation has read, attached or found, as in the chat beside the results.
-	const { pdfSources } = useBucketPublications(
+	const publications = useBucketPublications(
 		bucketEntriesFromMessages(conversation.messages),
 	);
+	const { pdfSources } = publications;
 	const scrolling = useChatScrolling();
 
 	return {
@@ -240,6 +241,8 @@ export function useChatWindow({
 		mode,
 		pdfSources,
 		prefersReducedMotion: useReducedMotion(),
+		// What its citation links say about open access: the search hits, then the publications once they load.
+		cited: { ...openAccessFromMessages(conversation.messages), ...publications.byKey },
 		setMode,
 	};
 }
