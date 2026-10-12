@@ -103,9 +103,9 @@
     "settings": "Settings",
     "logout": "Logout",
     "createCollection": "Create Collection",
-    "searchCollections": "Search Collections",
+    "searchCollections": "Search collections",
     "downloadDescription": "You can download resources in the following formats",
-    "selectCollection": "Select a collection",
+    "selectCollection": "Save to collection",
     "download": "Download",
     "RISDescription": "Recommended format for most reference management software",
     "BibTeXDescription": "Recommended format for BibTeX-specific software",
@@ -554,7 +554,13 @@
     "invitationOpen": "Open",
     "invitationAddAddress": "Add an address to your account",
     "invitationSharedBy": "{name} shared a collection",
-    "invitationOpenFailed": "Couldn't open it"
+    "invitationOpenFailed": "Couldn't open it",
+    "sortRecent": "Recent",
+    "sortName": "Name",
+    "sortCollections": "Sort collections: {sort}",
+    "noMatchingCollections": "No collections match",
+    "collectionsRange": "{from} to {to} of {total}",
+    "openCollection": "Open collection"
   },
   "ai": {
     "sourcesTitle": "Sources",

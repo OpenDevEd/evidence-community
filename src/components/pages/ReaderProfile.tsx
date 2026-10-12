@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
 import { ModalBody, ModalContent, ModalFooter, SelectItem, SelectSection } from "@nextui-org/react";
 import {
@@ -31,9 +30,7 @@ import GenericHeader from "@/components/features/modals/GenericHeader";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { LIST_TOP_ID } from "@/hooks/useFilters";
 import { useItemsList } from "@/hooks/useItemsList";
-import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
-import type { ItemsGetResponse } from "@/app/api/items/types";
 import ItemsList from "@/components/features/items/ItemsList";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { useOpenScholarAccountUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
@@ -41,6 +38,7 @@ import { useReaderData } from "@/hooks/useReaderData";
 import type { CollectionAccess, CollectionMember, ReaderCollectionSummary, SharedCollectionSummary } from "@/lib/readers/data";
 import { Link } from "@/i18n/routing";
 import { MemberFaces, RoleChip, ShareCollectionDialog, useSentInvitations } from "@/components/features/collections/CollectionPeople";
+import { CoverStack, useShelfItems } from "@/components/features/collections/CoverStack";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import PageContainer from "@/components/layout/PageContainer";
 
@@ -63,11 +61,6 @@ async function sendCollectionChange(url: string, method: "POST" | "PATCH" | "DEL
 		body: body ? JSON.stringify(body) : undefined,
 	});
 	if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
-}
-
-function useShelfItems(userId: string, collectionId: string) {
-	const query = buildItemsQuery(collectionId ? { collectionId, page: 1 } : { page: 1 }, `/user/items/${userId}`);
-	return useSWR<ItemsGetResponse>(query, fetcher, { revalidateOnFocus: false, keepPreviousData: true });
 }
 
 /** Which collection the owner is editing, or a new one; nothing for visitors. */
@@ -817,56 +810,6 @@ function SharedWithYou({ collections }: { collections: SharedCollectionSummary[]
 				))}
 			</ul>
 		</div>
-	);
-}
-
-/** Where each of the three covers sits, closed and fanned out: [x in px, rotation in degrees]. */
-const STACK_POSES = [
-	{ closed: [0, 0], fanned: [0, 0] },
-	{ closed: [-12, -8], fanned: [-22, -14] },
-	{ closed: [12, 8], fanned: [22, 14] },
-] as const;
-
-/**
- * A collection's first three records as a little stack of cover pages, the
- * first in front. A chosen collection fans its stack out. An empty one shows
- * an outline where its first record will go. The box has a fixed size, so the
- * covers arriving moves nothing.
- */
-function CoverStack({ userId, collectionId, count, fanned }: { userId: string; collectionId: string; count: number; fanned: boolean }) {
-	const { data } = useShelfItems(userId, collectionId);
-	const records = data?.items.slice(0, 3) ?? [];
-	const slots = Math.min(count, 3);
-	return (
-		<span aria-hidden className="relative h-[4.5rem] w-24 shrink-0">
-			{count === 0 ? (
-				<span className="absolute start-1/2 top-1 aspect-[3/4] w-12 -translate-x-1/2 rounded-md border-2 border-dashed border-black/15 rtl:translate-x-1/2 dark:border-white/20" />
-			) : (
-				Array.from({ length: slots }, (_, index) => slots - 1 - index).map((index) => {
-					const record = records[index];
-					const [x, rotation] = STACK_POSES[index]![fanned ? "fanned" : "closed"];
-					return (
-						<span
-							key={index}
-							className="absolute start-1/2 top-1 -ms-6 w-12 transition-transform duration-300 ease-out group-hover:[--lift:-2px] motion-reduce:transition-none"
-							style={{ transform: `translate(${x}px, var(--lift, 0px)) rotate(${rotation}deg)` }}
-						>
-							{record ? (
-								<PdfCover
-									src={record.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage}
-									alt=""
-									title={record.title ?? undefined}
-									className="aspect-[3/4] w-full rounded-md object-cover shadow-[0_1px_3px_rgba(0,0,0,0.18)]"
-									width={48}
-								/>
-							) : (
-								<span className="block aspect-[3/4] w-full rounded-md bg-black/[0.08] dark:bg-white/10" />
-							)}
-						</span>
-					);
-				})
-			)}
-		</span>
 	);
 }
 

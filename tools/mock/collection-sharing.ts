@@ -39,6 +39,12 @@ const collections: CollectionSeed[] = [
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0005", owner: "user_mock_daniel", name: "Girls in STEM", description: null, private: true, records: 4, members: [["user_mock_amina", "viewer"]] },
 	// For `npm run verify -- shift --as editor`, whose account is user_acceptance_admin.
 	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0006", owner: "user_acceptance_admin", name: "Verify shared", description: "Shared for the motion checks", private: true, records: 5, members: [["user_mock_daniel", "editor"], ["user_mock_priya", "viewer"]] },
+	// Enough of Amina's own to fill more than one page of the record picker.
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0010", owner: "user_mock_amina", name: "Assessment tools", description: "Reading and maths tests used in the studies", private: false, records: 4, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0011", owner: "user_mock_amina", name: "Mother tongue", description: null, private: true, records: 2, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0012", owner: "user_mock_amina", name: "School feeding", description: "Meals and attendance", private: false, records: 0, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0013", owner: "user_mock_amina", name: "Remedial programmes", description: null, private: true, records: 5, members: [] },
+	{ id: "0e1a9c52-1b7e-4c11-9d6a-5a0c3f1e0014", owner: "user_mock_amina", name: "Girls' education", description: "For the gender chapter", private: true, records: 3, members: [] },
 ];
 const invitations: { collection: number; email: string; role: "editor" | "viewer"; expire?: boolean }[] = [
 	{ collection: 0, email: "lucia@example.org", role: "editor" },
