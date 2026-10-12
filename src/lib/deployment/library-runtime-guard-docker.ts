@@ -553,26 +553,30 @@ export function createDockerLibraryRuntimeGuard(
 		};
 	};
 
-	const requireGuard = (
+	/** The guard's probe origin when it is this library's guard for this release and revision, else null. */
+	const matchingGuardOrigin = (
 		container: InspectedContainer,
 		input: LibraryRuntimeRouteInput,
 	) => {
 		const labels = requireLabels(container.config.Labels);
 		const probeOrigin = readHttpsOrigin(labels[guardProbeOriginLabel]);
+		const matches =
+			probeOrigin &&
+			labels[guardLabel] === "true" &&
+			labels[guardApplicationLabel] === input.applicationUuid &&
+			labels[LIBRARY_COMPOSE_RELEASE_LABEL] === input.commit &&
+			labels[guardRevisionLabel] === input.revision &&
+			probeOrigin === labels[guardProbeOriginLabel] &&
+			container.config.Image === input.runtimeImage;
+		return matches ? probeOrigin : null;
+	};
+
+	const requireGuard = (
+		container: InspectedContainer,
+		input: LibraryRuntimeRouteInput,
+	) => {
+		const probeOrigin = matchingGuardOrigin(container, input);
 		if (!probeOrigin) {
-			return guardError(
-				"runtime_guard_conflict",
-				"An unrelated container is using the Evidence Library guard name.",
-			);
-		}
-		if (
-			labels[guardLabel] !== "true" ||
-			labels[guardApplicationLabel] !== input.applicationUuid ||
-			labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
-			labels[guardRevisionLabel] !== input.revision ||
-			probeOrigin !== labels[guardProbeOriginLabel] ||
-			container.config.Image !== input.runtimeImage
-		) {
 			return guardError(
 				"runtime_guard_conflict",
 				"An unrelated container is using the Evidence Library guard name.",
@@ -680,6 +684,24 @@ export function createDockerLibraryRuntimeGuard(
 		return requireGuard(updated, input);
 	};
 
+	/** Starts a guard container; one already started is fine. */
+	const startGuard = (containerId: string) =>
+		request(`${dockerApiVersion}/containers/${containerId}/start`, { method: "POST" }, [204, 304]);
+
+	/** Stops and deletes a guard container; one already gone is fine. */
+	const deleteGuard = async (containerId: string) => {
+		await request(
+			`${dockerApiVersion}/containers/${containerId}/stop?t=10`,
+			{ method: "POST" },
+			[204, 304, 404],
+		);
+		await request(
+			`${dockerApiVersion}/containers/${containerId}?v=true`,
+			{ method: "DELETE" },
+			[204, 404],
+		);
+	};
+
 	const createGuard = async (
 		name: string,
 		initialNetwork: string,
@@ -724,18 +746,27 @@ export function createDockerLibraryRuntimeGuard(
 				},
 				method: "POST",
 			},
-			[201],
+			[201, 409],
 		);
+		// Another request for this revision created the guard after this one found none: it is started and used here.
+		if (response.status === 409) {
+			const existing = await inspect(name, true);
+			if (!existing) {
+				return guardError(
+					"runtime_guard_start_failed",
+					"The Evidence Library continuity guard did not start.",
+				);
+			}
+			const guard = requireGuard(existing, input);
+			await startGuard(guard.id);
+			return connectGuardNetworks(guard, input);
+		}
 		const created = requireRecord(await readJson(response));
 		const id = requireContainerId(created.Id);
 		for (const network of input.source.networks) {
 			if (network !== initialNetwork) await connectToNetwork(id, network);
 		}
-		await request(
-			`${dockerApiVersion}/containers/${id}/start`,
-			{ method: "POST" },
-			[204, 304],
-		);
+		await startGuard(id);
 		const container = await inspect(id);
 		if (!container) {
 			return guardError(
@@ -759,6 +790,19 @@ export function createDockerLibraryRuntimeGuard(
 				);
 			}
 			let container = await inspect(name, true);
+			// A guard that is not running may have been left by a hand-off whose caller gave up between creating and starting
+			// it, or be one another request for this revision is starting now. One for this revision is started (starting
+			// it twice is harmless); one for an earlier revision serves nothing, so a fresh one replaces it.
+			if (container && container.state.Status !== "running") {
+				const owned = requireOwnedGuard(container, input.applicationUuid);
+				if (matchingGuardOrigin(owned, input)) {
+					await startGuard(owned.id);
+					container = await inspect(name, true);
+				} else {
+					await deleteGuard(owned.id);
+					container = null;
+				}
+			}
 			if (container) {
 				container = await connectGuardNetworks(
 					requireGuard(container, input),
@@ -825,17 +869,7 @@ export function createDockerLibraryRuntimeGuard(
 			const name = guardName(applicationUuid);
 			const container = await inspect(name, true);
 			if (!container) return;
-			requireOwnedGuard(container, applicationUuid);
-			await request(
-				`${dockerApiVersion}/containers/${container.id}/stop?t=10`,
-				{ method: "POST" },
-				[204, 304, 404],
-			);
-			await request(
-				`${dockerApiVersion}/containers/${container.id}?v=true`,
-				{ method: "DELETE" },
-				[204, 404],
-			);
+			await deleteGuard(requireOwnedGuard(container, applicationUuid).id);
 		},
 	};
 }

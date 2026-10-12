@@ -95,8 +95,24 @@ function guardInspection() {
 	};
 }
 
-function dockerFetchFixture(configJson: string) {
-	let guardExists = false;
+/** A guard an earlier hand-off created for another revision and never started. */
+const staleGuardId = "e".repeat(64);
+function staleGuardInspection() {
+	const guard = guardInspection();
+	return {
+		...guard,
+		Config: { ...guard.Config, Labels: { ...guard.Config.Labels, "org.opendeved.evidence-library.guard.revision": "library-6" } },
+		Id: staleGuardId,
+		State: { Status: "created" },
+	};
+}
+
+function dockerFetchFixture(configJson: string, { staleGuard = false, unstartedGuard = false, createdMeanwhile = false } = {}) {
+	let guardExists = unstartedGuard;
+	let guardRunning = !unstartedGuard;
+	let stale = staleGuard;
+	const removed: string[] = [];
+	const started: string[] = [];
 	const connectedNetworks = new Set<string>();
 	let createBody: Record<string, unknown> | undefined;
 	const handlers = new Map<string, (init?: RequestInit) => Response>([
@@ -115,18 +131,36 @@ function dockerFetchFixture(configJson: string) {
 		[
 			`/v1.41/containers/openscholar-library-guard-${applicationUuid}/json`,
 			() =>
-				guardExists
-					? json(guardInspection())
-					: json({ message: "missing" }, 404),
+				stale
+					? json(staleGuardInspection())
+					: guardExists
+						? json({ ...guardInspection(), State: guardRunning ? guardInspection().State : { Status: "created" } })
+						: json({ message: "missing" }, 404),
+		],
+		[`/v1.41/containers/${staleGuardId}/stop`, () => new Response(null, { status: 304 })],
+		[
+			`/v1.41/containers/${staleGuardId}`,
+			(init) => {
+				if (init?.method === "DELETE") {
+					stale = false;
+					removed.push(staleGuardId);
+				}
+				return new Response(null, { status: 204 });
+			},
 		],
 		[
 			"/v1.41/containers/create",
 			(init) => {
+				guardExists = true;
+				// Another request for this revision created the guard first; it has not started it yet.
+				if (createdMeanwhile) {
+					guardRunning = false;
+					return json({ message: "Conflict. The container name is already in use." }, 409);
+				}
 				createBody = JSON.parse(init?.body as string) as Record<
 					string,
 					unknown
 				>;
-				guardExists = true;
 				return json({ Id: guardId, Warnings: [] }, 201);
 			},
 		],
@@ -146,7 +180,11 @@ function dockerFetchFixture(configJson: string) {
 		],
 		[
 			`/v1.41/containers/${guardId}/start`,
-			() => new Response(null, { status: 204 }),
+			() => {
+				started.push(guardId);
+				guardRunning = true;
+				return new Response(null, { status: 204 });
+			},
 		],
 		[`/v1.41/containers/${guardId}/json`, () => json(guardInspection())],
 	]);
@@ -185,6 +223,8 @@ function dockerFetchFixture(configJson: string) {
 		get createBody() {
 			return createBody;
 		},
+		removed,
+		started,
 	};
 }
 
@@ -248,6 +288,41 @@ describe("Docker Evidence Library runtime guard", () => {
 		expect(fixture.createBody?.Labels).not.toHaveProperty(
 			"coolify.managed",
 		);
+	});
+
+	it("replaces a guard an earlier hand-off created but never started", async () => {
+		const configJson = JSON.stringify({ identity: { baseUrl: canonicalOrigin }, revision });
+		const fixture = dockerFetchFixture(configJson, { staleGuard: true });
+		const docker = createDockerLibraryRuntimeGuard({ dockerProxyUrl: "http://docker-proxy:2375", fetch: fixture.fetchRequest as typeof fetch, sleep: async () => undefined });
+		const source = await docker.readApplicationWeb(input);
+		await expect(docker.ensureGuard({ ...input, configPath: `/runtime/guards/${applicationUuid}/library.json`, source })).resolves.toEqual({
+			ipAddress: "172.19.0.10",
+			port: 3000,
+			probeOrigin: canonicalOrigin,
+		});
+		expect(fixture.removed).toEqual([staleGuardId]);
+		expect(fixture.createBody?.Labels).toMatchObject({ "org.opendeved.evidence-library.guard.revision": revision });
+	});
+
+	it("starts this revision's guard when another request created it and has not started it yet", async () => {
+		const configJson = JSON.stringify({ identity: { baseUrl: canonicalOrigin }, revision });
+		const fixture = dockerFetchFixture(configJson, { unstartedGuard: true });
+		const docker = createDockerLibraryRuntimeGuard({ dockerProxyUrl: "http://docker-proxy:2375", fetch: fixture.fetchRequest as typeof fetch, sleep: async () => undefined });
+		const source = await docker.readApplicationWeb(input);
+		await expect(docker.ensureGuard({ ...input, configPath: `/runtime/guards/${applicationUuid}/library.json`, source })).resolves.toMatchObject({ ipAddress: "172.19.0.10" });
+		expect(fixture.started).toEqual([guardId]);
+		expect(fixture.removed).toEqual([]);
+		expect(fixture.createBody).toBeUndefined();
+	});
+
+	it("uses the guard another request created after this one replaced a stale guard", async () => {
+		const configJson = JSON.stringify({ identity: { baseUrl: canonicalOrigin }, revision });
+		const fixture = dockerFetchFixture(configJson, { staleGuard: true, createdMeanwhile: true });
+		const docker = createDockerLibraryRuntimeGuard({ dockerProxyUrl: "http://docker-proxy:2375", fetch: fixture.fetchRequest as typeof fetch, sleep: async () => undefined });
+		const source = await docker.readApplicationWeb(input);
+		await expect(docker.ensureGuard({ ...input, configPath: `/runtime/guards/${applicationUuid}/library.json`, source })).resolves.toMatchObject({ ipAddress: "172.19.0.10" });
+		expect(fixture.removed).toEqual([staleGuardId]);
+		expect(fixture.started).toEqual([guardId]);
 	});
 
 	it("refuses to preserve a web container with a different revision", async () => {
