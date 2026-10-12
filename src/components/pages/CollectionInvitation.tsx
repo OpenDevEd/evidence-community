@@ -15,6 +15,7 @@ import {
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import PageContainer from "@/components/layout/PageContainer";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import { useOpenScholarAccountUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
@@ -46,7 +47,8 @@ function Landing({
 }: {
 	hero: ReactNode;
 	lead?: ReactNode;
-	title: string;
+	/** Null while the invitation is not read yet: a placeholder the title's line height. */
+	title: string | null;
 	detail?: ReactNode;
 	/** Why opening failed, in place of the line under the title, so nothing moves. */
 	failed?: string | null;
@@ -61,7 +63,11 @@ function Landing({
 					<span className="-mt-14 rounded-full bg-white p-1.5 dark:bg-secondary">{hero}</span>
 					<div className="flex flex-col items-center gap-3">
 						{lead}
-						<h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground [overflow-wrap:anywhere] dark:text-white">{title}</h1>
+						{title === null ? (
+							<Skeleton className="h-9 w-56 max-w-full rounded-xl" />
+						) : (
+							<h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground [overflow-wrap:anywhere] dark:text-white">{title}</h1>
+						)}
 						{failed ? (
 							<p role="alert" className="max-w-sm text-danger">
 								{failed}
@@ -83,6 +89,31 @@ function IconHero({ icon, tone = "accent" }: { icon: typeof Mail01Icon; tone?: "
 		<span className={tone === "danger" ? "flex size-24 items-center justify-center rounded-full bg-danger/10 text-danger" : "flex size-24 items-center justify-center rounded-full bg-accent/10 text-accent"}>
 			<HugeiconsIcon icon={icon} className="size-10" aria-hidden />
 		</span>
+	);
+}
+
+/**
+ * The page before the server has read the invitation. Signed out, it is the
+ * same page whatever the invitation is. Signed in, it is a placeholder the
+ * size of the most common answer, an invitation still to open.
+ */
+export function CollectionInvitationPlaceholder({ invitationId }: { invitationId: string }) {
+	const { reader } = useReaderSession();
+	if (!reader) return <CollectionInvitation invitationId={invitationId} view={{ state: "signedOut" }} />;
+	return (
+		<Landing
+			hero={<Skeleton className="size-24 rounded-full" />}
+			lead={<Skeleton className="h-5 w-40 rounded-lg" />}
+			title={null}
+			chips={
+				<>
+					<Skeleton className="h-8 w-24 rounded-full" />
+					<Skeleton className="h-8 w-28 rounded-full" />
+				</>
+			}
+		>
+			<Skeleton className="h-12 rounded-2xl" />
+		</Landing>
 	);
 }
 
