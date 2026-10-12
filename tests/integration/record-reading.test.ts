@@ -109,6 +109,21 @@ it("grades a record for a screening source that starts holding it, though its re
 		const picked = jev(answering);
 		await runReadingCycle(db, both, undefined, picked.request);
 		expect(picked.asked).toEqual([["grade_0"]]);
-		expect((await db.select({ source: itemGrade.sourceConnectionKey }).from(itemGrade)).map((grade) => grade.source).sort()).toEqual([second.key, source.key].sort());
+		const gradedBy = async () => (await db.select({ source: itemGrade.sourceConnectionKey }).from(itemGrade)).map((grade) => grade.source).sort();
+		expect(await gradedBy()).toEqual([second.key, source.key].sort());
+
+		const setRemoteDeleted = (deleted: boolean) => client.query(`UPDATE "itemSourceLink" SET "remoteDeleted" = $1 WHERE "itemKey" = 'LAPPED22' AND "sourceConnectionKey" = $2`, [deleted, second.key]);
+		await setRemoteDeleted(false);
+		const untouched = jev(answering);
+		await runReadingCycle(db, both, undefined, untouched.request);
+		expect(untouched.asked).toEqual([]);
+
+		await setRemoteDeleted(true);
+		expect(await gradedBy()).toEqual([source.key]);
+		await setRemoteDeleted(false);
+		const restored = jev(answering);
+		await runReadingCycle(db, both, undefined, restored.request);
+		expect(restored.asked).toEqual([["grade_0"]]);
+		expect(await gradedBy()).toEqual([second.key, source.key].sort());
 	});
 }, 120_000);

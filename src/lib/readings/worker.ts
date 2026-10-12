@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
-import { itemGrade, itemReading, readingSpend } from "@/db/schema/readings";
+import { itemReading, readingSpend } from "@/db/schema/readings";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { askJev } from "./jev";
 import { metadataStudyType } from "./metadata-type";
@@ -91,7 +91,10 @@ async function recordFacts(database: Database, keys: string[]) {
 	const list = sql`ARRAY[${sql.join(keys.map((key) => sql`${key}`), sql`, `)}]::varchar[]`;
 	const { rows } = await database.execute<{ key: string; title: string | null; abstractNote: string | null; itemType: string; DOI: string | null; openAlexType: string | null; sources: string[] }>(sql`
 		SELECT i.key, i.title, i."abstractNote", i."itemType"::text AS "itemType", i."DOI",
-			(SELECT s.payload ->> 'type' FROM "sourceSnapshot" s WHERE s."itemKey" = i.key AND s.payload ? 'type' LIMIT 1) AS "openAlexType",
+			-- OpenAlex's type from the newest snapshot of a source that still holds the record.
+			(SELECT s.payload ->> 'type' FROM "sourceSnapshot" s
+				JOIN "itemSourceLink" held ON held."itemKey" = s."itemKey" AND held."sourceConnectionKey" = s."sourceConnectionKey" AND NOT held."remoteDeleted"
+				WHERE s."itemKey" = i.key AND s.payload ? 'type' ORDER BY s."fetchedAt" DESC LIMIT 1) AS "openAlexType",
 			ARRAY(SELECT l."sourceConnectionKey" FROM "itemSourceLink" l WHERE l."itemKey" = i.key AND NOT l."remoteDeleted") AS sources
 		FROM "item" i WHERE i.key = ANY(${list}) AND coalesce(i.deleted, 0) <> 1 AND coalesce(i."parentItem", '') = ''`);
 	const readings = await database.execute<{ itemKey: string; contentHash: string; questionSet: number; studyType: StudyTypeKey; typedBy: "ai" | "metadata" }>(sql`
@@ -150,9 +153,13 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 		} else if (plan.retype) {
 			await tx.update(itemReading).set(typeFields(plan, read)).where(sql`${itemReading.itemKey} = ${record.key}`);
 		}
+		// A grade is kept only while its source still holds the record. The share lock waits out a withdrawal in flight,
+		// whose trigger drops the source's grade.
 		for (const [index, subject] of plan.graded.entries()) {
-			const grade = { itemKey: record.key, sourceConnectionKey: subject.key, score: read.scores[index], subjectHash: subject.hash, gradedAt: new Date() };
-			await tx.insert(itemGrade).values(grade).onConflictDoUpdate({ target: [itemGrade.itemKey, itemGrade.sourceConnectionKey], set: grade });
+			await tx.execute(sql`INSERT INTO "itemGrade" ("itemKey", "sourceConnectionKey", "score", "subjectHash", "gradedAt")
+				SELECT ${record.key}, ${subject.key}, ${read.scores[index]}, ${subject.hash}, now()
+				WHERE EXISTS (SELECT 1 FROM "itemSourceLink" WHERE "itemKey" = ${record.key} AND "sourceConnectionKey" = ${subject.key} AND NOT "remoteDeleted" FOR SHARE)
+				ON CONFLICT ("itemKey", "sourceConnectionKey") DO UPDATE SET "score" = EXCLUDED."score", "subjectHash" = EXCLUDED."subjectHash", "gradedAt" = EXCLUDED."gradedAt"`);
 		}
 	});
 }

@@ -67,7 +67,13 @@ FOR EACH ROW EXECUTE FUNCTION enqueue_item_reading();
 CREATE FUNCTION enqueue_item_reading_for_link() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE revision bigint;
 BEGIN
-  IF NEW."remoteDeleted" THEN RETURN NEW; END IF;
+  -- A source that no longer holds the record drops its grade of it.
+  IF NEW."remoteDeleted" THEN
+    DELETE FROM "itemGrade" WHERE "itemKey" = NEW."itemKey" AND "sourceConnectionKey" = NEW."sourceConnectionKey";
+    RETURN NEW;
+  END IF;
+  -- An update that leaves the link active queues nothing.
+  IF TG_OP = 'UPDATE' AND NOT OLD."remoteDeleted" THEN RETURN NEW; END IF;
   SELECT i.revision INTO revision FROM "item" i WHERE i.key = NEW."itemKey" AND i."parentItem" IS NULL;
   IF revision IS NULL THEN RETURN NEW; END IF;
   INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."itemKey", revision)
