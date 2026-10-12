@@ -6,10 +6,12 @@ import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import {
+	createContext,
 	forwardRef,
 	type ComponentProps,
 	type CSSProperties,
 	type ReactNode,
+	use,
 	useState,
 } from "react";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -36,6 +38,14 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
+import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
+
+/**
+ * The publications a text may cite, by key, as the page already holds them, so a link to one shows whether it is
+ * open access from its first frame.
+ */
+export type CitedPublicationsByKey = Readonly<Record<string, { openAccess?: boolean | null }>>;
+export const CitedPublications = createContext<CitedPublicationsByKey>({});
 
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
 
@@ -443,7 +453,7 @@ export function PublicationLinkPreview({
 
 /**
  * A link the assistant wrote to a publication in this library: marked with
- * the library's own icon, and previewed on hover.
+ * the library's own icon and whether it is open access, and previewed on hover.
  */
 export function PublicationLink({
 	href,
@@ -455,6 +465,7 @@ export function PublicationLink({
 	children: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const openAccess = use(CitedPublications)[itemKey]?.openAccess;
 	return (
 		<InlineCitation className="inline align-baseline">
 			<InlineCitationCard open={open} onOpenChange={setOpen}>
@@ -466,6 +477,12 @@ export function PublicationLink({
 						className="group/library-link -mx-0.5 rounded-[0.35rem] px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-[0.18em] box-decoration-clone transition-[color,background-color,text-decoration-color] duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-600 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-300"
 					>
 						<SiteFavicon className="me-1 size-3.5 rounded-favicon align-[-0.12em] opacity-75 ring-1 ring-black/[0.06] transition-[opacity,transform] duration-200 ease-out group-hover/library-link:-translate-y-px group-hover/library-link:opacity-100 motion-reduce:transform-none motion-reduce:transition-none dark:ring-white/10" />
+						<OpenAccessLabel
+							openAccess={openAccess}
+							iconOnly
+							className="me-1 align-[-0.12em]"
+							iconClassName="size-3.5"
+						/>
 						<span className="underline decoration-inherit">
 							{children}
 						</span>
@@ -487,6 +504,7 @@ export function PublicationLink({
  */
 export function PageCitation({ href, page }: { href?: string; page: string }) {
 	const match = href?.match(pdfHrefPattern);
+	const openAccess = use(CitedPublications)[match?.[1] ?? ""]?.openAccess;
 	if (!href || !match) {
 		return (
 			<StaticCitationChip
@@ -505,6 +523,7 @@ export function PageCitation({ href, page }: { href?: string; page: string }) {
 						href={href}
 						ariaLabel={`Open citation source at page ${page}`}
 					>
+						<OpenAccessLabel openAccess={openAccess} iconOnly iconClassName="size-3.5" />
 						<SourcePageLabel page={page} />
 					</CitationLinkChip>
 				</InlineCitationCardTrigger>

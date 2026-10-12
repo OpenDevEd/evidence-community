@@ -2,6 +2,7 @@ import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { editionCardKeys, getDigestEdition, listEarlierDigests, pageNumber } from "@/lib/notifications/public";
 import { readSubscription } from "@/lib/notifications/subscriptions";
+import { citedKeys } from "@/lib/notifications/digest-text";
 import { readPublicItems } from "@/lib/search-index/projection";
 import { readAuthorProfiles } from "@/lib/authors/catalog-server";
 import DigestPages, { type EditionCardsData } from "@/components/digests/DigestPages";
@@ -21,14 +22,20 @@ export default async function Page({params, searchParams}: Props) {
   const reviewsPage = searchParams.then(value => pageNumber(value.reviews));
   const edition = readDigests(current, async (db, config, locale) => getDigestEdition(db, config, locale, slug, await page, await reviewsPage));
   // This page's cards and their authors are read with the page, so nothing loads in the browser.
-  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, value ? editionCardKeys(value) : [])));
+  const cards = edition.then(value => readDigests(current, (db, config) => readEditionCards(db, config, value ? editionCardKeys(value) : [], value ? citedKeys(value.markdown) : [])));
   return <DigestPages view="edition" slug={slug} earlier={readDigests(current, (db, config, locale) => listEarlierDigests(db, config, locale, slug))} edition={edition} cards={cards} />;
 }
 
-async function readEditionCards(db: Database, config: LibraryServerConfig, keys: string[]): Promise<EditionCardsData> {
-  const items = await readPublicItems(db, keys, config);
-  const cards = items.map(({fullTextPDFs: _text, attachmentsData: _files, ...card}) => card);
-  return {cards, profiles: await readAuthorProfiles(cards.flatMap(card => card.creators ?? []).flatMap(creator => creator.authorProfileId ? [creator.authorProfileId] : []))};
+async function readEditionCards(db: Database, config: LibraryServerConfig, keys: string[], cited: string[]): Promise<EditionCardsData> {
+  // The records the text cites come with the cards, so each citation link shows from the start whether its record is open access.
+  const items = await readPublicItems(db, [...new Set([...keys, ...cited])], config);
+  const onPage = new Set(keys);
+  const cards = items.filter(item => onPage.has(item.key)).map(({fullTextPDFs: _text, attachmentsData: _files, ...card}) => card);
+  return {
+    cards,
+    cited: Object.fromEntries(items.map(item => [item.key, {openAccess: item.openAccess}])),
+    profiles: await readAuthorProfiles(cards.flatMap(card => card.creators ?? []).flatMap(creator => creator.authorProfileId ? [creator.authorProfileId] : [])),
+  };
 }
 
 async function readPreferences(db: Database, token: string): Promise<Preferences | null> {

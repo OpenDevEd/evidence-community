@@ -22,6 +22,7 @@ import Resource from "@/components/features/items/Resource";
 import { HeadFigure, SidebarCard, barWidth } from "@/components/features/collections/SidebarCard";
 
 import { AIMarkdown, MarkdownExcerpt } from "@/components/features/markdown/Markdown";
+import { CitedPublications, type CitedPublicationsByKey } from "@/components/features/markdown/Citation";
 
 
 import { SectionTitle } from "@/components/typography/SectionTitle";
@@ -81,7 +82,7 @@ const newReader: Preferences = {email: "", digest: true, instant: false, confirm
 type DigestSettings = {libraryName: string; enabled: boolean; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
 type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; chart: Promise<DigestChart>; nextEdition: Promise<DigestDate | null>};
-export type EditionCardsData = {cards: ListItem[]; profiles: AuthorProfile[]};
+export type EditionCardsData = {cards: ListItem[]; cited: CitedPublicationsByKey; profiles: AuthorProfile[]};
 type EditionProps = {view: "edition"; slug: string; earlier: Promise<DigestSummary[]>; edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>};
 type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber: Promise<Preferences | null>};
 
@@ -298,11 +299,13 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
     <div className={withRail}>
       <article className="min-w-0">
         <EditorNote edition={edition} />
-        {intro && <AIMarkdown>{intro}</AIMarkdown>}
-        <div className="space-y-12">{parts.map(part => <section key={part.id} id={part.id} aria-labelledby={`${part.id}-title`} className="scroll-mt-8">
-          <SectionTitle className="mb-4"><span id={`${part.id}-title`}>{part.title}</span></SectionTitle>
-          <AIMarkdown>{part.body}</AIMarkdown>
-        </section>)}</div>
+        <CitedPublications value={records.cited}>
+          {intro && <AIMarkdown>{intro}</AIMarkdown>}
+          <div className="space-y-12">{parts.map(part => <section key={part.id} id={part.id} aria-labelledby={`${part.id}-title`} className="scroll-mt-8">
+            <SectionTitle className="mb-4"><span id={`${part.id}-title`}>{part.title}</span></SectionTitle>
+            <AIMarkdown>{part.body}</AIMarkdown>
+          </section>)}</div>
+        </CitedPublications>
         <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
       <aside className="order-first space-y-4 lg:sticky lg:top-8 lg:order-none">
