@@ -684,6 +684,10 @@ export function createDockerLibraryRuntimeGuard(
 		return requireGuard(updated, input);
 	};
 
+	/** Starts a guard container; one already started is fine. */
+	const startGuard = (containerId: string) =>
+		request(`${dockerApiVersion}/containers/${containerId}/start`, { method: "POST" }, [204, 304]);
+
 	/** Stops and deletes a guard container; one already gone is fine. */
 	const deleteGuard = async (containerId: string) => {
 		await request(
@@ -742,18 +746,27 @@ export function createDockerLibraryRuntimeGuard(
 				},
 				method: "POST",
 			},
-			[201],
+			[201, 409],
 		);
+		// Another request for this revision created the guard after this one found none: it is started and used here.
+		if (response.status === 409) {
+			const existing = await inspect(name, true);
+			if (!existing) {
+				return guardError(
+					"runtime_guard_start_failed",
+					"The Evidence Library continuity guard did not start.",
+				);
+			}
+			const guard = requireGuard(existing, input);
+			await startGuard(guard.id);
+			return connectGuardNetworks(guard, input);
+		}
 		const created = requireRecord(await readJson(response));
 		const id = requireContainerId(created.Id);
 		for (const network of input.source.networks) {
 			if (network !== initialNetwork) await connectToNetwork(id, network);
 		}
-		await request(
-			`${dockerApiVersion}/containers/${id}/start`,
-			{ method: "POST" },
-			[204, 304],
-		);
+		await startGuard(id);
 		const container = await inspect(id);
 		if (!container) {
 			return guardError(
@@ -783,7 +796,7 @@ export function createDockerLibraryRuntimeGuard(
 			if (container && container.state.Status !== "running") {
 				const owned = requireOwnedGuard(container, input.applicationUuid);
 				if (matchingGuardOrigin(owned, input)) {
-					await request(`${dockerApiVersion}/containers/${owned.id}/start`, { method: "POST" }, [204, 304]);
+					await startGuard(owned.id);
 					container = await inspect(name, true);
 				} else {
 					await deleteGuard(owned.id);

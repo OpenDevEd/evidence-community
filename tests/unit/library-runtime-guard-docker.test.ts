@@ -107,7 +107,7 @@ function staleGuardInspection() {
 	};
 }
 
-function dockerFetchFixture(configJson: string, { staleGuard = false, unstartedGuard = false } = {}) {
+function dockerFetchFixture(configJson: string, { staleGuard = false, unstartedGuard = false, createdMeanwhile = false } = {}) {
 	let guardExists = unstartedGuard;
 	let guardRunning = !unstartedGuard;
 	let stale = staleGuard;
@@ -151,11 +151,16 @@ function dockerFetchFixture(configJson: string, { staleGuard = false, unstartedG
 		[
 			"/v1.41/containers/create",
 			(init) => {
+				guardExists = true;
+				// Another request for this revision created the guard first; it has not started it yet.
+				if (createdMeanwhile) {
+					guardRunning = false;
+					return json({ message: "Conflict. The container name is already in use." }, 409);
+				}
 				createBody = JSON.parse(init?.body as string) as Record<
 					string,
 					unknown
 				>;
-				guardExists = true;
 				return json({ Id: guardId, Warnings: [] }, 201);
 			},
 		],
@@ -308,6 +313,16 @@ describe("Docker Evidence Library runtime guard", () => {
 		expect(fixture.started).toEqual([guardId]);
 		expect(fixture.removed).toEqual([]);
 		expect(fixture.createBody).toBeUndefined();
+	});
+
+	it("uses the guard another request created after this one replaced a stale guard", async () => {
+		const configJson = JSON.stringify({ identity: { baseUrl: canonicalOrigin }, revision });
+		const fixture = dockerFetchFixture(configJson, { staleGuard: true, createdMeanwhile: true });
+		const docker = createDockerLibraryRuntimeGuard({ dockerProxyUrl: "http://docker-proxy:2375", fetch: fixture.fetchRequest as typeof fetch, sleep: async () => undefined });
+		const source = await docker.readApplicationWeb(input);
+		await expect(docker.ensureGuard({ ...input, configPath: `/runtime/guards/${applicationUuid}/library.json`, source })).resolves.toMatchObject({ ipAddress: "172.19.0.10" });
+		expect(fixture.removed).toEqual([staleGuardId]);
+		expect(fixture.started).toEqual([guardId]);
 	});
 
 	it("refuses to preserve a web container with a different revision", async () => {
