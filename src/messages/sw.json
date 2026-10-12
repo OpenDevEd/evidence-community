@@ -574,7 +574,8 @@
     "sortCollections": "Panga makusanyo: {sort}",
     "noMatchingCollections": "Hakuna makusanyo yanayolingana",
     "collectionsRange": "{from} hadi {to} kati ya {total}",
-    "openCollection": "Fungua mkusanyiko"
+    "openCollection": "Fungua mkusanyiko",
+    "invitationsUnread": "Imeshindikana kupakia mialiko inayosubiri"
   },
   "ai": {
     "sourcesTitle": "Vyanzo",

@@ -20,6 +20,7 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { ConfirmationModal } from "@/components/nextui/ConfirmationModal";
+import { toast } from "@/components/layout/Toast";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -182,6 +183,7 @@ function useShownShelves(data: ProfileData, isOwnProfile: boolean, viewerId: str
 
 /** Leaving a collection someone shared with the reader, after asking. */
 function useLeaveCollection(selected: string, select: (id: string) => void, shelves: Shelf[]) {
+	const t = useTranslations("ui");
 	const router = useRouter();
 	const { reader, refresh } = useReaderData();
 	const [leaving, setLeaving] = useState<Shelf | null>(null);
@@ -191,7 +193,15 @@ function useLeaveCollection(selected: string, select: (id: string) => void, shel
 		cancel: () => setLeaving(null),
 		leave: async () => {
 			if (!leaving || !reader) return;
-			await sendCollectionChange(`/reader/collections/${leaving.id}/members/${reader.id}`, "DELETE");
+			// A refusal keeps the question open, so the reader can try again.
+			const left = await sendCollectionChange(`/reader/collections/${leaving.id}/members/${reader.id}`, "DELETE").then(
+				() => true,
+				(error: unknown) => {
+					toast({ type: "error", title: t("sharingFailed"), description: error instanceof Error ? error.message : undefined });
+					return false;
+				},
+			);
+			if (!left) return;
 			if (selected === leaving.id) select("");
 			setLeaving(null);
 			router.refresh();

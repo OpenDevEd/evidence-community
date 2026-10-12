@@ -573,7 +573,8 @@
     "sortCollections": "Ordenar coleções: {sort}",
     "noMatchingCollections": "Nenhuma coleção corresponde",
     "collectionsRange": "{from} a {to} de {total}",
-    "openCollection": "Abrir coleção"
+    "openCollection": "Abrir coleção",
+    "invitationsUnread": "Não foi possível carregar os convites pendentes"
   },
   "ai": {
     "sourcesTitle": "Fontes",

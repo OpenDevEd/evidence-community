@@ -573,7 +573,8 @@
     "sortCollections": "Sammlungen sortieren: {sort}",
     "noMatchingCollections": "Keine passenden Sammlungen",
     "collectionsRange": "{from} bis {to} von {total}",
-    "openCollection": "Sammlung öffnen"
+    "openCollection": "Sammlung öffnen",
+    "invitationsUnread": "Die offenen Einladungen konnten nicht geladen werden"
   },
   "ai": {
     "sourcesTitle": "Quellen",
