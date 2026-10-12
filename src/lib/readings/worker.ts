@@ -16,12 +16,13 @@ const AT_ONCE = 16;
 const CYCLE_MS = 20_000;
 /** Jev reads 32K tokens; an abstract is cut well inside that, as OpenScholar cuts it. */
 const ABSTRACT_CHARS = 3_000;
+/** Grades asked in one call, so a record many sources hold stays inside Jev's context; the rest are asked next. */
+const GRADES_PER_CALL = 8;
 
 const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
-/** The library's own OpenRouter key, when its AI is on; without it nothing is read. */
+/** The library's own OpenRouter key; without one nothing is read. Readers' AI answers are a switch of their own. */
 function readingKey(config: LibraryServerConfig) {
-	if (!config.features.ai) return null;
 	return config.ai.providers.find((provider) => provider.enabled && provider.provider === "openrouter")?.apiKey ?? null;
 }
 
@@ -51,10 +52,11 @@ export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[
 	const retype = fresh && (metadataType
 		? stored.reading!.typedBy !== "metadata" || stored.reading!.studyType !== metadataType
 		: stored.reading!.typedBy === "metadata");
-	const graded = fresh ? subjects.filter((subject) => stored.grades.get(subject.key) !== subject.hash) : subjects;
-	if (fresh && !graded.length && !retype) return null;
+	const stale = fresh ? subjects.filter((subject) => stored.grades.get(subject.key) !== subject.hash) : subjects;
+	if (fresh && !stale.length && !retype) return null;
+	const graded = stale.slice(0, GRADES_PER_CALL);
 	const ask: ReadingAsk = { type: !metadataType && (!fresh || retype), details: !fresh, subjects: graded.map((subject) => subject.subject) };
-	return { ask, contentHash, fresh, retype, metadataType, graded };
+	return { ask, contentHash, fresh, retype, metadataType, graded, more: stale.length > graded.length };
 }
 type Plan = NonNullable<ReturnType<typeof planRead>>;
 /** Whether a plan needs Jev at all: a metadata retype alone does not. */
@@ -132,15 +134,14 @@ const screenedBy = (record: RecordFacts, subjects: Map<string, { subject: string
 	});
 
 /**
- * Stores a read. What the call cost is kept whatever happens; the answers are kept only while the claim is still this
- * cycle's, so a record queued again during the call is read again instead of taking answers about its older text.
+ * Stores a read's answers, only while the claim is still this cycle's, so a record queued again during the call is
+ * read again instead of taking answers about its older text.
  */
 async function saveRead(database: Database, record: RecordFacts, plan: Plan, answer: Awaited<ReturnType<typeof askJev>> | null, token: string) {
 	const read: ReadingAnswers = answer ? readingAnswers(plan.ask, answer.answers) : { scores: [] };
 	await database.transaction(async (tx) => {
-		if (answer) await tx.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
-			.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
-		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+		// A record with grades still to ask stays queued for the next call.
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = ${plan.more ? sql`now()` : sql`NULL`}, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
 		if (!owned.rows.length) return;
 		if (!plan.fresh) {
@@ -162,11 +163,17 @@ function planFor(facts: Awaited<ReturnType<typeof recordFacts>>[number], subject
 	return screened.length ? planRead(facts.record, facts.stored, screened) : null;
 }
 
-/** Asks Jev what the plan needs, or nothing when a metadata retype is all there is to do. */
-function callJev(apiKey: string, record: RecordFacts, plan: Plan, signal?: AbortSignal, request?: typeof fetch) {
+/**
+ * Asks Jev what the plan needs, or nothing when a metadata retype is all there is to do. What a call cost is kept as
+ * soon as it answers, before its answers are checked, so a paid call whose answers are refused still counts.
+ */
+async function callJev(database: Database, apiKey: string, record: RecordFacts, plan: Plan, signal?: AbortSignal, request?: typeof fetch) {
 	if (!asksJev(plan.ask)) return null;
 	const state = record.abstract ? { title: record.title, abstract: record.abstract } : { title: record.title };
-	return askJev({ apiKey, state, questions: readingQuestions(plan.ask), signal, request });
+	const answer = await askJev({ apiKey, state, questions: readingQuestions(plan.ask), signal, request });
+	await database.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
+		.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
+	return answer;
 }
 
 /** Reads one claimed record, when anything about it needs reading, and stores what Jev answered. */
@@ -178,7 +185,7 @@ async function readOne(
 	const plan = facts ? planFor(facts, subjects) : null;
 	if (!facts || !plan) return finish(database, job.itemKey, token);
 	try {
-		await saveRead(database, facts.record, plan, await callJev(apiKey, facts.record, plan, signal, request), token);
+		await saveRead(database, facts.record, plan, await callJev(database, apiKey, facts.record, plan, signal, request), token);
 	} catch (error) {
 		await fail(database, job, token, error);
 	}

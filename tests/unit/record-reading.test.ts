@@ -42,6 +42,13 @@ describe("planning a read", () => {
 		expect(planRead({ ...record, abstract: "A new abstract." }, { ...stored, reading: { ...stored.reading, questionSet: QUESTION_SET } }, [climate])?.ask.details).toBe(true);
 	});
 
+	it("asks at most eight grades in one call and leaves the rest for the next", () => {
+		const many = Array.from({ length: 10 }, (_, index) => ({ key: `s${index}`, subject: `Subject ${index}`, hash: `h${index}` }));
+		const plan = planRead(record, { grades: new Map() }, many);
+		expect(plan?.ask.subjects).toHaveLength(8);
+		expect(plan?.more).toBe(true);
+	});
+
 	it("does not ask the type of a record its metadata types", () => {
 		expect(planRead({ ...record, itemType: "Dataset" }, { grades: new Map() }, [climate])?.ask.type).toBe(false);
 	});
