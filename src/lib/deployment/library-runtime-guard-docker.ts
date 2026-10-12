@@ -553,26 +553,30 @@ export function createDockerLibraryRuntimeGuard(
 		};
 	};
 
-	const requireGuard = (
+	/** The guard's probe origin when it is this library's guard for this release and revision, else null. */
+	const matchingGuardOrigin = (
 		container: InspectedContainer,
 		input: LibraryRuntimeRouteInput,
 	) => {
 		const labels = requireLabels(container.config.Labels);
 		const probeOrigin = readHttpsOrigin(labels[guardProbeOriginLabel]);
+		const matches =
+			probeOrigin &&
+			labels[guardLabel] === "true" &&
+			labels[guardApplicationLabel] === input.applicationUuid &&
+			labels[LIBRARY_COMPOSE_RELEASE_LABEL] === input.commit &&
+			labels[guardRevisionLabel] === input.revision &&
+			probeOrigin === labels[guardProbeOriginLabel] &&
+			container.config.Image === input.runtimeImage;
+		return matches ? probeOrigin : null;
+	};
+
+	const requireGuard = (
+		container: InspectedContainer,
+		input: LibraryRuntimeRouteInput,
+	) => {
+		const probeOrigin = matchingGuardOrigin(container, input);
 		if (!probeOrigin) {
-			return guardError(
-				"runtime_guard_conflict",
-				"An unrelated container is using the Evidence Library guard name.",
-			);
-		}
-		if (
-			labels[guardLabel] !== "true" ||
-			labels[guardApplicationLabel] !== input.applicationUuid ||
-			labels[LIBRARY_COMPOSE_RELEASE_LABEL] !== input.commit ||
-			labels[guardRevisionLabel] !== input.revision ||
-			probeOrigin !== labels[guardProbeOriginLabel] ||
-			container.config.Image !== input.runtimeImage
-		) {
 			return guardError(
 				"runtime_guard_conflict",
 				"An unrelated container is using the Evidence Library guard name.",
@@ -773,11 +777,18 @@ export function createDockerLibraryRuntimeGuard(
 				);
 			}
 			let container = await inspect(name, true);
-			// A guard that is not running was left by a hand-off that stopped part-way, such as one whose caller gave up
-			// between creating it and starting it. It serves nothing, so a fresh one replaces it.
+			// A guard that is not running may have been left by a hand-off whose caller gave up between creating and starting
+			// it, or be one another request for this revision is starting now. One for this revision is started (starting
+			// it twice is harmless); one for an earlier revision serves nothing, so a fresh one replaces it.
 			if (container && container.state.Status !== "running") {
-				await deleteGuard(requireOwnedGuard(container, input.applicationUuid).id);
-				container = null;
+				const owned = requireOwnedGuard(container, input.applicationUuid);
+				if (matchingGuardOrigin(owned, input)) {
+					await request(`${dockerApiVersion}/containers/${owned.id}/start`, { method: "POST" }, [204, 304]);
+					container = await inspect(name, true);
+				} else {
+					await deleteGuard(owned.id);
+					container = null;
+				}
 			}
 			if (container) {
 				container = await connectGuardNetworks(
