@@ -4,16 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
-import { ModalBody, ModalContent, ModalFooter, SelectItem } from "@nextui-org/react";
+import { ModalBody, ModalContent, ModalFooter, SelectItem, SelectSection } from "@nextui-org/react";
 import {
 	Add01Icon,
 	Bookmark02Icon,
 	CollectionsBookmarkIcon,
 	Delete02Icon,
+	Logout01Icon,
 	PencilEdit01Icon,
 	Share08Icon,
 	SquareLock01Icon,
 	Tick02Icon,
+	UserAdd01Icon,
 	UserEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -36,7 +38,9 @@ import ItemsList from "@/components/features/items/ItemsList";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { useOpenScholarAccountUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useReaderData } from "@/hooks/useReaderData";
-import type { ReaderCollectionSummary } from "@/lib/readers/data";
+import type { CollectionAccess, CollectionMember, ReaderCollectionSummary, SharedCollectionSummary } from "@/lib/readers/data";
+import { Link } from "@/i18n/routing";
+import { MemberFaces, RoleChip, ShareCollectionDialog, useSentInvitations } from "@/components/features/collections/CollectionPeople";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import PageContainer from "@/components/layout/PageContainer";
 
@@ -83,18 +87,28 @@ function useCollectionDialog(isOwnProfile: boolean, collections: ProfileCollecti
  * library lists records, with search and sort, and their collections beside
  * it where the library keeps its filters.
  */
-type Shelf = { id: string; name: string; count: number; isPrivate: boolean; description: string | null };
+type Shelf = {
+	id: string;
+	name: string;
+	count: number;
+	isPrivate: boolean;
+	description: string | null;
+	access: CollectionAccess;
+	members: CollectionMember[];
+};
 
 /** All bookmarks first, then each collection, as the column and the phone picker list them. */
 function profileShelves(allBookmarks: string, bookmarkCount: number, collections: ProfileCollection[]): Shelf[] {
 	return [
-		{ id: "", name: allBookmarks, count: bookmarkCount, isPrivate: false, description: null },
+		{ id: "", name: allBookmarks, count: bookmarkCount, isPrivate: false, description: null, access: null, members: [] },
 		...collections.map((collection) => ({
 			id: collection.id,
 			name: collection.name,
 			count: collection.count,
 			isPrivate: collection.private,
 			description: collection.description,
+			access: collection.access,
+			members: collection.members,
 		})),
 	];
 }
@@ -131,16 +145,43 @@ function useCollectionChanges(selected: string, select: (id: string) => void) {
 
 /**
  * The owner sees their own collections and bookmarks live, so a change made
- * from a record shows here at once. Anyone else sees the public collections
- * the page brought, even when the page was made for the owner before they
- * signed out.
+ * from a record shows here at once, and the collections others shared with
+ * them below. Anyone else sees the public collections the page brought and
+ * the private ones shared with them, even when the page was made for the
+ * owner before they signed out. Who a collection is shared with shows only to
+ * its members.
  */
-function useShownShelves(data: ProfileData, isOwnProfile: boolean) {
+function useShownShelves(data: ProfileData, isOwnProfile: boolean, viewerId: string | null) {
 	const { data: own } = useReaderData();
 	if (!isOwnProfile) {
-		return { collections: data.collections.filter((collection) => !collection.private), bookmarks: data.bookmarks };
+		const collections = data.collections.flatMap((collection) => {
+			const role = collection.members.find((member) => member.id === viewerId)?.role ?? null;
+			if (collection.private && !role) return [];
+			return [{ ...collection, access: role, members: role ? collection.members : [] }];
+		});
+		return { collections, shared: [], bookmarks: data.bookmarks };
 	}
-	return { collections: own?.collections ?? data.collections, bookmarks: own?.bookmarks ?? data.bookmarks };
+	return { collections: own?.collections ?? data.collections, shared: own?.shared ?? [], bookmarks: own?.bookmarks ?? data.bookmarks };
+}
+
+/** Leaving a collection someone shared with the reader, after asking. */
+function useLeaveCollection(selected: string, select: (id: string) => void) {
+	const router = useRouter();
+	const { reader, refresh } = useReaderData();
+	const [leaving, setLeaving] = useState<Shelf | null>(null);
+	return {
+		leaving,
+		ask: setLeaving,
+		cancel: () => setLeaving(null),
+		leave: async () => {
+			if (!leaving || !reader) return;
+			await sendCollectionChange(`/reader/collections/${leaving.id}/members/${reader.id}`, "DELETE");
+			if (selected === leaving.id) select("");
+			setLeaving(null);
+			router.refresh();
+			await refresh();
+		},
+	};
 }
 
 /**
@@ -153,7 +194,10 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const { reader } = useReaderSession();
 	const isOwnProfile = reader?.id === data.id;
 	const items = useItemsList(data);
-	const { collections, bookmarks } = useShownShelves(data, isOwnProfile);
+	const { collections, shared, bookmarks } = useShownShelves(data, isOwnProfile, reader?.id ?? null);
+	const { data: sent } = useSentInvitations(isOwnProfile);
+	const [sharing, setSharing] = useState<string | null>(null);
+	const sharedCollection = collections.find((collection) => collection.id === sharing);
 	const bookmarkCount = Object.keys(bookmarks).length;
 	const selected = items.queryParams.collectionId || "";
 	const shelves = profileShelves(t("allBookmarks"), bookmarkCount, collections);
@@ -161,6 +205,12 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 	const selectedCollection = collections.find((collection) => collection.id === selected);
 	const { save, remove } = useCollectionChanges(selected, select);
 	const { dialog, edit, create, close } = useCollectionDialog(isOwnProfile, collections);
+	const leaving = useLeaveCollection(selected, select);
+	const onShare = isOwnProfile ? setSharing : undefined;
+	const onLeave = (id: string) => {
+		const shelf = shelves.find((candidate) => candidate.id === id);
+		if (shelf) leaving.ask(shelf);
+	};
 
 	return (
 		<PageContainer id="main-content" className="flex w-full flex-col gap-8 xl:gap-10">
@@ -173,14 +223,33 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				firstBookmarkedAt={firstBookmarkDate(bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
-				<CollectionsNav userId={data.id} shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
+				<CollectionsNav
+					userId={data.id}
+					shelves={shelves}
+					shared={shared}
+					selected={selected}
+					onSelect={select}
+					onEdit={edit}
+					onCreate={create}
+					onShare={onShare}
+					onLeave={onLeave}
+				/>
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
 						header={selectedCollection?.name ?? t("allBookmarks")}
 						userData={{ ...data, collections }}
 						extraFilters={
-							<PhoneCollectionPicker shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
+							<PhoneCollectionPicker
+								shelves={shelves}
+								shared={shared}
+								selected={selected}
+								onSelect={select}
+								onEdit={edit}
+								onCreate={create}
+								onShare={onShare}
+								onLeave={onLeave}
+							/>
 						}
 					/>
 				</div>
@@ -194,6 +263,20 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 					onDelete={remove}
 				/>
 			) : null}
+			{sharedCollection ? (
+				<ShareCollectionDialog collection={sharedCollection} invitations={sent?.invitations} onClose={() => setSharing(null)} />
+			) : null}
+			{leaving.leaving ? (
+				<ConfirmationModal
+					isOpen
+					onOpenChange={(open) => !open && leaving.cancel()}
+					title={t("leaveCollectionTitle", { name: leaving.leaving.name })}
+					description={t("leaveCollectionBody", { owner: readerDisplayName(data, t) })}
+					confirmLabel={t("leaveCollection")}
+					cancelLabel={t("cancel")}
+					onConfirm={() => void leaving.leave()}
+				/>
+			) : null}
 		</PageContainer>
 	);
 }
@@ -201,19 +284,29 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 /** On phones the column is hidden, so a picker beside the filters chooses the list and the owner's actions sit next to it. */
 function PhoneCollectionPicker({
 	shelves,
+	shared,
 	selected,
 	onSelect,
 	onEdit,
 	onCreate,
+	onShare,
+	onLeave,
 }: {
 	shelves: Shelf[];
+	/** On the reader's own profile, the collections shared with them; choosing one opens it on its owner's profile. */
+	shared: SharedCollectionSummary[];
 	selected: string;
 	onSelect: (id: string) => void;
 	/** The owner edits the collection the picker shows. */
 	onEdit?: (id: string) => void;
 	onCreate?: () => void;
+	onShare?: (id: string) => void;
+	onLeave: (id: string) => void;
 }) {
 	const t = useTranslations("ui");
+	const router = useRouter();
+	const shown = shelves.find((shelf) => shelf.id === selected);
+	const isMember = shown?.access === "editor" || shown?.access === "viewer";
 	return (
 		<div className="flex gap-2 lg:hidden">
 			<Select
@@ -223,18 +316,48 @@ function PhoneCollectionPicker({
 				className="max-w-full flex-1"
 				disallowEmptySelection
 				selectedKeys={[selected || "all"]}
-				onSelectionChange={(keys) => {
+					onSelectionChange={(keys) => {
 					const key = String(Array.from(keys)[0] ?? "all");
-					onSelect(key === "all" ? "" : key);
+					const other = shared.find((collection) => collection.id === key);
+					if (other) router.push(`/profile/${other.owner.id}?collectionId=${other.id}`);
+					else onSelect(key === "all" ? "" : key);
 				}}
 				startContent={<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />}
 			>
-				{shelves.map((shelf) => (
-					<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
-						{shelf.name}
-					</SelectItem>
-				))}
+				<SelectSection showDivider={shared.length > 0}>
+					{shelves.map((shelf) => (
+						<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
+							{shelf.name}
+						</SelectItem>
+					))}
+				</SelectSection>
+				<SelectSection title={shared.length > 0 ? t("sharedWithYou") : undefined}>
+					{shared.map((collection) => (
+						<SelectItem
+							key={collection.id}
+							textValue={collection.name}
+							description={readerDisplayName(collection.owner, t)}
+							startContent={<ReaderAvatar reader={collection.owner} size="sm" className="h-6 w-6 text-[10px]" aria-hidden />}
+						>
+							{collection.name}
+						</SelectItem>
+					))}
+				</SelectSection>
 			</Select>
+			{onShare && selected ? (
+				<Tooltip content={t("shareAction")}>
+					<Button isIconOnly aria-label={t("shareAction")} onPress={() => onShare(selected)} className="h-12 w-12 shrink-0">
+						<HugeiconsIcon icon={UserAdd01Icon} className="size-5" aria-hidden />
+					</Button>
+				</Tooltip>
+			) : null}
+			{isMember ? (
+				<Tooltip content={t("leaveCollection")}>
+					<Button isIconOnly aria-label={t("leaveCollection")} onPress={() => onLeave(selected)} className="h-12 w-12 shrink-0">
+						<HugeiconsIcon icon={Logout01Icon} className="size-5" aria-hidden />
+					</Button>
+				</Tooltip>
+			) : null}
 			{onEdit && selected ? (
 				<Tooltip content={t("editCollection")}>
 					<Button isIconOnly aria-label={t("editCollection")} onPress={() => onEdit(selected)} className="h-12 w-12 shrink-0">
@@ -446,19 +569,28 @@ function CollectionDialogActions({
 function CollectionsNav({
 	userId,
 	shelves,
+	shared,
 	selected,
 	onSelect,
 	onEdit,
 	onCreate,
+	onShare,
+	onLeave,
 }: {
 	userId: string;
 	shelves: Shelf[];
+	/** On the reader's own profile, the collections others shared with them. */
+	shared: SharedCollectionSummary[];
 	selected: string;
 	onSelect: (id: string) => void;
 	/** Only the owner edits their collections. */
 	onEdit?: (id: string) => void;
 	/** Only the owner adds collections. */
 	onCreate?: () => void;
+	/** Only the owner shares their collections. */
+	onShare?: (id: string) => void;
+	/** A member leaves a collection shared with them. */
+	onLeave: (id: string) => void;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -493,9 +625,12 @@ function CollectionsNav({
 							isSelected={shelf.id === selected}
 							onSelect={() => onSelect(shelf.id)}
 							onEdit={onEdit && shelf.id ? () => onEdit(shelf.id) : undefined}
+							onShare={onShare && shelf.id ? () => onShare(shelf.id) : undefined}
+							onLeave={() => onLeave(shelf.id)}
 						/>
 					))}
 				</div>
+				{shared.length > 0 ? <SharedWithYou collections={shared} /> : null}
 			</nav>
 		</aside>
 	);
@@ -513,15 +648,20 @@ function CollectionRow({
 	isSelected,
 	onSelect,
 	onEdit,
+	onShare,
+	onLeave,
 }: {
 	userId: string;
 	shelf: Shelf;
 	isSelected: boolean;
 	onSelect: () => void;
 	onEdit?: () => void;
+	onShare?: () => void;
+	onLeave: () => void;
 }) {
 	const t = useTranslations("ui");
-	const isOpen = isSelected && Boolean(shelf.description || onEdit);
+	const memberRole = shelf.access === "editor" || shelf.access === "viewer" ? shelf.access : null;
+	const isOpen = isSelected && Boolean(shelf.description || onEdit || memberRole);
 	return (
 		<div className={twMerge("rounded-xl", isSelected && "bg-black/[0.04] dark:bg-white/[0.06]")}>
 			<button
@@ -541,16 +681,45 @@ function CollectionRow({
 							<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
 						) : null}
 					</span>
-					<span className="text-small text-black/50 dark:text-white/50">{t("collectionRecordCount", { count: shelf.count })}</span>
+					<span className="flex min-w-0 items-center gap-2.5">
+						<span className="text-small text-black/50 dark:text-white/50">{t("collectionRecordCount", { count: shelf.count })}</span>
+						<MemberFaces members={shelf.members} />
+					</span>
 				</span>
 			</button>
-			{shelf.id ? <CollectionRowDetails isOpen={isOpen} description={shelf.description} onEdit={onEdit} /> : null}
+			{shelf.id ? (
+				<CollectionRowDetails
+					isOpen={isOpen}
+					description={shelf.description}
+					onEdit={onEdit}
+					onShare={onShare}
+					memberRole={memberRole}
+					onLeave={onLeave}
+				/>
+			) : null}
 		</div>
 	);
 }
 
-/** What the chosen collection is for and, for its owner, Edit; it opens to its full height. */
-function CollectionRowDetails({ isOpen, description, onEdit }: { isOpen: boolean; description: string | null; onEdit?: () => void }) {
+/**
+ * What the chosen collection is for and, for its owner, Edit and Share; for
+ * someone it is shared with, what they may do and Leave. It opens to its full height.
+ */
+function CollectionRowDetails({
+	isOpen,
+	description,
+	onEdit,
+	onShare,
+	memberRole,
+	onLeave,
+}: {
+	isOpen: boolean;
+	description: string | null;
+	onEdit?: () => void;
+	onShare?: () => void;
+	memberRole: "editor" | "viewer" | null;
+	onLeave: () => void;
+}) {
 	const t = useTranslations("ui");
 	return (
 		<div
@@ -563,17 +732,90 @@ function CollectionRowDetails({ isOpen, description, onEdit }: { isOpen: boolean
 			<div className="min-h-0 overflow-hidden">
 				<div className="flex flex-col items-start gap-3 px-3 pb-3">
 					{description ? <p className="text-small leading-relaxed text-black/60 dark:text-white/60">{description}</p> : null}
-					{onEdit ? (
-						<Button
-							onPress={onEdit}
-							startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-4" aria-hidden />}
-							className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
-						>
-							{t("editAction")}
-						</Button>
+					{onEdit || onShare ? (
+						<span className="flex gap-2">
+							{onEdit ? (
+								<Button
+									onPress={onEdit}
+									startContent={<HugeiconsIcon icon={PencilEdit01Icon} className="size-4" aria-hidden />}
+									className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
+								>
+									{t("editAction")}
+								</Button>
+							) : null}
+							{onShare ? (
+								<Button
+									onPress={onShare}
+									startContent={<HugeiconsIcon icon={UserAdd01Icon} className="size-4" aria-hidden />}
+									className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
+								>
+									{t("shareAction")}
+								</Button>
+							) : null}
+						</span>
+					) : null}
+					{memberRole ? (
+						<span className="flex w-full items-center justify-between gap-3">
+							<RoleChip role={memberRole} />
+							<Button
+								onPress={onLeave}
+								startContent={<HugeiconsIcon icon={Logout01Icon} className="size-4" aria-hidden />}
+								className="h-8 min-w-0 gap-1.5 bg-black/[0.05] px-3 text-small font-medium dark:bg-white/10"
+							>
+								{t("leaveCollection")}
+							</Button>
+						</span>
 					) : null}
 				</div>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * On the reader's own profile, the collections others shared with them, under
+ * their own: each with its owner's face and what the reader may do with it.
+ * Each opens on its owner's profile, where its records are.
+ */
+function SharedWithYou({ collections }: { collections: SharedCollectionSummary[] }) {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+	return (
+		<div className="border-t border-black/[0.06] p-3 pt-4 dark:border-white/[0.08]">
+			<h3 className="flex items-center gap-2 px-3 pb-2 text-small font-semibold text-black/60 dark:text-white/60">
+				{t("sharedWithYou")}
+				<span className="rounded-full bg-black/[0.05] px-2 text-tiny font-medium tabular-nums dark:bg-white/10">{format.number(collections.length)}</span>
+			</h3>
+			<ul className="flex flex-col gap-1">
+				{collections.map((collection) => (
+					<li key={collection.id}>
+						<Link
+							href={`/profile/${collection.owner.id}?collectionId=${collection.id}`}
+							className="group flex w-full items-center gap-4 rounded-xl p-3 text-start text-black/80 outline-none hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:text-white/80 dark:hover:bg-white/[0.06]"
+						>
+							<span className="relative flex shrink-0">
+								<CoverStack userId={collection.owner.id} collectionId={collection.id} count={collection.count} fanned={false} />
+								<ReaderAvatar
+									reader={collection.owner}
+									size="sm"
+									className="absolute -bottom-1 end-1 h-7 w-7 text-[11px] ring-2 ring-white dark:ring-secondary"
+									aria-hidden
+								/>
+							</span>
+							<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+								<span className="flex min-w-0 items-center gap-1.5">
+									<span className="truncate font-medium">{collection.name}</span>
+									{collection.private ? (
+										<HugeiconsIcon icon={SquareLock01Icon} className="size-4 shrink-0 opacity-60" aria-label={t("privateCollection")} />
+									) : null}
+								</span>
+								<span className="truncate text-small text-black/50 dark:text-white/50">{readerDisplayName(collection.owner, t)}</span>
+							</span>
+							<RoleChip role={collection.access} className="text-black/55 dark:text-white/55" />
+						</Link>
+					</li>
+				))}
+			</ul>
 		</div>
 	);
 }

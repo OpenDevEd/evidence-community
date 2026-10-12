@@ -26,7 +26,10 @@ export default function CollectionsList({
 	const [search, setSearch] = useState("");
 	const t = useTranslations("ui");
 	const [collectionsPage, totalPages, currentPage] = useMemo(() => {
+		// The reader's own come first, then the ones shared with them that they edit.
 		const sortedCollections = [...collections].sort((a, b) => {
+			const aShared = "owner" in a;
+			if (aShared !== "owner" in b) return aShared ? 1 : -1;
 			// const aHighlighted = highlightedCollections?.includes(a.id) || false;
 			// const bHighlighted = highlightedCollections?.includes(b.id) || false;
 			// if (aHighlighted !== bHighlighted) {

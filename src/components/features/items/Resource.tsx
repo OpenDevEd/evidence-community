@@ -106,7 +106,7 @@ export function AddButton({
 										highlightedCollections={
 											highlightedCollections
 										}
-										collections={data?.collections ?? []}
+										collections={[...(data?.collections ?? []), ...(data?.shared ?? []).filter((collection) => collection.access === "editor")]}
 										classNames={{
 											container: "gap-3",
 										}}

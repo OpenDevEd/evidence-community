@@ -11,6 +11,8 @@ import { featureUnavailableResponse } from "@/lib/runtime-feature";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 
+import { invitationRefusal } from "./collection-invitations";
+import { clerkUserIdOf } from "./data";
 import { getSignedInReader, type SignedInReader } from "./session";
 
 export const READER_RESPONSE_HEADERS = { "Cache-Control": "private, no-store" };
@@ -50,5 +52,41 @@ export async function changeForRecord(request: Request, change: (itemKey: string
 	} catch (error) {
 		if (databaseErrorCode(error) === "23503") return readerError(404, "There is no such record.");
 		throw error;
+	}
+}
+
+/** What a reader is told when OpenScholar refuses an invitation change, by the code it refused with. */
+const INVITATION_REFUSALS: Record<string, [number, string]> = {
+	invalid_email: [400, "Enter a valid email address."],
+	rate_limited: [429, "You sent many invitations at once. Try again in a minute."],
+	too_many_invitations: [409, "This person has too many invitations waiting."],
+	not_found: [404, "This invitation is no longer open."],
+	answered: [409, "This invitation was already answered."],
+	expired: [410, "This invitation expired."],
+	other_address: [403, "Sign in with the address the invitation was sent to."],
+};
+
+/**
+ * Runs a call to OpenScholar about the signed-in reader, with the Clerk user
+ * ID OpenScholar knows them by. Its refusals become the reader's errors;
+ * anything else is logged and answered as OpenScholar being unreachable.
+ */
+export async function forOpenScholar(
+	access: { database: Database; reader: SignedInReader; config: LibraryServerConfig },
+	label: string,
+	run: (clerkUserId: string) => Promise<Response>,
+) {
+	const clerkUserId = await clerkUserIdOf(access.database, access.reader.id);
+	if (!clerkUserId) return readerError(401, "Sign in again to continue.");
+	try {
+		return await run(clerkUserId);
+	} catch (error) {
+		const refusal = invitationRefusal(error);
+		if (refusal) {
+			const [status, message] = INVITATION_REFUSALS[refusal] ?? [400, "OpenScholar refused this change."];
+			return NextResponse.json({ error: message, code: refusal }, { status, headers: READER_RESPONSE_HEADERS });
+		}
+		console.error(`${label} failed`, { libraryId: access.config.authentication.openScholar.libraryId, readerId: access.reader.id, error });
+		return readerError(503, "OpenScholar can't be reached. Try again.");
 	}
 }

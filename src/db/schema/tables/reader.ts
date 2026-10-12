@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { boolean, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { boolean, check, index, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
 import { item } from "./item";
 
@@ -103,6 +103,25 @@ export const readerCollectionItem = pgTable("reader_collection_item", {
 }, (table) => [
 	primaryKey({ columns: [table.collectionId, table.itemKey] }),
 	index("reader_collection_item_itemKey_idx").on(table.itemKey),
+]);
+
+export const READER_COLLECTION_ROLES = ["editor", "viewer"] as const;
+export type ReaderCollectionRole = (typeof READER_COLLECTION_ROLES)[number];
+
+/**
+ * Someone the owner shared a collection with. An editor adds and removes its
+ * records; a viewer reads it, even while it is private. OpenScholar keeps the
+ * invitations; a row here is made only once one is accepted.
+ */
+export const readerCollectionMember = pgTable("reader_collection_member", {
+	collectionId: uuid("collectionId").notNull().references(() => readerCollection.id, { onDelete: "cascade" }),
+	userId: text("userId").notNull().references(() => readerUser.id, { onDelete: "cascade" }),
+	role: varchar("role", { length: 16 }).$type<ReaderCollectionRole>().notNull(),
+	...timestamps(),
+}, (table) => [
+	primaryKey({ columns: [table.collectionId, table.userId] }),
+	index("reader_collection_member_userId_idx").on(table.userId),
+	check("reader_collection_member_role_valid", sql`${table.role} in ('editor', 'viewer')`),
 ]);
 
 export const readerUserRelations = relations(readerUser, ({ many }) => ({

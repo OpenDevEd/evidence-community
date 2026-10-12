@@ -43,7 +43,7 @@ const profile: ProfileData = {
 	image: null,
 	bookmarks: { SAVED001: "2026-09-02T10:00:00.000Z", SAVED002: "2026-09-10T10:00:00.000Z" },
 	collections: [
-		{ id: TEACHER_TRAINING, name: "Teacher training", description: "For the review", private: true, count: 2, createdAt: "2026-09-03T10:00:00.000Z" },
+		{ id: TEACHER_TRAINING, name: "Teacher training", description: "For the review", private: true, count: 2, createdAt: "2026-09-03T10:00:00.000Z", access: "owner" as const, members: [] },
 	],
 };
 

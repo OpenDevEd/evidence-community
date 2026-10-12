@@ -122,6 +122,101 @@ function crossrefValue(tag) {
 		: null;
 }
 
+
+// OpenScholar's collection invitations (OpenDevEd/openalex-count#893), kept in memory. An account
+// `user_mock_<name>` has `<name>@example.org` verified; mail to bounce.example.org fails to send.
+const COLLECTION_INVITATIONS = "/api/v1/evidence-libraries/collection-invitations/";
+const WEEK = 7 * 86_400_000;
+const collectionInvitations = new Map();
+const invitationEmails = [];
+const mockPeople = new Map([
+	["user_mock_amina", { name: "Amina Yusuf", emails: ["amina@example.org", "a.yusuf@uni.example.org"] }],
+	["user_mock_daniel", { name: "Daniel Mwangi", emails: ["daniel@example.org"] }],
+	// The account `npm run verify -- shift --as editor` signs in with.
+	["user_acceptance_admin", { name: "Verify editor", emails: ["editor@example.org"] }],
+]);
+const verifiedEmails = (clerkUserId) =>
+	mockPeople.get(clerkUserId)?.emails ?? (clerkUserId.startsWith("user_mock_") ? [`${clerkUserId.slice(10)}@example.org`] : []);
+const personName = (clerkUserId) => mockPeople.get(clerkUserId)?.name ?? clerkUserId.replace(/^user_mock_/u, "").replace(/^./u, (letter) => letter.toUpperCase());
+const pendingNow = (invitation) => invitation.state === "pending" && invitation.expiresAt > Date.now();
+const sentView = ({ id, collectionId, email, role, delivery, sentAt, expiresAt }) => ({ id, collectionId, email, role, delivery, sentAt, expiresAt });
+
+function sendInvitation(invitation) {
+	invitation.sentAt = Date.now();
+	invitation.expiresAt = invitation.sentAt + WEEK;
+	invitation.delivery = invitation.email.endsWith("@bounce.example.org") ? "failed" : "sent";
+	if (invitation.delivery === "sent") {
+		invitationEmails.unshift({
+			invitationId: invitation.id,
+			to: invitation.email,
+			from: `${personName(invitation.invitedBy)} via the library`,
+			inviter: personName(invitation.invitedBy),
+			collectionName: invitation.collectionName,
+			role: invitation.role,
+			sentAt: invitation.sentAt,
+		});
+	}
+}
+
+async function collectionInvitation(request, response, action) {
+	const libraryId = openScholarLibraries.get(request.headers.authorization?.match(/^Bearer ([^\s]+)$/u)?.[1]);
+	if (!libraryId) return json(response, 401, { error: "invalid_service_credential" });
+	let body;
+	try {
+		body = JSON.parse((await readBody(request)).toString("utf8"));
+	} catch {
+		return json(response, 400, { error: "invalid_request" });
+	}
+	if (body?.contractVersion !== 1 || body.libraryId !== libraryId || typeof body.clerkUserId !== "string") return json(response, 400, { error: "invalid_request" });
+	const sentByCaller = (invitation) => invitation?.libraryId === libraryId && invitation.invitedBy === body.clerkUserId;
+	if (action === "invite") {
+		const email = String(body.email ?? "").trim().toLowerCase();
+		if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return json(response, 400, { error: "invalid_email" });
+		// One row an address and collection, whatever became of the invitation before.
+		const existing = [...collectionInvitations.values()].find((invitation) => invitation.libraryId === libraryId && invitation.collectionId === body.collectionId && invitation.email === email);
+		const invitation = existing ?? { id: `inv_${Math.random().toString(36).slice(2, 12)}`, libraryId, collectionId: body.collectionId, email };
+		Object.assign(invitation, { collectionName: body.collectionName, role: body.role, invitedBy: body.clerkUserId, state: "pending", acceptedBy: null });
+		sendInvitation(invitation);
+		collectionInvitations.set(invitation.id, invitation);
+		return json(response, 200, sentView(invitation));
+	}
+	if (action === "list") {
+		const invitations = [...collectionInvitations.values()].filter((invitation) => sentByCaller(invitation) && pendingNow(invitation)).sort((a, b) => b.sentAt - a.sentAt);
+		return json(response, 200, { invitations: invitations.map(sentView) });
+	}
+	if (action === "cancel") {
+		for (const invitation of collectionInvitations.values()) {
+			if (sentByCaller(invitation) && invitation.collectionId === body.collectionId && invitation.state === "pending") invitation.state = "cancelled";
+		}
+		return json(response, 200, {});
+	}
+	const invitation = collectionInvitations.get(body.invitationId);
+	if (action === "change") {
+		if (!sentByCaller(invitation) || !pendingNow(invitation)) return json(response, 404, { error: "not_found" });
+		if (body.cancel) invitation.state = "cancelled";
+		else if (body.resend) sendInvitation(invitation);
+		else if (body.role) invitation.role = body.role;
+		return json(response, 200, {});
+	}
+	const own = invitation?.libraryId === libraryId && verifiedEmails(body.clerkUserId).includes(invitation.email);
+	const acceptedByCaller = invitation?.state === "accepted" && invitation.acceptedBy === body.clerkUserId;
+	if (action === "read") {
+		if (!invitation || invitation.libraryId !== libraryId || !(pendingNow(invitation) || acceptedByCaller)) return json(response, 200, { state: "gone" });
+		if (!acceptedByCaller && !own) return json(response, 200, { state: "other" });
+		return json(response, 200, { state: invitation.state, collectionId: invitation.collectionId, role: invitation.role });
+	}
+	if (action === "respond") {
+		if (!invitation || invitation.libraryId !== libraryId) return json(response, 404, { error: "not_found" });
+		if (acceptedByCaller) return json(response, 200, { collectionId: invitation.collectionId, role: invitation.role });
+		if (!own) return json(response, 403, { error: "other_address" });
+		if (invitation.state !== "pending") return json(response, 409, { error: "answered" });
+		if (invitation.expiresAt <= Date.now()) return json(response, 410, { error: "expired" });
+		Object.assign(invitation, body.accept ? { state: "accepted", acceptedBy: body.clerkUserId } : { state: "declined" });
+		return json(response, 200, body.accept ? { collectionId: invitation.collectionId, role: invitation.role } : {});
+	}
+	return json(response, 404, { error: "unknown_action" });
+}
+
 // fallow-ignore-next-line complexity
 const server = createServer(async (request, response) => {
 	const url = new URL(
@@ -202,6 +297,19 @@ const server = createServer(async (request, response) => {
 			return json(response, 403, { error: "access_revoked", organisationName: "Acceptance organisation" });
 		}
 		return json(response, 200, { role });
+	}
+
+	if (url.pathname.startsWith(COLLECTION_INVITATIONS) && method === "POST") {
+		return collectionInvitation(request, response, url.pathname.slice(COLLECTION_INVITATIONS.length));
+	}
+	// The mock inbox and test controls for collection invitations.
+	if (url.pathname === "/_test/collection-invitations" && method === "GET") {
+		return json(response, 200, { invitations: [...collectionInvitations.values()], emails: invitationEmails });
+	}
+	if (url.pathname === "/_test/collection-invitations/expire" && method === "POST") {
+		const invitation = collectionInvitations.get(url.searchParams.get("id"));
+		if (invitation) invitation.expiresAt = Date.now() - 1;
+		return json(response, invitation ? 200 : 404, {});
 	}
 
 	if (url.pathname.startsWith("/storage/v1/object/")) {
