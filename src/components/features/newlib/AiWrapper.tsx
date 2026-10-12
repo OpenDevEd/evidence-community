@@ -28,6 +28,7 @@ import {
 import { twMerge } from "@/lib/tw-merge";
 import { AskAboutConversation, attachedItem, useAskAbout } from "@/components/features/ai/AskAbout";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
+import { CitedPublications } from "@/components/features/markdown/Citation";
 
 function randomUUID() {
 	return (
@@ -97,6 +98,9 @@ function AiModals({
 			),
 		[data?.item?.key, data?.item?.attachmentsData],
 	);
+	// The summary and explanation cite this publication.
+	const item = data?.item;
+	const cited = item?.key ? { [item.key]: item } : {};
 	const generativeFeatures = [
 		{ feature: summaryFeature, title: summaryTitle },
 		{ feature: explainFeature, title: explainTitle },
@@ -111,6 +115,7 @@ function AiModals({
 				onModelChange={onModelChange}
 				hasConversation={use(AskAboutConversation)}
 			/>
+			<CitedPublications value={cited}>
 			{generativeFeatures.map(({ feature, title }) => (
 				<GenerativeModal
 					key={feature.key}
@@ -131,6 +136,7 @@ function AiModals({
 					pdfSources={pdfSources}
 				/>
 			))}
+			</CitedPublications>
 		</>
 	);
 }

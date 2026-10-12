@@ -218,9 +218,10 @@ export function useChatWindow({
 	};
 	const composer = useChatComposer({ isBusy, onSend: ask });
 	// Page links work for every publication the conversation has read, attached or found, as in the chat beside the results.
-	const { pdfSources } = useBucketPublications(
+	const publications = useBucketPublications(
 		bucketEntriesFromMessages(conversation.messages),
 	);
+	const { pdfSources } = publications;
 	const scrolling = useChatScrolling();
 
 	return {
@@ -240,6 +241,7 @@ export function useChatWindow({
 		mode,
 		pdfSources,
 		prefersReducedMotion: useReducedMotion(),
+		publications,
 		setMode,
 	};
 }

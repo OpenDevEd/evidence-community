@@ -13,10 +13,13 @@ export function OpenAccessLabel({
 	openAccess,
 	className,
 	iconClassName,
+	iconOnly = false,
 }: {
 	openAccess: boolean | null | undefined;
 	className?: string;
 	iconClassName?: string;
+	/** The icon alone, for a citation link; the words stay for screen readers. */
+	iconOnly?: boolean;
 }) {
 	const { content } = useLibraryConfig();
 	const t = useTranslations("ui");
@@ -35,7 +38,7 @@ export function OpenAccessLabel({
 				className={twMerge("size-4 shrink-0", iconClassName)}
 				aria-hidden="true"
 			/>
-			{t(shown ? "openAccess" : "closedAccess")}
+			<span className={iconOnly ? "sr-only" : undefined}>{t(shown ? "openAccess" : "closedAccess")}</span>
 		</span>
 	);
 }

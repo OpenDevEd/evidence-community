@@ -30,6 +30,7 @@ import {
 import { ChatErrorCard } from "../ai/chat-shared";
 import { useChatFailure } from "../ai/useChatActions";
 import { MessageComponent } from "../ai/ChatMessage";
+import { CitedPublications } from "../markdown/Citation";
 import { useChatWindow } from "../ai/useChatWindow";
 import type { AttachedItem } from "../ai/AskAbout";
 import { AttachedRow } from "../ai/AttachedRow";
@@ -605,6 +606,7 @@ function ChatModalContent({
 		onSmartScreeningOpenChange,
 		pdfSources,
 		prefersReducedMotion,
+		publications,
 		reload,
 		resetChat,
 		screenableContent,
@@ -676,21 +678,23 @@ function ChatModalContent({
 									)}
 								>
 									{conversationStarted && (
-										<ChatMessageList
-											chatFailure={chatFailure}
-											contentRef={contentRef}
-											isAtBottom={isAtBottom}
-											isStreaming={status === "streaming"}
-											hasError={Boolean(error)}
-											messages={messages}
-											modelId={modelId}
-											onReset={resetChat}
-											onRetry={reload}
-											pdfSources={pdfSources}
-											scrollEdges={scrollEdges}
-											scrollRef={messagesScrollRef}
-											scrollToBottom={scrollToBottom}
-										/>
+										<CitedPublications value={publications.byKey}>
+											<ChatMessageList
+												chatFailure={chatFailure}
+												contentRef={contentRef}
+												isAtBottom={isAtBottom}
+												isStreaming={status === "streaming"}
+												hasError={Boolean(error)}
+												messages={messages}
+												modelId={modelId}
+												onReset={resetChat}
+												onRetry={reload}
+												pdfSources={pdfSources}
+												scrollEdges={scrollEdges}
+												scrollRef={messagesScrollRef}
+												scrollToBottom={scrollToBottom}
+											/>
+										</CitedPublications>
 									)}
 									<motion.div
 										layoutId="chat-input"

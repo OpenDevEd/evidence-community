@@ -20,6 +20,7 @@ import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { MessageComponent } from "./ChatMessage";
+import { CitedPublications } from "../markdown/Citation";
 import {
 	ChatComposerControls,
 	ChatComposerShell,
@@ -132,6 +133,7 @@ function InlineChatMessages({
 		messages,
 		messagesScrollRef,
 		pdfSources,
+		publications,
 		reload,
 		resetChat,
 		scrollEdges,
@@ -151,26 +153,28 @@ function InlineChatMessages({
 					className="flex min-h-full flex-col gap-6 px-4 pt-5"
 					style={{ paddingBottom: composerDockHeight + 20 }}
 				>
-					{messages.slice(1).map((message, index) => (
-						<div
-							key={message.id}
-							className={twMerge(
-								"flex w-full items-start gap-2",
-								message.role === "user" && "justify-end",
-							)}
-						>
-							<MessageComponent
-								message={message}
-								askedAbout={asked.get(message.id)}
-								modelId={modelId}
-								error={Boolean(error)}
-								pdfSources={pdfSources}
-								isStreaming={
-									isLoading && index + 1 === lastIndex
-								}
-							/>
-						</div>
-					))}
+					<CitedPublications value={publications.byKey}>
+						{messages.slice(1).map((message, index) => (
+							<div
+								key={message.id}
+								className={twMerge(
+									"flex w-full items-start gap-2",
+									message.role === "user" && "justify-end",
+								)}
+							>
+								<MessageComponent
+									message={message}
+									askedAbout={asked.get(message.id)}
+									modelId={modelId}
+									error={Boolean(error)}
+									pdfSources={pdfSources}
+									isStreaming={
+										isLoading && index + 1 === lastIndex
+									}
+								/>
+							</div>
+						))}
+					</CitedPublications>
 					{isWaitingForAssistant ? (
 						<div className="flex items-center gap-3 p-2">
 							<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">

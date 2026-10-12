@@ -30,7 +30,7 @@ const creator = { id: "user_creator", name: "Eunice Jengo", photo: null };
 function digest(patch: Partial<api.AdminDigest> = {}): api.AdminDigest {
 	return {
 		id: ID, day: "12", month: "Oct", date: "12 October 2026", period: "5 to 12 October", publicationCount: 298, state: "draft", writing: false, revision: 3,
-		words, error: null, published: null, publishedAt: null, ai, checkedBy: null, attribution: true,
+		words, cited: {}, error: null, published: null, publishedAt: null, ai, checkedBy: null, attribution: true,
 		events: [{ kind: "written", at: "2026-10-12T06:00:00.000Z", actor: null }, { kind: "edited", at: "2026-10-12T14:12:00.000Z", actor: creator }], sent: null, ...patch,
 	};
 }
