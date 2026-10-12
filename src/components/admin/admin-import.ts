@@ -14,6 +14,7 @@ import {
 	type AdminImportPreviewRecord,
 	type AdminImportPreviewRequest,
 	type AdminPdfReadResponse,
+	type RightsFix,
 } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
@@ -100,9 +101,6 @@ export function summarizeImportResults(
 	};
 }
 
-/** A check the library runs on every PDF, and the Rights text its Fix button writes when it fails. Empty fix: no button. */
-export type ImportCheck = { fix: string; text: string };
-
 /** One record in the review, from a DOI, a bibliography file or a PDF the AI reads. */
 export type ImportRow = {
 	abstractWritten: boolean;
@@ -110,13 +108,14 @@ export type ImportRow = {
 	costUsd: number;
 	/** The PDF this row reads; null for DOIs and bibliography files. */
 	file: File | null;
-	/** The checks the editor fixed, by their place in the list. */
-	fixed: number[];
+	/** The editor applied the AI's Rights fix. */
+	fixApplied: boolean;
 	/** The row's id, also the id its record is committed under. */
 	id: string;
 	message?: string;
 	pdf: PdfPropertiesReading | null;
 	record: AdminImportPreviewRecord | null;
+	rightsFix: RightsFix | null;
 	state: "failed" | "read" | "reading" | "waiting";
 	topics: TopicSuggestion[];
 };
@@ -137,15 +136,15 @@ export function validatePdfFiles(files: readonly File[]): void {
 	if (empty) throw new ImportInputError(`${empty.name} is empty.`);
 }
 
-export function validateChecks(checks: readonly ImportCheck[]) {
+export function validateChecks(checks: readonly string[]) {
 	if (checks.length > PDF_IMPORT_MAX_CRITERIA) {
 		throw new ImportInputError(`Use no more than ${PDF_IMPORT_MAX_CRITERIA} checks.`);
 	}
-	const long = checks.find(({ fix, text }) => text.length > PDF_IMPORT_MAX_CRITERION_LENGTH || fix.length > PDF_IMPORT_MAX_CRITERION_LENGTH);
-	if (long) throw new ImportInputError(`Keep each check and fix under ${PDF_IMPORT_MAX_CRITERION_LENGTH} characters.`);
+	const long = checks.find((check) => check.length > PDF_IMPORT_MAX_CRITERION_LENGTH);
+	if (long) throw new ImportInputError(`Keep each check under ${PDF_IMPORT_MAX_CRITERION_LENGTH} characters.`);
 }
 
-const emptyRow = { abstractWritten: false, checks: [], costUsd: 0, fixed: [], pdf: null, topics: [] };
+const emptyRow = { abstractWritten: false, checks: [], costUsd: 0, fixApplied: false, pdf: null, rightsFix: null, topics: [] };
 
 export function pendingPdfRows(files: readonly File[]): ImportRow[] {
 	return files.map((file, index) => ({ ...emptyRow, file, id: String(index + 1), record: null, state: "waiting" }));
@@ -167,7 +166,7 @@ export type PublishState = { doi: string | null; state: "published" | "publishin
 export type ImportBatch = {
 	attach: ReadonlyMap<string, AttachState>;
 	/** The checks the PDFs were read against. */
-	checks: readonly ImportCheck[];
+	checks: readonly string[];
 	/** Collections the new drafts go into. */
 	collections: string[];
 	/** The import call is under way, so a reopened dialog can't send it twice. */
@@ -248,6 +247,7 @@ export async function readPdfs(importId: string, rows: readonly ImportRow[], rea
 						costUsd: reading.costUsd,
 						pdf: reading.pdf,
 						record: { ...reading.record, id: row.id },
+						rightsFix: reading.rightsFix,
 						state: "read",
 						topics: reading.topics,
 					}));
@@ -261,8 +261,9 @@ export async function readPdfs(importId: string, rows: readonly ImportRow[], rea
 
 export type ReviewFilter = "all" | "attention" | "existing" | "improve" | "ready";
 
-/** A check passes when the AI found it met or the editor fixed it. */
-export const checkPasses = (row: ImportRow, index: number) => row.checks[index]?.result === "met" || row.fixed.includes(index);
+const fixes = (row: ImportRow, index: number) => row.fixApplied && row.rightsFix?.checks.includes(index) === true;
+/** A check passes when the AI found it met or the editor applied the Rights fix that covers it. */
+export const checkPasses = (row: ImportRow, index: number) => row.checks[index]?.result === "met" || fixes(row, index);
 export const rowPasses = (row: ImportRow) => row.checks.every((_, index) => checkPasses(row, index));
 
 const needsAttention = (row: ImportRow) =>
@@ -298,47 +299,42 @@ export function chosenTopics(current: ImportBatch, row: ImportRow): ReadonlySet<
 	return current.topics.get(row.id) ?? new Set(row.topics.filter(({ fit }) => fit === "strong").map(({ id }) => id));
 }
 
-/**
- * The record's Rights. Until the editor fixes a check it is what the PDF
- * states. After a fix, the checks' fix texts together are the library's
- * statement: a fixed check adds its text, and so does a met one, because the
- * PDF already says it.
- */
-export function recordRights(row: ImportRow, checks: readonly ImportCheck[]) {
-	const stated = typeof row.record?.payload?.rights === "string" ? row.record.payload.rights : "";
-	if (!row.fixed.length) return stated;
-	return checks.flatMap(({ fix }, index) => (fix && checkPasses(row, index) ? [fix] : [])).join(". ");
+/** The record's Rights: the AI's fix once the editor applies it, otherwise what the PDF states. */
+export function recordRights(row: ImportRow) {
+	if (row.fixApplied && row.rightsFix) return row.rightsFix.statement;
+	return typeof row.record?.payload?.rights === "string" ? row.record.payload.rights : "";
 }
 
 /** What publishing writes into the PDF: the record as the editor leaves it. */
-export function publishedProperties(row: ImportRow, checks: readonly ImportCheck[], topicNames: readonly string[], doi: string | null): PdfProperties {
+export function publishedProperties(row: ImportRow, topicNames: readonly string[], doi: string | null): PdfProperties {
 	const text = (field: string) => (typeof row.record?.payload?.[field] === "string" ? (row.record.payload[field] as string) : "");
 	return {
 		authors: row.record?.creators ?? [],
 		doi: doi ?? text("DOI"),
 		keywords: [...topicNames],
-		rights: recordRights(row, checks),
+		rights: recordRights(row),
 		subject: text("abstractNote"),
 		title: row.record?.title ?? "",
 	};
 }
 
-export type ReviewCheck = PdfCheckResult & { fix: string; fixed: boolean };
+/** A check's answer, and whether the AI's Rights fix covers it and is applied. */
+export type ReviewCheck = PdfCheckResult & { fixable: boolean; fixed: boolean };
 
-export function reviewChecks(row: ImportRow, checks: readonly ImportCheck[]): ReviewCheck[] {
-	return row.checks.map((check, index) => ({ ...check, fix: checks[index]?.fix ?? "", fixed: row.fixed.includes(index) }));
+export function reviewChecks(row: ImportRow): ReviewCheck[] {
+	return row.checks.map((check, index) => ({ ...check, fixable: row.rightsFix?.checks.includes(index) === true, fixed: fixes(row, index) }));
 }
 
 // shortcut: the mock keeps the library's checks and each draft's results in
 // this browser; the real build stores both in the library's database.
-const CHECKS_KEY = "evidence-library:pdf-import-check-list";
+const CHECKS_KEY = "evidence-library:pdf-import-check-texts";
 const RESULTS_KEY = "evidence-library:pdf-import-results:";
 // shortcut: placeholder wording for the FCDO demo until Jenny's checklist arrives.
-const DEFAULT_CHECKS: ImportCheck[] = [
-	{ fix: "", text: "Credits UK International Development (FCDO) or UK aid as the funder" },
-	{ fix: "© Crown copyright", text: "Carries a Crown copyright notice" },
-	{ fix: "Licensed under the Open Government Licence v3.0", text: "Is licensed under the Open Government Licence v3.0" },
-	{ fix: "", text: "The figures in its tables add up to the totals it states" },
+const DEFAULT_CHECKS = [
+	"Credits UK International Development (FCDO) or UK aid as the funder",
+	"Carries a Crown copyright notice",
+	"Is licensed under the Open Government Licence v3.0",
+	"The figures in its tables add up to the totals it states",
 ];
 
 function parseJson(text: string): unknown {
@@ -349,20 +345,17 @@ function parseJson(text: string): unknown {
 	}
 }
 
-const isCheck = (value: unknown): value is ImportCheck =>
-	typeof (value as ImportCheck | null)?.text === "string" && typeof (value as ImportCheck).fix === "string";
-
 /** The checks saved in this browser, or the defaults when none are. */
-export function checksFrom(stored: string | null): ImportCheck[] {
+export function checksFrom(stored: string | null): string[] {
 	const parsed = stored === null ? null : parseJson(stored);
-	return Array.isArray(parsed) && parsed.every(isCheck) ? parsed : DEFAULT_CHECKS;
+	return Array.isArray(parsed) && parsed.every((check) => typeof check === "string") ? parsed : DEFAULT_CHECKS;
 }
 
 export function storedChecks() {
 	return checksFrom(localStorage.getItem(CHECKS_KEY));
 }
 
-export function storeChecks(checks: readonly ImportCheck[]) {
+export function storeChecks(checks: readonly string[]) {
 	localStorage.setItem(CHECKS_KEY, JSON.stringify(checks));
 }
 
@@ -373,13 +366,13 @@ export function storedReview(itemKey: string) {
 	return localStorage.getItem(RESULTS_KEY + itemKey);
 }
 
-/** A draft's saved review. Reviews saved by earlier mocks lack fixes; anything unreadable reads as none. */
+/** A draft's saved review. Reviews saved by earlier mocks lack the fixed flag; anything unreadable reads as none. */
 export function reviewFrom(stored: string): StoredReview | null {
 	const review = parseJson(stored) as Partial<StoredReview> | null | undefined;
 	if (!Array.isArray(review?.checks) || !Array.isArray(review?.topics)) return null;
 	return {
 		abstractWritten: review.abstractWritten === true,
-		checks: review.checks.map((check) => ({ ...check, fix: check.fix ?? "", fixed: check.fixed === true })),
+		checks: review.checks.map((check) => ({ ...check, fixable: check.fixable === true, fixed: check.fixed === true })),
 		topics: review.topics,
 	};
 }

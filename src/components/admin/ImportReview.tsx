@@ -25,7 +25,7 @@ import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
-import type { AdminImportCommitResult, PdfCheckResult, TopicSuggestion } from "@/lib/admin/item-import-contract";
+import type { AdminImportCommitResult, PdfCheckResult, RightsFix, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
 import { ImportCover } from "./ImportCover";
@@ -253,11 +253,11 @@ export function ReviewList({
 	);
 }
 
-/** The answer to each check; a failed one with a fix offers to write it into the record's Rights. */
-function CheckList({ checks, locked = false, onFix }: { checks: ReviewCheck[]; locked?: boolean; onFix?: (index: number) => void }) {
+/** The answer to each check, and for a failed one that the Rights fix covers, whether it is applied. */
+function CheckList({ checks }: { checks: ReviewCheck[] }) {
 	return (
 		<ul className="flex flex-col gap-4">
-			{checks.map((check, index) => {
+			{checks.map((check) => {
 				const look = lookOf(check);
 				return (
 					<li className="flex gap-2.5" key={check.criterion}>
@@ -276,7 +276,12 @@ function CheckList({ checks, locked = false, onFix }: { checks: ReviewCheck[]; l
 									{check.recommendation}
 								</p>
 							) : null}
-							{check.result !== "met" && check.fix ? <FixLine check={check} locked={locked} onFix={onFix && (() => onFix(index))} /> : null}
+							{check.fixable ? (
+								<p className="mt-1 flex gap-1.5 text-xs leading-5 text-black/55 dark:text-white/55">
+									<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={CopyrightIcon} size={12} />
+									{check.fixed ? "Fixed by the new Rights" : "The suggested Rights below fixes this"}
+								</p>
+							) : null}
 						</div>
 					</li>
 				);
@@ -285,23 +290,25 @@ function CheckList({ checks, locked = false, onFix }: { checks: ReviewCheck[]; l
 	);
 }
 
-function FixLine({ check, locked, onFix }: { check: ReviewCheck; locked: boolean; onFix?: () => void }) {
-	if (!onFix && !check.fixed) return null;
+/** The Rights statement the AI suggests so the failed rights checks pass, beside what the PDF says now. */
+function RightsFixLine({ applied, fix, locked, onToggle, stated }: { applied: boolean; fix: RightsFix; locked: boolean; onToggle: () => void; stated: string }) {
 	return (
-		<div className="mt-2 flex min-h-8 items-center gap-3">
-			<p className="flex min-w-0 flex-1 gap-1.5 text-xs leading-5 text-black/60 dark:text-white/60">
-				<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0 text-black/35 dark:text-white/35" icon={CopyrightIcon} size={12} />
-				<span className="min-w-0">
-					{check.fixed ? "Rights include " : "Fix writes "}
-					<q className="text-black/80 dark:text-white/80">{check.fix}</q>
-					{check.fixed ? null : " into Rights"}
-				</span>
-			</p>
-			{onFix ? (
-				<Button className="h-8 min-h-8 min-w-[4.5rem] shrink-0" isDisabled={locked} onPress={onFix} size="xs" startContent={<HugeiconsIcon aria-hidden icon={check.fixed ? Undo02Icon : Tick02Icon} size={13} />} variant={check.fixed ? "transparent" : "muted"}>
-					{check.fixed ? "Undo" : "Fix"}
-				</Button>
-			) : null}
+		<div className="mt-5 flex items-start gap-2.5">
+			<HugeiconsIcon aria-hidden className="mt-0.5 shrink-0 text-black/40 dark:text-white/40" icon={CopyrightIcon} size={16} />
+			<div className="min-w-0 flex-1 text-sm">
+				<p className="text-black/85 dark:text-white/85">{applied ? "Rights changed" : "Suggested Rights"}</p>
+				<p className="mt-1 text-xs leading-5 text-black/70 dark:text-white/70">
+					<q>{fix.statement}</q>
+				</p>
+				{stated ? (
+					<p className="mt-1 text-xs leading-5 text-black/45 dark:text-white/45">
+						The PDF says <q>{stated}</q>
+					</p>
+				) : null}
+			</div>
+			<Button className="h-8 min-h-8 min-w-[4.5rem] shrink-0" isDisabled={locked} onPress={onToggle} size="xs" startContent={<HugeiconsIcon aria-hidden icon={applied ? Undo02Icon : Tick02Icon} size={13} />} variant={applied ? "transparent" : "muted"}>
+				{applied ? "Undo" : "Apply"}
+			</Button>
 		</div>
 	);
 }
@@ -456,8 +463,8 @@ export function ReviewDetail({
 	chosenTopics,
 	criteriaCount,
 	locked,
-	onFix,
 	onOpenRecord,
+	onToggleFix,
 	onToggleTopic,
 	properties,
 	result,
@@ -468,8 +475,8 @@ export function ReviewDetail({
 	chosenTopics: ReadonlySet<string>;
 	criteriaCount: number;
 	locked: boolean;
-	onFix: (index: number) => void;
 	onOpenRecord: (itemKey: string) => void;
+	onToggleFix: () => void;
 	onToggleTopic: (topicId: string) => void;
 	/** What publishing writes into the PDF. */
 	properties: PdfProperties;
@@ -521,7 +528,8 @@ export function ReviewDetail({
 					) : null}
 					{row.file && criteriaCount ? (
 						<DetailSection aside={`${passed} of ${criteriaCount} pass`} title="Checks">
-							<CheckList checks={checks} locked={locked} onFix={onFix} />
+							<CheckList checks={checks} />
+							{row.rightsFix ? <RightsFixLine applied={row.fixApplied} fix={row.rightsFix} locked={locked} onToggle={onToggleFix} stated={typeof payload.rights === "string" ? payload.rights : ""} /> : null}
 						</DetailSection>
 					) : null}
 					{row.file && record && row.pdf ? (

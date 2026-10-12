@@ -131,6 +131,9 @@ export type TopicSuggestion = {
 	reason: string;
 };
 
+/** The Rights statement the AI proposes when checks fail over copyright or licence, and the checks it fixes, by their place in the list. */
+export type RightsFix = { checks: number[]; statement: string };
+
 export type AdminPdfReadResponse = {
 	/** The PDF had no abstract, so the AI's summary is the record's abstract. */
 	abstractWritten: boolean;
@@ -143,6 +146,7 @@ export type AdminPdfReadResponse = {
 	/** The properties the PDF carries now, before publishing writes the record into it. */
 	pdf: PdfPropertiesReading;
 	record: AdminImportPreviewRecord;
+	rightsFix: RightsFix | null;
 };
 
 /** OpenRouter's price for Claude Haiku 5.5 per token, checked 2026-10-12. */

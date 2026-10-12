@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
 			outputTokens: reading.outputTokens,
 			pdf,
 			record: records[0]!,
+			rightsFix: reading.rightsFix,
 			topics: reading.topics,
 		};
 		return NextResponse.json(response, { headers: ADMIN_RESPONSE_HEADERS });

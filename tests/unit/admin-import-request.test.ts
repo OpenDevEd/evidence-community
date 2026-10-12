@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	checkPasses,
 	doiPreviewRequest,
 	filePreviewRequest,
 	recordRights,
@@ -48,25 +49,22 @@ describe("import input checks", () => {
 	});
 });
 
-describe("the record's Rights after fixes", () => {
-	const checks = [
-		{ fix: "", text: "Credits the funder" },
-		{ fix: "© Crown copyright", text: "Carries a Crown copyright notice" },
-		{ fix: "Licensed under the Open Government Licence v3.0", text: "Is licensed under the OGL" },
-	];
-	const row = (results: Array<"met" | "not_met">, fixed: number[]): ImportRow => ({
+describe("the record's Rights and the AI's fix", () => {
+	const row = (fixApplied: boolean): ImportRow => ({
 		...rowsFromRecords([record({ id: "1", payload: { rights: "© EdTech Hub 2024. CC BY 4.0" } })])[0]!,
-		checks: results.map((result, index) => ({ criterion: checks[index]!.text, page: null, quote: null, recommendation: null, result })),
-		fixed,
+		checks: (["met", "not_met", "not_met"] as const).map((result) => ({ criterion: result, page: null, quote: null, recommendation: null, result })),
+		fixApplied,
+		rightsFix: { checks: [1], statement: "© Crown copyright 2024. Licensed under the Open Government Licence v3.0" },
 	});
 
-	it("keeps what the PDF states until a check is fixed", () => {
-		expect(recordRights(row(["met", "not_met", "not_met"], []), checks)).toBe("© EdTech Hub 2024. CC BY 4.0");
+	it("keeps what the PDF states until the editor applies the fix", () => {
+		expect(recordRights(row(false))).toBe("© EdTech Hub 2024. CC BY 4.0");
+		expect(checkPasses(row(false), 1)).toBe(false);
 	});
 
-	it("builds the statement from the fixed checks and the met ones, in the checks' order", () => {
-		expect(recordRights(row(["not_met", "met", "not_met"], [2]), checks)).toBe("© Crown copyright. Licensed under the Open Government Licence v3.0");
-		expect(recordRights(row(["met", "not_met", "not_met"], [2]), checks)).toBe("Licensed under the Open Government Licence v3.0");
+	it("uses the AI's statement once applied, and passes only the checks it names", () => {
+		expect(recordRights(row(true))).toBe("© Crown copyright 2024. Licensed under the Open Government Licence v3.0");
+		expect([0, 1, 2].map((index) => checkPasses(row(true), index))).toEqual([true, true, false]);
 	});
 });
 

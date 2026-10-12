@@ -52,7 +52,6 @@ import {
 	validateImportFiles,
 	validatePdfFiles,
 	type AttachState,
-	type ImportCheck,
 	type ImportRow,
 	type ReviewFilter,
 } from "./admin-import";
@@ -67,7 +66,7 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly ImportCheck[]) {
+function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly string[]) {
 	try {
 		if (kind === "dois") doiPreviewRequest(doiText);
 		else if (kind === "files") validateImportFiles(files);
@@ -175,10 +174,10 @@ function ImportFlow({
 	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
 	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
 	const selected = batch ? selectedIds(batch) : new Set<string>();
-	const checksOf = (row: ImportRow) => reviewChecks(row, batch?.checks ?? []);
+	const checksOf = (row: ImportRow) => reviewChecks(row);
 	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
-	const propertiesOf = (row: ImportRow) => publishedProperties(row, batch?.checks ?? [], topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
+	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -201,8 +200,7 @@ function ImportFlow({
 				const pending = pendingPdfRows(pdfs);
 				setActiveId(pending[0]?.id ?? null);
 				startImportBatch({ checks, importId, kind, rows: pending });
-				const texts = checks.map(({ text }) => text);
-				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, texts), errorMessage);
+				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks), errorMessage);
 				return;
 			}
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
@@ -243,7 +241,7 @@ function ImportFlow({
 			).map((record) => {
 				const row = rowById.get(record.id)!;
 				const topics = [...topicsOf(row)];
-				const rights = recordRights(row, batch.checks);
+				const rights = recordRights(row);
 				return { ...record, payload: { ...record.payload, ...(topicsEnabled && topics.length ? { topics } : {}), ...(rights ? { rights } : {}) } };
 			});
 			changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
@@ -314,9 +312,9 @@ function ImportFlow({
 								<Tab key="pdfs" title="PDFs">
 									<PdfInput
 										busy={busy}
-										checks={checks}
+										criteria={checks}
 										files={pdfs}
-										onChecksChange={(value) => {
+										onCriteriaChange={(value) => {
 											setChecks(value);
 											storeChecks(value);
 										}}
@@ -363,8 +361,8 @@ function ImportFlow({
 											criteriaCount={batch.checks.length}
 											key={activeRow.id}
 											locked={locked}
-											onFix={(index) => changeImportRow(batch.importId, activeRow.id, (row) => ({ ...row, fixed: row.fixed.includes(index) ? row.fixed.filter((other) => other !== index) : [...row.fixed, index] }))}
 											onOpenRecord={onOpenRecord}
+											onToggleFix={() => changeImportRow(batch.importId, activeRow.id, (row) => ({ ...row, fixApplied: !row.fixApplied }))}
 											onToggleTopic={(topicId) =>
 												changeImportBatch(batch.importId, (current) => {
 													const next = new Set(chosenTopics(current, activeRow));

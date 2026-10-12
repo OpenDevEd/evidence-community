@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircleIcon, Cancel01Icon, CopyrightIcon, Upload04Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, Cancel01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -20,7 +20,7 @@ import {
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { PDF_IMPORT_MAX_FILES, type ImportCheck } from "./admin-import";
+import { PDF_IMPORT_MAX_FILES } from "./admin-import";
 
 const COVERS_PER_PAGE = 10;
 const DOIS_SHOWN = 12;
@@ -106,17 +106,15 @@ function DropText({ hint, what }: { hint: string; what: string }) {
 	);
 }
 
-function IconButton({ busy, icon, label, onPress, tip }: { busy: boolean; icon: typeof Cancel01Icon; label: string; onPress: () => void; tip: string }) {
+function RemoveButton({ busy, name, onPress }: { busy: boolean; name: string; onPress: () => void }) {
 	return (
-		<Tooltip content={tip}>
-			<Button aria-label={label} className="size-7 min-w-7" isDisabled={busy} isIconOnly onPress={onPress} size="xs" variant="transparent">
-				<HugeiconsIcon aria-hidden icon={icon} size={14} />
+		<Tooltip content="Remove">
+			<Button aria-label={`Remove ${name}`} className="size-7 min-w-7" isDisabled={busy} isIconOnly onPress={onPress} size="xs" variant="transparent">
+				<HugeiconsIcon aria-hidden icon={Cancel01Icon} size={14} />
 			</Button>
 		</Tooltip>
 	);
 }
-
-const RemoveButton = ({ busy, name, onPress }: { busy: boolean; name: string; onPress: () => void }) => <IconButton busy={busy} icon={Cancel01Icon} label={`Remove ${name}`} onPress={onPress} tip="Remove" />;
 
 function CoverGrid({ busy, files, onFilesChange }: { busy: boolean; files: File[]; onFilesChange: (files: File[]) => void }) {
 	const [page, setPage] = useState(1);
@@ -167,7 +165,6 @@ function CoverGrid({ busy, files, onFilesChange }: { busy: boolean; files: File[
  * text sizes the grid cell the textarea fills.
  */
 function GrowingText({
-	autoFocus = false,
 	className,
 	disabled,
 	label,
@@ -177,7 +174,6 @@ function GrowingText({
 	placeholder,
 	value,
 }: {
-	autoFocus?: boolean;
 	className: string;
 	disabled: boolean;
 	label: string;
@@ -187,15 +183,14 @@ function GrowingText({
 	placeholder?: string;
 	value: string;
 }) {
-	const shared = "col-start-1 row-start-1 whitespace-pre-wrap break-words py-1 leading-5";
+	const shared = "col-start-1 row-start-1 whitespace-pre-wrap break-words py-1 text-sm leading-5";
 	return (
 		<span className="grid min-w-0 flex-1">
-			<span aria-hidden className={`${shared} ${className} invisible`}>
+			<span aria-hidden className={`${shared} invisible`}>
 				{`${value || placeholder || ""} `}
 			</span>
 			<textarea
 				aria-label={label}
-				autoFocus={autoFocus}
 				className={`${shared} ${className} resize-none overflow-hidden`}
 				disabled={disabled}
 				maxLength={PDF_IMPORT_MAX_CRITERION_LENGTH}
@@ -210,84 +205,48 @@ function GrowingText({
 	);
 }
 
-const stopNewLine = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-	if (event.key === "Enter") event.preventDefault();
-};
-const fieldText = "min-w-0 flex-1 bg-transparent outline-none placeholder:text-black/40 dark:placeholder:text-white/40";
-
-/** One check, and under it the Rights text its Fix button writes, when it has one. */
-function CheckRow({ busy, check, index, onChange, onRemove }: { busy: boolean; check: ImportCheck; index: number; onChange: (check: ImportCheck) => void; onRemove: () => void }) {
-	const [addingFix, setAddingFix] = useState(false);
-	const showFix = addingFix || check.fix !== "";
-	return (
-		<li className="group/check rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]">
-			<div className="flex items-start gap-2.5">
-				<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/40 dark:text-white/40">{index + 1}</span>
-				<GrowingText
-					className={`${fieldText} text-sm text-black/85 dark:text-white/85`}
-					disabled={busy}
-					label={`Check ${index + 1}`}
-					onBlur={() => {
-						if (!check.text.trim()) onRemove();
-					}}
-					onChange={(text) => onChange({ ...check, text })}
-					onKeyDown={stopNewLine}
-					value={check.text}
-				/>
-				<span className="flex opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/check:opacity-100">
-					{showFix ? null : <IconButton busy={busy} icon={CopyrightIcon} label={`Add a fix to check ${index + 1}`} onPress={() => setAddingFix(true)} tip="Add a fix" />}
-					<RemoveButton busy={busy} name={`check ${index + 1}`} onPress={onRemove} />
-				</span>
-			</div>
-			{showFix ? (
-				<div className="flex items-start gap-2.5">
-					<HugeiconsIcon aria-hidden className="mt-[7px] w-4 shrink-0 text-black/35 dark:text-white/35" icon={CopyrightIcon} size={13} />
-					<GrowingText
-						autoFocus={addingFix && !check.fix}
-						className={`${fieldText} text-xs text-black/60 dark:text-white/60`}
-						disabled={busy}
-						label={`Fix for check ${index + 1}`}
-						onBlur={() => setAddingFix(false)}
-						onChange={(fix) => onChange({ ...check, fix })}
-						onKeyDown={stopNewLine}
-						placeholder="Rights text to write when it fails"
-						value={check.fix}
-					/>
-				</div>
-			) : null}
-		</li>
-	);
-}
-
 /** The library's checks, one per row, saved as they are edited. */
-function ChecksEditor({ busy, checks, onChange }: { busy: boolean; checks: ImportCheck[]; onChange: (checks: ImportCheck[]) => void }) {
+function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: string[]; onChange: (criteria: string[]) => void }) {
 	const [draft, setDraft] = useState("");
-	const full = checks.length >= PDF_IMPORT_MAX_CRITERIA;
+	const full = criteria.length >= PDF_IMPORT_MAX_CRITERIA;
 	const add = () => {
 		const text = draft.trim();
 		if (!text || full) return;
-		onChange([...checks, { fix: "", text }]);
+		onChange([...criteria, text]);
 		setDraft("");
+	};
+	const input = "min-w-0 flex-1 bg-transparent text-sm text-black/85 outline-none placeholder:text-black/40 dark:text-white/85 dark:placeholder:text-white/40";
+	const stopNewLine = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+		if (event.key === "Enter") event.preventDefault();
 	};
 	return (
 		<div>
-			<SectionLabel aside={`${checks.length} of ${PDF_IMPORT_MAX_CRITERIA}`}>Checks</SectionLabel>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library. The AI answers each one for every PDF, with the quote and page it rests on. A check with a fix offers to write that text into the record&apos;s Rights when it fails.</p>
+			<SectionLabel aside={`${criteria.length} of ${PDF_IMPORT_MAX_CRITERIA}`}>Checks</SectionLabel>
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library. The AI answers each one for every PDF, with the quote and page it rests on.</p>
 			<ol className="flex flex-col">
-				{checks.map((check, index) => (
-					<CheckRow
-						busy={busy}
-						check={check}
-						index={index}
-						key={index}
-						onChange={(changed) => onChange(checks.map((other, at) => (at === index ? changed : other)))}
-						onRemove={() => onChange(checks.filter((_, at) => at !== index))}
-					/>
+				{criteria.map((criterion, index) => (
+					<li className="group/check flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]" key={index}>
+						<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/40 dark:text-white/40">{index + 1}</span>
+						<GrowingText
+							className={input}
+							disabled={busy}
+							label={`Check ${index + 1}`}
+							onBlur={() => {
+								if (!criterion.trim()) onChange(criteria.filter((_, other) => other !== index));
+							}}
+							onChange={(value) => onChange(criteria.map((text, other) => (other === index ? value : text)))}
+							onKeyDown={stopNewLine}
+							value={criterion}
+						/>
+						<span className="opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/check:opacity-100">
+							<RemoveButton busy={busy} name={`check ${index + 1}`} onPress={() => onChange(criteria.filter((_, other) => other !== index))} />
+						</span>
+					</li>
 				))}
 				<li className="flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2">
-					<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/30 dark:text-white/30">{checks.length + 1}</span>
+					<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/30 dark:text-white/30">{criteria.length + 1}</span>
 					<GrowingText
-						className={`${fieldText} text-sm text-black/85 dark:text-white/85`}
+						className={input}
 						disabled={busy || full}
 						label="Add a check"
 						onBlur={add}
@@ -308,19 +267,19 @@ function ChecksEditor({ busy, checks, onChange }: { busy: boolean; checks: Impor
 /** Two columns: the PDFs, and the checks every one of them is read against. */
 export function PdfInput({
 	busy,
-	checks,
+	criteria,
 	files,
-	onChecksChange,
+	onCriteriaChange,
 	onFilesChange,
 }: {
 	busy: boolean;
-	checks: ImportCheck[];
+	criteria: string[];
 	files: File[];
-	onChecksChange: (checks: ImportCheck[]) => void;
+	onCriteriaChange: (criteria: string[]) => void;
 	onFilesChange: (files: File[]) => void;
 }) {
 	return (
-		<div className="grid min-h-full grid-cols-[minmax(0,1fr)_21rem] gap-8">
+		<div className="grid min-h-full grid-cols-[minmax(0,1fr)_18rem] gap-8">
 			{files.length ? (
 				<CoverGrid busy={busy} files={files} onFilesChange={onFilesChange} />
 			) : (
@@ -329,7 +288,7 @@ export function PdfInput({
 				</DropArea>
 			)}
 			<div className="border-s border-black/[0.06] ps-8 dark:border-white/[0.06]">
-				<ChecksEditor busy={busy} checks={checks} onChange={onChecksChange} />
+				<ChecksEditor busy={busy} criteria={criteria} onChange={onCriteriaChange} />
 			</div>
 		</div>
 	);
