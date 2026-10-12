@@ -18,7 +18,7 @@ import { studyTone } from "@/components/features/items/study-tone";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { Hint } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
@@ -68,17 +68,13 @@ function EditionMeta({ edition }: { edition: DigestEdition }) {
   const locale = useLocale();
   const timezone = useLibraryConfig().notifications.schedule.timezone;
   return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-sm ${muted}`}>
-    <Explained card={<PeriodCard period={edition.period} timezone={timezone} />}><Icon value={Calendar03Icon} size={16} /><time dateTime={edition.period.first}>{edition.period.label}</time></Explained>
-    <Explained card={<CountCard edition={edition} locale={locale} />}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, locale)}</Explained>
+    <Hint content={<PeriodCard period={edition.period} timezone={timezone} />} {...headerHint}><Icon value={Calendar03Icon} size={16} /><time dateTime={edition.period.first}>{edition.period.label}</time></Hint>
+    <Hint content={<CountCard edition={edition} locale={locale} />} {...headerHint}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, locale)}</Hint>
     <Attribution by={edition.by} />
   </div>;
 }
-/** A date or count in the edition's header that says on hover, or on focus, what it means. */
-function Explained({ card, children }: { card: ReactNode; children: ReactNode }) {
-  return <Tooltip content={card} placement="bottom-start" className="w-96 max-w-[calc(100vw-24px)] p-4">
-    <span tabIndex={0} className="inline-flex cursor-help items-center gap-1.5 rounded-md underline decoration-black/25 decoration-dashed underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent dark:decoration-white/30">{children}</span>
-  </Tooltip>;
-}
+/** The header's hints open below their text, as wide as their cards need. */
+const headerHint = {placement: "bottom-start", contentClassName: "w-96 max-w-[calc(100vw-24px)] p-4"} as const;
 const cardText = "text-sm leading-6 text-black/70 dark:text-white/70";
 /** The first and last day an edition covers, joined by a line, and which date of a publication puts it in. */
 function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: string }) {
