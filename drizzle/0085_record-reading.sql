@@ -61,3 +61,22 @@ $$;
 --> statement-breakpoint
 CREATE TRIGGER enqueue_item_reading AFTER INSERT ON "outbox"
 FOR EACH ROW EXECUTE FUNCTION enqueue_item_reading();
+--> statement-breakpoint
+-- A source that starts holding a record it did not hold before, an overlapping search for one, writes no new revision.
+-- The record is queued all the same, so the new source's grade is asked.
+CREATE FUNCTION enqueue_item_reading_for_link() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE revision bigint;
+BEGIN
+  IF NEW."remoteDeleted" THEN RETURN NEW; END IF;
+  SELECT i.revision INTO revision FROM "item" i WHERE i.key = NEW."itemKey" AND i."parentItem" IS NULL;
+  IF revision IS NULL THEN RETURN NEW; END IF;
+  INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."itemKey", revision)
+  ON CONFLICT ("itemKey") DO UPDATE SET
+    "generation" = "itemReadingQueue"."generation" + 1,
+    "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER enqueue_item_reading_for_link AFTER INSERT OR UPDATE OF "remoteDeleted" ON "itemSourceLink"
+FOR EACH ROW EXECUTE FUNCTION enqueue_item_reading_for_link();

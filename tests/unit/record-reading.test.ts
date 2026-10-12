@@ -5,6 +5,8 @@ import { planRead } from "@/lib/readings/worker";
 
 const record = { key: "AAAA1111", title: "Heat and maize yields", abstract: "We pooled 40 trials.", itemType: "JournalArticle", openAlexType: "article", doi: null, sources: ["oa"] };
 const climate = { key: "oa", subject: "Climate adaptation", hash: "climate" };
+/** What a whole read of `record` stored, as Jev typed it. */
+const readAs = (contentHash: string, questionSet = QUESTION_SET) => ({ contentHash, questionSet, studyType: "meta-analysis" as const, typedBy: "ai" as const });
 
 describe("what a record's own metadata says it is", () => {
 	it("types datasets, software, corrections, editorials and registered protocols without asking Jev", () => {
@@ -24,24 +26,33 @@ describe("planning a read", () => {
 
 	it("asks nothing when the text, question set and subject are what the record was read with", () => {
 		const first = planRead(record, { grades: new Map() }, [climate])!;
-		expect(planRead(record, { reading: { contentHash: first.contentHash, questionSet: QUESTION_SET }, grades: new Map([["oa", "climate"]]) }, [climate])).toBeNull();
+		expect(planRead(record, { reading: readAs(first.contentHash), grades: new Map([["oa", "climate"]]) }, [climate])).toBeNull();
 	});
 
 	it("asks only the grade when a source's subject changed", () => {
 		const first = planRead(record, { grades: new Map() }, [climate])!;
-		const plan = planRead(record, { reading: { contentHash: first.contentHash, questionSet: QUESTION_SET }, grades: new Map([["oa", "old subject"]]) }, [climate]);
+		const plan = planRead(record, { reading: readAs(first.contentHash), grades: new Map([["oa", "old subject"]]) }, [climate]);
 		expect(plan?.ask).toEqual({ type: false, details: false, subjects: ["Climate adaptation"] });
 	});
 
 	it("reads the record whole again when its text or the question set changed", () => {
 		const first = planRead(record, { grades: new Map() }, [climate])!;
-		const stored = { reading: { contentHash: first.contentHash, questionSet: QUESTION_SET - 1 }, grades: new Map([["oa", "climate"]]) };
+		const stored = { reading: readAs(first.contentHash, QUESTION_SET - 1), grades: new Map([["oa", "climate"]]) };
 		expect(planRead(record, stored, [climate])?.ask.details).toBe(true);
 		expect(planRead({ ...record, abstract: "A new abstract." }, { ...stored, reading: { ...stored.reading, questionSet: QUESTION_SET } }, [climate])?.ask.details).toBe(true);
 	});
 
 	it("does not ask the type of a record its metadata types", () => {
 		expect(planRead({ ...record, itemType: "Dataset" }, { grades: new Map() }, [climate])?.ask.type).toBe(false);
+	});
+
+	it("retypes a record whose metadata changed, without a call when the metadata now gives the type", () => {
+		const first = planRead(record, { grades: new Map() }, [climate])!;
+		const graded = new Map([["oa", "climate"]]);
+		const nowDataset = planRead({ ...record, itemType: "Dataset" }, { reading: readAs(first.contentHash), grades: graded }, [climate]);
+		expect(nowDataset).toMatchObject({ retype: true, metadataType: "not-research", ask: { type: false, details: false, subjects: [] } });
+		const noLongerDataset = planRead(record, { reading: { ...readAs(first.contentHash), studyType: "not-research", typedBy: "metadata" }, grades: graded }, [climate]);
+		expect(noLongerDataset?.ask).toEqual({ type: true, details: false, subjects: [] });
 	});
 });
 

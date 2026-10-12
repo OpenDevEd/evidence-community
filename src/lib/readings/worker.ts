@@ -33,30 +33,43 @@ function screeningSubjects(config: LibraryServerConfig) {
 
 /** A record as a read needs it. */
 type RecordFacts = { key: string; title: string; abstract: string; itemType: string; openAlexType: string | null; doi: string | null; sources: string[] };
-/** What is stored about a record already: its reading's text hash and question set, and each grade's subject hash. */
-type Stored = { reading?: { contentHash: string; questionSet: number }; grades: Map<string, string> };
+/** What is stored about a record already: its reading's text hash, question set and type, and each grade's subject hash. */
+type Stored = { reading?: { contentHash: string; questionSet: number; studyType: StudyTypeKey; typedBy: "ai" | "metadata" }; grades: Map<string, string> };
 type Subject = { key: string; subject: string; hash: string };
 
 /**
  * What a read of this record asks, or null when nothing has changed. A record whose text and question set are what
  * its reading was made from asks only the grades whose subject changed; otherwise it is read whole, every screening
- * source graded again. The type is not asked when the record's own metadata gives it.
+ * source graded again. The type is never asked when the record's own metadata gives it, and a change in what the
+ * metadata says retypes a record whose text has not changed: at no cost when the metadata now gives the type, with a
+ * type-only question when it no longer does.
  */
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
 	const contentHash = hash(`${record.title}\n${record.abstract}`);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
+	const metadataType = metadataStudyType(record);
+	const retype = fresh && (metadataType
+		? stored.reading!.typedBy !== "metadata" || stored.reading!.studyType !== metadataType
+		: stored.reading!.typedBy === "metadata");
 	const graded = fresh ? subjects.filter((subject) => stored.grades.get(subject.key) !== subject.hash) : subjects;
-	if (fresh && !graded.length) return null;
-	const metadataType = fresh ? null : metadataStudyType(record);
-	const ask: ReadingAsk = { type: !fresh && !metadataType, details: !fresh, subjects: graded.map((subject) => subject.subject) };
-	return { ask, contentHash, fresh, metadataType, graded };
+	if (fresh && !graded.length && !retype) return null;
+	const ask: ReadingAsk = { type: !metadataType && (!fresh || retype), details: !fresh, subjects: graded.map((subject) => subject.subject) };
+	return { ask, contentHash, fresh, retype, metadataType, graded };
 }
+type Plan = NonNullable<ReturnType<typeof planRead>>;
+/** Whether a plan needs Jev at all: a metadata retype alone does not. */
+const asksJev = (ask: ReadingAsk) => ask.type || ask.details || ask.subjects.length > 0;
+
+/** The type a read stores: the metadata's, else Jev's answer. */
+const typeFields = (plan: Plan, read: ReadingAnswers): { studyType: StudyTypeKey; typeConfidence: number; typedBy: "ai" | "metadata" } =>
+	plan.metadataType
+		? { studyType: plan.metadataType, typeConfidence: 1, typedBy: "metadata" }
+		: { studyType: read.type!.key, typeConfidence: read.type!.confidence, typedBy: "ai" };
 
 /** The reading row a whole read stores. */
-function readingRow(record: RecordFacts, plan: NonNullable<ReturnType<typeof planRead>>, read: ReadingAnswers, model: string) {
-	const type: { key: StudyTypeKey; confidence: number } = plan.metadataType ? { key: plan.metadataType, confidence: 1 } : read.type!;
+function readingRow(record: RecordFacts, plan: Plan, read: ReadingAnswers, model: string) {
 	return {
-		itemKey: record.key, studyType: type.key, typeConfidence: type.confidence, typedBy: plan.metadataType ? "metadata" as const : "ai" as const,
+		itemKey: record.key, ...typeFields(plan, read),
 		pooled: read.details!.pooled, region: read.details!.region, effects: read.details!.effects,
 		input: record.abstract ? "abstract" as const : "title" as const, contentHash: plan.contentHash, questionSet: QUESTION_SET, model, readAt: new Date(),
 	};
@@ -79,8 +92,8 @@ async function recordFacts(database: Database, keys: string[]) {
 			(SELECT s.payload ->> 'type' FROM "sourceSnapshot" s WHERE s."itemKey" = i.key AND s.payload ? 'type' LIMIT 1) AS "openAlexType",
 			ARRAY(SELECT l."sourceConnectionKey" FROM "itemSourceLink" l WHERE l."itemKey" = i.key AND NOT l."remoteDeleted") AS sources
 		FROM "item" i WHERE i.key = ANY(${list}) AND coalesce(i.deleted, 0) <> 1 AND coalesce(i."parentItem", '') = ''`);
-	const readings = await database.execute<{ itemKey: string; contentHash: string; questionSet: number }>(sql`
-		SELECT "itemKey", "contentHash", "questionSet" FROM "itemReading" WHERE "itemKey" = ANY(${list})`);
+	const readings = await database.execute<{ itemKey: string; contentHash: string; questionSet: number; studyType: StudyTypeKey; typedBy: "ai" | "metadata" }>(sql`
+		SELECT "itemKey", "contentHash", "questionSet", "studyType", "typedBy" FROM "itemReading" WHERE "itemKey" = ANY(${list})`);
 	const grades = await database.execute<{ itemKey: string; sourceConnectionKey: string; subjectHash: string }>(sql`
 		SELECT "itemKey", "sourceConnectionKey", "subjectHash" FROM "itemGrade" WHERE "itemKey" = ANY(${list})`);
 	return rows.map((row) => ({
@@ -111,7 +124,11 @@ async function fail(database: Database, job: { itemKey: string; attempts: number
 		WHERE "itemKey" = ${job.itemKey} AND "leaseToken" = ${token}`);
 }
 
-/** Reads one claimed record, when anything about it needs reading, and stores what Jev answered. */
+/**
+ * Reads one claimed record, when anything about it needs reading, and stores what Jev answered. What it spent is kept
+ * whatever happens; the answers are kept only while the claim is still this cycle's, so a record queued again during
+ * the call is read again instead of taking answers about its older text.
+ */
 async function readOne(
 	database: Database, apiKey: string, subjects: Map<string, { subject: string; hash: string }>,
 	facts: Awaited<ReturnType<typeof recordFacts>>[number] | undefined, job: { itemKey: string; attempts: number }, token: string,
@@ -126,38 +143,61 @@ async function readOne(
 	if (!facts || !plan) return finish(database, job.itemKey, token);
 	try {
 		const { record } = facts;
-		const answer = await askJev({
-			apiKey, state: { title: record.title, ...(record.abstract ? { abstract: record.abstract } : {}) },
-			questions: readingQuestions(plan.ask), signal, request,
-		});
-		const read = readingAnswers(plan.ask, answer.answers);
+		const answer = asksJev(plan.ask)
+			? await askJev({ apiKey, state: { title: record.title, ...(record.abstract ? { abstract: record.abstract } : {}) }, questions: readingQuestions(plan.ask), signal, request })
+			: null;
+		const read = answer ? readingAnswers(plan.ask, answer.answers) : { scores: [] };
 		await database.transaction(async (tx) => {
+			if (answer) await tx.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
+				.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
+			const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+				WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
+			if (!owned.rows.length) return;
 			if (!plan.fresh) {
-				const row = readingRow(record, plan, read, answer.model);
+				const row = readingRow(record, plan, read, answer!.model);
 				await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
+			} else if (plan.retype) {
+				await tx.update(itemReading).set(typeFields(plan, read)).where(sql`${itemReading.itemKey} = ${record.key}`);
 			}
 			for (const [index, subject] of plan.graded.entries()) {
 				const grade = { itemKey: record.key, sourceConnectionKey: subject.key, score: read.scores[index], subjectHash: subject.hash, gradedAt: new Date() };
 				await tx.insert(itemGrade).values(grade).onConflictDoUpdate({ target: [itemGrade.itemKey, itemGrade.sourceConnectionKey], set: grade });
 			}
-			await tx.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
-				.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
 		});
-		await finish(database, job.itemKey, token);
 	} catch (error) {
 		await fail(database, job, token, error);
 	}
 }
 
 /**
- * Reads the records waiting in the queue, a batch at a time, for up to `CYCLE_MS`. Each record is read once by Jev on
- * the library's own key: its study type and details when its text changed, and its grade against each screening source
- * whose subject changed. Returns whether it read anything.
+ * Leaves every waiting record done without reading it: what was published while nothing screens, or without a key, is
+ * read only when the owner asks for it, so turning screening on never spends on its own.
+ */
+async function drain(database: Database) {
+	await database.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL
+		WHERE "nextAttemptAt" IS NOT NULL AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now())`);
+}
+
+/** Hands back the claims a cycle ran out of time for, so the next cycle takes them at once. */
+async function release(database: Database, keys: string[], token: string) {
+	if (!keys.length) return;
+	await database.execute(sql`UPDATE "itemReadingQueue" SET "leaseToken" = NULL, "leaseExpiresAt" = NULL
+		WHERE "itemKey" = ANY(ARRAY[${sql.join(keys.map((key) => sql`${key}`), sql`, `)}]::varchar[]) AND "leaseToken" = ${token}`);
+}
+
+/**
+ * Reads the records waiting in the queue, a batch at a time, for up to `CYCLE_MS`; no call starts after that, and the
+ * records it did not reach are handed back. Each record is read once by Jev on the library's own key: its study type
+ * and details when its text changed, and its grade against each screening source whose subject changed. Returns
+ * whether it read anything.
  */
 export async function runReadingCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request?: typeof fetch) {
 	const apiKey = readingKey(config);
 	const subjects = screeningSubjects(config);
-	if (!apiKey || !subjects.size) return false;
+	if (!apiKey || !subjects.size) {
+		await drain(database);
+		return false;
+	}
 	const deadline = Date.now() + CYCLE_MS;
 	let worked = false;
 	while (Date.now() < deadline && !signal?.aborted) {
@@ -168,11 +208,12 @@ export async function runReadingCycle(database: Database, config: LibraryServerC
 		const facts = new Map((await recordFacts(database, jobs.map((job) => job.itemKey))).map((entry) => [entry.record.key, entry]));
 		let next = 0;
 		await Promise.all(Array.from({ length: Math.min(AT_ONCE, jobs.length) }, async () => {
-			while (next < jobs.length) {
+			while (next < jobs.length && Date.now() < deadline && !signal?.aborted) {
 				const job = jobs[next++]!;
 				await readOne(database, apiKey, subjects, facts.get(job.itemKey), job, token, signal, request);
 			}
 		}));
+		await release(database, jobs.slice(next).map((job) => job.itemKey), token);
 	}
 	return worked;
 }

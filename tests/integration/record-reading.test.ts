@@ -81,3 +81,34 @@ it("reads each published record once, again only when its text or its source's s
 		expect(job.nextAttemptAt).not.toBeNull();
 	});
 }, 120_000);
+
+it("does not read, when screening turns on, what was published while nothing screened", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		await publish(client, "BEFREAD2", "Coastal flooding in Lagos", "Flood risk across 40 wards.");
+		const offConfig = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [{ ...source, screening: { enabled: false } }] });
+		await runReadingCycle(db, offConfig, undefined, jev(answering).request);
+		const on = jev(answering);
+		await runReadingCycle(db, configWith("Climate adaptation in farming"), undefined, on.request);
+		expect(on.asked).toEqual([]);
+		expect(await db.select().from(itemReading)).toEqual([]);
+	});
+}, 120_000);
+
+it("grades a record for a screening source that starts holding it, though its revision does not change", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		const second = { ...source, key: "zotero-second", groupId: "7743475" };
+		const both = libraryConfigSchema.parse({
+			...configWith("Climate adaptation in farming"),
+			sources: [{ ...source, screening: { enabled: true, subject: "Climate adaptation in farming" } }, { ...second, screening: { enabled: true, subject: "Water security" } }],
+		});
+		await publish(client, "LAPPED22", "Irrigation and drought in Kenya", "Smallholders adopted drip irrigation.");
+		await runReadingCycle(db, both, undefined, jev(answering).request);
+
+		await client.query(`INSERT INTO "sourceConnection" (key, provider, "scopeKind", "externalScopeKey") VALUES ($1, 'zotero', 'group', '7743475')`, [second.key]);
+		await client.query(`INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey") VALUES ('LAPPED22', $1, 'LAPPED22')`, [second.key]);
+		const picked = jev(answering);
+		await runReadingCycle(db, both, undefined, picked.request);
+		expect(picked.asked).toEqual([["grade_0"]]);
+		expect((await db.select({ source: itemGrade.sourceConnectionKey }).from(itemGrade)).map((grade) => grade.source).sort()).toEqual([second.key, source.key].sort());
+	});
+}, 120_000);
