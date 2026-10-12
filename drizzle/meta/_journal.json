@@ -610,6 +610,13 @@
       "when": 1791829763478,
       "tag": "0086_record-screening",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1791831914045,
+      "tag": "0087_screening-status-detail",
+      "breakpoints": true
     }
   ]
 }

@@ -77,14 +77,16 @@ async function withdrawRequests(tx: DatabaseTransaction, sources: string[]) {
  */
 export async function saveSourceScreening(tx: DatabaseTransaction, sources: LibraryServerConfig["sources"], alsoDecide: readonly string[] = []) {
 	const before = new Map((await tx.select().from(sourceScreening)).map((row) => [row.sourceConnectionKey, row]));
-	const wanted = new Map(sources.filter(screens).map((source) => [source.key, { subjectHash: subjectHash(source.screening.subject), keptOut: [...source.screening.keptOut].sort() }]));
+	const wanted = new Map(sources.filter(screens).map((source) => [source.key, {
+		subject: source.screening.subject, subjectHash: subjectHash(source.screening.subject), keptOut: [...source.screening.keptOut].sort(),
+	}]));
 	const stopped = [...before.keys()].filter((key) => !wanted.has(key));
 	const changed = [...stopped, ...alsoDecide];
 	const ended = [...stopped];
 	for (const key of stopped) await tx.delete(sourceScreening).where(eq(sourceScreening.sourceConnectionKey, key));
 	for (const [key, screening] of wanted) {
 		const old = before.get(key);
-		if (old?.subjectHash === screening.subjectHash && old.keptOut.join() === screening.keptOut.join()) continue;
+		if (old?.subject === screening.subject && old.subjectHash === screening.subjectHash && old.keptOut.join() === screening.keptOut.join()) continue;
 		await tx.insert(sourceScreening).values({ sourceConnectionKey: key, ...screening })
 			.onConflictDoUpdate({ target: sourceScreening.sourceConnectionKey, set: { ...screening, gradingOf: sql`CASE WHEN ${sourceScreening.subjectHash} = ${screening.subjectHash} THEN ${sourceScreening.gradingOf} END` } });
 		if (old?.keptOut.join() !== screening.keptOut.join()) changed.push(key);
@@ -157,17 +159,42 @@ export async function requestGrading(database: Database, config: LibraryServerCo
 	});
 }
 
-/** What a screening source's report says: its records by grade, those not graded against its subject, and progress. */
+type ByGrade<T> = { about: T; touches: T; passing: T; notAbout: T };
+
+/**
+ * What a screening source's report says: the subject it screens against, its records by grade with a recently graded
+ * title for each, those not graded against its subject, progress while the owner's request runs, and, while records
+ * wait to be read, the latest one read and how many are left.
+ */
 export type ScreeningStatus = {
-	grades: { about: number; touches: number; passing: number; notAbout: number };
+	subject: string;
+	grades: ByGrade<number>;
+	examples: ByGrade<string | null>;
 	ungraded: number;
 	grading: { done: number; of: number } | null;
+	reading: { title: string; left: number } | null;
 };
+
+/** Titles go into a report OpenScholar keeps; this many characters say what a record is. */
+const TITLE_CHARS = 300;
+const GRADE_COLUMNS = { about: "about", touches: "touches", passing: "passing", notAbout: "not-about" } as const;
+
+/** The title of the source's most recently graded record, of one grade or of any. */
+const latestTitle = (grade: string | null) => sql`(SELECT left(i.title, ${TITLE_CHARS}) FROM "itemGrade" g JOIN "item" i ON i.key = g."itemKey"
+	WHERE g."sourceConnectionKey" = s."sourceConnectionKey" ${grade === null ? sql`` : sql`AND g."grade" = ${grade}`} AND coalesce(i.deleted, 0) <> 1
+	ORDER BY g."gradedAt" DESC LIMIT 1)`;
 
 /** The screening report of each source that screens, by source key. */
 export async function readScreeningStatuses(database: Pick<Database, "execute">) {
-	const { rows } = await database.execute<{ key: string; gradingOf: number | null; about: number; touches: number; passing: number; notAbout: number; ungraded: number }>(sql`
-		SELECT s."sourceConnectionKey" AS key, s."gradingOf",
+	type Row = ByGrade<number> & { key: string; subject: string; gradingOf: number | null; ungraded: number; left: number; latest: string | null }
+		& { [Example in `${keyof ByGrade<number>}Example`]: string | null };
+	const { rows } = await database.execute<Row>(sql`
+		SELECT s."sourceConnectionKey" AS key, s."subject", s."gradingOf",
+			${sql.join(Object.entries(GRADE_COLUMNS).map(([column, grade]) => sql`${latestTitle(grade)} AS ${sql.identifier(`${column}Example`)}`), sql`, `)},
+			${latestTitle(null)} AS latest,
+			-- Records of the source waiting for their first try: the reading under way.
+			(SELECT count(*) FROM "itemReadingQueue" q JOIN "itemSourceLink" w ON w."itemKey" = q."itemKey" AND NOT w."remoteDeleted"
+				WHERE w."sourceConnectionKey" = s."sourceConnectionKey" AND q."nextAttemptAt" IS NOT NULL AND q."attempts" = 0)::int AS "left",
 			count(g."itemKey") FILTER (WHERE g."grade" = 'about')::int AS about,
 			count(g."itemKey") FILTER (WHERE g."grade" = 'touches')::int AS touches,
 			count(g."itemKey") FILTER (WHERE g."grade" = 'passing')::int AS passing,
@@ -178,10 +205,13 @@ export async function readScreeningStatuses(database: Pick<Database, "execute">)
 		LEFT JOIN "itemSourceLink" l ON l."sourceConnectionKey" = s."sourceConnectionKey" AND NOT l."remoteDeleted"
 			AND EXISTS (SELECT 1 FROM "item" i WHERE i.key = l."itemKey" AND coalesce(i.deleted, 0) <> 1 AND coalesce(i."parentItem", '') = '')
 		LEFT JOIN "itemGrade" g ON g."itemKey" = l."itemKey" AND g."sourceConnectionKey" = l."sourceConnectionKey"
-		GROUP BY s."sourceConnectionKey", s."gradingOf"`);
+		GROUP BY s."sourceConnectionKey", s."subject", s."gradingOf"`);
 	return new Map(rows.map((row): [string, ScreeningStatus] => [row.key, {
+		subject: row.subject,
 		grades: { about: row.about, touches: row.touches, passing: row.passing, notAbout: row.notAbout },
+		examples: { about: row.aboutExample, touches: row.touchesExample, passing: row.passingExample, notAbout: row.notAboutExample },
 		ungraded: row.ungraded,
 		grading: row.gradingOf === null ? null : { done: Math.max(0, row.gradingOf - row.ungraded), of: row.gradingOf },
+		reading: row.left > 0 && row.latest !== null ? { title: row.latest, left: row.left } : null,
 	}]));
 }

@@ -486,6 +486,9 @@ export async function hasSourceActivity(database: Database, now = new Date()) {
 		)
 		.limit(1);
 	if (running) return true;
+	// Records waiting to be read: screening reports its progress as often as an import does.
+	const reading = await database.execute(sql`SELECT 1 FROM "itemReadingQueue" WHERE "nextAttemptAt" IS NOT NULL AND "attempts" = 0 LIMIT 1`);
+	if (reading.rows.length) return true;
 	const [waiting] = await database
 		.select({ id: outbox.id })
 		.from(outbox)

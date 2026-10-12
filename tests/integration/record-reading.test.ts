@@ -191,10 +191,18 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 		// Until the workers store the new subject, a request to grade against it is refused.
 		expect(await requestGrading(db, after, source.key)).toBe("not_ready");
 		await store(db, after);
-		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({ grades: { about: 2, touches: 0, passing: 0, notAbout: 0 }, ungraded: 2, grading: null });
+		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({
+			subject: "Urban housing policy",
+			grades: { about: 2, touches: 0, passing: 0, notAbout: 0 },
+			examples: { about: expect.stringMatching(/^Irrigation in (Kenya|Malawi)$/u), touches: null, passing: null, notAbout: null },
+			ungraded: 2,
+			grading: null,
+			reading: null,
+		});
 		expect(await requestGrading(db, after, source.key)).toEqual({ queued: 2 });
 		// Asked again before anything was read: the same request, and progress counts from where it began.
 		expect(await requestGrading(db, after, source.key)).toEqual({ queued: 2 });
+		expect((await readScreeningStatuses(db)).get(source.key)?.reading).toEqual({ title: expect.stringMatching(/^Irrigation in/u), left: 2 });
 
 		// One record graded against the new subject: its grade waits, and both records stay in.
 		let calls = 0;
@@ -204,7 +212,12 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 
 		await client.query(`UPDATE "itemReadingQueue" SET "nextAttemptAt" = now() WHERE "nextAttemptAt" IS NOT NULL`);
 		await runReadingCycle(db, after, undefined, jev(scoring(0.1)).request);
-		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({ grades: { about: 0, touches: 0, passing: 0, notAbout: 2 }, ungraded: 0, grading: null });
+		expect((await readScreeningStatuses(db)).get(source.key)).toMatchObject({
+			grades: { about: 0, touches: 0, passing: 0, notAbout: 2 },
+			examples: { about: null, notAbout: expect.stringMatching(/^Irrigation in/u) },
+			ungraded: 0,
+			grading: null,
+		});
 		expect(await visible(db)).toEqual([]);
 		expect(await db.select({ pending: itemGrade.pendingSubjectHash }).from(itemGrade)).toEqual([{ pending: null }, { pending: null }]);
 

@@ -50,6 +50,7 @@ export const itemGrade = pgTable("itemGrade", {
 	foreignKey({ columns: [table.itemKey, table.sourceConnectionKey], foreignColumns: [itemSourceLink.itemKey, itemSourceLink.sourceConnectionKey] }).onDelete("cascade").onUpdate("cascade"),
 	index("itemGrade_source_idx").on(table.sourceConnectionKey),
 	index("itemGrade_pending_idx").on(table.sourceConnectionKey).where(sql`${table.pendingSubjectHash} IS NOT NULL`),
+	index("itemGrade_latest_idx").on(table.sourceConnectionKey, table.grade, table.gradedAt),
 ]);
 
 /**
@@ -66,10 +67,12 @@ export const itemReadingQueue = pgTable("itemReadingQueue", {
 
 /**
  * The screening of each source that screens, as its configuration last set it, so the database alone can say which
- * grades it keeps out. `gradingOf` is how many records the owner asked to have graded, until they all are.
+ * grades it keeps out and OpenScholar can see which subject it screens against. `gradingOf` is how many records the
+ * owner asked to have graded, until they all are.
  */
 export const sourceScreening = pgTable("sourceScreening", {
 	sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 }).primaryKey().references(() => sourceConnection.key, { onDelete: "cascade" }),
+	subject: text("subject").notNull(),
 	subjectHash: text("subjectHash").notNull(),
 	keptOut: text("keptOut").array().$type<ScreeningGrade[]>().notNull(),
 	gradingOf: integer("gradingOf"),
