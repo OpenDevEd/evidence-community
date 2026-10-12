@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, asc, count, eq, exists, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -111,57 +112,193 @@ async function readMembers(database: Database, collectionIds: string[]) {
 	return members;
 }
 
+/** One page of a list of collections: its rows, which page it is of how many, and how many rows the list has. */
+export type CollectionsPage<Row = ReaderCollectionSummary> = { rows: Row[]; page: number; pages: number; total: number };
+
+/** A profile's page of collections, and the chosen one wherever it is, which the list beside them shows. */
+export type ProfileCollectionsPage = CollectionsPage & { chosen: ReaderCollectionSummary | null };
+
+/** A collection the record picker offers: the reader's own or one they edit, with its owner, and whether it holds the record. */
+export type PickerCollection = ReaderCollectionSummary & { ownerId: string; owner: ReaderPerson | null; holdsRecord: boolean };
+
+/** Most rows any page of collections holds. */
+export const MAX_COLLECTIONS_PAGE_SIZE = 24;
+
+const pageCount = (total: number, pageSize: number) => Math.max(1, Math.ceil(total / pageSize));
+const clampPage = (page: number, pages: number) => Math.min(Math.max(1, Math.trunc(page) || 1), pages);
+
+/** Who may see which of a reader's collections: all of them for the reader, and for anyone else the public ones and the private ones shared with them. */
+function visibleCollections(database: Database, ownerUserId: string, viewerUserId: string | null) {
+	return and(
+		eq(readerCollection.userId, ownerUserId),
+		viewerUserId === ownerUserId ? undefined : or(eq(readerCollection.private, false), viewerUserId ? memberOf(database, viewerUserId) : undefined),
+	);
+}
+
+/** Rows of a reader's collections as the viewer sees them: who each is shared with shows only to its owner and its members. */
+async function asViewerSees(database: Database, rows: { id: string; createdAt: Date }[], ownerUserId: string, viewerUserId: string | null) {
+	const members = viewerUserId ? await readMembers(database, rows.map((row) => row.id)) : new Map<string, CollectionMember[]>();
+	return <Row extends { id: string; createdAt: Date; userId: string }>(row: Row) => {
+		const { userId: _owner, ...rest } = row;
+		const shared = members.get(row.id) ?? [];
+		const access: CollectionAccess = viewerUserId === ownerUserId ? "owner" : (shared.find((member) => member.id === viewerUserId)?.role ?? null);
+		return { ...rest, createdAt: row.createdAt.toISOString(), access, members: access ? shared : [] };
+	};
+}
+
 /**
- * A reader's collections as the viewer may see them: all of them for the
- * reader, and for anyone else the public ones and the private ones shared
- * with them. Who a collection is shared with shows only to its owner and its members.
+ * How many of a list's collections sort before one, oldest first: its position, from which the page it is on follows.
+ * The comparison reads the collection's own row, so two made in the same instant still sort by their IDs.
  */
-async function readCollections(database: Database, ownerUserId: string, viewerUserId: string | null): Promise<ReaderCollectionSummary[]> {
-	const isOwner = viewerUserId === ownerUserId;
-	const rows = await database
+async function positionOf(database: Database, where: SQL | undefined, collectionId: string) {
+	const chosen = alias(readerCollection, "chosen");
+	const chosenRow = database.select({ createdAt: chosen.createdAt, id: chosen.id }).from(chosen).where(eq(chosen.id, collectionId));
+	const [row] = await database
+		.select({ before: count() })
+		.from(readerCollection)
+		.where(and(where, sql`(${readerCollection.createdAt}, ${readerCollection.id}) < (${chosenRow})`));
+	return row?.before ?? 0;
+}
+
+/**
+ * A page of a reader's collections as the viewer may see them, oldest first. Without a page asked for, it is the page
+ * the chosen collection is on, so a collection opened from a link or just made is in view; the chosen collection comes
+ * with it either way, for whatever shows it beside the list.
+ */
+export async function readProfileCollections(
+	database: Database,
+	ownerUserId: string,
+	viewerUserId: string | null,
+	request: { chosenId?: string | null; page?: number | null; pageSize: number },
+): Promise<ProfileCollectionsPage> {
+	const where = visibleCollections(database, ownerUserId, viewerUserId);
+	const chosenId = request.chosenId && isReaderCollectionId(request.chosenId) ? request.chosenId : null;
+	const [[counted], chosenRows] = await Promise.all([
+		database.select({ total: count() }).from(readerCollection).where(where),
+		chosenId ? collectionSummaries(database, and(where, eq(readerCollection.id, chosenId))) : [],
+	]);
+	const total = counted?.total ?? 0;
+	const pages = pageCount(total, request.pageSize);
+	const chosenRow = chosenRows[0];
+	const page = clampPage(request.page ?? (chosenRow ? Math.floor((await positionOf(database, where, chosenRow.id)) / request.pageSize) + 1 : 1), pages);
+	const rows = await collectionSummaries(database, where).orderBy(asc(readerCollection.createdAt), asc(readerCollection.id)).limit(request.pageSize).offset((page - 1) * request.pageSize);
+	const summarize = await asViewerSees(database, chosenRow ? [...rows, chosenRow] : rows, ownerUserId, viewerUserId);
+	return { rows: rows.map(summarize), chosen: chosenRow ? summarize(chosenRow) : null, page, pages, total };
+}
+
+/** Collections with their record counts, for whichever list asks. */
+function collectionSummaries(database: Database, where: SQL | undefined) {
+	return database
 		.select(collectionSummaryColumns)
 		.from(readerCollection)
 		.leftJoin(readerCollectionItem, eq(readerCollectionItem.collectionId, readerCollection.id))
-		.where(
-			and(
-				eq(readerCollection.userId, ownerUserId),
-				isOwner ? undefined : or(eq(readerCollection.private, false), viewerUserId ? memberOf(database, viewerUserId) : undefined),
-			),
-		)
+		.where(where)
 		.groupBy(readerCollection.id)
-		.orderBy(asc(readerCollection.createdAt));
-	const members = viewerUserId ? await readMembers(database, rows.map((row) => row.id)) : new Map<string, CollectionMember[]>();
-	return rows.map(({ userId: _owner, ...row }) => {
-		const shared = members.get(row.id) ?? [];
-		const own = shared.find((member) => member.id === viewerUserId);
-		const access: CollectionAccess = isOwner ? "owner" : (own?.role ?? null);
-		return { ...row, createdAt: row.createdAt.toISOString(), access, members: access ? shared : [] };
-	});
+		.$dynamic();
 }
 
-/** The collections other readers shared with this one, newest share first. */
-async function readSharedCollections(database: Database, userId: string): Promise<SharedCollectionSummary[]> {
-	const rows = await database
-		.select({ ...collectionSummaryColumns, role: readerCollectionMember.role, sharedAt: readerCollectionMember.createdAt })
-		.from(readerCollectionMember)
-		.innerJoin(readerCollection, eq(readerCollection.id, readerCollectionMember.collectionId))
-		.leftJoin(readerCollectionItem, eq(readerCollectionItem.collectionId, readerCollection.id))
-		.where(eq(readerCollectionMember.userId, userId))
-		.groupBy(readerCollection.id, readerCollectionMember.role, readerCollectionMember.createdAt)
-		.orderBy(sql`${readerCollectionMember.createdAt} desc`);
-	if (rows.length === 0) return [];
-	const ownerIds = [...new Set(rows.map((row) => row.userId))];
-	const [owners, members] = await Promise.all([
-		database.select({ id: readerUser.id, name: readerUser.name, image: readerUser.image }).from(readerUser).where(inArray(readerUser.id, ownerIds)),
-		readMembers(database, rows.map((row) => row.id)),
-	]);
-	const ownerById = new Map(owners.map((owner) => [owner.id, owner]));
-	return rows.flatMap(({ userId: ownerId, role, sharedAt: _sharedAt, ...row }) => {
-		const owner = ownerById.get(ownerId);
-		return owner
-			? [{ ...row, createdAt: row.createdAt.toISOString(), access: role, owner, members: members.get(row.id) ?? [] }]
-			: [];
-	});
+/**
+ * One page of a list of collections, kept within the list, with who each collection on it is shared with. `rowsFrom`
+ * reads the page's rows from where they start.
+ */
+async function pageOfCollections<Row extends { id: string }>(
+	database: Database,
+	counted: PromiseLike<{ total: number }[]>,
+	request: { page: number; pageSize: number },
+	rowsFrom: (offset: number) => PromiseLike<Row[]>,
+) {
+	const [{ total } = { total: 0 }] = await counted;
+	const pages = pageCount(total, request.pageSize);
+	const page = clampPage(request.page, pages);
+	const rows = await rowsFrom((page - 1) * request.pageSize);
+	return { rows, members: await readMembers(database, rows.map((row) => row.id)), page, pages, total };
+}
+
+/** A page of the collections other readers shared with this one, newest share first. */
+export async function readSharedCollections(database: Database, userId: string, request: { page: number; pageSize: number }): Promise<CollectionsPage<SharedCollectionSummary>> {
+	const mine = eq(readerCollectionMember.userId, userId);
+	const owner = alias(readerUser, "owner");
+	const { rows, members, ...at } = await pageOfCollections(database, database.select({ total: count() }).from(readerCollectionMember).where(mine), request, (offset) =>
+		database
+			.select({ ...collectionSummaryColumns, role: readerCollectionMember.role, ownerName: owner.name, ownerImage: owner.image })
+			.from(readerCollectionMember)
+			.innerJoin(readerCollection, eq(readerCollection.id, readerCollectionMember.collectionId))
+			.innerJoin(owner, eq(owner.id, readerCollection.userId))
+			.leftJoin(readerCollectionItem, eq(readerCollectionItem.collectionId, readerCollection.id))
+			.where(mine)
+			.groupBy(readerCollection.id, readerCollectionMember.role, readerCollectionMember.createdAt, owner.id)
+			.orderBy(desc(readerCollectionMember.createdAt), asc(readerCollection.id))
+			.limit(request.pageSize)
+			.offset(offset),
+	);
+	return {
+		...at,
+		rows: rows.map(({ userId: ownerId, role, ownerName, ownerImage, ...row }) => ({
+			...row,
+			createdAt: row.createdAt.toISOString(),
+			access: role,
+			owner: { id: ownerId, name: ownerName, image: ownerImage },
+			members: members.get(row.id) ?? [],
+		})),
+	};
+}
+
+/** `text` for a LIKE pattern that matches it anywhere, with its own wildcards taken literally. */
+const containing = (text: string) => `%${text.replace(/[\\%_]/gu, (character) => `\\${character}`)}%`;
+
+/**
+ * A page of the collections a record can go into: the reader's own, newest first, then the ones shared with them that
+ * they edit; or all of them by name. A search matches names and descriptions. Each says whether it holds the record.
+ */
+export async function readPickerCollections(
+	database: Database,
+	userId: string,
+	request: { search: string; sort: "recent" | "name"; page: number; pageSize: number; itemKey: string | null },
+): Promise<CollectionsPage<PickerCollection>> {
+	const mine = eq(readerCollection.userId, userId);
+	const search = request.search.trim();
+	const where = and(
+		or(mine, editorOf(database, userId)),
+		search ? or(ilike(readerCollection.name, containing(search)), ilike(readerCollection.description, containing(search))) : undefined,
+	);
+	const holds = request.itemKey
+		? exists(database.select({ one: sql`1` }).from(readerCollectionItem).where(and(eq(readerCollectionItem.collectionId, readerCollection.id), eq(readerCollectionItem.itemKey, request.itemKey))))
+		: sql<boolean>`false`;
+	// The reader's own membership: a collection shared with them is as recent as its share.
+	const membership = alias(readerCollectionMember, "membership");
+	const order =
+		request.sort === "name"
+			? [asc(sql`lower(${readerCollection.name})`), asc(readerCollection.id)]
+			: [desc(sql`${mine}`), desc(sql`coalesce(${membership.createdAt}, ${readerCollection.createdAt})`), desc(readerCollection.id)];
+	const owner = alias(readerUser, "owner");
+	const { rows, members, ...at } = await pageOfCollections(database, database.select({ total: count() }).from(readerCollection).where(where), request, (offset) =>
+		database
+			.select({ ...collectionSummaryColumns, ownerName: owner.name, ownerImage: owner.image, holdsRecord: sql<boolean>`${holds}` })
+			.from(readerCollection)
+			.innerJoin(owner, eq(owner.id, readerCollection.userId))
+			.leftJoin(membership, and(eq(membership.collectionId, readerCollection.id), eq(membership.userId, userId)))
+			.leftJoin(readerCollectionItem, eq(readerCollectionItem.collectionId, readerCollection.id))
+			.where(where)
+			.groupBy(readerCollection.id, owner.id, membership.createdAt)
+			.orderBy(...order)
+			.limit(request.pageSize)
+			.offset(offset),
+	);
+	return {
+		...at,
+		rows: rows.map(({ userId: ownerId, ownerName, ownerImage, ...row }) => {
+			const own = ownerId === userId;
+			return {
+				...row,
+				createdAt: row.createdAt.toISOString(),
+				access: own ? ("owner" as const) : ("editor" as const),
+				ownerId,
+				owner: own ? null : { id: ownerId, name: ownerName, image: ownerImage },
+				members: own ? (members.get(row.id) ?? []) : [],
+				holdsRecord: Boolean(row.holdsRecord),
+			};
+		}),
+	};
 }
 
 async function readBookmarks(database: Database, userId: string) {
@@ -172,25 +309,9 @@ async function readBookmarks(database: Database, userId: string) {
 	return Object.fromEntries(rows.map((row) => [row.itemKey, row.createdAt.toISOString()]));
 }
 
-/**
- * What the signed-in reader's own controls need: their bookmarks, their
- * collections, the ones shared with them, and which of the collections they
- * can add to hold each record.
- */
+/** What the signed-in reader's own controls need everywhere: their bookmarks. Their collections come a page at a time where they are listed. */
 export async function readOwnReaderData(database: Database, userId: string) {
-	const [bookmarks, collections, shared, memberships] = await Promise.all([
-		readBookmarks(database, userId),
-		readCollections(database, userId, userId),
-		readSharedCollections(database, userId),
-		database
-			.select({ collectionId: readerCollectionItem.collectionId, itemKey: readerCollectionItem.itemKey })
-			.from(readerCollectionItem)
-			.innerJoin(readerCollection, eq(readerCollection.id, readerCollectionItem.collectionId))
-			.where(or(eq(readerCollection.userId, userId), editorOf(database, userId))),
-	]);
-	const itemCollections: Record<string, string[]> = {};
-	for (const { collectionId, itemKey } of memberships) (itemCollections[itemKey] ??= []).push(collectionId);
-	return { bookmarks, collections, shared, itemCollections };
+	return { bookmarks: await readBookmarks(database, userId) };
 }
 
 /** The reader is an editor of the collection the query is on. */
@@ -210,20 +331,27 @@ function editorOf(database: Database, userId: string) {
 }
 
 /**
- * A reader's public profile. It names the reader by name and avatar only and
- * lists a private collection only to its owner and the people it is shared with.
+ * A reader's public profile. It names the reader by name and avatar only, and brings the page of their collections
+ * the chosen one is on; a private collection lists only to its owner and the people it is shared with. Their own
+ * profile also brings the first page of the collections shared with them.
  */
-export async function readReaderProfile(database: Database, profileUserId: string, viewerUserId: string | null) {
+export async function readReaderProfile(
+	database: Database,
+	profileUserId: string,
+	viewerUserId: string | null,
+	collections: { chosenId: string | null; pageSize: number },
+) {
 	const reader = await database.query.readerUser.findFirst({
 		where: eq(readerUser.id, profileUserId),
 		columns: { id: true, name: true, image: true },
 	});
 	if (!reader) return null;
-	const [bookmarks, collections] = await Promise.all([
+	const [bookmarks, page, shared] = await Promise.all([
 		readBookmarks(database, profileUserId),
-		readCollections(database, profileUserId, viewerUserId),
+		readProfileCollections(database, profileUserId, viewerUserId, { ...collections, page: null }),
+		viewerUserId === profileUserId ? readSharedCollections(database, profileUserId, { page: 1, pageSize: collections.pageSize }) : null,
 	]);
-	return { ...reader, bookmarks, collections };
+	return { ...reader, viewer: viewerUserId, bookmarks, collections: page, shared };
 }
 
 export type ReaderListRequest = { userId: string; collectionId: string };

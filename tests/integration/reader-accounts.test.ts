@@ -30,7 +30,8 @@ vi.mock("next/server", async (importOriginal) => ({
 import ProfilePage from "@/app/[locale]/profile/[id]/page";
 import { GET as readOwnData } from "@/app/api/reader/route";
 import { POST as toggleBookmarkRoute } from "@/app/api/reader/bookmarks/route";
-import { POST as createCollectionRoute } from "@/app/api/reader/collections/route";
+import { POST as createCollectionRoute, GET as readPickerRoute } from "@/app/api/reader/collections/route";
+import { GET as readCollectionsRoute } from "@/app/api/user/collections/[id]/route";
 import { DELETE as deleteCollectionRoute, PATCH as editCollectionRoute } from "@/app/api/reader/collections/[id]/route";
 import { POST as toggleCollectionItemRoute } from "@/app/api/reader/collections/[id]/items/route";
 import { DELETE as deleteReaderRoute } from "@/app/api/v1/openscholar/readers/[clerkUserId]/route";
@@ -112,11 +113,11 @@ describe("reader collections", () => {
 			await createReaderCollection(db, amina, { name: "Shared", description: "For the team", private: false });
 			await createReaderCollection(db, amina, { name: "Only mine", description: null, private: true });
 
-			const asVisitor = await readReaderProfile(db, amina, bob);
-			expect(asVisitor?.collections.map((collection) => collection.name)).toEqual(["Shared"]);
+			const asVisitor = await readReaderProfile(db, amina, bob, { chosenId: null, pageSize: 6 });
+			expect(asVisitor?.collections.rows.map((collection) => collection.name)).toEqual(["Shared"]);
 			expect(JSON.stringify(asVisitor)).not.toContain("amina@example.org");
-			const asOwner = await readReaderProfile(db, amina, amina);
-			expect(asOwner?.collections.map((collection) => collection.name)).toEqual(["Shared", "Only mine"]);
+			const asOwner = await readReaderProfile(db, amina, amina, { chosenId: null, pageSize: 6 });
+			expect(asOwner?.collections.rows.map((collection) => collection.name)).toEqual(["Shared", "Only mine"]);
 		});
 	});
 
@@ -250,11 +251,11 @@ describe("reader routes", () => {
 
 			expect((await editCollectionRoute(call("user_amina", "PATCH", { name: "Coaching" }), params(id))).status).toBe(200);
 			expect(await (await toggleCollectionItemRoute(call("user_amina", "POST", { itemKey }), params(id))).json()).toEqual({ inCollection: true });
-			const own = await (await readOwnData(call("user_amina", "GET"))).json();
-			expect(own).toMatchObject({
-				bookmarks: { [itemKey]: expect.any(String) },
-				collections: [{ id, name: "Coaching", description: "For the review", private: true, count: 1 }],
-				itemCollections: { [itemKey]: [id] },
+			expect(await (await readOwnData(call("user_amina", "GET"))).json()).toEqual({ bookmarks: { [itemKey]: expect.any(String) } });
+			const picker = await readPickerRoute(new Request(`https://library.example.org/api/reader/collections?pageSize=5&itemKey=${itemKey}`, { headers: signedInHeaders("user_amina") }));
+			expect(await picker.json()).toMatchObject({
+				rows: [{ id, name: "Coaching", description: "For the review", private: true, count: 1, holdsRecord: true }],
+				total: 1,
 			});
 			expect((await deleteCollectionRoute(call("user_amina", "DELETE"), params(id))).status).toBe(204);
 		});
@@ -270,16 +271,24 @@ describe("reader routes", () => {
 });
 
 describe("profile page", () => {
-	it("shows a visitor the reader's public collections and no page for someone who is not a reader", async () => {
+	it("shows a visitor the reader's public collections, on the page and a page at a time, and no page for someone who is not a reader", async () => {
 		await withReaders(async ({ db, amina }) => {
 			await createReaderCollection(db, amina, { name: "Shared", description: null, private: false });
 			await createReaderCollection(db, amina, { name: "Only mine", description: null, private: true });
 			requestHeaders.current = signedInHeaders("user_bob");
 
-			const page = (await ProfilePage({ params: Promise.resolve({ id: amina }) })) as { props: { data: { name: string; collections: { name: string }[] } } };
+			const page = (await ProfilePage({ params: Promise.resolve({ id: amina }), searchParams: Promise.resolve({}) })) as { props: { data: { name: string; collections: { rows: { name: string }[] } } } };
 			expect(page.props.data.name).toBe("Amina Okafor");
-			expect(page.props.data.collections.map((collection) => collection.name)).toEqual(["Shared"]);
-			await expect(ProfilePage({ params: Promise.resolve({ id: "reader-nobody" }) })).rejects.toThrow("NEXT_NOT_FOUND");
+			expect(page.props.data.collections.rows.map((collection) => collection.name)).toEqual(["Shared"]);
+			await expect(ProfilePage({ params: Promise.resolve({ id: "reader-nobody" }), searchParams: Promise.resolve({}) })).rejects.toThrow("NEXT_NOT_FOUND");
+			// The column turns its pages through this address, which answers by who is signed in.
+			const pageAs = async (clerkUserId: string) => {
+				const request = new Request(`https://library.example.org/api/user/collections/${amina}?pageSize=6`, { headers: signedInHeaders(clerkUserId) });
+				const response = await readCollectionsRoute(request, { params: Promise.resolve({ id: amina }) });
+				return ((await response.json()) as { rows: { name: string }[] }).rows.map((collection) => collection.name);
+			};
+			expect(await pageAs("user_bob")).toEqual(["Shared"]);
+			expect(await pageAs("user_amina")).toEqual(["Shared", "Only mine"]);
 		});
 	});
 });

@@ -30,7 +30,7 @@ import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
-import { CollectionPicker } from "../collections/CollectionPicker";
+import { CollectionPicker, usePickerAhead } from "../collections/CollectionPicker";
 import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -57,13 +57,13 @@ export function AddButton({
 	collectionId?: string;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const { reader, data, refresh } = useReaderData();
+	const { reader, refresh } = useReaderData();
 	const t = useTranslations("ui");
-	const highlightedCollections = itemData ? (data?.itemCollections[itemData.key] ?? []) : [];
+	const picker = usePickerAhead(itemData?.key);
 	// Puts the record in the collection or takes it out. Taking it out of the collection this list shows closes the picker, as the record leaves the list behind it.
-	const onCollectionSelect = async (pressedCollectionId: string) => {
+	const onCollectionSelect = async (pressedCollectionId: string, heldRecord: boolean) => {
 		if (!itemData) return;
-		const willClose = pressedCollectionId === collectionId && highlightedCollections.includes(pressedCollectionId);
+		const willClose = pressedCollectionId === collectionId && heldRecord;
 		const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey: itemData.key } });
 		if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
 		await Promise.allSettled([revalidateResults && revalidateResults(), refresh()]);
@@ -92,7 +92,9 @@ export function AddButton({
 				<Button
 					isIconOnly
 					size="sm"
-					onPress={onOpen}
+					onPress={() => picker.open(onOpen)}
+					onPointerEnter={picker.warm}
+					onFocus={picker.warm}
 					aria-label={t("addResourceAriaLabel")}
 				>
 					<HugeiconsIcon icon={Add01Icon} className="size-5" />

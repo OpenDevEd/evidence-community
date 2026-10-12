@@ -540,10 +540,10 @@ test("shares a private collection by email: OpenScholar sends the invitation and
 	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(200);
 
 	// The owner sees them among the collection's people, and they see it among the collections shared with them.
-	const ownerData = (await (await request.get("/api/reader", { headers: { cookie: owner.cookie } })).json()) as { collections: { id: string; members: { id: string; role: string }[] }[] };
-	expect(ownerData.collections.find((collection) => collection.id === id)?.members).toEqual([expect.objectContaining({ id: invitee.readerId, role: "editor" })]);
-	const inviteeData = (await (await request.get("/api/reader", { headers: { cookie: invitee.cookie } })).json()) as { shared: { id: string; access: string }[] };
-	expect(inviteeData.shared).toEqual([expect.objectContaining({ id, access: "editor" })]);
+	const ownerPage = (await (await request.get(`/api/user/collections/${owner.readerId}?collectionId=${id}&pageSize=6`, { headers: { cookie: owner.cookie } })).json()) as { chosen: { members: { id: string; role: string }[] } };
+	expect(ownerPage.chosen.members).toEqual([expect.objectContaining({ id: invitee.readerId, role: "editor" })]);
+	const shared = (await (await request.get("/api/reader/collections/shared?pageSize=6", { headers: { cookie: invitee.cookie } })).json()) as { rows: { id: string; access: string }[] };
+	expect(shared.rows).toEqual([expect.objectContaining({ id, access: "editor" })]);
 
 	// Once the owner takes them out, accepting the same invitation again gives nothing back.
 	expect((await request.delete(`/api/reader/collections/${id}/members/${invitee.readerId}`, { headers: { cookie: owner.cookie } })).status()).toBe(204);

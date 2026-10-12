@@ -27,7 +27,7 @@ vi.mock("@/context/Providers", () => ({
 vi.mock("@/lib/utils", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/lib/utils")>()),
 	fetcher: async (key: string) => {
-		if (!key.startsWith("/user/items/")) return { bookmarks: {}, collections: [], itemCollections: {} };
+		if (!key.startsWith("/user/items/")) return { bookmarks: {} };
 		server.listRequests += 1;
 		const bookmarks = server.bookmarks;
 		await server.hold;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import {
@@ -25,40 +26,75 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { toast } from "@/components/layout/Toast";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import { CoverStack } from "@/components/features/collections/CoverStack";
-import { ListPager, pageOf } from "@/components/features/collections/ListPager";
+import { ListPager } from "@/components/features/collections/ListPager";
 import { MemberFaces } from "@/components/features/collections/CollectionPeople";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useReaderData } from "@/hooks/useReaderData";
 import { Link } from "@/i18n/routing";
 import { twMerge } from "@/lib/tw-merge";
 import { READER_COLLECTION_NAME_LIMIT } from "@/db/schema/tables/reader";
-import type { ReaderCollectionSummary, ReaderPerson, SharedCollectionSummary } from "@/lib/readers/data";
-
-/** Rows on one page of the picker. A page keeps this many rows' height, so turning pages moves nothing. */
-const PER_PAGE = 5;
+import type { CollectionsPage, PickerCollection } from "@/lib/readers/data";
+import { PICKER_COLLECTIONS_PER_PAGE, pickerCollectionsKey } from "@/lib/readers/collection-pages";
+import { fetcher } from "@/lib/utils";
 
 type Sort = "recent" | "name";
-type Entry = { collection: ReaderCollectionSummary | SharedCollectionSummary; ownerId: string; owner: ReaderPerson | null };
 
 const SORT_ICONS = { recent: TimeQuarterPassIcon, name: SortingAZ01Icon } as const;
 
 /**
- * The collections a record can go into: the reader's own, newest first, then
- * the ones shared with them that they edit. "Name" sorts them all by name.
+ * A page of the collections a record can go into, read from the server: the reader's own, newest first, then the ones
+ * shared with them that they edit, or all of them by name. While the next page is on its way, the last one stays.
  */
-function useEntries(search: string, sort: Sort) {
-	const { reader, data } = useReaderData();
-	if (!reader || !data) return null;
-	const own: Entry[] = [...data.collections]
-		.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-		.map((collection) => ({ collection, ownerId: reader.id, owner: null }));
-	const shared: Entry[] = data.shared
-		.filter((collection) => collection.access === "editor")
-		.map((collection) => ({ collection, ownerId: collection.owner.id, owner: collection.owner }));
-	const query = search.trim().toLowerCase();
-	const found = [...own, ...shared].filter(
-		({ collection }) => !query || collection.name.toLowerCase().includes(query) || collection.description?.toLowerCase().includes(query),
-	);
-	return sort === "name" ? found.sort((a, b) => a.collection.name.localeCompare(b.collection.name)) : found;
+function usePickerPage(itemKey: string | undefined, search: string, sort: Sort, page: number) {
+	const { reader } = useReaderData();
+	const viewer = reader?.id ?? null;
+	const { data, isLoading } = useSWR<CollectionsPage<PickerCollection>>(reader ? pickerCollectionsKey({ viewer, search, sort, page, itemKey }) : null, fetcher, {
+		keepPreviousData: true,
+		revalidateOnFocus: false,
+	});
+	// The page the picker opened on says how many collections there are to choose from, which sizes the list whatever a search finds.
+	const { data: first } = useSWR<CollectionsPage<PickerCollection>>(reader ? firstPickerPageKey(viewer, itemKey) : null, fetcher, { revalidateOnFocus: false });
+	const choices = first?.total ?? 0;
+	const { rows, pages, total, page: served } = data ?? { rows: [], pages: 1, total: 0, page };
+	return {
+		loaded: data !== undefined,
+		rows,
+		waiting: isLoading,
+		openedWith: Math.min(choices, PICKER_COLLECTIONS_PER_PAGE),
+		paged: choices > PICKER_COLLECTIONS_PER_PAGE,
+		// While the asked page is on its way, the pager already shows it.
+		pager: { page: isLoading ? page : served, pages, total },
+	};
+}
+
+const firstPickerPageKey = (viewer: string | null, itemKey: string | undefined) => pickerCollectionsKey({ viewer, search: "", sort: "recent", page: 1, itemKey });
+
+/** First pages being read ahead, so reaching for a button and then pressing it read the page once. */
+const readingAhead = new Map<string, Promise<void>>();
+
+/**
+ * Reads the picker's first page ahead as the reader reaches for the button that opens it, and opens the picker once
+ * that page is in, so it opens with its rows. A failed read opens it anyway, and the picker reads the page again.
+ */
+export function usePickerAhead(itemKey: string | undefined) {
+	const { reader } = useReaderData();
+	const { cache, mutate } = useSWRConfig();
+	const key = firstPickerPageKey(reader?.id ?? null, itemKey);
+	// Into the cache, so the picker's first frame has it; the picker reads it again as it opens.
+	const read = () => {
+		if (cache.get(key)?.data) return Promise.resolve();
+		const reading =
+			readingAhead.get(key) ??
+			mutate(key, fetcher(key), { revalidate: false })
+				.then(
+					() => undefined,
+					() => undefined,
+				)
+				.finally(() => readingAhead.delete(key));
+		readingAhead.set(key, reading);
+		return reading;
+	};
+	return { warm: () => void read(), open: (open: () => void) => void read().then(open) };
 }
 
 async function post(path: string, body: object) {
@@ -70,8 +106,8 @@ async function post(path: string, body: object) {
 /**
  * Where a record goes into collections: a search and a sort, a row that makes
  * a new collection with the record already in it, then the collections a page
- * at a time. Each row toggles the record in or out and has its own button to
- * open the collection.
+ * at a time from the server. Each row toggles the record in or out and has its
+ * own button to open the collection.
  */
 export function CollectionPicker({
 	itemKey,
@@ -79,26 +115,27 @@ export function CollectionPicker({
 }: {
 	/** The record; until it is known the rows can't be pressed. */
 	itemKey: string | undefined;
-	onToggle: (collectionId: string) => Promise<void>;
+	/** Puts the record in a collection or takes it out, told whether the collection held it. */
+	onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>;
 }) {
 	const t = useTranslations("ui");
-	const { data, refresh } = useReaderData();
-	const [search, setSearch] = useState("");
+	const { refresh } = useReaderData();
 	const [sort, setSort] = useState<Sort>("recent");
 	const [page, setPage] = useState(1);
+	const query = usePickerSearch(() => setPage(1));
+	const { draft, search } = query;
+	// Collections made here since the picker opened, which slide open.
+	const [made, setMade] = useState<ReadonlySet<string>>(new Set());
 	const { pending, toggle } = usePendingToggles(onToggle);
-	const entries = useEntries(search, sort);
-	// The rows there when the picker opened; a collection made since slides open.
-	const [opened] = useState(() => new Set([...(data?.collections ?? []), ...(data?.shared ?? [])].map((collection) => collection.id)));
-	const total = entries?.length ?? 0;
-	const { pages, current, shown } = pageOf(entries ?? [], page, PER_PAGE);
-	const inCollection = new Set(itemKey ? (data?.itemCollections[itemKey] ?? []) : []);
+	const shown = usePickerPage(itemKey, search, sort, page);
 
 	// Only making the collection can fail the row: once it exists, the row closes whatever else fails, so it isn't made twice.
 	const create = async (name: string) => {
-		const made = await post("/reader/collections", { name, description: null, private: true });
-		if (itemKey && made.id) await post(`/reader/collections/${made.id}/items`, { itemKey }).catch(() => toast({ type: "error", title: t("collectionSaveFailed") }));
-		setSearch("");
+		const created = await post("/reader/collections", { name, description: null, private: true });
+		const id = created.id;
+		if (id) setMade((ids) => new Set(ids).add(id));
+		if (itemKey && id) await post(`/reader/collections/${id}/items`, { itemKey }).catch(() => toast({ type: "error", title: t("collectionSaveFailed") }));
+		query.clear();
 		setSort("recent");
 		setPage(1);
 		await refresh().catch((error: unknown) => console.error("Reloading the reader's collections failed", error));
@@ -107,53 +144,76 @@ export function CollectionPicker({
 	return (
 		<div className="flex flex-col gap-4">
 			<PickerControls
-				search={search}
-				onSearch={(value) => {
-					setSearch(value);
-					setPage(1);
-				}}
+				search={draft}
+				onSearch={query.type}
 				sort={sort}
 				onSort={setSort}
 			/>
-			{/* It opens to its height once the reader's collections are in, if the picker opened before them. */}
-			<div className={twMerge("grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none", entries ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
+			{/* It opens to its height once the first page is in, if the picker opened before it. */}
+			<div className={twMerge("grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none", shown.loaded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
 				<div className="min-h-0 overflow-hidden">
 					<ul className="flex flex-col">
-						<NewCollectionRow initialName={search.trim()} onCreate={create} disabled={!itemKey} />
-						<li className="flex flex-col" style={{ minHeight: pages > 1 ? `${PER_PAGE * 4}rem` : undefined }}>
-							<ul className="flex flex-col">
-								{shown.map(({ collection, ownerId, owner }) => (
+						<NewCollectionRow initialName={draft.trim()} onCreate={create} disabled={!itemKey} />
+						{/* As many rows as it opened with, or one for a search's answer, so what a search finds never shrinks it. */}
+						<li className="flex flex-col" style={{ minHeight: `${Math.max(shown.openedWith, draft.trim() ? 1 : 0) * 4}rem` }}>
+							<ul inert={shown.waiting || undefined} className={twMerge("flex flex-col transition-opacity duration-150 motion-reduce:transition-none", shown.waiting && "opacity-50")}>
+								{shown.rows.map((collection) => (
 									<PickerRow
 										key={collection.id}
 										collection={collection}
-										ownerId={ownerId}
-										owner={owner}
-										entering={!opened.has(collection.id)}
-										checked={inCollection.has(collection.id)}
+										entering={made.has(collection.id)}
 										pending={pending.has(collection.id)}
 										disabled={!itemKey}
-										onToggle={() => void toggle(collection.id)}
+										onToggle={() => void toggle(collection.id, collection.holdsRecord)}
 									/>
 								))}
-								<NothingFound entries={entries} search={search} />
+								<NothingFound total={shown.loaded ? shown.pager.total : undefined} search={search} />
 							</ul>
 						</li>
 					</ul>
 				</div>
 			</div>
-			<ListPager page={current} pages={pages} total={total} perPage={PER_PAGE} onChange={setPage} />
+			{/* The pages keep their place while a search finds only one. */}
+			{shown.paged ? (
+				<div className="h-8">
+					<ListPager {...shown.pager} perPage={PICKER_COLLECTIONS_PER_PAGE} onChange={setPage} />
+				</div>
+			) : null}
 		</div>
 	);
 }
 
+/** What the reader types in the search, and the search the server is asked for once they pause, which starts from page one. */
+function usePickerSearch(onSearch: () => void) {
+	const [draft, setDraft] = useState("");
+	const [search, setSearch] = useState("");
+	const [searchSoon, , cancelSearch] = useDebounce((value: string) => {
+		setSearch(value);
+		onSearch();
+	}, 250);
+	return {
+		draft,
+		search,
+		type: (value: string) => {
+			setDraft(value);
+			searchSoon(value);
+		},
+		clear: () => {
+			cancelSearch();
+			setDraft("");
+			setSearch("");
+		},
+	};
+}
+
 /** Toggling the record in a collection, one row at a time: each row waits for its own change, and a failed one says so. */
-function usePendingToggles(onToggle: (collectionId: string) => Promise<void>) {
+function usePendingToggles(onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>) {
 	const t = useTranslations("ui");
 	const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
-	const toggle = async (collectionId: string) => {
+	const toggle = async (collectionId: string, heldRecord: boolean) => {
 		setPending((set) => new Set(set).add(collectionId));
 		try {
-			await onToggle(collectionId);
+			await onToggle(collectionId, heldRecord);
 		} catch (error) {
 			console.error(error);
 			toast({ type: "error", title: t("collectionSaveFailed") });
@@ -169,9 +229,9 @@ function usePendingToggles(onToggle: (collectionId: string) => Promise<void>) {
 }
 
 /** Said in place of the rows when a search found none of the reader's collections. */
-function NothingFound({ entries, search }: { entries: Entry[] | null; search: string }) {
+function NothingFound({ total, search }: { total: number | undefined; search: string }) {
 	const t = useTranslations("ui");
-	if (entries?.length !== 0 || !search.trim()) return null;
+	if (total !== 0 || !search.trim()) return null;
 	return <li className="flex h-16 items-center px-3 text-small text-black/50 dark:text-white/50">{t("noMatchingCollections")}</li>;
 }
 
@@ -320,24 +380,19 @@ function NewCollectionRow({
  */
 function PickerRow({
 	collection,
-	ownerId,
-	owner,
 	entering,
-	checked,
 	pending,
 	disabled,
 	onToggle,
 }: {
-	collection: ReaderCollectionSummary;
-	ownerId: string;
-	owner: ReaderPerson | null;
+	collection: PickerCollection;
 	entering: boolean;
-	checked: boolean;
 	pending: boolean;
 	disabled: boolean;
 	onToggle: () => void;
 }) {
 	const t = useTranslations("ui");
+	const { ownerId, owner, holdsRecord: checked } = collection;
 	return (
 		<li className={twMerge("grid grid-rows-[1fr]", entering && "animate-row-open motion-reduce:animate-none")}>
 			<div className="flex h-16 min-h-0 items-center gap-1 overflow-hidden">

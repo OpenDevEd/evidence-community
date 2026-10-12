@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, type ReactNode } from "react";
+import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
-import { ModalBody, ModalContent, ModalFooter, SelectItem, SelectSection } from "@nextui-org/react";
+import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
 import {
 	Add01Icon,
+	ArrowDown01Icon,
 	Bookmark02Icon,
 	CollectionsBookmarkIcon,
 	Delete02Icon,
@@ -23,7 +24,6 @@ import { ConfirmationModal } from "@/components/nextui/ConfirmationModal";
 import { toast } from "@/components/layout/Toast";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
-import { Select } from "@/components/nextui/Select";
 import { Switch } from "@/components/nextui/Switch";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -37,24 +37,31 @@ import ItemsList from "@/components/features/items/ItemsList";
 import { PdfCover } from "@/components/features/items/PdfCover";
 import { useOpenScholarAccountUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useReaderData } from "@/hooks/useReaderData";
-import type { CollectionAccess, CollectionMember, ReaderCollectionSummary, SharedCollectionSummary } from "@/lib/readers/data";
+import type { CollectionAccess, CollectionMember, CollectionsPage, ProfileCollectionsPage, ReaderCollectionSummary, SharedCollectionSummary } from "@/lib/readers/data";
+import { PROFILE_COLLECTIONS_PER_PAGE, profileCollectionsKey, sharedCollectionsKey } from "@/lib/readers/collection-pages";
+import { fetcher } from "@/lib/utils";
 import { Link } from "@/i18n/routing";
 import { MemberFaces, RoleChip, ShareCollectionDialog, useSentInvitations } from "@/components/features/collections/CollectionPeople";
 import { CoverStack, useShelfItems } from "@/components/features/collections/CoverStack";
-import { ListPager, pageOf, pageWith } from "@/components/features/collections/ListPager";
+import { ListPager } from "@/components/features/collections/ListPager";
 import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/UserMenu";
 import PageContainer from "@/components/layout/PageContainer";
 
 type ProfileCollection = ReaderCollectionSummary;
 type CollectionInput = { name: string; description: string | null; private: boolean };
 
-/** What anyone may see of a reader: never their email, and private collections only for themselves. */
+/** What anyone may see of a reader: never their email; private collections only for themselves and who they share them with. */
 export type ProfileData = {
 	id: string;
 	name: string;
 	image: string | null;
 	bookmarks: Record<string, string>;
-	collections: ProfileCollection[];
+	/** Who the server read the collections for: whoever was signed in when it rendered the page. */
+	viewer: string | null;
+	/** The page of their collections the chosen one is on, as the server rendered it. */
+	collections: ProfileCollectionsPage;
+	/** On the reader's own profile, the first page of the collections others shared with them. */
+	shared: CollectionsPage<SharedCollectionSummary> | null;
 };
 
 async function sendCollectionChange(url: string, method: "POST" | "PATCH" | "DELETE", body?: CollectionInput) {
@@ -79,11 +86,7 @@ function useCollectionDialog(isOwnProfile: boolean, collections: ProfileCollecti
 	};
 }
 
-/**
- * A reader's page: their card on top, then their bookmarks the way the
- * library lists records, with search and sort, and their collections beside
- * it where the library keeps its filters.
- */
+/** One list in the column or the sheet: All bookmarks, or one collection. */
 type Shelf = {
 	id: string;
 	name: string;
@@ -94,12 +97,21 @@ type Shelf = {
 	members: CollectionMember[];
 };
 
-/** What the column and the phone picker choose from, and what the viewer may do with the chosen list. */
+/**
+ * A page of a list as it is drawn: its rows, the page asked for, and whether those rows are still the last page's
+ * while the asked one is on its way, which leaves them dimmed and inert.
+ */
+type ShownPage<Row> = { rows: Row[]; page: number; pages: number; total: number; waiting: boolean; turn: (page: number) => void };
+
+/** What the column and the phone sheet choose from, and what the viewer may do with the chosen list. */
 type CollectionChoices = {
-	shelves: Shelf[];
+	all: Shelf;
+	collections: ShownPage<Shelf>;
 	/** On the reader's own profile, the collections others shared with them. */
-	shared: SharedCollectionSummary[];
+	shared: ShownPage<SharedCollectionSummary> | null;
 	selected: string;
+	/** The chosen collection wherever it is, which the list's own page may not hold. */
+	chosen: Shelf | null;
 	onSelect: (id: string) => void;
 	/** Only the owner edits, adds and shares their collections. */
 	onEdit?: (id: string) => void;
@@ -112,45 +124,124 @@ type CollectionChoices = {
 /** What the reader was given a collection as, when it's shared with them rather than theirs. */
 const memberRoleOf = (access: CollectionAccess) => (access === "owner" ? null : access);
 
-/** All bookmarks first, then each collection, as the column and the phone picker list them. */
-function profileShelves(allBookmarks: string, bookmarkCount: number, collections: ProfileCollection[]): Shelf[] {
-	return [
-		{ id: "", name: allBookmarks, count: bookmarkCount, isPrivate: false, description: null, access: null, members: [] },
-		...collections.map((collection) => ({
-			id: collection.id,
-			name: collection.name,
-			count: collection.count,
-			isPrivate: collection.private,
-			description: collection.description,
-			access: collection.access,
-			members: collection.members,
-		})),
-	];
-}
+const shelfOf = (collection: ProfileCollection): Shelf => ({
+	id: collection.id,
+	name: collection.name,
+	count: collection.count,
+	isPrivate: collection.private,
+	description: collection.description,
+	access: collection.access,
+	members: collection.members,
+});
 
 function firstBookmarkDate(bookmarks: Record<string, string>) {
 	const times = Object.values(bookmarks).map((value) => new Date(value).getTime()).filter((time) => !Number.isNaN(time));
 	return times.length > 0 ? new Date(Math.min(...times)) : null;
 }
 
+/** A page of a list read from the server, keeping the last page on screen while the next is on its way. */
+function useServerPage<Page extends CollectionsPage<unknown>>(key: string | null, first: Page | null, page: number) {
+	const { data, isLoading } = useSWR<Page>(key, fetcher, {
+		keepPreviousData: true,
+		revalidateOnFocus: false,
+		// The page the server rendered, until the browser has its own.
+		fallbackData: page === first?.page ? first : undefined,
+	});
+	const shown = data ?? first;
+	// While the asked page is on its way it is the one named; once in, the one the server sent, which stays within the list.
+	return { shown, waiting: isLoading, page: isLoading ? page : (shown?.page ?? page) };
+}
+
 /**
- * Saving and deleting the owner's collections. The profile's data comes with
- * the page, so a change reloads it, along with the reader's own controls and
- * the lists already shown.
+ * The page of a profile's collections the column shows. It starts on the page the server rendered, the one the
+ * chosen collection is on, and stays where the reader turns it: choosing a collection on it, or All bookmarks, reads
+ * nothing. A new page from the server, as after a link to another collection, starts from its own page again.
  */
-function useCollectionChanges(selected: string, select: (id: string) => void) {
-	const router = useRouter();
-	const { refresh: refreshReaderData } = useReaderData();
-	const refresh = async () => {
-		router.refresh();
-		await refreshReaderData();
+function useProfileCollections(data: ProfileData, viewer: string | null, selected: string, loading: boolean) {
+	// What the server read for someone else, as before a sign-out in another tab, is never shown to this viewer.
+	const sent = data.viewer === viewer ? data.collections : null;
+	const { page, turn } = useColumnPage(data.collections, sent);
+	const { shown, waiting, page: served } = useServerPage(loading ? null : profileCollectionsKey(data.id, { viewer, page }), sent, page);
+	const { rows, pages, total } = shown ?? { rows: [], pages: 1, total: 0 };
+	const chosen = useChosenCollection(data.id, sent?.chosen ?? null, loading ? null : { viewer, selected }, rows);
+	return {
+		// Nothing read for this viewer yet: the column shows placeholders, as while the profile loads.
+		placeholder: loading || !shown,
+		page: { rows: rows.map(shelfOf), page: served, pages, total, waiting, turn },
+		chosen,
+		known: [...rows, ...chosen],
 	};
+}
+
+/** The page the column is on: the server's, until the reader turns it. A new page from the server starts from its own again. */
+function useColumnPage(fromServer: ProfileCollectionsPage, sent: ProfileCollectionsPage | null) {
+	const [turned, setTurned] = useState<{ page: number; from: ProfileCollectionsPage } | null>(null);
+	return {
+		page: turned?.from === fromServer ? turned.page : (sent?.page ?? 1),
+		turn: (page: number) => setTurned({ page, from: fromServer }),
+	};
+}
+
+type Choice = { viewer: string | null; selected: string };
+
+/** The chosen collection, if any: on the page shown, or else read alone, for whatever shows it beside the list. */
+function useChosenCollection(userId: string, sent: ProfileCollection | null, choice: Choice | null, rows: ProfileCollection[]): ProfileCollection[] {
+	const onPage = rows.find((collection) => collection.id === choice?.selected);
+	const seen = useLastSeen(onPage, sent);
+	const alone = useCollectionAlone(userId, onPage ? null : choice, seen);
+	const chosen = onPage ?? alone;
+	return chosen ? [chosen] : [];
+}
+
+/** What was last seen of the chosen collection on a page; at first, as the server sent it with the profile. */
+function useLastSeen(onPage: ProfileCollection | undefined, sent: ProfileCollection | null) {
+	const [seen, setSeen] = useState(sent);
+	if (onPage && onPage !== seen) setSeen(onPage);
+	return seen;
+}
+
+/**
+ * The chosen collection read alone, when the page shown doesn't hold it. Until the read answers it is what was last
+ * seen of it, as on the page the reader turned away from. The read answers nothing for one the viewer may not see.
+ */
+function useCollectionAlone(userId: string, choice: Choice | null, seen: ProfileCollection | null) {
+	const { data } = useSWR<{ chosen: ProfileCollection | null }>(choice?.selected ? profileCollectionsKey(userId, { viewer: choice.viewer, collectionId: choice.selected }) : null, fetcher, {
+		revalidateOnFocus: false,
+		fallbackData: seen && seen.id === choice?.selected ? { chosen: seen } : undefined,
+	});
+	return data?.chosen ?? null;
+}
+
+/** The reader's bookmarks; on their own profile their live ones, so a record bookmarked elsewhere counts at once. */
+function useProfileBookmarks(data: ProfileData, isOwnProfile: boolean) {
+	const { data: own } = useReaderData();
+	return (isOwnProfile ? own?.bookmarks : undefined) ?? data.bookmarks;
+}
+
+/**
+ * The collections shared with the reader, on their own profile, a page at a time: whenever the owner is signed in here,
+ * starting from the first page the server rendered when it was rendered for them.
+ */
+function useSharedCollections(data: ProfileData, viewer: string | null, ownerHere: boolean): ShownPage<SharedCollectionSummary> | null {
+	const [page, setPage] = useState(1);
+	const { shown, waiting, page: served } = useServerPage(ownerHere ? sharedCollectionsKey({ viewer, page }) : null, data.viewer === viewer ? data.shared : null, page);
+	return ownerHere && shown ? { rows: shown.rows, page: served, pages: shown.pages, total: shown.total, waiting, turn: setPage } : null;
+}
+
+/**
+ * Saving and deleting the owner's collections. A change reloads every list of collections and records already shown.
+ * A new collection opens at once, on the column's last page, where the newest one is.
+ */
+function useCollectionChanges(selected: string, select: (id: string) => void, collections: ShownPage<Shelf>) {
+	const { refresh } = useReaderData();
 	return {
 		save: async (id: string | null, input: CollectionInput) => {
 			const made = await sendCollectionChange(id ? `/reader/collections/${id}` : "/reader/collections", id ? "PATCH" : "POST", input);
+			if (made) {
+				select(made.id);
+				collections.turn(Math.ceil((collections.total + 1) / PROFILE_COLLECTIONS_PER_PAGE));
+			}
 			await refresh();
-			// A new collection opens at once, which also turns the column to the page it is on.
-			if (made) select(made.id);
 		},
 		remove: async (id: string) => {
 			await sendCollectionChange(`/reader/collections/${id}`, "DELETE");
@@ -160,36 +251,14 @@ function useCollectionChanges(selected: string, select: (id: string) => void) {
 	};
 }
 
-/**
- * The owner sees their own collections and bookmarks live, so a change made
- * from a record shows here at once, and the collections others shared with
- * them below. Anyone else sees the public collections the page brought and
- * the private ones shared with them, even when the page was made for the
- * owner before they signed out. Who a collection is shared with shows only to
- * its members.
- */
-function useShownShelves(data: ProfileData, isOwnProfile: boolean, viewerId: string | null) {
-	const { data: own } = useReaderData();
-	if (!isOwnProfile) {
-		const collections = data.collections.flatMap((collection) => {
-			const role = collection.members.find((member) => member.id === viewerId)?.role ?? null;
-			if (collection.private && !role) return [];
-			return [{ ...collection, access: role, members: role ? collection.members : [] }];
-		});
-		return { collections, shared: [], bookmarks: data.bookmarks };
-	}
-	return { collections: own?.collections ?? data.collections, shared: own?.shared ?? [], bookmarks: own?.bookmarks ?? data.bookmarks };
-}
-
 /** Leaving a collection someone shared with the reader, after asking. */
-function useLeaveCollection(selected: string, select: (id: string) => void, shelves: Shelf[]) {
+function useLeaveCollection(selected: string, select: (id: string) => void, known: ProfileCollection[]) {
 	const t = useTranslations("ui");
-	const router = useRouter();
 	const { reader, refresh } = useReaderData();
-	const [leaving, setLeaving] = useState<Shelf | null>(null);
+	const [leaving, setLeaving] = useState<ProfileCollection | null>(null);
 	return {
 		leaving,
-		ask: (id: string) => setLeaving(shelves.find((shelf) => shelf.id === id) ?? null),
+		ask: (id: string) => setLeaving(known.find((collection) => collection.id === id) ?? null),
 		cancel: () => setLeaving(null),
 		leave: async () => {
 			if (!leaving || !reader) return;
@@ -204,19 +273,18 @@ function useLeaveCollection(selected: string, select: (id: string) => void, shel
 			if (!left) return;
 			if (selected === leaving.id) select("");
 			setLeaving(null);
-			router.refresh();
 			await refresh();
 		},
 	};
 }
 
 /** Which of the owner's collections the Share dialog is open on, with the invitations they sent, read once for the whole profile. */
-function useSharing(isOwnProfile: boolean, collections: ProfileCollection[]) {
+function useSharing(isOwnProfile: boolean, known: ProfileCollection[]) {
 	const { data: sent } = useSentInvitations(isOwnProfile);
 	const [sharing, setSharing] = useState<string | null>(null);
 	return {
 		onShare: isOwnProfile ? setSharing : undefined,
-		collection: collections.find((collection) => collection.id === sharing),
+		collection: known.find((collection) => collection.id === sharing),
 		invitations: sent?.invitations,
 		close: () => setSharing(null),
 	};
@@ -265,34 +333,38 @@ function ProfileDialogs({
 /**
  * A reader's page: their card on top, then their bookmarks the way the
  * library lists records, with search and sort, and their collections beside
- * it where the library keeps its filters.
+ * it where the library keeps its filters, a page at a time.
  */
-export default function ReaderProfile({
-	data,
-	loading = false,
-}: {
+export default function ReaderProfile(props: {
 	data: ProfileData;
 	/** Drawn while the profile is on its way, from its address alone: the reader, their counts and collections show as placeholders. */
 	loading?: boolean;
 }) {
+	const viewer = useReaderSession().reader?.id ?? null;
+	// Whatever was read for one viewer goes when another signs in or out, here or in another tab.
+	return <ProfileFor key={viewer ?? ""} viewer={viewer} {...props} />;
+}
+
+function ProfileFor({ data, viewer, loading = false }: { data: ProfileData; viewer: string | null; loading?: boolean }) {
 	const t = useTranslations("ui");
-	const { reader } = useReaderSession();
-	const isOwnProfile = reader?.id === data.id;
+	const isOwnProfile = viewer === data.id;
 	const items = useItemsList(data);
-	const { collections, shared, bookmarks } = useShownShelves(data, isOwnProfile, reader?.id ?? null);
-	const sharing = useSharing(isOwnProfile, collections);
+	const bookmarks = useProfileBookmarks(data, isOwnProfile);
 	const bookmarkCount = Object.keys(bookmarks).length;
 	const selected = items.queryParams.collectionId || "";
-	const shelves = profileShelves(t("allBookmarks"), bookmarkCount, collections);
 	const select = (id: string) => items.handleCollectionSelect(id);
-	const selectedCollection = collections.find((collection) => collection.id === selected);
-	const changes = useCollectionChanges(selected, select);
-	const editing = useCollectionDialog(isOwnProfile, collections);
-	const leaving = useLeaveCollection(selected, select, shelves);
+	const collections = useProfileCollections(data, viewer, selected, loading);
+	const shared = useSharedCollections(data, viewer, isOwnProfile && !loading);
+	const sharing = useSharing(isOwnProfile, collections.known);
+	const changes = useCollectionChanges(selected, select, collections.page);
+	const editing = useCollectionDialog(isOwnProfile, collections.known);
+	const leaving = useLeaveCollection(selected, select, collections.known);
 	const choices: CollectionChoices = {
-		shelves,
+		all: { id: "", name: t("allBookmarks"), count: bookmarkCount, isPrivate: false, description: null, access: null, members: [] },
+		collections: collections.page,
 		shared,
 		selected,
+		chosen: collections.chosen.map(shelfOf)[0] ?? null,
 		onSelect: select,
 		onEdit: editing.edit,
 		onCreate: editing.create,
@@ -308,17 +380,17 @@ export default function ReaderProfile({
 				isOwnProfile={isOwnProfile}
 				loading={loading}
 				bookmarkCount={bookmarkCount}
-				collectionCount={collections.length}
+				collectionCount={collections.placeholder ? null : collections.page.total}
 				firstBookmarkedAt={firstBookmarkDate(bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
-				<CollectionsNav userId={data.id} loading={loading} {...choices} />
+				<CollectionsNav userId={data.id} loading={collections.placeholder} {...choices} />
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
-						header={selectedCollection?.name ?? t("allBookmarks")}
-						userData={{ ...data, collections }}
-						extraFilters={<PhoneCollectionPicker {...choices} />}
+						header={(choices.chosen ?? choices.all).name}
+						userData={{ id: data.id, collections: collections.chosen }}
+						extraFilters={<PhoneCollectionPicker userId={data.id} {...choices} />}
 					/>
 				</div>
 			</div>
@@ -327,65 +399,57 @@ export default function ReaderProfile({
 	);
 }
 
-/** On phones the column is hidden, so a picker beside the filters chooses the list and the owner's actions sit next to it. */
-function PhoneCollectionPicker(choices: CollectionChoices) {
+/**
+ * On phones the column is hidden: a button beside the filters names the chosen list and opens the same paged lists
+ * as a sheet, and the owner's actions sit next to it.
+ */
+function PhoneCollectionPicker({ userId, ...choices }: { userId: string } & CollectionChoices) {
+	const t = useTranslations("ui");
+	const [open, setOpen] = useState(false);
+	const shown = choices.chosen ?? choices.all;
 	return (
 		<div className="flex gap-2 lg:hidden">
-			<PhoneCollectionSelect {...choices} />
+			<Button
+				aria-haspopup="dialog"
+				aria-label={t("bookmarksListAriaLabel")}
+				onPress={() => setOpen(true)}
+				startContent={<HugeiconsIcon icon={choices.chosen ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />}
+				endContent={<HugeiconsIcon icon={ArrowDown01Icon} className="ms-auto size-4 shrink-0 opacity-60" aria-hidden />}
+				className="h-12 min-w-0 flex-1 justify-start gap-2 px-4 font-medium"
+			>
+				<span className="truncate">{shown.name}</span>
+			</Button>
 			<PhoneCollectionActions {...choices} />
+			<DialogModal isOpen={open} onOpenChange={setOpen} scrollBehavior="inside">
+				<ModalContent>
+					<GenericHeader onClose={() => setOpen(false)}>{t("collections")}</GenericHeader>
+					<ModalBody className="gap-0 px-0 pb-3 pt-0">
+						{/* Choosing a list closes the sheet; the actions beside the button act on it. */}
+						<CollectionPages
+							userId={userId}
+							loading={false}
+							{...choices}
+							onSelect={(id) => {
+								choices.onSelect(id);
+								setOpen(false);
+							}}
+							onEdit={undefined}
+							onShare={undefined}
+						/>
+						{choices.shared && choices.shared.total > 0 ? <SharedWithYou shared={choices.shared} /> : null}
+					</ModalBody>
+				</ModalContent>
+			</DialogModal>
 		</div>
 	);
 }
 
-/** The lists to choose from. One shared with the reader opens on its owner's profile. */
-function PhoneCollectionSelect({ shelves, shared, selected, onSelect }: CollectionChoices) {
-	const t = useTranslations("ui");
-	const router = useRouter();
-	return (
-		<Select
-			aria-label={t("bookmarksListAriaLabel")}
-			color="secondary"
-			placement="left"
-			className="max-w-full flex-1"
-			disallowEmptySelection
-			selectedKeys={[selected || "all"]}
-			onSelectionChange={(keys) => {
-				const key = String(Array.from(keys)[0] ?? "all");
-				const other = shared.find((collection) => collection.id === key);
-				if (other) router.push(`/profile/${other.owner.id}?collectionId=${other.id}`);
-				else onSelect(key === "all" ? "" : key);
-			}}
-			startContent={<HugeiconsIcon icon={selected ? CollectionsBookmarkIcon : Bookmark02Icon} className="size-5 shrink-0" aria-hidden />}
-		>
-			<SelectSection showDivider={shared.length > 0}>
-				{shelves.map((shelf) => (
-					<SelectItem key={shelf.id || "all"} textValue={shelf.name} description={shelf.description}>
-						{shelf.name}
-					</SelectItem>
-				))}
-			</SelectSection>
-			<SelectSection title={shared.length > 0 ? t("sharedWithYou") : undefined}>
-				{shared.map((collection) => (
-					<SelectItem
-						key={collection.id}
-						textValue={collection.name}
-						description={readerDisplayName(collection.owner, t)}
-						startContent={<ReaderAvatar reader={collection.owner} size="sm" className="h-6 w-6 text-[10px]" aria-hidden />}
-					>
-						{collection.name}
-					</SelectItem>
-				))}
-			</SelectSection>
-		</Select>
-	);
-}
-
-/** What the viewer may do with the list the picker shows: the owner shares and edits it and adds collections; a member leaves it. */
-function PhoneCollectionActions({ shelves, selected, onEdit, onCreate, onShare, onLeave }: CollectionChoices) {
+/** What the viewer may do with the list the button shows: the owner shares and edits it and adds collections; a member leaves it. */
+function PhoneCollectionActions({ chosen, selected, onEdit, onCreate, onShare, onLeave }: CollectionChoices) {
 	const t = useTranslations("ui");
 	// A collection is chosen: All bookmarks is shared, edited and left by nobody.
 	const onChosen = (run?: (id: string) => void) => (run && selected ? () => run(selected) : undefined);
-	const isMember = memberRoleOf(shelves.find((shelf) => shelf.id === selected)?.access ?? null) !== null;
+	const isMember = memberRoleOf(chosen?.access ?? null) !== null;
 	return (
 		<>
 			<PhoneAction label={t("shareAction")} icon={UserAdd01Icon} onPress={onChosen(onShare)} />
@@ -612,9 +676,9 @@ function CollectionsNav({
 		<aside id="collections" aria-label={t("bookmarksListAriaLabel")} className="hidden w-full shrink-0 lg:block lg:w-[24rem] xl:w-[28.5rem]">
 			{/* The same card as the profile's own, its head tinted like the cover band above. */}
 			<nav className="overflow-hidden rounded-2xl bg-white dark:bg-secondary">
-				<CollectionsHead loading={loading} count={choices.shelves.length - 1} onCreate={choices.onCreate} />
+				<CollectionsHead loading={loading} count={choices.collections.total} onCreate={choices.onCreate} />
 				<CollectionPages userId={userId} loading={loading} {...choices} />
-				{choices.shared.length > 0 ? <SharedWithYou collections={choices.shared} /> : null}
+				{choices.shared && choices.shared.total > 0 ? <SharedWithYou shared={choices.shared} /> : null}
 			</nav>
 		</aside>
 	);
@@ -651,59 +715,58 @@ function CollectionsHead({ loading, count, onCreate }: { loading: boolean; count
 }
 
 /** All bookmarks, then the page of collections the column shows, then the pages. */
-function CollectionPages({ userId, loading, shelves, selected, onSelect, onEdit, onShare, onLeave }: { userId: string; loading: boolean } & CollectionChoices) {
-	const [all, ...collections] = shelves;
-	const page = useFollowingPage(collections, selected);
-	const { pages, current, shown } = pageOf(collections, page.number, COLLECTIONS_PER_PAGE);
+function CollectionPages({ userId, loading, all, collections, selected, onSelect, onEdit, onShare, onLeave }: { userId: string; loading: boolean } & CollectionChoices) {
 	const forShelf = (run: ((id: string) => void) | undefined, id: string) => (run ? () => run(id) : undefined);
 	return (
 		<div className="flex flex-col gap-1 p-3">
 			{loading ? (
 				// One row, as tall as a row with its cover stack. The reader's collections are not known yet, so no page follows it.
 				<Skeleton className="h-24 rounded-xl" />
-			) : all ? (
+			) : (
 				<CollectionRow userId={userId} shelf={all} isSelected={selected === ""} onSelect={() => onSelect("")} />
-			) : null}
-			{/* A page keeps a full page's height, so turning to a shorter last page moves nothing below. */}
-			<div className="flex flex-col gap-1" style={{ minHeight: pages > 1 ? COLLECTIONS_PAGE_HEIGHT : undefined }}>
-				{shown.map((shelf) => (
-					<CollectionRow
-						key={shelf.id}
-						userId={userId}
-						shelf={shelf}
-						isSelected={shelf.id === selected}
-						onSelect={() => onSelect(shelf.id)}
-						onEdit={forShelf(onEdit, shelf.id)}
-						onShare={forShelf(onShare, shelf.id)}
-						onLeave={() => onLeave(shelf.id)}
-					/>
+			)}
+			<PagedRows page={collections}>
+				{collections.rows.map((shelf) => (
+					<li key={shelf.id}>
+						<CollectionRow
+							userId={userId}
+							shelf={shelf}
+							// The chosen row folds as soon as the reader turns away from its page, not when the next page comes.
+							isSelected={shelf.id === selected && !collections.waiting}
+							onSelect={() => onSelect(shelf.id)}
+							onEdit={forShelf(onEdit, shelf.id)}
+							onShare={forShelf(onShare, shelf.id)}
+							onLeave={() => onLeave(shelf.id)}
+						/>
+					</li>
 				))}
-			</div>
-			<div className="px-2 pt-2 empty:hidden">
-				<ListPager page={current} pages={pages} total={collections.length} perPage={COLLECTIONS_PER_PAGE} onChange={page.turn} />
-			</div>
+			</PagedRows>
 		</div>
 	);
 }
 
-/** Collections on one page of the profile's column. */
-const COLLECTIONS_PER_PAGE = 6;
 /** That many rows (a cover stack and its padding, 6rem) with the gaps between them. */
-const COLLECTIONS_PAGE_HEIGHT = `calc(${COLLECTIONS_PER_PAGE} * 6rem + ${COLLECTIONS_PER_PAGE - 1} * 0.25rem)`;
+const COLLECTIONS_PAGE_HEIGHT = `calc(${PROFILE_COLLECTIONS_PER_PAGE} * 6rem + ${PROFILE_COLLECTIONS_PER_PAGE - 1} * 0.25rem)`;
 
 /**
- * The page of the column to show. It is the page the chosen collection is
- * on, so one chosen from elsewhere (a link, the record picker, a collection
- * just made) is in view, until the reader turns to another page. Choosing a
- * collection follows it again; choosing All bookmarks, which is above every
- * page, keeps the page the reader turned to.
+ * A page of rows and the pages under it. A page keeps a full page's height, so turning to a shorter last page moves
+ * nothing below. While the page turned to is on its way, the last one stays, dimmed and inert.
  */
-function useFollowingPage(collections: Shelf[], selected: string) {
-	const [turned, setTurned] = useState<{ page: number; selected: string } | null>(null);
-	const listed = collections.some((shelf) => shelf.id === selected);
-	const followed = pageWith(collections, (shelf) => shelf.id === selected, COLLECTIONS_PER_PAGE);
-	const number = turned && (turned.selected === selected || !listed) ? turned.page : followed;
-	return { number, turn: (page: number) => setTurned({ page, selected }) };
+function PagedRows<Row>({ page, children }: { page: ShownPage<Row>; children: ReactNode }) {
+	return (
+		<>
+			<ul
+				inert={page.waiting || undefined}
+				className={twMerge("flex flex-col gap-1 transition-opacity duration-150 motion-reduce:transition-none", page.waiting && "opacity-50")}
+				style={{ minHeight: page.pages > 1 ? COLLECTIONS_PAGE_HEIGHT : undefined }}
+			>
+				{children}
+			</ul>
+			<div className="px-2 pt-2 empty:hidden">
+				<ListPager page={page.page} pages={page.pages} total={page.total} perPage={PROFILE_COLLECTIONS_PER_PAGE} onChange={page.turn} />
+			</div>
+		</>
+	);
 }
 
 /**
@@ -855,19 +918,17 @@ function CollectionRowDetails({
  * their own: each with its owner's face and what the reader may do with it.
  * Each opens on its owner's profile, where its records are.
  */
-function SharedWithYou({ collections }: { collections: SharedCollectionSummary[] }) {
+function SharedWithYou({ shared }: { shared: ShownPage<SharedCollectionSummary> }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const [page, setPage] = useState(1);
-	const { pages, current, shown } = pageOf(collections, page, COLLECTIONS_PER_PAGE);
 	return (
 		<div className="border-t border-black/[0.06] p-3 pt-4 dark:border-white/[0.08]">
 			<h3 className="flex items-center gap-2 px-3 pb-2 text-small font-semibold text-black/60 dark:text-white/60">
 				{t("sharedWithYou")}
-				<span className="rounded-full bg-black/[0.05] px-2 text-tiny font-medium tabular-nums dark:bg-white/10">{format.number(collections.length)}</span>
+				<span className="rounded-full bg-black/[0.05] px-2 text-tiny font-medium tabular-nums dark:bg-white/10">{format.number(shared.total)}</span>
 			</h3>
-			<ul className="flex flex-col gap-1" style={{ minHeight: pages > 1 ? COLLECTIONS_PAGE_HEIGHT : undefined }}>
-				{shown.map((collection) => (
+			<PagedRows page={shared}>
+				{shared.rows.map((collection) => (
 					<li key={collection.id}>
 						<Link
 							href={`/profile/${collection.owner.id}?collectionId=${collection.id}`}
@@ -895,10 +956,7 @@ function SharedWithYou({ collections }: { collections: SharedCollectionSummary[]
 						</Link>
 					</li>
 				))}
-			</ul>
-			<div className="px-2 pt-2 empty:hidden">
-				<ListPager page={current} pages={pages} total={collections.length} perPage={COLLECTIONS_PER_PAGE} onChange={setPage} />
-			</div>
+			</PagedRows>
 		</div>
 	);
 }

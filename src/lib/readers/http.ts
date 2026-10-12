@@ -2,6 +2,7 @@ import "server-only";
 
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
+import { fromError } from "zod-validation-error";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
@@ -12,7 +13,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 
 import { invitationRefusal } from "./collection-invitations";
-import { clerkUserIdOf } from "./data";
+import { clerkUserIdOf, MAX_COLLECTIONS_PAGE_SIZE } from "./data";
 import { getSignedInReader, type SignedInReader } from "./session";
 
 export const READER_RESPONSE_HEADERS = { "Cache-Control": "private, no-store" };
@@ -34,6 +35,25 @@ export async function readReaderRequest(request: Request): Promise<ReaderRequest
 	const reader = await getSignedInReader(request.headers, config);
 	if (!reader) return { response: readerError(401, "Sign in to continue.") };
 	return { config, database: await getDatabaseForConfig(config), reader };
+}
+
+/** A page of a list of collections the address asks for: which page, and how many rows a page holds. */
+export const pageQuerySchema = z.object({
+	page: z.coerce.number().int().min(1).default(1),
+	pageSize: z.coerce.number().int().min(1).max(MAX_COLLECTIONS_PAGE_SIZE),
+});
+
+/** The request's address parameters, read by `schema`. */
+export function parseQuery<Query>(request: Request, schema: z.ZodType<Query>) {
+	return schema.safeParse(Object.fromEntries(new URL(request.url).searchParams));
+}
+
+/** The signed-in reader's request, as `readReaderRequest` reads it, with its address parameters; or the response to send instead. */
+export async function readReaderQuery<Query>(request: Request, schema: z.ZodType<Query>): Promise<{ response: Response } | (Exclude<ReaderRequest, { response: Response }> & { query: Query })> {
+	const access = await readReaderRequest(request);
+	if (access.response) return access;
+	const query = parseQuery(request, schema);
+	return query.success ? { ...access, query: query.data } : { response: readerError(400, fromError(query.error).toString()) };
 }
 
 /** The JSON body, or null when it is not JSON. */

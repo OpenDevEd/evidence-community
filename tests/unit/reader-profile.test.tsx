@@ -10,7 +10,7 @@ import messages from "@/messages/en-GB.json";
 const session = vi.hoisted(() => ({ reader: null as { id: string; name: string; image: string | null } | null }));
 const list = vi.hoisted(() => ({ selected: "", select: vi.fn() }));
 // The signed-in reader's own bookmarks and collections, as the header's controls keep them.
-const own = vi.hoisted(() => ({ data: undefined as ProfileData | undefined }));
+const own = vi.hoisted(() => ({ data: undefined as { bookmarks: Record<string, string> } | undefined }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
@@ -25,8 +25,10 @@ vi.mock("@/hooks/useItemsList", () => ({
 }));
 // The list itself is the library's; the profile around it is under test.
 vi.mock("@/components/features/items/ItemsList", () => ({ default: () => null }));
+// Each page the profile reads is the one the server rendered: its collections, and an empty list of records.
+const pages = vi.hoisted(() => ({ collections: undefined as unknown }));
 vi.mock("swr", () => ({
-	default: () => ({ data: { items: [] } }),
+	default: (key: string | null) => ({ data: key?.startsWith("/user/collections/") ? pages.collections : key ? { items: [] } : undefined, isLoading: false }),
 	useSWRConfig: () => ({ mutate: vi.fn() }),
 }));
 
@@ -42,9 +44,17 @@ const profile: ProfileData = {
 	name: "Amina Okafor",
 	image: null,
 	bookmarks: { SAVED001: "2026-09-02T10:00:00.000Z", SAVED002: "2026-09-10T10:00:00.000Z" },
-	collections: [
-		{ id: TEACHER_TRAINING, name: "Teacher training", description: "For the review", private: true, count: 2, createdAt: "2026-09-03T10:00:00.000Z", access: "owner" as const, members: [] },
-	],
+	viewer: null,
+	collections: {
+		rows: [
+			{ id: TEACHER_TRAINING, name: "Teacher training", description: "For the review", private: true, count: 2, createdAt: "2026-09-03T10:00:00.000Z", access: "owner" as const, members: [] },
+		],
+		chosen: null,
+		page: 1,
+		pages: 1,
+		total: 1,
+	},
+	shared: null,
 };
 
 let container: HTMLDivElement;
@@ -81,6 +91,7 @@ beforeEach(() => {
 	list.selected = "";
 	list.select.mockReset();
 	own.data = undefined;
+	pages.collections = profile.collections;
 });
 
 afterEach(() => {
@@ -116,21 +127,6 @@ describe("a reader's profile", () => {
 
 		expect(document.querySelector("h1")?.textContent).toBe("Reader");
 		expect(document.querySelector('a[href="https://accounts.openscholar.example.org/user"]')?.textContent).toContain("Add your name");
-	});
-
-	it("shows the owner a collection they just made from a record, and visitors only public ones", () => {
-		const madeFromRecord = { ...profile.collections[0], id: "hidden-notes", name: "Hidden notes", description: null };
-		own.data = { ...profile, collections: [...profile.collections, madeFromRecord] };
-
-		session.reader = { id: "reader-amina", name: "Amina Okafor", image: null };
-		render();
-		expect(document.body.textContent).toContain("Hidden notes");
-
-		// The page was made for Amina; Bob now has it, as after she signed out.
-		session.reader = { id: "reader-bob", name: "Bob", image: null };
-		render();
-		expect(document.body.textContent).not.toContain("Hidden notes");
-		expect(document.body.textContent).not.toContain("Teacher training");
 	});
 
 	it("saves and deletes the owner's collection through the reader API", async () => {
