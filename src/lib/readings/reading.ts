@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { itemReading } from "@/db/schema/readings";
+import { item } from "@/db/schema/tables/item";
+import { contentHashOf, readingText } from "./reading-text";
 import type { StudyReading, StudyTypeKey } from "./study-types";
 
 type ReadingRow = Pick<typeof itemReading.$inferSelect, "studyType" | "typeConfidence" | "typedBy" | "input">;
@@ -11,12 +13,16 @@ export function studyReadingOf(row: ReadingRow | undefined, corrected: StudyType
 	return row ? { type: row.studyType, confidence: row.typeConfidence, by: row.typedBy, input: row.input } : null;
 }
 
-/** What the reading found for a record, whatever an editor chose; null before it is read. */
+/**
+ * What the reading found for a record, whatever an editor chose; null before it is read, and while its reading is of
+ * text the record no longer has, as readers see it.
+ */
 export async function readStudyReading(db: Pick<Database, "select">, itemKey: string) {
 	const [row] = await db
-		.select({ studyType: itemReading.studyType, typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input })
+		.select({ studyType: itemReading.studyType, typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash, title: item.title, abstractNote: item.abstractNote })
 		.from(itemReading)
+		.innerJoin(item, eq(item.key, itemReading.itemKey))
 		.where(eq(itemReading.itemKey, itemKey))
 		.limit(1);
-	return studyReadingOf(row, null);
+	return row?.contentHash === contentHashOf(readingText(row.title, row.abstractNote)) ? studyReadingOf(row, null) : null;
 }
