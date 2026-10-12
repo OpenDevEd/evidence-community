@@ -168,6 +168,10 @@ export type ImportBatch = {
 	attach: ReadonlyMap<string, AttachState>;
 	/** The checks the PDFs were read against. */
 	checks: readonly ImportCheck[];
+	/** Collections the new drafts go into. */
+	collections: string[];
+	/** The import call is under way, so a reopened dialog can't send it twice. */
+	committing: boolean;
 	/** Ready records the editor unticked. */
 	excluded: ReadonlySet<string>;
 	importId: string;
@@ -175,6 +179,8 @@ export type ImportBatch = {
 	publish: ReadonlyMap<string, PublishState>;
 	results: AdminImportCommitResult[] | null;
 	rows: ImportRow[];
+	/** The drafts ticked for publishing, once the editor changes the default. */
+	toPublish: ReadonlySet<string> | null;
 	/** Each record's topics, once the editor changes the AI's choice. */
 	topics: ReadonlyMap<string, ReadonlySet<string>>;
 };
@@ -188,8 +194,10 @@ function setBatch(next: ImportBatch | null) {
 }
 
 export function startImportBatch(start: Pick<ImportBatch, "checks" | "importId" | "kind" | "rows">) {
-	setBatch({ ...start, attach: new Map(), excluded: new Set(), publish: new Map(), results: null, topics: new Map() });
+	setBatch({ ...start, attach: new Map(), collections: [], committing: false, excluded: new Set(), publish: new Map(), results: null, toPublish: null, topics: new Map() });
 }
+
+export const currentImportBatch = () => batch;
 
 export function endImportBatch() {
 	setBatch(null);

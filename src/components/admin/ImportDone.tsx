@@ -45,16 +45,17 @@ function DraftState({ publish, row }: { publish: PublishState | undefined; row: 
  * read from a PDF can be published with a DOI from here; the ones that pass
  * every check start ticked, and the editor decides on the rest.
  */
-export function ImportDone({ batch, onOpenRecord, onPublish }: { batch: ImportBatch; onOpenRecord: (itemKey: string) => void; onPublish: (ids: string[]) => void }) {
+export function ImportDone({ batch, onChoose, onOpenRecord, onPublish }: { batch: ImportBatch; onChoose: (ids: ReadonlySet<string>) => void; onOpenRecord: (itemKey: string) => void; onPublish: (ids: string[]) => void }) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, row: rowById.get(id)! }] : []));
 	const publishable = drafts.filter(({ row }) => row.file).map(({ row }) => row.id);
 	const passing = drafts.filter(({ row }) => row.file && rowPasses(row)).length;
-	const [chosen, setChosen] = useState(() => new Set(drafts.filter(({ row }) => row.file && rowPasses(row)).map(({ row }) => row.id)));
+	const started = batch.publish.size > 0;
+	// Once publishing starts, the ticks are the drafts it was started for.
+	const chosen = started ? new Set(batch.publish.keys()) : (batch.toPublish ?? new Set(drafts.filter(({ row }) => row.file && rowPasses(row)).map(({ row }) => row.id)));
 	const [page, setPage] = useState(1);
-	const started = publishable.some((id) => batch.publish.has(id));
-	const published = publishable.filter((id) => batch.publish.get(id)?.state === "published").length;
+	const published = [...batch.publish.values()].filter(({ state }) => state === "published").length;
 	const all = publishable.length > 0 && publishable.every((id) => chosen.has(id));
 	const { current, items, pages } = pageOf(drafts, page, PER_PAGE);
 	const pdfs = [...batch.attach.values()];
@@ -66,13 +67,12 @@ export function ImportDone({ batch, onOpenRecord, onPublish }: { batch: ImportBa
 		{ count: results.filter(({ outcome }) => outcome === "skipped").length, label: "Already in the library", tone: "" },
 		{ count: results.filter(({ outcome }) => outcome === "failed").length, label: "Not imported", tone: "text-danger" },
 	].filter((line) => line.count > 0);
-	const toggle = (id: string, checked: boolean) =>
-		setChosen((value) => {
-			const next = new Set(value);
-			if (checked) next.add(id);
-			else next.delete(id);
-			return next;
-		});
+	const toggle = (id: string, checked: boolean) => {
+		const next = new Set(chosen);
+		if (checked) next.add(id);
+		else next.delete(id);
+		onChoose(next);
+	};
 	return (
 		<div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center gap-6">
 			<div className="flex items-center gap-3">
@@ -99,7 +99,7 @@ export function ImportDone({ batch, onOpenRecord, onPublish }: { batch: ImportBa
 			<div>
 				{publishable.length ? (
 					<div className="mb-1 flex h-9 items-center gap-3 px-2">
-						<Checkbox aria-label="Choose every draft to publish" isDisabled={started} isIndeterminate={chosen.size > 0 && !all} isSelected={all} onValueChange={(checked) => setChosen(new Set(checked ? publishable : []))} size="sm" />
+						<Checkbox aria-label="Choose every draft to publish" isDisabled={started} isIndeterminate={chosen.size > 0 && !all} isSelected={all} onValueChange={(checked) => onChoose(new Set(checked ? publishable : []))} size="sm" />
 						<span className="text-xs tabular-nums text-black/50 dark:text-white/50">
 							{chosen.size} of {publishable.length} to publish
 						</span>

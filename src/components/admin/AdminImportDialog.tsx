@@ -26,6 +26,7 @@ import {
 	changeImportBatch,
 	changeImportRow,
 	chosenTopics,
+	currentImportBatch,
 	doiPreviewRequest,
 	endImportBatch,
 	filePreviewRequest,
@@ -161,7 +162,6 @@ function ImportFlow({
 	const [checks, setChecks] = useState(storedChecks);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [filter, setFilter] = useState<ReviewFilter>("all");
-	const [collections, setCollections] = useState<string[]>([]);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -170,6 +170,7 @@ function ImportFlow({
 	const rows = batch?.rows ?? [];
 	const counts = reviewCounts(rows);
 	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
+	const locked = busy || batch?.committing === true;
 	const shown = rows.filter((row) => reviewMatches(row, filter));
 	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
 	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
@@ -205,6 +206,8 @@ function ImportFlow({
 				return;
 			}
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
+			// The dialog may have closed and started another import while this lookup ran.
+			if (currentImportBatch()) return;
 			const previewRows = rowsFromRecords(response.records);
 			setActiveId(previewRows[0]?.id ?? null);
 			startImportBatch({ checks: [], importId, kind, rows: previewRows });
@@ -243,8 +246,12 @@ function ImportFlow({
 				const rights = recordRights(row, batch.checks);
 				return { ...record, payload: { ...record.payload, ...(topicsEnabled && topics.length ? { topics } : {}), ...(rights ? { rights } : {}) } };
 			});
-			const response = await commitAdminImport({ collections, importId: batch.importId, records });
-			changeImportBatch(batch.importId, (current) => ({ ...current, results: response.results }));
+			changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
+			const response = await commitAdminImport({ collections: batch.collections, importId: batch.importId, records }).catch((caught: unknown) => {
+				changeImportBatch(batch.importId, (current) => ({ ...current, committing: false }));
+				throw caught;
+			});
+			changeImportBatch(batch.importId, (current) => ({ ...current, committing: false, results: response.results }));
 			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
 			for (const { id, itemKey } of created) {
 				const row = rowById.get(id)!;
@@ -258,7 +265,6 @@ function ImportFlow({
 
 	const restart = () => {
 		endImportBatch();
-		setCollections([]);
 		setError(null);
 		if (stage === "done") {
 			setPdfs([]);
@@ -339,7 +345,7 @@ function ImportFlow({
 										checksOf={checksOf}
 										criteriaCount={batch.checks.length}
 										filter={filter}
-										locked={busy}
+										locked={locked}
 										onActivate={setActiveId}
 										onSelectedChange={(next) => changeImportBatch(batch.importId, (current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) }))}
 										readyIds={readyIds(rows)}
@@ -356,7 +362,7 @@ function ImportFlow({
 											chosenTopics={topicsOf(activeRow)}
 											criteriaCount={batch.checks.length}
 											key={activeRow.id}
-											locked={busy}
+											locked={locked}
 											onFix={(index) => changeImportRow(batch.importId, activeRow.id, (row) => ({ ...row, fixed: row.fixed.includes(index) ? row.fixed.filter((other) => other !== index) : [...row.fixed, index] }))}
 											onOpenRecord={onOpenRecord}
 											onToggleTopic={(topicId) =>
@@ -378,7 +384,12 @@ function ImportFlow({
 					) : null}
 					{stage === "done" && batch?.results ? (
 						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
-							<ImportDone batch={batch} onOpenRecord={onOpenRecord} onPublish={(ids) => void publishImported(batch.importId, ids)} />
+							<ImportDone
+								batch={batch}
+								onChoose={(ids) => changeImportBatch(batch.importId, (current) => ({ ...current, toPublish: ids }))}
+								onOpenRecord={onOpenRecord}
+								onPublish={(ids) => void publishImported(batch.importId, ids)}
+							/>
 						</div>
 					) : null}
 				</motion.div>
@@ -390,7 +401,7 @@ function ImportFlow({
 					</p>
 				) : stage === "review" ? (
 					<>
-						<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+						<CollectionsButton collections={batch?.collections ?? []} locked={locked} onChange={(keys) => batch && changeImportBatch(batch.importId, (current) => ({ ...current, collections: keys }))} sources={sources} />
 						{reading ? <p className="text-xs text-black/50 dark:text-white/50">Reading carries on if you close this</p> : null}
 					</>
 				) : stage === "input" && kind === "pdfs" && estimateFiles.length ? (
@@ -400,7 +411,7 @@ function ImportFlow({
 				) : null}
 				<span className="ms-auto flex items-center gap-2">
 					{stage === "review" ? (
-						<Button isDisabled={busy} onPress={restart} size="sm" variant="transparent">
+						<Button isDisabled={locked} onPress={restart} size="sm" variant="transparent">
 							Back
 						</Button>
 					) : null}
@@ -419,7 +430,7 @@ function ImportFlow({
 						</Button>
 					) : null}
 					{stage === "review" ? (
-						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy} onPress={() => void commit()} size="sm" variant="solid">
+						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={locked} onPress={() => void commit()} size="sm" variant="solid">
 							{action("Import", selected.size, "record", "records")}
 						</Button>
 					) : null}

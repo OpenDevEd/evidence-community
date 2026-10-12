@@ -23,13 +23,17 @@ function xmpOf(document: PDFDocument) {
 	return stream instanceof PDFRawStream ? new TextDecoder().decode(decodePDFRawStream(stream).decode()) : "";
 }
 
+// ponytail: matches the usual dc/prism/xmpRights prefixes, not a custom prefix
+// bound to the same namespace; parse the XML with namespaces if that turns up.
 /** The `rdf:li` entries of one XMP property, such as every `dc:creator`. */
 function xmpList(xmp: string, property: string) {
-	const block = new RegExp(`<${property}>([\\s\\S]*?)</${property}>`).exec(xmp)?.[1] ?? "";
+	const block = new RegExp(`<${property}(?:\\s[^>]*)?>([\\s\\S]*?)</${property}>`).exec(xmp)?.[1] ?? "";
 	return [...block.matchAll(/<rdf:li[^>]*>([\s\S]*?)<\/rdf:li>/g)].map((match) => unescapeXml(match[1]!.trim())).filter(Boolean);
 }
 
-const xmpText = (xmp: string, property: string) => unescapeXml(new RegExp(`<${property}>([^<]*)</${property}>`).exec(xmp)?.[1]?.trim() ?? "");
+/** A simple XMP value, written as an element or as an attribute of its description. */
+const xmpText = (xmp: string, property: string) =>
+	unescapeXml((new RegExp(`<${property}(?:\\s[^>]*)?>([^<]*)</${property}>`).exec(xmp) ?? new RegExp(`\\s${property}="([^"]*)"`).exec(xmp))?.[1]?.trim() ?? "");
 
 /** Reads the properties a PDF carries now. */
 export async function readPdfProperties(bytes: Uint8Array): Promise<PdfPropertiesReading> {
@@ -39,20 +43,29 @@ export async function readPdfProperties(bytes: Uint8Array): Promise<PdfPropertie
 	} catch (error) {
 		return { reason: error instanceof EncryptedPDFError ? "password" : "damaged", writable: false };
 	}
-	const xmp = xmpOf(document);
-	const author = document.getAuthor()?.trim();
-	const keywords = document.getKeywords()?.trim();
+	// A broken XMP block or Info value reads as unset; publishing replaces both anyway.
+	const xmp = orEmpty(() => xmpOf(document));
+	const author = orEmpty(() => document.getAuthor()?.trim());
+	const keywords = orEmpty(() => document.getKeywords()?.trim());
 	return {
 		writable: true,
 		properties: {
 			authors: xmpList(xmp, "dc:creator").length ? xmpList(xmp, "dc:creator") : author ? [author] : [],
 			doi: xmpText(xmp, "prism:doi"),
-			keywords: xmpList(xmp, "dc:subject").length ? xmpList(xmp, "dc:subject") : (keywords?.split(/[;,]/).map((word) => word.trim()).filter(Boolean) ?? []),
+			keywords: xmpList(xmp, "dc:subject").length ? xmpList(xmp, "dc:subject") : keywords.split(/[;,]/).map((word) => word.trim()).filter(Boolean),
 			rights: xmpList(xmp, "dc:rights")[0] ?? "",
-			subject: document.getSubject()?.trim() || (xmpList(xmp, "dc:description")[0] ?? ""),
-			title: document.getTitle()?.trim() || (xmpList(xmp, "dc:title")[0] ?? ""),
+			subject: orEmpty(() => document.getSubject()?.trim()) || (xmpList(xmp, "dc:description")[0] ?? ""),
+			title: orEmpty(() => document.getTitle()?.trim()) || (xmpList(xmp, "dc:title")[0] ?? ""),
 		},
 	};
+}
+
+function orEmpty(read: () => string | undefined) {
+	try {
+		return read() ?? "";
+	} catch {
+		return "";
+	}
 }
 
 function xmpPacket(properties: PdfProperties) {
