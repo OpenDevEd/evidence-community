@@ -1019,5 +1019,87 @@
     "domain": "Domain",
     "field": "Field",
     "subfield": "Subfield"
+  },
+  "studyTypes": {
+    "title": "Study types",
+    "read": "{count, number} read",
+    "notRead": "Not read yet",
+    "chip": "Study type",
+    "uncertain": "uncertain",
+    "metadata": "Typed from the record itself.",
+    "ai": "Read by Jev from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
+    "method": "Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one.",
+    "levels": {
+      "synthesis": "Reviews and syntheses",
+      "primary": "Primary studies",
+      "other": "Other work"
+    },
+    "types": {
+      "review-of-reviews": {
+        "label": "Review of reviews",
+        "plural": "Reviews of reviews",
+        "description": "Gathers and sums up earlier reviews or meta-analyses, such as an umbrella review."
+      },
+      "meta-analysis": {
+        "label": "Meta-analysis",
+        "plural": "Meta-analyses",
+        "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count."
+      },
+      "systematic-review": {
+        "label": "Systematic review",
+        "plural": "Systematic reviews",
+        "description": "Sums up earlier studies found with a stated search and inclusion rules, without pooling them. Includes scoping and rapid reviews."
+      },
+      "literature-review": {
+        "label": "Literature review",
+        "plural": "Other literature reviews",
+        "description": "A narrative, critical or integrative review with no stated search method."
+      },
+      "bibliometric": {
+        "label": "Bibliometric study",
+        "plural": "Bibliometric studies",
+        "description": "Counts and maps publications, authors or citations on a topic, rather than what the studies found."
+      },
+      "rct": {
+        "label": "Randomized trial",
+        "plural": "Randomized trials",
+        "description": "Participants, groups or places were randomly assigned to conditions."
+      },
+      "quasi-experiment": {
+        "label": "Quasi-experiment",
+        "plural": "Quasi-experiments",
+        "description": "An intervention compared with a comparison group chosen without random assignment."
+      },
+      "quantitative": {
+        "label": "Quantitative study",
+        "plural": "Other quantitative",
+        "description": "Surveys, correlational and observational studies, single-group before-and-after tests, analyses of existing data."
+      },
+      "qualitative": {
+        "label": "Qualitative study",
+        "plural": "Qualitative and mixed",
+        "description": "Interviews, focus groups, case studies, ethnography or document analysis, alone or with quantitative data."
+      },
+      "modelling": {
+        "label": "Modeling study",
+        "plural": "Modeling studies",
+        "description": "Builds, simulates, projects or tests a model, method, tool or system, judged on how well it performs."
+      },
+      "protocol": {
+        "label": "Protocol",
+        "plural": "Protocols",
+        "description": "A study or review that is planned or under way, with no results yet."
+      },
+      "commentary": {
+        "label": "Commentary",
+        "plural": "Commentaries",
+        "description": "An editorial, opinion, policy analysis, theory or framework with no new data."
+      },
+      "not-research": {
+        "label": "Not a research paper",
+        "plural": "Not research papers",
+        "description": "A dataset, software, correction, book review, or a file that accompanies another paper."
+      }
+    }
   }
 }

@@ -29,6 +29,7 @@ const filters = {
 		collections: [] as string[],
 		institution: [] as string[],
 		type: [] as string[],
+		study: [] as string[],
 		author: "",
 		range: "",
 	} as Record<string, unknown>,
@@ -62,6 +63,7 @@ describe("the chips showing which filters are on", () => {
 			institution: [],
 			topics: [],
 			type: [],
+			study: [],
 			author: "",
 			range: "",
 		};

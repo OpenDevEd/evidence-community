@@ -41,8 +41,15 @@ describe("the library result set the assistant can see", () => {
 			collections: [],
 			topics: [],
 			type: [],
+			study: [],
 			readerList: null,
 		});
+	});
+
+	it("keeps the chosen study types, so the assistant and exports read the same results the list shows", () => {
+		const chosen = context({ study: ["meta-analysis"] });
+		expect(chosen.study).toEqual(["meta-analysis"]);
+		expect(JSON.parse(librarySearchContextSummary(chosen)).studyTypes).toEqual(["meta-analysis"]);
 	});
 
 	it("keeps the chosen item types, so the assistant reads the same results the list shows", () => {

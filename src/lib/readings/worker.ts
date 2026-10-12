@@ -3,23 +3,21 @@ import { sql } from "drizzle-orm";
 import type { LibraryServerConfig, ScreeningGrade } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemReading, readingSpend } from "@/db/schema/readings";
-import { abstractPlainText } from "@/lib/abstract-text";
 import { askJev } from "./jev";
 import { metadataStudyType } from "./metadata-type";
 import { QUESTION_SET, gradeOf, readingAnswers, readingQuestions, type ReadingAsk, type ReadingAnswers } from "./questions";
-import { hash, keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
-import type { StudyTypeKey } from "./study-types";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
+import { contentHashOf, readingText } from "./reading-text";
+import { keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
+import { SURE, type StudyTypeKey } from "./study-types";
 
 /** Records claimed at once, and how many of them are read at the same time. */
 const BATCH = 32;
 const AT_ONCE = 16;
 /** A cycle reads for this long, so the worker's other cycles keep their turn. */
 const CYCLE_MS = 20_000;
-/** Jev reads 32K tokens; an abstract is cut well inside that, as OpenScholar cuts it, and a PDF at its opening pages. */
-const ABSTRACT_CHARS = 3_000;
+/** Jev reads a PDF at its opening pages, well inside its 32K tokens. */
 const PDF_CHARS = 12_000;
-/** A type Jev gave with less confidence than this is asked again from the record's PDF, once it has one. */
-const LOW_CONFIDENCE = 0.6;
 const PDF_PAGE_MARK = /\*\*\|\|\s*PAGE\s+\d+\s*\|\|\*\*/giu;
 /** Grades asked in one call, so a record many sources hold stays inside Jev's context; the rest are asked next. */
 const GRADES_PER_CALL = 8;
@@ -51,10 +49,10 @@ const metadataChanged = (reading: Reading, metadataType: StudyTypeKey | null) =>
 
 /** Whether Jev's type, unsure from the abstract, can be asked again from the PDF the record now has. */
 const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
-	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < LOW_CONFIDENCE;
+	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < SURE;
 
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
-	const contentHash = hash(`${record.title}\n${record.abstract}`);
+	const contentHash = contentHashOf(record);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
 	const metadataType = metadataStudyType(record);
 	const retype = fresh && metadataChanged(stored.reading!, metadataType);
@@ -115,7 +113,7 @@ async function recordFacts(database: Database, keys: string[]) {
 		SELECT "itemKey", "sourceConnectionKey", "subjectHash", "pendingSubjectHash" FROM "itemGrade" WHERE "itemKey" = ANY(${list})`);
 	return rows.map((row) => ({
 		record: {
-			key: row.key, title: row.title ?? "", abstract: abstractPlainText(row.abstractNote).slice(0, ABSTRACT_CHARS),
+			key: row.key, ...readingText(row.title, row.abstractNote),
 			pdf: (row.pdf ?? "").replace(PDF_PAGE_MARK, "\n").trim(),
 			itemType: row.itemType, openAlexType: row.openAlexType, doi: row.DOI, sources: row.sources,
 		},
@@ -174,9 +172,15 @@ async function saveGrade(tx: DatabaseTransaction, itemKey: string, subject: Subj
 			"gradedAt" = now()`);
 }
 
+/** Queues the record's search document again, at its current revision. */
+async function reprojectRecord(tx: DatabaseTransaction, key: string) {
+	const { rows } = await tx.execute<{ revision: number }>(sql`SELECT revision FROM "item" WHERE key = ${key}`);
+	if (rows[0]) await enqueueItemSearchReprojections(tx, [{ itemKey: key, revision: Number(rows[0].revision) }], new Date());
+}
+
 /** A type Jev was unsure of from the abstract, of a record with a PDF: it is queued again to be asked from the PDF. */
 const askFromPdf = (record: RecordFacts, plan: Plan, read: ReadingAnswers) =>
-	Boolean(record.pdf) && !plan.pdf && read.type !== undefined && read.type.confidence < LOW_CONFIDENCE;
+	Boolean(record.pdf) && !plan.pdf && read.type !== undefined && read.type.confidence < SURE;
 
 /**
  * Stores a read's answers, only while the claim is still this cycle's, so a record queued again during the call is
@@ -193,12 +197,15 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 			"requestedFor" = CASE WHEN ${stay} THEN "requestedFor" END, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
 		if (!owned.rows.length) return;
+		// Readers see the type on the record's card, so a new one is searched again with it.
 		if (!plan.fresh) {
 			const row = readingRow(record, plan, read, answer!.model);
 			await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
+			await reprojectRecord(tx, record.key);
 		} else if (plan.retype) {
 			await tx.update(itemReading).set({ ...typeFields(plan, read), ...(plan.pdf ? { input: "pdf" as const } : {}) })
 				.where(sql`${itemReading.itemKey} = ${record.key}`);
+			await reprojectRecord(tx, record.key);
 		}
 		for (const [index, subject] of plan.graded.entries()) await saveGrade(tx, record.key, subject, read.scores[index]!);
 		// Decided with the grades it rests on, so a crash cannot leave the two apart.
@@ -212,7 +219,7 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
  */
 function planFor(facts: Awaited<ReturnType<typeof recordFacts>>[number], subjects: Map<string, { subject: string; hash: string }>, requestedFor: string[] | null) {
 	const screened = screenedBy(facts.record, subjects).filter((subject) => !requestedFor || requestedFor.includes(subject.key));
-	return screened.length ? planRead(facts.record, facts.stored, screened) : null;
+	return planRead(facts.record, facts.stored, screened);
 }
 
 /**
@@ -247,9 +254,9 @@ async function readOne(
 }
 
 /**
- * Leaves every waiting record done without reading it: what was published while nothing screens, or without a key, is
- * read only when the owner asks for it, so turning screening on never spends on its own. An owner's request dropped
- * this way ends, so its source reports those records not graded rather than a grading that never finishes.
+ * Leaves every waiting record done without reading it, in a library without a key: what was published meanwhile is read
+ * only when the owner asks for it, so saving a key never spends on its own. An owner's request dropped this way ends,
+ * so its source reports those records not graded rather than a grading that never finishes.
  */
 async function drain(database: Database) {
 	await database.transaction(async (tx) => {
@@ -286,7 +293,7 @@ async function release(database: Database, keys: string[], token: string) {
 export async function runReadingCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request?: typeof fetch) {
 	const apiKey = readingKey(config);
 	const subjects = screeningSubjects(config);
-	if (!apiKey || !subjects.size) {
+	if (!apiKey) {
 		await drain(database);
 		// Swapping finished grades in needs no key: a cycle that stopped before it is made good here too.
 		await settleScreening(database);
@@ -346,7 +353,7 @@ export async function trySubject(
 	const calls = await Promise.allSettled(Array.from({ length: Math.min(AT_ONCE, rows.length) }, async () => {
 		while (index < rows.length && !stopping.aborted) {
 			const at = index++;
-			const record = { title: rows[at]!.title ?? "", abstract: abstractPlainText(rows[at]!.abstractNote).slice(0, ABSTRACT_CHARS), pdf: "" };
+			const record = { ...readingText(rows[at]!.title, rows[at]!.abstractNote), pdf: "" };
 			try {
 				const answer = await callJev(database, apiKey, record, ask, false, stopping, request);
 				next[at] = gradeOf(readingAnswers(ask, answer!.answers).scores[0]!);

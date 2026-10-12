@@ -1030,5 +1030,87 @@
     "domain": "Domaine",
     "field": "Champ",
     "subfield": "Sous-champ"
+  },
+  "studyTypes": {
+    "title": "Types d'études",
+    "read": "{count, number} lues",
+    "notRead": "Pas encore lues",
+    "chip": "Type d'étude",
+    "uncertain": "incertain",
+    "metadata": "Déterminé à partir de la notice elle-même.",
+    "ai": "Lu par Jev à partir {input, select, abstract {du titre et du résumé} title {du titre seul, la notice n'ayant pas de résumé} other {du début de son PDF, une lecture précédente étant restée incertaine}}, sûr à {percent} %{uncertain, select, yes {, donc marqué incertain} other {}}.",
+    "method": "Le type de chaque notice est lu à son entrée dans la bibliothèque. Jev, un classifieur d'IA, lit son titre et son résumé et choisit l'un de ces types ; une notice sans résumé est jugée sur son titre. Les jeux de données, logiciels, corrections et protocoles enregistrés sont typés à partir de la notice elle-même, sans IA. Un type dont Jev est sûr à moins de 60 % est marqué incertain, puis relu à partir du PDF dès que la notice en a un.",
+    "levels": {
+      "synthesis": "Revues et synthèses",
+      "primary": "Études primaires",
+      "other": "Autres travaux"
+    },
+    "types": {
+      "review-of-reviews": {
+        "label": "Revue de revues",
+        "plural": "Revues de revues",
+        "description": "Rassemble et résume des revues ou méta-analyses antérieures, comme une revue parapluie."
+      },
+      "meta-analysis": {
+        "label": "Méta-analyse",
+        "plural": "Méta-analyses",
+        "description": "Les auteurs regroupent eux-mêmes statistiquement les résultats de plusieurs études antérieures. Citer le résultat regroupé d'un autre travail ne compte pas."
+      },
+      "systematic-review": {
+        "label": "Revue systématique",
+        "plural": "Revues systématiques",
+        "description": "Résume des études antérieures trouvées par une recherche et des critères d'inclusion déclarés, sans regrouper leurs résultats. Inclut les revues de portée et les revues rapides."
+      },
+      "literature-review": {
+        "label": "Revue de littérature",
+        "plural": "Autres revues de littérature",
+        "description": "Une revue narrative, critique ou intégrative sans méthode de recherche déclarée."
+      },
+      "bibliometric": {
+        "label": "Étude bibliométrique",
+        "plural": "Études bibliométriques",
+        "description": "Compte et cartographie les publications, auteurs ou citations sur un sujet, plutôt que ce que les études ont trouvé."
+      },
+      "rct": {
+        "label": "Essai randomisé",
+        "plural": "Essais randomisés",
+        "description": "Les participants, groupes ou lieux ont été répartis au hasard entre les conditions."
+      },
+      "quasi-experiment": {
+        "label": "Quasi-expérience",
+        "plural": "Quasi-expériences",
+        "description": "Une intervention comparée à un groupe de comparaison choisi sans répartition aléatoire."
+      },
+      "quantitative": {
+        "label": "Étude quantitative",
+        "plural": "Autres quantitatives",
+        "description": "Enquêtes, études corrélationnelles et observationnelles, tests avant-après sur un seul groupe, analyses de données existantes."
+      },
+      "qualitative": {
+        "label": "Étude qualitative",
+        "plural": "Qualitatives et mixtes",
+        "description": "Entretiens, groupes de discussion, études de cas, ethnographie ou analyse documentaire, seuls ou avec des données quantitatives."
+      },
+      "modelling": {
+        "label": "Étude de modélisation",
+        "plural": "Études de modélisation",
+        "description": "Construit, simule, projette ou teste un modèle, une méthode, un outil ou un système, jugé sur ses performances."
+      },
+      "protocol": {
+        "label": "Protocole",
+        "plural": "Protocoles",
+        "description": "Une étude ou une revue prévue ou en cours, sans résultats pour l'instant."
+      },
+      "commentary": {
+        "label": "Commentaire",
+        "plural": "Commentaires",
+        "description": "Un éditorial, une opinion, une analyse de politiques, une théorie ou un cadre sans nouvelles données."
+      },
+      "not-research": {
+        "label": "Pas un article de recherche",
+        "plural": "Hors articles de recherche",
+        "description": "Un jeu de données, un logiciel, une correction, un compte rendu de livre ou un fichier qui accompagne un autre article."
+      }
+    }
   }
 }

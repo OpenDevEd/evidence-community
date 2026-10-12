@@ -348,6 +348,7 @@ describe("the chat beside the search results", () => {
 			sort: "relevance",
 			topics: [],
 			type: [],
+			study: [],
 			readerList: null,
 		};
 		expect(asked).toHaveLength(1);

@@ -16,11 +16,17 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
 
 ## Decisions (the user, 2026-10-12)
 
-- Every record a screening source brings in is read once by Jev when it comes
-  in. No cap. The read runs on the library's own OpenRouter key; a library
-  without one gets no reading.
+- Every record that comes into a library is read once by Jev when it comes in,
+  from every kind of source, screening or not. No cap. The read runs on the
+  library's own OpenRouter key; a library without one gets no reading.
+  - Changed 2026-10-12. The first decision read only the records a screening
+    source brings in. Types, the Study types filter and the per-type digest
+    counts cover the whole library, so a record from a source that does not
+    screen needs a type too. Proof: the reader slice (#589, PR #598) reads
+    every record of a library that has a key.
 - One call answers everything, since Jev charges only for input: the grade
-  against the source's subject (score, four levels), the study type (choice, 13
+  against the subject of each screening source that holds the record (score,
+  four levels), the study type (choice, 13
   types in three levels), whether the authors pooled results themselves
   (noul), the region studied (choice), and whether the abstract reports
   quantitative results (noul).
@@ -132,6 +138,12 @@ New tables and a new optional config field; no existing row changes shape.
 again with the new questions. The removal of `notificationItemKind` ships in the
 digest slice, after the reading has filled `itemReading` on AIED, TVET and
 ECCAR. Rollback drops the new tables and trigger.
+
+No migration queues the records a library already holds, since reading them is
+the owner's spend to start. At rollout they are queued once the owner approves
+it: AIED through its sources' Grade them (2026-10-12); TVET and ECCAR, which do
+not screen, by queuing every top-level record that has no reading, as
+`requestGrading` queues a source's records.
 
 ## Slices
 

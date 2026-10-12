@@ -993,16 +993,18 @@ function TopicTreeSection({ counts, onChange, selected }: { counts: Record<strin
 function SidebarCards({ facetDistribution, range, onRangeChange, queryParams, inExplore }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; inExplore: boolean }) {
 	const { filters } = useLibraryConfig();
 	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
-	const { handleTypeSelect, handleAuthorSelect } = useFiltersContext();
+	const { handleTypeSelect, handleStudySelect, handleAuthorSelect } = useFiltersContext();
 	return (
 		<div className="mt-4 flex flex-col gap-4">
 			<ResultsOverview
 				facetDistribution={facetDistribution}
 				range={range}
 				types={queryParams.type}
+				studies={queryParams.study}
 				author={queryParams.author}
 				onRangeChange={onRangeChange}
 				onTypeSelect={handleTypeSelect}
+				onStudySelect={handleStudySelect}
 				onAuthorSelect={handleAuthorSelect}
 				showYears={filters.years.enabled}
 				showAuthors={isAuthorFilterEnabled}

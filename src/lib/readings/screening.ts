@@ -1,14 +1,12 @@
-import { createHash } from "node:crypto";
 import { eq, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { sourceScreening } from "@/db/schema/readings";
+import { hash } from "./reading-text";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { QUESTION_SET } from "./questions";
 
 type ConfiguredSource = LibraryServerConfig["sources"][number];
-
-export const hash = (text: string) => createHash("sha256").update(text).digest("hex");
 
 export const keyArray = (keys: readonly string[]) => sql`ARRAY[${sql.join(keys.map((key) => sql`${key}`), sql`, `)}]::varchar[]`;
 

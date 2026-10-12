@@ -1030,5 +1030,87 @@
     "domain": "Bereich",
     "field": "Feld",
     "subfield": "Teilgebiet"
+  },
+  "studyTypes": {
+    "title": "Studientypen",
+    "read": "{count, number} bestimmt",
+    "notRead": "Noch nicht bestimmt",
+    "chip": "Studientyp",
+    "uncertain": "unsicher",
+    "metadata": "Aus dem Eintrag selbst bestimmt.",
+    "ai": "Von Jev anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
+    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Jev, ein KI-Klassifikator, liest Titel und Abstract und wählt einen dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem Jev zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat.",
+    "levels": {
+      "synthesis": "Reviews und Synthesen",
+      "primary": "Primärstudien",
+      "other": "Sonstige Arbeiten"
+    },
+    "types": {
+      "review-of-reviews": {
+        "label": "Review von Reviews",
+        "plural": "Reviews von Reviews",
+        "description": "Fasst frühere Reviews oder Metaanalysen zusammen, etwa als Umbrella-Review."
+      },
+      "meta-analysis": {
+        "label": "Metaanalyse",
+        "plural": "Metaanalysen",
+        "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht."
+      },
+      "systematic-review": {
+        "label": "Systematisches Review",
+        "plural": "Systematische Reviews",
+        "description": "Fasst frühere Studien zusammen, die mit einer angegebenen Suche und Einschlusskriterien gefunden wurden, ohne ihre Ergebnisse zu poolen. Umfasst Scoping- und Rapid Reviews."
+      },
+      "literature-review": {
+        "label": "Literaturübersicht",
+        "plural": "Andere Literaturübersichten",
+        "description": "Eine narrative, kritische oder integrative Übersicht ohne angegebene Suchmethode."
+      },
+      "bibliometric": {
+        "label": "Bibliometrische Studie",
+        "plural": "Bibliometrische Studien",
+        "description": "Zählt und kartiert Publikationen, Autorinnen und Autoren oder Zitationen zu einem Thema, statt die Ergebnisse der Studien zusammenzufassen."
+      },
+      "rct": {
+        "label": "Randomisierte Studie",
+        "plural": "Randomisierte Studien",
+        "description": "Teilnehmende, Gruppen oder Orte wurden den Bedingungen zufällig zugeteilt."
+      },
+      "quasi-experiment": {
+        "label": "Quasi-Experiment",
+        "plural": "Quasi-Experimente",
+        "description": "Eine Intervention im Vergleich mit einer Vergleichsgruppe, die ohne Zufallszuteilung gebildet wurde."
+      },
+      "quantitative": {
+        "label": "Quantitative Studie",
+        "plural": "Andere quantitative",
+        "description": "Umfragen, korrelative und Beobachtungsstudien, Vorher-nachher-Tests mit einer Gruppe, Analysen vorhandener Daten."
+      },
+      "qualitative": {
+        "label": "Qualitative Studie",
+        "plural": "Qualitative und gemischte",
+        "description": "Interviews, Fokusgruppen, Fallstudien, Ethnografie oder Dokumentenanalyse, allein oder mit quantitativen Daten."
+      },
+      "modelling": {
+        "label": "Modellierungsstudie",
+        "plural": "Modellierungsstudien",
+        "description": "Entwickelt, simuliert, projiziert oder testet ein Modell, eine Methode, ein Werkzeug oder ein System und wird an dessen Leistung gemessen."
+      },
+      "protocol": {
+        "label": "Protokoll",
+        "plural": "Protokolle",
+        "description": "Eine geplante oder laufende Studie oder Übersicht, noch ohne Ergebnisse."
+      },
+      "commentary": {
+        "label": "Kommentar",
+        "plural": "Kommentare",
+        "description": "Ein Editorial, eine Meinung, eine Politikanalyse, eine Theorie oder ein Rahmenwerk ohne neue Daten."
+      },
+      "not-research": {
+        "label": "Keine Forschungsarbeit",
+        "plural": "Keine Forschungsarbeiten",
+        "description": "Forschungsdaten, Software, eine Korrektur, eine Buchbesprechung oder eine Datei, die zu einer anderen Arbeit gehört."
+      }
+    }
   }
 }
