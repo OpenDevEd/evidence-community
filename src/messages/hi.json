@@ -573,7 +573,8 @@
     "sortCollections": "संग्रह क्रमबद्ध करें: {sort}",
     "noMatchingCollections": "कोई संग्रह मेल नहीं खाता",
     "collectionsRange": "{total} में से {from} से {to}",
-    "openCollection": "संग्रह खोलें"
+    "openCollection": "संग्रह खोलें",
+    "invitationsUnread": "प्रतीक्षारत आमंत्रण लोड नहीं हो सके"
   },
   "ai": {
     "sourcesTitle": "स्रोत",

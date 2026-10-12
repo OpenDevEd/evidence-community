@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useState, type ReactNode } from "react";
 import useSWR from "swr";
 import { useFormatter, useTranslations } from "next-intl";
 import { DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger, ModalBody, ModalContent } from "@nextui-org/react";
@@ -60,6 +60,33 @@ const SENT_INVITATIONS = "/reader/invitations";
 export function useSentInvitations(enabled: boolean) {
 	return useSWR<{ invitations: PendingCollectionInvitation[] }>(enabled ? SENT_INVITATIONS : null, fetcher, { revalidateOnFocus: false });
 }
+
+/**
+ * Who a collection is shared with, read again: the members and the invitations waiting, so an invitation accepted
+ * meanwhile moves from one to the other. While the Share dialog is open this also runs when the owner comes back to
+ * the tab. The lists' own hooks don't follow focus, and SWR sends focus only to a key's first hook.
+ */
+function useSharingReload() {
+	const { refresh } = useReaderData();
+	const { mutate, error } = useSentInvitations(true);
+	const reload = () => Promise.all([refresh(), mutate()]);
+	const onFocus = useEffectEvent(() => void reload().catch((failure: unknown) => console.error("Reloading who a collection is shared with failed", failure)));
+	// The browser's focus event, for as long as the dialog is open.
+	useEffect(() => {
+		const listener = () => onFocus();
+		window.addEventListener("focus", listener);
+		return () => window.removeEventListener("focus", listener);
+	}, []);
+	return { reload, refresh, error };
+}
+
+/** A copy of a set of row IDs with one added or taken out. */
+const withRow = (rows: ReadonlySet<string>, id: string, on: boolean) => {
+	const next = new Set(rows);
+	if (on) next.add(id);
+	else next.delete(id);
+	return next;
+};
 
 async function send(path: string, method: "POST" | "PATCH" | "DELETE", body?: object) {
 	const response = await fetch(`/api${path}`, {
@@ -243,48 +270,43 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const { reader } = useReaderSession();
-	const { refresh } = useReaderData();
-	const { mutate } = useSentInvitations(true);
+	const { reload, refresh, error: unread } = useSharingReload();
 	const waiting = (invitations ?? []).filter((invitation) => invitation.collectionId === collection.id);
 	// The rows there when the dialog opened; any other row arrived since, and slides open.
 	const [opened] = useState(() => new Set([...collection.members.map((member) => member.id), ...waiting.map((invitation) => invitation.id)]));
 	const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
-	const markLeaving = (id: string, on: boolean) =>
-		setLeaving((current) => {
-			const next = new Set(current);
-			if (on) next.add(id);
-			else next.delete(id);
-			return next;
-		});
-	// A refusal shows as a toast, so nothing in the dialog moves. A removal closes its row first.
-	const change = async (run: () => Promise<unknown>, after: () => Promise<unknown>, removing?: string) => {
+	// A row with a change on its way takes no other until it lands, so a role change and a send can't cross.
+	const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+	// A refusal shows as a toast, so nothing in the dialog moves. A removal closes its row first. Either way the list is
+	// read again: after a refusal, a row that changed elsewhere, such as an invitation accepted meanwhile, goes.
+	const change = async (row: string, run: () => Promise<unknown>, after: () => Promise<unknown>, removing = false) => {
+		setBusy((rows) => withRow(rows, row, true));
 		if (removing) {
-			markLeaving(removing, true);
+			setLeaving((rows) => withRow(rows, row, true));
 			await new Promise((resolve) => setTimeout(resolve, ROW_CLOSE_MS));
 		}
 		try {
 			await run();
 		} catch (error) {
-			if (removing) markLeaving(removing, false);
+			if (removing) setLeaving((rows) => withRow(rows, row, false));
 			toast({ type: "error", title: t("sharingFailed"), description: error instanceof Error ? error.message : undefined });
-			return;
 		}
-		// The change is made: a list that fails to reload keeps its row closed, and shows the change on its next read.
 		await after().catch((error: unknown) => console.error("Reloading who a collection is shared with failed", error));
+		setBusy((rows) => withRow(rows, row, false));
 	};
 	const people = `/reader/collections/${collection.id}/members`;
 	const changeMember = (member: CollectionMember, role: ReaderCollectionRole | null) =>
 		role
-			? change(() => send(`${people}/${member.id}`, "PATCH", { role }), refresh)
-			: change(() => send(`${people}/${member.id}`, "DELETE"), refresh, member.id);
+			? change(member.id, () => send(`${people}/${member.id}`, "PATCH", { role }), refresh)
+			: change(member.id, () => send(`${people}/${member.id}`, "DELETE"), refresh, true);
 	const changeInvitation = (invitation: PendingCollectionInvitation, body: object | null) =>
 		body
-			? change(() => send(`/reader/invitations/${invitation.id}`, "PATCH", body), () => mutate())
-			: change(() => send(`/reader/invitations/${invitation.id}`, "DELETE"), () => mutate(), invitation.id);
+			? change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "PATCH", body), reload)
+			: change(invitation.id, () => send(`/reader/invitations/${invitation.id}`, "DELETE"), reload, true);
 
 	return (
 		<ModalBody className="gap-5 px-6 pb-6 pt-0">
-			<InviteForm collectionId={collection.id} onInvited={() => mutate()} />
+			<InviteForm collectionId={collection.id} onInvited={reload} />
 			<ul className="-my-2 flex max-h-[min(26rem,55vh)] flex-col overflow-y-auto">
 				{reader ? (
 					<PersonRow
@@ -310,6 +332,7 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 								label={t("accessOf", { name: readerDisplayName(member, t) })}
 								onRole={(role) => void changeMember(member, role)}
 								actions={[{ key: "remove", label: t("removeFromCollection"), icon: UserRemove01Icon, danger: true, onPress: () => void changeMember(member, null) }]}
+								isDisabled={busy.has(member.id)}
 							/>
 						}
 					/>
@@ -344,10 +367,23 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 									{ key: "resend", label: t("resendInvitation"), icon: RefreshIcon, onPress: () => void changeInvitation(invitation, { resend: true, collectionId: collection.id }) },
 									{ key: "cancel", label: t("cancelInvitation"), icon: Delete02Icon, danger: true, onPress: () => void changeInvitation(invitation, null) },
 								]}
+								isDisabled={busy.has(invitation.id)}
 							/>
 						}
 					/>
 				))}
+				{/* The invitations waiting couldn't be read: say so, rather than show none. */}
+				{unread ? (
+					<li className="flex items-center justify-between gap-3 py-2">
+						<span className="flex min-w-0 items-center gap-1.5 text-small text-danger">
+							<HugeiconsIcon icon={Alert02Icon} className="size-4 shrink-0" aria-hidden />
+							{t("invitationsUnread")}
+						</span>
+						<Button variant="transparent" onPress={() => void reload()} className="h-9 shrink-0 px-3 text-small font-medium">
+							{t("tryAgain")}
+						</Button>
+					</li>
+				) : null}
 			</ul>
 		</ModalBody>
 	);
@@ -370,9 +406,10 @@ function InviteForm({ collectionId, onInvited }: { collectionId: string; onInvit
 				if (!address || sending) return;
 				setSending(true);
 				void send(`/reader/collections/${collectionId}/invitations`, "POST", { email: address, role })
-					.then(async () => {
-						await onInvited();
+					// Sent: the address clears whether or not the list reloads, so it isn't sent twice.
+					.then(() => {
 						setEmail("");
+						return onInvited().catch((error: unknown) => console.error("Reloading the invitations waiting failed", error));
 					})
 					.catch((error: unknown) =>
 						toast({ type: "error", title: t("invitationNotSentTitle"), description: error instanceof Error ? error.message : undefined }),

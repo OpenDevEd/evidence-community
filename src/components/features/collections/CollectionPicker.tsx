@@ -94,13 +94,14 @@ export function CollectionPicker({
 	const { pages, current, shown } = pageOf(entries ?? [], page, PER_PAGE);
 	const inCollection = new Set(itemKey ? (data?.itemCollections[itemKey] ?? []) : []);
 
+	// Only making the collection can fail the row: once it exists, the row closes whatever else fails, so it isn't made twice.
 	const create = async (name: string) => {
 		const made = await post("/reader/collections", { name, description: null, private: true });
-		if (itemKey && made.id) await post(`/reader/collections/${made.id}/items`, { itemKey });
+		if (itemKey && made.id) await post(`/reader/collections/${made.id}/items`, { itemKey }).catch(() => toast({ type: "error", title: t("collectionSaveFailed") }));
 		setSearch("");
 		setSort("recent");
 		setPage(1);
-		await refresh();
+		await refresh().catch((error: unknown) => console.error("Reloading the reader's collections failed", error));
 	};
 
 	return (

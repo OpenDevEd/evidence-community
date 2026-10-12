@@ -562,7 +562,8 @@
     "sortCollections": "Sort collections: {sort}",
     "noMatchingCollections": "No collections match",
     "collectionsRange": "{from} to {to} of {total}",
-    "openCollection": "Open collection"
+    "openCollection": "Open collection",
+    "invitationsUnread": "Couldn't load the invitations waiting"
   },
   "ai": {
     "sourcesTitle": "Sources",

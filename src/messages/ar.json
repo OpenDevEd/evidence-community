@@ -573,7 +573,8 @@
     "sortCollections": "ترتيب المجموعات: {sort}",
     "noMatchingCollections": "لا توجد مجموعات مطابقة",
     "collectionsRange": "{from} إلى {to} من {total}",
-    "openCollection": "فتح المجموعة"
+    "openCollection": "فتح المجموعة",
+    "invitationsUnread": "تعذّر تحميل الدعوات المنتظرة"
   },
   "ai": {
     "sourcesTitle": "المصادر",
