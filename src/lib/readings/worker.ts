@@ -124,46 +124,61 @@ async function fail(database: Database, job: { itemKey: string; attempts: number
 		WHERE "itemKey" = ${job.itemKey} AND "leaseToken" = ${token}`);
 }
 
+/** The screening sources that hold a record, with their subjects. */
+const screenedBy = (record: RecordFacts, subjects: Map<string, { subject: string; hash: string }>): Subject[] =>
+	record.sources.flatMap((key) => {
+		const subject = subjects.get(key);
+		return subject ? [{ key, ...subject }] : [];
+	});
+
 /**
- * Reads one claimed record, when anything about it needs reading, and stores what Jev answered. What it spent is kept
- * whatever happens; the answers are kept only while the claim is still this cycle's, so a record queued again during
- * the call is read again instead of taking answers about its older text.
+ * Stores a read. What the call cost is kept whatever happens; the answers are kept only while the claim is still this
+ * cycle's, so a record queued again during the call is read again instead of taking answers about its older text.
  */
+async function saveRead(database: Database, record: RecordFacts, plan: Plan, answer: Awaited<ReturnType<typeof askJev>> | null, token: string) {
+	const read: ReadingAnswers = answer ? readingAnswers(plan.ask, answer.answers) : { scores: [] };
+	await database.transaction(async (tx) => {
+		if (answer) await tx.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
+			.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+			WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
+		if (!owned.rows.length) return;
+		if (!plan.fresh) {
+			const row = readingRow(record, plan, read, answer!.model);
+			await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
+		} else if (plan.retype) {
+			await tx.update(itemReading).set(typeFields(plan, read)).where(sql`${itemReading.itemKey} = ${record.key}`);
+		}
+		for (const [index, subject] of plan.graded.entries()) {
+			const grade = { itemKey: record.key, sourceConnectionKey: subject.key, score: read.scores[index], subjectHash: subject.hash, gradedAt: new Date() };
+			await tx.insert(itemGrade).values(grade).onConflictDoUpdate({ target: [itemGrade.itemKey, itemGrade.sourceConnectionKey], set: grade });
+		}
+	});
+}
+
+/** What reading a record asks, or null when it is held by no screening source or nothing about it changed. */
+function planFor(facts: Awaited<ReturnType<typeof recordFacts>>[number], subjects: Map<string, { subject: string; hash: string }>) {
+	const screened = screenedBy(facts.record, subjects);
+	return screened.length ? planRead(facts.record, facts.stored, screened) : null;
+}
+
+/** Asks Jev what the plan needs, or nothing when a metadata retype is all there is to do. */
+function callJev(apiKey: string, record: RecordFacts, plan: Plan, signal?: AbortSignal, request?: typeof fetch) {
+	if (!asksJev(plan.ask)) return null;
+	const state = record.abstract ? { title: record.title, abstract: record.abstract } : { title: record.title };
+	return askJev({ apiKey, state, questions: readingQuestions(plan.ask), signal, request });
+}
+
+/** Reads one claimed record, when anything about it needs reading, and stores what Jev answered. */
 async function readOne(
 	database: Database, apiKey: string, subjects: Map<string, { subject: string; hash: string }>,
 	facts: Awaited<ReturnType<typeof recordFacts>>[number] | undefined, job: { itemKey: string; attempts: number }, token: string,
 	signal?: AbortSignal, request?: typeof fetch,
 ) {
-	const screened = facts ? facts.record.sources.flatMap((key) => {
-		const subject = subjects.get(key);
-		return subject ? [{ key, ...subject }] : [];
-	}) : [];
-	// A record gone, or held by no screening source, has nothing to read.
-	const plan = facts && screened.length ? planRead(facts.record, facts.stored, screened) : null;
+	const plan = facts ? planFor(facts, subjects) : null;
 	if (!facts || !plan) return finish(database, job.itemKey, token);
 	try {
-		const { record } = facts;
-		const answer = asksJev(plan.ask)
-			? await askJev({ apiKey, state: { title: record.title, ...(record.abstract ? { abstract: record.abstract } : {}) }, questions: readingQuestions(plan.ask), signal, request })
-			: null;
-		const read = answer ? readingAnswers(plan.ask, answer.answers) : { scores: [] };
-		await database.transaction(async (tx) => {
-			if (answer) await tx.insert(readingSpend).values({ day: new Date().toISOString().slice(0, 10), reads: 1, usd: answer.usd })
-				.onConflictDoUpdate({ target: readingSpend.day, set: { reads: sql`${readingSpend.reads} + 1`, usd: sql`${readingSpend.usd} + ${answer.usd}` } });
-			const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
-				WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
-			if (!owned.rows.length) return;
-			if (!plan.fresh) {
-				const row = readingRow(record, plan, read, answer!.model);
-				await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
-			} else if (plan.retype) {
-				await tx.update(itemReading).set(typeFields(plan, read)).where(sql`${itemReading.itemKey} = ${record.key}`);
-			}
-			for (const [index, subject] of plan.graded.entries()) {
-				const grade = { itemKey: record.key, sourceConnectionKey: subject.key, score: read.scores[index], subjectHash: subject.hash, gradedAt: new Date() };
-				await tx.insert(itemGrade).values(grade).onConflictDoUpdate({ target: [itemGrade.itemKey, itemGrade.sourceConnectionKey], set: grade });
-			}
-		});
+		await saveRead(database, facts.record, plan, await callJev(apiKey, facts.record, plan, signal, request), token);
 	} catch (error) {
 		await fail(database, job, token, error);
 	}
