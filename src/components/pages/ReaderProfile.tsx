@@ -219,14 +219,13 @@ function useProfileBookmarks(data: ProfileData, isOwnProfile: boolean) {
 }
 
 /**
- * The collections shared with the reader, on their own profile, a page at a time from the first the server rendered;
- * only while the owner is signed in here, as after a sign-out in another tab they no longer are.
+ * The collections shared with the reader, on their own profile, a page at a time: whenever the owner is signed in here,
+ * starting from the first page the server rendered when it was rendered for them.
  */
-function useSharedCollections(sent: ProfileData["shared"], viewer: string | null, isOwnProfile: boolean): ShownPage<SharedCollectionSummary> | null {
-	const first = isOwnProfile ? sent : null;
+function useSharedCollections(data: ProfileData, viewer: string | null, ownerHere: boolean): ShownPage<SharedCollectionSummary> | null {
 	const [page, setPage] = useState(1);
-	const { shown, waiting, page: served } = useServerPage(first ? sharedCollectionsKey({ viewer, page }) : null, first, page);
-	return first && shown ? { rows: shown.rows, page: served, pages: shown.pages, total: shown.total, waiting, turn: setPage } : null;
+	const { shown, waiting, page: served } = useServerPage(ownerHere ? sharedCollectionsKey({ viewer, page }) : null, data.viewer === viewer ? data.shared : null, page);
+	return ownerHere && shown ? { rows: shown.rows, page: served, pages: shown.pages, total: shown.total, waiting, turn: setPage } : null;
 }
 
 /**
@@ -355,7 +354,7 @@ function ProfileFor({ data, viewer, loading = false }: { data: ProfileData; view
 	const selected = items.queryParams.collectionId || "";
 	const select = (id: string) => items.handleCollectionSelect(id);
 	const collections = useProfileCollections(data, viewer, selected, loading);
-	const shared = useSharedCollections(data.shared, viewer, isOwnProfile);
+	const shared = useSharedCollections(data, viewer, isOwnProfile && !loading);
 	const sharing = useSharing(isOwnProfile, collections.known);
 	const changes = useCollectionChanges(selected, select, collections.page);
 	const editing = useCollectionDialog(isOwnProfile, collections.known);

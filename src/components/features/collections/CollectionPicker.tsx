@@ -28,6 +28,7 @@ import { ReaderAvatar, readerDisplayName } from "@/components/layout/navbar/User
 import { CoverStack } from "@/components/features/collections/CoverStack";
 import { ListPager } from "@/components/features/collections/ListPager";
 import { MemberFaces } from "@/components/features/collections/CollectionPeople";
+import { useDebounce } from "@/hooks/useDebounce";
 import { useReaderData } from "@/hooks/useReaderData";
 import { Link } from "@/i18n/routing";
 import { twMerge } from "@/lib/tw-merge";
@@ -119,9 +120,10 @@ export function CollectionPicker({
 }) {
 	const t = useTranslations("ui");
 	const { refresh } = useReaderData();
-	const [search, setSearch] = useState("");
 	const [sort, setSort] = useState<Sort>("recent");
 	const [page, setPage] = useState(1);
+	const query = usePickerSearch(() => setPage(1));
+	const { draft, search } = query;
 	// Collections made here since the picker opened, which slide open.
 	const [made, setMade] = useState<ReadonlySet<string>>(new Set());
 	const { pending, toggle } = usePendingToggles(onToggle);
@@ -133,7 +135,7 @@ export function CollectionPicker({
 		const id = created.id;
 		if (id) setMade((ids) => new Set(ids).add(id));
 		if (itemKey && id) await post(`/reader/collections/${id}/items`, { itemKey }).catch(() => toast({ type: "error", title: t("collectionSaveFailed") }));
-		setSearch("");
+		query.clear();
 		setSort("recent");
 		setPage(1);
 		await refresh().catch((error: unknown) => console.error("Reloading the reader's collections failed", error));
@@ -142,11 +144,8 @@ export function CollectionPicker({
 	return (
 		<div className="flex flex-col gap-4">
 			<PickerControls
-				search={search}
-				onSearch={(value) => {
-					setSearch(value);
-					setPage(1);
-				}}
+				search={draft}
+				onSearch={query.type}
 				sort={sort}
 				onSort={setSort}
 			/>
@@ -154,9 +153,9 @@ export function CollectionPicker({
 			<div className={twMerge("grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none", shown.loaded ? "grid-rows-[1fr]" : "grid-rows-[0fr]")}>
 				<div className="min-h-0 overflow-hidden">
 					<ul className="flex flex-col">
-						<NewCollectionRow initialName={search.trim()} onCreate={create} disabled={!itemKey} />
+						<NewCollectionRow initialName={draft.trim()} onCreate={create} disabled={!itemKey} />
 						{/* As many rows as it opened with, or one for a search's answer, so what a search finds never shrinks it. */}
-						<li className="flex flex-col" style={{ minHeight: `${Math.max(shown.openedWith, search.trim() ? 1 : 0) * 4}rem` }}>
+						<li className="flex flex-col" style={{ minHeight: `${Math.max(shown.openedWith, draft.trim() ? 1 : 0) * 4}rem` }}>
 							<ul inert={shown.waiting || undefined} className={twMerge("flex flex-col transition-opacity duration-150 motion-reduce:transition-none", shown.waiting && "opacity-50")}>
 								{shown.rows.map((collection) => (
 									<PickerRow
@@ -182,6 +181,29 @@ export function CollectionPicker({
 			) : null}
 		</div>
 	);
+}
+
+/** What the reader types in the search, and the search the server is asked for once they pause, which starts from page one. */
+function usePickerSearch(onSearch: () => void) {
+	const [draft, setDraft] = useState("");
+	const [search, setSearch] = useState("");
+	const [searchSoon, , cancelSearch] = useDebounce((value: string) => {
+		setSearch(value);
+		onSearch();
+	}, 250);
+	return {
+		draft,
+		search,
+		type: (value: string) => {
+			setDraft(value);
+			searchSoon(value);
+		},
+		clear: () => {
+			cancelSearch();
+			setDraft("");
+			setSearch("");
+		},
+	};
 }
 
 /** Toggling the record in a collection, one row at a time: each row waits for its own change, and a failed one says so. */
