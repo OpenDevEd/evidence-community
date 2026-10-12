@@ -299,7 +299,7 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
 						{earlier.map((edition) => (
 							<li key={edition.slug} className="border-b border-[rgb(var(--ink-rgb)/0.1)] py-4 last:border-b-0">
 								<Link href={`/digests/${edition.slug}`} className="group block outline-offset-4">
-									<span className="block text-sm tabular-nums opacity-60">{shortDate.format(new Date(edition.published.at))}</span>
+									<span className="block text-sm tabular-nums opacity-60">{edition.period.label}</span>
 									<span className="mt-1 block font-heading text-lg font-medium leading-snug transition-colors group-hover:text-accent">{edition.title}</span>
 								</Link>
 							</li>

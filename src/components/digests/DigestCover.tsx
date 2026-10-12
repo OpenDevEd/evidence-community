@@ -18,7 +18,7 @@ export const coverHeight = "h-[337px]";
 
 /** A digest edition as a stack of paper sheets: the digests page's latest edition, and the home page's digests. */
 export function DigestCover({edition, libraryName, href, locale, titleAs: Title = "h2"}: {edition: DigestSummary; libraryName: string; href: string; locale: string; /** A heading on the digests page; inside a section elsewhere. */ titleAs?: "h2" | "h3"}) {
-  const {cover, published} = edition;
+  const {cover, period} = edition;
   return (
         <Link href={href} prefetch aria-label={`Read ${edition.title}`} className={`${styles.cover} group relative isolate mx-auto block w-full max-w-md rounded-2xl outline-offset-8`}>
           <div aria-hidden="true" className={`${styles.backSheet} absolute inset-0 -z-10 rounded-2xl bg-[#a8623f]`} />
@@ -26,7 +26,7 @@ export function DigestCover({edition, libraryName, href, locale, titleAs: Title 
           <article className={`${styles.frontSheet} relative flex ${coverHeight} flex-col overflow-hidden rounded-2xl bg-[#eee4d5] text-[#352b24] shadow-xl`}>
             <div className="flex items-center gap-4 px-7 pt-6"><span className="flex min-w-0 flex-1 items-center gap-2 text-xs font-medium text-[#352b24]/65"><Icon value={BookOpen01Icon} size={16} /><TruncatedText text={libraryName} className="w-0 flex-1" /></span></div>
             <div className="relative flex flex-1 items-center gap-6 px-7 py-7">
-              <div className="shrink-0 self-start pt-1" aria-hidden="true"><span className="block text-[76px] font-bold leading-[0.85] tracking-[-0.08em] text-[#ac5937]">{published.day}</span><span className="mt-3 block text-center text-xs font-medium text-[#352b24]/65">{published.monthYear}</span></div>
+              <div className="shrink-0 self-start pt-1" aria-hidden="true"><span className="block whitespace-nowrap text-[64px] font-bold leading-[0.85] tracking-[-0.07em] text-[#ac5937]">{period.days}</span><span className="mt-3 block text-center text-xs font-medium text-[#352b24]/65">{period.months} {period.year}</span></div>
               <Title className={`relative line-clamp-4 hyphens-auto text-[28px] font-semibold leading-[1.12] tracking-tight ${cover ? "max-w-[190px]" : "max-w-[230px]"}`}>{edition.title}</Title>
             </div>
             <MarkdownExcerpt className="-mt-2 mb-6 line-clamp-2 px-7 text-sm leading-6 text-[#352b24]/70">{edition.summary}</MarkdownExcerpt>

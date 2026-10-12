@@ -564,7 +564,7 @@ it("writes a past period's digest by publication date, rewrites it as a draft wh
     expect(await prepareNotificationEditions(db, publishedConfig, due)).toEqual({status: "empty"});
     expect((await db.select().from(notificationState))[0].digestThrough).toEqual(due);
     expect((await db.select().from(notificationEdition).where(eq(notificationEdition.windowEnd, due))).map(edition => edition.id)).toEqual([manual.status === "queued" ? manual.editionId : null]);
-    expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, published: {date: "1 September 2026"}});
+    expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, period: {first: "2026-08-01", last: "2026-08-31", label: "August 2026"}});
   });
 }, 120_000);
 

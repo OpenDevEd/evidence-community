@@ -8,6 +8,7 @@ import { ItemMutationConflictError, ItemNotFoundError } from "@/lib/admin/native
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { checkedDigestDraft, citedKeys, digestDraftSchema } from "./digest-text";
 import { getNextDigestEdition } from "./public";
+import { digestPeriod } from "./schedule";
 import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner } from "./types";
 
 /**
@@ -76,21 +77,11 @@ export async function queueEditionDeliveries(tx: DatabaseTransaction, edition: P
   `);
 }
 
-/** A digest's period as the team reads it: "September 2026" for a calendar month, else "28 September to 5 October". Days are the library's. */
-function periodLabel(start: Date, end: Date, timeZone: string) {
-  const part = (date: Date, options: Intl.DateTimeFormatOptions) => date.toLocaleDateString("en-GB", { ...options, timeZone });
-  const midnight = (date: Date) => part(date, { day: "numeric" }) === "1" && date.toLocaleTimeString("en-GB", { timeZone, hour12: false }) === "00:00:00";
-  const month = (date: Date) => part(date, { month: "long", year: "numeric" });
-  const next = new Date(start.getTime() + 32 * 86_400_000);
-  if (midnight(start) && midnight(end) && month(end) === month(next)) return month(start);
-  const sameMonth = part(start, { month: "long", year: "numeric" }) === part(end, { month: "long", year: "numeric" });
-  return `${part(start, sameMonth ? { day: "numeric" } : { day: "numeric", month: "long" })} to ${part(end, { day: "numeric", month: "long" })}`;
-}
-
+/** When an edition is dated, and its period as the team reads it: "September 2026" for a calendar month, else the first and last day it covers. */
 const when = (config: LibraryServerConfig, edition: Pick<Edition, "windowStart" | "windowEnd">) => {
   const timeZone = config.notifications.schedule.timezone;
   const end = (options: Intl.DateTimeFormatOptions) => edition.windowEnd.toLocaleDateString("en-GB", { ...options, timeZone });
-  return { day: end({ day: "numeric" }), month: end({ month: "short" }), date: end({ day: "numeric", month: "long", year: "numeric" }), period: periodLabel(edition.windowStart, edition.windowEnd, timeZone) };
+  return { day: end({ day: "numeric" }), month: end({ month: "short" }), date: end({ day: "numeric", month: "long", year: "numeric" }), period: digestPeriod(edition.windowStart, edition.windowEnd, config.notifications.digestCovers, timeZone, "en-GB").label };
 };
 
 type AdminDigestRow = { id: string; day: string; month: string; date: string; period: string; publicationCount: number; title: string | null; state: DigestState; checkedBy: DigestPerson | null };
