@@ -418,6 +418,7 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
   const {listed, period} = edition.types;
   const types = STUDY_TYPES.filter(type => (period[type.key] ?? 0) > 0 || (listed[type.key] ?? 0) > 0);
   const n = (count: number) => count.toLocaleString(locale);
+  const counted = Object.values(period).reduce((sum, count) => sum + (count ?? 0), 0);
   return <SidebarCard title="Publications" band={<>
     <HeadFigure value={n(edition.listed)} label={edition.listed < total ? `listed of ${n(total)} in this period` : "listed, every one in this period"} />
     <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{types.map(type => (listed[type.key] ?? 0) > 0 && <span key={type.key} className={`h-full min-w-[3px] ${studyTone(type.key)}`} style={{width: `${((listed[type.key] ?? 0) / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
@@ -428,7 +429,7 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
       return <section key={level.key} aria-label={level.label}>
         <h5 className={`px-3 pb-1 text-xs ${muted}`}>{level.label}</h5>
         <ul className="flex flex-col">{rows.map(type => <li key={type.key}>
-          <a href={level.key === "synthesis" ? "#reviews" : "#other-publications"} className={railRow}>
+          <a href={!edition.reviews ? "#publications" : level.key === "synthesis" ? "#reviews" : "#other-publications"} className={railRow}>
             <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${studyTone(type.key)}`} />
             <span className="min-w-0 flex-1 truncate">{type.plural}</span>
             <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{n(listed[type.key] ?? 0)}</span><span className={muted}> of {n(period[type.key] ?? 0)}</span></span>
@@ -436,6 +437,8 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
         </li>)}</ul>
       </section>;
     })}</div>
+    {/* ponytail: mock. A real edition stores its counts by type when its list is made, so they add up to its count. */}
+    {counted !== total && <p className={`text-xs leading-5 ${muted}`}>By type, counted today with the same rules: {n(counted)} publications. This edition counted {n(total)} on {edition.counted}.</p>}
   </SidebarCard>;
 }
 

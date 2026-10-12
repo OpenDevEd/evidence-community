@@ -6,7 +6,7 @@ import { notificationEdition, notificationState } from "@/db/schema/notification
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { citedKeys } from "./digest-text";
-import { keysOfTypes, typeCountsIn, typeCountsOf } from "@/lib/readings/mock";
+import { keysOfTypes, typeCountsOf } from "@/lib/readings/mock";
 import { SYNTHESIS_TYPES, type StudyTypeKey } from "@/lib/readings/study-types";
 import { digestPeriod, nextDigestDate, type DigestPeriod } from "./schedule";
 import type { DigestSigner } from "./types";
@@ -121,6 +121,28 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
   return rows.map(row => editionSummary(row, locale, config));
 }
 
+/**
+ * The period's publications as the edition counts them today: dated from `first` to `last`, public, one record per
+ * work (title and first author's surname), retracted papers and front matter left out.
+ * ponytail: mock. It repeats `rankPublications`' rules; the real edition stores its counts by type when its list is
+ * made, so they always add up to its publication count.
+ */
+async function periodWorks(db: Database, config: LibraryServerConfig, first: string, last: string) {
+  const {rows} = await db.execute<{key: string}>(sql`
+    SELECT DISTINCT ON (work) key FROM (
+      SELECT ${item.key} AS key, length(coalesce(${item.abstractNote}, '')) >= 200 AS abstract,
+        CASE WHEN length(coalesce(${item.title}, '')) >= 25 AND author.surname <> ''
+          THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname ELSE ${item.key} END AS work
+      FROM ${item}
+      CROSS JOIN LATERAL (SELECT lower(coalesce(nullif(first.creator ->> 'lastName', ''), substring(first.creator ->> 'name' from '(\\S+)\\s*$'), '')) AS surname
+        FROM (SELECT (SELECT creator FROM jsonb_array_elements(coalesce(${item.creators}, '[]'::jsonb)) WITH ORDINALITY AS listed(creator, position)
+          ORDER BY (creator ->> 'creatorType' = 'author') DESC NULLS LAST, position LIMIT 1) AS creator) first) author
+      WHERE ${publicParentVisibility(db, config.content.tags.hidden)} AND ${item.date} ~ '^\\d{4}-\\d{2}-\\d{2}' AND ${item.date} >= ${first} AND ${item.date} <= ${last}
+        AND NOT EXISTS (SELECT 1 FROM "sourceSnapshot" WHERE "itemKey" = ${item.key} AND ("payload" ->> 'is_retracted' = 'true' OR "payload" ->> 'is_paratext' = 'true'))
+    ) candidate ORDER BY work, abstract DESC, key`);
+  return rows.map(row => row.key);
+}
+
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
@@ -152,7 +174,7 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   const counted = (row.requestedAt ?? row.publishedAt!).toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: config.notifications.schedule.timezone});
   const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, counted, read: row.read, cited: citedKeys(row.markdown!).length};
   const {rows: all} = await db.execute<{key: string}>(sql`SELECT stored.entry->>'key' AS key ${listedNow}`);
-  const types = {listed: typeCountsOf(all.map(entry => entry.key)), period: typeCountsIn(summary.period.first, summary.period.last)};
+  const types = {listed: typeCountsOf(all.map(entry => entry.key)), period: typeCountsOf(await periodWorks(db, config, summary.period.first, summary.period.last))};
   const reviews = await list(sql`AND ${review}`, reviewsPage);
   if (!reviews.listed) return {...edition, types, ...await list(sql``, page)};
   const others = await list(sql`AND NOT ${review}`, page);

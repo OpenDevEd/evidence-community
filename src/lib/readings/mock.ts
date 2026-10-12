@@ -17,15 +17,6 @@ export function keysOfTypes(types: readonly string[]) {
 	return Object.entries(ALL).filter(([, stored]) => types.includes(stored.type)).map(([key]) => key);
 }
 
-/** How many records of each type are dated from `first` to `last`, both YYYY-MM-DD and included. */
-export function typeCountsIn(first: string, last: string): Partial<Record<StudyTypeKey, number>> {
-	const counts: Partial<Record<StudyTypeKey, number>> = {};
-	for (const stored of Object.values(ALL)) {
-		if (stored.date >= first && stored.date <= last) counts[stored.type] = (counts[stored.type] ?? 0) + 1;
-	}
-	return counts;
-}
-
 /** How many of these records are of each type. */
 export function typeCountsOf(keys: readonly string[]): Partial<Record<StudyTypeKey, number>> {
 	const counts: Partial<Record<StudyTypeKey, number>> = {};

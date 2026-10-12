@@ -36,6 +36,7 @@ export const librarySearchContextSchema = z
 		topics: filterValuesSchema,
 		/** Item types, any of them. */
 		type: filterValuesSchema.default([]),
+		study: filterValuesSchema.default([]),
 		/** A reader's bookmarks, or one of their collections, when the list is on a profile. */
 		readerList: z
 			.object({
@@ -88,6 +89,7 @@ export function normalizeLibrarySearchContext(
 		collections: filterValues(value.collections),
 		topics: filterValues(value.topics),
 		type: filterValues(value.type),
+		study: filterValues(value.study),
 		readerList: value.readerList ?? null,
 	});
 }
@@ -106,6 +108,7 @@ export function librarySearchContextSummary(
 		collections: context.collections,
 		topics: context.topics,
 		itemTypes: context.type,
+		studyTypes: context.study,
 		readerList: context.readerList
 			? context.readerList.collectionId
 				? "one of this reader's collections, as shown on their profile"

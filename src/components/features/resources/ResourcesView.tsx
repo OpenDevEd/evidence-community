@@ -183,7 +183,7 @@ function captureExportResults(items: ReturnType<typeof useItemsList>): { context
 	return { context: {
 		search: params.search, scope: params.scope, sort: params.sort, range: params.range,
 		institution: params.institution, country: params.country, author: params.author,
-		collections: params.collections, topics: params.topics, type: params.type,
+		collections: params.collections, topics: params.topics, type: params.type, study: params.study,
 		readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
 	}, count: items.itemsData.totalItems };
 }
