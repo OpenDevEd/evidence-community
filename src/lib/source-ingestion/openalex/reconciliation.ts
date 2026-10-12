@@ -1,6 +1,8 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { sourceConnection } from "@/db/schema/source";
+import { item } from "@/db/schema/tables/item";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { SourceConnectionUnavailableError, SourceCursorConflictError } from "../transactional-writer";
 import { sourcePayloadHash } from "../fingerprint";
 import { jsonObjectSchema, type JsonValue } from "../batch-schema";
@@ -60,6 +62,11 @@ async function withdrawItems(tx: Transaction, args: WithdrawalArgs, keys: string
       AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" dirty WHERE dirty."itemKey" = i.key AND dirty."dirtyFields" <> '[]'::jsonb)
     RETURNING key, revision
   ) INSERT INTO outbox ("entityType", "entityKey", operation, revision, "sourceSyncRunId") SELECT 'item', key, 'delete', revision, ${args.sourceSyncRunId ?? null}::bigint FROM withdrawn`);
+  // A record that something else keeps is searched again: what this source gave it, such as its open-access label, no
+  // longer counts.
+  const kept = await tx.select({ itemKey: item.key, revision: item.revision }).from(item)
+    .where(and(inArray(item.key, keys), eq(item.deleted, 0)));
+  await enqueueItemSearchReprojections(tx, kept, new Date(), args.sourceSyncRunId ?? null);
 }
 
 /** Only a completely read query may withdraw its memberships. Each batch is retryable. */

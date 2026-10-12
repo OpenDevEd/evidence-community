@@ -1,5 +1,5 @@
 {
-  "id": "f4e1ff80-96b1-4d73-a9a7-ea086e99cd80",
+  "id": "160600c7-4bf3-4a64-82ef-db163223c29f",
   "prevId": "391d08d7-aaf6-45af-9716-dfeb7a5f6e72",
   "version": "7",
   "dialect": "postgresql",
@@ -7187,6 +7187,12 @@
         },
         "checkedAt": {
           "name": "checkedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lookedAt": {
+          "name": "lookedAt",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true

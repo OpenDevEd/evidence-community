@@ -138,6 +138,15 @@ export function retryDelay(response: Response, attempt: number) {
 	return Math.min(MAX_RETRY_DELAY_MS, Math.max(backoff(attempt), requestedDelay || 0));
 }
 
+/** Adds each work's open access to `open` by DOI; a DOI is open when any of its works is. */
+function addOpenAccess(open: Map<string, boolean>, works: readonly unknown[]) {
+	for (const work of works) {
+		const doi = normalizeDoi((work as { doi?: string | null } | null)?.doi);
+		const isOa = workIsOpenAccess(work);
+		if (doi && isOa !== null) open.set(doi, open.get(doi) === true || isOa);
+	}
+}
+
 export class OpenAlexClient {
 	private pageLimit = OPENALEX_MAX_PAGE_SIZE;
 	private pagesAtLimit = 0;
@@ -205,15 +214,15 @@ export class OpenAlexClient {
 		if (!dois.length || dois.length > OPENALEX_MAX_IDS_PER_FILTER) {
 			throw new Error(`An OpenAlex DOI filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} DOIs`);
 		}
-		// A cursor makes OpenAlex answer with `next_cursor`, which the page schema reads.
-		const url = worksUrl({ filter: `doi:${dois.join("|")}` }, "*", OPENALEX_MAX_PAGE_SIZE, this.options.apiKey);
-		url.searchParams.set("select", "doi,open_access");
-		const { results } = openAlexPageSchema.parse(await this.read(url, undefined));
 		const open = new Map<string, boolean>();
-		for (const work of results) {
-			const doi = normalizeDoi((work as { doi?: string | null } | null)?.doi);
-			const isOa = workIsOpenAccess(work);
-			if (doi && isOa !== null) open.set(doi, open.get(doi) === true || isOa);
+		// Cursor paging: OpenAlex answers with `next_cursor`, which the page schema reads, and DOIs that share works can
+		// fill more than one page.
+		for (let cursor: string | null = "*"; cursor; ) {
+			const url = worksUrl({ filter: `doi:${dois.join("|")}` }, cursor, OPENALEX_MAX_PAGE_SIZE, this.options.apiKey);
+			url.searchParams.set("select", "doi,open_access");
+			const page = openAlexPageSchema.parse(await this.read(url, undefined));
+			addOpenAccess(open, page.results);
+			cursor = page.results.length > 0 ? page.meta.next_cursor : null;
 		}
 		return open;
 	}

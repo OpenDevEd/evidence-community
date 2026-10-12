@@ -6,7 +6,8 @@ CREATE TABLE "itemOpenAccessLookup" (
 	"itemRevision" bigint NOT NULL,
 	"doi" varchar,
 	"isOpenAccess" boolean,
-	"checkedAt" timestamp with time zone NOT NULL
+	"checkedAt" timestamp with time zone NOT NULL,
+	"lookedAt" timestamp with time zone NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "itemOpenAccessLookup" ADD CONSTRAINT "itemOpenAccessLookup_item_fk" FOREIGN KEY ("itemKey") REFERENCES "public"."item"("key") ON DELETE cascade ON UPDATE no action;

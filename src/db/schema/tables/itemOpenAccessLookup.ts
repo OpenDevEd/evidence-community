@@ -13,7 +13,10 @@ export const itemOpenAccessLookup = pgTable(
 		doi: varchar("doi"),
 		/** Null when the record has no DOI OpenAlex could be asked about, or OpenAlex has no work with it. */
 		isOpenAccess: boolean("isOpenAccess"),
+		/** When OpenAlex was last asked about this DOI, or when the record turned out to have none. */
 		checkedAt: timestamp("checkedAt", { withTimezone: true }).notNull(),
+		/** When the record was last looked at; a DOI the library minted since then changes what it shows. */
+		lookedAt: timestamp("lookedAt", { withTimezone: true }).notNull(),
 	},
 	(table) => [
 		foreignKey({

@@ -2497,10 +2497,6 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 						),
 					),
 		);
-		const openAccessAfter = await readOpenAccess(transaction, batchItemKeys);
-		const openAccessChangedItemKeys = batchItemKeys.filter(
-			(key) => openAccessBefore(key, null) !== openAccessAfter(key, null),
-		);
 		await updateItemSourceLinkVersions(
 			transaction,
 			batch.sourceConnectionKey,
@@ -2525,6 +2521,11 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				];
 			}),
 			now,
+		);
+		// After the links too: a withdrawn or returning link decides whether its copy counts.
+		const openAccessAfter = await readOpenAccess(transaction, batchItemKeys);
+		const openAccessChangedItemKeys = batchItemKeys.filter(
+			(key) => openAccessBefore(key, null) !== openAccessAfter(key, null),
 		);
 		await updateCollectionSourceLinkVersions(
 			transaction,

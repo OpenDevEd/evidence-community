@@ -8,12 +8,12 @@ import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
 import { chunkValues } from "@/lib/chunk-values";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
+import { hasCurrentOpenAlexWork } from "@/lib/search-index/open-access";
 import { readPublicItems } from "@/lib/search-index/projection";
 import {
 	OPENALEX_MAX_IDS_PER_FILTER,
 	OpenAlexClient,
 } from "@/lib/source-ingestion/openalex/client";
-import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
 /** A DOI is asked about again after this long, since an embargo can end. */
 const RECHECK_MS = 30 * 24 * 60 * 60_000;
@@ -25,11 +25,6 @@ const RETRY_MS = 10 * 60_000;
 // OpenAlex's doi filter splits on `|` and `,`, and 100 DOIs this long stay under its 16,384 characters.
 const MAX_DOI_LENGTH = 150;
 
-const openAlexWorkProviders = sql.join(
-	OPENALEX_WORK_PROVIDERS.map((provider) => sql`${provider}`),
-	sql`, `,
-);
-
 type DueRecord = {
 	key: string;
 	revision: number;
@@ -39,18 +34,19 @@ type DueRecord = {
 	checkedAt: Date | null;
 };
 
-/** Records with no OpenAlex work that were never looked at, changed since, or were looked at long ago. */
+/**
+ * Records with no current OpenAlex work that were never looked at, changed since, got a DOI from the library's own
+ * deposit since (which takes no new revision), or were asked about long ago.
+ */
 async function dueRecords(database: Database, recheckBefore: Date) {
 	const { rows } = await database.execute<DueRecord>(sql`
 		SELECT i.key, i.revision::int AS revision, l.doi AS "askedDoi", l."isOpenAccess" AS answer, l."checkedAt" AS "checkedAt"
 		FROM item i
 		LEFT JOIN "itemOpenAccessLookup" l ON l."itemKey" = i.key
 		WHERE i.deleted = 0 AND i."parentItem" IS NULL
-			AND NOT EXISTS (
-				SELECT 1 FROM "sourceSnapshot" s
-				JOIN "sourceConnection" c ON c.key = s."sourceConnectionKey"
-				WHERE s."itemKey" = i.key AND c.provider IN (${openAlexWorkProviders}))
-			AND (l."itemKey" IS NULL OR l."itemRevision" <> i.revision OR l."checkedAt" < ${recheckBefore})
+			AND NOT ${hasCurrentOpenAlexWork(sql`i.key`)}
+			AND (l."itemKey" IS NULL OR l."itemRevision" <> i.revision OR l."checkedAt" < ${recheckBefore}
+				OR EXISTS (SELECT 1 FROM "publicationIdentifier" p WHERE p."itemKey" = i.key AND p."updatedAt" > l."lookedAt"))
 		ORDER BY l."checkedAt" NULLS FIRST, i.key
 		LIMIT ${ROUND_SIZE}`);
 	return rows.map((row) => ({ ...row, checkedAt: row.checkedAt && new Date(row.checkedAt) }));
@@ -94,6 +90,7 @@ export async function lookUpOpenAccess({
 			doi,
 			isOpenAccess: fresh ? record.answer : ask ? (answers.get(ask) ?? null) : null,
 			checkedAt: fresh ? record.checkedAt! : now,
+			lookedAt: now,
 		}));
 		// The search entry shows the last answer for the DOI the record shows; only a different one is indexed again.
 		const changed = rows.flatMap((row, index) => {
@@ -111,6 +108,7 @@ export async function lookUpOpenAccess({
 						doi: sql.raw(`excluded."doi"`),
 						isOpenAccess: sql.raw(`excluded."isOpenAccess"`),
 						checkedAt: sql.raw(`excluded."checkedAt"`),
+						lookedAt: sql.raw(`excluded."lookedAt"`),
 					},
 				});
 			if (changed.length === 0) return;
