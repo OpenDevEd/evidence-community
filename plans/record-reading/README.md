@@ -66,9 +66,12 @@ configuration migration. The question set is code, versioned by a constant.
   while the source is graded again.
 - `itemReadingQueue`: the lease, generation, attempts and retry columns
   `topicAssociationDelivery` uses, with what the job asks (`read` or `grade`).
-- `itemReading.screenedOut`: true when every screening source that holds the
-  record keeps its grade out. A source with screening off brings its records in
-  unscreened.
+- `itemReading.screenedOut`: true when every source that holds the record
+  screens it and keeps its grade out. A source with screening off brings its
+  records in unscreened, and a record not graded yet stays in.
+- `sourceScreening` (one row per screening source): the subject hash and
+  kept-out grades the configuration last set, so the database alone decides
+  `screenedOut`, and how many records the owner asked to grade.
 
 ### Reading worker
 
@@ -95,8 +98,9 @@ and an outbox row in one transaction, so the search indexer picks the change up.
 - The source-status report each library already pushes gains, per screening
   source: counts by grade, records not graded against the current subject,
   progress while grading, and spend. OpenScholar stores and shows it.
-- `POST /api/v1/openscholar/sources/{key}/screening/grade` queues what needs
-  grading. `POST .../screening/trial` reads 200 of the source's records with a
+- `POST /api/openscholar/sources/{key}/screening/grade` queues what needs
+  grading, beside the existing `.../sync`. `POST .../screening/trial` with
+  `{subject}` reads 200 of the source's records with a
   proposed subject, stores nothing, and returns the grade counts now and with
   it. Both use the library's machine credential, as the digest endpoint does.
 

@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from "node:util";
 import { itemSourceLink, openAlexQueryApproval } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
+import { saveSourceScreening } from "@/lib/readings/screening";
 import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 import { sourceConnection } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
@@ -184,6 +185,7 @@ async function reconcileInTransaction(
 		.from(sourceConnection)
 		.where(ne(sourceConnection.provider, "native"));
 	await requeueRecordsOfToggledWorkSources(transaction, current, saved);
+	await saveSourceScreening(transaction, sources);
 	return saved;
 }
 

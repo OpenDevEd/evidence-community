@@ -24,6 +24,7 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { readScreeningStatuses, type ScreeningStatus } from "@/lib/readings/screening";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -126,6 +127,8 @@ type SourceStatusBase = {
 	issues: Record<string, number>;
 	/** Null for a source without PDFs. While PDFs are added, the counts of this run. */
 	pdfs: PdfCounts | null;
+	/** What screening found, from the database; null for a source that does not screen its records. */
+	screening?: ScreeningStatus | null;
 };
 
 export type SourceStatus = SourceStatusBase &
@@ -393,9 +396,10 @@ export async function readSourceStatuses(
 				.groupBy(sourceRecordIssue.sourceConnectionKey, sourceRecordIssue.code),
 		]);
 
-	const [pdfsByKey, failedStageByKey] = await Promise.all([
+	const [pdfsByKey, failedStageByKey, screeningByKey] = await Promise.all([
 		readPdfCounts(database),
 		readFailedStages(database),
+		readScreeningStatuses(database),
 	]);
 	const stateByKey = new Map(states.map((row) => [row.key, row]));
 	const searchByKey = new Map(searchRows.map((row) => [row.key, row]));
@@ -427,6 +431,7 @@ export async function readSourceStatuses(
 	return statuses.map((status) => ({
 		...status,
 		searchable: isImporting(status) ? null : (searchable.get(status.key) ?? 0),
+		screening: screeningByKey.get(status.key) ?? null,
 	}));
 }
 
