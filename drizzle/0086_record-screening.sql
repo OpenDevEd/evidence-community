@@ -13,7 +13,7 @@ ALTER TABLE "itemGrade" ADD COLUMN "pendingScore" real;--> statement-breakpoint
 ALTER TABLE "itemGrade" ADD COLUMN "pendingGrade" text;--> statement-breakpoint
 ALTER TABLE "itemGrade" ADD COLUMN "pendingSubjectHash" text;--> statement-breakpoint
 ALTER TABLE "itemReading" ADD COLUMN "screenedOut" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "itemReadingQueue" ADD COLUMN "requested" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "itemReadingQueue" ADD COLUMN "requestedFor" text[];--> statement-breakpoint
 CREATE INDEX "itemGrade_pending_idx" ON "itemGrade" USING btree ("sourceConnectionKey") WHERE "itemGrade"."pendingSubjectHash" IS NOT NULL;--> statement-breakpoint
 ALTER TABLE "sourceScreening" ADD CONSTRAINT "sourceScreening_sourceConnectionKey_sourceConnection_key_fk" FOREIGN KEY ("sourceConnectionKey") REFERENCES "public"."sourceConnection"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 -- A PDF's text arriving queues its record, so a type the abstract left uncertain is asked again from the PDF.
@@ -27,14 +27,14 @@ BEGIN
     IF pdf THEN
       INSERT INTO "itemReadingQueue" ("itemKey", "revision") SELECT p.key, p.revision FROM "item" p WHERE p.key = parent
       ON CONFLICT ("itemKey") DO UPDATE SET
-        "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
+        "generation" = "itemReadingQueue"."generation" + 1, "requestedFor" = NULL,
         "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL;
     END IF;
     RETURN NEW;
   END IF;
   INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."entityKey", NEW."revision")
   ON CONFLICT ("itemKey") DO UPDATE SET
-    "revision" = EXCLUDED."revision", "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
+    "revision" = EXCLUDED."revision", "generation" = "itemReadingQueue"."generation" + 1, "requestedFor" = NULL,
     "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
   WHERE "itemReadingQueue"."revision" < EXCLUDED."revision";
   RETURN NEW;
@@ -54,8 +54,16 @@ BEGIN
   IF revision IS NULL THEN RETURN NEW; END IF;
   INSERT INTO "itemReadingQueue" ("itemKey", "revision") VALUES (NEW."itemKey", revision)
   ON CONFLICT ("itemKey") DO UPDATE SET
-    "generation" = "itemReadingQueue"."generation" + 1, "requested" = false,
+    "generation" = "itemReadingQueue"."generation" + 1, "requestedFor" = NULL,
     "attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL;
   RETURN NEW;
 END;
 $$;
+--> statement-breakpoint
+-- A type read before this release that came back unsure (under 0.6, the worker's LOW_CONFIDENCE), of a record that
+-- already has its PDF's text, is queued to be asked again from the PDF.
+INSERT INTO "itemReadingQueue" ("itemKey", "revision")
+SELECT r."itemKey", i.revision FROM "itemReading" r JOIN "item" i ON i.key = r."itemKey"
+WHERE r."typedBy" = 'ai' AND r."input" <> 'pdf' AND r."typeConfidence" < 0.6
+  AND EXISTS (SELECT 1 FROM "item" c WHERE c."parentItem" = r."itemKey" AND coalesce(c.deleted, 0) <> 1 AND c."fullTextPDF" <> '')
+ON CONFLICT ("itemKey") DO UPDATE SET "nextAttemptAt" = now(), "attempts" = 0, "lastError" = NULL;

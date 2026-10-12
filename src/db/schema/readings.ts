@@ -53,13 +53,14 @@ export const itemGrade = pgTable("itemGrade", {
 ]);
 
 /**
- * Records waiting to be read: new and changed ones from the outbox, leased, retried with backoff. `requested` marks a
- * record queued only by the owner's request to grade, which a later subject change withdraws.
+ * Records waiting to be read: new and changed ones from the outbox, leased, retried with backoff. `requestedFor` names
+ * the sources whose owner's request to grade queued the record, which is then graded for those sources only; it is
+ * null when the record was queued for its own reasons.
  */
 export const itemReadingQueue = pgTable("itemReadingQueue", {
 	itemKey: varchar("itemKey", { length: 8 }).primaryKey(),
 	generation: bigint("generation", { mode: "number" }).notNull().default(1),
-	requested: boolean("requested").notNull().default(false),
+	requestedFor: text("requestedFor").array(),
 	...associationDeliveryColumns,
 }, (table) => [index("itemReadingQueue_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
 

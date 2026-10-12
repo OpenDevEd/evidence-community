@@ -35,7 +35,7 @@ $$;
 --> statement-breakpoint
 DROP TABLE "sourceScreening";--> statement-breakpoint
 DROP INDEX "itemGrade_pending_idx";--> statement-breakpoint
-ALTER TABLE "itemReadingQueue" DROP COLUMN "requested";--> statement-breakpoint
+ALTER TABLE "itemReadingQueue" DROP COLUMN "requestedFor";--> statement-breakpoint
 ALTER TABLE "itemReading" DROP COLUMN "screenedOut";--> statement-breakpoint
 ALTER TABLE "itemGrade" DROP COLUMN "pendingSubjectHash";--> statement-breakpoint
 ALTER TABLE "itemGrade" DROP COLUMN "pendingGrade";--> statement-breakpoint

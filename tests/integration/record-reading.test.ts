@@ -165,6 +165,14 @@ it("screens a record out only while every source holding it keeps its grade out"
 		await runReadingCycle(db, config, undefined, jev(answering).request);
 		expect(await visible(db)).toEqual([]);
 
+		// A source removed from the configuration no longer holds what it brought in.
+		await linkSecond(client, "FFTPCAA2");
+		await runReadingCycle(db, config, undefined, jev(answering).request);
+		expect(await visible(db)).toEqual(["FFTPCAA2"]);
+		await client.query(`UPDATE "sourceConnection" SET status = 'removed' WHERE key = $1`, [second.key]);
+		await db.transaction((tx) => saveSourceScreening(tx, config.sources, [second.key]));
+		expect(await visible(db)).toEqual([]);
+
 		// Keeping no grade out lets every record back in.
 		await store(db, configWith("Climate adaptation in farming", [], [second]));
 		expect(await visible(db)).toEqual(["FFTPCAA2", "NTPCAAA2"]);
@@ -184,6 +192,8 @@ it("grades a new subject in waiting, and swaps the new grades in only once the o
 		expect(await requestGrading(db, after, source.key)).toBe("not_ready");
 		await store(db, after);
 		expect((await readScreeningStatuses(db)).get(source.key)).toEqual({ grades: { about: 2, touches: 0, passing: 0, notAbout: 0 }, ungraded: 2, grading: null });
+		expect(await requestGrading(db, after, source.key)).toEqual({ queued: 2 });
+		// Asked again before anything was read: the same request, and progress counts from where it began.
 		expect(await requestGrading(db, after, source.key)).toEqual({ queued: 2 });
 
 		// One record graded against the new subject: its grade waits, and both records stay in.
@@ -245,5 +255,25 @@ it("tries a subject on the source's records without changing their grades", asyn
 		expect(trial).toEqual({ size: 1, now: { about: 1, touches: 0, passing: 0, notAbout: 0 }, next: { about: 0, touches: 0, passing: 0, notAbout: 1 }, changed: 1 });
 		expect(await db.select({ grade: itemGrade.grade, pending: itemGrade.pendingGrade }).from(itemGrade)).toEqual([{ grade: "about", pending: null }]);
 		expect((await db.select({ reads: readingSpend.reads }).from(readingSpend))[0]?.reads).toBe(2);
+	});
+}, 120_000);
+
+it("grades a record an owner's request queued for the requesting source only", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		const both = (first: string, other: string) => configWith(first, ["not-about"], [{ ...second, screening: { enabled: true, subject: other } }]);
+		await publish(client, "SHARED22", "Irrigation and drought in Kenya", "Smallholders adopted drip irrigation.");
+		await linkSecond(client, "SHARED22");
+		await store(db, both("Climate adaptation in farming", "Water security"));
+		await runReadingCycle(db, both("Climate adaptation in farming", "Water security"), undefined, jev(scoring(2.8)).request);
+
+		const changed = both("Urban housing policy", "Coastal fisheries");
+		await store(db, changed);
+		expect(await requestGrading(db, changed, source.key)).toEqual({ queued: 1 });
+		const asked = jev(scoring(0.1));
+		await runReadingCycle(db, changed, undefined, asked.request);
+		expect(asked.asked).toEqual([["grade_0"]]);
+		const statuses = await readScreeningStatuses(db);
+		expect(statuses.get(source.key)).toMatchObject({ grades: { notAbout: 1 }, ungraded: 0, grading: null });
+		expect(statuses.get(second.key)).toMatchObject({ grades: { about: 1 }, ungraded: 1 });
 	});
 }, 120_000);

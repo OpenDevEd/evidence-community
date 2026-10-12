@@ -184,9 +184,20 @@ async function reconcileInTransaction(
 		.select()
 		.from(sourceConnection)
 		.where(ne(sourceConnection.provider, "native"));
-	await requeueRecordsOfToggledWorkSources(transaction, current, saved);
-	await saveSourceScreening(transaction, sources);
+	const toggled = toggledRemoval(current, saved);
+	await requeueRecordsOfToggledWorkSources(transaction, toggled);
+	// A removed source stops holding its records for screening too, and holds them again when it returns.
+	await saveSourceScreening(transaction, sources, toggled.map((row) => row.key));
 	return saved;
+}
+
+/** The sources removed from the configuration, or returned to it, by this reconcile. */
+function toggledRemoval(
+	before: readonly { key: string; status: string }[],
+	after: readonly { key: string; provider: string; status: string }[],
+) {
+	const removedBefore = new Map(before.map((row) => [row.key, row.status === "removed"]));
+	return after.filter((row) => removedBefore.has(row.key) && removedBefore.get(row.key) !== (row.status === "removed"));
 }
 
 /**
@@ -195,14 +206,9 @@ async function reconcileInTransaction(
  */
 async function requeueRecordsOfToggledWorkSources(
 	transaction: DatabaseTransaction,
-	before: readonly { key: string; status: string }[],
-	after: readonly { key: string; provider: string; status: string }[],
+	toggledSources: readonly { key: string; provider: string }[],
 ) {
-	const removedBefore = new Map(before.map((row) => [row.key, row.status === "removed"]));
-	const toggled = after
-		.filter((row) => isOpenAlexWorkProvider(row.provider) && removedBefore.has(row.key))
-		.filter((row) => removedBefore.get(row.key) !== (row.status === "removed"))
-		.map((row) => row.key);
+	const toggled = toggledSources.filter((row) => isOpenAlexWorkProvider(row.provider)).map((row) => row.key);
 	if (toggled.length === 0) return;
 	const records = await transaction
 		.selectDistinct({ itemKey: item.key, revision: item.revision })

@@ -2532,13 +2532,6 @@
           "notNull": true,
           "default": 1
         },
-        "requested": {
-          "name": "requested",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "revision": {
           "name": "revision",
           "type": "bigint",
@@ -2574,6 +2567,12 @@
         "lastError": {
           "name": "lastError",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "requestedFor": {
+          "name": "requestedFor",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         }

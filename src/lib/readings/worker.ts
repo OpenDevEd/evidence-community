@@ -84,13 +84,16 @@ function readingRow(record: RecordFacts, plan: Plan, read: ReadingAnswers, model
 	};
 }
 
+/** A claimed record: how often it failed, and the sources whose owner's request queued it, or null. */
+type Job = { itemKey: string; attempts: number; requestedFor: string[] | null };
+
 async function claim(database: Database, token: string) {
-	const { rows } = await database.execute<{ itemKey: string; generation: number; attempts: number }>(sql`
+	const { rows } = await database.execute<Job>(sql`
 		UPDATE "itemReadingQueue" SET "leaseToken" = ${token}, "leaseExpiresAt" = now() + interval '3 minutes'
 		WHERE "itemKey" IN (SELECT "itemKey" FROM "itemReadingQueue"
 			WHERE "nextAttemptAt" <= now() AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now())
 			ORDER BY "nextAttemptAt", "itemKey" LIMIT ${BATCH} FOR UPDATE SKIP LOCKED)
-		RETURNING "itemKey", "generation", "attempts"`);
+		RETURNING "itemKey", "attempts", "requestedFor"`);
 	return rows;
 }
 
@@ -129,7 +132,7 @@ async function recordFacts(database: Database, keys: string[]) {
  */
 async function finish(database: Database, key: string, token: string) {
 	await database.transaction(async (tx) => {
-		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "requested" = false, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "requestedFor" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			WHERE "itemKey" = ${key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
 		if (owned.rows.length) await refreshScreenedOut(tx, sql`SELECT ${key}::varchar`);
 	});
@@ -179,13 +182,15 @@ const askFromPdf = (record: RecordFacts, plan: Plan, read: ReadingAnswers) =>
  * Stores a read's answers, only while the claim is still this cycle's, so a record queued again during the call is
  * read again instead of taking answers about its older text.
  */
-async function saveRead(database: Database, record: RecordFacts, plan: Plan, answer: Awaited<ReturnType<typeof askJev>> | null, token: string) {
+async function saveRead(database: Database, record: RecordFacts, plan: Plan, answer: Awaited<ReturnType<typeof askJev>> | null, job: Job, token: string) {
 	const read: ReadingAnswers = answer ? readingAnswers(plan.ask, answer.answers) : { scores: [] };
 	await database.transaction(async (tx) => {
-		// A record with grades still to ask, or a type to ask from its PDF, stays queued for the next call.
-		const again = plan.more || askFromPdf(record, plan, read);
-		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = ${again ? sql`now()` : sql`NULL`}, "requested" = ${again ? sql`"requested"` : sql`false`},
-			"leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+		// A record with grades still to ask, a type to ask from its PDF, or another source's request added during the
+		// call stays queued for the next one.
+		const claimed = job.requestedFor ? sql`${keyArray(job.requestedFor)}::text[]` : sql`NULL::text[]`;
+		const stay = sql`(${plan.more || askFromPdf(record, plan, read)} OR "requestedFor" IS DISTINCT FROM ${claimed})`;
+		const owned = await tx.execute(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = CASE WHEN ${stay} THEN now() END,
+			"requestedFor" = CASE WHEN ${stay} THEN "requestedFor" END, "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
 			WHERE "itemKey" = ${record.key} AND "leaseToken" = ${token} RETURNING "itemKey"`);
 		if (!owned.rows.length) return;
 		if (!plan.fresh) {
@@ -201,9 +206,12 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 	});
 }
 
-/** What reading a record asks, or null when it is held by no screening source or nothing about it changed. */
-function planFor(facts: Awaited<ReturnType<typeof recordFacts>>[number], subjects: Map<string, { subject: string; hash: string }>) {
-	const screened = screenedBy(facts.record, subjects);
+/**
+ * What reading a record asks, or null when it is held by no screening source or nothing about it changed. A record an
+ * owner's request queued is graded for the requesting sources only.
+ */
+function planFor(facts: Awaited<ReturnType<typeof recordFacts>>[number], subjects: Map<string, { subject: string; hash: string }>, requestedFor: string[] | null) {
+	const screened = screenedBy(facts.record, subjects).filter((subject) => !requestedFor || requestedFor.includes(subject.key));
 	return screened.length ? planRead(facts.record, facts.stored, screened) : null;
 }
 
@@ -226,13 +234,13 @@ async function callJev(
 /** Reads one claimed record, when anything about it needs reading, and stores what Jev answered. */
 async function readOne(
 	database: Database, apiKey: string, subjects: Map<string, { subject: string; hash: string }>,
-	facts: Awaited<ReturnType<typeof recordFacts>>[number] | undefined, job: { itemKey: string; attempts: number }, token: string,
+	facts: Awaited<ReturnType<typeof recordFacts>>[number] | undefined, job: Job, token: string,
 	signal?: AbortSignal, request?: typeof fetch,
 ) {
-	const plan = facts ? planFor(facts, subjects) : null;
+	const plan = facts ? planFor(facts, subjects, job.requestedFor) : null;
 	if (!facts || !plan) return finish(database, job.itemKey, token);
 	try {
-		await saveRead(database, facts.record, plan, await callJev(database, apiKey, facts.record, plan.ask, plan.pdf, signal, request), token);
+		await saveRead(database, facts.record, plan, await callJev(database, apiKey, facts.record, plan.ask, plan.pdf, signal, request), job, token);
 	} catch (error) {
 		await fail(database, job, token, error);
 	}
@@ -318,15 +326,25 @@ export async function trySubject(
 		WHERE l."sourceConnectionKey" = ${key} AND NOT l."remoteDeleted" ORDER BY random() LIMIT ${TRIAL_SIZE}`);
 	const ask: ReadingAsk = { type: false, details: false, subjects: [subject] };
 	const next: ScreeningGrade[] = [];
+	// The first failed call stops the others, so a trial that cannot answer spends no more.
+	const failed = new AbortController();
+	const stopping = signal ? AbortSignal.any([signal, failed.signal]) : failed.signal;
 	let index = 0;
-	await Promise.all(Array.from({ length: Math.min(AT_ONCE, rows.length) }, async () => {
-		while (index < rows.length) {
+	const calls = await Promise.allSettled(Array.from({ length: Math.min(AT_ONCE, rows.length) }, async () => {
+		while (index < rows.length && !stopping.aborted) {
 			const at = index++;
 			const record = { title: rows[at]!.title ?? "", abstract: abstractPlainText(rows[at]!.abstractNote).slice(0, ABSTRACT_CHARS), pdf: "" };
-			const answer = await callJev(database, apiKey, record, ask, false, signal, request);
-			next[at] = gradeOf(readingAnswers(ask, answer!.answers).scores[0]!);
+			try {
+				const answer = await callJev(database, apiKey, record, ask, false, stopping, request);
+				next[at] = gradeOf(readingAnswers(ask, answer!.answers).scores[0]!);
+			} catch (error) {
+				failed.abort();
+				throw error;
+			}
 		}
 	}));
+	const refusal = calls.find((call) => call.status === "rejected");
+	if (refusal) throw refusal.reason;
 	return {
 		size: rows.length,
 		now: gradeCounts(rows.map((row) => row.grade)),
