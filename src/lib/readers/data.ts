@@ -264,16 +264,22 @@ export async function readPickerCollections(
 	const holds = request.itemKey
 		? exists(database.select({ one: sql`1` }).from(readerCollectionItem).where(and(eq(readerCollectionItem.collectionId, readerCollection.id), eq(readerCollectionItem.itemKey, request.itemKey))))
 		: sql<boolean>`false`;
-	const order = request.sort === "name" ? [asc(sql`lower(${readerCollection.name})`), asc(readerCollection.id)] : [desc(sql`${mine}`), desc(readerCollection.createdAt), desc(readerCollection.id)];
+	// The reader's own membership: a collection shared with them is as recent as its share.
+	const membership = alias(readerCollectionMember, "membership");
+	const order =
+		request.sort === "name"
+			? [asc(sql`lower(${readerCollection.name})`), asc(readerCollection.id)]
+			: [desc(sql`${mine}`), desc(sql`coalesce(${membership.createdAt}, ${readerCollection.createdAt})`), desc(readerCollection.id)];
 	const owner = alias(readerUser, "owner");
 	const { rows, members, ...at } = await pageOfCollections(database, database.select({ total: count() }).from(readerCollection).where(where), request, (offset) =>
 		database
 			.select({ ...collectionSummaryColumns, ownerName: owner.name, ownerImage: owner.image, holdsRecord: sql<boolean>`${holds}` })
 			.from(readerCollection)
 			.innerJoin(owner, eq(owner.id, readerCollection.userId))
+			.leftJoin(membership, and(eq(membership.collectionId, readerCollection.id), eq(membership.userId, userId)))
 			.leftJoin(readerCollectionItem, eq(readerCollectionItem.collectionId, readerCollection.id))
 			.where(where)
-			.groupBy(readerCollection.id, owner.id)
+			.groupBy(readerCollection.id, owner.id, membership.createdAt)
 			.orderBy(...order)
 			.limit(request.pageSize)
 			.offset(offset),
@@ -345,7 +351,7 @@ export async function readReaderProfile(
 		readProfileCollections(database, profileUserId, viewerUserId, { ...collections, page: null }),
 		viewerUserId === profileUserId ? readSharedCollections(database, profileUserId, { page: 1, pageSize: collections.pageSize }) : null,
 	]);
-	return { ...reader, bookmarks, collections: page, shared };
+	return { ...reader, viewer: viewerUserId, bookmarks, collections: page, shared };
 }
 
 export type ReaderListRequest = { userId: string; collectionId: string };

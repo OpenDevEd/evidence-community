@@ -93,7 +93,7 @@ it("pages the collections shared with a reader, newest share first", async () =>
 	});
 });
 
-it("offers a record the reader's own collections and the ones they edit, searched literally, and says which hold it", async () => {
+it("offers a record the reader's own collections, then the ones they edit by when they were shared, searched literally, and says which hold it", async () => {
 	await withReaders(async (db) => {
 		const { itemKey } = await createNativeItemDraft(db, { itemType: "Report", title: "Saved report" });
 		await publishItemDraft(db, itemKey);
@@ -103,20 +103,23 @@ it("offers a record the reader's own collections and the ones they edit, searche
 			{ id: idFor(3), userId: FRIEND, name: "500 studies", createdAt: day(3) },
 			{ id: idFor(4), userId: OWNER, name: "Owner's, edited", createdAt: day(4) },
 			{ id: idFor(5), userId: OWNER, name: "Owner's, viewed", createdAt: day(5) },
+			// Made first, shared last.
+			{ id: idFor(6), userId: OWNER, name: "Shared last", createdAt: day(0) },
 		]);
 		await db.insert(readerCollectionMember).values([
-			{ collectionId: idFor(4), userId: FRIEND, role: "editor" },
-			{ collectionId: idFor(5), userId: FRIEND, role: "viewer" },
+			{ collectionId: idFor(4), userId: FRIEND, role: "editor", createdAt: day(10) },
+			{ collectionId: idFor(5), userId: FRIEND, role: "viewer", createdAt: day(11) },
+			{ collectionId: idFor(6), userId: FRIEND, role: "editor", createdAt: day(12) },
 		]);
 		await db.insert(readerCollectionItem).values({ collectionId: idFor(1), itemKey });
 		const pick = (search: string, sort: "recent" | "name" = "recent") => readPickerCollections(db, FRIEND, { search, sort, page: 1, pageSize: 5, itemKey });
 
 		const recent = await pick("");
-		// Their own newest first, then the one they edit; the one they only view is not offered.
-		expect(names(recent)).toEqual(["500 studies", "50% done", "Reading", "Owner's, edited"]);
-		expect(recent.rows.map((row) => row.holdsRecord)).toEqual([false, false, true, false]);
+		// Their own newest first, then the ones they edit, newest share first; the one they only view is not offered.
+		expect(names(recent)).toEqual(["500 studies", "50% done", "Reading", "Shared last", "Owner's, edited"]);
+		expect(recent.rows.map((row) => row.holdsRecord)).toEqual([false, false, true, false, false]);
 		expect(recent.rows[3]).toMatchObject({ access: "editor", owner: { id: OWNER } });
-		expect(names(await pick("", "name"))).toEqual(["500 studies", "50% done", "Owner's, edited", "Reading"]);
+		expect(names(await pick("", "name"))).toEqual(["500 studies", "50% done", "Owner's, edited", "Reading", "Shared last"]);
 		// A % in the search is the character, not a wildcard.
 		expect(names(await pick("50%"))).toEqual(["50% done"]);
 	});

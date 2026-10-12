@@ -56,6 +56,8 @@ export type ProfileData = {
 	name: string;
 	image: string | null;
 	bookmarks: Record<string, string>;
+	/** Who the server read the collections for: whoever was signed in when it rendered the page. */
+	viewer: string | null;
 	/** The page of their collections the chosen one is on, as the server rendered it. */
 	collections: ProfileCollectionsPage;
 	/** On the reader's own profile, the first page of the collections others shared with them. */
@@ -138,16 +140,16 @@ function firstBookmarkDate(bookmarks: Record<string, string>) {
 }
 
 /** A page of a list read from the server, keeping the last page on screen while the next is on its way. */
-function useServerPage<Page extends CollectionsPage<unknown>>(key: string | null, first: Page, page: number) {
+function useServerPage<Page extends CollectionsPage<unknown>>(key: string | null, first: Page | null, page: number) {
 	const { data, isLoading } = useSWR<Page>(key, fetcher, {
 		keepPreviousData: true,
 		revalidateOnFocus: false,
 		// The page the server rendered, until the browser has its own.
-		fallbackData: page === first.page ? first : undefined,
+		fallbackData: page === first?.page ? first : undefined,
 	});
 	const shown = data ?? first;
 	// While the asked page is on its way it is the one named; once in, the one the server sent, which stays within the list.
-	return { shown, waiting: isLoading, page: isLoading ? page : shown.page };
+	return { shown, waiting: isLoading, page: isLoading ? page : (shown?.page ?? page) };
 }
 
 /**
@@ -156,24 +158,37 @@ function useServerPage<Page extends CollectionsPage<unknown>>(key: string | null
  * nothing. A new page from the server, as after a link to another collection, starts from its own page again.
  */
 function useProfileCollections(data: ProfileData, viewer: string | null, selected: string, loading: boolean) {
-	const [turned, setTurned] = useState<{ page: number; from: ProfileCollectionsPage } | null>(null);
-	const page = turned?.from === data.collections ? turned.page : data.collections.page;
-	const { shown, waiting, page: served } = useServerPage(loading ? null : profileCollectionsKey(data.id, { viewer, page }), data.collections, page);
-	const chosen = useChosenCollection(data, loading ? null : { viewer, selected }, shown.rows);
+	// What the server read for someone else, as before a sign-out in another tab, is never shown to this viewer.
+	const sent = data.viewer === viewer ? data.collections : null;
+	const { page, turn } = useColumnPage(data.collections, sent);
+	const { shown, waiting, page: served } = useServerPage(loading ? null : profileCollectionsKey(data.id, { viewer, page }), sent, page);
+	const { rows, pages, total } = shown ?? { rows: [], pages: 1, total: 0 };
+	const chosen = useChosenCollection(data.id, sent?.chosen ?? null, loading ? null : { viewer, selected }, rows);
 	return {
-		page: { rows: shown.rows.map(shelfOf), page: served, pages: shown.pages, total: shown.total, waiting, turn: (next: number) => setTurned({ page: next, from: data.collections }) },
+		// Nothing read for this viewer yet: the column shows placeholders, as while the profile loads.
+		placeholder: loading || !shown,
+		page: { rows: rows.map(shelfOf), page: served, pages, total, waiting, turn },
 		chosen,
-		known: [...shown.rows, ...chosen],
+		known: [...rows, ...chosen],
+	};
+}
+
+/** The page the column is on: the server's, until the reader turns it. A new page from the server starts from its own again. */
+function useColumnPage(fromServer: ProfileCollectionsPage, sent: ProfileCollectionsPage | null) {
+	const [turned, setTurned] = useState<{ page: number; from: ProfileCollectionsPage } | null>(null);
+	return {
+		page: turned?.from === fromServer ? turned.page : (sent?.page ?? 1),
+		turn: (page: number) => setTurned({ page, from: fromServer }),
 	};
 }
 
 type Choice = { viewer: string | null; selected: string };
 
 /** The chosen collection, if any: on the page shown, or else read alone, for whatever shows it beside the list. */
-function useChosenCollection(data: ProfileData, choice: Choice | null, rows: ProfileCollection[]): ProfileCollection[] {
+function useChosenCollection(userId: string, sent: ProfileCollection | null, choice: Choice | null, rows: ProfileCollection[]): ProfileCollection[] {
 	const onPage = rows.find((collection) => collection.id === choice?.selected);
-	const seen = useLastSeen(onPage, data.collections.chosen);
-	const alone = useCollectionAlone(data.id, onPage ? null : choice, seen);
+	const seen = useLastSeen(onPage, sent);
+	const alone = useCollectionAlone(userId, onPage ? null : choice, seen);
 	const chosen = onPage ?? alone;
 	return chosen ? [chosen] : [];
 }
@@ -203,8 +218,6 @@ function useProfileBookmarks(data: ProfileData, isOwnProfile: boolean) {
 	return (isOwnProfile ? own?.bookmarks : undefined) ?? data.bookmarks;
 }
 
-const NOTHING_SHARED: CollectionsPage<SharedCollectionSummary> = { rows: [], page: 1, pages: 1, total: 0 };
-
 /**
  * The collections shared with the reader, on their own profile, a page at a time from the first the server rendered;
  * only while the owner is signed in here, as after a sign-out in another tab they no longer are.
@@ -212,8 +225,8 @@ const NOTHING_SHARED: CollectionsPage<SharedCollectionSummary> = { rows: [], pag
 function useSharedCollections(sent: ProfileData["shared"], viewer: string | null, isOwnProfile: boolean): ShownPage<SharedCollectionSummary> | null {
 	const first = isOwnProfile ? sent : null;
 	const [page, setPage] = useState(1);
-	const { shown, waiting, page: served } = useServerPage(first ? sharedCollectionsKey({ viewer, page }) : null, first ?? NOTHING_SHARED, page);
-	return first ? { rows: shown.rows, page: served, pages: shown.pages, total: shown.total, waiting, turn: setPage } : null;
+	const { shown, waiting, page: served } = useServerPage(first ? sharedCollectionsKey({ viewer, page }) : null, first, page);
+	return first && shown ? { rows: shown.rows, page: served, pages: shown.pages, total: shown.total, waiting, turn: setPage } : null;
 }
 
 /**
@@ -323,16 +336,18 @@ function ProfileDialogs({
  * library lists records, with search and sort, and their collections beside
  * it where the library keeps its filters, a page at a time.
  */
-export default function ReaderProfile({
-	data,
-	loading = false,
-}: {
+export default function ReaderProfile(props: {
 	data: ProfileData;
 	/** Drawn while the profile is on its way, from its address alone: the reader, their counts and collections show as placeholders. */
 	loading?: boolean;
 }) {
-	const t = useTranslations("ui");
 	const viewer = useReaderSession().reader?.id ?? null;
+	// Whatever was read for one viewer goes when another signs in or out, here or in another tab.
+	return <ProfileFor key={viewer ?? ""} viewer={viewer} {...props} />;
+}
+
+function ProfileFor({ data, viewer, loading = false }: { data: ProfileData; viewer: string | null; loading?: boolean }) {
+	const t = useTranslations("ui");
 	const isOwnProfile = viewer === data.id;
 	const items = useItemsList(data);
 	const bookmarks = useProfileBookmarks(data, isOwnProfile);
@@ -366,11 +381,11 @@ export default function ReaderProfile({
 				isOwnProfile={isOwnProfile}
 				loading={loading}
 				bookmarkCount={bookmarkCount}
-				collectionCount={collections.page.total}
+				collectionCount={collections.placeholder ? null : collections.page.total}
 				firstBookmarkedAt={firstBookmarkDate(bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
-				<CollectionsNav userId={data.id} loading={loading} {...choices} />
+				<CollectionsNav userId={data.id} loading={collections.placeholder} {...choices} />
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
