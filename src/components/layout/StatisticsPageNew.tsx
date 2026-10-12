@@ -181,7 +181,8 @@ function OpenAlexTopicsSection({
 	);
 }
 
-export default function StatisticsPage({ stats }: StatisticsPageProps) {
+/** Without `stats`, the page is drawn while its figures are still to be read: the heading and the placeholder. */
+export default function StatisticsPage({ stats }: Partial<StatisticsPageProps>) {
 	const t = useTranslations("ui");
 
 	return (
@@ -194,9 +195,13 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 					{t("databaseStatisticsDescription")}
 				</p>
 			</div>
-			<Suspense fallback={<StatisticsPlaceholder />}>
-				<StatisticsSections stats={stats} />
-			</Suspense>
+			{stats ? (
+				<Suspense fallback={<StatisticsPlaceholder />}>
+					<StatisticsSections stats={stats} />
+				</Suspense>
+			) : (
+				<StatisticsPlaceholder />
+			)}
 		</PageContainer>
 	);
 }

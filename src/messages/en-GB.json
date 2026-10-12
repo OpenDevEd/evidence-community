@@ -283,6 +283,8 @@
     "collapseFilters": "Collapse Filters",
     "expandFilters": "Expand Filters",
     "internal": "Internal",
+    "openAccess": "Open access",
+    "closedAccess": "Closed access",
     "openDocument": "Open Document",
     "databaseStatistics": "Database Statistics",
     "databaseStatisticsDescription": "Comprehensive insights into our research database, including institutions, publications, citations, and data completeness metrics.",

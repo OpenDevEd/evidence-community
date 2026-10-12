@@ -1,6 +1,4 @@
-import {
-	getCachedItemSmall,
-} from "@/app/api/cache";
+import { getCachedItemPage, getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { creatorDisplayName } from "@/lib/creator-display-name";
@@ -14,17 +12,7 @@ import ItemRoute from "./ItemRoute";
 import type { ItemGetResponse } from "@/app/api/item/types";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
-import { withTopicNames } from "@/lib/topics/server";
 
-async function getCurrentItem(key: string) {
-	const data = await getCachedItemSmall(key);
-
-	if (data?.item && !data.item.citation) {
-		data.item.citation = "<div>Loading...</div>";
-	}
-
-	return data;
-}
 
 function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 	if (!pages) return {};
@@ -44,7 +32,7 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
 	const params = await props.params;
 	const [data, libraryConfig] = await Promise.all([
-		getCurrentItem(params.key),
+		getCachedItemSmall(params.key),
 		getLibraryConfig(),
 	]);
 	const baseUrl = libraryConfig.identity.baseUrl;
@@ -168,14 +156,14 @@ export async function generateMetadata(props: {
 export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
-	const record = props.params.then(({ key }) => getCurrentItem(key)).then(withTopicNames) as Promise<ItemGetResponse | null>;
+	const record = props.params.then(({ key }) => getCachedItemPage(key)) as Promise<ItemGetResponse | null>;
 	return (
 		<>
 			<Suspense fallback={<LoadingComponent />}>
 				<ItemRoute record={record} />
 			</Suspense>
 			<Suspense fallback={null}>
-				<ServerComponent params={props.params} record={record} />
+				<ServerComponent record={record} />
 			</Suspense>
 		</>
 	);

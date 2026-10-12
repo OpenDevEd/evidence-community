@@ -157,12 +157,14 @@ function itemRow(itemKey: string, index: number) {
 	return `INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publicationTitle", "publisher", "DOI", "url", "countryFocus", "languageName", "dateAdded", "deleted") VALUES (${values.join(", ")});`;
 }
 
-// Citation counts come from OpenAlex, through the source connection the fixture database already has.
+// Citation counts and open access come from OpenAlex, through the source connection the fixture database already has.
+// Five in eight works are open, about the share in a live library.
 function citationRows(itemKey: string, index: number): string[] {
 	const cited = between(0, maybe(0.1, () => 2400, 120));
 	return [
 		`INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'openalex-acceptance', ${sql(`W9${pad(index, 8)}`)});`,
 		`INSERT INTO "itemCitationMetric" ("itemKey", "sourceConnectionKey", "citedByCount", "referencedWorksCount", "observedAt") VALUES (${sql(itemKey)}, 'openalex-acceptance', ${cited}, ${between(5, 80)}, '2026-09-01T00:00:00Z');`,
+		`INSERT INTO "sourceSnapshot" ("itemKey", "sourceConnectionKey", "payload", "payloadHash", "fetchedAt") VALUES (${sql(itemKey)}, 'openalex-acceptance', ${json({ open_access: { is_oa: index % 8 < 5 } })}, ${sql(`verify-${index}`)}, '2026-09-01T00:00:00Z');`,
 	];
 }
 

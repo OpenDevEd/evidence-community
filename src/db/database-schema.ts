@@ -10,6 +10,7 @@ import * as collectionTable from "./schema/tables/collection";
 import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
 import * as itemTable from "./schema/tables/item";
 import * as itemCitationMetricTable from "./schema/tables/itemCitationMetric";
+import * as itemOpenAccessLookupTable from "./schema/tables/itemOpenAccessLookup";
 import * as institutionCountryTable from "./schema/tables/institutionCountry";
 import * as itemInstitutionTable from "./schema/tables/itemInstitution";
 import * as itemLinkTable from "./schema/tables/itemLink";
@@ -32,6 +33,7 @@ export const schema = {
 	...adminItemListProjectionTable,
 	...itemTable,
 	...itemCitationMetricTable,
+	...itemOpenAccessLookupTable,
 	...collectionTable,
 	...sourceTables,
 	...publicationTables,

@@ -20,6 +20,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
 import { useScrollSpy } from "@/hooks/useScrollSpy";
 import { Link } from "@/i18n/routing";
@@ -309,6 +310,43 @@ export default function PolicyLayout(props: Props) {
 					{props.sections.map((section, i) => (
 						<Chapter key={section.id} section={section} index={i} />
 					))}
+				</article>
+			</div>
+		</main>
+	);
+}
+
+/** Widths of the placeholder lines, so they read as paragraphs. */
+const PLACEHOLDER_LINES = ["96%", "100%", "92%", "64%", "", "100%", "88%", "97%", "72%", "", "94%", "100%", "58%"];
+
+/**
+ * The page's two columns while its document is read: the heading it already knows, and placeholders where the date,
+ * the other policy's link, the contents and the text go.
+ */
+export function PolicyLayoutPlaceholder({ title, description }: { title: string; description: string }) {
+	return (
+		<main id="main-content" className={styles.page} aria-busy="true">
+			<div className={styles.splitPage}>
+				<div className={styles.splitIdentity}>
+					<div className={styles.splitSticky}>
+						<div className={styles.documentLinks}>
+							<span className={styles.currentDocument}>
+								<Icon icon={title.toLowerCase().includes("privacy") ? Shield01Icon : File02Icon} />
+								{title}
+							</span>
+							<Skeleton className="h-6 w-28 rounded-lg" />
+						</div>
+						<h1>{title}</h1>
+						<p className={styles.splitDescription}>{description}</p>
+						<Skeleton className="h-5 w-44 rounded-md" />
+					</div>
+				</div>
+				<article className={styles.splitArticle}>
+					<div className="flex flex-col gap-3">
+						{PLACEHOLDER_LINES.map((width, index) =>
+							width ? <Skeleton key={index} className="h-4 rounded-md" style={{ width }} /> : <span key={index} className="h-3" />,
+						)}
+					</div>
 				</article>
 			</div>
 		</main>

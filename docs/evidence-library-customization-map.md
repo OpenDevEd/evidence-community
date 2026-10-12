@@ -38,12 +38,13 @@ container image can be started repeatedly with different mounted documents.
 | `search` | Search fields, semantic search, scopes, default scope | Platform scope catalog; default scope must be enabled |
 | `filters` | Institution mode/label, country mode, collection expansion, years | Explicit modes; valid year range |
 | `content.tags` | Coming-soon, internal, hidden, description, redirects, publish tags | User-defined unique tag lists |
+| `content.openAccessLabel` | Which records say whether they are open access: `open` (default) labels open records, `both` closed ones too, `off` none | One of the three values |
 | `citations` | Citation display behavior | Boolean switches |
 | `features` | Theme/language/reader accounts/search/AI/download and related UI switches | Dependency validation in the schema |
 | `collections` | Enabled collection IDs, labels, ordering | Unique IDs and bounded order |
 | `gapMaps` | Runtime gap-map routes and source URLs | Unique IDs/slugs and stable URLs |
 | `exports` | One switch each for RIS, BibTeX, and the Atom feed | Booleans; the library builds every file from its own records |
-| `services` | PostgreSQL, Meilisearch, Zotero translation | Valid service URLs and bounded credentials/index |
+| `services` | PostgreSQL, Meilisearch, Zotero translation, and the OpenAlex key (`services.openAlex.apiKey`) that looks up the open access of records from other sources by DOI | Valid service URLs and bounded credentials/index; without the OpenAlex key nothing is looked up |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |
 | `authentication` | OpenScholar service access, sign-in and session signing | OpenScholar site, library ID, library page, account page, machine credential, the library's Clerk OAuth client (issuer, client ID, secret) and the session secret are all required; OpenScholar writes them |

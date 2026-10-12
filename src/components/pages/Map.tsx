@@ -8,6 +8,7 @@ import { flushSync } from "react-dom";
 import { Fragment, ReactNode, Suspense, use, useEffect, useMemo, useState, useRef, memo } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
@@ -474,7 +475,7 @@ function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 }
 
 /** The library's countries, largest first, in the space above the search bar. The list doubles as the map's key: each bar has its country's colour. */
-function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props: ReturnType<typeof useItemsList>; rows: CountryRow[]; max: number; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void }) {
+function CountryPanel({ props, rows, counted, max, hovered, onHover, onSelect }: { props: ReturnType<typeof useItemsList>; rows: CountryRow[]; /** False until the counts are in: the page is drawn before its data. */ counted: boolean; max: number; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const { theme } = useLibraryConfig();
@@ -483,7 +484,11 @@ function CountryPanel({ props, rows, max, hovered, onHover, onSelect }: { props:
 			<div className="pointer-events-auto flex h-full flex-col rounded-2xl bg-white pt-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] dark:bg-secondary-400">
 				<h2 className="flex items-baseline justify-between px-5 pb-1 pt-2 text-base font-semibold">
 					{t("countries")}
-					<span className="text-sm font-medium tabular-nums text-black/50 dark:text-white/50">{rows.length}</span>
+					{counted ? (
+						<span className="text-sm font-medium tabular-nums text-black/50 dark:text-white/50">{rows.length}</span>
+					) : (
+						<Skeleton className="h-4 w-5 self-center rounded" />
+					)}
 				</h2>
 				<ol className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]" onPointerLeave={() => onHover(null)}>
 					{rows.map((row) => {
@@ -583,7 +588,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 				anchor={tooltipAnchor}
 			/>
 			<Search props={props} />
-			<CountryPanel props={props} rows={rows} max={maxItems} hovered={hovered} onHover={setHovered} onSelect={selectCountry} />
+			<CountryPanel props={props} rows={rows} counted={Boolean(counts ?? props.facetDistribution)} max={maxItems} hovered={hovered} onHover={setHovered} onSelect={selectCountry} />
 			<MemoizedItemView props={props} />
 			<Suspense fallback={null}>
 				<Globe

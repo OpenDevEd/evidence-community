@@ -11,6 +11,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { RuntimeCollectionConfigurationError } from "@/lib/collections";
 import { staleWhileRevalidate } from "@/lib/stale-while-revalidate";
+import { withTopicNames } from "@/lib/topics/server";
 
 // --- Collections ---
 
@@ -95,6 +96,13 @@ export const getCachedItemSmall = cache(async (key: string) => {
 	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
 	return readCachedPublicItem(key, config.revision, version);
 });
+
+/** A record as its page draws it: a placeholder until its citation is read, and its stored topic names. */
+export async function getCachedItemPage(key: string) {
+	const data = await getCachedItemSmall(key);
+	if (data.item && !data.item.citation) data.item.citation = "<div>Loading...</div>";
+	return withTopicNames(data);
+}
 
 /**
  * The library's public record count and last update, which every page's layout reads. Counting a large library takes

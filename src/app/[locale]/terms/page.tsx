@@ -1,5 +1,6 @@
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
+import { POLICY_PAGES } from "@/components/pages/policy-pages";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -36,8 +37,7 @@ export default async function TermsPage() {
 	return (
 		<PolicyPage
 			content={document.content}
-			title="Terms of Service"
-			description="The rules for using this public library and its content."
+			{...POLICY_PAGES["terms"]}
 			lastUpdated={document.lastUpdated}
 			otherPolicyLink={{
 				href: getRuntimeLinkHref(config.legal.privacyPolicy, config.identity.baseUrl),

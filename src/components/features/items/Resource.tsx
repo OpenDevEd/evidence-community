@@ -45,6 +45,7 @@ import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
+import { OpenAccessLabel } from "./OpenAccessLabel";
 
 export function AddButton({
 	itemData,
@@ -449,6 +450,10 @@ function ResourceArticle({
 								<ResourceDivider />
 							</>
 						)}
+					<OpenAccessLabel
+						openAccess={finalItemData?.openAccess}
+						className="text-lg"
+					/>
 
 					{hasAnyTag(
 						finalItemData?.tags,

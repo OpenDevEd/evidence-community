@@ -49,6 +49,7 @@ import {
 } from "./primitives";
 import { generateColorRamp, parseHexColor, type RgbaColor } from "./theme";
 import { policyRedirectIssues } from "@/lib/legal-links";
+import { OPEN_ACCESS_LABELS } from "@/lib/open-access";
 
 export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
 const DEFAULT_FONT_WEIGHTS = [400, 500, 700] as const;
@@ -1039,6 +1040,8 @@ const contentSchema = z
 			})
 			.strict()
 			.prefault({}),
+		// Which records say whether they are open access: `open` labels the open ones, `both` the closed ones too.
+		openAccessLabel: z.enum(OPEN_ACCESS_LABELS).default("open"),
 	})
 	.strict()
 	.prefault({});
@@ -1355,6 +1358,13 @@ const servicesSchema = z
 			})
 			.strict()
 			.prefault({}),
+		// Asks OpenAlex whether a record from another source is open access, by its DOI.
+		openAlex: z
+			.object({
+				apiKey: secretSchema(1, 512),
+			})
+			.strict()
+			.optional(),
 		publication: publicationServicesSchema,
 	})
 	.strict();

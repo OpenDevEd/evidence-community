@@ -25,6 +25,8 @@ export type Item = InferSelectModel<typeof item> & {
 	citationMetrics?: SourceCitationMetric[];
 	/** The higher of the library's citation count and a source's, as the index sorts by. */
 	citationCount?: number;
+	/** Whether OpenAlex says the record is open access; null when it does not know. */
+	openAccess?: boolean | null;
 	sourceExternalScopeKey?: string | null;
 	tags?: string[];
 	collections?: string[];

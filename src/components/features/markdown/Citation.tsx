@@ -407,6 +407,7 @@ export function PublicationLinkPreview({
 		etAl: t("etAl"),
 		formatter,
 		institutions,
+		openAccessLabel: content.openAccessLabel,
 	});
 
 	return (

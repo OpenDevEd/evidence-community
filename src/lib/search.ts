@@ -71,6 +71,7 @@ export const LIST_ITEM_FIELDS = [...new Set([
 	"collectionsAncestry",
 	"topics",
 	"citationMetrics",
+	"openAccess",
 	"createdAt",
 	"updatedAt",
 	"year",
