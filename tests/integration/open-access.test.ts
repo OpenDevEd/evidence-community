@@ -6,7 +6,7 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemOpenAccessLookup } from "@/db/schema/tables/itemOpenAccessLookup";
-import { openAccessFromSources } from "@/lib/admin/item-preview";
+import { readOpenAccessFromSources } from "@/lib/search-index/open-access";
 import { openItemDraft, publishItemDraft, saveItemDraft } from "@/lib/admin/native-item-service";
 import { lookUpOpenAccess } from "@/lib/open-access-lookup";
 import { generateSearchProjectionPlans } from "@/lib/search-index/projection";
@@ -294,7 +294,7 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		// the next sync of the work keeps the choice.
 		await choose(work, false);
 		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
-		expect(await openAccessFromSources(db, work, config)).toBe(true);
+		expect(await readOpenAccessFromSources(db, work)).toBe(true);
 		await importWork(2, "An open OpenAlex work, revised");
 		expect((await db.select().from(item).where(eq(item.key, work)))[0]?.title).toBe("An open OpenAlex work, revised");
 		expect(await openAccessOf(db, [work])).toEqual({ [work]: false });
@@ -312,5 +312,10 @@ it("puts an editor's choice before OpenAlex, keeps it through source sync, and a
 		expect(await openAccessOf(db, [work])).toEqual({ [work]: true });
 		expect(await lookUpOpenAccess({ database: db, client: openAlexApi.client, config, now: new Date() })).toBe(1);
 		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: false });
+
+		// Marked open again, the record still tells the admin what OpenAlex said about its DOI.
+		await choose(zotero, true);
+		expect(await openAccessOf(db, [zotero])).toEqual({ [zotero]: true });
+		expect(await readOpenAccessFromSources(db, zotero)).toBe(false);
 	});
 }, 120_000);

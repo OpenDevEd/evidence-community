@@ -41,7 +41,7 @@ import {
 	adminCanonicalPayloadToItemFields,
 	isTopLevelAdminItemType,
 } from "./item-fields";
-import { openAccessFromSources } from "./item-preview";
+import { readOpenAccessFromSources } from "@/lib/search-index/open-access";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -405,7 +405,7 @@ export async function getAdminItemDetail(
 			getAdminAttachments(db, itemKey),
 			getManualLinkKeys(db, itemKey),
 			published && isTopLevelAdminItemType(published.itemType)
-				? openAccessFromSources(db, itemKey, config)
+				? readOpenAccessFromSources(db, itemKey)
 				: Promise.resolve(null),
 		]);
 	const basePayload = publishedAdminItemPayload(published, {

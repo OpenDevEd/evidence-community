@@ -60,3 +60,16 @@ export async function readOpenAccess(
 		return chosen ?? fromWork.get(key) ?? (lookup && lookup.doi === doi ? lookup.isOpenAccess : null);
 	};
 }
+
+/**
+ * What OpenAlex says about one record, whatever an editor chose and whether or not readers can see it: its OpenAlex
+ * work, else the last answer for its DOI. That answer counts whichever DOI it was for, as the record is looked up again
+ * soon after its DOI changes.
+ */
+export async function readOpenAccessFromSources(database: Pick<Database | DatabaseTransaction, "select">, key: string) {
+	const [openAccessOf, [lookup]] = await Promise.all([
+		readOpenAccess(database, [key]),
+		database.select({ doi: itemOpenAccessLookup.doi }).from(itemOpenAccessLookup).where(eq(itemOpenAccessLookup.itemKey, key)),
+	]);
+	return openAccessOf(key, lookup?.doi ?? null);
+}
