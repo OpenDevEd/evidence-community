@@ -104,9 +104,9 @@ function CountCard({ edition, locale }: { edition: DigestEdition; locale: string
   return <div className="flex flex-col gap-3">
     <ul className="flex flex-col gap-2.5">{rows.map(row => <li key={row.label}>
       <p className="flex items-baseline gap-2"><span className="font-heading text-base font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span><span className={`text-sm ${muted}`}>{row.label}</span></p>
-      <span aria-hidden className="mt-1 block h-1.5 rounded-full bg-black/10 dark:bg-white/15"><span className="block h-full min-w-[3px] rounded-full bg-accent" style={{width: `${(row.count / edition.publicationCount) * 100}%`}} /></span>
+      <span aria-hidden className="mt-1 block h-1.5 rounded-full bg-black/10 dark:bg-white/15"><span className={twMerge("block h-full rounded-full bg-accent", row.count > 0 && "min-w-[3px]")} style={{width: `${(row.count / edition.publicationCount) * 100}%`}} /></span>
     </li>)}</ul>
-    <p className={cardText}>The count holds every publication in this library dated in the period, as the library stood on {edition.counted}. Works OpenAlex added after that day are not in it. A preprint and its article count once. Retracted papers and journal front matter are left out.</p>
+    <p className={cardText}>The count holds every publication in this library dated in the period, as the library stood on {edition.counted}. Works OpenAlex added after that day are not in it. Records with the same title and first author count once. Retracted papers and journal front matter are left out.</p>
   </div>;
 }
 /** The words of the person who checked the edition, above its text. */
@@ -528,8 +528,8 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
         </Fragment>)}</dl>}
       </div>
     </li>)}</ol>
-    <p className={`mt-5 text-sm leading-6 ${muted}`}>Never counted or listed: retracted papers, as Retraction Watch reports them through OpenAlex, and journal front matter. Records with the same title and first author are one paper, so a preprint and its article count once.</p>
-    <p className="mt-4 text-sm leading-6 text-black/70 dark:text-white/70">AI wrote the text from these titles and abstracts, not from the full papers. A second AI model, from another company, then checked each sentence about a paper against that paper's title and abstract, and the writer corrected or removed what it could not support.{edition.by && ` ${edition.by.name} checked the text before it was published.`}</p>
+    <p className={`mt-5 text-sm leading-6 ${muted}`}>Never counted or listed: retracted papers, as Retraction Watch reports them through OpenAlex, and journal front matter. Two records with the same title, 25 characters or longer, and the same first author's surname count as one paper, such as a preprint and its article under one title.</p>
+    <p className="mt-4 text-sm leading-6 text-black/70 dark:text-white/70">AI wrote the text from these titles and abstracts, not from the full papers. Once it is written, OpenScholar asks a second AI model, from another company, to check each sentence about a paper against that paper's title and abstract, and the writer corrects or removes what it flags.{edition.by && ` ${edition.by.name} checked the text before it was published.`}</p>
   </div>;
 }
 

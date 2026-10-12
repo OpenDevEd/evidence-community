@@ -337,7 +337,7 @@ it("lists every edition a page at a time with where each stands", async () => {
     expect((await list({ page: 2 })).editions.map(row => row.state)).toEqual(["published", "published", "published"]);
     expect((await list({ page: 7 })).page).toBe(2);
     expect(await list({ show: "review" })).toMatchObject({ total: 1, pages: 1, editions: [{ title: "Changed" }] });
-    expect((await list({ show: "published", sort: "oldest" })).editions[0]).toMatchObject({ day: "5", month: "Jan", period: "29 December 2025 – 4 January 2026", state: "published" });
+    expect((await list({ show: "published", sort: "oldest" })).editions[0]).toMatchObject({ day: "5", month: "Jan", period: "29 December 2025\u2009–\u20094 January 2026", state: "published" });
   });
 }, 120_000);
 
