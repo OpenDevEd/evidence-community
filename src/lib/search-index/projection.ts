@@ -24,6 +24,7 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
 import { studyReadingOf } from "@/lib/readings/reading";
+import { contentHashOf, readingText } from "@/lib/readings/reading-text";
 import type { StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
@@ -70,9 +71,13 @@ type CollectionRow = Pick<
 type ItemRow = typeof item.$inferSelect;
 type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
-/** A record's study type for its search document: an editor's correction, else the reading's; none until either. */
-function readingFields(row: Parameters<typeof studyReadingOf>[0], corrected: StudyTypeKey | null) {
-	const reading = studyReadingOf(row, corrected);
+/**
+ * A record's study type for its search document: an editor's correction, else its reading while that was made from the
+ * text the record has now; none until either.
+ */
+function readingFields(row: (Parameters<typeof studyReadingOf>[0] & { contentHash: string }) | undefined, record: ItemRow) {
+	const current = row?.contentHash === contentHashOf(readingText(record.title, record.abstractNote)) ? row : undefined;
+	const reading = studyReadingOf(current, record.studyType);
 	return reading ? { studyType: reading.type, reading } : {};
 }
 
@@ -323,7 +328,7 @@ async function buildSearchProjectionPlanForKeys(
 		(await database
 			.select({
 				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, studyType: itemReading.studyType,
-				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input,
+				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash,
 			})
 			.from(itemReading)
 			.where(inArray(itemReading.itemKey, topLevelKeys)))
@@ -539,7 +544,7 @@ async function buildSearchProjectionPlanForKeys(
 				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
 				revision: parent.revision,
 				// What kind of work it is, once read: filtered and counted by `studyType`, shown from `reading`.
-				...readingFields(readings.get(parent.key), parent.studyType),
+				...readingFields(readings.get(parent.key), parent),
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,
 				sourceRecordKey: parent.sourceRecordKey,

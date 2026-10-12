@@ -7,6 +7,7 @@
 
 import { QUESTION_SET } from "../../src/lib/readings/questions";
 import { STUDY_TYPE_KEYS } from "../../src/lib/readings/study-types";
+import { contentHashOf, readingText } from "../../src/lib/readings/reading-text";
 
 const KEY_ALPHABET = "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
 
@@ -138,14 +139,16 @@ function itemRow(itemKey: string, index: number) {
 	const itemType = pick(TYPES);
 	const { journal, publisher } = venue(itemType);
 	const doi = maybe(0.7, () => `10.5555/verify.${index}`, null);
+	const name = title(index);
+	const abstract = maybe(0.8, () => Array.from({ length: between(1, 8) }, () => pick(SENTENCES)).join(" "), null);
 	const values = [
 		sql(itemKey),
 		"'native'",
 		sql(itemKey),
 		sql(itemType),
 		"1",
-		sql(title(index)),
-		sql(maybe(0.8, () => Array.from({ length: between(1, 8) }, () => pick(SENTENCES)).join(" "), null)),
+		sql(name),
+		sql(abstract),
 		sql(itemDate()),
 		json(creators()),
 		sql(journal),
@@ -157,7 +160,7 @@ function itemRow(itemKey: string, index: number) {
 		`timestamp '2026-09-01 00:00:00' - interval '${index} days'`,
 		"0",
 	];
-	return `INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publicationTitle", "publisher", "DOI", "url", "countryFocus", "languageName", "dateAdded", "deleted") VALUES (${values.join(", ")});`;
+	return { row: `INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publicationTitle", "publisher", "DOI", "url", "countryFocus", "languageName", "dateAdded", "deleted") VALUES (${values.join(", ")});`, text: readingText(name, abstract) };
 }
 
 // Citation counts and open access come from OpenAlex, through the source connection the fixture database already has.
@@ -177,16 +180,17 @@ const outboxRow = (entityType: string, entityKey: string) => `INSERT INTO "outbo
  * Jev's reading of a record, for most of them: a study type by its place in the list, every type in turn, a few read
  * with low confidence and every seventh not read yet. No random draw, so the records stay as they were.
  */
-function readingRow(itemKey: string, index: number): string[] {
+function readingRow(itemKey: string, index: number, text: { title: string; abstract: string }): string[] {
 	if (index % 7 === 3) return [];
 	const type = STUDY_TYPE_KEYS[index % STUDY_TYPE_KEYS.length];
 	const confidence = index % 11 === 0 ? 0.45 : 0.9;
-	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', 'verify', ${QUESTION_SET}, 'typesafe/jev-1.13');`];
+	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', ${sql(contentHashOf(text))}, ${QUESTION_SET}, 'typesafe/jev-1.13');`];
 }
 
 function itemRows(index: number, members: Map<string, string[]>): string[] {
 	const itemKey = key("V", index);
-	const rows = [`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'native', ${sql(itemKey)});`, itemRow(itemKey, index), ...readingRow(itemKey, index)];
+	const item = itemRow(itemKey, index);
+	const rows = [`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'native', ${sql(itemKey)});`, item.row, ...readingRow(itemKey, index, item.text)];
 	rows.push(...maybe(0.65, () => citationRows(itemKey, index), []));
 	for (const collection of COLLECTIONS) members.get(collection.key)!.push(...maybe(0.25, () => [itemKey], []));
 	return [...rows, outboxRow("item", itemKey)];

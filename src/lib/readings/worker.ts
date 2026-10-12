@@ -3,12 +3,12 @@ import { sql } from "drizzle-orm";
 import type { LibraryServerConfig, ScreeningGrade } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemReading, readingSpend } from "@/db/schema/readings";
-import { abstractPlainText } from "@/lib/abstract-text";
 import { askJev } from "./jev";
 import { metadataStudyType } from "./metadata-type";
 import { QUESTION_SET, gradeOf, readingAnswers, readingQuestions, type ReadingAsk, type ReadingAnswers } from "./questions";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
-import { hash, keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
+import { contentHashOf, readingText } from "./reading-text";
+import { keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
 import { SURE, type StudyTypeKey } from "./study-types";
 
 /** Records claimed at once, and how many of them are read at the same time. */
@@ -16,8 +16,7 @@ const BATCH = 32;
 const AT_ONCE = 16;
 /** A cycle reads for this long, so the worker's other cycles keep their turn. */
 const CYCLE_MS = 20_000;
-/** Jev reads 32K tokens; an abstract is cut well inside that, as OpenScholar cuts it, and a PDF at its opening pages. */
-const ABSTRACT_CHARS = 3_000;
+/** Jev reads a PDF at its opening pages, well inside its 32K tokens. */
 const PDF_CHARS = 12_000;
 const PDF_PAGE_MARK = /\*\*\|\|\s*PAGE\s+\d+\s*\|\|\*\*/giu;
 /** Grades asked in one call, so a record many sources hold stays inside Jev's context; the rest are asked next. */
@@ -53,7 +52,7 @@ const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
 	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < SURE;
 
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
-	const contentHash = hash(`${record.title}\n${record.abstract}`);
+	const contentHash = contentHashOf(record);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
 	const metadataType = metadataStudyType(record);
 	const retype = fresh && metadataChanged(stored.reading!, metadataType);
@@ -114,7 +113,7 @@ async function recordFacts(database: Database, keys: string[]) {
 		SELECT "itemKey", "sourceConnectionKey", "subjectHash", "pendingSubjectHash" FROM "itemGrade" WHERE "itemKey" = ANY(${list})`);
 	return rows.map((row) => ({
 		record: {
-			key: row.key, title: row.title ?? "", abstract: abstractPlainText(row.abstractNote).slice(0, ABSTRACT_CHARS),
+			key: row.key, ...readingText(row.title, row.abstractNote),
 			pdf: (row.pdf ?? "").replace(PDF_PAGE_MARK, "\n").trim(),
 			itemType: row.itemType, openAlexType: row.openAlexType, doi: row.DOI, sources: row.sources,
 		},
@@ -354,7 +353,7 @@ export async function trySubject(
 	const calls = await Promise.allSettled(Array.from({ length: Math.min(AT_ONCE, rows.length) }, async () => {
 		while (index < rows.length && !stopping.aborted) {
 			const at = index++;
-			const record = { title: rows[at]!.title ?? "", abstract: abstractPlainText(rows[at]!.abstractNote).slice(0, ABSTRACT_CHARS), pdf: "" };
+			const record = { ...readingText(rows[at]!.title, rows[at]!.abstractNote), pdf: "" };
 			try {
 				const answer = await callJev(database, apiKey, record, ask, false, stopping, request);
 				next[at] = gradeOf(readingAnswers(ask, answer!.answers).scores[0]!);

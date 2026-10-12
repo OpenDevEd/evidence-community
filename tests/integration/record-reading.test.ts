@@ -99,10 +99,13 @@ it("reads the type of every record a library with a key brings in, grades only f
 		expect(await db.select().from(itemGrade)).toEqual([]);
 		// Readers see the type on the record: its search document carries it.
 		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toEqual({ type: "meta-analysis", confidence: 0.91, by: "ai", input: "abstract" });
+		// New text: the type read from the old text is not shown while the new one waits to be read.
+		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 52 trials.", 2);
+		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toBeUndefined();
 
 		// An editor's correction wins over the reading, and a later read of new text leaves it.
 		await client.query(`UPDATE item SET "studyType" = 'commentary' WHERE key = 'TYPEAAA2'`);
-		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 52 trials.", 2);
+		await publish(client, "TYPEAAA2", "Drought and maize: a meta-analysis", "We pooled 61 trials.", 3);
 		await runReadingCycle(db, unscreened, undefined, jev(answering).request);
 		expect((await readPublicItem(db, "TYPEAAA2", unscreened))?.reading).toEqual({ type: "commentary", by: "editor" });
 
