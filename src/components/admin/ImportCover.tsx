@@ -49,8 +49,8 @@ export function ImportCover({
 	size?: number;
 }) {
 	return (
-		<span className={`relative block aspect-[3/4] shrink-0 overflow-hidden rounded-md bg-gradient-to-b from-white to-black/[0.03] shadow-[0_1px_2px_rgba(0,0,0,0.06),0_6px_16px_-10px_rgba(0,0,0,0.35)] ring-1 ring-black/[0.08] dark:from-white/[0.08] dark:to-white/[0.03] dark:ring-white/10 ${className}`}>
-			<span className="absolute inset-0 flex items-center justify-center text-black/25 dark:text-white/25">
+		<span className={`relative block aspect-[3/4] shrink-0 overflow-hidden rounded-[4px] bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/[0.06] dark:ring-white/10 ${className}`}>
+			<span className="absolute inset-0 flex items-center justify-center text-black/20 dark:text-white/20">
 				<HugeiconsIcon aria-hidden icon={file ? Pdf01Icon : (TYPE_ICONS[itemType ?? ""] ?? File02Icon)} size={size} />
 			</span>
 			{file ? (
@@ -60,7 +60,7 @@ export function ImportCover({
 			) : null}
 			{reading ? (
 				<span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden motion-reduce:hidden">
-					<span className="absolute inset-x-0 top-0 h-2/5 animate-pdf-scan bg-gradient-to-b from-transparent via-accent/30 to-transparent" />
+					<span className="absolute inset-x-0 top-0 h-2/5 animate-pdf-scan bg-gradient-to-b from-transparent via-accent/20 to-transparent" />
 				</span>
 			) : null}
 		</span>

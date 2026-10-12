@@ -1,6 +1,6 @@
 "use client";
 
-import { Folder01Icon, SparklesIcon } from "@hugeicons/core-free-icons";
+import { Folder01Icon } from "@hugeicons/core-free-icons";
 import { ModalContent, Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
@@ -10,6 +10,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
+import { Tab, Tabs } from "@/components/nextui/Tabs";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
 import { parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
@@ -18,8 +19,8 @@ import type { AdminSource } from "@/lib/admin/types";
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { ImportDone } from "./ImportDone";
 import { BibliographyInput, DoiInput, PdfInput } from "./ImportInputs";
-import { ImportRail, type ImportKind, type ImportStage } from "./ImportRail";
-import { ReviewDetail, ReviewList, SummaryStrip, type AttachState } from "./ImportReview";
+import { ReviewBar, ReviewDetail, ReviewList, type AttachState } from "./ImportReview";
+import { ImportSteps, type ImportKind, type ImportStage } from "./ImportSteps";
 import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
 import {
 	doiPreviewRequest,
@@ -92,7 +93,7 @@ export function AdminImportDialog({
 }) {
 	return (
 		<DialogModal
-			classNames={{ base: "h-[min(48rem,calc(100dvh-2rem))] max-w-[72rem] overflow-hidden" }}
+			classNames={{ base: "h-[min(46rem,calc(100dvh-2rem))] max-w-[68rem] overflow-hidden" }}
 			isOpen={isOpen}
 			onOpenChange={(open) => {
 				if (!open) onClose();
@@ -236,136 +237,132 @@ function ImportFlow({
 		}
 	};
 
-	const inputNote = {
-		dois: doiText.trim() ? plural(parseDoiList(doiText).dois.length, "DOI", "DOIs") : "Paste DOIs",
-		files: files.length ? plural(files.length, "file", "files") : "Choose files",
-		pdfs: pdfs.length ? `${plural(pdfs.length, "PDF", "PDFs")}, ${plural(criteria.length, "check", "checks")}` : "Choose PDFs",
-	}[kind];
-	const stepNotes: Record<ImportStage, string> = {
-		done: results ? plural(summarizeImportResults(results).createdKeys.length, "draft", "drafts") : "",
-		input: inputNote,
-		review: review ? (reading ? `${counts.done} of ${counts.total} read` : `${counts.ready} ready, ${selected.size} chosen`) : "",
-	};
 	const primaryLabel = { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: action("Read", pdfs.length, "PDF", "PDFs") }[kind];
 	// The DOI box marks entries that are not DOIs itself.
 	const footerProblem = stage === "input" && kind !== "dois" && (files.length || pdfs.length) ? problem : null;
-	const headings = {
-		done: "Imported",
-		input: { dois: "Paste DOIs", files: "Add bibliography files", pdfs: "Add PDFs" }[kind],
-		review: "Review",
-	}[stage];
 
 	return (
-		<div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] md:grid-cols-[16.5rem_minmax(0,1fr)] md:grid-rows-1">
-			<ImportRail kind={kind} locked={stage !== "input" || busy} onKindChange={(value) => { setKind(value); setError(null); }} stage={stage} stepNotes={stepNotes} />
-			<div className="flex min-h-0 flex-col">
-				<header className="flex h-16 shrink-0 items-center gap-3 px-7">
-					<h3 className="text-base font-semibold text-black/85 dark:text-white/85">{headings}</h3>
-					{stage === "input" && kind === "pdfs" ? (
-						<span className="flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-							<HugeiconsIcon aria-hidden icon={SparklesIcon} size={12} />
-							Read by Claude Haiku 5.5
-						</span>
+		<div className="flex h-full min-h-0 flex-col">
+			<header className="flex h-14 shrink-0 items-center gap-4 border-b border-black/[0.06] px-6 dark:border-white/[0.06]">
+				<h2 className="text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
+				<span className="ms-auto">
+					<ImportSteps stage={stage} />
+				</span>
+			</header>
+			<AnimatePresence initial={false} mode="wait">
+				<motion.div
+					animate={{ opacity: 1 }}
+					className="flex min-h-0 flex-1 flex-col"
+					exit={{ opacity: 0 }}
+					initial={{ opacity: 0 }}
+					key={stage}
+					transition={{ duration: reduceMotion ? 0 : 0.15 }}
+				>
+					{stage === "input" ? (
+						<div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
+							<Tabs
+								aria-label="Import from"
+								classNames={{ panel: "px-0 pb-0 pt-5" }}
+								isDisabled={busy}
+								onSelectionChange={(key) => {
+									setKind(key as ImportKind);
+									setError(null);
+								}}
+								selectedKey={kind}
+							>
+								<Tab key="pdfs" title="PDFs">
+									<PdfInput busy={busy} criteria={criteria} files={pdfs} onCriteriaChange={(value) => { setCriteria(value); storeCriteria(value); }} onFilesChange={setPdfs} />
+								</Tab>
+								<Tab key="dois" title="DOIs">
+									<DoiInput busy={busy} onChange={setDoiText} text={doiText} />
+								</Tab>
+								<Tab key="files" title="Bibliography files">
+									<BibliographyInput busy={busy} files={files} onFilesChange={setFiles} />
+								</Tab>
+							</Tabs>
+						</div>
 					) : null}
-				</header>
-				<AnimatePresence initial={false} mode="wait">
-					<motion.div
-						animate={{ opacity: 1, y: 0 }}
-						className="flex min-h-0 flex-1 flex-col"
-						exit={{ opacity: 0, y: reduceMotion ? 0 : -6 }}
-						initial={{ opacity: 0, y: reduceMotion ? 0 : 10 }}
-						key={stage === "input" ? `input-${kind}` : stage}
-						transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-					>
-						{stage === "input" ? (
-							<div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
-								{kind === "pdfs" ? <PdfInput busy={busy} criteria={criteria} files={pdfs} onCriteriaChange={(value) => { setCriteria(value); storeCriteria(value); }} onFilesChange={setPdfs} /> : null}
-								{kind === "dois" ? <DoiInput busy={busy} onChange={setDoiText} text={doiText} /> : null}
-								{kind === "files" ? <BibliographyInput busy={busy} files={files} onFilesChange={setFiles} /> : null}
+					{stage === "review" ? (
+						<div className="flex min-h-0 flex-1 flex-col">
+							<div className="shrink-0 px-6 py-3">
+								<ReviewBar counts={counts} filter={filter} kind={kind} onFilter={setFilter} />
 							</div>
-						) : null}
-						{stage === "review" ? (
-							<div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pb-5">
-								<SummaryStrip counts={counts} filter={filter} kind={kind} onFilter={setFilter} />
-								<div className="grid min-h-0 flex-1 gap-5 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-									<div className="min-h-0 overflow-y-auto">
-										<ReviewList activeId={activeRow?.id ?? null} attach={attach} criteriaCount={criteria.length} filter={filter} locked={busy} onActivate={setActiveId} onSelectedChange={setSelected} readyIds={rows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))} results={results} rows={shown} selected={selected} />
-									</div>
-									<div className="min-h-0 overflow-y-auto rounded-2xl bg-white p-6 shadow-card-hairline ring-1 ring-black/[0.06] dark:bg-white/[0.03] dark:ring-white/10">
-										{activeRow ? (
-											<ReviewDetail
-												attach={attach.get(activeRow.id)}
-												chosenTopics={topicChoice.get(activeRow.id) ?? new Set()}
-												criteriaCount={criteria.length}
-												key={activeRow.id}
-												locked={busy}
-												onOpenRecord={onOpenRecord}
-												onToggleTopic={(topicId) =>
-													setTopicChoice((current) => {
-														const next = new Set(current.get(activeRow.id));
-														if (next.has(topicId)) next.delete(topicId);
-														else next.add(topicId);
-														return new Map(current).set(activeRow.id, next);
-													})
-												}
-												result={resultById.get(activeRow.id)}
-												row={activeRow}
-											/>
-										) : null}
-									</div>
+							<div className="grid min-h-0 flex-1 grid-cols-[22rem_minmax(0,1fr)] border-t border-black/[0.06] dark:border-white/[0.06]">
+								<div className="min-h-0 overflow-y-auto border-e border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
+									<ReviewList activeId={activeRow?.id ?? null} attach={attach} criteriaCount={criteria.length} filter={filter} locked={busy} onActivate={setActiveId} onSelectedChange={setSelected} readyIds={rows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))} results={results} rows={shown} selected={selected} />
+								</div>
+								<div className="min-h-0 overflow-y-auto px-7 py-6">
+									{activeRow ? (
+										<ReviewDetail
+											attach={attach.get(activeRow.id)}
+											chosenTopics={topicChoice.get(activeRow.id) ?? new Set()}
+											criteriaCount={criteria.length}
+											key={activeRow.id}
+											locked={busy}
+											onOpenRecord={onOpenRecord}
+											onToggleTopic={(topicId) =>
+												setTopicChoice((current) => {
+													const next = new Set(current.get(activeRow.id));
+													if (next.has(topicId)) next.delete(topicId);
+													else next.add(topicId);
+													return new Map(current).set(activeRow.id, next);
+												})
+											}
+											result={resultById.get(activeRow.id)}
+											row={activeRow}
+										/>
+									) : null}
 								</div>
 							</div>
-						) : null}
-						{stage === "done" && results ? (
-							<div className="min-h-0 flex-1 overflow-y-auto px-7 pb-6">
-								<ImportDone attach={attach} onOpenRecord={onOpenRecord} results={results} rows={rows} />
-							</div>
-						) : null}
-					</motion.div>
-				</AnimatePresence>
-				<footer className="flex h-[4.25rem] shrink-0 items-center gap-2 border-t border-black/[0.06] px-7 dark:border-white/[0.06]">
-					{error || footerProblem ? (
-						<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
-							{error ?? footerProblem}
-						</p>
-					) : stage === "review" ? (
-						<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+						</div>
+					) : null}
+					{stage === "done" && results ? (
+						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+							<ImportDone attach={attach} onOpenRecord={onOpenRecord} results={results} rows={rows} />
+						</div>
+					) : null}
+				</motion.div>
+			</AnimatePresence>
+			<footer className="flex h-16 shrink-0 items-center gap-2 border-t border-black/[0.06] px-6 dark:border-white/[0.06]">
+				{error || footerProblem ? (
+					<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
+						{error ?? footerProblem}
+					</p>
+				) : stage === "review" ? (
+					<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+				) : null}
+				<span className="ms-auto flex items-center gap-2">
+					{stage === "review" ? (
+						<Button isDisabled={busy} onPress={restart} size="sm" variant="transparent">
+							Back
+						</Button>
+					) : null}
+					{stage === "done" ? (
+						<Button onPress={restart} size="sm" variant="transparent">
+							Import more
+						</Button>
 					) : (
-						<span className="flex-1" />
+						<Button isDisabled={busy && stage === "input"} onPress={onClose} size="sm" variant="transparent">
+							Cancel
+						</Button>
 					)}
-					<span className="ms-auto flex items-center gap-2">
-						{stage === "review" ? (
-							<Button isDisabled={busy} onPress={restart} size="sm" variant="transparent">
-								Back
-							</Button>
-						) : null}
-						{stage === "done" ? (
-							<Button onPress={restart} size="sm" variant="transparent">
-								Import more
-							</Button>
-						) : (
-							<Button isDisabled={busy && stage === "input"} onPress={onClose} size="sm" variant="transparent">
-								Cancel
-							</Button>
-						)}
-						{stage === "input" ? (
-							<Button className="min-w-32 font-medium" color="accent" isDisabled={problem !== null} isLoading={busy} onPress={() => void start()} size="sm" variant="solid">
-								{primaryLabel}
-							</Button>
-						) : null}
-						{stage === "review" ? (
-							<Button className="min-w-36 font-medium" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy && !reading} onPress={() => void commit()} size="sm" variant="solid">
-								{action("Import", selected.size, "record", "records")}
-							</Button>
-						) : null}
-						{stage === "done" ? (
-							<Button className="min-w-24 font-medium" color="accent" onPress={onClose} size="sm" variant="solid">
-								Done
-							</Button>
-						) : null}
-					</span>
-				</footer>
-			</div>
+					{stage === "input" ? (
+						<Button className="min-w-28" color="accent" isDisabled={problem !== null} isLoading={busy} onPress={() => void start()} size="sm" variant="solid">
+							{primaryLabel}
+						</Button>
+					) : null}
+					{stage === "review" ? (
+						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy && !reading} onPress={() => void commit()} size="sm" variant="solid">
+							{action("Import", selected.size, "record", "records")}
+						</Button>
+					) : null}
+					{stage === "done" ? (
+						<Button className="min-w-24" color="accent" onPress={onClose} size="sm" variant="solid">
+							Done
+						</Button>
+					) : null}
+				</span>
+			</footer>
 		</div>
 	);
 }
