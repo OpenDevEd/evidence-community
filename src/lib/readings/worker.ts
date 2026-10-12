@@ -43,15 +43,22 @@ type Subject = { key: string; subject: string; hash: string };
  * metadata says retypes a record whose text has not changed: at no cost when the metadata now gives the type, with a
  * type-only question when it no longer does. A type Jev was unsure of from the abstract is asked again from the PDF.
  */
+type Reading = NonNullable<Stored["reading"]>;
+
+/** Whether what the metadata says the record is differs from how its reading was typed. */
+const metadataChanged = (reading: Reading, metadataType: StudyTypeKey | null) =>
+	metadataType ? reading.typedBy !== "metadata" || reading.studyType !== metadataType : reading.typedBy === "metadata";
+
+/** Whether Jev's type, unsure from the abstract, can be asked again from the PDF the record now has. */
+const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
+	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < LOW_CONFIDENCE;
+
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
 	const contentHash = hash(`${record.title}\n${record.abstract}`);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
 	const metadataType = metadataStudyType(record);
-	const retype = fresh && (metadataType
-		? stored.reading!.typedBy !== "metadata" || stored.reading!.studyType !== metadataType
-		: stored.reading!.typedBy === "metadata");
-	const pdf = fresh && !retype && !metadataType && Boolean(record.pdf) && stored.reading!.typedBy === "ai"
-		&& stored.reading!.input !== "pdf" && stored.reading!.typeConfidence < LOW_CONFIDENCE;
+	const retype = fresh && metadataChanged(stored.reading!, metadataType);
+	const pdf = fresh && !retype && !metadataType && pdfCanSettle(record, stored.reading!);
 	const stale = fresh ? subjects.filter((subject) => !stored.grades.get(subject.key)?.includes(subject.hash)) : subjects;
 	if (fresh && !stale.length && !retype && !pdf) return null;
 	const graded = stale.slice(0, GRADES_PER_CALL);
