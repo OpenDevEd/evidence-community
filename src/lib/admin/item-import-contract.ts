@@ -4,6 +4,7 @@ import { z } from "zod";
 import { normalizeDoi } from "@/lib/doi";
 
 import type { AdminFieldErrors } from "./errors";
+import type { PdfPropertiesReading } from "./pdf-properties";
 
 export const ADMIN_IMPORT_MAX_RECORDS = 500;
 export const ADMIN_IMPORT_MAX_FILES = 20;
@@ -131,14 +132,34 @@ export type TopicSuggestion = {
 };
 
 export type AdminPdfReadResponse = {
+	/** The PDF had no abstract, so the AI's summary is the record's abstract. */
+	abstractWritten: boolean;
 	checks: PdfCheckResult[];
 	topics: TopicSuggestion[];
-	costUsd: number | null;
-	inputTokens: number | null;
+	costUsd: number;
+	inputTokens: number;
 	ms: number;
-	outputTokens: number | null;
+	outputTokens: number;
+	/** The properties the PDF carries now, before publishing writes the record into it. */
+	pdf: PdfPropertiesReading;
 	record: AdminImportPreviewRecord;
 };
+
+/** OpenRouter's price for Claude Haiku 5.5 per token, checked 2026-10-12. */
+export const PDF_IMPORT_PRICE = { input: 0.1 / 1_000_000, output: 0.5 / 1_000_000 };
+
+export function pdfImportCost(inputTokens: number, outputTokens: number) {
+	return inputTokens * PDF_IMPORT_PRICE.input + outputTokens * PDF_IMPORT_PRICE.output;
+}
+
+// Measured on the sample reports: each page costs about 2,000 input tokens;
+// the subfield list, the instructions and the topic call add the rest.
+const ESTIMATE_TOKENS = { page: 2_000, pdf: 17_000, output: 4_000 };
+
+/** What reading these PDFs should cost, from their page counts. */
+export function estimatePdfImportCost(pages: number, pdfs: number) {
+	return pdfImportCost(pages * ESTIMATE_TOKENS.page + pdfs * ESTIMATE_TOKENS.pdf, pdfs * ESTIMATE_TOKENS.output);
+}
 
 
 export type AdminImportCommitResult = {

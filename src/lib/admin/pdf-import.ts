@@ -5,7 +5,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 
-import type { PdfCheckResult, TopicSuggestion } from "./item-import-contract";
+import { pdfImportCost, type PdfCheckResult, type TopicSuggestion } from "./item-import-contract";
 import { subfields, subfieldTopics, type TopicCandidate } from "./openalex-topic-tree";
 
 // shortcut: the mock reads PDFs on the server's own OpenRouter key and in the
@@ -54,11 +54,14 @@ const pdfReadingSchema = z.object({
 		language: z.string().nullable().describe("ISO 639-1 code"),
 		url: z.string().nullable(),
 		ISBN: z.string().nullable(),
+		rights: z.string().nullable().describe("The copyright and licence statement, verbatim"),
 		pages: z.string().nullable(),
 		volume: z.string().nullable(),
 		issue: z.string().nullable(),
 	}),
-	summary: z.string().describe("Two sentences on what the work studies, with whom, where and how"),
+	summary: z
+		.string()
+		.describe("Three to five sentences for a reader of the library: the question, where and with whom, the method, and the main findings. It becomes the abstract when the PDF has none."),
 	subfields: z.array(z.string()).describe("Up to three subfield ids from the list, such as subfields/3304"),
 	checks: z.array(
 		z.object({
@@ -72,10 +75,11 @@ const pdfReadingSchema = z.object({
 });
 
 export type PdfReading = {
+	abstractWritten: boolean;
 	checks: PdfCheckResult[];
-	costUsd: number | null;
-	inputTokens: number | null;
-	outputTokens: number | null;
+	costUsd: number;
+	inputTokens: number;
+	outputTokens: number;
 	topics: TopicSuggestion[];
 	zoteroItem: Record<string, unknown>;
 };
@@ -179,11 +183,13 @@ export async function readImportPdf(
 		],
 	});
 	const byIndex = new Map(result.output.checks.map((check) => [check.index, check]));
-	const openRouterUsage = (result.providerMetadata?.openrouter as { usage?: { cost?: number } } | undefined)?.usage;
 	const { metadata, summary } = result.output;
 	const chosen = await chooseTopics({ abstract: metadata.abstractNote, summary, title: metadata.title }, result.output.subfields);
 	const usages = chosen.usage ? [result.usage, chosen.usage] : [result.usage];
+	const inputTokens = total(usages, "inputTokens");
+	const outputTokens = total(usages, "outputTokens");
 	return {
+		abstractWritten: !metadata.abstractNote,
 		checks: criteria.map((criterion, index) => {
 			const found = byIndex.get(index + 1);
 			return {
@@ -194,10 +200,11 @@ export async function readImportPdf(
 				result: found?.result ?? "unclear",
 			};
 		}),
-		costUsd: openRouterUsage?.cost ?? null,
-		inputTokens: total(usages, "inputTokens"),
-		outputTokens: total(usages, "outputTokens"),
+		// OpenRouter reports a cost of 0 on this key, so the cost comes from the tokens.
+		costUsd: pdfImportCost(inputTokens, outputTokens),
+		inputTokens,
+		outputTokens,
 		topics: chosen.topics,
-		zoteroItem: zoteroItemFrom(metadata),
+		zoteroItem: zoteroItemFrom({ ...metadata, abstractNote: metadata.abstractNote ?? summary }),
 	};
 }

@@ -7,6 +7,7 @@ const AT_ONCE = 3;
 
 let library: Promise<PdfJs> | null = null;
 const thumbnails = new WeakMap<File, Promise<string | null>>();
+const pageCounts = new WeakMap<File, Promise<number | null>>();
 let running = 0;
 const waiting: Array<() => void> = [];
 
@@ -58,4 +59,24 @@ export function pdfThumbnail(file: File) {
 		thumbnails.set(file, thumbnail);
 	}
 	return thumbnail;
+}
+
+async function countPages(file: File) {
+	const lib = await pdfjs();
+	const task = lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	try {
+		return (await task.promise).numPages;
+	} finally {
+		await task.destroy();
+	}
+}
+
+/** How many pages a chosen PDF has, read once per file. Null when it can't be opened. */
+export function pdfPageCount(file: File) {
+	let count = pageCounts.get(file);
+	if (!count) {
+		count = inTurn(() => countPages(file)).catch(() => null);
+		pageCounts.set(file, count);
+	}
+	return count;
 }

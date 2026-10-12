@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	criteriaFrom,
 	doiPreviewRequest,
 	filePreviewRequest,
+	recordRights,
+	rowsFromRecords,
 	selectedImportRecords,
 	summarizeImportResults,
+	type ImportRow,
 } from "@/components/admin/admin-import";
 import type { AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
 
@@ -46,11 +48,25 @@ describe("import input checks", () => {
 	});
 });
 
-describe("checks saved in the browser", () => {
-	it("reads the saved list, the first mock's lines of text, or the defaults", () => {
-		expect(criteriaFrom(JSON.stringify(["Names the funder"]))).toEqual(["Names the funder"]);
-		expect(criteriaFrom("Names the funder\n\n States a licence ")).toEqual(["Names the funder", "States a licence"]);
-		expect(criteriaFrom(null)).toContain("Names the funder of the work");
+describe("the record's Rights after fixes", () => {
+	const checks = [
+		{ fix: "", text: "Credits the funder" },
+		{ fix: "© Crown copyright", text: "Carries a Crown copyright notice" },
+		{ fix: "Licensed under the Open Government Licence v3.0", text: "Is licensed under the OGL" },
+	];
+	const row = (results: Array<"met" | "not_met">, fixed: number[]): ImportRow => ({
+		...rowsFromRecords([record({ id: "1", payload: { rights: "© EdTech Hub 2024. CC BY 4.0" } })])[0]!,
+		checks: results.map((result, index) => ({ criterion: checks[index]!.text, page: null, quote: null, recommendation: null, result })),
+		fixed,
+	});
+
+	it("keeps what the PDF states until a check is fixed", () => {
+		expect(recordRights(row(["met", "not_met", "not_met"], []), checks)).toBe("© EdTech Hub 2024. CC BY 4.0");
+	});
+
+	it("builds the statement from the fixed checks and the met ones, in the checks' order", () => {
+		expect(recordRights(row(["not_met", "met", "not_met"], [2]), checks)).toBe("© Crown copyright. Licensed under the Open Government Licence v3.0");
+		expect(recordRights(row(["met", "not_met", "not_met"], [2]), checks)).toBe("Licensed under the Open Government Licence v3.0");
 	});
 });
 

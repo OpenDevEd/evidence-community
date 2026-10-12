@@ -8,7 +8,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { parseAsString, useQueryState } from "nuqs";
 import { AdminDigestsInspector, AdminDigestsMain, useAdminDigests } from "./AdminDigests";
 import { DigestsPage, digestShowFor, recordStateFor, type DigestShow } from "./admin-digests-page";
-import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArchiveIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Delete02Icon, FileImportIcon, Folder01Icon, FolderInputIcon, LibraryIcon, Files01Icon, Loading03Icon, Logout01Icon, FilterHorizontalIcon, FileEditIcon, Refresh01Icon, Search01Icon, SentIcon, Tick01Icon } from "@hugeicons/core-free-icons";
 import {
 	ModalBody,
 	ModalContent,
@@ -63,6 +63,7 @@ import { Link } from "@/i18n/routing";
 
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
+import { importButtonLabel, useImportBatch } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
@@ -513,6 +514,7 @@ export default function AdminWorkbench({
 	}, [setFilters, digestsOpen, digestsShow, setDigestsParam, forgetDigestsShow]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
+	const importLabel = importButtonLabel(useImportBatch());
 	const [newItemSearch, setNewItemSearch] = useState("");
 	const [collectionDialog, setCollectionDialog] =
 		useState<CollectionDialog | null>(null);
@@ -2330,10 +2332,10 @@ export default function AdminWorkbench({
 						className="flex items-center overflow-hidden rounded-xl shadow-sm shadow-accent/10"
 						role="group"
 					>
-						<Tooltip content="Import Item" isDisabled={showImportLabel}>
+						<Tooltip content={importLabel.text} isDisabled={showImportLabel}>
 							<Button
 								aria-label="Import Item"
-								className="h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3"
+								className={`h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3 ${importLabel.batch ? "lg:!w-[9.5rem]" : ""}`}
 								color="secondary"
 								isDisabled={busy}
 								onPress={() => setImportOpen(true)}
@@ -2341,12 +2343,13 @@ export default function AdminWorkbench({
 								variant="solid"
 							>
 								<HugeiconsIcon
-									icon={FileImportIcon}
+									icon={importLabel.reading ? Loading03Icon : FileImportIcon}
 									aria-hidden
+									className={importLabel.reading ? "animate-spin motion-reduce:animate-none" : undefined}
 									size={15}
 								/>
-								<span className="hidden lg:inline">
-									Import Item
+								<span className="hidden tabular-nums lg:inline">
+									{importLabel.text}
 								</span>
 							</Button>
 						</Tooltip>

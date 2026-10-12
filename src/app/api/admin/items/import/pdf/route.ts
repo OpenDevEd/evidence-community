@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/item-import-contract";
 import { previewEntries } from "@/lib/admin/item-import-service";
 import { readImportPdf } from "@/lib/admin/pdf-import";
+import { readPdfProperties } from "@/lib/admin/pdf-properties";
 import { assertPdfHeader } from "@/lib/admin/pdf-processing";
 
 export const maxDuration = 300;
@@ -48,16 +49,18 @@ export async function POST(request: NextRequest) {
 		assertPdfHeader(bytes);
 
 		const started = Date.now();
-		const reading = await readImportPdf(bytes, file.name, criteria);
+		const [reading, pdf] = await Promise.all([readImportPdf(bytes, file.name, criteria), readPdfProperties(bytes)]);
 		const { records } = await previewEntries(await getDatabase(), [
 			{ method: "file", source: file.name, zoteroItem: reading.zoteroItem },
 		]);
 		const response: AdminPdfReadResponse = {
+			abstractWritten: reading.abstractWritten,
 			checks: reading.checks,
 			costUsd: reading.costUsd,
 			inputTokens: reading.inputTokens,
 			ms: Date.now() - started,
 			outputTokens: reading.outputTokens,
+			pdf,
 			record: records[0]!,
 			topics: reading.topics,
 		};

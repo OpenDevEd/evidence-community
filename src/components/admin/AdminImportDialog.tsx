@@ -3,7 +3,7 @@
 import { Folder01Icon } from "@hugeicons/core-free-icons";
 import { ModalContent, Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { Suspense, use, useDeferredValue, useState } from "react";
 import { toast } from "sonner";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -13,38 +13,50 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { Tab, Tabs } from "@/components/nextui/Tabs";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
+import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { ImportDone } from "./ImportDone";
 import { BibliographyInput, DoiInput, PdfInput } from "./ImportInputs";
-import { ReviewBar, ReviewDetail, ReviewList, type AttachState } from "./ImportReview";
+import { ReviewBar, ReviewDetail, ReviewList, usd } from "./ImportReview";
 import { ImportSteps, type ImportKind, type ImportStage } from "./ImportSteps";
 import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
 import {
+	changeImportBatch,
+	changeImportRow,
+	chosenTopics,
 	doiPreviewRequest,
+	endImportBatch,
 	filePreviewRequest,
-	initialTopicChoice,
 	pendingPdfRows,
+	publishedProperties,
+	publishImported,
 	readPdfs,
+	readyIds,
+	recordRights,
+	reviewChecks,
 	reviewCounts,
 	reviewMatches,
 	rowsFromRecords,
+	selectedIds,
 	selectedImportRecords,
-	storeCriteria,
-	storedCriteria,
+	startImportBatch,
+	storeChecks,
+	storedChecks,
 	storeReview,
 	summarizeImportResults,
-	validateCriteria,
+	useImportBatch,
+	validateChecks,
 	validateImportFiles,
 	validatePdfFiles,
+	type AttachState,
+	type ImportCheck,
 	type ImportRow,
 	type ReviewFilter,
 } from "./admin-import";
 import { uploadPdfFile } from "./admin-pdf";
-
-type Review = { importId: string; rows: ImportRow[] };
+import { pdfPageCount } from "./pdf-thumbnail";
 
 function errorMessage(error: unknown) {
 	if (error instanceof AdminApiError) {
@@ -54,13 +66,13 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], criteria: readonly string[]) {
+function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly ImportCheck[]) {
 	try {
 		if (kind === "dois") doiPreviewRequest(doiText);
 		else if (kind === "files") validateImportFiles(files);
 		else {
 			validatePdfFiles(pdfs);
-			validateCriteria(criteria);
+			validateChecks(checks);
 		}
 		return null;
 	} catch (error) {
@@ -105,6 +117,28 @@ export function AdminImportDialog({
 	);
 }
 
+const pageTotals = new WeakMap<readonly File[], Promise<number | null>>();
+
+/** The chosen PDFs' pages added up, once per selection. Null when one can't be opened. */
+function pagesIn(files: readonly File[]) {
+	let total = pageTotals.get(files);
+	if (!total) {
+		total = Promise.all(files.map(pdfPageCount)).then((counts) => (counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0)));
+		pageTotals.set(files, total);
+	}
+	return total;
+}
+
+function CostEstimate({ files, stale }: { files: readonly File[]; stale: boolean }) {
+	const pages = use(pagesIn(files));
+	if (pages === null) return null;
+	return (
+		<p className={`animate-fade-in text-xs tabular-nums text-black/50 transition-opacity duration-200 [animation-duration:300ms] dark:text-white/50 ${stale ? "opacity-50" : ""}`}>
+			About {usd(estimatePdfImportCost(pages, files.length))} for {pages} pages
+		</p>
+	);
+}
+
 function ImportFlow({
 	onClose,
 	onImported,
@@ -118,30 +152,32 @@ function ImportFlow({
 }) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
 	const reduceMotion = useReducedMotion();
-	const [kind, setKind] = useState<ImportKind>("pdfs");
+	const batch = useImportBatch();
+	const [kind, setKind] = useState<ImportKind>(batch?.kind ?? "pdfs");
 	const [doiText, setDoiText] = useState("");
 	const [files, setFiles] = useState<File[]>([]);
 	const [pdfs, setPdfs] = useState<File[]>([]);
-	const [criteria, setCriteria] = useState(storedCriteria);
-	const [review, setReview] = useState<Review | null>(null);
+	const estimateFiles = useDeferredValue(pdfs);
+	const [checks, setChecks] = useState(storedChecks);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [filter, setFilter] = useState<ReviewFilter>("all");
-	const [selected, setSelected] = useState<Set<string>>(new Set());
-	const [topicChoice, setTopicChoice] = useState<ReadonlyMap<string, ReadonlySet<string>>>(new Map());
 	const [collections, setCollections] = useState<string[]>([]);
-	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
-	const [attach, setAttach] = useState<ReadonlyMap<string, AttachState>>(new Map());
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	const stage: ImportStage = results ? "done" : review ? "review" : "input";
-	const problem = inputError(kind, doiText, files, pdfs, criteria);
-	const rows = review?.rows ?? [];
+	const stage: ImportStage = batch?.results ? "done" : batch ? "review" : "input";
+	const problem = inputError(kind, doiText, files, pdfs, checks);
+	const rows = batch?.rows ?? [];
 	const counts = reviewCounts(rows);
-	const reading = kind === "pdfs" && counts.done < counts.total;
+	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
 	const shown = rows.filter((row) => reviewMatches(row, filter));
 	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
-	const resultById = new Map((results ?? []).map((result) => [result.id, result]));
+	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
+	const selected = batch ? selectedIds(batch) : new Set<string>();
+	const checksOf = (row: ImportRow) => reviewChecks(row, batch?.checks ?? []);
+	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
+	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
+	const propertiesOf = (row: ImportRow) => publishedProperties(row, batch?.checks ?? [], topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -155,35 +191,28 @@ function ImportFlow({
 		}
 	};
 
-	const changeRow = (row: ImportRow) => {
-		setReview((current) => current && { ...current, rows: current.rows.map((other) => (other.id === row.id ? row : other)) });
-		if (row.state !== "read") return;
-		setTopicChoice((current) => new Map(current).set(row.id, initialTopicChoice(row.topics)));
-		if (row.record?.state === "ready") setSelected((current) => new Set(current).add(row.id));
-	};
-
 	const start = () =>
 		run(async () => {
 			setFilter("all");
+			const importId = crypto.randomUUID();
 			if (kind === "pdfs") {
-				storeCriteria(criteria);
+				storeChecks(checks);
 				const pending = pendingPdfRows(pdfs);
-				setSelected(new Set());
 				setActiveId(pending[0]?.id ?? null);
-				setReview({ importId: crypto.randomUUID(), rows: pending });
-				await readPdfs(pending, (file) => readAdminImportPdf(file, criteria), changeRow, errorMessage);
+				startImportBatch({ checks, importId, kind, rows: pending });
+				const texts = checks.map(({ text }) => text);
+				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, texts), errorMessage);
 				return;
 			}
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
 			const previewRows = rowsFromRecords(response.records);
 			setActiveId(previewRows[0]?.id ?? null);
-			setSelected(new Set(previewRows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))));
-			setReview({ importId: crypto.randomUUID(), rows: previewRows });
+			startImportBatch({ checks: [], importId, kind, rows: previewRows });
 		});
 
-	const attachPdfs = async (created: AdminImportCommitResult[]) => {
+	const attachPdfs = async (importId: string, created: AdminImportCommitResult[]) => {
 		const rowById = new Map(rows.map((row) => [row.id, row]));
-		const mark = (id: string, state: AttachState) => setAttach((current) => new Map(current).set(id, state));
+		const mark = (id: string, state: AttachState) => changeImportBatch(importId, (current) => ({ ...current, attach: new Map(current.attach).set(id, state) }));
 		for (const { id } of created) mark(id, "attaching");
 		await Promise.all(
 			created.map(async ({ id, itemKey }) => {
@@ -203,31 +232,32 @@ function ImportFlow({
 
 	const commit = () =>
 		run(async () => {
-			if (!review) return;
-			const chosen = (id: string) => [...(topicChoice.get(id) ?? [])];
+			if (!batch) return;
+			const rowById = new Map(rows.map((row) => [row.id, row]));
 			const records = selectedImportRecords(
 				rows.flatMap(({ record }) => (record ? [record] : [])),
 				selected,
-			).map((record) => (topicsEnabled && chosen(record.id).length ? { ...record, payload: { ...record.payload, topics: chosen(record.id) } } : record));
-			const response = await commitAdminImport({ collections, importId: review.importId, records });
-			setResults(response.results);
+			).map((record) => {
+				const row = rowById.get(record.id)!;
+				const topics = [...topicsOf(row)];
+				const rights = recordRights(row, batch.checks);
+				return { ...record, payload: { ...record.payload, ...(topicsEnabled && topics.length ? { topics } : {}), ...(rights ? { rights } : {}) } };
+			});
+			const response = await commitAdminImport({ collections, importId: batch.importId, records });
+			changeImportBatch(batch.importId, (current) => ({ ...current, results: response.results }));
 			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
 			for (const { id, itemKey } of created) {
-				const row = rows.find((other) => other.id === id);
-				if (row) storeReview(itemKey!, { checks: row.checks, topics: row.topics.filter((topic) => topicChoice.get(id)?.has(topic.id)) });
+				const row = rowById.get(id)!;
+				storeReview(itemKey!, { abstractWritten: row.abstractWritten, checks: checksOf(row), topics: row.topics.filter((topic) => topicsOf(row).has(topic.id)) });
 			}
 			const summary = summarizeImportResults(response.results);
-			if (kind === "pdfs") void attachPdfs(created);
+			if (batch.kind === "pdfs") void attachPdfs(batch.importId, created);
 			await onImported(summary.createdKeys);
 			(summary.failed ? toast.warning : toast.success)(summary.message);
 		});
 
 	const restart = () => {
-		setReview(null);
-		setResults(null);
-		setAttach(new Map());
-		setTopicChoice(new Map());
-		setSelected(new Set());
+		endImportBatch();
 		setCollections([]);
 		setError(null);
 		if (stage === "done") {
@@ -235,6 +265,11 @@ function ImportFlow({
 			setFiles([]);
 			setDoiText("");
 		}
+	};
+
+	const finish = () => {
+		endImportBatch();
+		onClose();
 	};
 
 	const primaryLabel = { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: action("Read", pdfs.length, "PDF", "PDFs") }[kind];
@@ -271,7 +306,16 @@ function ImportFlow({
 								selectedKey={kind}
 							>
 								<Tab key="pdfs" title="PDFs">
-									<PdfInput busy={busy} criteria={criteria} files={pdfs} onCriteriaChange={(value) => { setCriteria(value); storeCriteria(value); }} onFilesChange={setPdfs} />
+									<PdfInput
+										busy={busy}
+										checks={checks}
+										files={pdfs}
+										onChecksChange={(value) => {
+											setChecks(value);
+											storeChecks(value);
+										}}
+										onFilesChange={setPdfs}
+									/>
 								</Tab>
 								<Tab key="dois" title="DOIs">
 									<DoiInput busy={busy} onChange={setDoiText} text={doiText} />
@@ -282,32 +326,48 @@ function ImportFlow({
 							</Tabs>
 						</div>
 					) : null}
-					{stage === "review" ? (
+					{stage === "review" && batch ? (
 						<div className="flex min-h-0 flex-1 flex-col">
 							<div className="shrink-0 px-6 py-3">
-								<ReviewBar counts={counts} filter={filter} kind={kind} onFilter={setFilter} />
+								<ReviewBar costUsd={rows.reduce((sum, row) => sum + row.costUsd, 0)} counts={counts} filter={filter} kind={batch.kind} onFilter={setFilter} />
 							</div>
 							<div className="grid min-h-0 flex-1 grid-cols-[22rem_minmax(0,1fr)] border-t border-black/[0.06] dark:border-white/[0.06]">
 								<div className="min-h-0 overflow-y-auto border-e border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
-									<ReviewList activeId={activeRow?.id ?? null} attach={attach} criteriaCount={criteria.length} filter={filter} locked={busy} onActivate={setActiveId} onSelectedChange={setSelected} readyIds={rows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []))} results={results} rows={shown} selected={selected} />
+									<ReviewList
+										activeId={activeRow?.id ?? null}
+										attach={batch.attach}
+										checksOf={checksOf}
+										criteriaCount={batch.checks.length}
+										filter={filter}
+										locked={busy}
+										onActivate={setActiveId}
+										onSelectedChange={(next) => changeImportBatch(batch.importId, (current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) }))}
+										readyIds={readyIds(rows)}
+										results={batch.results}
+										rows={shown}
+										selected={selected}
+									/>
 								</div>
 								<div className="min-h-0 overflow-y-auto px-7 py-6">
 									{activeRow ? (
 										<ReviewDetail
-											attach={attach.get(activeRow.id)}
-											chosenTopics={topicChoice.get(activeRow.id) ?? new Set()}
-											criteriaCount={criteria.length}
+											attach={batch.attach.get(activeRow.id)}
+											checks={checksOf(activeRow)}
+											chosenTopics={topicsOf(activeRow)}
+											criteriaCount={batch.checks.length}
 											key={activeRow.id}
 											locked={busy}
+											onFix={(index) => changeImportRow(batch.importId, activeRow.id, (row) => ({ ...row, fixed: row.fixed.includes(index) ? row.fixed.filter((other) => other !== index) : [...row.fixed, index] }))}
 											onOpenRecord={onOpenRecord}
 											onToggleTopic={(topicId) =>
-												setTopicChoice((current) => {
-													const next = new Set(current.get(activeRow.id));
+												changeImportBatch(batch.importId, (current) => {
+													const next = new Set(chosenTopics(current, activeRow));
 													if (next.has(topicId)) next.delete(topicId);
 													else next.add(topicId);
-													return new Map(current).set(activeRow.id, next);
+													return { ...current, topics: new Map(current.topics).set(activeRow.id, next) };
 												})
 											}
+											properties={propertiesOf(activeRow)}
 											result={resultById.get(activeRow.id)}
 											row={activeRow}
 										/>
@@ -316,20 +376,27 @@ function ImportFlow({
 							</div>
 						</div>
 					) : null}
-					{stage === "done" && results ? (
+					{stage === "done" && batch?.results ? (
 						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
-							<ImportDone attach={attach} onOpenRecord={onOpenRecord} results={results} rows={rows} />
+							<ImportDone batch={batch} onOpenRecord={onOpenRecord} onPublish={(ids) => void publishImported(batch.importId, ids)} />
 						</div>
 					) : null}
 				</motion.div>
 			</AnimatePresence>
-			<footer className="flex h-16 shrink-0 items-center gap-2 border-t border-black/[0.06] px-6 dark:border-white/[0.06]">
+			<footer className="flex h-16 shrink-0 items-center gap-3 border-t border-black/[0.06] px-6 dark:border-white/[0.06]">
 				{error || footerProblem ? (
 					<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
 						{error ?? footerProblem}
 					</p>
 				) : stage === "review" ? (
-					<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+					<>
+						<CollectionsButton collections={collections} locked={busy} onChange={setCollections} sources={sources} />
+						{reading ? <p className="text-xs text-black/50 dark:text-white/50">Reading carries on if you close this</p> : null}
+					</>
+				) : stage === "input" && kind === "pdfs" && estimateFiles.length ? (
+					<Suspense fallback={null}>
+						<CostEstimate files={estimateFiles} stale={estimateFiles !== pdfs} />
+					</Suspense>
 				) : null}
 				<span className="ms-auto flex items-center gap-2">
 					{stage === "review" ? (
@@ -343,7 +410,7 @@ function ImportFlow({
 						</Button>
 					) : (
 						<Button isDisabled={busy && stage === "input"} onPress={onClose} size="sm" variant="transparent">
-							Cancel
+							{stage === "review" ? "Close" : "Cancel"}
 						</Button>
 					)}
 					{stage === "input" ? (
@@ -352,12 +419,12 @@ function ImportFlow({
 						</Button>
 					) : null}
 					{stage === "review" ? (
-						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy && !reading} onPress={() => void commit()} size="sm" variant="solid">
+						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={busy} onPress={() => void commit()} size="sm" variant="solid">
 							{action("Import", selected.size, "record", "records")}
 						</Button>
 					) : null}
 					{stage === "done" ? (
-						<Button className="min-w-24" color="accent" onPress={onClose} size="sm" variant="solid">
+						<Button className="min-w-24" color="accent" onPress={finish} size="sm" variant="solid">
 							Done
 						</Button>
 					) : null}
