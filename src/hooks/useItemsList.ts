@@ -24,8 +24,10 @@ function useItemsResults(
 
 	const itemsQuery = useMemo(
 		() =>
+			// A record opened from the list adds where to go back to. Leaving it out keeps the list's address while
+			// the reader is on the record, so Back finds the list it left instead of loading it again.
 			userData
-				? buildItemsQuery(params, `/user/items/${userData.id}`)
+				? buildItemsQuery({ ...listingParams(params), collectionId: params.collectionId }, `/user/items/${userData.id}`)
 				: buildItemsQuery(listingParams(params), "/items"),
 		[params, userData]
 	);

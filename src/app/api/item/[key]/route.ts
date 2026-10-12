@@ -5,7 +5,7 @@ import { getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Collection } from "../../collections/types";
-import { getCachedCollections } from "../../cache";
+import { getCachedCollections, getCachedItemPage } from "../../cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "../types";
@@ -67,7 +67,11 @@ export async function GET(
 	try {
 		const { searchParams } = new URL(request.url);
 		let result;
-		if (searchParams.get("view") === "card") {
+		const view = searchParams.get("view");
+		if (view === "page") {
+			// What the record's page draws, for a page that has to read its record again.
+			result = await getCachedItemPage(key);
+		} else if (view === "card") {
 			const config = await getLibraryConfig();
 			const database = await getDatabaseForConfig(config);
 			result = { item: await getPublicItemCard(database, key, config) };
