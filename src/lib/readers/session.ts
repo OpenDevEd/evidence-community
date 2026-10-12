@@ -1,14 +1,12 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
 import { headers as requestHeaders } from "next/headers";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { readerAccount } from "@/db/schema/tables/reader";
 
+import { clerkUserIdOf } from "./data";
 import { getReaderAuthForConfig } from "./instance";
-import { OPENSCHOLAR_PROVIDER_ID } from "./openscholar";
 
 export type SignedInReader = { id: string; name: string; image: string | null };
 
@@ -33,9 +31,6 @@ export async function getSignedInOpenScholarUser(headers: Headers, config: Libra
 	const reader = await getSignedInReader(headers, config);
 	if (!reader) return null;
 	const { database } = await getReaderAuthForConfig(config);
-	const account = await database.query.readerAccount.findFirst({
-		where: and(eq(readerAccount.userId, reader.id), eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID)),
-		columns: { accountId: true },
-	});
-	return account ? { ...reader, clerkUserId: account.accountId } : null;
+	const clerkUserId = await clerkUserIdOf(database, reader.id);
+	return clerkUserId ? { ...reader, clerkUserId } : null;
 }

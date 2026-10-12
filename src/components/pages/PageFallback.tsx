@@ -18,6 +18,9 @@ const GapMaps = dynamic(() => import("@/components/pages/GapMaps"));
 const NotFound = dynamic(() => import("@/components/layout/NotFound"));
 const DigestPages = dynamic(() => import("@/components/digests/DigestPages"));
 const Contact = dynamic(() => import("@/components/pages/Contact"));
+const CollectionInvitationPlaceholder = dynamic(() =>
+	import("@/components/pages/CollectionInvitation").then((module) => module.CollectionInvitationPlaceholder),
+);
 
 // Data the page has not read yet: parts that wait on it keep their own placeholders until the page replaces them.
 const PENDING = new Promise<never>(() => {});
@@ -58,6 +61,7 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	"404": () => <NotFound />,
 	digests: (slug) => <DigestFallback slug={slug} />,
 	contact: (_, server) => <Contact formEnabled={server.contactForm} />,
+	invitations: (id) => id && <CollectionInvitationPlaceholder invitationId={id} />,
 };
 
 /**
