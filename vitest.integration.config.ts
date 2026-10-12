@@ -31,6 +31,7 @@ export default defineConfig({
             "tests/integration/notifications.test.ts",
             "tests/integration/digest-editorial.test.ts",
             "tests/integration/digest-kinds.test.ts",
+            "tests/integration/record-reading.test.ts",
             "tests/integration/public-library-status.test.ts",
             "tests/integration/reader-collection-privacy.test.ts",
             "tests/integration/reader-accounts.test.ts",

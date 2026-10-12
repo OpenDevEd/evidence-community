@@ -45,6 +45,7 @@ async function verify() {
 		enabled: true,
 		writebackEnabled: true,
 		settings,
+		screening: {enabled: false, subject: "", keptOut: ["not-about"]},
 		...overrides,
 	});
 
