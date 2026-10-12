@@ -1,5 +1,6 @@
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
+import { POLICY_PAGES } from "@/components/pages/policy-pages";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -31,8 +32,7 @@ export default async function PrivacyPage() {
 	return (
 		<PolicyPage
 			content={document!.content}
-			title="Privacy Policy"
-			description="How this public library collects, uses, stores, and protects personal information across support, analytics, and site operations."
+			{...POLICY_PAGES["privacy"]}
 			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
 				href: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),

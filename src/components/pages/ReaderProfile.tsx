@@ -25,6 +25,7 @@ import { Select } from "@/components/nextui/Select";
 import { Switch } from "@/components/nextui/Switch";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import GenericHeader from "@/components/features/modals/GenericHeader";
 import { useClipboardFeedback } from "@/hooks/useClipboardFeedback";
 import { LIST_TOP_ID } from "@/hooks/useFilters";
@@ -148,7 +149,14 @@ function useShownShelves(data: ProfileData, isOwnProfile: boolean) {
  * library lists records, with search and sort, and their collections beside
  * it where the library keeps its filters.
  */
-export default function ReaderProfile({ data }: { data: ProfileData }) {
+export default function ReaderProfile({
+	data,
+	loading = false,
+}: {
+	data: ProfileData;
+	/** Drawn while the profile is on its way, from its address alone: the reader, their counts and collections show as placeholders. */
+	loading?: boolean;
+}) {
 	const t = useTranslations("ui");
 	const { reader } = useReaderSession();
 	const isOwnProfile = reader?.id === data.id;
@@ -168,12 +176,13 @@ export default function ReaderProfile({ data }: { data: ProfileData }) {
 				reader={{ id: data.id, name: data.name, image: data.image }}
 				userId={data.id}
 				isOwnProfile={isOwnProfile}
+				loading={loading}
 				bookmarkCount={bookmarkCount}
 				collectionCount={collections.length}
 				firstBookmarkedAt={firstBookmarkDate(bookmarks)}
 			/>
 			<div id={LIST_TOP_ID} className="flex scroll-mt-6 flex-col gap-8 lg:flex-row xl:gap-10">
-				<CollectionsNav userId={data.id} shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
+				<CollectionsNav userId={data.id} loading={loading} shelves={shelves} selected={selected} onSelect={select} onEdit={edit} onCreate={create} />
 				<div className="flex min-w-0 flex-1 flex-col gap-4">
 					<ItemsList
 						props={items}
@@ -445,6 +454,7 @@ function CollectionDialogActions({
  */
 function CollectionsNav({
 	userId,
+	loading,
 	shelves,
 	selected,
 	onSelect,
@@ -452,6 +462,8 @@ function CollectionsNav({
 	onCreate,
 }: {
 	userId: string;
+	/** The reader's collections are not known yet: their count and rows show as placeholders. */
+	loading: boolean;
 	shelves: Shelf[];
 	selected: string;
 	onSelect: (id: string) => void;
@@ -469,9 +481,13 @@ function CollectionsNav({
 				<div className="flex items-center justify-between gap-3 bg-accent/10 px-5 py-4">
 					<h2 className="flex items-center gap-2.5 font-heading text-xl font-semibold tracking-tight text-foreground dark:text-white">
 						{t("collections")}
-						<span className="rounded-full bg-white px-2 text-small font-medium tabular-nums text-black/70 dark:bg-white/10 dark:text-white/70">
-							{format.number(shelves.length - 1)}
-						</span>
+						{loading ? (
+							<Skeleton className="h-5 w-7 rounded-full" />
+						) : (
+							<span className="rounded-full bg-white px-2 text-small font-medium tabular-nums text-black/70 dark:bg-white/10 dark:text-white/70">
+								{format.number(shelves.length - 1)}
+							</span>
+						)}
 					</h2>
 					{onCreate ? (
 						<Button
@@ -485,16 +501,21 @@ function CollectionsNav({
 					) : null}
 				</div>
 				<div className="flex flex-col gap-1 p-3">
-					{shelves.map((shelf) => (
-						<CollectionRow
-							key={shelf.id || "all"}
-							userId={userId}
-							shelf={shelf}
-							isSelected={shelf.id === selected}
-							onSelect={() => onSelect(shelf.id)}
-							onEdit={onEdit && shelf.id ? () => onEdit(shelf.id) : undefined}
-						/>
-					))}
+					{loading ? (
+						// One row, as tall as a row with its cover stack.
+						<Skeleton className="h-24 rounded-xl" />
+					) : (
+						shelves.map((shelf) => (
+							<CollectionRow
+								key={shelf.id || "all"}
+								userId={userId}
+								shelf={shelf}
+								isSelected={shelf.id === selected}
+								onSelect={() => onSelect(shelf.id)}
+								onEdit={onEdit && shelf.id ? () => onEdit(shelf.id) : undefined}
+							/>
+						))
+					)}
 				</div>
 			</nav>
 		</aside>
@@ -632,6 +653,7 @@ function ProfileHeader({
 	reader,
 	userId,
 	isOwnProfile,
+	loading,
 	bookmarkCount,
 	collectionCount,
 	firstBookmarkedAt,
@@ -639,14 +661,62 @@ function ProfileHeader({
 	reader: { id: string; name: string; image: string | null };
 	userId: string;
 	isOwnProfile: boolean;
+	/** Only the address is known: the reader and their counts show as placeholders the size of what replaces them. */
+	loading: boolean;
 	bookmarkCount: number;
 	collectionCount: number | null;
 	firstBookmarkedAt: Date | null;
 }) {
-	const accountUrl = useOpenScholarAccountUrl();
+	return (
+		<header className="overflow-hidden rounded-2xl bg-white dark:bg-secondary">
+			<CoverWall userId={userId} hasBookmarks={loading || bookmarkCount > 0} />
+			<div className="flex flex-col gap-6 px-5 pb-6 sm:px-8 sm:pb-8 lg:flex-row lg:items-end lg:justify-between">
+				<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
+					{/* The ring is the card's own colour, so the avatar reads as cut out of the covers behind it. */}
+					<span className="relative -mt-14 w-fit shrink-0 rounded-full bg-white p-1.5 sm:-mt-16 dark:bg-secondary">
+						{loading ? (
+							<Skeleton className="h-24 w-24 rounded-full sm:h-28 sm:w-28" />
+						) : (
+							<ReaderAvatar reader={reader} size="lg" className="h-24 w-24 text-3xl sm:h-28 sm:w-28 [&_svg]:size-10" />
+						)}
+					</span>
+					<div className="flex min-w-0 flex-col gap-3">
+						{loading ? (
+							<>
+								{/* The name's line height, and the stats line's. */}
+								<Skeleton className="h-10 w-64 max-w-full rounded-xl sm:h-12 sm:w-80" />
+								<Skeleton className="h-7 w-72 max-w-full rounded-lg" />
+							</>
+						) : (
+							<ProfileName
+								reader={reader}
+								bookmarkCount={bookmarkCount}
+								collectionCount={collectionCount}
+								firstBookmarkedAt={firstBookmarkedAt}
+							/>
+						)}
+					</div>
+				</div>
+				<ProfileActions isOwnProfile={isOwnProfile} loading={loading} readerName={reader.name} />
+			</div>
+		</header>
+	);
+}
+
+/** The reader's name and what they have saved. */
+function ProfileName({
+	reader,
+	bookmarkCount,
+	collectionCount,
+	firstBookmarkedAt,
+}: {
+	reader: { id: string; name: string; image: string | null };
+	bookmarkCount: number;
+	collectionCount: number | null;
+	firstBookmarkedAt: Date | null;
+}) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const { copy, copied } = useClipboardFeedback();
 	const stats = [
 		{ key: "bookmarks", value: format.number(bookmarkCount), label: t("bookmarksStat", { count: bookmarkCount }) },
 		...(collectionCount === null
@@ -656,53 +726,52 @@ function ProfileHeader({
 			? [{ key: "first", value: format.dateTime(firstBookmarkedAt, { month: "short", year: "numeric" }), label: t("firstBookmarkStat") }]
 			: []),
 	];
-
 	return (
-		<header className="overflow-hidden rounded-2xl bg-white dark:bg-secondary">
-			<CoverWall userId={userId} bookmarkCount={bookmarkCount} />
-			<div className="flex flex-col gap-6 px-5 pb-6 sm:px-8 sm:pb-8 lg:flex-row lg:items-end lg:justify-between">
-				<div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
-					{/* The ring is the card's own colour, so the avatar reads as cut out of the covers behind it. */}
-					<span className="relative -mt-14 w-fit shrink-0 rounded-full bg-white p-1.5 sm:-mt-16 dark:bg-secondary">
-						<ReaderAvatar reader={reader} size="lg" className="h-24 w-24 text-3xl sm:h-28 sm:w-28 [&_svg]:size-10" />
-					</span>
-					<div className="flex min-w-0 flex-col gap-3">
-						<h1 className="truncate font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl dark:text-white">
-							{readerDisplayName(reader, t)}
-						</h1>
-						<dl className="flex flex-wrap gap-x-8 gap-y-2">
-							{stats.map((stat) => (
-								<div key={stat.key} className="flex flex-row-reverse items-baseline justify-end gap-1.5">
-									<dt className="text-small text-foreground/60 dark:text-white/60">{stat.label}</dt>
-									<dd className="text-lg font-semibold tabular-nums text-foreground dark:text-white">{stat.value}</dd>
-								</div>
-							))}
-						</dl>
+		<>
+			<h1 className="truncate font-heading text-4xl font-semibold tracking-tight text-foreground sm:text-5xl dark:text-white">
+				{readerDisplayName(reader, t)}
+			</h1>
+			<dl className="flex flex-wrap gap-x-8 gap-y-2">
+				{stats.map((stat) => (
+					<div key={stat.key} className="flex flex-row-reverse items-baseline justify-end gap-1.5">
+						<dt className="text-small text-foreground/60 dark:text-white/60">{stat.label}</dt>
+						<dd className="text-lg font-semibold tabular-nums text-foreground dark:text-white">{stat.value}</dd>
 					</div>
-				</div>
-				<div className="flex shrink-0 flex-wrap gap-2">
-					<Button
-						onPress={() => copy(`${window.location.origin}${window.location.pathname}`)}
-						startContent={<HugeiconsIcon icon={copied ? Tick02Icon : Share08Icon} className="size-5" aria-hidden />}
-						className="h-10 px-4 font-medium"
-					>
-						{copied ? t("profileLinkCopied") : t("shareProfile")}
-					</Button>
-					{isOwnProfile ? (
-						<Button
-							as="a"
-							href={accountUrl}
-							target="_blank"
-							rel="noopener"
-							startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-5" aria-hidden />}
-							className="h-10 px-4 font-medium"
-						>
-							{reader.name.trim() ? t("editProfile") : t("addYourName")}
-						</Button>
-					) : null}
-				</div>
-			</div>
-		</header>
+				))}
+			</dl>
+		</>
+	);
+}
+
+/** Share for anyone; the owner also edits their account, a placeholder while their name is not known. */
+function ProfileActions({ isOwnProfile, loading, readerName }: { isOwnProfile: boolean; loading: boolean; readerName: string }) {
+	const accountUrl = useOpenScholarAccountUrl();
+	const t = useTranslations("ui");
+	const { copy, copied } = useClipboardFeedback();
+	return (
+		<div className="flex shrink-0 flex-wrap gap-2">
+			<Button
+				onPress={() => copy(`${window.location.origin}${window.location.pathname}`)}
+				startContent={<HugeiconsIcon icon={copied ? Tick02Icon : Share08Icon} className="size-5" aria-hidden />}
+				className="h-10 px-4 font-medium"
+			>
+				{copied ? t("profileLinkCopied") : t("shareProfile")}
+			</Button>
+			{isOwnProfile && loading ? (
+				<Skeleton className="h-10 w-36 rounded-xl" />
+			) : isOwnProfile ? (
+				<Button
+					as="a"
+					href={accountUrl}
+					target="_blank"
+					rel="noopener"
+					startContent={<HugeiconsIcon icon={UserEdit01Icon} className="size-5" aria-hidden />}
+					className="h-10 px-4 font-medium"
+				>
+					{readerName.trim() ? t("editProfile") : t("addYourName")}
+				</Button>
+			) : null}
+		</div>
 	);
 }
 
@@ -715,13 +784,13 @@ const WALL_SIZE = 16;
  * so it is hidden from assistive technology; the shelves carry the records.
  * The band has a fixed height, so the covers arriving moves nothing.
  */
-function CoverWall({ userId, bookmarkCount }: { userId: string; bookmarkCount: number }) {
+function CoverWall({ userId, hasBookmarks }: { userId: string; hasBookmarks: boolean }) {
 	const { data } = useShelfItems(userId, "");
 	const records = data?.items ?? [];
 	const wall = records.length > 0 ? Array.from({ length: WALL_SIZE }, (_, index) => records[index % records.length]!) : [];
 	return (
 		<div aria-hidden className="relative h-40 overflow-hidden bg-accent/10 sm:h-52">
-			{bookmarkCount > 0 ? (
+			{hasBookmarks ? (
 				<ul className="absolute inset-x-0 -top-6 flex gap-4 px-4">
 					{(data ? wall : Array.from({ length: WALL_SIZE }, () => null)).map((record, index) => (
 						<li

@@ -21,6 +21,8 @@ import { PLATFORM_FONTS } from "@/components/library/platform-fonts";
 import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { getSignedInReader } from "@/lib/readers/session";
+import PageFallback from "@/components/pages/PageFallback";
+import { isEmailChannelEnabled } from "@/lib/nodemailer";
 
 async function BaseContent({
 	children,
@@ -118,8 +120,10 @@ export default async function Base({
 						 * load in ten under load, which blanked the page and lost
 						 * clicks. A page's own redirect() still needs a boundary
 						 * here to reach the browser as a client-side redirect.
+						 * Its fallback shows while the page is on its way: on a
+						 * first load, and on Back when the page is read again.
 						 */}
-						<Suspense fallback={null}>{children}</Suspense>
+						<Suspense fallback={<PageFallback contactForm={isEmailChannelEnabled(serverConfig, "contact")} />}>{children}</Suspense>
 					</BaseContent>
 				</LibraryConfigProvider>
 			</body>
