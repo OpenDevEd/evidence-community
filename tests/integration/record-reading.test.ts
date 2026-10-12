@@ -277,3 +277,22 @@ it("grades a record an owner's request queued for the requesting source only", a
 		expect(statuses.get(second.key)).toMatchObject({ grades: { about: 1 }, ungraded: 1 });
 	});
 }, 120_000);
+
+it("ends a grading request the library has no key to read for, and swaps finished grades in without one", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		await publish(client, "NKEYAAA2", "Irrigation in Kenya", "Drip irrigation spread.");
+		await store(db, configWith("Climate adaptation in farming"));
+		await runReadingCycle(db, configWith("Climate adaptation in farming"), undefined, jev(scoring(2.8)).request);
+		const withoutKey = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [{ ...source, screening: { enabled: true, subject: "Urban housing policy" } }] });
+		await store(db, configWith("Urban housing policy"));
+		expect(await requestGrading(db, configWith("Urban housing policy"), source.key)).toEqual({ queued: 1 });
+
+		await runReadingCycle(db, withoutKey);
+		expect((await readScreeningStatuses(db)).get(source.key)).toMatchObject({ ungraded: 1, grading: null });
+
+		// Grades a cycle finished before it stopped: swapped in all the same.
+		await client.query(`UPDATE "itemGrade" SET "pendingScore" = 0.1, "pendingGrade" = 'not-about', "pendingSubjectHash" = (SELECT "subjectHash" FROM "sourceScreening")`);
+		await runReadingCycle(db, withoutKey);
+		expect((await readScreeningStatuses(db)).get(source.key)).toMatchObject({ grades: { about: 0, notAbout: 1 }, ungraded: 0 });
+	});
+}, 120_000);

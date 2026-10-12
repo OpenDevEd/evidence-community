@@ -248,13 +248,24 @@ async function readOne(
 
 /**
  * Leaves every waiting record done without reading it: what was published while nothing screens, or without a key, is
- * read only when the owner asks for it, so turning screening on never spends on its own.
+ * read only when the owner asks for it, so turning screening on never spends on its own. An owner's request dropped
+ * this way ends, so its source reports those records not graded rather than a grading that never finishes.
  */
 async function drain(database: Database) {
 	await database.transaction(async (tx) => {
-		const { rows } = await tx.execute<{ itemKey: string }>(sql`UPDATE "itemReadingQueue" SET "nextAttemptAt" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL
-			WHERE "nextAttemptAt" IS NOT NULL AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now()) RETURNING "itemKey"`);
-		if (rows.length) await refreshScreenedOut(tx, sql`SELECT unnest(${keyArray(rows.map((row) => row.itemKey))})`);
+		const { rows } = await tx.execute<{ itemKey: string; requestedFor: string[] | null }>(sql`
+			WITH drained AS (
+				SELECT "itemKey", "requestedFor" FROM "itemReadingQueue"
+				WHERE "nextAttemptAt" IS NOT NULL AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now()) FOR UPDATE
+			), done AS (
+				UPDATE "itemReadingQueue" q SET "nextAttemptAt" = NULL, "requestedFor" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL
+				FROM drained d WHERE q."itemKey" = d."itemKey"
+			)
+			SELECT "itemKey", "requestedFor" FROM drained`);
+		if (!rows.length) return;
+		const requested = [...new Set(rows.flatMap((row) => row.requestedFor ?? []))];
+		if (requested.length) await tx.execute(sql`UPDATE "sourceScreening" SET "gradingOf" = NULL WHERE "sourceConnectionKey" = ANY(${keyArray(requested)})`);
+		await refreshScreenedOut(tx, sql`SELECT unnest(${keyArray(rows.map((row) => row.itemKey))})`);
 	});
 }
 
@@ -277,6 +288,8 @@ export async function runReadingCycle(database: Database, config: LibraryServerC
 	const subjects = screeningSubjects(config);
 	if (!apiKey || !subjects.size) {
 		await drain(database);
+		// Swapping finished grades in needs no key: a cycle that stopped before it is made good here too.
+		await settleScreening(database);
 		return false;
 	}
 	const deadline = Date.now() + CYCLE_MS;
