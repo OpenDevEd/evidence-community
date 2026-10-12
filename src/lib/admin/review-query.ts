@@ -15,6 +15,7 @@ import { ItemNotFoundError } from "./native-item-service";
 import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -151,6 +152,7 @@ export async function getAdminReviewSnapshot(
 						payload.url,
 					),
 					filePublication: null,
+					openAccessFromSources: await readOpenAccessFromSourcesFor(db, record.itemKey, payload),
 					fileRemovalPending: files.some(
 						(entry) =>
 							entry.itemKey === record.itemKey &&

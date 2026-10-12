@@ -14,6 +14,8 @@ import { topicIdSchema } from "@/lib/topics/contract";
 import { SourceConflictEditor, type SourceResolution } from "./SourceConflictEditor";
 import { describeCountryFocus } from "@/lib/country-focus";
 import { CountryFocusInput } from "./CountryFocusInput";
+import { OpenAccessInput } from "./OpenAccessInput";
+import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
@@ -513,6 +515,51 @@ const CountryFocusEditor = memo(function CountryFocusEditor({
 	);
 });
 
+const OpenAccessEditor = memo(function OpenAccessEditor({
+	value,
+	fromSources,
+	change,
+	onChange,
+	readOnly,
+	error,
+}: {
+	value: unknown;
+	fromSources: boolean | null;
+	change: AdminDraftDiff["openAccess"];
+	onChange: (payload: Record<string, unknown>) => void;
+	readOnly: boolean;
+	error?: string;
+}) {
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel
+				action={
+					change && !readOnly ? (
+						<ChangedMarker
+							label="open access"
+							publishedValue={describeOpenAccessChoice(change.previous)}
+							onRevert={() => onChange({ openAccess: change.previous })}
+						/>
+					) : null
+				}
+			>
+				Open access
+			</FieldLabel>
+			<OpenAccessInput
+				disabled={readOnly}
+				value={typeof value === "boolean" ? value : null}
+				fromSources={fromSources}
+				onChange={(openAccess) => onChange({ openAccess })}
+			/>
+			{error && (
+				<p role="alert" className="text-xs text-danger">
+					{error}
+				</p>
+			)}
+		</div>
+	);
+});
+
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
 	const titleField =
@@ -691,14 +738,24 @@ function MetadataEditor({
 								isTopLevelAdminItemType(
 									String(payload.itemType ?? detail.itemType),
 								) && (
-									<CountryFocusEditor
-										payload={countryPayload}
-										titleField={titleField}
-										change={diff.countryFocus}
-										onChange={onChange}
-										readOnly={readOnly}
-										error={errors.countryFocus}
-									/>
+									<>
+										<CountryFocusEditor
+											payload={countryPayload}
+											titleField={titleField}
+											change={diff.countryFocus}
+											onChange={onChange}
+											readOnly={readOnly}
+											error={errors.countryFocus}
+										/>
+										<OpenAccessEditor
+											value={payload.openAccess}
+											fromSources={detail.openAccessFromSources}
+											change={diff.openAccess}
+											onChange={onChange}
+											readOnly={readOnly}
+											error={errors.openAccess}
+										/>
+									</>
 								)}
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">

@@ -5,6 +5,7 @@ import {
 } from "@opendeved/evidence-library-core";
 import {
 	bigint,
+	boolean,
 	foreignKey,
 	index,
 	integer,
@@ -105,6 +106,8 @@ export const item = pgTable(
 		country: varchar(),
 		// Library-owned focus. Null derives from title/abstract; [] is explicitly empty.
 		countryFocus: varchar().array(),
+		// Library-owned. Null leaves open access to OpenAlex; true or false is an editor's choice and wins.
+		openAccess: boolean(),
 		assignee: varchar(),
 		filingDate: varchar(),
 		applicationNumber: varchar(),

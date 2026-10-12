@@ -132,6 +132,8 @@ export type AdminItemDetail = AdminItemSummary & {
 	filePublication: AdminFilePublication | null;
 	fileRemovalPending: boolean;
 	links: AdminItemLinks;
+	/** What OpenAlex says about a published record's open access, whatever an editor chose; null when it has no answer. */
+	openAccessFromSources: boolean | null;
 	parentItem: string | null;
 	parentState: AdminRecordState | null;
 	published: Record<string, unknown> | null;

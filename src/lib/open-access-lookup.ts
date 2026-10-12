@@ -35,15 +35,15 @@ type DueRecord = {
 };
 
 /**
- * Records with no current OpenAlex work that were never looked at, changed since, got a DOI from the library's own
- * deposit since (which takes no new revision), or were asked about long ago.
+ * Records with no current OpenAlex work and no editor's choice that were never looked at, changed since, got a DOI from
+ * the library's own deposit since (which takes no new revision), or were asked about long ago.
  */
 async function dueRecords(database: Database, recheckBefore: Date) {
 	const { rows } = await database.execute<DueRecord>(sql`
 		SELECT i.key, i.revision::int AS revision, l.doi AS "askedDoi", l."isOpenAccess" AS answer, l."checkedAt" AS "checkedAt"
 		FROM item i
 		LEFT JOIN "itemOpenAccessLookup" l ON l."itemKey" = i.key
-		WHERE i.deleted = 0 AND i."parentItem" IS NULL
+		WHERE i.deleted = 0 AND i."parentItem" IS NULL AND i."openAccess" IS NULL
 			AND NOT ${hasCurrentOpenAlexWork(sql`i.key`)}
 			AND (l."itemKey" IS NULL OR l."itemRevision" <> i.revision OR l."checkedAt" < ${recheckBefore}
 				OR EXISTS (SELECT 1 FROM "publicationIdentifier" p WHERE p."itemKey" = i.key AND p."updatedAt" > l."lookedAt"))
