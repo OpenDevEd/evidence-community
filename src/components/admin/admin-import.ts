@@ -6,6 +6,7 @@ import {
 	PDF_IMPORT_MAX_CRITERION_LENGTH,
 	PDF_IMPORT_MAX_FILE_BYTES,
 	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
+	type CollectionSuggestion,
 	type PdfCheckResult,
 	type TopicSuggestion,
 	ADMIN_IMPORT_MAX_FILE_BYTES,
@@ -113,6 +114,8 @@ export type ImportRow = {
 	/** Changes the AI suggests to the record's fields. */
 	suggestions: PdfSuggestion[];
 	topics: TopicSuggestion[];
+	/** The library's collections the AI files the record in. */
+	collections: CollectionSuggestion[];
 };
 
 
@@ -141,7 +144,7 @@ export function validateGuidance(guidance: string) {
 	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`);
 }
 
-const emptyRow = { checks: [], cites: [], pdf: null, source: null, suggestions: [], topics: [] };
+const emptyRow = { checks: [], cites: [], collections: [], pdf: null, source: null, suggestions: [], topics: [] };
 
 export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): ImportRow[] {
 	return records.map((record) => ({ ...emptyRow, id: record.id, record, state: "read" }));
@@ -152,6 +155,7 @@ function rowsFromImport(server: AdminPdfImport): ImportRow[] {
 	return server.files.map((file) => ({
 		checks: file.reading?.checks ?? [],
 		cites: file.reading?.cites ?? [],
+		collections: file.reading?.collections ?? [],
 		id: file.rowId,
 		message: file.message ?? undefined,
 		pdf: file.reading?.pdf ?? null,
@@ -197,9 +201,12 @@ export type ImportBatch = {
 	rows: ImportRow[];
 	/** The drafts ticked for publishing, once the editor changes the default. */
 	toPublish: ReadonlySet<string> | null;
-	/** Each record's topics, once the editor changes the AI's choice. */
-	topics: ReadonlyMap<string, ReadonlySet<string>>;
+	/** Each record's topics and collections, once the editor changes the AI's choice. */
+	chosen: Record<ChoiceKind, ReadonlyMap<string, ReadonlySet<string>>>;
 };
+
+/** What the AI chooses from a library's own lists for a record. */
+export type ChoiceKind = "collections" | "topics";
 
 let batch: ImportBatch | null = null;
 const listeners = new Set<() => void>();
@@ -213,7 +220,7 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setBatch({ ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: "zenodo" as const, toPublish: null, topics: new Map() };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: "zenodo" as const, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 /**
  * Takes in the server's PDF import, keeping the editor's choices on it. A
@@ -325,9 +332,9 @@ export function selectedIds(current: ImportBatch) {
 	return new Set(readyIds(current.rows).filter((id) => !current.excluded.has(id)));
 }
 
-/** The AI's topics start chosen; the editor drops the ones that don't fit. */
-export function chosenTopics(current: ImportBatch, row: ImportRow): ReadonlySet<string> {
-	return current.topics.get(row.id) ?? new Set(row.topics.map(({ id }) => id));
+/** The topics and collections the AI chose start chosen; the editor drops the ones that don't fit. */
+export function chosenOf(current: ImportBatch, row: ImportRow, kind: ChoiceKind): ReadonlySet<string> {
+	return current.chosen[kind].get(row.id) ?? new Set(row[kind].map(({ id }) => id));
 }
 
 /** The record as the editor leaves it: what the PDF states, with the applied suggestions. */

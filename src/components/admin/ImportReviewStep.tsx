@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, Folder01Icon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, SuggestionList, TagList, TopicList } from "./ImportReview";
+import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, ChoiceList, SuggestionList, TagList } from "./ImportReview";
 
 import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, recordPayload, rowPasses, type ImportRow, type ReviewFilter } from "./admin-import";
@@ -230,8 +230,13 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 							</Setting>
 						) : null}
 						{row.topics.length ? (
-							<Setting icon={Tag01Icon} summary={`${flow.topicsOf(row).size} of ${row.topics.length} chosen`} title="Topics">
-								<TopicList chosen={flow.topicsOf(row)} locked={flow.locked} onToggle={(topicId) => flow.toggleTopic(row.id, topicId)} topics={row.topics} />
+							<Setting icon={Tag01Icon} summary={`${flow.choicesOf(row, "topics").size} of ${row.topics.length} chosen`} title="Topics">
+								<ChoiceList chosen={flow.choicesOf(row, "topics")} choices={row.topics} locked={flow.locked} onToggle={(id) => flow.toggleChoice(row.id, "topics", id)} />
+							</Setting>
+						) : null}
+						{row.collections.length ? (
+							<Setting icon={Folder01Icon} summary={`${flow.choicesOf(row, "collections").size} of ${row.collections.length} chosen`} title="Collections">
+								<ChoiceList chosen={flow.choicesOf(row, "collections")} choices={row.collections} locked={flow.locked} onToggle={(id) => flow.toggleChoice(row.id, "collections", id)} />
 							</Setting>
 						) : null}
 						{row.source && record && row.pdf ? (

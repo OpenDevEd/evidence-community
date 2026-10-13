@@ -27,7 +27,7 @@ import {
 import {
 	appliedOf,
 	changeImportBatch,
-	chosenTopics,
+	chosenOf,
 	createdKeys,
 	currentImportBatch,
 	doiPreviewRequest,
@@ -49,6 +49,7 @@ import {
 	validateGuidance,
 	validateImportFiles,
 	validatePdfFiles,
+	type ChoiceKind,
 	type ImportRow,
 	type PublishState,
 	type ReviewFilter,
@@ -140,8 +141,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const appliedFor = (row: ImportRow) => appliedOf(batch, row);
 	const checksOf = (row: ImportRow) => reviewChecks(row, appliedFor(row));
 	const checkCount = batch?.checks.length ?? 0;
-	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
-	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
+	const choicesOf = (row: ImportRow, kind: ChoiceKind) => (batch ? chosenOf(batch, row, kind) : new Set<string>());
+	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => choicesOf(row, "topics").has(id)).map(({ name }) => name);
 	const propertiesOf = (row: ImportRow) => publishedProperties(row, appliedFor(row), topicNames(row));
 
 	const run = async (work: () => Promise<void>) => {
@@ -203,8 +204,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				selected,
 			).map((record) => {
 				const row = rowById.get(record.id)!;
-				const topics = [...topicsOf(row)];
-				return { ...record, payload: { ...recordPayload(row, appliedFor(row)), ...(topicsEnabled && topics.length ? { topics } : {}) } };
+				const topics = [...choicesOf(row, "topics")];
+				return { ...record, payload: { ...recordPayload(row, appliedFor(row)), collections: [...choicesOf(row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
 			});
 			const input = { collections: batch.collections, importId: batch.importId, records };
 			changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
@@ -324,7 +325,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		sources,
 		stage,
 		start: () => void start(),
-		topicsOf,
+		choicesOf,
 		readyIds: readyIds(rows),
 		setActiveId,
 		setChecks: setEditedChecks,
@@ -354,14 +355,14 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				else next.add(index);
 				return { ...current, applied: new Map(current.applied).set(rowId, next) };
 			}),
-		toggleTopic: (rowId: string, topicId: string) =>
+		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) =>
 			changeImportBatch(importId, (current) => {
-				const row = current.rows.find(({ id }) => id === rowId);
+				const row = current.rows.find(({ id: candidate }) => candidate === rowId);
 				if (!row) return current;
-				const next = new Set(chosenTopics(current, row));
-				if (next.has(topicId)) next.delete(topicId);
-				else next.add(topicId);
-				return { ...current, topics: new Map(current.topics).set(rowId, next) };
+				const next = new Set(chosenOf(current, row, kind));
+				if (next.has(id)) next.delete(id);
+				else next.add(id);
+				return { ...current, chosen: { ...current.chosen, [kind]: new Map(current.chosen[kind]).set(rowId, next) } };
 			}),
 	};
 }

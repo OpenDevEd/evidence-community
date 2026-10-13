@@ -148,11 +148,15 @@ export type PdfSuggestion = {
 	value: string;
 };
 
+/** A library collection the AI files a record in, with where it sits and why, the same shape as a topic. */
+export type CollectionSuggestion = TopicSuggestion;
+
 /** What the AI made of one PDF. */
 export type PdfReading = {
 	checks: PdfCheckResult[];
 	/** The library's records the work cites, which the record links to. */
 	cites: { key: string; title: string }[];
+	collections: CollectionSuggestion[];
 	/** The properties the PDF carries now, before publishing writes the record into it. */
 	pdf: PdfPropertiesReading;
 	record: AdminImportPreviewRecord;

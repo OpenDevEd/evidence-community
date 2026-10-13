@@ -394,10 +394,17 @@ export async function commitImportRecords(
 		message?: string;
 		payload: Record<string, unknown> | null;
 	};
+	// The import's collections, and those a record was given on its own, such as the ones the AI chose for a PDF.
+	const collectionsOf = (payload: Record<string, unknown>) => [
+		...new Set([
+			...input.collections,
+			...(Array.isArray(payload.collections) ? payload.collections.filter((key): key is string => typeof key === "string") : []),
+		]),
+	];
 	const prepared = input.records.map((record): PreparedRecord => {
 		try {
 			const validated = validateNativeItemDraft(
-				{ ...record.payload, collections: input.collections },
+				{ ...record.payload, collections: collectionsOf(record.payload) },
 				{ allowIncompleteCreators: true },
 			);
 			if (!isTopLevelAdminItemType(validated.item.itemType)) {
@@ -437,7 +444,7 @@ export async function commitImportRecords(
 			transaction,
 			null,
 			NATIVE_SOURCE_CONNECTION_KEY,
-			input.collections,
+			[...new Set(input.records.flatMap(({ payload }) => collectionsOf(payload)))],
 		);
 		const existing = await findExistingRecords(
 			transaction,

@@ -236,16 +236,18 @@ export function CitedList({ cites }: { cites: readonly { key: string; title: str
 	);
 }
 
-export function TopicList({ chosen, locked, onToggle, topics }: { chosen: ReadonlySet<string>; locked: boolean; onToggle: (id: string) => void; topics: TopicSuggestion[] }) {
+/** The topics or collections the AI chose, each with where it sits and why, to keep or drop. */
+export function ChoiceList({ chosen, choices, locked, onToggle }: { chosen: ReadonlySet<string>; choices: TopicSuggestion[]; locked: boolean; onToggle: (id: string) => void }) {
 	return (
 		<ul className="flex flex-col gap-3">
-			{topics.map((topic) => (
-				<li className="flex gap-2.5" key={topic.id}>
-					<Checkbox aria-label={`Add ${topic.name}`} className="mt-0.5 self-start" isDisabled={locked} isSelected={chosen.has(topic.id)} onValueChange={() => onToggle(topic.id)} size="sm" />
+			{choices.map((choice) => (
+				<li className="flex gap-2.5" key={choice.id}>
+					<Checkbox aria-label={`Add ${choice.name}`} className="mt-0.5 self-start" isDisabled={locked} isSelected={chosen.has(choice.id)} onValueChange={() => onToggle(choice.id)} size="sm" />
 					<div className="min-w-0 flex-1">
-						<p className="text-sm text-black/85 dark:text-white/85">{topic.name}</p>
-						<p className="text-xs text-black/40 dark:text-white/40">{topicPath(topic.path).join(" › ")}</p>
-						<p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{topic.reason}</p>
+						<p className="text-sm text-black/85 dark:text-white/85">{choice.name}</p>
+						{/* A top-level collection sits under nothing. */}
+						{choice.path.length ? <p className="text-xs text-black/40 dark:text-white/40">{topicPath(choice.path).join(" › ")}</p> : null}
+						<p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{choice.reason}</p>
 					</div>
 				</li>
 			))}
