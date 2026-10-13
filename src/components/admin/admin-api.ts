@@ -634,6 +634,11 @@ export async function uploadAdminPdfImportFile(fileId: string, file: File) {
 	}
 }
 
+/** Tells the server a PDF couldn't be sent, so the import goes ahead without it. */
+export function failAdminPdfImportUpload(fileId: string, message: string) {
+	return requestJson<{ failed: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "upload-failed", fileId, message: message.slice(0, 500) }), method: "POST" });
+}
+
 /** Imports the chosen records as drafts, each with its PDF. */
 export function commitAdminPdfImport(input: Omit<AdminImportCommitRequest, "action">) {
 	return requestJson<{ attach: Record<string, "attached" | "failed">; results: AdminImportCommitResult[] }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "commit", ...input }), method: "POST" });

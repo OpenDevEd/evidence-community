@@ -15,6 +15,7 @@ import {
 	closeAdminPdfImport,
 	commitAdminImport,
 	commitAdminPdfImport,
+	failAdminPdfImportUpload,
 	PDF_IMPORT_KEY,
 	previewAdminImport,
 	reserveAdminCrossrefDoi,
@@ -184,7 +185,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 					try {
 						await uploadAdminPdfImportFile(id, file);
 					} catch (caught) {
-						setError(`${file.name} could not be uploaded. ${errorMessage(caught)}`);
+						// The import goes ahead without it; its row says why.
+						await failAdminPdfImportUpload(id, errorMessage(caught)).catch(() => undefined);
 					}
 					void mutate(PDF_IMPORT_KEY);
 				}

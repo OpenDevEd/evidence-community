@@ -7,6 +7,7 @@ CREATE TABLE "pdfImport" (
 	"checks" jsonb NOT NULL,
 	"instructions" text NOT NULL,
 	"collections" jsonb NOT NULL,
+	"commitStartedAt" timestamp with time zone,
 	"results" jsonb,
 	"attach" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"closedAt" timestamp with time zone

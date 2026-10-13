@@ -167,6 +167,8 @@ export type AdminPdfImportFile = {
 	message: string | null;
 	/** Its row and record id in the review, from its place in the import. */
 	rowId: string;
+	/** The PDF is in storage, so the review can show and open it. */
+	stored: boolean;
 	reading: PdfReading | null;
 	state: PdfImportFileState;
 };

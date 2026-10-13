@@ -109,7 +109,7 @@ function zoteroItemFrom(record: z.infer<typeof readingSchema>["record"]) {
  * and topics.
  */
 export async function readImportPdf(
-	{ config, database }: { config: LibraryServerConfig; database: Database },
+	{ config, database, signal }: { config: LibraryServerConfig; database: Database; signal?: AbortSignal },
 	{ bytes, checks, filename, instructions, pdf }: { bytes: Uint8Array; checks: readonly string[]; filename: string; instructions: string; pdf: PdfPropertiesReading },
 ): Promise<PdfAiReading> {
 	const topicContext = { config, database };
@@ -125,6 +125,7 @@ export async function readImportPdf(
 	});
 	const tools: ToolSet = { searchLibrary: createResearchTools("quick", config).searchLibrary, ...(config.topics.enabled ? { searchTopics } : {}) };
 	const result = await generateText({
+		abortSignal: signal,
 		model: await libraryModel(config),
 		output: Output.object({ schema: readingSchema }),
 		stopWhen: stepCountIs(12),

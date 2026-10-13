@@ -223,13 +223,13 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 				</div>
 			)}
 			<div className="flex flex-wrap gap-2 empty:hidden">
-				{row.source ? (
-				<Button onPress={() => window.open(row.source!.url, "_blank", "noopener")} size="xs" startContent={<HugeiconsIcon aria-hidden icon={SquareArrowUpRight02Icon} size={13} />} variant="muted">
+				{row.source?.url ? (
+				<Button onPress={() => window.open(row.source!.url!, "_blank", "noopener")} size="xs" startContent={<HugeiconsIcon aria-hidden icon={SquareArrowUpRight02Icon} size={13} />} variant="muted">
 						Open PDF
 					</Button>
 				) : null}
-				{row.source && record && row.pdf?.writable ? (
-				<Button onPress={() => void openWithProperties(row.source!.url, properties)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={FileExportIcon} size={13} />} variant="muted">
+				{row.source?.url && record && row.pdf?.writable ? (
+				<Button onPress={() => void openWithProperties(row.source!.url!, properties)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={FileExportIcon} size={13} />} variant="muted">
 						Open with new properties
 					</Button>
 				) : null}

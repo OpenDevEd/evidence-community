@@ -13,7 +13,7 @@ import {
 	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
 	adminImportRequestSchema,
 } from "@/lib/admin/item-import-contract";
-import { closePdfImport, commitPdfImport, pdfImportStatus, startPdfImport, storePdfImportFile } from "@/lib/admin/pdf-import-service";
+import { closePdfImport, commitPdfImport, failPdfImportUpload, pdfImportStatus, startPdfImport, storePdfImportFile } from "@/lib/admin/pdf-import-service";
 
 // Importing gives each new draft its PDF, which takes a moment per file.
 export const maxDuration = 300;
@@ -28,14 +28,16 @@ const startSchema = z.object({
 
 const closeSchema = z.object({ action: z.literal("close"), importId: z.string().uuid() });
 
+const uploadFailedSchema = z.object({ action: z.literal("upload-failed"), fileId: z.string().uuid(), message: z.string().max(500) });
+
 /** The library's PDF import, as the publication worker has read it so far. */
 export function GET(request: NextRequest) {
 	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => pdfImportStatus((await getNativeFileRuntime()).db));
 }
 
 /**
- * Starts the import, takes its PDFs one per request, imports the chosen
- * records with their PDFs, or closes it.
+ * Starts the import, takes its PDFs one per request (or hears that one
+ * couldn't be sent), imports the chosen records with their PDFs, or closes it.
  */
 export function POST(request: NextRequest) {
 	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async (session) => {
@@ -50,6 +52,11 @@ export function POST(request: NextRequest) {
 		}
 		const body = (await readAdminJson(request)) as { action?: unknown };
 		if (body.action === "start") return startPdfImport(runtime.db, { ...startSchema.parse(body), createdBy: session.clerkUserId });
+		if (body.action === "upload-failed") {
+			const { fileId, message } = uploadFailedSchema.parse(body);
+			await failPdfImportUpload(runtime.db, fileId, message);
+			return { failed: fileId };
+		}
 		if (body.action === "close") {
 			const { importId } = closeSchema.parse(body);
 			await closePdfImport(runtime.db, runtime.storage, importId);

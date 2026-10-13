@@ -175,7 +175,7 @@ async function main() {
 			try {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				await runTopicAssociationCycle(resource.database, config, abortController.signal);
-				pdfImportReading ??= runPdfImportCycle(resource.database, storage, config)
+				pdfImportReading ??= runPdfImportCycle(resource.database, storage, config, abortController.signal)
 					.catch((error: unknown) => console.error(`PDF import cycle failed: ${errorMessage(error)}`))
 					.finally(() => {
 						pdfImportReading = null;
@@ -278,6 +278,8 @@ async function main() {
 		throw error;
 	} finally {
 		clearInterval(heartbeatTimer);
+		// A read in progress saves or releases its PDFs before the database closes.
+		await pdfImportReading;
 		try {
 			await reporter.flush();
 			if (!ownershipLost) {

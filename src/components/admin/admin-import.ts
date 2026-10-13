@@ -105,8 +105,8 @@ export type ImportRow = {
 	/** The properties the PDF carries now. */
 	pdf: PdfPropertiesReading | null;
 	record: AdminImportPreviewRecord | null;
-	/** The PDF this row reads, stored with the import; null for DOIs and bibliography files. */
-	source: { filename: string; url: string } | null;
+	/** The PDF this row reads, and where it opens once stored; null for DOIs and bibliography files. */
+	source: { filename: string; url: string | null } | null;
 	state: PdfImportFileState;
 	/** Changes the AI suggests to the record's fields. */
 	suggestions: PdfSuggestion[];
@@ -153,7 +153,8 @@ function rowsFromImport(server: AdminPdfImport): ImportRow[] {
 		message: file.message ?? undefined,
 		pdf: file.reading?.pdf ?? null,
 		record: file.reading?.record ?? null,
-		source: { filename: file.filename, url: pdfImportFileUrl(file.id) },
+		// No address until the PDF is stored, so a cover isn't drawn from a missing file.
+		source: { filename: file.filename, url: file.stored ? pdfImportFileUrl(file.id) : null },
 		state: file.state,
 		suggestions: file.reading?.suggestions ?? [],
 		topics: file.reading?.topics ?? [],

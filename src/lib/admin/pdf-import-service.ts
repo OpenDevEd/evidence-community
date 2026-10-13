@@ -2,25 +2,32 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import type { Database } from "@/db";
 import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
 
 import { AdminValidationError } from "./errors";
 import type { EvidenceFileStorage } from "./file-storage";
-import type { AdminImportCommitRequest, AdminPdfImport, AdminPdfImportFile, AdminPdfImportStatus } from "./item-import-contract";
+import type { AdminImportCommitRequest, AdminImportCommitResult, AdminPdfImport, AdminPdfImportFile, AdminPdfImportStatus } from "./item-import-contract";
 import { commitImportRecords } from "./item-import-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-service";
 import { createNativeItemDraft } from "./native-item-service";
+import { removeClosedImportFiles } from "./pdf-import-reading";
 import { assertPdfHeader } from "./pdf-processing";
 
 const PDF = "application/pdf";
 
+// A PDF that hasn't arrived this long after its import started never will: its tab closed or lost the connection.
+const UPLOAD_WAIT_MS = 15 * 60_000;
+// How long one request may hold the import while it imports the records.
+const COMMIT_WAIT_MS = 10 * 60_000;
+const NOT_UPLOADED = "The PDF didn't finish uploading.";
+
 type FileRow = typeof pdfImportFile.$inferSelect;
 
-function fileState(file: FileRow, now: Date): AdminPdfImportFile["state"] {
-	if (!file.objectPath) return "uploading";
+function fileState(file: FileRow, startedAt: Date, now: Date): AdminPdfImportFile["state"] {
+	if (!file.objectPath) return file.lastError || now.getTime() - startedAt.getTime() > UPLOAD_WAIT_MS ? "failed" : "uploading";
 	if (file.reading) return "read";
 	if (!file.nextAttemptAt) return "failed";
 	return file.leaseExpiresAt && file.leaseExpiresAt > now ? "reading" : "waiting";
@@ -40,8 +47,8 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		collections: open.collections,
 		createdAt: open.createdAt.toISOString(),
 		files: files.map((file) => {
-			const state = fileState(file, now);
-			return { filename: file.filename, id: file.id, message: state === "failed" ? file.lastError : null, reading: file.reading, rowId: String(file.position), state };
+			const state = fileState(file, open.createdAt, now);
+			return { filename: file.filename, id: file.id, message: state === "failed" ? (file.lastError ?? NOT_UPLOADED) : null, reading: file.reading, rowId: String(file.position), state, stored: Boolean(file.objectPath) };
 		}),
 		id: open.id,
 		instructions: open.instructions,
@@ -78,7 +85,21 @@ export async function storePdfImportFile(db: Database, storage: EvidenceFileStor
 	if (!file) throw new AdminValidationError("This PDF is not waiting for an upload.");
 	const objectPath = `imports/${file.importId}/${fileId}.pdf`;
 	await storage.uploadPrivate(objectPath, bytes, PDF);
-	await db.update(pdfImportFile).set({ nextAttemptAt: new Date(), objectPath }).where(eq(pdfImportFile.id, fileId));
+	// Only while the import is still open: one discarded during the upload has already collected its PDFs.
+	const [stored] = await db
+		.update(pdfImportFile)
+		.set({ nextAttemptAt: new Date(), objectPath })
+		.where(and(eq(pdfImportFile.id, fileId), isNull(pdfImportFile.objectPath), inArray(pdfImportFile.importId, db.select({ id: pdfImport.id }).from(pdfImport).where(isNull(pdfImport.closedAt)))))
+		.returning({ id: pdfImportFile.id });
+	if (!stored) {
+		await storage.removePrivate([objectPath]);
+		throw new AdminValidationError("The import was closed while this PDF uploaded.");
+	}
+}
+
+/** Marks a PDF the editor's tab couldn't send, so the import can go ahead without it. */
+export async function failPdfImportUpload(db: Database, fileId: string, message: string) {
+	await db.update(pdfImportFile).set({ lastError: message.slice(0, 500) || NOT_UPLOADED }).where(and(eq(pdfImportFile.id, fileId), isNull(pdfImportFile.objectPath)));
 }
 
 /** An import's PDF, for its cover and for opening it in the review. */
@@ -90,11 +111,9 @@ export async function readPdfImportFile(db: Database, storage: EvidenceFileStora
 
 /** Ends the import, kept or discarded, and removes its stored PDFs; imported drafts keep their own copies. */
 export async function closePdfImport(db: Database, storage: EvidenceFileStorage, importId: string) {
-	const [closed] = await db.update(pdfImport).set({ closedAt: new Date() }).where(and(eq(pdfImport.id, importId), isNull(pdfImport.closedAt))).returning({ id: pdfImport.id });
-	if (!closed) return;
-	const files = await db.select({ objectPath: pdfImportFile.objectPath }).from(pdfImportFile).where(eq(pdfImportFile.importId, importId));
-	const paths = files.flatMap(({ objectPath }) => (objectPath ? [objectPath] : []));
-	if (paths.length) await storage.removePrivate(paths).catch((error: unknown) => console.error("Removing an import's stored PDFs failed", importId, error));
+	await db.update(pdfImport).set({ closedAt: new Date() }).where(and(eq(pdfImport.id, importId), isNull(pdfImport.closedAt)));
+	// The worker's cycle retries what a storage failure leaves behind.
+	await removeClosedImportFiles(db, storage, importId).catch((error: unknown) => console.error("Removing an import's stored PDFs failed", importId, error));
 }
 
 /** Gives a draft its PDF from the import, through the same staging an upload in the inspector takes. */
@@ -113,20 +132,18 @@ async function attachPdf(db: Database, storage: EvidenceFileStorage, maxPdfBytes
 	await completeNativePdfUpload(db, storage, { expectedUploadRevision: staged.fileDraft.uploadRevision, itemKey, maxPdfBytes });
 }
 
-/** Imports the chosen records as drafts, gives each its PDF, and keeps what happened on the import. */
-export async function commitPdfImport(
-	db: Database,
-	storage: EvidenceFileStorage,
-	maxPdfBytes: number,
-	input: Omit<AdminImportCommitRequest, "action">,
-) {
-	const { results } = await commitImportRecords(db, { ...input, action: "commit" });
-	const files = await db.select().from(pdfImportFile).where(eq(pdfImportFile.importId, input.importId));
+/**
+ * Gives each new draft its PDF, keeping each outcome on the import as it
+ * finishes, so a repeated request carries on from where one stopped.
+ */
+async function attachPdfs(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, importId: string, results: AdminImportCommitResult[], done: Record<string, "attached" | "failed">) {
+	const files = await db.select().from(pdfImportFile).where(eq(pdfImportFile.importId, importId));
 	const fileByRow = new Map(files.map((file) => [String(file.position), file]));
-	const attach: Record<string, "attached" | "failed"> = {};
+	const attach = { ...done };
 	for (const result of results) {
 		const file = fileByRow.get(result.id);
-		if (result.outcome !== "created" || !result.itemKey || !file?.objectPath) continue;
+		// ponytail: a request that stopped inside one attachment leaves it unrecorded, and the next tries it again.
+		if (result.outcome !== "created" || !result.itemKey || !file?.objectPath || attach[result.id]) continue;
 		try {
 			await attachPdf(db, storage, maxPdfBytes, result.itemKey, file);
 			attach[result.id] = "attached";
@@ -134,7 +151,40 @@ export async function commitPdfImport(
 			console.error("Attaching an imported PDF failed", { file: file.filename, itemKey: result.itemKey, error });
 			attach[result.id] = "failed";
 		}
+		await db.update(pdfImport).set({ attach }).where(eq(pdfImport.id, importId));
 	}
-	await db.update(pdfImport).set({ attach, results }).where(eq(pdfImport.id, input.importId));
 	return { attach, results };
+}
+
+/**
+ * Imports the chosen records as drafts and gives each its PDF. One request
+ * holds the import while it does, so a second tab or a retry can't import
+ * the records twice; a request after the records are in carries on
+ * attaching their PDFs.
+ */
+export async function commitPdfImport(
+	db: Database,
+	storage: EvidenceFileStorage,
+	maxPdfBytes: number,
+	input: Omit<AdminImportCommitRequest, "action">,
+) {
+	const [claimed] = await db
+		.update(pdfImport)
+		.set({ commitStartedAt: new Date() })
+		.where(and(eq(pdfImport.id, input.importId), isNull(pdfImport.closedAt), isNull(pdfImport.results), or(isNull(pdfImport.commitStartedAt), lt(pdfImport.commitStartedAt, new Date(Date.now() - COMMIT_WAIT_MS)))))
+		.returning({ id: pdfImport.id });
+	if (!claimed) {
+		const [current] = await db.select().from(pdfImport).where(eq(pdfImport.id, input.importId));
+		if (!current?.results) throw new AdminValidationError("These records are already being imported. Wait a moment, then open the import again.");
+		return attachPdfs(db, storage, maxPdfBytes, current.id, current.results, current.attach);
+	}
+	let results: AdminImportCommitResult[];
+	try {
+		({ results } = await commitImportRecords(db, { ...input, action: "commit" }));
+	} catch (error) {
+		await db.update(pdfImport).set({ commitStartedAt: null }).where(eq(pdfImport.id, input.importId));
+		throw error;
+	}
+	await db.update(pdfImport).set({ results }).where(eq(pdfImport.id, input.importId));
+	return attachPdfs(db, storage, maxPdfBytes, input.importId, results, {});
 }

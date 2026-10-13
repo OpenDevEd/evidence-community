@@ -11,6 +11,8 @@ export const pdfImport = pgTable("pdfImport", {
 	checks: jsonb("checks").$type<string[]>().notNull(),
 	instructions: text("instructions").notNull(),
 	collections: jsonb("collections").$type<string[]>().notNull(),
+	/** Set while one request imports the records, so a second can't import them again. */
+	commitStartedAt: timestamp("commitStartedAt", { withTimezone: true }),
 	results: jsonb("results").$type<AdminImportCommitResult[]>(),
 	attach: jsonb("attach").$type<Record<string, "attached" | "failed">>().notNull().default({}),
 	closedAt: timestamp("closedAt", { withTimezone: true }),

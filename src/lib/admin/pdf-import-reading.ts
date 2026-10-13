@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
@@ -10,7 +10,7 @@ import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import type { PdfReading } from "./item-import-contract";
-import { previewEntries } from "./item-import-service";
+import { importPayloadFromZoteroItem, previewEntries } from "./item-import-service";
 import { readImportPdf } from "./pdf-import";
 import { readPdfProperties } from "./pdf-properties";
 
@@ -40,13 +40,23 @@ async function previewReading(db: Database, source: string, zoteroItem: Record<s
 	return (await previewEntries(db, [{ method: "pdf", source, zoteroItem: kept }])).records[0]!;
 }
 
-async function readOne(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow): Promise<PdfReading> {
+const FIELD_PROBE = "pdf-import-field-probe";
+
+/** The record's own name for a field the AI named as Zotero does, as the import maps it: a report's institution is its publisher. */
+function recordField(itemType: unknown, field: string) {
+	const payload = importPayloadFromZoteroItem({ creators: [], itemType, title: "", [field]: FIELD_PROBE }) as Record<string, unknown>;
+	return Object.keys(payload).find((key) => payload[key] === FIELD_PROBE) ?? field;
+}
+
+async function readOne(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, signal: AbortSignal | undefined): Promise<PdfReading> {
 	const [owner] = await db.select().from(pdfImport).where(eq(pdfImport.id, file.importId));
 	const bytes = await storage.downloadPrivate(file.objectPath!);
 	const pdf = await readPdfProperties(bytes);
-	const ai = await readImportPdf({ config, database: db }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
+	const ai = await readImportPdf({ config, database: db, signal }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
 	const record = await previewReading(db, file.filename, ai.zoteroItem);
-	return { checks: ai.checks, pdf, record: { ...record, id: String(file.position) }, suggestions: ai.suggestions, topics: ai.topics };
+	// Suggestions use the record's field names, so applying one replaces the field the review shows.
+	const suggestions = ai.suggestions.map((suggestion) => ({ ...suggestion, field: recordField(ai.zoteroItem.itemType, suggestion.field) }));
+	return { checks: ai.checks, pdf, record: { ...record, id: String(file.position) }, suggestions, topics: ai.topics };
 }
 
 /**
@@ -55,13 +65,31 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
  * and keeps the reading. A failed read is retried a few times, then shown
  * as failed with its error.
  */
-export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig) {
+/**
+ * Removes the stored PDFs of closed imports. Closing tries at once; the
+ * worker's cycle retries what a storage failure left behind.
+ */
+export async function removeClosedImportFiles(db: Database, storage: EvidenceFileStorage, importId?: string) {
+	const files = await db
+		.select({ id: pdfImportFile.id, objectPath: pdfImportFile.objectPath })
+		.from(pdfImportFile)
+		.innerJoin(pdfImport, eq(pdfImport.id, pdfImportFile.importId))
+		.where(and(isNotNull(pdfImport.closedAt), isNotNull(pdfImportFile.objectPath), importId ? eq(pdfImport.id, importId) : undefined))
+		.limit(100);
+	if (!files.length) return;
+	await storage.removePrivate(files.map(({ objectPath }) => objectPath!));
+	await db.update(pdfImportFile).set({ objectPath: null }).where(inArray(pdfImportFile.id, files.map(({ id }) => id)));
+}
+
+export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, signal?: AbortSignal) {
+	await removeClosedImportFiles(db, storage).catch((error: unknown) => console.error("Removing closed imports' PDFs failed", error));
 	const token = randomUUID();
 	const claimed = await db.execute<{ id: string }>(sql`
 		UPDATE "pdfImportFile" SET "leaseToken" = ${token}, "leaseExpiresAt" = now() + ${LEASE}::interval
 		WHERE "id" IN (SELECT "id" FROM "pdfImportFile"
 			WHERE "nextAttemptAt" <= now() AND "objectPath" IS NOT NULL AND "reading" IS NULL
 				AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now())
+				AND "importId" IN (SELECT "id" FROM "pdfImport" WHERE "closedAt" IS NULL)
 			ORDER BY "nextAttemptAt", "position" FOR UPDATE SKIP LOCKED LIMIT ${READ_AT_ONCE})
 		RETURNING "id"`);
 	if (!claimed.rows.length) return false;
@@ -70,9 +98,14 @@ export async function runPdfImportCycle(db: Database, storage: EvidenceFileStora
 		files.map(async (file) => {
 			const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
 			try {
-				const reading = await readOne(db, storage, config, file);
+				const reading = await readOne(db, storage, config, file, signal);
 				await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading }).where(mine);
 			} catch (error) {
+				// A worker asked to stop hands the PDF back for the next one, without counting a failed read.
+				if (signal?.aborted) {
+					await db.update(pdfImportFile).set({ leaseExpiresAt: null, leaseToken: null }).where(mine);
+					return;
+				}
 				const message = error instanceof Error ? error.message : String(error);
 				const attempts = file.attempts + 1;
 				console.error("Reading an imported PDF failed", { attempts, error: message, file: file.filename, id: file.id });

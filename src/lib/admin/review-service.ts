@@ -574,7 +574,9 @@ export async function approveItemReview(
 			// published copy's hash differs from the upload's: it carries the record.
 			if (current?.sourceObjectPath === file.objectPath) continue;
 			const parentKey = file.file.parentItemKey;
-			const parent = review.snapshot.records.find(({ itemKey }) => itemKey === parentKey);
+			const submitted = review.snapshot.records.find(({ itemKey }) => itemKey === parentKey);
+			// The record as approved, with the editor's corrections, as publishing it uses.
+			const parent = submitted ? effectiveReviewRecord(review, submitted) : undefined;
 			prepared.push(
 				await prepareNativePdfPublication(
 					db,
