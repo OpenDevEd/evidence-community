@@ -17,6 +17,7 @@ import {
 	PlusSignIcon,
 	Tick02Icon,
 	Undo02Icon,
+	UserCheck01Icon,
 } from "@hugeicons/core-free-icons";
 import { useState, type ReactNode } from "react";
 
@@ -184,6 +185,57 @@ export function SuggestionList({ applied, checks, locked, onToggle, payload, sug
 	);
 }
 
+type PayloadCreator = { authorProfileId?: string; firstName?: string; institutions?: { display_name: string }[]; lastName?: string; name?: string };
+
+/** The record's authors with the affiliations the PDF prints, each marked when it links to one of the library's author profiles. */
+export function AuthorList({ creators }: { creators: readonly PayloadCreator[] }) {
+	return (
+		<ul className="flex flex-col gap-3">
+			{creators.map((creator, index) => {
+				const name = [creator.firstName, creator.lastName].filter(Boolean).join(" ") || creator.name || "Unnamed";
+				return (
+					<li className="flex gap-2.5" key={`${name}-${index}`}>
+						<HugeiconsIcon aria-hidden className={`mt-0.5 shrink-0 ${creator.authorProfileId ? "text-emerald-600 dark:text-emerald-400" : "text-black/30 dark:text-white/30"}`} icon={UserCheck01Icon} size={15} />
+						<div className="min-w-0 flex-1 text-sm">
+							<p className="text-black/85 dark:text-white/85">
+								{name}
+								{creator.authorProfileId ? <span className="ms-2 text-xs text-emerald-700 dark:text-emerald-400">Linked to a profile</span> : null}
+							</p>
+							{creator.institutions?.length ? <p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{creator.institutions.map(({ display_name }) => display_name).join("; ")}</p> : null}
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+/** The keywords the PDF lists, as the record's tags. */
+export function TagList({ tags }: { tags: readonly string[] }) {
+	return (
+		<ul className="flex flex-wrap gap-1.5">
+			{tags.map((tag) => (
+				<li className="rounded-md bg-black/[0.05] px-2 py-1 text-xs text-black/70 dark:bg-white/[0.07] dark:text-white/70" key={tag}>
+					{tag}
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** The library's records the work cites, which the new record links to. */
+export function CitedList({ cites }: { cites: readonly { key: string; title: string }[] }) {
+	return (
+		<ul className="flex flex-col gap-2">
+			{cites.map(({ key, title }) => (
+				<li className="text-sm leading-5 text-black/80 dark:text-white/80" key={key}>
+					{title}
+				</li>
+			))}
+		</ul>
+	);
+}
+
 export function TopicList({ chosen, locked, onToggle, topics }: { chosen: ReadonlySet<string>; locked: boolean; onToggle: (id: string) => void; topics: TopicSuggestion[] }) {
 	return (
 		<ul className="flex flex-col gap-3">
@@ -207,7 +259,7 @@ export function MetadataLine({ payload }: { payload: Record<string, unknown> }) 
 	const items = [
 		{ icon: Building03Icon, label: "Published by", value: text("publicationTitle") ?? text("proceedingsTitle") ?? text("publisher") ?? text("institution") },
 		{ icon: Calendar03Icon, label: "Date", value: text("date") },
-		{ icon: Globe02Icon, label: "Language", value: text("language")?.toUpperCase() ?? null },
+		{ icon: Globe02Icon, label: "Language", value: (text("languageName") ?? text("language"))?.toUpperCase() ?? null },
 	].filter((item) => item.value);
 	if (!items.length && !doi) return null;
 	return (
@@ -261,6 +313,15 @@ const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "keywords", label: "Keywords" },
 	{ field: "rights", label: "Rights" },
 	{ field: "doi", label: "DOI" },
+	{ field: "date", label: "Date" },
+	{ field: "publisher", label: "Publisher" },
+	{ field: "language", label: "Language" },
+	{ field: "publicationTitle", label: "Published in" },
+	{ field: "volume", label: "Volume" },
+	{ field: "issue", label: "Issue" },
+	{ field: "pages", label: "Pages" },
+	{ field: "issn", label: "ISSN" },
+	{ field: "isbn", label: "ISBN" },
 ];
 
 const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
@@ -299,7 +360,7 @@ export function PdfPropertiesList({ after, now }: { after: PdfProperties; now: P
 	}
 	return (
 		<dl className="grid grid-cols-[4.5rem_minmax(0,1fr)_5rem] gap-x-4 gap-y-2.5">
-			{PROPERTY_ROWS.map(({ field, label }) => {
+			{PROPERTY_ROWS.filter(({ field }) => field === "doi" || propertyText(after, field) || propertyText(now.properties, field)).map(({ field, label }) => {
 				const value = propertyText(after, field);
 				const before = propertyText(now.properties, field);
 				const change = changeOf(field, after, now.properties);

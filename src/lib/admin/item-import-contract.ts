@@ -151,6 +151,8 @@ export type PdfSuggestion = {
 /** What the AI made of one PDF. */
 export type PdfReading = {
 	checks: PdfCheckResult[];
+	/** The library's records the work cites, which the record links to. */
+	cites: { key: string; title: string }[];
 	/** The properties the PDF carries now, before publishing writes the record into it. */
 	pdf: PdfPropertiesReading;
 	record: AdminImportPreviewRecord;

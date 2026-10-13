@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, PencilEdit02Icon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, EarthIcon, FileEditIcon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -10,7 +10,9 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { Abstract, CheckMeter, Checks, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, SuggestionList, TopicList } from "./ImportReview";
+import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, SuggestionList, TagList, TopicList } from "./ImportReview";
+import { countryFocusNames } from "@/lib/country-focus";
+
 import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, recordPayload, rowPasses, type ImportRow, type ReviewFilter } from "./admin-import";
 import { CollectionsSetting } from "./ImportAdd";
@@ -141,6 +143,11 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 	const edited = recordPayload(row, applied);
 	const abstract = typeof edited.abstractNote === "string" ? edited.abstractNote : null;
 	const abstractWritten = row.suggestions.some(({ field }, index) => field === "abstractNote" && applied.has(index));
+	const creators = Array.isArray(edited.creators) ? (edited.creators as Parameters<typeof AuthorList>[0]["creators"]) : [];
+	const affiliated = creators.filter(({ institutions }) => institutions?.length).length;
+	const linked = creators.filter(({ authorProfileId }) => authorProfileId).length;
+	const tags = Array.isArray(edited.tags) ? (edited.tags as string[]) : [];
+	const countries = Array.isArray(edited.countryFocus) ? (edited.countryFocus as string[]).map((code) => countryFocusNames[code] ?? code) : [];
 	const settled = row.state === "read" || row.state === "failed";
 	const checks = flow.checksOf(row);
 	const result = flow.resultById.get(row.id);
@@ -202,6 +209,26 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 						{row.source && flow.checkCount ? (
 							<Setting defaultOpen={!rowPasses(row, applied)} icon={CheckListIcon} summary={`${checks.filter(checkPasses).length} of ${flow.checkCount} pass`} title="AI checks">
 								<Checks checks={checks} />
+							</Setting>
+						) : null}
+						{creators.length ? (
+							<Setting icon={UserMultipleIcon} summary={[`${affiliated} of ${creators.length} with affiliations`, linked ? `${linked} linked to profiles` : ""].filter(Boolean).join(", ")} title="Authors">
+								<AuthorList creators={creators} />
+							</Setting>
+						) : null}
+						{tags.length ? (
+							<Setting icon={HashtagIcon} summary={`${tags.length} ${tags.length === 1 ? "keyword" : "keywords"}`} title="Tags">
+								<TagList tags={tags} />
+							</Setting>
+						) : null}
+						{countries.length ? (
+							<Setting icon={EarthIcon} summary={countries.join(", ")} title="Countries">
+								<TagList tags={countries} />
+							</Setting>
+						) : null}
+						{row.cites.length ? (
+							<Setting icon={QuoteDownIcon} summary={`${row.cites.length} ${row.cites.length === 1 ? "record" : "records"}`} title="Cites in the library">
+								<CitedList cites={row.cites} />
 							</Setting>
 						) : null}
 						{row.suggestions.length ? (

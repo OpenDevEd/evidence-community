@@ -56,7 +56,7 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
 	const record = await previewReading(db, file.filename, ai.zoteroItem);
 	// Suggestions use the record's field names, so applying one replaces the field the review shows.
 	const suggestions = ai.suggestions.map((suggestion) => ({ ...suggestion, field: recordField(ai.zoteroItem.itemType, suggestion.field) }));
-	return { checks: ai.checks, pdf, record: { ...record, id: String(file.position) }, suggestions, topics: ai.topics };
+	return { checks: ai.checks, cites: ai.cites, pdf, record: { ...record, id: String(file.position) }, suggestions, topics: ai.topics };
 }
 
 /**

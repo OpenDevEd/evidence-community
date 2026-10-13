@@ -21,7 +21,7 @@ import {
 	type PdfSuggestion,
 	PDF_IMPORT_MAX_FILES,
 } from "@/lib/admin/item-import-contract";
-import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
+import { pdfPropertiesOfRecord, type PdfProperties, type PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 
 import type { ImportKind } from "./ImportSteps";
@@ -99,6 +99,8 @@ export function createdKeys(results: readonly AdminImportCommitResult[]) {
 /** One record in the review, from a DOI, a bibliography file or a PDF the AI reads. */
 export type ImportRow = {
 	checks: PdfCheckResult[];
+	/** The library's records the PDF cites, which its record links to. */
+	cites: { key: string; title: string }[];
 	/** The row's id, also the id its record is committed under. */
 	id: string;
 	message?: string;
@@ -139,7 +141,7 @@ export function validateGuidance(guidance: string) {
 	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`);
 }
 
-const emptyRow = { checks: [], pdf: null, source: null, suggestions: [], topics: [] };
+const emptyRow = { checks: [], cites: [], pdf: null, source: null, suggestions: [], topics: [] };
 
 export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): ImportRow[] {
 	return records.map((record) => ({ ...emptyRow, id: record.id, record, state: "read" }));
@@ -149,6 +151,7 @@ export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): I
 function rowsFromImport(server: AdminPdfImport): ImportRow[] {
 	return server.files.map((file) => ({
 		checks: file.reading?.checks ?? [],
+		cites: file.reading?.cites ?? [],
 		id: file.rowId,
 		message: file.message ?? undefined,
 		pdf: file.reading?.pdf ?? null,
@@ -335,16 +338,7 @@ export function recordPayload(row: ImportRow, applied: ReadonlySet<number>): Rec
 
 /** What publishing writes into the PDF: the record as the editor leaves it. */
 export function publishedProperties(row: ImportRow, applied: ReadonlySet<number>, topicNames: readonly string[]): PdfProperties {
-	const payload = recordPayload(row, applied);
-	const text = (field: string) => (typeof payload[field] === "string" ? (payload[field] as string) : "");
-	return {
-		authors: row.record?.creators ?? [],
-		doi: text("DOI"),
-		keywords: [...topicNames],
-		rights: text("rights"),
-		subject: text("abstractNote"),
-		title: text("title") || (row.record?.title ?? ""),
-	};
+	return pdfPropertiesOfRecord(recordPayload(row, applied), { authors: row.record?.creators ?? [], doi: "", keywords: [...topicNames] });
 }
 
 /** A check's answer, and whether an applied suggestion meets it. */

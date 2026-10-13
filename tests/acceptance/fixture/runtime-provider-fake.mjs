@@ -1,15 +1,24 @@
 // fallow-ignore-file unused-file
 // Docker Compose starts this fixture directly; it is not imported by TypeScript.
 import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { join } from "node:path";
 
 const port = Number(process.env.PORT ?? 4000);
 const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
-// Files uploaded through signed URLs, by bucket and path; anything else reads as the acceptance PDF.
-const storedObjects = new Map();
+// Files uploaded, by bucket and path, kept on the container's disk so a restart of this process keeps them;
+// anything else reads as the acceptance PDF.
+const STORAGE_DIR = "/tmp/runtime-provider-fake-storage";
+mkdirSync(STORAGE_DIR, { recursive: true });
+const storedFile = (objectPath) => join(STORAGE_DIR, encodeURIComponent(objectPath));
+const storedObjects = {
+	get: (objectPath) => (existsSync(storedFile(objectPath)) ? readFileSync(storedFile(objectPath)) : undefined),
+	set: (objectPath, bytes) => writeFileSync(storedFile(objectPath), bytes),
+};
 const adminUsers = { editor: "user_acceptance_admin", creator: "user_acceptance_creator", owner: "user_acceptance_owner" };
 function requiredEnvironment(name) {
 	const value = process.env[name];
@@ -124,16 +133,33 @@ function crossrefValue(tag) {
 		: null;
 }
 
-/** An OpenAlex topic as a node of OpenScholar's topic catalogue. */
-function topicNode(topic) {
-	return {
-		childCount: 0,
-		id: topic.id.replace("https://openalex.org/", ""),
-		level: "topic",
-		name: topic.display_name,
-		parent: topic.subfield.id.replace("https://openalex.org/", ""),
-		path: [topic.domain.display_name, topic.field.display_name, topic.subfield.display_name],
-	};
+// OpenScholar's author profiles, created, looked up by id and searched by name; kept beside the stored files.
+const PROFILES_FILE = join(STORAGE_DIR, "..author-profiles.json");
+const authorProfiles = new Map(existsSync(PROFILES_FILE) ? JSON.parse(readFileSync(PROFILES_FILE, "utf8")) : []);
+
+// fallow-ignore-next-line complexity
+function authorProfileRequest(body) {
+	if (body.operation === "create") {
+		const profile = { affiliation: body.affiliation ?? "", bio: "", headline: "", id: `profile_${authorProfiles.size + 1}`, linkedin: "", name: String(body.name ?? "").trim(), openalex: "", orcid: "", photo: null, revision: 1, website: "" };
+		authorProfiles.set(profile.id, profile);
+		writeFileSync(PROFILES_FILE, JSON.stringify([...authorProfiles]));
+		return { profiles: [profile] };
+	}
+	if (body.operation === "resolve") return { profiles: (body.profileIds ?? []).flatMap((id) => (authorProfiles.has(id) ? [authorProfiles.get(id)] : [])) };
+	const words = String(body.search ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
+	const found = [...authorProfiles.values()].filter(({ name }) => words.every((word) => name.toLowerCase().includes(word)));
+	return { continueCursor: null, isDone: true, profiles: found.slice(0, body.paginationOpts?.numItems ?? 12) };
+}
+
+const openAlexId = (value) => value.replace("https://openalex.org/", "");
+
+/** An OpenAlex topic, subfield, field or domain as a node of OpenScholar's topic catalogue. */
+// fallow-ignore-next-line complexity
+function topicNode(node) {
+	const id = openAlexId(node.id);
+	const above = [node.domain, node.field, node.subfield].filter(Boolean);
+	const level = id.startsWith("domains/") ? "domain" : id.startsWith("fields/") ? "field" : id.startsWith("subfields/") ? "subfield" : "topic";
+	return { childCount: 0, id, level, name: node.display_name, parent: above.length ? openAlexId(above[above.length - 1].id) : null, path: above.map(({ display_name }) => display_name) };
 }
 
 /**
@@ -151,7 +177,7 @@ async function topicCatalog(body) {
 	const nodes = body.query
 		? ((await openAlex(`/topics?search=${encodeURIComponent(body.query)}&per-page=${Math.min(body.limit ?? 25, 50)}`))?.results ?? []).map(topicNode)
 		: body.ids
-			? (await Promise.all(body.ids.filter((id) => /^T\d+$/u.test(id)).map((id) => openAlex(`/topics/${id}`)))).filter(Boolean).map(topicNode)
+			? (await Promise.all(body.ids.filter((id) => /^(?:T\d+|(?:domains|fields|subfields)\/\d+)$/u.test(id)).map((id) => openAlex(id.startsWith("T") ? `/topics/${id}` : `/${id}`)))).filter(Boolean).map(topicNode)
 			: [];
 	return { contractVersion: 1, nextCursor: null, nodes, publicBaseUrl: "https://openalex.org", revision: "openalex" };
 }
@@ -165,6 +191,9 @@ async function handle(request, response) {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/api/v1/evidence-libraries/author-profiles" && method === "POST") {
+		return json(response, 200, authorProfileRequest(JSON.parse((await readBody(request)).toString("utf8"))));
+	}
 	if (url.pathname === "/api/v1/evidence-libraries/topics/catalog" && method === "POST") {
 		return json(response, 200, await topicCatalog(JSON.parse((await readBody(request)).toString("utf8"))));
 	}

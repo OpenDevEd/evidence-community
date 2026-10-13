@@ -3,12 +3,52 @@ import { decodePDFRawStream, EncryptedPDFError, PDFBool, PDFDict, PDFDocument, P
 /** What a PDF says about itself in its document properties and XMP block. Empty when unset. */
 export type PdfProperties = {
 	authors: string[];
+	/** Publication date: a year, a month or a day, as XMP dates are written. */
+	date: string;
 	doi: string;
+	isbn: string;
+	issn: string;
+	issue: string;
 	keywords: string[];
+	/** A language tag such as "en". */
+	language: string;
+	pages: string;
+	/** The journal, series or proceedings it appeared in. */
+	publicationTitle: string;
+	publisher: string;
 	rights: string;
 	subject: string;
 	title: string;
+	volume: string;
 };
+
+const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+
+/**
+ * What a published PDF carries in its own metadata: the record as the
+ * library has it, its authors, and keywords (topic names and tags) and DOI
+ * as the caller knows them. The review's preview and publishing both use it.
+ */
+export function pdfPropertiesOfRecord(payload: Record<string, unknown>, { authors, doi, keywords }: { authors: string[]; doi: string; keywords: string[] }): PdfProperties {
+	const tags = Array.isArray(payload.tags) ? payload.tags.map(textOf).filter(Boolean) : [];
+	return {
+		authors,
+		date: textOf(payload.date),
+		doi: textOf(payload.DOI) || doi,
+		isbn: textOf(payload.ISBN),
+		issn: textOf(payload.ISSN),
+		issue: textOf(payload.issue),
+		keywords: [...new Set([...keywords, ...tags])],
+		language: textOf(payload.languageName) || textOf(payload.language),
+		pages: textOf(payload.pages),
+		publicationTitle: textOf(payload.publicationTitle),
+		publisher: textOf(payload.publisher),
+		rights: textOf(payload.rights),
+		subject: textOf(payload.abstractNote),
+		title: textOf(payload.title),
+		volume: textOf(payload.volume),
+	};
+}
 
 /**
  * What a PDF claims to meet: tags for screen readers, and the PDF/A and
@@ -39,6 +79,10 @@ const NAMESPACES: Record<string, string> = {
 	xmp: "http://ns.adobe.com/xap/1.0/",
 	xmpRights: "http://ns.adobe.com/xap/1.0/rights/",
 };
+
+// XMP dates and language tags have set forms; a record's free text is only written when it has them.
+const XMP_DATE = /^\d{4}(?:-\d{2}(?:-\d{2})?)?$/;
+const LANGUAGE_TAG = /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 
 // ponytail: resolves prefixes from the block's xmlns declarations rather than
 // parsing XML, so one prefix bound to two namespaces in different elements
@@ -103,11 +147,20 @@ export async function readPdfProperties(bytes: Uint8Array): Promise<PdfPropertie
 		writable: true,
 		properties: {
 			authors: xmpList(xmp, "dc:creator").length ? xmpList(xmp, "dc:creator") : author ? [author] : [],
+			date: xmpList(xmp, "dc:date")[0] ?? "",
 			doi: doiOf(xmp),
+			isbn: xmpText(xmp, "prism:isbn"),
+			issn: xmpText(xmp, "prism:issn"),
+			issue: xmpText(xmp, "prism:number"),
 			keywords: xmpList(xmp, "dc:subject").length ? xmpList(xmp, "dc:subject") : keywords.split(/[;,]/).map((word) => word.trim()).filter(Boolean),
+			language: xmpList(xmp, "dc:language")[0] ?? "",
+			pages: xmpText(xmp, "prism:pageRange"),
+			publicationTitle: xmpText(xmp, "prism:publicationName"),
+			publisher: xmpList(xmp, "dc:publisher")[0] ?? "",
 			rights: xmpList(xmp, "dc:rights")[0] ?? "",
 			subject: safely(() => document.getSubject()?.trim() ?? "", "") || (xmpList(xmp, "dc:description")[0] ?? ""),
 			title: safely(() => document.getTitle()?.trim() ?? "", "") || (xmpList(xmp, "dc:title")[0] ?? ""),
+			volume: xmpText(xmp, "prism:volume"),
 		},
 		standards: { pdfa: pdfaOf(xmp), pdfua:xmpText(xmp, "pdfuaid:part"), tagged: safely(() => taggedOf(document), false) },
 	};
@@ -125,7 +178,37 @@ function safely<T>(read: () => T, fallback: T) {
  * The XMP properties publishing owns. The file keeps every other one, such
  * as its PDF/A and PDF/UA claims, creation date and creator tool.
  */
-const WRITTEN = ["dc:creator", "dc:description", "dc:identifier", "dc:rights", "dc:subject", "dc:title", "pdf:Keywords", "prism:doi", "xmp:MetadataDate", "xmp:ModifyDate", "xmpRights:Marked"];
+const WRITTEN = [
+	"dc:creator", "dc:date", "dc:description", "dc:identifier", "dc:language", "dc:publisher", "dc:rights", "dc:subject", "dc:title", "pdf:Keywords",
+	"prism:doi", "prism:isbn", "prism:issn", "prism:number", "prism:pageRange", "prism:publicationName", "prism:volume",
+	"xmp:MetadataDate", "xmp:ModifyDate", "xmpRights:Marked",
+];
+
+/** The PRISM properties publishing writes, each with what the record calls it and a description for the PDF/A extension schema. */
+const PRISM_PROPERTIES = [
+	{ description: "Name of the journal, series or proceedings", field: "publicationTitle", name: "publicationName" },
+	{ description: "Volume of the publication", field: "volume", name: "volume" },
+	{ description: "Issue of the publication", field: "issue", name: "number" },
+	{ description: "Pages of the work in the publication", field: "pages", name: "pageRange" },
+	{ description: "ISSN of the publication", field: "issn", name: "issn" },
+	{ description: "ISBN of the publication", field: "isbn", name: "isbn" },
+] as const;
+
+const EXTENSION_NAMESPACES = 'xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"';
+
+/**
+ * The PDF/A extension schema entry that declares the PRISM properties
+ * written. PDF/A accepts a property outside its predefined schemas only
+ * when the file declares it like this.
+ */
+function prismSchemaEntry(names: readonly string[]) {
+	const properties = PRISM_PROPERTIES.filter(({ name }) => names.includes(name))
+		.map(({ description, name }) => `<rdf:li rdf:parseType="Resource"><pdfaProperty:name>${name}</pdfaProperty:name><pdfaProperty:valueType>Text</pdfaProperty:valueType><pdfaProperty:category>external</pdfaProperty:category><pdfaProperty:description>${description}</pdfaProperty:description></rdf:li>`)
+		.join("");
+	// It declares its own prefixes: in a file's own list of schemas they may be bound to other names, or not at all.
+	return `<rdf:li rdf:parseType="Resource" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" ${EXTENSION_NAMESPACES}><pdfaSchema:schema>PRISM Basic Metadata</pdfaSchema:schema><pdfaSchema:namespaceURI>${NAMESPACES.prism}</pdfaSchema:namespaceURI><pdfaSchema:prefix>prism</pdfaSchema:prefix><pdfaSchema:property><rdf:Seq>${properties}</rdf:Seq></pdfaSchema:property></rdf:li>`;
+}
+
 
 /** The XMP block without one property under any of its names, whether written as an element or as an attribute. */
 const withoutProperty = (xmp: string, property: string) =>
@@ -134,37 +217,62 @@ const withoutProperty = (xmp: string, property: string) =>
 		xmp,
 	);
 
+/** The PRISM properties with a value in this record, by their PRISM names. */
+const prismValues = (properties: PdfProperties) => PRISM_PROPERTIES.filter(({ field }) => properties[field]).map(({ field, name }) => ({ name, value: properties[field] }));
+
 /**
- * The record as one `rdf:Description`, in schemas PDF/A accepts without an
- * extension schema. That is why the DOI goes in `dc:identifier`, not `prism:doi`.
+ * The record as one `rdf:Description`. Dublin Core holds what it can, which
+ * PDF/A accepts as is; that is why the DOI goes in `dc:identifier`. The
+ * journal details have no Dublin Core place, so they go in PRISM, and
+ * `schemas` is the PDF/A extension schema entry declaring them when the
+ * file has no extension schemas of its own to add it to.
  */
-function recordDescription(properties: PdfProperties, date: string) {
+function recordDescription(properties: PdfProperties, date: string, schemas: string) {
 	const alt = (name: string, value: string) => (value ? `<${name}><rdf:Alt><rdf:li xml:lang="x-default">${escapeXml(value)}</rdf:li></rdf:Alt></${name}>` : "");
 	const list = (name: string, kind: "Bag" | "Seq", values: string[]) => (values.length ? `<${name}><rdf:${kind}>${values.map((value) => `<rdf:li>${escapeXml(value)}</rdf:li>`).join("")}</rdf:${kind}></${name}>` : "");
 	const text = (name: string, value: string) => (value ? `<${name}>${escapeXml(value)}</${name}>` : "");
 	return [
-		'<rdf:Description rdf:about="" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/">',
+		`<rdf:Description rdf:about="" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:prism="${NAMESPACES.prism}" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/" ${EXTENSION_NAMESPACES}>`,
 		alt("dc:title", properties.title),
 		list("dc:creator", "Seq", properties.authors),
 		alt("dc:description", properties.subject),
 		list("dc:subject", "Bag", properties.keywords),
 		alt("dc:rights", properties.rights),
 		text("dc:identifier", properties.doi && `doi:${properties.doi}`),
+		list("dc:date", "Seq", XMP_DATE.test(properties.date) ? [properties.date] : []),
+		list("dc:publisher", "Bag", properties.publisher ? [properties.publisher] : []),
+		list("dc:language", "Bag", LANGUAGE_TAG.test(properties.language) ? [properties.language] : []),
+		...prismValues(properties).map(({ name, value }) => text(`prism:${name}`, value)),
 		properties.rights ? "<xmpRights:Marked>True</xmpRights:Marked>" : "",
 		text("pdf:Keywords", properties.keywords.join(", ")),
 		text("xmp:ModifyDate", date),
 		text("xmp:MetadataDate", date),
+		schemas ? `<pdfaExtension:schemas><rdf:Bag>${schemas}</rdf:Bag></pdfaExtension:schemas>` : "",
 		"</rdf:Description>",
 	].join("");
 }
 
-/** The file's XMP block with the record written over the properties publishing owns, or a new block when it has none. */
+/** Where a file's own list of extension schemas closes, under whatever prefixes it uses. */
+const SCHEMAS_CLOSE = /<\/(?:[\w.-]+:)?Bag>(\s*)<\/[\w.-]+:schemas>/;
+/** The file already declares PRISM. */
+const PRISM_DECLARED = /namespaceURI>http:\/\/prismstandard\.org\/namespaces\/basic\/3\.0\/</;
+
+/**
+ * The file's XMP block with the record written over the properties
+ * publishing owns, or a new block when it has none. A file that already
+ * declares extension schemas gets PRISM's among them, unless it is there:
+ * a second schemas property would give one property two values.
+ */
 function mergedXmp(existing: string, properties: PdfProperties, date: string) {
-	const description = recordDescription(properties, date);
+	const prism = prismValues(properties).map(({ name }) => name);
+	const entry = prism.length ? prismSchemaEntry(prism) : "";
 	// The RDF element closes as </rdf:RDF> or under whatever prefix the file binds RDF to.
 	const close = /<\/(?:[\w.-]+:)?RDF>/;
-	if (close.test(existing)) return WRITTEN.reduce(withoutProperty, existing).replace(close, (tag) => description + tag);
-	return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">${description}</rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
+	if (!close.test(existing)) return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">${recordDescription(properties, date, entry)}</rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
+	const kept = WRITTEN.reduce(withoutProperty, existing);
+	const ownSchemas = SCHEMAS_CLOSE.test(kept);
+	const declared = ownSchemas && entry && !PRISM_DECLARED.test(kept) ? kept.replace(SCHEMAS_CLOSE, (tag) => entry + tag) : kept;
+	return declared.replace(close, (tag) => recordDescription(properties, date, ownSchemas ? "" : entry) + tag);
 }
 
 /**

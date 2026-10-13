@@ -128,7 +128,8 @@ export type ExistingRecordIndex = Record<
  * Finds library records (published or draft) that share an exact DOI, PMID
  * or ISBN with the import. Title matching is deliberately not attempted.
  */
-async function findExistingRecords(
+/** The library's records that have one of these DOIs, PMIDs or ISBNs, by identifier. */
+export async function findExistingRecords(
 	db: Executor,
 	identifiers: readonly ImportIdentifiers[],
 ): Promise<ExistingRecordIndex> {
