@@ -12,6 +12,7 @@ import { createResearchTools } from "@/lib/ai/tools";
 import { searchAuthorProfiles } from "@/lib/authors/catalog-search";
 import { COUNTRIES } from "@/constants/misc";
 import { normalizeDoi } from "@/lib/doi";
+import { existingItemKeys } from "@/lib/links/item-links";
 import { readPublicTopicCatalog, resolveTopicNodes } from "@/lib/topics/catalog";
 import { topicCatalogRequestSchema } from "@/lib/topics/contract";
 
@@ -101,15 +102,20 @@ function recordTypes() {
 		.join("\n");
 }
 
-/** The library's records among the works a PDF cites, matched by DOI, with the titles the reference list gives them. */
+/**
+ * The library's published records among the works a PDF cites, matched by
+ * DOI, with the titles the reference list gives them. A draft that was
+ * never published can't be linked to until it is.
+ */
 async function citedRecords(database: Database, references: readonly { doi: string; title: string }[]) {
 	const titleByDoi = new Map(references.flatMap(({ doi, title }) => {
 		const normalized = normalizeDoi(doi);
 		return normalized ? [[normalized, title.trim()] as const] : [];
 	}));
 	const existing = await findExistingRecords(database, [...titleByDoi.keys()].map((doi) => ({ doi, isbn: null, pmid: null })));
+	const published = await existingItemKeys(database, [...new Set(existing.doi.values())]);
 	const cites = new Map<string, string>();
-	for (const [doi, key] of existing.doi) if (!cites.has(key)) cites.set(key, titleByDoi.get(doi) || doi);
+	for (const [doi, key] of existing.doi) if (published.has(key) && !cites.has(key)) cites.set(key, titleByDoi.get(doi) || doi);
 	return [...cites].map(([key, title]) => ({ key, title }));
 }
 

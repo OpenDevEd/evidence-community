@@ -320,6 +320,8 @@ const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "volume", label: "Volume" },
 	{ field: "issue", label: "Issue" },
 	{ field: "pages", label: "Pages" },
+	{ field: "seriesTitle", label: "Series" },
+	{ field: "seriesNumber", label: "Series number" },
 	{ field: "issn", label: "ISSN" },
 	{ field: "isbn", label: "ISBN" },
 ];

@@ -1,9 +1,9 @@
 import { PDFDocument, PDFName } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
-import { readPdfProperties, writePdfProperties, type PdfProperties } from "@/lib/admin/pdf-properties";
+import { pdfPropertiesOfRecord, readPdfProperties, writePdfProperties, type PdfProperties } from "@/lib/admin/pdf-properties";
 
-const EMPTY: PdfProperties = { authors: [], date: "", doi: "", isbn: "", issn: "", issue: "", keywords: [], language: "", pages: "", publicationTitle: "", publisher: "", rights: "", subject: "", title: "", volume: "" };
+const EMPTY: PdfProperties = { authors: [], date: "", doi: "", isbn: "", issn: "", issue: "", keywords: [], language: "", pages: "", publicationTitle: "", publisher: "", rights: "", seriesNumber: "", seriesTitle: "", subject: "", title: "", volume: "" };
 
 const ARTICLE: PdfProperties = {
 	...EMPTY,
@@ -18,10 +18,20 @@ const ARTICLE: PdfProperties = {
 	publicationTitle: "Journal of Education in Africa",
 	publisher: "Taylor & Francis",
 	rights: "© Crown copyright 2026",
+	seriesNumber: "7",
+	seriesTitle: "Education Research Reports",
 	subject: "Attendance rose in the schools that took part.",
 	title: "Girls' learning in Sierra Leone",
 	volume: "12",
 };
+
+const pdfWithXmp = async (xmp: string) => {
+	const document = await PDFDocument.create();
+	document.addPage();
+	document.catalog.set(PDFName.of("Metadata"), document.context.register(document.context.stream(xmp, { Type: "Metadata", Subtype: "XML" })));
+	return document.save();
+};
+const textOf = (bytes: Uint8Array) => new TextDecoder("latin1").decode(bytes);
 
 // Prefixes are the file's choice: this block binds RDF to "r" and Dublin Core to "purl".
 const XMP = [
@@ -68,32 +78,48 @@ describe("writing a record into a PDF", () => {
 		expect(new TextDecoder("latin1").decode(written)).not.toMatch(/\/Type\s*\/XRef/);
 	});
 
-	it("writes the date, publisher, language and journal details, and reads them back", async () => {
+	it("writes the date, publisher, language, journal and series details, and reads them back", async () => {
 		const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), ARTICLE));
 		expect(reading).toMatchObject({ properties: ARTICLE, writable: true });
 	});
 
-	// PDF/A accepts PRISM only when the file declares it in an extension schema.
-	it("declares the journal details it writes for PDF/A", async () => {
-		const text = new TextDecoder("latin1").decode(await writePdfProperties(await archivalPdf(), ARTICLE));
-		expect(text).toContain("<pdfaSchema:namespaceURI>http://prismstandard.org/namespaces/basic/3.0/</pdfaSchema:namespaceURI>");
-		for (const name of ["publicationName", "volume", "number", "pageRange", "issn"]) expect(text).toContain(`<pdfaProperty:name>${name}</pdfaProperty:name>`);
-		expect(text).not.toContain("<pdfaProperty:name>isbn</pdfaProperty:name>");
+	// PDF/A accepts PRISM only when the file declares it in an extension schema, once.
+	it("declares every journal and series property for PDF/A, so writing again with more filled stays valid", async () => {
+		const first = await writePdfProperties(await archivalPdf(), { ...EMPTY, publicationTitle: ARTICLE.publicationTitle, title: ARTICLE.title });
+		const second = await writePdfProperties(first, ARTICLE);
+		const text = textOf(second);
+		expect(text.match(/<pdfaSchema:prefix>prism<\/pdfaSchema:prefix>/g)).toHaveLength(1);
+		for (const name of ["publicationName", "volume", "number", "pageRange", "issn", "isbn", "seriesTitle", "seriesNumber"]) expect(text).toContain(`<pdfaProperty:name>${name}</pdfaProperty:name>`);
+		expect(await readPdfProperties(second)).toMatchObject({ properties: ARTICLE });
 	});
 
-	it("adds the declaration to a file's own extension schemas rather than a second list", async () => {
-		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"><pdfaExtension:schemas><r:Bag><r:li r:parseType="Resource"><pdfaSchema:prefix>own</pdfaSchema:prefix></r:li></r:Bag></pdfaExtension:schemas></r:Description></r:RDF>');
-		const document = await PDFDocument.create();
-		document.addPage();
-		document.catalog.set(PDFName.of("Metadata"), document.context.register(document.context.stream(own, { Type: "Metadata", Subtype: "XML" })));
-		const text = new TextDecoder("latin1").decode(await writePdfProperties(await document.save(), ARTICLE));
+	it("adds the declaration to a file's own extension schemas rather than a second list, comments and all", async () => {
+		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#"><pdfaExtension:schemas><r:Bag><r:li r:parseType="Resource"><pdfaSchema:prefix>own</pdfaSchema:prefix></r:li></r:Bag> <!-- schemas end --> </pdfaExtension:schemas></r:Description></r:RDF>');
+		const text = textOf(await writePdfProperties(await pdfWithXmp(own), ARTICLE));
 		expect(text.match(/<pdfaExtension:schemas>/g)).toHaveLength(1);
 		expect(text).toContain("<pdfaSchema:prefix>own</pdfaSchema:prefix>");
 		expect(text).toContain("<pdfaSchema:prefix>prism</pdfaSchema:prefix>");
 	});
 
-	it("leaves out a date or language a record holds as free text, which XMP can't take", async () => {
-		const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), { ...ARTICLE, date: "Spring 2026", language: "English" }));
-		expect(reading).toMatchObject({ properties: { date: "", language: "", title: ARTICLE.title } });
+	it("writes only the PRISM properties a PDF/A file declares when it declares PRISM itself", async () => {
+		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"><pdfaExtension:schemas><r:Bag><r:li r:parseType="Resource"><pdfaSchema:namespaceURI>http://prismstandard.org/namespaces/basic/3.0/</pdfaSchema:namespaceURI><pdfaSchema:prefix>prism</pdfaSchema:prefix><pdfaSchema:property><r:Seq><r:li r:parseType="Resource"><pdfaProperty:name>volume</pdfaProperty:name></r:li></r:Seq></pdfaSchema:property></r:li></r:Bag></pdfaExtension:schemas></r:Description></r:RDF>');
+		const reading = await readPdfProperties(await writePdfProperties(await pdfWithXmp(own), ARTICLE));
+		expect(reading).toMatchObject({ properties: { ...ARTICLE, isbn: "", issn: "", issue: "", pages: "", publicationTitle: "", seriesNumber: "", seriesTitle: "" } });
+	});
+
+	it("leaves out a date or language XMP can't take", async () => {
+		for (const [date, language] of [["Spring 2026", "English"], ["2026-02-30", "en GB"], ["2026-13", ""]] as const) {
+			const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), { ...ARTICLE, date, language }));
+			expect(reading).toMatchObject({ properties: { date: "", language: "", title: ARTICLE.title } });
+		}
+	});
+});
+
+describe("the PDF properties of a record", () => {
+	// The review shows these before publishing writes them, so both must agree.
+	it("hold only what publishing writes, the series included", () => {
+		const report = { date: "2026-02-30", itemType: "report", language: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls"], title: "A report" };
+		expect(pdfPropertiesOfRecord(report, { authors: [], doi: "", keywords: ["Education"] })).toMatchObject({ date: "", keywords: ["Education", "girls"], language: "", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report" });
+		expect(pdfPropertiesOfRecord({ itemType: "book", language: "en-GB", series: "Studies in Education" }, { authors: [], doi: "", keywords: [] })).toMatchObject({ language: "en-GB", seriesTitle: "Studies in Education" });
 	});
 });

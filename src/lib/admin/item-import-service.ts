@@ -4,6 +4,7 @@ import { eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { reserveItemIdentity } from "@/db/record-identity";
+import { publicationIdentifier } from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
@@ -126,9 +127,9 @@ export type ExistingRecordIndex = Record<
 
 /**
  * Finds library records (published or draft) that share an exact DOI, PMID
- * or ISBN with the import. Title matching is deliberately not attempted.
+ * or ISBN with the import, a DOI the library issued through Crossref or
+ * Zenodo included. Title matching is deliberately not attempted.
  */
-/** The library's records that have one of these DOIs, PMIDs or ISBNs, by identifier. */
 export async function findExistingRecords(
 	db: Executor,
 	identifiers: readonly ImportIdentifiers[],
@@ -161,11 +162,18 @@ export async function findExistingRecords(
 			].flat(),
 		);
 
-	const [published, drafts] = await Promise.all([
+	const [published, issued, drafts] = await Promise.all([
 		db
 			.select({ key: item.key, DOI: item.DOI, ISBN: item.ISBN, PMID: item.PMID })
 			.from(item)
 			.where(conditions(sql`${item.DOI}`, sql`${item.PMID}`, sql`${item.ISBN}`)),
+		// Issued DOIs are stored normalized, and a record may carry its own only here.
+		dois.length
+			? db
+					.select({ key: publicationIdentifier.itemKey, DOI: publicationIdentifier.doi })
+					.from(publicationIdentifier)
+					.where(inArray(publicationIdentifier.doi, dois))
+			: [],
 		db
 			.select({
 				key: itemDraft.itemKey,
@@ -189,7 +197,7 @@ export async function findExistingRecords(
 		pmid: index.pmid as Map<string, string>,
 	};
 	// Published rows first so a draft of a published record never shadows it.
-	for (const row of [...published, ...drafts]) {
+	for (const row of [...published, ...issued, ...drafts]) {
 		const found = importIdentifiers(row);
 		for (const kind of ["doi", "pmid", "isbn"] as const) {
 			const value = found[kind];
