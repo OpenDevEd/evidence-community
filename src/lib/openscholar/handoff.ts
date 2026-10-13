@@ -12,6 +12,8 @@ const HANDOFF_RECORDS_MAX = 1_000;
 
 const id = z.string().trim().min(1).max(200);
 const RECORD_KEY = /^[A-Z0-9]{8}$/u;
+/** What a question may say it means: as much as the Smart screening editor takes (src/lib/ai/screening-fields.ts). */
+const DESCRIPTION_MAX = 1_024;
 
 /** The record keys among `keys`, as many as a hand-off takes. */
 export const recordsOf = (keys: string[]) => keys.filter((key) => RECORD_KEY.test(key)).slice(0, HANDOFF_RECORDS_MAX);
@@ -24,7 +26,7 @@ export const handoffSchema = z.strictObject({
 		z.strictObject({ readerCollection: id }),
 		z.strictObject({ libraryCollection: id }),
 	]),
-	fields: z.array(z.strictObject({ label: z.string().trim().min(1).max(120), type: z.enum(SMART_SCREENING_FIELD_TYPES), description: z.string().trim().max(1_000) })).max(20),
+	fields: z.array(z.strictObject({ label: z.string().trim().min(1).max(120), type: z.enum(SMART_SCREENING_FIELD_TYPES), description: z.string().trim().max(DESCRIPTION_MAX) })).max(20),
 });
 
 export type OpenScholarHandoff = z.infer<typeof handoffSchema>;
