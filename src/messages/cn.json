@@ -574,7 +574,11 @@
     "noMatchingCollections": "没有匹配的收藏集",
     "collectionsRange": "第 {from} 至 {to} 个，共 {total} 个",
     "openCollection": "打开收藏集",
-    "invitationsUnread": "无法加载待处理的邀请"
+    "invitationsUnread": "无法加载待处理的邀请",
+    "continueInOpenScholar": "在 OpenScholar 中继续",
+    "openInOpenScholar": "在 OpenScholar 中打开",
+    "screenAllInOpenScholar": "在 OpenScholar 中筛选全部 {total} 篇",
+    "openInOpenScholarFailed": "无法在 OpenScholar 中打开"
   },
   "ai": {
     "sourcesTitle": "来源",

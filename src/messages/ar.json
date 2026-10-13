@@ -574,7 +574,11 @@
     "noMatchingCollections": "لا توجد مجموعات مطابقة",
     "collectionsRange": "{from} إلى {to} من {total}",
     "openCollection": "فتح المجموعة",
-    "invitationsUnread": "تعذّر تحميل الدعوات المنتظرة"
+    "invitationsUnread": "تعذّر تحميل الدعوات المنتظرة",
+    "continueInOpenScholar": "المتابعة في OpenScholar",
+    "openInOpenScholar": "فتح في OpenScholar",
+    "screenAllInOpenScholar": "فحص الكل ({total}) في OpenScholar",
+    "openInOpenScholarFailed": "تعذّر الفتح في OpenScholar"
   },
   "ai": {
     "sourcesTitle": "المصادر",

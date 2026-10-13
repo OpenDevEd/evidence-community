@@ -31,6 +31,8 @@ import { ToolActivity } from "./ToolActivity";
 import { useMessageExport } from "./useChatActions";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { AttachedItemChip } from "./AttachedItemChip";
+import { OpenInOpenScholar, useSmartScreeningFields } from "@/components/features/openscholar/OpenInOpenScholar";
+import { recordsOf } from "@/lib/openscholar/handoff";
 
 type Message = ResearchUIMessage;
 
@@ -172,6 +174,19 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 			},
 		} satisfies Record<ControlAction, GeneratedContent>;
 	}, [results]);
+	const stored = useSmartScreeningFields();
+	// The records screened here and the questions asked, each with what the reader wrote it means.
+	const continueInOpenScholar = (
+		<OpenInOpenScholar
+			appearance="header"
+			label={tUI("continueInOpenScholar")}
+			handoff={() => ({
+				from: "smartScreening",
+				source: { records: recordsOf(resultEntries.map(([key]) => key)) },
+				fields: results.fields.map((field) => ({ ...field, description: stored.find((s) => s.label.trim() === field.label.trim())?.description ?? "" })),
+			})}
+		/>
+	);
 	const exportControls = (
 		<AIStructuredContentControls
 			formats={formats}
@@ -195,6 +210,7 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 					</p>
 				</div>
 				<div className="flex items-center gap-1 self-end sm:self-auto">
+					{continueInOpenScholar}
 					{exportControls}
 				</div>
 			</div>
@@ -221,7 +237,10 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 			</div>
 
 			<div className="flex justify-end rounded-2xl bg-black/[0.025] p-1 dark:bg-white/[0.04]">
-				<div className="flex items-center gap-1">{exportControls}</div>
+				<div className="flex items-center gap-1">
+					{continueInOpenScholar}
+					{exportControls}
+				</div>
 			</div>
 		</div>
 	);

@@ -574,7 +574,11 @@
     "noMatchingCollections": "Aucune collection ne correspond",
     "collectionsRange": "{from} à {to} sur {total}",
     "openCollection": "Ouvrir la collection",
-    "invitationsUnread": "Impossible de charger les invitations en attente"
+    "invitationsUnread": "Impossible de charger les invitations en attente",
+    "continueInOpenScholar": "Continuer dans OpenScholar",
+    "openInOpenScholar": "Ouvrir dans OpenScholar",
+    "screenAllInOpenScholar": "Analyser les {total} dans OpenScholar",
+    "openInOpenScholarFailed": "Impossible d'ouvrir dans OpenScholar"
   },
   "ai": {
     "sourcesTitle": "Sources",

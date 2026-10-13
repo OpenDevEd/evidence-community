@@ -10,6 +10,7 @@ describe("smart screening selection", () => {
 		).join("\n");
 
 		expect(screeningSelection(content)).toEqual({
+			allKeys: Array.from({ length: 30 }, (_, index) => `ITEM${index}`),
 			keys: Array.from({ length: 25 }, (_, index) => `ITEM${index}`),
 			total: 30,
 			omitted: 5,
@@ -24,6 +25,7 @@ describe("smart screening selection", () => {
 		].join("\n");
 
 		expect(screeningSelection(content)).toEqual({
+			allKeys: ["ONE", "TWO"],
 			keys: ["ONE", "TWO"],
 			total: 2,
 			omitted: 0,

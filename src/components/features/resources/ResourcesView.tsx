@@ -37,6 +37,8 @@ import {
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/nextui/Button";
+import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
+import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -268,8 +270,19 @@ function ContentActions() {
 	const { exports } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
+	const items = use(ItemsContext);
+	const params = items.queryParams;
+	// A reader's collection goes as itself, or as the search inside it; the library's results as the search they are.
+	// A reader's page with no collection open is no source: OpenScholar reads a collection of theirs, not all of it.
+	const collectionId = items.userData ? params.collectionId : null;
+	const handoff = (): OpenScholarHandoff => {
+		const search = searchOf(params);
+		if (!collectionId) return { from: "search", source: { search }, fields: [] };
+		return { from: "collection", source: search ? { search, readerCollection: collectionId } : { readerCollection: collectionId }, fields: [] };
+	};
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
+			{items.userData && !collectionId ? null : <OpenInOpenScholar label={t("openInOpenScholar")} handoff={handoff} />}
 			{isDownloadEnabled && <LibraryDownload />}
 			{isAtomFeedEnabled && exports.atom && (
 				<Button
