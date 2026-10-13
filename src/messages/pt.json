@@ -1039,8 +1039,8 @@
     "uncertain": "incerto",
     "editor": "Definido por um editor desta biblioteca.",
     "metadata": "Tipo obtido do próprio registro.",
-    "ai": "Lido por Jev a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
-    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Jev, um classificador de IA, lê o título e o resumo e escolhe um destes tipos; um registro sem resumo é avaliado pelo título. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza de Jev é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo.",
+    "ai": "Lido pela <ai>IA</ai> a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
+    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Um modelo de IA lê o título e o resumo e escolhe o tipo que melhor se encaixa; um registro sem resumo é avaliado pelo título. Quando dois tipos servem, uma revisão sistemática que combina estatisticamente seus resultados conta como meta-análise, e um estudo que acrescenta números a entrevistas ou estudos de caso conta como qualitativo. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza do modelo é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo. Escolher vários tipos mostra os registros de qualquer um deles.",
     "levels": {
       "synthesis": "Revisões e sínteses",
       "primary": "Estudos primários",
@@ -1050,67 +1050,80 @@
       "review-of-reviews": {
         "label": "Revisão de revisões",
         "plural": "Revisões de revisões",
-        "description": "Reúne e resume revisões ou meta-análises anteriores, como uma revisão guarda-chuva."
+        "description": "Reúne e resume revisões ou meta-análises anteriores, como uma revisão guarda-chuva.",
+        "not": "Não é uma revisão de estudos individuais, que é uma revisão sistemática ou narrativa."
       },
       "meta-analysis": {
         "label": "Meta-análise",
         "plural": "Meta-análises",
-        "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta."
+        "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta.",
+        "not": "Não é uma revisão que cita o resultado combinado de outros autores ou que não combina nada, que é uma revisão sistemática."
       },
       "systematic-review": {
         "label": "Revisão sistemática",
         "plural": "Revisões sistemáticas",
-        "description": "Resume estudos anteriores encontrados com uma busca e critérios de inclusão declarados, sem combinar os resultados. Inclui revisões de escopo e revisões rápidas."
+        "description": "Resume estudos anteriores encontrados com uma busca e critérios de inclusão declarados, sem combinar os resultados. Inclui revisões de escopo e revisões rápidas.",
+        "not": "Não é uma revisão que combina estatisticamente os resultados, que é uma meta-análise, nem uma sem busca declarada, que é uma revisão narrativa."
       },
       "literature-review": {
-        "label": "Revisão de literatura",
-        "plural": "Outras revisões de literatura",
-        "description": "Uma revisão narrativa, crítica ou integrativa sem método de busca declarado."
+        "label": "Revisão narrativa",
+        "plural": "Revisões narrativas",
+        "description": "Uma revisão narrativa, crítica ou integrativa sem método de busca declarado.",
+        "not": "Não é uma revisão com busca e critérios de inclusão declarados, que é uma revisão sistemática."
       },
       "bibliometric": {
         "label": "Estudo bibliométrico",
         "plural": "Estudos bibliométricos",
-        "description": "Conta e mapeia publicações, autores ou citações sobre um tema, em vez do que os estudos encontraram."
+        "description": "Conta e mapeia publicações, autores ou citações sobre um tema, em vez do que os estudos encontraram.",
+        "not": "Não é uma revisão do que os estudos encontraram, que é uma revisão sistemática ou narrativa."
       },
       "rct": {
         "label": "Ensaio randomizado",
         "plural": "Ensaios randomizados",
-        "description": "Participantes, grupos ou locais foram designados aleatoriamente às condições."
+        "description": "Participantes, grupos ou locais foram designados aleatoriamente às condições.",
+        "not": "Não é uma comparação sem distribuição aleatória, que é um quase-experimento, nem uma revisão de ensaios."
       },
       "quasi-experiment": {
         "label": "Quase-experimento",
         "plural": "Quase-experimentos",
-        "description": "Uma intervenção comparada com um grupo de comparação escolhido sem designação aleatória."
+        "description": "Uma intervenção comparada com um grupo de comparação escolhido sem designação aleatória.",
+        "not": "Não é um estudo com distribuição aleatória, que é um ensaio randomizado, nem um sem grupo de comparação, que é um estudo quantitativo."
       },
       "quantitative": {
         "label": "Estudo quantitativo",
-        "plural": "Outros quantitativos",
-        "description": "Levantamentos, estudos correlacionais e observacionais, testes antes e depois com um único grupo, análises de dados existentes."
+        "plural": "Estudos quantitativos",
+        "description": "Levantamentos, estudos correlacionais e observacionais, testes antes e depois com um único grupo, análises de dados existentes.",
+        "not": "Não é uma comparação de grupos distribuídos, que é um ensaio ou quase-experimento, nem a construção ou o teste de um modelo, que é um estudo de modelagem."
       },
       "qualitative": {
-        "label": "Estudo qualitativo",
-        "plural": "Qualitativos e mistos",
-        "description": "Entrevistas, grupos focais, estudos de caso, etnografia ou análise documental, sozinhos ou com dados quantitativos."
+        "label": "Qualitativo ou métodos mistos",
+        "plural": "Qualitativo ou métodos mistos",
+        "description": "Entrevistas, grupos focais, estudos de caso, etnografia ou análise documental, sozinhos ou com dados quantitativos.",
+        "not": "Não são apenas números, sem entrevistas, casos ou documentos, o que é um estudo quantitativo."
       },
       "modelling": {
         "label": "Estudo de modelagem",
         "plural": "Estudos de modelagem",
-        "description": "Constrói, simula, projeta ou testa um modelo, método, ferramenta ou sistema, avaliado pelo seu desempenho."
+        "description": "Constrói, simula, projeta ou testa um modelo, método, ferramenta ou sistema, avaliado pelo seu desempenho.",
+        "not": "Não são estatísticas sobre dados coletados sem construir ou testar um modelo, o que é um estudo quantitativo."
       },
       "protocol": {
         "label": "Protocolo",
         "plural": "Protocolos",
-        "description": "Um estudo ou revisão planejado ou em andamento, ainda sem resultados."
+        "description": "Um estudo ou revisão planejado ou em andamento, ainda sem resultados.",
+        "not": "Não é um estudo que relata resultados."
       },
       "commentary": {
         "label": "Comentário",
         "plural": "Comentários",
-        "description": "Um editorial, opinião, análise de políticas, teoria ou modelo conceitual sem dados novos."
+        "description": "Um editorial, opinião, análise de políticas, teoria ou modelo conceitual sem dados novos.",
+        "not": "Não é um artigo com dados novos, nem uma revisão de estudos."
       },
       "not-research": {
-        "label": "Não é um artigo de pesquisa",
-        "plural": "Não são artigos de pesquisa",
-        "description": "Um conjunto de dados, software, correção, resenha de livro ou arquivo que acompanha outro artigo."
+        "label": "Outro",
+        "plural": "Outros",
+        "description": "Um conjunto de dados, software, correção, resenha de livro ou arquivo que acompanha outro artigo.",
+        "not": "Não é um texto de opinião ou de política, que é um comentário."
       }
     }
   }

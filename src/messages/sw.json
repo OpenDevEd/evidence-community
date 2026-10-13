@@ -1040,8 +1040,8 @@
     "uncertain": "haina uhakika",
     "editor": "Imewekwa na mhariri wa maktaba hii.",
     "metadata": "Aina imetambuliwa kutoka kwenye rekodi yenyewe.",
-    "ai": "Imesomwa na Jev kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, yes {, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
-    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Jev, kiainishaji cha AI, husoma kichwa na muhtasari wake na kuchagua mojawapo ya aina hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Aina ambayo Jev ana uhakika nayo chini ya 60% huwekwa alama ya kutokuwa na uhakika, na husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo. Mhariri anaweza kusahihisha aina yoyote.",
+    "ai": "Imesomwa na <ai>AI</ai> kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, yes {, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
+    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Modeli ya AI husoma kichwa na muhtasari wake na kuchagua aina inayofaa zaidi kati ya hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Aina mbili zinapofaa, mapitio ya kimfumo yanayounganisha matokeo yake kitakwimu huhesabiwa kuwa uchambuzi-meta, na utafiti unaoongeza takwimu kwenye mahojiano au uchunguzi kifani huhesabiwa kuwa wa kiubora. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Aina ambayo modeli ina uhakika nayo chini ya 60% huwekwa alama ya kutokuwa na uhakika, na husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo. Mhariri anaweza kusahihisha aina yoyote. Kuchagua aina kadhaa huonyesha rekodi za yoyote kati yake.",
     "levels": {
       "synthesis": "Mapitio na usanisi",
       "primary": "Tafiti za msingi",
@@ -1051,67 +1051,80 @@
       "review-of-reviews": {
         "label": "Mapitio ya mapitio",
         "plural": "Mapitio ya mapitio",
-        "description": "Hukusanya na kufupisha mapitio au uchambuzi-meta wa awali, kama mapitio mwavuli."
+        "description": "Hukusanya na kufupisha mapitio au uchambuzi-meta wa awali, kama mapitio mwavuli.",
+        "not": "Si mapitio ya tafiti moja moja; hayo ni mapitio ya kimfumo au ya kisimulizi."
       },
       "meta-analysis": {
         "label": "Uchambuzi-meta",
         "plural": "Uchambuzi-meta",
-        "description": "Waandishi wenyewe huunganisha kitakwimu matokeo ya tafiti kadhaa za awali. Kunukuu matokeo yaliyounganishwa na mtu mwingine hakuhesabiki."
+        "description": "Waandishi wenyewe huunganisha kitakwimu matokeo ya tafiti kadhaa za awali. Kunukuu matokeo yaliyounganishwa na mtu mwingine hakuhesabiki.",
+        "not": "Si mapitio yanayonukuu matokeo yaliyounganishwa na wengine au yasiyounganisha kabisa; hayo ni mapitio ya kimfumo."
       },
       "systematic-review": {
         "label": "Mapitio ya kimfumo",
         "plural": "Mapitio ya kimfumo",
-        "description": "Hufupisha tafiti za awali zilizopatikana kwa utafutaji na vigezo vya ujumuishaji vilivyoelezwa, bila kuunganisha matokeo yake. Hujumuisha mapitio ya wigo na mapitio ya haraka."
+        "description": "Hufupisha tafiti za awali zilizopatikana kwa utafutaji na vigezo vya ujumuishaji vilivyoelezwa, bila kuunganisha matokeo yake. Hujumuisha mapitio ya wigo na mapitio ya haraka.",
+        "not": "Si mapitio yanayounganisha matokeo kitakwimu (hayo ni uchambuzi-meta), wala yasiyo na utafutaji uliotajwa (hayo ni mapitio ya kisimulizi)."
       },
       "literature-review": {
-        "label": "Mapitio ya maandiko",
-        "plural": "Mapitio mengine ya maandiko",
-        "description": "Mapitio ya kisimulizi, kiuhakiki au kiunganishi yasiyo na mbinu ya utafutaji iliyoelezwa."
+        "label": "Mapitio ya kisimulizi",
+        "plural": "Mapitio ya kisimulizi",
+        "description": "Mapitio ya kisimulizi, kiuhakiki au kiunganishi yasiyo na mbinu ya utafutaji iliyoelezwa.",
+        "not": "Si mapitio yenye utafutaji na vigezo vya kujumuisha vilivyotajwa; hayo ni mapitio ya kimfumo."
       },
       "bibliometric": {
         "label": "Utafiti wa bibliometriki",
         "plural": "Tafiti za bibliometriki",
-        "description": "Huhesabu na kuchora ramani ya machapisho, waandishi au manukuu kuhusu mada fulani, badala ya kile tafiti zilichogundua."
+        "description": "Huhesabu na kuchora ramani ya machapisho, waandishi au manukuu kuhusu mada fulani, badala ya kile tafiti zilichogundua.",
+        "not": "Si mapitio ya yale tafiti zilizogundua; hayo ni mapitio ya kimfumo au ya kisimulizi."
       },
       "rct": {
         "label": "Jaribio la nasibu",
         "plural": "Majaribio ya nasibu",
-        "description": "Washiriki, vikundi au maeneo yaligawiwa kwa hali mbalimbali kwa nasibu."
+        "description": "Washiriki, vikundi au maeneo yaligawiwa kwa hali mbalimbali kwa nasibu.",
+        "not": "Si ulinganisho usio na ugawaji wa nasibu (huo ni jaribio-nusu), wala mapitio ya majaribio."
       },
       "quasi-experiment": {
         "label": "Jaribio-nusu",
         "plural": "Majaribio-nusu",
-        "description": "Afua inayolinganishwa na kikundi cha ulinganisho kilichochaguliwa bila mgawanyo wa nasibu."
+        "description": "Afua inayolinganishwa na kikundi cha ulinganisho kilichochaguliwa bila mgawanyo wa nasibu.",
+        "not": "Si utafiti wenye ugawaji wa nasibu (huo ni jaribio la nasibu), wala usio na kundi la kulinganisha (huo ni utafiti wa kiidadi)."
       },
       "quantitative": {
         "label": "Utafiti wa kiidadi",
-        "plural": "Mengine ya kiidadi",
-        "description": "Tafiti za dodoso, tafiti za kiuhusiano na za uchunguzi, majaribio ya kabla na baada kwa kikundi kimoja, uchambuzi wa data iliyopo."
+        "plural": "Tafiti za kiidadi",
+        "description": "Tafiti za dodoso, tafiti za kiuhusiano na za uchunguzi, majaribio ya kabla na baada kwa kikundi kimoja, uchambuzi wa data iliyopo.",
+        "not": "Si ulinganisho wa makundi yaliyogawiwa (huo ni jaribio au jaribio-nusu), wala kujenga au kupima modeli (huo ni utafiti wa uundaji modeli)."
       },
       "qualitative": {
-        "label": "Utafiti wa kiubora",
-        "plural": "Ya kiubora na mseto",
-        "description": "Mahojiano, vikundi lengwa, tafiti kifani, ethnografia au uchambuzi wa nyaraka, peke yake au pamoja na data ya kiidadi."
+        "label": "Ya kiubora au mbinu mseto",
+        "plural": "Ya kiubora au mbinu mseto",
+        "description": "Mahojiano, vikundi lengwa, tafiti kifani, ethnografia au uchambuzi wa nyaraka, peke yake au pamoja na data ya kiidadi.",
+        "not": "Si takwimu pekee bila mahojiano, visa au nyaraka; huo ni utafiti wa kiidadi."
       },
       "modelling": {
         "label": "Utafiti wa uundaji modeli",
         "plural": "Tafiti za uundaji modeli",
-        "description": "Hujenga, huiga, hutabiri au hujaribu modeli, mbinu, zana au mfumo, na hupimwa kwa jinsi unavyofanya kazi."
+        "description": "Hujenga, huiga, hutabiri au hujaribu modeli, mbinu, zana au mfumo, na hupimwa kwa jinsi unavyofanya kazi.",
+        "not": "Si takwimu za data iliyokusanywa bila kujenga au kupima modeli; huo ni utafiti wa kiidadi."
       },
       "protocol": {
         "label": "Itifaki",
         "plural": "Itifaki",
-        "description": "Utafiti au mapitio yaliyopangwa au yanayoendelea, bila matokeo bado."
+        "description": "Utafiti au mapitio yaliyopangwa au yanayoendelea, bila matokeo bado.",
+        "not": "Si utafiti unaoripoti matokeo."
       },
       "commentary": {
         "label": "Maoni",
         "plural": "Maoni",
-        "description": "Tahariri, maoni, uchambuzi wa sera, nadharia au mfumo usio na data mpya."
+        "description": "Tahariri, maoni, uchambuzi wa sera, nadharia au mfumo usio na data mpya.",
+        "not": "Si karatasi yenye data mpya, wala mapitio ya tafiti."
       },
       "not-research": {
-        "label": "Si karatasi ya utafiti",
-        "plural": "Si karatasi za utafiti",
-        "description": "Seti ya data, programu, sahihisho, uhakiki wa kitabu, au faili inayoambatana na karatasi nyingine."
+        "label": "Nyingine",
+        "plural": "Nyingine",
+        "description": "Seti ya data, programu, sahihisho, uhakiki wa kitabu, au faili inayoambatana na karatasi nyingine.",
+        "not": "Si makala ya maoni au sera; hiyo ni maoni."
       }
     }
   }

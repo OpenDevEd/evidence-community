@@ -1039,8 +1039,8 @@
     "uncertain": "unsicher",
     "editor": "Von einer Redakteurin oder einem Redakteur dieser Bibliothek festgelegt.",
     "metadata": "Aus dem Eintrag selbst bestimmt.",
-    "ai": "Von Jev anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
-    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Jev, ein KI-Klassifikator, liest Titel und Abstract und wählt einen dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem Jev zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren.",
+    "ai": "Von <ai>KI</ai> anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
+    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Ein KI-Modell liest Titel und Abstract und wählt den passendsten dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Passen zwei, gilt ein systematisches Review, das seine Ergebnisse statistisch zusammenführt, als Metaanalyse, und eine Studie, die Interviews oder Fallstudien um Zahlen ergänzt, als qualitativ. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem das Modell zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren. Wer mehrere Typen wählt, sieht Einträge jedes dieser Typen.",
     "levels": {
       "synthesis": "Reviews und Synthesen",
       "primary": "Primärstudien",
@@ -1050,67 +1050,80 @@
       "review-of-reviews": {
         "label": "Review von Reviews",
         "plural": "Reviews von Reviews",
-        "description": "Fasst frühere Reviews oder Metaanalysen zusammen, etwa als Umbrella-Review."
+        "description": "Fasst frühere Reviews oder Metaanalysen zusammen, etwa als Umbrella-Review.",
+        "not": "Kein Review einzelner Studien: Das ist ein systematisches oder narratives Review."
       },
       "meta-analysis": {
         "label": "Metaanalyse",
         "plural": "Metaanalysen",
-        "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht."
+        "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht.",
+        "not": "Kein Review, das ein fremdes gepooltes Ergebnis zitiert oder gar nicht poolt: Das ist ein systematisches Review."
       },
       "systematic-review": {
         "label": "Systematisches Review",
         "plural": "Systematische Reviews",
-        "description": "Fasst frühere Studien zusammen, die mit einer angegebenen Suche und Einschlusskriterien gefunden wurden, ohne ihre Ergebnisse zu poolen. Umfasst Scoping- und Rapid Reviews."
+        "description": "Fasst frühere Studien zusammen, die mit einer angegebenen Suche und Einschlusskriterien gefunden wurden, ohne ihre Ergebnisse zu poolen. Umfasst Scoping- und Rapid Reviews.",
+        "not": "Kein Review, das Ergebnisse statistisch zusammenführt (Metaanalyse), und keines ohne angegebene Suche (narratives Review)."
       },
       "literature-review": {
-        "label": "Literaturübersicht",
-        "plural": "Andere Literaturübersichten",
-        "description": "Eine narrative, kritische oder integrative Übersicht ohne angegebene Suchmethode."
+        "label": "Narratives Review",
+        "plural": "Narrative Reviews",
+        "description": "Eine narrative, kritische oder integrative Übersicht ohne angegebene Suchmethode.",
+        "not": "Kein Review mit angegebener Suche und Einschlusskriterien: Das ist ein systematisches Review."
       },
       "bibliometric": {
         "label": "Bibliometrische Studie",
         "plural": "Bibliometrische Studien",
-        "description": "Zählt und kartiert Publikationen, Autorinnen und Autoren oder Zitationen zu einem Thema, statt die Ergebnisse der Studien zusammenzufassen."
+        "description": "Zählt und kartiert Publikationen, Autorinnen und Autoren oder Zitationen zu einem Thema, statt die Ergebnisse der Studien zusammenzufassen.",
+        "not": "Kein Review dessen, was die Studien fanden: Das ist ein systematisches oder narratives Review."
       },
       "rct": {
         "label": "Randomisierte Studie",
         "plural": "Randomisierte Studien",
-        "description": "Teilnehmende, Gruppen oder Orte wurden den Bedingungen zufällig zugeteilt."
+        "description": "Teilnehmende, Gruppen oder Orte wurden den Bedingungen zufällig zugeteilt.",
+        "not": "Kein Vergleich ohne Zufallszuteilung (Quasi-Experiment) und kein Review von Studien."
       },
       "quasi-experiment": {
         "label": "Quasi-Experiment",
         "plural": "Quasi-Experimente",
-        "description": "Eine Intervention im Vergleich mit einer Vergleichsgruppe, die ohne Zufallszuteilung gebildet wurde."
+        "description": "Eine Intervention im Vergleich mit einer Vergleichsgruppe, die ohne Zufallszuteilung gebildet wurde.",
+        "not": "Keine Studie mit Zufallszuteilung (randomisierte Studie) und keine ohne Vergleichsgruppe (quantitative Studie)."
       },
       "quantitative": {
         "label": "Quantitative Studie",
-        "plural": "Andere quantitative",
-        "description": "Umfragen, korrelative und Beobachtungsstudien, Vorher-nachher-Tests mit einer Gruppe, Analysen vorhandener Daten."
+        "plural": "Quantitative Studien",
+        "description": "Umfragen, korrelative und Beobachtungsstudien, Vorher-nachher-Tests mit einer Gruppe, Analysen vorhandener Daten.",
+        "not": "Kein Vergleich zugeteilter Gruppen (Studie oder Quasi-Experiment) und nicht der Bau oder Test eines Modells (Modellierungsstudie)."
       },
       "qualitative": {
-        "label": "Qualitative Studie",
-        "plural": "Qualitative und gemischte",
-        "description": "Interviews, Fokusgruppen, Fallstudien, Ethnografie oder Dokumentenanalyse, allein oder mit quantitativen Daten."
+        "label": "Qualitativ oder Mixed Methods",
+        "plural": "Qualitativ oder Mixed Methods",
+        "description": "Interviews, Fokusgruppen, Fallstudien, Ethnografie oder Dokumentenanalyse, allein oder mit quantitativen Daten.",
+        "not": "Nicht nur Zahlen ohne Interviews, Fälle oder Dokumente: Das ist eine quantitative Studie."
       },
       "modelling": {
         "label": "Modellierungsstudie",
         "plural": "Modellierungsstudien",
-        "description": "Entwickelt, simuliert, projiziert oder testet ein Modell, eine Methode, ein Werkzeug oder ein System und wird an dessen Leistung gemessen."
+        "description": "Entwickelt, simuliert, projiziert oder testet ein Modell, eine Methode, ein Werkzeug oder ein System und wird an dessen Leistung gemessen.",
+        "not": "Keine Statistik über erhobene Daten ohne Bau oder Test eines Modells: Das ist eine quantitative Studie."
       },
       "protocol": {
         "label": "Protokoll",
         "plural": "Protokolle",
-        "description": "Eine geplante oder laufende Studie oder Übersicht, noch ohne Ergebnisse."
+        "description": "Eine geplante oder laufende Studie oder Übersicht, noch ohne Ergebnisse.",
+        "not": "Keine Studie, die Ergebnisse berichtet."
       },
       "commentary": {
         "label": "Kommentar",
         "plural": "Kommentare",
-        "description": "Ein Editorial, eine Meinung, eine Politikanalyse, eine Theorie oder ein Rahmenwerk ohne neue Daten."
+        "description": "Ein Editorial, eine Meinung, eine Politikanalyse, eine Theorie oder ein Rahmenwerk ohne neue Daten.",
+        "not": "Keine Arbeit mit neuen Daten und kein Review von Studien."
       },
       "not-research": {
-        "label": "Keine Forschungsarbeit",
-        "plural": "Keine Forschungsarbeiten",
-        "description": "Forschungsdaten, Software, eine Korrektur, eine Buchbesprechung oder eine Datei, die zu einer anderen Arbeit gehört."
+        "label": "Sonstiges",
+        "plural": "Sonstiges",
+        "description": "Forschungsdaten, Software, eine Korrektur, eine Buchbesprechung oder eine Datei, die zu einer anderen Arbeit gehört.",
+        "not": "Kein Meinungs- oder Politikbeitrag: Das ist ein Kommentar."
       }
     }
   }

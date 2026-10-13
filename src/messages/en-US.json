@@ -1028,8 +1028,8 @@
     "uncertain": "uncertain",
     "editor": "Set by an editor of this library.",
     "metadata": "Typed from the record itself.",
-    "ai": "Read by Jev from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
-    "method": "Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type.",
+    "ai": "Read by <ai>AI</ai> from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
+    "method": "Each record's type is read when it enters the library. An AI model reads its title and abstract and picks the one type that fits best; a record with no abstract is judged on its title. Where two could fit, a systematic review that pools its results counts as a meta-analysis, and a study that adds numbers to interviews or case studies counts as qualitative. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type the model is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type. Choosing several types shows records of any of them.",
     "levels": {
       "synthesis": "Reviews and syntheses",
       "primary": "Primary studies",
@@ -1039,67 +1039,80 @@
       "review-of-reviews": {
         "label": "Review of reviews",
         "plural": "Reviews of reviews",
-        "description": "Gathers and sums up earlier reviews or meta-analyses, such as an umbrella review."
+        "description": "Gathers and sums up earlier reviews or meta-analyses, such as an umbrella review.",
+        "not": "Not a review of individual studies, which is a systematic or narrative review."
       },
       "meta-analysis": {
         "label": "Meta-analysis",
         "plural": "Meta-analyses",
-        "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count."
+        "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count.",
+        "not": "Not a review that quotes someone else's pooled result or doesn't pool at all, which is a systematic review."
       },
       "systematic-review": {
         "label": "Systematic review",
         "plural": "Systematic reviews",
-        "description": "Sums up earlier studies found with a stated search and inclusion rules, without pooling them. Includes scoping and rapid reviews."
+        "description": "Sums up earlier studies found with a stated search and inclusion rules, without pooling them. Includes scoping and rapid reviews.",
+        "not": "Not a review that pools results, which is a meta-analysis, or one with no stated search, which is a narrative review."
       },
       "literature-review": {
-        "label": "Literature review",
-        "plural": "Other literature reviews",
-        "description": "A narrative, critical or integrative review with no stated search method."
+        "label": "Narrative review",
+        "plural": "Narrative reviews",
+        "description": "A narrative, critical or integrative review with no stated search method.",
+        "not": "Not a review with a stated search and inclusion rules, which is a systematic review."
       },
       "bibliometric": {
         "label": "Bibliometric study",
         "plural": "Bibliometric studies",
-        "description": "Counts and maps publications, authors or citations on a topic, rather than what the studies found."
+        "description": "Counts and maps publications, authors or citations on a topic, rather than what the studies found.",
+        "not": "Not a review of what the studies found, which is a systematic or narrative review."
       },
       "rct": {
         "label": "Randomized trial",
         "plural": "Randomized trials",
-        "description": "Participants, groups or places were randomly assigned to conditions."
+        "description": "Participants, groups or places were randomly assigned to conditions.",
+        "not": "Not a comparison without random assignment, which is a quasi-experiment, or a review of trials."
       },
       "quasi-experiment": {
         "label": "Quasi-experiment",
         "plural": "Quasi-experiments",
-        "description": "An intervention compared with a comparison group chosen without random assignment."
+        "description": "An intervention compared with a comparison group chosen without random assignment.",
+        "not": "Not a study with random assignment, which is a randomized trial, or one with no comparison group, which is a quantitative study."
       },
       "quantitative": {
         "label": "Quantitative study",
-        "plural": "Other quantitative",
-        "description": "Surveys, correlational and observational studies, single-group before-and-after tests, analyses of existing data."
+        "plural": "Quantitative studies",
+        "description": "Surveys, correlational and observational studies, single-group before-and-after tests, analyses of existing data.",
+        "not": "Not a comparison of assigned groups, which is a trial or quasi-experiment, or the building or testing of a model, which is a modeling study."
       },
       "qualitative": {
-        "label": "Qualitative study",
-        "plural": "Qualitative and mixed",
-        "description": "Interviews, focus groups, case studies, ethnography or document analysis, alone or with quantitative data."
+        "label": "Qualitative or mixed methods",
+        "plural": "Qualitative or mixed methods",
+        "description": "Interviews, focus groups, case studies, ethnography or document analysis, alone or with quantitative data.",
+        "not": "Not numbers alone, with no interviews, cases or documents, which is a quantitative study."
       },
       "modelling": {
         "label": "Modeling study",
         "plural": "Modeling studies",
-        "description": "Builds, simulates, projects or tests a model, method, tool or system, judged on how well it performs."
+        "description": "Builds, simulates, projects or tests a model, method, tool or system, judged on how well it performs.",
+        "not": "Not statistics on collected data without building or testing a model, which is a quantitative study."
       },
       "protocol": {
         "label": "Protocol",
         "plural": "Protocols",
-        "description": "A study or review that is planned or under way, with no results yet."
+        "description": "A study or review that is planned or under way, with no results yet.",
+        "not": "Not a study that reports results."
       },
       "commentary": {
         "label": "Commentary",
         "plural": "Commentaries",
-        "description": "An editorial, opinion, policy analysis, theory or framework with no new data."
+        "description": "An editorial, opinion, policy analysis, theory or framework with no new data.",
+        "not": "Not a paper with new data, or a review of studies."
       },
       "not-research": {
-        "label": "Not a research paper",
-        "plural": "Not research papers",
-        "description": "A dataset, software, correction, book review, or a file that accompanies another paper."
+        "label": "Other",
+        "plural": "Other",
+        "description": "A dataset, software, correction, book review, or a file that accompanies another paper.",
+        "not": "Not an opinion or policy piece, which is a commentary."
       }
     }
   }

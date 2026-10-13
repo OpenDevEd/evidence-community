@@ -11,8 +11,8 @@ function readingSays(reading: StudyReading | null) {
 	if (!reading || reading.by === "editor") return "This record has not been read yet.";
 	const label = studyType(reading.type)?.label ?? reading.type;
 	return reading.by === "metadata"
-		? `Its metadata says it is a ${label.toLowerCase()}.`
-		: `Jev read it as a ${label.toLowerCase()}, ${Math.round(reading.confidence * 100)}% sure.`;
+		? `Its metadata says “${label}”.`
+		: `Read by AI as “${label}”, ${Math.round(reading.confidence * 100)}% sure.`;
 }
 
 /** What kind of work a record is: what its reading found, or an editor's correction, which wins. */
