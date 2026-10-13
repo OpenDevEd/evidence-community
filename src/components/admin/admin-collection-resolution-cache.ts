@@ -227,6 +227,14 @@ export function invalidateAdminCollectionResolutionCache() {
 	for (const controller of activeControllers) controller.abort();
 }
 
+/** A known entry without touching the cache's order, for reading during render. */
+export const peekResolvedAdminCollection = (key: string) => resolved.get(key);
+
+/** Entries a list or search already returned, so picking one shows it at once instead of waiting for a lookup. */
+export function rememberAdminCollections(entries: readonly AdminCollectionCatalogEntry[]) {
+	for (const entry of entries) writeResolvedAdminCollection(entry.key, entry);
+}
+
 export function readResolvedAdminCollection(key: string) {
 	const entry = resolved.get(key);
 	if (entry !== undefined) writeResolvedAdminCollection(key, entry);

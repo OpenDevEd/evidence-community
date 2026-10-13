@@ -3,10 +3,12 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -16,9 +18,41 @@ import {
 	getAdminCollectionChildren,
 	searchAdminCollectionCatalog,
 } from "./admin-api";
+import { ADMIN_COLLECTION_INVALIDATION_EVENT } from "./admin-collection-events";
+import { rememberAdminCollections } from "./admin-collection-resolution-cache";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
 type CollectionPathEntry = { key: string; name: string };
+type CollectionPage = { items: AdminCollectionCatalogEntry[]; nextCursor: string | null };
+
+/** Three rows' worth of room for a list that is still loading for the first time. */
+const FIRST_LOAD_HEIGHT = 3 * 54;
+
+// Pages loaded this session, by what was asked, so a picker reopens or goes
+// back to a folder with its list already there. Cleared when collections change.
+const pages = new Map<string, CollectionPage>();
+const preloads = new Map<string, Promise<void>>();
+if (typeof window !== "undefined") window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, () => pages.clear());
+
+const pageKey = (query: string, sourceKey: string | null, parent: string | null) => [query, sourceKey ?? "all", parent ?? "root"].join("\u0000");
+
+function storePage(key: string, page: CollectionPage) {
+	pages.set(key, page);
+	rememberAdminCollections(page.items);
+}
+
+/** Loads a source's top level before a picker opens, so it opens with its list instead of a spinner. */
+export function preloadAdminCollections(sourceConnectionKey: string) {
+	const key = pageKey("", sourceConnectionKey, null);
+	if (pages.has(key) || preloads.has(key)) return;
+	preloads.set(
+		key,
+		getAdminCollectionChildren({ cursor: null, pageSize: 50, parentCollection: null, sourceConnectionKey })
+			.then((page) => storePage(key, page))
+			.catch(() => undefined)
+			.finally(() => preloads.delete(key)),
+	);
+}
 
 function useDebouncedValue(value: string, delay: number) {
 	const [debounced, setDebounced] = useState(value);
@@ -48,7 +82,8 @@ export function adminCollectionPath(
 	return [source, ...entry.ancestors.map(({ name }) => name)].join(" › ");
 }
 
-function SelectionRow({
+/** A chosen collection as a chip; its full path is in its name for screen readers and on hover when cut off. */
+function SelectionChip({
 	entry,
 	locked,
 	onRemove,
@@ -59,49 +94,45 @@ function SelectionRow({
 	onRemove: (key: string) => void;
 	sources: readonly AdminSource[];
 }) {
+	const reduceMotion = useReducedMotion();
+	const path = adminCollectionPath(entry, sources);
 	return (
-		<div className="flex min-h-10 items-center gap-2 rounded-lg bg-black/[0.035] px-2.5 dark:bg-white/[0.045]">
-			<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={14} />
-			<div className="min-w-0 flex-1">
-				<div className="truncate text-xs font-medium text-black/75 dark:text-white/80">
-					{entry.name}
-				</div>
-				<div className="truncate text-[11px] text-black/40 dark:text-white/40">
-					{adminCollectionPath(entry, sources)}
-				</div>
-			</div>
+		<motion.li
+			animate={{ opacity: 1, scale: 1 }}
+			aria-label={`${entry.name}, ${path}`}
+			className="flex h-7 min-w-0 max-w-full items-center gap-1.5 rounded-lg bg-black/[0.05] pe-1 ps-2 text-xs font-medium text-black/75 dark:bg-white/[0.07] dark:text-white/80"
+			exit={{ opacity: 0, scale: 0.92 }}
+			initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
+			layout={reduceMotion ? false : "position"}
+			transition={{ duration: 0.16 }}
+		>
+			<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={12} />
+			<span className="min-w-0 max-w-56">
+				<TruncatedText text={entry.name} />
+			</span>
 			{locked ? (
-				<HugeiconsIcon icon={SquareLock01Icon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="shrink-0 text-black/30 dark:text-white/30" size={12} />
+				<HugeiconsIcon icon={SquareLock01Icon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="me-1 shrink-0 text-black/30 dark:text-white/30" size={11} />
 			) : (
 				<button
-					aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
-					className="grid size-7 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
+					aria-label={`Remove ${entry.name}, ${path}`}
+					className="grid size-5 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.07] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.08] dark:hover:text-white/75"
 					onClick={() => onRemove(entry.key)}
 					type="button"
 				>
-					<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={13} />
+					<HugeiconsIcon icon={Cancel01Icon} aria-hidden size={11} />
 				</button>
 			)}
-		</div>
+		</motion.li>
 	);
 }
 
-function CollectionLoadingStatus() {
+/** A spinner that only shows when a first load takes long; a quick one shows nothing at all. */
+function SlowLoading() {
 	return (
-		<div
-			aria-label="Loading collections"
-			className="inline-flex items-center gap-2 rounded-lg border border-black/[0.08] bg-card_light px-2.5 py-2 text-xs font-medium text-black/60 shadow-sm dark:border-white/[0.09] dark:bg-card dark:text-white/65"
-			role="status"
-		>
-			<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin motion-reduce:animate-none" size={14} />
-		</div>
-	);
-}
-
-function CollectionLoadingIndicator() {
-	return (
-		<div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
-			<CollectionLoadingStatus />
+		<div aria-label="Loading collections" className="grid h-full place-items-center" role="status">
+			<span className="animate-fade-in [animation-delay:400ms] [animation-duration:300ms] [animation-fill-mode:both]">
+				<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin text-black/35 motion-reduce:animate-none dark:text-white/35" size={16} />
+			</span>
 		</div>
 	);
 }
@@ -282,9 +313,11 @@ export function AdminCollectionPicker({
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);
 	const [sourceKey, setSourceKey] = useState<string | null>(defaultSourceKey);
 	const [path, setPath] = useState<CollectionPathEntry[]>([]);
-	const [items, setItems] = useState<AdminCollectionCatalogEntry[]>([]);
-	const [nextCursor, setNextCursor] = useState<string | null>(null);
-	const [loading, setLoading] = useState(false);
+	// A cached or preloaded top level opens at once; otherwise the first load is under way from the first frame.
+	const initialPage = pages.get(pageKey("", defaultSourceKey, null));
+	const [items, setItems] = useState<AdminCollectionCatalogEntry[]>(() => initialPage?.items ?? []);
+	const [nextCursor, setNextCursor] = useState<string | null>(() => initialPage?.nextCursor ?? null);
+	const [loading, setLoading] = useState(() => Boolean(defaultSourceKey) && !initialPage);
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
@@ -362,6 +395,8 @@ export function AdminCollectionPicker({
 						signal,
 					);
 			if (contextKeyRef.current !== requestContext) return;
+			if (append) rememberAdminCollections(page.items);
+			else storePage(pageKey(debouncedQuery, sourceKey, activeParent), page);
 			setItems((current) =>
 				append ? uniqueEntries(current, page.items) : page.items,
 			);
@@ -382,10 +417,17 @@ export function AdminCollectionPicker({
 			setSourceSelectionPending(false);
 			return;
 		}
+		// A page seen before shows at once and is refreshed quietly behind it.
+		const cachedPage = pages.get(pageKey(debouncedQuery, sourceKey, activeParent));
+		if (cachedPage) {
+			setItems(cachedPage.items);
+			setNextCursor(cachedPage.nextCursor);
+			setSourceSelectionPending(false);
+		}
 		const controller = new AbortController();
 		const version = ++requestVersion.current;
 		setError(null);
-		setLoading(true);
+		setLoading(!cachedPage);
 		void loadPage(null, false, controller.signal)
 			.catch((caught: unknown) => {
 				if (
@@ -404,7 +446,7 @@ export function AdminCollectionPicker({
 				if (version === requestVersion.current) setLoading(false);
 			});
 		return () => controller.abort();
-	}, [allowedSourceSet, contextKey, debouncedQuery, loadPage, sourceKey]);
+	}, [activeParent, allowedSourceSet, contextKey, debouncedQuery, loadPage, sourceKey]);
 
 	const loadMore = useCallback(() => {
 		if (!nextCursor || loading || loadingMore) return;
@@ -441,6 +483,10 @@ export function AdminCollectionPicker({
 		getScrollElement: () => scrollRef.current,
 		overscan: 6,
 	});
+	// The list's height follows what it shows, so it grows and shrinks smoothly
+	// instead of jumping: the rows, a gap held for a first load, or the empty note.
+	const topLevelHeight = showTopLevel ? 44 : 0;
+	const listHeight = topLevelHeight + (items.length ? virtualizer.getTotalSize() : loading ? FIRST_LOAD_HEIGHT : 56);
 
 	const toggleEntry = (entry: AdminCollectionCatalogEntry) => {
 		if (selectionMode === "single") {
@@ -463,7 +509,7 @@ export function AdminCollectionPicker({
 	const navigateToPath = (nextPath: CollectionPathEntry[]) => {
 		const nextParent = nextPath.at(-1)?.key ?? null;
 		if (nextParent === activeParent) return;
-		setLoading(true);
+		setLoading(!pages.has(pageKey("", sourceKey, nextParent)));
 		setPath(nextPath);
 		scrollRef.current?.scrollTo({ top: 0 });
 	};
@@ -479,8 +525,9 @@ export function AdminCollectionPicker({
 
 	const chooseSource = (key: string) => {
 		if (key === sourceKey && activeParent === null) return;
-		setLoading(true);
-		setSourceSelectionPending(true);
+		const cached = pages.has(pageKey("", key, null));
+		setLoading(!cached);
+		setSourceSelectionPending(!cached);
 		setSourceKey(key);
 		setPath([]);
 	};
@@ -500,7 +547,6 @@ export function AdminCollectionPicker({
 					inputWrapper: "h-9 min-h-9 rounded-lg",
 				}}
 				placeholder="Search collections"
-				isDisabled={loading}
 				startContent={
 					<HugeiconsIcon icon={Search01Icon} aria-hidden className="text-black/35 dark:text-white/35" size={14} />
 				}
@@ -509,35 +555,31 @@ export function AdminCollectionPicker({
 				onValueChange={setQuery}
 			/>
 
-			{selectionMode === "multiple" && selectedEntries.length > 0 ? (
-				<div
-					className="max-h-28 space-y-1 overflow-y-auto pr-1"
-					inert={loading ? true : undefined}
-				>
-					{selectedEntries.map((entry) => (
-						<SelectionRow
-							key={entry.key}
-							entry={entry}
-							locked={
-								(lockDeletedSelections && entry.deleted) ||
-								Boolean(
-									allowedSourceSet &&
-									!allowedSourceSet.has(
-										entry.sourceConnectionKey,
-									),
-								)
-							}
-							onRemove={removeSelection}
-							sources={sources}
-						/>
-					))}
-				</div>
+			{selectionMode === "multiple" ? (
+				<ul aria-label="Chosen collections" className="flex flex-wrap gap-1.5 empty:hidden">
+					<AnimatePresence initial={false}>
+						{selectedEntries.map((entry) => (
+							<SelectionChip
+								key={entry.key}
+								entry={entry}
+								locked={
+									(lockDeletedSelections && entry.deleted) ||
+									Boolean(
+										allowedSourceSet &&
+										!allowedSourceSet.has(
+											entry.sourceConnectionKey,
+										),
+									)
+								}
+								onRemove={removeSelection}
+								sources={sources}
+							/>
+						))}
+					</AnimatePresence>
+				</ul>
 			) : null}
 			{selectionMode === "multiple" && selectedEntriesError ? (
-				<div
-					className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
-					inert={loading ? true : undefined}
-				>
+				<div className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger">
 					<HugeiconsIcon icon={AlertCircleIcon} aria-hidden className="shrink-0" size={13} />
 					<span className="min-w-0 flex-1">
 						Some selected collections could not be loaded.
@@ -558,7 +600,6 @@ export function AdminCollectionPicker({
 						<button
 							aria-label="Choose source"
 							className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-							disabled={loading}
 							onClick={() => {
 								setSourceKey(null);
 								setPath([]);
@@ -571,7 +612,6 @@ export function AdminCollectionPicker({
 					{path.length > 0 ? (
 						<button
 							className="shrink-0 rounded-md px-1.5 py-1 font-medium hover:bg-black/[0.05] hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-							disabled={loading}
 							onClick={() => navigateToPath([])}
 							type="button"
 						>
@@ -603,7 +643,6 @@ export function AdminCollectionPicker({
 							) : (
 								<button
 									className="min-w-0 truncate rounded-md px-1.5 py-1 hover:bg-black/[0.05] hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-									disabled={loading}
 									onClick={() =>
 										navigateToPath(path.slice(0, index + 1))
 									}
@@ -628,13 +667,10 @@ export function AdminCollectionPicker({
 						data-admin-collection-picker-source-scroll
 					>
 						<div
-							className={`space-y-1 p-1.5 transition-opacity duration-150 motion-reduce:transition-none ${
-								sourceSelectionPending
-									? "pointer-events-none select-none opacity-40"
-									: "opacity-100"
+							className={`space-y-1 p-1.5 transition-opacity duration-200 motion-reduce:transition-none ${
+								sourceSelectionPending ? "opacity-50 delay-300" : "opacity-100"
 							}`}
 							data-admin-collection-picker-source-content
-							inert={sourceSelectionPending ? true : undefined}
 						>
 							{availableSources.map((source) => (
 								<button
@@ -655,9 +691,6 @@ export function AdminCollectionPicker({
 							))}
 						</div>
 					</div>
-					{sourceSelectionPending ? (
-						<CollectionLoadingIndicator />
-					) : null}
 				</div>
 			) : (
 				<div
@@ -667,17 +700,16 @@ export function AdminCollectionPicker({
 				>
 					<div
 						ref={scrollRef}
-						className="max-h-[min(44vh,320px)] overflow-y-auto rounded-xl"
+						className="overflow-y-auto rounded-xl transition-[height] duration-200 ease-out motion-reduce:transition-none"
 						data-admin-collection-picker-scroll
+						style={{ height: `min(44vh, 320px, ${listHeight}px)` }}
 					>
 						<div
-							className={`transition-opacity duration-150 motion-reduce:transition-none ${
-								loading || error
-									? "pointer-events-none select-none opacity-40"
-									: "opacity-100"
+							className={`transition-opacity duration-200 motion-reduce:transition-none ${
+								error ? "pointer-events-none select-none opacity-40" : loading ? "opacity-50 delay-300" : "opacity-100"
 							}`}
 							data-admin-collection-picker-content
-							inert={loading || Boolean(error) ? true : undefined}
+							inert={error ? true : undefined}
 						>
 							{showTopLevel ? (
 								<button
@@ -692,7 +724,11 @@ export function AdminCollectionPicker({
 									Top level
 								</button>
 							) : null}
-							{items.length === 0 && !loading && !error ? (
+							{items.length === 0 && loading ? (
+								<div style={{ height: FIRST_LOAD_HEIGHT }}>
+									<SlowLoading />
+								</div>
+							) : items.length === 0 && !error ? (
 								<div className="grid place-items-center px-6 py-4 text-center text-xs text-black/40 dark:text-white/40">
 									{debouncedQuery
 										? "No matching collections"
@@ -700,7 +736,8 @@ export function AdminCollectionPicker({
 								</div>
 							) : (
 								<div
-									className="relative w-full"
+									className="relative w-full animate-fade-in [animation-duration:200ms]"
+									key={`${sourceKey}:${activeParent}`}
 									style={{
 										height: virtualizer.getTotalSize(),
 									}}
@@ -782,15 +819,7 @@ export function AdminCollectionPicker({
 							)}
 						</div>
 					</div>
-					{loading ? (
-						items.length > 0 || showTopLevel ? (
-							<CollectionLoadingIndicator />
-						) : (
-							<div className="flex justify-center py-2">
-								<CollectionLoadingStatus />
-							</div>
-						)
-					) : error ? (
+					{error ? (
 						items.length > 0 || showTopLevel ? (
 							<div className="absolute inset-0 z-20 grid place-items-center">
 								<CollectionErrorStatus

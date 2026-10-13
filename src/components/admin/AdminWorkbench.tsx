@@ -78,6 +78,7 @@ import { resolveWritebackDialogOptions } from "./writeback-selection";
 import {
 	adminCollectionPath,
 	AdminCollectionPicker,
+	preloadAdminCollections,
 } from "./AdminCollectionPicker";
 import { AdminItemFilters } from "./AdminItemFilters";
 import { AdminItemTable } from "./AdminItemTable";
@@ -2338,7 +2339,11 @@ export default function AdminWorkbench({
 								className={`h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3 ${importLabel.batch ? "lg:!w-[9.5rem]" : ""}`}
 								color="secondary"
 								isDisabled={busy}
-								onPress={() => setImportOpen(true)}
+								onPress={() => {
+									// The sheet's Collections setting then opens with its list.
+									preloadAdminCollections(NATIVE_SOURCE_CONNECTION_KEY);
+									setImportOpen(true);
+								}}
 								size="xs"
 								variant="solid"
 							>
