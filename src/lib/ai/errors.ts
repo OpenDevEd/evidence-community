@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import {
 	AI_CONTEXT_TOO_LARGE_MESSAGE,
@@ -11,6 +12,7 @@ export type AIErrorCode =
 	| "DOCUMENT_TOO_LARGE"
 	| "INVALID_REQUEST"
 	| "ITEM_NOT_FOUND"
+	| "LIBRARY_UNAVAILABLE"
 	| "MODEL_UNAVAILABLE"
 	| "PROVIDER_ERROR"
 	| "RATE_LIMITED";
@@ -33,6 +35,14 @@ export function normalizeAIError(
 	options: { context?: AIErrorContext } = {},
 ): AIError {
 	if (error instanceof AIError) return error;
+	// The library's own database failed, before or after the model: no provider was involved.
+	if (error instanceof DrizzleQueryError) {
+		return new AIError(
+			"LIBRARY_UNAVAILABLE",
+			"The library couldn't read its records just now. Try again in a moment.",
+			503,
+		);
+	}
 
 	const message =
 		extractAIErrorMessage(error) ??
