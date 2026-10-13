@@ -36,6 +36,7 @@ import {
 	readPdfs,
 	readyIds,
 	recordRights,
+	FILE_CHECKS,
 	reviewChecks,
 	reviewCounts,
 	reviewMatches,
@@ -175,6 +176,8 @@ function ImportFlow({
 	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
 	const selected = batch ? selectedIds(batch) : new Set<string>();
 	const checksOf = (row: ImportRow) => reviewChecks(row);
+	// The library's checks, and for PDFs the ones read from the file.
+	const checkCount = (batch?.checks.length ?? 0) + (batch?.kind === "pdfs" ? FILE_CHECKS.length : 0);
 	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
 	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
@@ -341,7 +344,7 @@ function ImportFlow({
 										activeId={activeRow?.id ?? null}
 										attach={batch.attach}
 										checksOf={checksOf}
-										criteriaCount={batch.checks.length}
+										criteriaCount={checkCount}
 										filter={filter}
 										locked={locked}
 										onActivate={setActiveId}
@@ -358,7 +361,7 @@ function ImportFlow({
 											attach={batch.attach.get(activeRow.id)}
 											checks={checksOf(activeRow)}
 											chosenTopics={topicsOf(activeRow)}
-											criteriaCount={batch.checks.length}
+											criteriaCount={checkCount}
 											key={activeRow.id}
 											locked={locked}
 											onOpenRecord={onOpenRecord}

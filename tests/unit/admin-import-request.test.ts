@@ -5,6 +5,8 @@ import {
 	doiPreviewRequest,
 	filePreviewRequest,
 	recordRights,
+	reviewChecks,
+	rowPasses,
 	rowsFromRecords,
 	selectedImportRecords,
 	summarizeImportResults,
@@ -59,12 +61,26 @@ describe("the record's Rights and the AI's fix", () => {
 
 	it("keeps what the PDF states until the editor applies the fix", () => {
 		expect(recordRights(row(false))).toBe("© EdTech Hub 2024. CC BY 4.0");
-		expect(checkPasses(row(false), 1)).toBe(false);
+		expect(checkPasses(reviewChecks(row(false))[1]!)).toBe(false);
 	});
 
 	it("uses the AI's statement once applied, and passes only the checks it names", () => {
 		expect(recordRights(row(true))).toBe("© Crown copyright 2024. Licensed under the Open Government Licence v3.0");
-		expect([0, 1, 2].map((index) => checkPasses(row(true), index))).toEqual([true, true, false]);
+		expect(reviewChecks(row(true)).map(checkPasses)).toEqual([true, true, false]);
+	});
+});
+
+describe("the checks a PDF gets from its own file", () => {
+	const properties = { authors: [], doi: "", keywords: [], rights: "", subject: "", title: "" };
+	const row = (pdfua: string): ImportRow => ({
+		...rowsFromRecords([record({ id: "1" })])[0]!,
+		checks: [{ criterion: "Credits the funder", page: 1, quote: "Funded by UK aid", recommendation: null, result: "met" }],
+		pdf: { properties, standards: { pdfa: "2B", pdfua, tagged: true }, writable: true },
+	});
+
+	it("passes every check only when the file also meets the accessibility and archiving standards", () => {
+		expect(rowPasses(row("1"))).toBe(true);
+		expect(rowPasses(row(""))).toBe(false);
 	});
 });
 

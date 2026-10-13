@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { checkPasses, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 
 const PER_PAGE = 8;
 
@@ -31,7 +31,7 @@ function DraftState({ publish, row }: { publish: PublishState | undefined; row: 
 	}
 	if (!row.checks.length) return <span className="text-xs text-black/45 dark:text-white/45">In Drafts</span>;
 	if (rowPasses(row)) return <span className="text-xs text-emerald-700 dark:text-emerald-400">Passes every check</span>;
-	const failing = row.checks.filter((_, index) => !checkPasses(row, index)).length;
+	const failing = reviewChecks(row).filter((check) => !checkPasses(check)).length;
 	return (
 		<span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
 			<HugeiconsIcon aria-hidden icon={AlertCircleIcon} size={13} />

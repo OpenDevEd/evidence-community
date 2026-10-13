@@ -33,7 +33,7 @@ import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
 import { InspectorSection } from "./InspectorSection";
 import { humanizeAdminField } from "./admin-schema";
-import { reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck, type ReviewFilter } from "./admin-import";
+import { checkPasses, reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck, type ReviewFilter } from "./admin-import";
 
 const ROWS_PER_PAGE = 8;
 
@@ -88,7 +88,7 @@ const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[che
 /** One small bar per check, coloured by its result; grey until the PDF is read. */
 function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number }) {
 	if (!count) return null;
-	const passed = checks.filter((check) => check.fixed || check.result === "met").length;
+	const passed = checks.filter(checkPasses).length;
 	return (
 		<span aria-label={checks.length ? `${passed} of ${count} checks pass` : `${count} checks`} className="flex shrink-0 items-center gap-1.5" role="img">
 			<span className="flex gap-[3px]">
@@ -266,7 +266,7 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 							<p className="text-black/85 dark:text-white/85">{check.criterion}</p>
 							{check.quote ? (
 								<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
-									<q>{check.quote}</q>
+									{check.file ? check.quote : <q>{check.quote}</q>}
 									{check.page ? <span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span> : null}
 								</p>
 							) : null}
@@ -287,6 +287,23 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 				);
 			})}
 		</ul>
+	);
+}
+
+/** The library's checks, then the ones read from the file itself, with what goes between them. */
+function Checks({ checks, children }: { checks: ReviewCheck[]; children?: ReactNode }) {
+	const file = checks.filter((check) => check.file);
+	return (
+		<>
+			<CheckList checks={checks.filter((check) => !check.file)} />
+			{children}
+			{file.length ? (
+				<>
+					<p className="mb-2.5 mt-5 text-xs text-black/45 dark:text-white/45">From the file itself</p>
+					<CheckList checks={file} />
+				</>
+			) : null}
+		</>
 	);
 }
 
@@ -487,7 +504,7 @@ export function ReviewDetail({
 	const payload = record?.payload ?? {};
 	const abstract = typeof payload.abstractNote === "string" ? payload.abstractNote : null;
 	const settled = row.state === "read" || row.state === "failed";
-	const passed = checks.filter((check) => check.fixed || check.result === "met").length;
+	const passed = checks.filter(checkPasses).length;
 	const openKey = result?.itemKey ?? record?.existingKey;
 	const kindLine = [record?.itemType ? humanizeAdminField(record.itemType) : null, record?.year].filter(Boolean);
 	const writable = row.pdf?.writable === true;
@@ -528,8 +545,7 @@ export function ReviewDetail({
 					) : null}
 					{row.file && criteriaCount ? (
 						<DetailSection aside={`${passed} of ${criteriaCount} pass`} title="Checks">
-							<CheckList checks={checks} />
-							{row.rightsFix ? <RightsFixLine applied={row.fixApplied} fix={row.rightsFix} locked={locked} onToggle={onToggleFix} stated={typeof payload.rights === "string" ? payload.rights : ""} /> : null}
+							<Checks checks={checks}>{row.rightsFix ? <RightsFixLine applied={row.fixApplied} fix={row.rightsFix} locked={locked} onToggle={onToggleFix} stated={typeof payload.rights === "string" ? payload.rights : ""} /> : null}</Checks>
 						</DetailSection>
 					) : null}
 					{row.file && record && row.pdf ? (
@@ -575,7 +591,11 @@ export function ImportReviewSection({ itemKey }: { itemKey: string }) {
 			<div className="flex flex-col gap-4">
 				{review.abstractWritten ? <p className="text-xs text-black/55 dark:text-white/55">The AI wrote the abstract; the PDF has none.</p> : null}
 				{review.topics.length ? <p className="text-sm text-black/70 dark:text-white/70">{review.topics.map(({ name }) => name).join(", ")}</p> : null}
-				{review.checks.length ? <CheckList checks={review.checks} /> : null}
+				{review.checks.length ? (
+					<div>
+						<Checks checks={review.checks} />
+					</div>
+				) : null}
 			</div>
 		</InspectorSection>
 	);

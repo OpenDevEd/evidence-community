@@ -260,6 +260,7 @@ function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: s
 					/>
 				</li>
 			</ol>
+			<p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Every PDF is also checked from the file itself: tagged for screen readers, PDF/UA and PDF/A.</p>
 		</div>
 	);
 }

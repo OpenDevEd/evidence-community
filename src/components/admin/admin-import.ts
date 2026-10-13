@@ -261,10 +261,9 @@ export async function readPdfs(importId: string, rows: readonly ImportRow[], rea
 
 export type ReviewFilter = "all" | "attention" | "existing" | "improve" | "ready";
 
-const fixes = (row: ImportRow, index: number) => row.fixApplied && row.rightsFix?.checks.includes(index) === true;
-/** A check passes when the AI found it met or the editor applied the Rights fix that covers it. */
-export const checkPasses = (row: ImportRow, index: number) => row.checks[index]?.result === "met" || fixes(row, index);
-export const rowPasses = (row: ImportRow) => row.checks.every((_, index) => checkPasses(row, index));
+/** A check passes when it was found met or the editor applied the Rights fix that covers it. */
+export const checkPasses = (check: ReviewCheck) => check.result === "met" || check.fixed;
+export const rowPasses = (row: ImportRow) => reviewChecks(row).every(checkPasses);
 
 const needsAttention = (row: ImportRow) =>
 	row.state === "failed" || row.record?.state === "attention" || row.record?.state === "unresolved";
@@ -318,11 +317,40 @@ export function publishedProperties(row: ImportRow, topicNames: readonly string[
 	};
 }
 
-/** A check's answer, and whether the AI's Rights fix covers it and is applied. */
-export type ReviewCheck = PdfCheckResult & { fixable: boolean; fixed: boolean };
+/**
+ * A check's answer, and whether the AI's Rights fix covers it and is applied.
+ * A file check is read from the PDF itself; its quote says what the file claims.
+ */
+export type ReviewCheck = PdfCheckResult & { file: boolean; fixable: boolean; fixed: boolean };
 
+/**
+ * Checks every PDF gets beside the library's, from Björn's accessibility
+ * guidance: the copy readers download should be tagged to PDF/UA, and PDF/A
+ * when it is also the archive deposit, which a published PDF is.
+ */
+export const FILE_CHECKS = [
+	{ criterion: "Tagged for screen readers", met: () => null, recommendation: "Export a tagged PDF from the source file and replace this one. Word and LibreOffice both have the option when saving as PDF.", standard: "tagged" },
+	{ criterion: "Claims PDF/UA, the accessibility standard", met: (part: string) => `Its metadata claims PDF/UA-${part}`, recommendation: "Export from the source file with PDF/UA turned on, which LibreOffice offers, or have the PDF remediated.", standard: "pdfua" },
+	{ criterion: "Claims PDF/A, the archiving standard", met: (part: string) => `Its metadata claims PDF/A-${part.toLowerCase()}`, recommendation: "Export as PDF/A from the source file so the archived copy opens the same way for decades. Word and LibreOffice both have the option.", standard: "pdfa" },
+] as const;
+
+function fileChecks(pdf: PdfPropertiesReading): ReviewCheck[] {
+	return FILE_CHECKS.map(({ criterion, met, recommendation, standard }) => {
+		const check = { criterion, file: true, fixable: false, fixed: false, page: null };
+		// A file with a password or broken structure can't be read for its claims.
+		if (!pdf.writable) return { ...check, quote: null, recommendation: null, result: "unclear" };
+		const claim = pdf.standards[standard];
+		return claim ? { ...check, quote: met(String(claim)), recommendation: null, result: "met" } : { ...check, quote: null, recommendation, result: "not_met" };
+	});
+}
+
+/** The library's checks as the AI answered them, then the file's own. */
 export function reviewChecks(row: ImportRow): ReviewCheck[] {
-	return row.checks.map((check, index) => ({ ...check, fixable: row.rightsFix?.checks.includes(index) === true, fixed: fixes(row, index) }));
+	const library = row.checks.map((check, index) => {
+		const fixable = row.rightsFix?.checks.includes(index) === true;
+		return { ...check, file: false, fixable, fixed: fixable && row.fixApplied };
+	});
+	return row.pdf ? [...library, ...fileChecks(row.pdf)] : library;
 }
 
 // shortcut: the mock keeps the library's checks and each draft's results in
@@ -372,7 +400,7 @@ export function reviewFrom(stored: string): StoredReview | null {
 	if (!Array.isArray(review?.checks) || !Array.isArray(review?.topics)) return null;
 	return {
 		abstractWritten: review.abstractWritten === true,
-		checks: review.checks.map((check) => ({ ...check, fixable: check.fixable === true, fixed: check.fixed === true })),
+		checks: review.checks.map((check) => ({ ...check, file: check.file === true, fixable: check.fixable === true, fixed: check.fixed === true })),
 		topics: review.topics,
 	};
 }
