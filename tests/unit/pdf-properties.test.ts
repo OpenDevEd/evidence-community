@@ -128,6 +128,6 @@ describe("the PDF properties of a record", () => {
 	// Records hold a language as free text, often its name; XMP takes only a tag.
 	it("write a language the record names as its code, and leave out one it can't name", () => {
 		const language = (languageName: string) => pdfPropertiesOfRecord({ languageName }, { authors: [], doi: "", keywords: [] }).language;
-		expect(["Swahili", "portuguese", "Hebrew", "Klingonese"].map(language)).toEqual(["sw", "pt", "he", ""]);
+		expect(["Swahili", "portuguese", "Hebrew", "Cebuano", "Klingonese"].map(language)).toEqual(["sw", "pt", "he", "ceb", ""]);
 	});
 });
