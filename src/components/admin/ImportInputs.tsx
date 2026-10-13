@@ -24,19 +24,19 @@ import { PDF_IMPORT_MAX_FILES } from "./admin-import";
 
 const COVERS_PER_PAGE = 10;
 const DOIS_SHOWN = 12;
-const PDF_ACCEPT = "application/pdf,.pdf";
+export const PDF_ACCEPT = "application/pdf,.pdf";
 
-function megabytes(bytes: number) {
+export function megabytes(bytes: number) {
 	return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /** Adds dropped or chosen files once each, by name and size. */
-function withNew(current: readonly File[], chosen: readonly File[]) {
+export function withNew(current: readonly File[], chosen: readonly File[]) {
 	const known = new Set(current.map((file) => `${file.name}:${file.size}`));
 	return [...current, ...chosen.filter((file) => !known.has(`${file.name}:${file.size}`))];
 }
 
-function SectionLabel({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
+export function SectionLabel({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
 	return (
 		<div className="mb-2 flex h-6 items-center gap-2">
 			<h3 className="text-sm font-medium text-black/85 dark:text-white/85">{children}</h3>
@@ -46,7 +46,7 @@ function SectionLabel({ aside, children }: { aside?: ReactNode; children: ReactN
 }
 
 /** A drop target that is also a file chooser. */
-function DropArea({
+export function DropArea({
 	accept,
 	busy,
 	children,
@@ -94,7 +94,7 @@ function DropArea({
 	);
 }
 
-function DropText({ hint, what }: { hint: string; what: string }) {
+export function DropText({ hint, what }: { hint: string; what: string }) {
 	return (
 		<>
 			<HugeiconsIcon aria-hidden className="mb-1 text-black/40 dark:text-white/40" icon={Upload04Icon} size={20} />
@@ -106,7 +106,7 @@ function DropText({ hint, what }: { hint: string; what: string }) {
 	);
 }
 
-function RemoveButton({ busy, name, onPress }: { busy: boolean; name: string; onPress: () => void }) {
+export function RemoveButton({ busy, name, onPress }: { busy: boolean; name: string; onPress: () => void }) {
 	return (
 		<Tooltip content="Remove">
 			<Button aria-label={`Remove ${name}`} className="size-7 min-w-7" isDisabled={busy} isIconOnly onPress={onPress} size="xs" variant="transparent">
@@ -116,7 +116,7 @@ function RemoveButton({ busy, name, onPress }: { busy: boolean; name: string; on
 	);
 }
 
-function CoverGrid({ busy, files, onFilesChange }: { busy: boolean; files: File[]; onFilesChange: (files: File[]) => void }) {
+export function CoverGrid({ busy, files, onFilesChange }: { busy: boolean; files: File[]; onFilesChange: (files: File[]) => void }) {
 	const [page, setPage] = useState(1);
 	const { current, items, pages } = pageOf(files, page, COVERS_PER_PAGE);
 	const total = files.reduce((sum, file) => sum + file.size, 0);
@@ -206,7 +206,8 @@ function GrowingText({
 }
 
 /** The library's checks, one per row, saved as they are edited. */
-function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: string[]; onChange: (criteria: string[]) => void }) {
+/** `heading` and `fileNote` drop the editor's own title and its note about the file checks, for a design that shows them itself. */
+export function ChecksEditor({ busy, criteria, fileNote = true, heading = true, onChange }: { busy: boolean; criteria: string[]; fileNote?: boolean; heading?: boolean; onChange: (criteria: string[]) => void }) {
 	const [draft, setDraft] = useState("");
 	const full = criteria.length >= PDF_IMPORT_MAX_CRITERIA;
 	const add = () => {
@@ -221,8 +222,12 @@ function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: s
 	};
 	return (
 		<div>
-			<SectionLabel aside={`${criteria.length} of ${PDF_IMPORT_MAX_CRITERIA}`}>Checks</SectionLabel>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library. The AI answers each one for every PDF, with the quote and page it rests on.</p>
+			{heading ? (
+				<>
+					<SectionLabel aside={`${criteria.length} of ${PDF_IMPORT_MAX_CRITERIA}`}>Checks</SectionLabel>
+					<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library. The AI answers each one for every PDF, with the quote and page it rests on.</p>
+				</>
+			) : null}
 			<ol className="flex flex-col">
 				{criteria.map((criterion, index) => (
 					<li className="group/check flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]" key={index}>
@@ -260,7 +265,7 @@ function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: s
 					/>
 				</li>
 			</ol>
-			<p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Every PDF is also checked from the file itself: tagged for screen readers, PDF/UA and PDF/A.</p>
+			{fileNote ? <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Every PDF is also checked from the file itself: tagged for screen readers, PDF/UA and PDF/A.</p> : null}
 		</div>
 	);
 }
@@ -296,12 +301,12 @@ export function PdfInput({
 }
 
 /** The pasted text beside the DOIs read from it, so nothing is looked up by surprise. */
-export function DoiInput({ busy, onChange, text }: { busy: boolean; onChange: (text: string) => void; text: string }) {
+export function DoiInput({ busy, narrow = false, onChange, text }: { busy: boolean; narrow?: boolean; onChange: (text: string) => void; text: string }) {
 	const { dois, invalid } = parseDoiList(text);
 	return (
-		<div className="grid min-h-full grid-cols-[minmax(0,1fr)_18rem] gap-8">
+		<div className={`grid min-h-full gap-8 ${narrow ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_18rem]"}`}>
 			<div>
-				<SectionLabel>DOIs or doi.org links</SectionLabel>
+				<SectionLabel aside={narrow && (dois.length || invalid.length) ? `${dois.length} to look up${invalid.length ? `, ${invalid.length} not DOIs` : ""}` : undefined}>DOIs or doi.org links</SectionLabel>
 				<Textarea
 					aria-label="DOIs"
 					classNames={{ input: "min-h-[24rem] font-mono text-[13px] leading-6" }}
@@ -314,7 +319,7 @@ export function DoiInput({ busy, onChange, text }: { busy: boolean; onChange: (t
 				/>
 				<p className="mt-2 text-xs text-black/45 dark:text-white/45">One per line or separated by commas, up to {ADMIN_IMPORT_MAX_RECORDS}.</p>
 			</div>
-			<div className="border-s border-black/[0.06] ps-8 dark:border-white/[0.06]">
+			<div className={`border-s border-black/[0.06] ps-8 dark:border-white/[0.06] ${narrow ? "hidden" : ""}`}>
 				<SectionLabel aside={dois.length ? `${dois.length}` : undefined}>To look up</SectionLabel>
 				{dois.length || invalid.length ? (
 					<ul className="flex flex-col gap-1 font-mono text-xs">

@@ -1,89 +1,21 @@
 "use client";
 
-import { Folder01Icon } from "@hugeicons/core-free-icons";
-import { ModalContent, Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, use, useDeferredValue, useState } from "react";
-import { toast } from "sonner";
+import { Drawer, DrawerContent, ModalContent } from "@nextui-org/react";
+import { useState } from "react";
 
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
-import { Tab, Tabs } from "@/components/nextui/Tabs";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
-import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
-import type { AdminSource } from "@/lib/admin/types";
 
-import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { ImportDone } from "./ImportDone";
 import { BibliographyInput, DoiInput, PdfInput } from "./ImportInputs";
-import { ReviewBar, ReviewDetail, ReviewList, usd } from "./ImportReview";
-import { ImportSteps, type ImportKind, type ImportStage } from "./ImportSteps";
-import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
-import {
-	changeImportBatch,
-	changeImportRow,
-	chosenTopics,
-	currentImportBatch,
-	doiPreviewRequest,
-	endImportBatch,
-	filePreviewRequest,
-	pendingPdfRows,
-	publishedProperties,
-	publishImported,
-	readPdfs,
-	readyIds,
-	recordRights,
-	FILE_CHECKS,
-	reviewChecks,
-	reviewCounts,
-	reviewMatches,
-	rowsFromRecords,
-	selectedIds,
-	selectedImportRecords,
-	startImportBatch,
-	storeChecks,
-	storedChecks,
-	storeReview,
-	summarizeImportResults,
-	useImportBatch,
-	validateChecks,
-	validateImportFiles,
-	validatePdfFiles,
-	type AttachState,
-	type ImportRow,
-	type ReviewFilter,
-} from "./admin-import";
-import { uploadPdfFile } from "./admin-pdf";
-import { pdfPageCount } from "./pdf-thumbnail";
-
-function errorMessage(error: unknown) {
-	if (error instanceof AdminApiError) {
-		const fieldMessages = Object.values(error.fields);
-		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
-	}
-	return error instanceof Error ? error.message : "Something went wrong. Try again.";
-}
-
-function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly string[]) {
-	try {
-		if (kind === "dois") doiPreviewRequest(doiText);
-		else if (kind === "files") validateImportFiles(files);
-		else {
-			validatePdfFiles(pdfs);
-			validateChecks(checks);
-		}
-		return null;
-	} catch (error) {
-		return errorMessage(error);
-	}
-}
-
-const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
-/** "Read 5 PDFs", or "Read PDFs" before there are any. */
-const action = (verb: string, count: number, one: string, many: string) => (count ? `${verb} ${plural(count, one, many)}` : `${verb} ${many}`);
+import { ReviewBar, ReviewDetail, ReviewList } from "./ImportReview";
+import { DesignChecks } from "./DesignChecks";
+import { DesignDocument } from "./DesignDocument";
+import { DesignDrawer } from "./DesignDrawer";
+import { DesignQueue } from "./DesignQueue";
+import { DesignSheet } from "./DesignSheet";
+import { DesignHeader, InputNote, SourceTabs, StageFade } from "./import-design-parts";
+import { action, CollectionsButton, useImportDesign, useImportFlow, type ImportDesign, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 
 /**
  * Import records from PDFs, a pasted DOI list or bibliography files. PDFs are
@@ -91,381 +23,168 @@ const action = (verb: string, count: number, one: string, many: string) => (coun
  * answers the library's checks. Every source ends in the same review, and the
  * chosen records become unpublished drafts in one call.
  */
-export function AdminImportDialog({
-	isOpen,
-	onClose,
-	onImported,
-	onOpenRecord,
-	sources,
-}: {
-	isOpen: boolean;
-	onClose: () => void;
-	onImported: (itemKeys: string[]) => Promise<void> | void;
-	onOpenRecord: (itemKey: string) => void;
-	sources: readonly AdminSource[];
-}) {
+export function AdminImportDialog({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	// Each opening starts fresh; closing keeps the contents while the dialog animates out.
+	const [opening, setOpening] = useState(0);
+	const [wasOpen, setWasOpen] = useState(isOpen);
+	if (isOpen !== wasOpen) {
+		setWasOpen(isOpen);
+		if (isOpen) setOpening((value) => value + 1);
+	}
+	return <ImportHost isOpen={isOpen} key={opening} {...props} />;
+}
+
+// shortcut: the mock's five designs share one flow; the real build keeps the chosen one.
+const FRAMES: Record<Exclude<ImportDesign, "drawer">, { base: string; size: "5xl" | "full" }> = {
+	checks: { base: "my-4 h-[calc(100dvh-2rem)] max-w-[80rem] overflow-hidden sm:my-4", size: "5xl" },
+	document: { base: "my-4 h-[calc(100dvh-2rem)] max-w-[90rem] overflow-hidden sm:my-4", size: "5xl" },
+	now: { base: "my-4 h-[min(46rem,calc(100dvh-2rem))] max-w-[68rem] overflow-hidden sm:my-4", size: "5xl" },
+	queue: { base: "my-4 h-[min(46rem,calc(100dvh-2rem))] max-w-[66rem] overflow-hidden sm:my-4", size: "5xl" },
+	sheet: { base: "m-0 h-dvh max-h-dvh w-screen max-w-none overflow-hidden rounded-none border-0 sm:m-0", size: "full" },
+};
+
+function ImportHost({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	const flow = useImportFlow(props);
+	const design = useImportDesign();
+	const onOpenChange = (open: boolean) => {
+		if (!open) props.onClose();
+	};
+	if (design === "drawer") {
+		return (
+			<Drawer classNames={{ base: "max-w-[36rem] border-s border-black/10 bg-background_light dark:border-white/10 dark:bg-card" }} hideCloseButton isOpen={isOpen} onOpenChange={onOpenChange} placement="right" size="2xl">
+				<DrawerContent>{isOpen ? <DesignDrawer flow={flow} /> : null}</DrawerContent>
+			</Drawer>
+		);
+	}
+	const frame = FRAMES[design];
 	return (
-		<DialogModal
-			classNames={{ base: "my-4 h-[min(46rem,calc(100dvh-2rem))] max-w-[68rem] overflow-hidden sm:my-4" }}
-			isOpen={isOpen}
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-			size="5xl"
-		>
-			<ModalContent>{isOpen ? <ImportFlow onClose={onClose} onImported={onImported} onOpenRecord={onOpenRecord} sources={sources} /> : null}</ModalContent>
+		<DialogModal classNames={{ base: frame.base }} isOpen={isOpen} onOpenChange={onOpenChange} size={frame.size}>
+			<ModalContent>
+				{isOpen ? (
+					design === "document" ? (
+						<DesignDocument flow={flow} />
+					) : design === "sheet" ? (
+						<DesignSheet flow={flow} />
+					) : design === "queue" ? (
+						<DesignQueue flow={flow} />
+					) : design === "checks" ? (
+						<DesignChecks flow={flow} />
+					) : (
+						<DesignNow flow={flow} />
+					)
+				) : null}
+			</ModalContent>
 		</DialogModal>
 	);
 }
 
-const pageTotals = new WeakMap<readonly File[], Promise<number | null>>();
-
-/** The chosen PDFs' pages added up, once per selection. Null when one can't be opened. */
-function pagesIn(files: readonly File[]) {
-	let total = pageTotals.get(files);
-	if (!total) {
-		total = Promise.all(files.map(pdfPageCount)).then((counts) => (counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0)));
-		pageTotals.set(files, total);
-	}
-	return total;
-}
-
-function CostEstimate({ files, stale }: { files: readonly File[]; stale: boolean }) {
-	const pages = use(pagesIn(files));
-	if (pages === null) return null;
-	return (
-		<p className={`animate-fade-in text-xs tabular-nums text-black/50 transition-opacity duration-200 [animation-duration:300ms] dark:text-white/50 ${stale ? "opacity-50" : ""}`}>
-			About {usd(estimatePdfImportCost(pages, files.length))} for {pages} pages
-		</p>
-	);
-}
-
-function ImportFlow({
-	onClose,
-	onImported,
-	onOpenRecord,
-	sources,
-}: {
-	onClose: () => void;
-	onImported: (itemKeys: string[]) => Promise<void> | void;
-	onOpenRecord: (itemKey: string) => void;
-	sources: readonly AdminSource[];
-}) {
-	const topicsEnabled = useLibraryConfig().topics.enabled;
-	const reduceMotion = useReducedMotion();
-	const batch = useImportBatch();
-	const [kind, setKind] = useState<ImportKind>(batch?.kind ?? "pdfs");
-	const [doiText, setDoiText] = useState("");
-	const [files, setFiles] = useState<File[]>([]);
-	const [pdfs, setPdfs] = useState<File[]>([]);
-	const estimateFiles = useDeferredValue(pdfs);
-	const [checks, setChecks] = useState(storedChecks);
-	const [activeId, setActiveId] = useState<string | null>(null);
-	const [filter, setFilter] = useState<ReviewFilter>("all");
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-
-	const stage: ImportStage = batch?.results ? "done" : batch ? "review" : "input";
-	const problem = inputError(kind, doiText, files, pdfs, checks);
-	const rows = batch?.rows ?? [];
-	const counts = reviewCounts(rows);
-	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
-	const locked = busy || batch?.committing === true;
-	const shown = rows.filter((row) => reviewMatches(row, filter));
-	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
-	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
-	const selected = batch ? selectedIds(batch) : new Set<string>();
-	const checksOf = (row: ImportRow) => reviewChecks(row);
-	// The library's checks, and for PDFs the ones read from the file.
-	const checkCount = (batch?.checks.length ?? 0) + (batch?.kind === "pdfs" ? FILE_CHECKS.length : 0);
-	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
-	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
-	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
-
-	const run = async (work: () => Promise<void>) => {
-		setError(null);
-		setBusy(true);
-		try {
-			await work();
-		} catch (caught) {
-			setError(errorMessage(caught));
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	const start = () =>
-		run(async () => {
-			setFilter("all");
-			const importId = crypto.randomUUID();
-			if (kind === "pdfs") {
-				storeChecks(checks);
-				const pending = pendingPdfRows(pdfs);
-				setActiveId(pending[0]?.id ?? null);
-				startImportBatch({ checks, importId, kind, rows: pending });
-				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks), errorMessage);
-				return;
-			}
-			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
-			// The dialog may have closed and started another import while this lookup ran.
-			if (currentImportBatch()) return;
-			const previewRows = rowsFromRecords(response.records);
-			setActiveId(previewRows[0]?.id ?? null);
-			startImportBatch({ checks: [], importId, kind, rows: previewRows });
-		});
-
-	const attachPdfs = async (importId: string, created: AdminImportCommitResult[]) => {
-		const rowById = new Map(rows.map((row) => [row.id, row]));
-		const mark = (id: string, state: AttachState) => changeImportBatch(importId, (current) => ({ ...current, attach: new Map(current.attach).set(id, state) }));
-		for (const { id } of created) mark(id, "attaching");
-		await Promise.all(
-			created.map(async ({ id, itemKey }) => {
-				const row = rowById.get(id);
-				if (!row?.file || !itemKey) return;
-				try {
-					const attachment = await createAdminDraft({ collections: [], itemType: "attachment", parentItem: itemKey, tags: [], title: row.file.name });
-					await uploadPdfFile(attachment.itemKey, row.file, () => undefined);
-					mark(id, "attached");
-				} catch (caught) {
-					console.error("Attaching the PDF failed", row.file.name, caught);
-					mark(id, "failed");
-				}
-			}),
-		);
-	};
-
-	const commit = () =>
-		run(async () => {
-			if (!batch) return;
-			const rowById = new Map(rows.map((row) => [row.id, row]));
-			const records = selectedImportRecords(
-				rows.flatMap(({ record }) => (record ? [record] : [])),
-				selected,
-			).map((record) => {
-				const row = rowById.get(record.id)!;
-				const topics = [...topicsOf(row)];
-				const rights = recordRights(row);
-				return { ...record, payload: { ...record.payload, ...(topicsEnabled && topics.length ? { topics } : {}), ...(rights ? { rights } : {}) } };
-			});
-			changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
-			const response = await commitAdminImport({ collections: batch.collections, importId: batch.importId, records }).catch((caught: unknown) => {
-				changeImportBatch(batch.importId, (current) => ({ ...current, committing: false }));
-				throw caught;
-			});
-			changeImportBatch(batch.importId, (current) => ({ ...current, committing: false, results: response.results }));
-			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
-			for (const { id, itemKey } of created) {
-				const row = rowById.get(id)!;
-				storeReview(itemKey!, { abstractWritten: row.abstractWritten, checks: checksOf(row), topics: row.topics.filter((topic) => topicsOf(row).has(topic.id)) });
-			}
-			const summary = summarizeImportResults(response.results);
-			if (batch.kind === "pdfs") void attachPdfs(batch.importId, created);
-			await onImported(summary.createdKeys);
-			(summary.failed ? toast.warning : toast.success)(summary.message);
-		});
-
-	const restart = () => {
-		endImportBatch();
-		setError(null);
-		if (stage === "done") {
-			setPdfs([]);
-			setFiles([]);
-			setDoiText("");
-		}
-	};
-
-	const finish = () => {
-		endImportBatch();
-		onClose();
-	};
-
-	const primaryLabel = { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: action("Read", pdfs.length, "PDF", "PDFs") }[kind];
-	// The DOI box marks entries that are not DOIs itself.
-	const footerProblem = stage === "input" && kind !== "dois" && (files.length || pdfs.length) ? problem : null;
-
+/** The dialog as it was before the five designs: tabs, then a list beside the detail. */
+function DesignNow({ flow }: { flow: ImportFlowState }) {
+	const { activeRow, batch, stage } = flow;
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<header className="flex h-14 shrink-0 items-center gap-4 border-b border-black/[0.06] px-6 dark:border-white/[0.06]">
-				<h2 className="text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
-				<span className="ms-auto">
-					<ImportSteps stage={stage} />
-				</span>
-			</header>
-			<AnimatePresence initial={false} mode="wait">
-				<motion.div
-					animate={{ opacity: 1 }}
-					className="flex min-h-0 flex-1 flex-col"
-					exit={{ opacity: 0 }}
-					initial={{ opacity: 0 }}
-					key={stage}
-					transition={{ duration: reduceMotion ? 0 : 0.15 }}
-				>
-					{stage === "input" ? (
-						<div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
-							<Tabs
-								aria-label="Import from"
-								classNames={{ panel: "px-0 pb-0 pt-5" }}
-								isDisabled={busy}
-								onSelectionChange={(key) => {
-									setKind(key as ImportKind);
-									setError(null);
-								}}
-								selectedKey={kind}
-							>
-								<Tab key="pdfs" title="PDFs">
-									<PdfInput
-										busy={busy}
-										criteria={checks}
-										files={pdfs}
-										onCriteriaChange={(value) => {
-											setChecks(value);
-											storeChecks(value);
-										}}
-										onFilesChange={setPdfs}
-									/>
-								</Tab>
-								<Tab key="dois" title="DOIs">
-									<DoiInput busy={busy} onChange={setDoiText} text={doiText} />
-								</Tab>
-								<Tab key="files" title="Bibliography files">
-									<BibliographyInput busy={busy} files={files} onFilesChange={setFiles} />
-								</Tab>
-							</Tabs>
+			<DesignHeader stage={stage} />
+			<StageFade stage={stage}>
+				{stage === "input" ? (
+					<div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4">
+						<SourceTabs
+							dois={<DoiInput busy={flow.busy} onChange={flow.setDoiText} text={flow.doiText} />}
+							files={<BibliographyInput busy={flow.busy} files={flow.files} onFilesChange={flow.setFiles} />}
+							flow={flow}
+							pdfs={<PdfInput busy={flow.busy} criteria={flow.checks} files={flow.pdfs} onCriteriaChange={flow.setChecks} onFilesChange={flow.setPdfs} />}
+						/>
+					</div>
+				) : null}
+				{stage === "review" && batch ? (
+					<div className="flex min-h-0 flex-1 flex-col">
+						<div className="shrink-0 px-6 py-3">
+							<ReviewBar costUsd={flow.costUsd} counts={flow.counts} filter={flow.filter} kind={batch.kind} onFilter={flow.setFilter} />
 						</div>
-					) : null}
-					{stage === "review" && batch ? (
-						<div className="flex min-h-0 flex-1 flex-col">
-							<div className="shrink-0 px-6 py-3">
-								<ReviewBar costUsd={rows.reduce((sum, row) => sum + row.costUsd, 0)} counts={counts} filter={filter} kind={batch.kind} onFilter={setFilter} />
+						<div className="grid min-h-0 flex-1 grid-cols-[22rem_minmax(0,1fr)] border-t border-black/[0.06] dark:border-white/[0.06]">
+							<div className="min-h-0 overflow-y-auto border-e border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
+								<ReviewList
+									activeId={activeRow?.id ?? null}
+									attach={batch.attach}
+									checksOf={flow.checksOf}
+									criteriaCount={flow.checkCount}
+									filter={flow.filter}
+									locked={flow.locked}
+									onActivate={flow.setActiveId}
+									onSelectedChange={flow.setSelected}
+									readyIds={flow.readyIds}
+									results={batch.results}
+									rows={flow.shown}
+									selected={flow.selected}
+								/>
 							</div>
-							<div className="grid min-h-0 flex-1 grid-cols-[22rem_minmax(0,1fr)] border-t border-black/[0.06] dark:border-white/[0.06]">
-								<div className="min-h-0 overflow-y-auto border-e border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
-									<ReviewList
-										activeId={activeRow?.id ?? null}
-										attach={batch.attach}
-										checksOf={checksOf}
-										criteriaCount={checkCount}
-										filter={filter}
-										locked={locked}
-										onActivate={setActiveId}
-										onSelectedChange={(next) => changeImportBatch(batch.importId, (current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) }))}
-										readyIds={readyIds(rows)}
-										results={batch.results}
-										rows={shown}
-										selected={selected}
+							<div className="min-h-0 overflow-y-auto px-7 py-6">
+								{activeRow ? (
+									<ReviewDetail
+										attach={batch.attach.get(activeRow.id)}
+										checks={flow.checksOf(activeRow)}
+										chosenTopics={flow.topicsOf(activeRow)}
+										criteriaCount={flow.checkCount}
+										key={activeRow.id}
+										locked={flow.locked}
+										onOpenRecord={flow.onOpenRecord}
+										onToggleFix={() => flow.toggleFix(activeRow.id)}
+										onToggleTopic={(topicId) => flow.toggleTopic(activeRow.id, topicId)}
+										properties={flow.propertiesOf(activeRow)}
+										result={flow.resultById.get(activeRow.id)}
+										row={activeRow}
 									/>
-								</div>
-								<div className="min-h-0 overflow-y-auto px-7 py-6">
-									{activeRow ? (
-										<ReviewDetail
-											attach={batch.attach.get(activeRow.id)}
-											checks={checksOf(activeRow)}
-											chosenTopics={topicsOf(activeRow)}
-											criteriaCount={checkCount}
-											key={activeRow.id}
-											locked={locked}
-											onOpenRecord={onOpenRecord}
-											onToggleFix={() => changeImportRow(batch.importId, activeRow.id, (row) => ({ ...row, fixApplied: !row.fixApplied }))}
-											onToggleTopic={(topicId) =>
-												changeImportBatch(batch.importId, (current) => {
-													const next = new Set(chosenTopics(current, activeRow));
-													if (next.has(topicId)) next.delete(topicId);
-													else next.add(topicId);
-													return { ...current, topics: new Map(current.topics).set(activeRow.id, next) };
-												})
-											}
-											properties={propertiesOf(activeRow)}
-											result={resultById.get(activeRow.id)}
-											row={activeRow}
-										/>
-									) : null}
-								</div>
+								) : null}
 							</div>
 						</div>
-					) : null}
-					{stage === "done" && batch?.results ? (
-						<div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
-							<ImportDone
-								batch={batch}
-								onChoose={(ids) => changeImportBatch(batch.importId, (current) => ({ ...current, toPublish: ids }))}
-								onOpenRecord={onOpenRecord}
-								onPublish={(ids) => void publishImported(batch.importId, ids)}
-							/>
-						</div>
-					) : null}
-				</motion.div>
-			</AnimatePresence>
+					</div>
+				) : null}
+				{stage === "done" && batch?.results ? (
+					<div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+						<ImportDone batch={batch} onChoose={flow.choosePublish} onOpenRecord={flow.onOpenRecord} onPublish={flow.publish} />
+					</div>
+				) : null}
+			</StageFade>
 			<footer className="flex h-16 shrink-0 items-center gap-3 border-t border-black/[0.06] px-6 dark:border-white/[0.06]">
-				{error || footerProblem ? (
-					<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
-						{error ?? footerProblem}
-					</p>
+				{flow.error || flow.footerProblem || stage === "input" ? (
+					<InputNote flow={flow} />
 				) : stage === "review" ? (
 					<>
-						<CollectionsButton collections={batch?.collections ?? []} locked={locked} onChange={(keys) => batch && changeImportBatch(batch.importId, (current) => ({ ...current, collections: keys }))} sources={sources} />
-						{reading ? <p className="text-xs text-black/50 dark:text-white/50">Reading carries on if you close this</p> : null}
+						<CollectionsButton collections={batch?.collections ?? []} locked={flow.locked} onChange={flow.setCollections} sources={flow.sources} />
+						{flow.reading ? <p className="text-xs text-black/50 dark:text-white/50">Reading carries on if you close this</p> : null}
 					</>
-				) : stage === "input" && kind === "pdfs" && estimateFiles.length ? (
-					<Suspense fallback={null}>
-						<CostEstimate files={estimateFiles} stale={estimateFiles !== pdfs} />
-					</Suspense>
 				) : null}
 				<span className="ms-auto flex items-center gap-2">
 					{stage === "review" ? (
-						<Button isDisabled={locked} onPress={restart} size="sm" variant="transparent">
+						<Button isDisabled={flow.locked} onPress={flow.restart} size="sm" variant="transparent">
 							Back
 						</Button>
 					) : null}
 					{stage === "done" ? (
-						<Button onPress={restart} size="sm" variant="transparent">
+						<Button onPress={flow.restart} size="sm" variant="transparent">
 							Import more
 						</Button>
 					) : (
-						<Button isDisabled={busy && stage === "input"} onPress={onClose} size="sm" variant="transparent">
+						<Button isDisabled={flow.busy && stage === "input"} onPress={flow.onClose} size="sm" variant="transparent">
 							{stage === "review" ? "Close" : "Cancel"}
 						</Button>
 					)}
 					{stage === "input" ? (
-						<Button className="min-w-28" color="accent" isDisabled={problem !== null} isLoading={busy} onPress={() => void start()} size="sm" variant="solid">
-							{primaryLabel}
+						<Button className="min-w-28" color="accent" isDisabled={flow.problem !== null} isLoading={flow.busy} onPress={flow.start} size="sm" variant="solid">
+							{flow.primaryLabel}
 						</Button>
 					) : null}
 					{stage === "review" ? (
-						<Button className="min-w-32" color="accent" isDisabled={reading || selected.size === 0} isLoading={locked} onPress={() => void commit()} size="sm" variant="solid">
-							{action("Import", selected.size, "record", "records")}
+						<Button className="min-w-32" color="accent" isDisabled={flow.reading || flow.selected.size === 0} isLoading={flow.locked} onPress={flow.commit} size="sm" variant="solid">
+							{action("Import", flow.selected.size, "record", "records")}
 						</Button>
 					) : null}
 					{stage === "done" ? (
-						<Button className="min-w-24" color="accent" onPress={finish} size="sm" variant="solid">
+						<Button className="min-w-24" color="accent" onPress={flow.finish} size="sm" variant="solid">
 							Done
 						</Button>
 					) : null}
 				</span>
 			</footer>
 		</div>
-	);
-}
-
-/** Collections for the new drafts, picked in a popover so the review keeps its room. */
-function CollectionsButton({ collections, locked, onChange, sources }: { collections: string[]; locked: boolean; onChange: (keys: string[]) => void; sources: readonly AdminSource[] }) {
-	return (
-		<Popover placement="top-start">
-			<PopoverTrigger>
-				<Button isDisabled={locked} size="sm" startContent={<HugeiconsIcon aria-hidden icon={Folder01Icon} size={15} />} variant="muted">
-					{collections.length ? plural(collections.length, "collection", "collections") : "Add to collections"}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent className="w-[24rem] p-3">
-				<div className="max-h-[22rem] w-full overflow-y-auto">
-					<AdminCollectionPicker
-						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], sources)}
-						onSelectionChange={onChange}
-						selectedKeys={collections}
-						selectionMode="multiple"
-						sources={sources}
-					/>
-				</div>
-			</PopoverContent>
-		</Popover>
 	);
 }

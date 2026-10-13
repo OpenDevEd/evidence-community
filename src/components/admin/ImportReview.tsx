@@ -54,10 +54,10 @@ const toneClass: Record<Tone, string> = {
 	ready: "text-emerald-700 dark:text-emerald-400",
 };
 
-type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
+export type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
 
 /** What a row's status says, from its reading, its preview, its import and its PDF. */
-function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
+export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
 	if (row.state === "waiting") return { icon: null, label: "Queued", tone: "progress" };
 	if (row.state === "reading") return { icon: null, label: "Reading", tone: "progress" };
 	if (row.state === "failed" || !row.record) return { icon: AlertCircleIcon, label: "Could not read", tone: "attention" };
@@ -75,7 +75,7 @@ function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, 
 	return states[row.record.state];
 }
 
-function StatusText({ status }: { status: Status }) {
+export function StatusText({ status }: { status: Status }) {
 	return (
 		<span className={`flex min-w-0 items-center gap-1.5 text-xs ${toneClass[status.tone]}`}>
 			{status.tone === "progress" ? <HugeiconsIcon aria-hidden className="shrink-0 animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} /> : status.icon ? <HugeiconsIcon aria-hidden className="shrink-0" icon={status.icon} size={13} /> : null}
@@ -86,10 +86,10 @@ function StatusText({ status }: { status: Status }) {
 
 /** A check's look: the AI's answer, or a pass labelled fixed once the editor fixed it. */
 const fixedLook = { ...resultLook.met, label: "Fixed" };
-const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[check.result]);
+export const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[check.result]);
 
 /** One small bar per check, coloured by its result; grey until the PDF is read. */
-function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number }) {
+export function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number }) {
 	if (!count) return null;
 	const passed = checks.filter(checkPasses).length;
 	return (
@@ -106,7 +106,7 @@ function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number })
 	);
 }
 
-function creatorsLine(creators: readonly string[]) {
+export function creatorsLine(creators: readonly string[]) {
 	if (creators.length <= 2) return creators.join(" and ");
 	return `${creators[0]} and ${creators.length - 1} more`;
 }
@@ -127,7 +127,7 @@ export function usd(amount: number) {
 export type ReviewCounts = Record<"attention" | "done" | "existing" | "improve" | "ready" | "total", number>;
 
 /** The filters, each with its count, and reading progress while PDFs are read. */
-export function ReviewBar({ costUsd, counts, filter, kind, onFilter }: { costUsd: number; counts: ReviewCounts; filter: ReviewFilter; kind: ImportKind; onFilter: (filter: ReviewFilter) => void }) {
+export function ReviewBar({ costUsd, counts, filter, kind, onFilter, progress = true }: { costUsd: number; counts: ReviewCounts; filter: ReviewFilter; kind: ImportKind; onFilter: (filter: ReviewFilter) => void; progress?: boolean }) {
 	const reading = counts.done < counts.total;
 	return (
 		<div className="flex h-8 items-center gap-4">
@@ -149,7 +149,7 @@ export function ReviewBar({ costUsd, counts, filter, kind, onFilter }: { costUsd
 					);
 				})}
 			</div>
-			{kind === "pdfs" ? (
+			{kind === "pdfs" && progress ? (
 				<div className="ms-auto flex items-center gap-2.5">
 					<span className="text-xs tabular-nums text-black/55 dark:text-white/55">{reading ? `${counts.done} of ${counts.total} read` : `Read for ${usd(costUsd)}`}</span>
 					<span aria-hidden className={`relative h-1 w-24 overflow-hidden rounded-full bg-black/[0.08] transition-opacity duration-500 dark:bg-white/10 ${reading ? "" : "opacity-0"}`}>
@@ -257,7 +257,7 @@ export function ReviewList({
 }
 
 /** The answer to each check, and for a failed one that the Rights fix covers, whether it is applied. */
-function CheckList({ checks }: { checks: ReviewCheck[] }) {
+export function CheckList({ checks, onPage }: { checks: ReviewCheck[]; onPage?: (page: number) => void }) {
 	return (
 		<ul className="flex flex-col gap-4">
 			{checks.map((check) => {
@@ -270,7 +270,13 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 							{check.quote ? (
 								<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
 									{check.file ? check.quote : <q>{check.quote}</q>}
-									{check.page ? <span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span> : null}
+									{check.page && onPage ? (
+										<button className="ms-1.5 whitespace-nowrap rounded tabular-nums text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onPage(check.page!)} type="button">
+											p. {check.page}
+										</button>
+									) : check.page ? (
+										<span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span>
+									) : null}
 								</p>
 							) : null}
 							{check.recommendation ? (
@@ -294,11 +300,11 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 }
 
 /** The library's checks, then the ones read from the file itself, with what goes between them. */
-function Checks({ checks, children }: { checks: ReviewCheck[]; children?: ReactNode }) {
+export function Checks({ checks, children, onPage }: { checks: ReviewCheck[]; children?: ReactNode; onPage?: (page: number) => void }) {
 	const file = checks.filter((check) => check.file);
 	return (
 		<>
-			<CheckList checks={checks.filter((check) => !check.file)} />
+			<CheckList checks={checks.filter((check) => !check.file)} onPage={onPage} />
 			{children}
 			{file.length ? (
 				<>
@@ -311,7 +317,7 @@ function Checks({ checks, children }: { checks: ReviewCheck[]; children?: ReactN
 }
 
 /** The Rights statement the AI suggests so the failed rights checks pass, beside what the PDF says now. */
-function RightsFixLine({ applied, fix, locked, onToggle, stated }: { applied: boolean; fix: RightsFix; locked: boolean; onToggle: () => void; stated: string }) {
+export function RightsFixLine({ applied, fix, locked, onToggle, stated }: { applied: boolean; fix: RightsFix; locked: boolean; onToggle: () => void; stated: string }) {
 	return (
 		<div className="mt-5 flex items-start gap-2.5">
 			<HugeiconsIcon aria-hidden className="mt-0.5 shrink-0 text-black/40 dark:text-white/40" icon={CopyrightIcon} size={16} />
@@ -333,7 +339,7 @@ function RightsFixLine({ applied, fix, locked, onToggle, stated }: { applied: bo
 	);
 }
 
-function TopicList({ chosen, locked, onToggle, topics }: { chosen: ReadonlySet<string>; locked: boolean; onToggle: (id: string) => void; topics: TopicSuggestion[] }) {
+export function TopicList({ chosen, locked, onToggle, topics }: { chosen: ReadonlySet<string>; locked: boolean; onToggle: (id: string) => void; topics: TopicSuggestion[] }) {
 	return (
 		<ul className="flex flex-col gap-3">
 			{topics.map((topic) => (
@@ -353,7 +359,7 @@ function TopicList({ chosen, locked, onToggle, topics }: { chosen: ReadonlySet<s
 	);
 }
 
-function DetailSection({ aside, children, title }: { aside?: ReactNode; children: ReactNode; title: string }) {
+export function DetailSection({ aside, children, title }: { aside?: ReactNode; children: ReactNode; title: string }) {
 	return (
 		<section>
 			<div className="mb-2.5 flex h-6 items-center gap-2">
@@ -365,7 +371,7 @@ function DetailSection({ aside, children, title }: { aside?: ReactNode; children
 	);
 }
 
-function MetadataLine({ payload }: { payload: Record<string, unknown> }) {
+export function MetadataLine({ payload }: { payload: Record<string, unknown> }) {
 	const text = (field: string) => (typeof payload[field] === "string" && payload[field] ? (payload[field] as string) : null);
 	const doi = text("DOI");
 	const items = [
@@ -394,7 +400,7 @@ function MetadataLine({ payload }: { payload: Record<string, unknown> }) {
 	);
 }
 
-function Abstract({ text }: { text: string }) {
+export function Abstract({ text }: { text: string }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<div>
@@ -408,7 +414,7 @@ function Abstract({ text }: { text: string }) {
 	);
 }
 
-function ReadingPlaceholder() {
+export function ReadingPlaceholder() {
 	return (
 		<div aria-hidden className="flex flex-col gap-2.5">
 			{["w-11/12", "w-full", "w-4/5", "w-2/3"].map((width) => (
@@ -418,7 +424,7 @@ function ReadingPlaceholder() {
 	);
 }
 
-const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
+export const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "title", label: "Title" },
 	{ field: "authors", label: "Authors" },
 	{ field: "subject", label: "Subject" },
@@ -427,12 +433,12 @@ const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "doi", label: "DOI" },
 ];
 
-const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
+export const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
 	const value = properties[field];
 	return Array.isArray(value) ? value.join(field === "authors" ? "; " : ", ") : value;
 };
 
-type PropertyChange = "added" | "changed" | "removed";
+export type PropertyChange = "added" | "changed" | "removed";
 
 const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: string; tone: string }> = {
 	added: { icon: PlusSignIcon, label: "Added", tone: "text-emerald-700 dark:text-emerald-400" },
@@ -441,7 +447,7 @@ const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: strin
 };
 
 /** What publishing does to one property. A missing DOI isn't removed: Zenodo allocates one at publishing. */
-function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
+export function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
 	const value = propertyText(after, field) || (field === "doi" ? "pending" : "");
 	const before = propertyText(now, field);
 	if (value === before) return null;
@@ -453,7 +459,7 @@ function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProp
  * property marked added, changed or removed. Every published PDF gets the
  * record's properties; fixes reach the file through Rights.
  */
-function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPropertiesReading }) {
+export function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPropertiesReading }) {
 	if (!now.writable) {
 		return (
 			<p className="text-xs leading-5 text-black/55 dark:text-white/55">
@@ -496,7 +502,7 @@ function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPrope
 }
 
 /** The section's note: what publishing does to the file's properties, in the marks the rows carry. */
-function propertiesAside(after: PdfProperties, now: PdfPropertiesReading) {
+export function propertiesAside(after: PdfProperties, now: PdfPropertiesReading) {
 	if (!now.writable) return undefined;
 	const changes = PROPERTY_ROWS.map(({ field }) => changeOf(field, after, now.properties));
 	const count = (change: PropertyChange) => changes.filter((value) => value === change).length;
@@ -505,7 +511,7 @@ function propertiesAside(after: PdfProperties, now: PdfPropertiesReading) {
 	return parts.length ? `Publishing ${parts.join(", ")}` : "Already in the file";
 }
 
-async function openWithProperties(file: File, properties: PdfProperties) {
+export async function openWithProperties(file: File, properties: PdfProperties) {
 	const { writePdfProperties } = await import("@/lib/admin/pdf-properties");
 	const bytes = await writePdfProperties(new Uint8Array(await file.arrayBuffer()), properties);
 	window.open(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })), "_blank", "noopener");

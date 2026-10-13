@@ -16,7 +16,7 @@ const PER_PAGE = 8;
 type Draft = { itemKey: string; row: ImportRow };
 
 /** Where a new record stands: publishing, published with its DOI, or how its checks went. */
-function DraftState({ publish, row }: { publish: PublishState | undefined; row: ImportRow }) {
+export function DraftState({ publish, row }: { publish: PublishState | undefined; row: ImportRow }) {
 	if (publish?.state === "publishing") {
 		return (
 			<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
@@ -45,7 +45,8 @@ function DraftState({ publish, row }: { publish: PublishState | undefined; row: 
  * read from a PDF can be published with a DOI from here; the ones that pass
  * every check start ticked, and the editor decides on the rest.
  */
-export function ImportDone({ batch, onChoose, onOpenRecord, onPublish }: { batch: ImportBatch; onChoose: (ids: ReadonlySet<string>) => void; onOpenRecord: (itemKey: string) => void; onPublish: (ids: string[]) => void }) {
+/** What the finish screen knows: the new drafts, which are ticked for publishing, and how the import went. */
+export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, row: rowById.get(id)! }] : []));
@@ -54,10 +55,8 @@ export function ImportDone({ batch, onChoose, onOpenRecord, onPublish }: { batch
 	const started = batch.publish.size > 0;
 	// Once publishing starts, the ticks are the drafts it was started for.
 	const chosen = started ? new Set(batch.publish.keys()) : (batch.toPublish ?? new Set(drafts.filter(({ row }) => row.file && rowPasses(row)).map(({ row }) => row.id)));
-	const [page, setPage] = useState(1);
 	const published = [...batch.publish.values()].filter(({ state }) => state === "published").length;
 	const all = publishable.length > 0 && publishable.every((id) => chosen.has(id));
-	const { current, items, pages } = pageOf(drafts, page, PER_PAGE);
 	const pdfs = [...batch.attach.values()];
 	const count = (state: AttachState) => pdfs.filter((value) => value === state).length;
 	const tally = [
@@ -73,6 +72,26 @@ export function ImportDone({ batch, onChoose, onOpenRecord, onPublish }: { batch
 		else next.delete(id);
 		onChoose(next);
 	};
+	return {
+		all,
+		chosen,
+		drafts,
+		headline: published ? `${published} published, ${drafts.length - published} in Drafts` : `${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} created`,
+		passing,
+		publishLabel: started ? `${published} of ${chosen.size} published` : chosen.size ? `Publish ${chosen.size} with DOIs` : "Publish with DOIs",
+		publishable,
+		published,
+		started,
+		tally,
+		toggle,
+		toggleAll: (checked: boolean) => onChoose(new Set(checked ? publishable : [])),
+	};
+}
+
+export function ImportDone({ batch, onChoose, onOpenRecord, onPublish }: { batch: ImportBatch; onChoose: (ids: ReadonlySet<string>) => void; onOpenRecord: (itemKey: string) => void; onPublish: (ids: string[]) => void }) {
+	const { all, chosen, drafts, passing, publishable, published, started, tally, toggle } = publishView(batch, onChoose);
+	const [page, setPage] = useState(1);
+	const { current, items, pages } = pageOf(drafts, page, PER_PAGE);
 	return (
 		<div className="mx-auto flex min-h-full w-full max-w-2xl flex-col justify-center gap-6">
 			<div className="flex items-center gap-3">

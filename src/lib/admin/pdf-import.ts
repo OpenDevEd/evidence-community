@@ -46,7 +46,7 @@ const pdfReadingSchema = z.object({
 			}),
 		),
 		date: z.string().nullable().describe("YYYY-MM-DD, YYYY-MM or YYYY"),
-		abstractNote: z.string().nullable().describe("The PDF's own abstract or summary, verbatim"),
+		abstractNote: z.string().nullable().describe("The abstract or summary section printed in the PDF, copied verbatim. Null when the PDF has none; never write a note about it being missing"),
 		DOI: z.string().nullable(),
 		publicationTitle: z.string().nullable().describe("Journal or series name"),
 		publisher: z.string().nullable(),
