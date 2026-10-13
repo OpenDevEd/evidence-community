@@ -32,6 +32,8 @@ describe("the words a meta-analysis or randomised trial says it is in", () => {
 			text("Chatbots and anxiety", "A cluster-randomized trial in 20 schools."),
 			text("Feedback timing", "An RCT with 300 students."),
 			text("Tutoría entre pares", "Ensayo aleatorizado en cuatro escuelas."),
+			text("Feedback from a chatbot", "Students were randomly divided into two groups."),
+			text("Lernen mit Avataren", "Die Klassen wurden zufällig zugeteilt."),
 		]) expect(ruledOutTypes(named)).not.toContain("rct");
 	});
 
