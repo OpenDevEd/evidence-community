@@ -12,6 +12,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import {
 	getRuntimeSearchAttributes,
 	getRuntimeSearchFacets,
+	studyTypeFacet,
 	type RuntimeSearch,
 } from "@/config/library-config/search";
 import type {
@@ -175,8 +176,10 @@ type SearchFilterInput = {
 	scope: string;
 	/** Item types, any of them. */
 	type?: readonly string[];
-	/** Study types, any of them, as Jev read each record. */
+	/** Study types, any of them, as the AI read each record. */
 	study?: readonly string[];
+	/** The field study types are filtered by, as the library's settings choose. */
+	studyField?: string;
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -201,6 +204,7 @@ function buildSearchFilters({
 	scope,
 	type = [],
 	study = [],
+	studyField = "studyType",
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -211,7 +215,7 @@ function buildSearchFilters({
 		...createCountryFilters(country),
 		author ? meilisearchEquals("fullNames", author) : null,
 		type.length ? meilisearchIn("itemType", type) : null,
-		study.length ? meilisearchIn("studyType", study) : null,
+		study.length ? meilisearchIn(studyField, study) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
@@ -239,6 +243,7 @@ export function resolveSearchRequest(
 		collections: searchParams.collections || [],
 		type: searchParams.type ?? [],
 		study: searchParams.study ?? [],
+		studyField: studyTypeFacet(libraryConfig.filters),
 		country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
@@ -436,7 +441,7 @@ export async function getPublicFacets(
 	const ownFilters = [
 		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
 		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
-		{ facet: "studyType", active: Boolean(searchParams.study?.length), without: { study: [] } },
+		{ facet: studyTypeFacet(libraryConfig.filters), active: Boolean(searchParams.study?.length), without: { study: [] } },
 	].filter(({ facet, active }) => active && facets.includes(facet));
 
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([

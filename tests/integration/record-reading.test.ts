@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -34,13 +35,25 @@ async function publish(client: Client, key: string, title: string, abstract: str
 	await client.query(`INSERT INTO outbox ("entityType", "entityKey", operation, revision) VALUES ('item', $1, 'upsert', $2)`, [key, revision]);
 }
 
-/** Stands in for OpenRouter's Decisions API: answers every question asked, and keeps what each call asked. */
+type Asked = Record<string, { criteria?: Record<string, string> | string[] }>;
+
+/**
+ * Stands in for OpenRouter's Decisions API: answers every question asked, and keeps what each call asked. Like Jev, it
+ * picks a type among those offered: a type the answer names that is not offered becomes the first offered.
+ */
 function jev(answer: (questions: string[]) => Response) {
 	const asked: string[][] = [];
 	const request = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-		const questions = Object.keys((JSON.parse(String(init?.body)) as { questions: Record<string, unknown> }).questions);
+		const offered = (JSON.parse(String(init?.body)) as { questions: Asked }).questions;
+		const questions = Object.keys(offered);
 		asked.push(questions);
-		return answer(questions);
+		const response = answer(questions);
+		if (!response.ok) return response;
+		const body = (await response.json()) as { answers: Record<string, { choice?: string }> };
+		const type = body.answers.type;
+		const types = Object.keys(offered.type?.criteria ?? {});
+		if (type?.choice && !types.includes(type.choice)) type.choice = types[0];
+		return Response.json(body);
 	});
 	return { asked, request: request as unknown as typeof fetch };
 }
@@ -272,7 +285,7 @@ it("asks a type Jev was unsure of again from the record's PDF once it arrives", 
 
 		await client.query(`INSERT INTO "itemIdentity" (key, "sourceConnectionKey", "sourceRecordKey") VALUES ('UNSUREP2', $1, 'UNSUREP2')`, [source.key]);
 		await client.query(`INSERT INTO item (key, "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "fullTextPDF", revision)
-			VALUES ('UNSUREP2', $1, 'UNSUREP2', 'Attachment', 'UNSURE22', '**|| PAGE 1 ||** Methods. We searched five databases and pooled 30 trials.', 1)`, [source.key]);
+			VALUES ('UNSUREP2', $1, 'UNSUREP2', 'Attachment', 'UNSURE22', '**|| PAGE 1 ||** Methods. We searched five databases and pooled 30 trials in a meta-analysis.', 1)`, [source.key]);
 		await client.query(`INSERT INTO outbox ("entityType", "entityKey", operation, revision) VALUES ('item', 'UNSUREP2', 'upsert', 1)`);
 		const fromPdf = jev(answering);
 		await runReadingCycle(db, config, undefined, fromPdf.request);
@@ -280,6 +293,31 @@ it("asks a type Jev was unsure of again from the record's PDF once it arrives", 
 		const sent = JSON.parse(String(vi.mocked(fromPdf.request).mock.calls[0]![1]!.body)) as { state: { fullTextOpening?: string } };
 		expect(sent.state.fullTextOpening).toContain("pooled 30 trials");
 		expect(await db.select({ type: itemReading.studyType, input: itemReading.input }).from(itemReading)).toEqual([{ type: "meta-analysis", input: "pdf" }]);
+	});
+}, 120_000);
+
+it("asks a trial typed before the words counted again, without the type, when its migration queues it", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		const config = configWith("Climate adaptation in farming");
+		await publish(client, "TRIALWD2", "Chatting with an AI tutor", "Students were split into two groups.");
+		await publish(client, "TRIALYS2", "Tutoring at scale", "A randomised trial in 40 schools.");
+		await store(db, config);
+		await runReadingCycle(db, config, undefined, jev(answering).request);
+		// As a runtime before the rule typed both, with a read under way and an owner's request for another source.
+		await client.query(`UPDATE "itemReading" SET "studyType" = 'rct'`);
+		await client.query(`UPDATE "itemReadingQueue" SET "nextAttemptAt" = now(), "requestedFor" = ARRAY['zotero-other'],
+			"leaseToken" = 'earlier', "leaseExpiresAt" = now() + interval '3 minutes' WHERE "itemKey" = 'TRIALWD2'`);
+		await client.query(readFileSync("drizzle/0090_type-words.sql", "utf8"));
+
+		const again = jev(answering);
+		await runReadingCycle(db, config, undefined, again.request);
+		expect(again.asked).toEqual([["type"]]);
+		const sent = JSON.parse(String(vi.mocked(again.request).mock.calls[0]![1]!.body)) as { questions: Asked; state: { title: string } };
+		expect(sent.state.title).toBe("Chatting with an AI tutor");
+		expect(Object.keys(sent.questions.type!.criteria!)).not.toContain("rct");
+		expect(await db.select({ key: itemReading.itemKey, type: itemReading.studyType }).from(itemReading).orderBy(itemReading.itemKey))
+			.toEqual([{ key: "TRIALWD2", type: "review-of-reviews" }, { key: "TRIALYS2", type: "rct" }]);
+		expect((await db.select({ next: itemReadingQueue.nextAttemptAt }).from(itemReadingQueue)).every((job) => job.next === null)).toBe(true);
 	});
 }, 120_000);
 

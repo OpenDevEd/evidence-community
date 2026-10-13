@@ -994,6 +994,11 @@ const filtersSchema = z
 			.strict()
 			.prefault({}),
 		collectionsExpanded: z.boolean().default(true),
+		/**
+		 * Where a study type the AI is uncertain of shows: marked uncertain beside its type, or apart as an Uncertain type
+		 * of its own in the Study types filter and on the record.
+		 */
+		uncertainStudyTypes: z.enum(["marked", "separate"]).default("marked"),
 		years: z
 			.object({
 				enabled: z.boolean().default(true),

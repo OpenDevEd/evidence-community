@@ -1037,10 +1037,15 @@
     "notRead": "Ainda não lidos",
     "chip": "Tipo de estudo",
     "uncertain": "incerto",
+    "uncertainType": {
+      "label": "Incerto",
+      "description": "A IA tinha menos de 60% de certeza do tipo.",
+      "guess": "Melhor palpite: {type}"
+    },
     "editor": "Definido por um editor desta biblioteca.",
     "metadata": "Tipo obtido do próprio registro.",
     "ai": "Lido pela <ai>IA</ai> a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
-    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Um modelo de IA lê o título e o resumo e escolhe o tipo que melhor se encaixa; um registro sem resumo é avaliado pelo título. Quando dois tipos servem, uma revisão sistemática que combina estatisticamente seus resultados conta como meta-análise, e um estudo que acrescenta números a entrevistas ou estudos de caso conta como qualitativo. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza do modelo é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo. Escolher vários tipos mostra os registros de qualquer um deles.",
+    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Um modelo de IA lê o título e o resumo e escolhe o tipo que melhor se encaixa; um registro sem resumo é avaliado pelo título. Quando dois tipos servem, uma revisão sistemática que combina estatisticamente seus resultados conta como meta-análise, e um estudo que acrescenta números a entrevistas ou estudos de caso conta como qualitativo. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. O modelo só pode escolher meta-análise ou ensaio randomizado quando o título, o resumo ou o PDF o diz. Um tipo com menos de 60% de certeza do modelo é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo. Escolher vários tipos mostra os registros de qualquer um deles.",
     "levels": {
       "synthesis": "Revisões e sínteses",
       "primary": "Estudos primários",
@@ -1056,8 +1061,8 @@
       "meta-analysis": {
         "label": "Meta-análise",
         "plural": "Meta-análises",
-        "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta.",
-        "not": "Não é uma revisão que cita o resultado combinado de outros autores ou que não combina nada, que é uma revisão sistemática."
+        "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta. Atribuído só quando o título, o resumo ou o PDF o diz.",
+        "not": "Não é uma revisão que cita o resultado combinado de outros autores ou que não combina nada, que é uma revisão sistemática ou narrativa."
       },
       "systematic-review": {
         "label": "Revisão sistemática",
@@ -1080,7 +1085,7 @@
       "rct": {
         "label": "Ensaio randomizado",
         "plural": "Ensaios randomizados",
-        "description": "Participantes, grupos ou locais foram designados aleatoriamente às condições.",
+        "description": "Participantes, grupos ou locais foram designados aleatoriamente às condições. Atribuído só quando o título, o resumo ou o PDF o diz.",
         "not": "Não é uma comparação sem distribuição aleatória, que é um quase-experimento, nem uma revisão de ensaios."
       },
       "quasi-experiment": {
