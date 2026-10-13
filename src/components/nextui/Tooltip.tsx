@@ -128,6 +128,9 @@ export function Tooltip({
  * Text that says more about itself on hover or keyboard focus, such as a date or a count. Its dashed underline marks it
  * the same way wherever it is.
  */
+/** The dashed underline that marks text with more to say on hover, wherever it is. */
+export const HINT_UNDERLINE = "underline decoration-black/25 decoration-dashed underline-offset-4 dark:decoration-white/30";
+
 export function Hint({
 	content,
 	children,
@@ -148,7 +151,7 @@ export function Hint({
 			<span
 				tabIndex={0}
 				className={twMerge(
-					"inline-flex cursor-help items-center gap-1.5 rounded-md underline decoration-black/25 decoration-dashed underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-accent dark:decoration-white/30",
+					`inline-flex cursor-help items-center gap-1.5 rounded-md ${HINT_UNDERLINE} outline-none focus-visible:ring-2 focus-visible:ring-accent`,
 					className,
 				)}
 			>

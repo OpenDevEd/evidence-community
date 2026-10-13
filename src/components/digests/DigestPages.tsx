@@ -21,7 +21,7 @@ import { studyTone } from "@/components/features/items/study-tone";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
-import { Hint, Tooltip } from "@/components/nextui/Tooltip";
+import { HINT_UNDERLINE, Hint, Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
@@ -93,20 +93,35 @@ function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: stri
     {yearOnly && <p className={cardText}>OpenAlex dates a work it knows only the year of 1 January, so those works are in this period too.</p>}
   </div>;
 }
-/** What the edition's count holds, and how much of it the list and the text take, as bars of one scale. */
+/**
+ * What the edition's count holds, and how much of it the AI read, the edition lists and the text cites, as bars of one
+ * scale, with why each is smaller than the one before. The header's count, the Publications card and the list's
+ * heading all open it.
+ */
 function CountCard({ edition, locale }: { edition: DigestEdition; locale: string }) {
+  const n = (count: number) => count.toLocaleString(locale);
   const rows = [
     {count: edition.publicationCount, label: "dated in this period"},
     {count: edition.read, label: "read by the AI that wrote the text"},
+    {count: edition.listed, label: "listed in this edition"},
     {count: edition.cited, label: "cited in the text"},
   ];
+  const hidden = edition.read - edition.listed;
   return <div className="flex flex-col gap-3">
     <ul className="flex flex-col gap-2.5">{rows.map(row => <li key={row.label}>
       <p className="flex items-baseline gap-2"><span className="font-heading text-base font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span><span className={`text-sm ${muted}`}>{row.label}</span></p>
       <span aria-hidden className="mt-1 block h-1.5 rounded-full bg-black/10 dark:bg-white/15"><span className={twMerge("block h-full rounded-full bg-accent", row.count > 0 && "min-w-[3px]")} style={{width: `${(row.count / edition.publicationCount) * 100}%`}} /></span>
     </li>)}</ul>
     <p className={cardText}>The count holds every publication in this library dated in the period, as the library stood on {edition.counted}. Works OpenAlex added after that day are not in it. Records with the same title and first author count once. Retracted papers and journal front matter are left out.</p>
+    {(edition.read < edition.publicationCount || hidden > 0) && <p className={cardText}>
+      {edition.read < edition.publicationCount && `The AI reads at most 1,000 publications or 1.5 MB of text, so it read the ${n(edition.read)} that rank highest. `}
+      {hidden > 0 && `The library has taken ${n(hidden)} of them down since, so ${n(edition.listed)} are listed.`}
+    </p>}
   </div>;
+}
+/** A count of the edition's publications that opens the count's card on hover, wherever the page shows it. */
+function CountHint({ edition, locale, children }: { edition: DigestEdition; locale: string; children: ReactNode }) {
+  return <Hint content={<CountCard edition={edition} locale={locale} />} placement="bottom-end" contentClassName={headerHint.contentClassName}>{children}</Hint>;
 }
 /** The words of the person who checked the edition, above its text. */
 function EditorNote({ edition }: { edition: DigestEdition }) {
@@ -374,7 +389,7 @@ function EditionHeader({edition}: {edition: DigestEdition}) {
 /** The edition's publications under their heading, with how many of the period's are listed and how they were chosen. */
 function InThisEdition({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
   return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
-    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span><span className={`text-sm font-normal tabular-nums ${muted}`}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)}</span></SectionTitle>
+    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)}</CountHint></span></SectionTitle>
     <HowChosen edition={edition} locale={locale} />
     <EditionLists edition={edition} records={records} path={path} locale={locale} />
   </section>;
@@ -443,16 +458,21 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
   const rows = typeShares(edition.types);
   const n = (count: number) => count.toLocaleString(locale);
   const unread = share(edition.types.listed, "unread");
-  return <SidebarCard title="Publications" band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} n={n} />}>
+  const label = edition.listed < edition.publicationCount ? `listed of ${n(edition.publicationCount)} in this period` : "listed, every one in this period";
+  // The whole figure opens the count's card, beside the rail rather than over it; only its words carry the hint's underline.
+  const figure = <Tooltip content={<CountCard edition={edition} locale={locale} />} placement="left" className={headerHint.contentClassName}>
+    <div tabIndex={0} className="cursor-help rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"><HeadFigure value={n(edition.listed)} label={<span className={HINT_UNDERLINE}>{label}</span>} /></div>
+  </Tooltip>;
+  return <SidebarCard title="Publications" band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} figure={figure} />}>
     <ShareLevels rows={rows} href={level => levelList(edition, level)} n={n} />
     <UnreadShare listed={unread} period={edition.types.period && share(edition.types.period, "unread")} n={n} />
   </SidebarCard>;
 }
 
 /** How many the edition lists of the period's, and a bar of the listed records by type, those not read yet last. */
-function ShareBand({rows, unread, listed, total, n}: {rows: TypeShare[]; unread: number; listed: number; total: number; n: (count: number) => string}) {
+function ShareBand({rows, unread, listed, total, figure}: {rows: TypeShare[]; unread: number; listed: number; total: number; figure: ReactNode}) {
   return <>
-    <HeadFigure value={n(listed)} label={listed < total ? `listed of ${n(total)} in this period` : "listed, every one in this period"} />
+    {figure}
     <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.filter(row => row.listed > 0).map(row => <span key={row.type.key} className={`h-full min-w-[3px] ${studyTone(row.type.key)}`} style={{width: `${(row.listed / total) * 100}%`}} />)}{unread > 0 && <span className={`h-full min-w-[3px] rounded-[2px] ${UNREAD_TONE}`} style={{width: `${(unread / total) * 100}%`}} />}{listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
   </>;
 }
