@@ -22,7 +22,7 @@ import { readPdfProperties } from "./pdf-properties";
 // The worker gives up on a PDF after this many failed reads.
 const MAX_ATTEMPTS = 3;
 // PDFs the worker reads at once, and how long a read may hold its lease.
-const READ_AT_ONCE = 4;
+const READ_AT_ONCE = 8;
 const LEASE = "10 minutes";
 // A record can't be imported without these, so a read never leaves them out.
 const NEEDED_FIELDS = new Set(["creators", "itemType", "title"]);
