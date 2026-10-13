@@ -13,6 +13,8 @@ export type ScreeningResultsData = {
 	fields: Array<{
 		label: string;
 		type: "string" | "number" | "boolean";
+		/** What the reader wrote the question means, as it was when the records were screened. */
+		description?: string;
 	}>;
 };
 

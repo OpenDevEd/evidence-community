@@ -9,9 +9,8 @@ import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 
 /**
  * Hands records, a search or a collection to OpenScholar, and answers its address for the reader to open. Anyone may:
- * the hand-off holds no permission, and OpenScholar asks whoever opens it to sign in and reads it as them.
- * ponytail: not rate limited; each hand-off is a small row OpenScholar drops after a week. Put it behind the AI
- * limiter's Redis windows if one visitor ever makes thousands.
+ * the hand-off holds no permission, and OpenScholar asks whoever opens it to sign in and reads it as them. The proxy
+ * holds each visitor to the AI request windows (src/proxy.ts).
  */
 export async function POST(request: Request) {
 	await connection();

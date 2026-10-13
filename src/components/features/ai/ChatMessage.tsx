@@ -31,7 +31,7 @@ import { ToolActivity } from "./ToolActivity";
 import { useMessageExport } from "./useChatActions";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { AttachedItemChip } from "./AttachedItemChip";
-import { OpenInOpenScholar, useSmartScreeningFields } from "@/components/features/openscholar/OpenInOpenScholar";
+import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { recordsOf } from "@/lib/openscholar/handoff";
 
 type Message = ResearchUIMessage;
@@ -174,8 +174,7 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 			},
 		} satisfies Record<ControlAction, GeneratedContent>;
 	}, [results]);
-	const stored = useSmartScreeningFields();
-	// The records screened here and the questions asked, each with what the reader wrote it means.
+	// The records screened here and the questions they were screened with, each with what the reader wrote it means then.
 	const continueInOpenScholar = (
 		<OpenInOpenScholar
 			appearance="header"
@@ -183,7 +182,7 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 			handoff={() => ({
 				from: "smartScreening",
 				source: { records: recordsOf(resultEntries.map(([key]) => key)) },
-				fields: results.fields.map((field) => ({ ...field, description: stored.find((s) => s.label.trim() === field.label.trim())?.description ?? "" })),
+				fields: results.fields.map(({ label, type, description }) => ({ label, type, description: description ?? "" })),
 			})}
 		/>
 	);
