@@ -36,6 +36,7 @@ export default defineConfig({
             "tests/integration/reader-collection-privacy.test.ts",
             "tests/integration/reader-collection-pages.test.ts",
             "tests/integration/reader-accounts.test.ts",
+            "tests/integration/openscholar-reads.test.ts",
             "tests/integration/public-item-read.test.ts",
             "tests/integration/reviewed-publications.test.ts",
             "tests/integration/zotero-citations.test.ts",

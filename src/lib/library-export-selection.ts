@@ -71,7 +71,8 @@ async function collectSearchKeys(index: Awaited<ReturnType<typeof getMeilisearch
 	return keys;
 }
 
-async function readSearchKeys(config: LibraryServerConfig, context: LibrarySearchContext, allowedKeys: string[] | undefined, signal: AbortSignal) {
+/** A search's record keys in its order, at most one past the export cap, read while the index holds still. */
+export async function readSearchKeys(config: LibraryServerConfig, context: LibrarySearchContext, allowedKeys: string[] | undefined, signal: AbortSignal) {
 	const { issues } = resolveSearchQuery(context, config);
 	if (issues.length) throw new LibraryExportError("exportInvalid", issues.map(issue => issue.message).join(" "), 400);
 	if (allowedKeys?.length === 0) return [];

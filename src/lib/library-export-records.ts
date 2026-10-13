@@ -51,18 +51,20 @@ function publicRecordCondition(
 	return publicParentVisibility(database, config.content.tags.hidden);
 }
 
-/** Capture the whole-library selection in one database snapshot. */
+/** Capture the whole-library selection in one database snapshot, in key order, from `offset` on. */
 export function buildPublicLibraryKeysQuery(
 	database: Database,
 	config: LibraryServerConfig,
 	limit: number,
+	offset = 0,
 ) {
 	return database
 		.select({ key: item.key })
 		.from(item)
 		.where(publicRecordCondition(database, config))
 		.orderBy(asc(item.key))
-		.limit(limit);
+		.limit(limit)
+		.offset(offset);
 }
 
 /** The query behind the Atom feed: newest addition first. */

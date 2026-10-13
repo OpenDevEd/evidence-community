@@ -81,6 +81,27 @@ async function readOpenScholarReaderStatus(config: LibraryServerConfig, clerkUse
 }
 
 /**
+ * Tells OpenScholar the reader was here, so the library is among theirs there
+ * (plans/evidence-library-sources in OpenScholar). A failure only logs: the
+ * next check tells it again.
+ */
+async function reportReaderSeen(config: LibraryServerConfig, clerkUserId: string) {
+	const { convexSiteUrl, libraryId, machineCredential } = config.authentication.openScholar;
+	try {
+		const response = await fetch(new URL("/api/v1/evidence-libraries/readers/seen", convexSiteUrl), {
+			method: "POST",
+			cache: "no-store",
+			signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+			headers: { "Content-Type": "application/json", Authorization: `Bearer ${machineCredential}`, "OpenScholar-Contract": "1" },
+			body: JSON.stringify({ libraryId, clerkUserId }),
+		});
+		if (!response.ok) console.warn("[library sources] OpenScholar refused a reader report", { libraryId, clerkUserId, status: response.status });
+	} catch (error) {
+		console.warn("[library sources] could not report a reader to OpenScholar", { libraryId, clerkUserId, error: String(error) });
+	}
+}
+
+/**
  * Checks an active reader's OpenScholar account, at most once every 15
  * minutes per reader. Better Auth reports every refresh failure the same way,
  * so a failure asks OpenScholar whether the account still exists: a deleted
@@ -101,6 +122,7 @@ export async function checkReaderSoon(check: ReaderCheck) {
 	});
 	if (!account) return;
 	const clerkUserId = account.accountId;
+	await reportReaderSeen(config, clerkUserId);
 
 	try {
 		await refreshReaderProfile(check, account.id);
