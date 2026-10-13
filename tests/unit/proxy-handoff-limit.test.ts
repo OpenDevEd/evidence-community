@@ -21,8 +21,8 @@ beforeEach(() => {
 });
 
 it("refuses a visitor's hand-off once their request windows are used up", async () => {
-	const config = libraryConfigSchema.parse({ ...structuredClone(minimalLibraryConfig), features: { ...minimalLibraryConfig.features, ai: false } });
-	mocks.loadLibraryConfig.mockResolvedValue(config);
+	const config = libraryConfigSchema.parse(structuredClone(minimalLibraryConfig));
+	mocks.loadLibraryConfig.mockResolvedValue({ ...config, features: { ...config.features, ai: false } });
 	expect(config.services.redis).toBeDefined();
 
 	expect((await handOff()).status).toBe(429);
