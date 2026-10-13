@@ -1,13 +1,13 @@
 /**
  * How often Jev's study types are right, measured two ways on one library (OpenDevEd/new-el#592).
  *
- *   DATABASE_URL=… npm run readings:accuracy -- pubmed
+ *   DATABASE_URL=… npm run -s readings:accuracy -- pubmed
  *     Compares Jev's types with the publication types PubMed's indexers gave the records PubMed holds: meta-analysis,
  *     systematic review and randomised trial. Only citations PubMed has fully indexed (status MEDLINE) count: the others
  *     have not had their types assigned yet.
- *   DATABASE_URL=… npm run readings:accuracy -- sample 200 > sheet.tsv
+ *   DATABASE_URL=… npm run -s readings:accuracy -- sample 200 > sheet.tsv
  *     A random sample of read records as a sheet to type blind, without Jev's answer.
- *   DATABASE_URL=… npm run readings:accuracy -- score sheet.tsv
+ *   DATABASE_URL=… npm run -s readings:accuracy -- score sheet.tsv
  *     Compares the types in the sheet's last column with Jev's.
  *
  * Only records Jev typed are measured; those typed from their metadata, and editors' corrections, are left out.
@@ -119,9 +119,17 @@ function mostConfused(misread: string[]) {
 	return [...counts].sort((left, right) => right[1] - left[1]).slice(0, 8);
 }
 
+/** Jev's type for each key. A key with no reading stops the score: the record is gone, or the sheet is another library's. */
+async function jevTypes(keys: string[]) {
+	const jev = new Map((await query<{ key: string; type: string }>(`SELECT "itemKey" AS key, "studyType" AS type FROM "itemReading" WHERE "itemKey" = ANY($1)`, [keys])).map((row) => [row.key, row.type]));
+	const missing = keys.filter((key) => !jev.has(key));
+	if (missing.length) throw new Error(`No reading in this library for ${missing.join(", ")}`);
+	return jev;
+}
+
 async function scoreSheet(path: string) {
 	const checked = readSheet(path);
-	const jev = new Map((await query<{ key: string; type: string }>(`SELECT "itemKey" AS key, "studyType" AS type FROM "itemReading" WHERE "itemKey" = ANY($1)`, [checked.map((row) => row.key)])).map((row) => [row.key, row.type]));
+	const jev = await jevTypes(checked.map((row) => row.key));
 	const byType = STUDY_TYPE_KEYS.map((type) => {
 		const sheet = checked.filter((row) => row.type === type);
 		return { type, sheet: sheet.length, agreed: sheet.filter((row) => jev.get(row.key) === type).length };
