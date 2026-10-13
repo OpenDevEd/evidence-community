@@ -40,9 +40,9 @@ function useExpandTransition(): Transition {
 	return useReducedMotion() ? { duration: 0 } : { duration: 0.35, ease: [0.16, 1, 0.3, 1] };
 }
 
-/** A part of the results as a share: whole percents, one decimal below 1%, and "<0.1%" for less. */
+/** A part of the results as a share: whole percents, one decimal below 1%, and "<0.1%" for less. None of nothing is 0%. */
 export function shareOf(format: ReturnType<typeof useFormatter>, count: number, total: number) {
-	const share = count / total;
+	const share = total > 0 ? count / total : 0;
 	if (count > 0 && share < 0.001) return `<${format.number(0.001, { style: "percent", maximumFractionDigits: 1 })}`;
 	return format.number(share, { style: "percent", maximumFractionDigits: share < 0.01 ? 1 : 0 });
 }
