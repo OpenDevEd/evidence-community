@@ -49,7 +49,8 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
 	const [owner] = await db.select().from(pdfImport).where(eq(pdfImport.id, file.importId));
 	const bytes = await storage.downloadPrivate(file.objectPath!);
 	const pdf = await readPdfProperties(bytes);
-	const ai = await readImportPdf({ config, database: db, signal }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
+	// The editor who started the import is who OpenScholar's author search answers.
+	const ai = await readImportPdf({ clerkUserId: owner!.createdBy, config, database: db, signal }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
 	const record = await previewReading(db, file.filename, ai.zoteroItem);
 	// Suggestions use the record's field names, so applying one replaces the field the review shows.
 	const suggestions = ai.suggestions.map((suggestion) => ({ ...suggestion, field: recordField(ai.zoteroItem.itemType, suggestion.field) }));

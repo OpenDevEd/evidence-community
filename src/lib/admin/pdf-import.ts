@@ -129,12 +129,12 @@ async function libraryModel(config: LibraryServerConfig) {
 /**
  * Reads one PDF with the library's own AI model. The AI gets the PDF, the
  * file's own properties, the library's instructions and checks, and every
- * record type, with tools to search the library and its topic catalogue;
- * it returns the record, its answer to each check, the changes it suggests,
- * and topics.
+ * record type, with tools to search the library, its topic catalogue, its
+ * collections and its author profiles; it returns the record, its answer to
+ * each check, the changes it suggests, topics and collections.
  */
 export async function readImportPdf(
-	{ config, database, signal }: { config: LibraryServerConfig; database: Database; signal?: AbortSignal },
+	{ clerkUserId, config, database, signal }: { clerkUserId: string; config: LibraryServerConfig; database: Database; signal?: AbortSignal },
 	{ bytes, checks, filename, instructions, pdf }: { bytes: Uint8Array; checks: readonly string[]; filename: string; instructions: string; pdf: PdfPropertiesReading },
 ): Promise<PdfAiReading> {
 	const topicContext = { config, database };
@@ -154,7 +154,7 @@ export async function readImportPdf(
 		description: "Search the library's author profiles by a person's name. Returns profiles with their id, name, headline and affiliation.",
 		inputSchema: z.object({ name: z.string() }),
 		execute: async ({ name }) => {
-			const profiles = await searchAuthorProfiles(config.authentication.openScholar, name, signal);
+			const profiles = await searchAuthorProfiles(config.authentication.openScholar, { clerkUserId, search: name }, signal);
 			for (const { id, name: profileName } of profiles) profilesFound.set(id, { id, name: profileName });
 			return profiles.map(({ affiliation, headline, id, name: profileName }) => ({ affiliation, headline, id, name: profileName }));
 		},

@@ -192,7 +192,10 @@ async function handle(request, response) {
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
 	if (url.pathname === "/api/v1/evidence-libraries/author-profiles" && method === "POST") {
-		return json(response, 200, authorProfileRequest(JSON.parse((await readBody(request)).toString("utf8"))));
+		const body = JSON.parse((await readBody(request)).toString("utf8"));
+		// As OpenScholar does, a search or a new profile says which of the library's people asks for it.
+		if (body.operation !== "resolve" && !body.clerkUserId) return json(response, 400, { error: "clerkUserId is required" });
+		return json(response, 200, authorProfileRequest(body));
 	}
 	if (url.pathname === "/api/v1/evidence-libraries/topics/catalog" && method === "POST") {
 		return json(response, 200, await topicCatalog(JSON.parse((await readBody(request)).toString("utf8"))));
