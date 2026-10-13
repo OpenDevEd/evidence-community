@@ -18,11 +18,7 @@ import {
 	parseDoiList,
 } from "@/lib/admin/item-import-contract";
 
-import { ImportCover } from "./ImportCover";
-import { ImportPager, pageOf } from "./ImportPager";
-import { PDF_IMPORT_MAX_FILES } from "./admin-import";
 
-const COVERS_PER_PAGE = 10;
 export const PDF_ACCEPT = "application/pdf,.pdf";
 
 export function megabytes(bytes: number) {

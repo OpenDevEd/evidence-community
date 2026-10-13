@@ -161,7 +161,7 @@ function GuidanceEditor({ flow }: { flow: ImportFlowState }) {
 function DrawerInput({ flow }: { flow: ImportFlowState }) {
 	const guidance = flow.guidance.trim();
 	return (
-		<div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4">
+		<div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4 [scrollbar-gutter:stable]">
 			<SourceTabs
 				dois={<DoiInput busy={flow.busy} onChange={flow.setDoiText} text={flow.doiText} />}
 				files={<BibliographyInput busy={flow.busy} files={flow.files} onFilesChange={flow.setFiles} />}
@@ -209,7 +209,7 @@ function DrawerReview({ flow }: { flow: ImportFlowState }) {
 				</span>
 				{batch.kind === "pdfs" ? <span className="ms-auto tabular-nums">{flow.counts.done < flow.counts.total ? `${flow.counts.done} of ${flow.counts.total} read` : `Read for ${usd(flow.costUsd)}`}</span> : null}
 			</div>
-			<ul className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+			<ul className="min-h-0 flex-1 overflow-y-auto px-3 py-2 [scrollbar-gutter:stable]">
 				{items.map((row) => (
 					<DrawerRow flow={flow} key={row.id} onToggle={() => setOpenId(openId === row.id ? null : row.id)} open={openId === row.id} row={row} />
 				))}
@@ -343,7 +343,7 @@ function DrawerDrafts({ flow }: { flow: ImportFlowState }) {
 					</span>
 				</div>
 			) : null}
-			<ul className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+			<ul className="min-h-0 flex-1 overflow-y-auto px-3 py-2 [scrollbar-gutter:stable]">
 				{items.map(({ itemKey, row }) => (
 					<li className="flex min-h-16 items-center gap-3 rounded-lg px-2 py-2 hover:bg-black/[0.025] dark:hover:bg-white/[0.03]" key={row.id}>
 						{view.publishable.length ? <Checkbox aria-label={`Publish ${row.record?.title ?? row.record?.source}`} isDisabled={view.started || !row.file} isSelected={view.chosen.has(row.id)} onValueChange={(checked) => view.toggle(row.id, checked)} size="sm" /> : null}

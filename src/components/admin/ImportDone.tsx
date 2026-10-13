@@ -1,17 +1,10 @@
 "use client";
 
-import { AlertCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons";
-import { useState } from "react";
+import { AlertCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
 
-import { ImportCover } from "./ImportCover";
-import { ImportPager, pageOf } from "./ImportPager";
 import { checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
-
-const PER_PAGE = 8;
 
 type Draft = { itemKey: string; row: ImportRow };
 

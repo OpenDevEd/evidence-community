@@ -119,7 +119,7 @@ export function CollectionsButton({ collections, locked, onChange, sources }: { 
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent className="w-[24rem] p-3">
-				<div className="max-h-[22rem] w-full overflow-y-auto">
+				<div className="max-h-[22rem] w-full overflow-y-auto [scrollbar-gutter:stable]">
 					<AdminCollectionPicker
 						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], sources)}
 						onSelectionChange={onChange}

@@ -2,7 +2,6 @@
 
 import {
 	AlertCircleIcon,
-	ArrowRight01Icon,
 	Building03Icon,
 	Calendar03Icon,
 	CancelCircleIcon,
@@ -17,10 +16,8 @@ import {
 	MinusSignIcon,
 	PencilEdit02Icon,
 	PlusSignIcon,
-	SquareArrowUpRight02Icon,
 	Tick02Icon,
 	CopyrightIcon,
-	FileExportIcon,
 	Undo02Icon,
 } from "@hugeicons/core-free-icons";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
@@ -31,14 +28,9 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import type { AdminImportCommitResult, PdfCheckResult, RightsFix, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
-import { ImportCover } from "./ImportCover";
-import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
 import { InspectorSection } from "./InspectorSection";
-import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck, type ReviewFilter } from "./admin-import";
-
-const ROWS_PER_PAGE = 8;
 
 const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
 	met: { bar: "bg-emerald-500", icon: CheckmarkCircle02Icon, label: "Met", tone: "text-emerald-600 dark:text-emerald-400" },
@@ -417,7 +409,7 @@ export function ImportReviewSection({ itemKey }: { itemKey: string }) {
 	return (
 		<InspectorSection icon={CheckListIcon} id="admin-import-review" title="PDF review">
 			<div className="flex flex-col gap-4">
-				{review.abstractWritten ? <p className="text-xs text-black/55 dark:text-white/55">The AI wrote the abstract; the PDF has none.</p> : null}
+				{review.abstractWritten ? <p className="text-xs text-black/55 dark:text-white/55">The AI wrote the abstract.</p> : null}
 				{review.topics.length ? <p className="text-sm text-black/70 dark:text-white/70">{review.topics.map(({ name }) => name).join(", ")}</p> : null}
 				{review.checks.length ? (
 					<div>
