@@ -5,6 +5,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
+import { Accordion, AccordionItem } from "@nextui-org/react";
+import { useReducedMotion } from "framer-motion";
+import { ACCORDION_CONTENT_MOTION } from "@/components/nextui/accordion-motion";
 import { AiMagicIcon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary, EditionTypes } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
@@ -495,15 +498,24 @@ const SCORE = [
   ["+2 × ln(1 + n)", "n citations in OpenAlex, about +5 for 10 and +9 for 100"],
   ["−1", "A dataset or software"],
 ] as const;
+/** Each question of "How this edition was made" says its answer in a line, so the card reads at a glance while closed. */
+const FAQ_ITEM = {
+  base: "px-0",
+  trigger: "gap-4 py-4 data-[focus-visible=true]:outline-accent",
+  title: "font-medium leading-6",
+  subtitle: `mt-0.5 text-sm leading-6 ${muted}`,
+  indicator: "text-black/40 dark:text-white/40",
+  content: "pb-5 pt-0 text-sm leading-6 text-black/70 dark:text-white/70",
+};
+
 /**
- * Why the list holds these publications and in this order, in the steps the library ranks them by (`reviewStanding`,
- * then an abstract, then the score), and what never enters the count.
+ * How the edition was made, as the questions a reader asks of it: what the AI read, why these publications are listed
+ * in this order (`reviewStanding`, then an abstract, then the score), what is left out, and how the text was checked.
  */
 function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) {
+  const reducedMotion = useReducedMotion();
   const n = (count: number) => count.toLocaleString(locale);
-  const lead = edition.read < edition.publicationCount
-    ? `The AI that wrote this digest read the title and abstract of ${n(edition.read)} of the period's publications, and cites ${n(edition.cited)} of them in the text. It reads at most 1,000 publications or 1.5 MB of text, so a period with more is cut to those that rank highest, in this order.`
-    : `The AI that wrote this digest read the title and abstract of every publication dated in this period, and cites ${n(edition.cited)} of them in the text. They are listed in this order.`;
+  const cut = edition.read < edition.publicationCount;
   // A record hidden after the edition was written leaves its list, so the list can be shorter than what was read.
   const hidden = edition.read - edition.listed;
   const steps: {title: string; text: string; score?: true}[] = [
@@ -511,21 +523,37 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
     {title: "An abstract of 200 characters or more", text: "The writer works from abstracts, so papers with one come before papers without."},
     {title: "A score", text: "Then papers are ranked by the sum of:", score: true},
   ];
-  return <div className="mb-10 rounded-2xl bg-card_light p-6 dark:bg-card">
+  return <div className="mb-10 rounded-2xl bg-card_light px-6 pt-5 pb-1 dark:bg-card">
     <h3 className="font-heading text-lg font-medium">How this edition was made</h3>
-    <p className="mt-2 text-sm leading-6 text-black/70 dark:text-white/70">{lead}{hidden > 0 && ` Since then the library has taken ${n(hidden)} of them down, so ${n(edition.listed)} are listed.`}</p>
-    <ol className="mt-5 flex flex-col gap-4">{steps.map((step, index) => <li key={step.title} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3">
-      <span aria-hidden className="grid size-7 place-content-center rounded-full bg-accent/10 text-sm font-semibold tabular-nums text-accent">{index + 1}</span>
-      <div className="pt-0.5">
-        <p className="font-medium leading-6">{step.title}</p>
-        <p className={`mt-0.5 text-sm leading-6 ${muted}`}>{step.text}</p>
-        {step.score && <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm leading-6">{SCORE.map(([weight, what]) => <Fragment key={weight}>
-          <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd className="text-black/70 dark:text-white/70">{what}</dd>
-        </Fragment>)}</dl>}
-      </div>
-    </li>)}</ol>
-    <p className={`mt-5 text-sm leading-6 ${muted}`}>Never counted or listed: retracted papers, as Retraction Watch reports them through OpenAlex, and journal front matter. Two records with the same title, 25 characters or longer, and the same first author's surname count as one paper, such as a preprint and its article under one title.</p>
-    <p className="mt-4 text-sm leading-6 text-black/70 dark:text-white/70">AI wrote the text from these titles and abstracts, not from the full papers. Once it is written, OpenScholar asks a second AI model, from another company, to check each sentence about a paper against that paper's title and abstract, and the writer corrects or removes what it flags.{edition.by && ` ${edition.by.name} checked the text before it was published.`}</p>
+    <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={FAQ_ITEM} disableAnimation={Boolean(reducedMotion)}>
+      <AccordionItem key="read" aria-label="What did the AI read?" title="What did the AI read?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={`The titles and abstracts of ${cut ? n(edition.read) : "all"} of the period's ${n(edition.publicationCount)} publications. The text cites ${n(edition.cited)}.`}>
+        <p>{cut
+          ? `It reads at most 1,000 publications or 1.5 MB of text, so a period with more is cut to the ${n(edition.read)} that rank highest, in the order below.`
+          : "It read every publication dated in this period, and they are listed in the order below."}{hidden > 0 && ` Since then the library has taken ${n(hidden)} of them down, so ${n(edition.listed)} are listed.`}</p>
+      </AccordionItem>
+      <AccordionItem key="order" aria-label="Why these publications, in this order?" title="Why these publications, in this order?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle="Reviews and syntheses first, then those with an abstract, then by a score.">
+        <ol className="flex flex-col gap-4">{steps.map((step, index) => <li key={step.title} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3">
+          <span aria-hidden className="grid size-7 place-content-center rounded-full bg-accent/10 text-sm font-semibold tabular-nums text-accent">{index + 1}</span>
+          <div className="pt-0.5">
+            <p className="font-medium leading-6 text-black dark:text-white">{step.title}</p>
+            <p className={`mt-0.5 ${muted}`}>{step.text}</p>
+            {step.score && <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5">{SCORE.map(([weight, what]) => <Fragment key={weight}>
+              <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{what}</dd>
+            </Fragment>)}</dl>}
+          </div>
+        </li>)}</ol>
+      </AccordionItem>
+      <AccordionItem key="left-out" aria-label="What is left out?" title="What is left out?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle="Retracted papers, journal front matter, and a second record of the same paper.">
+        <p>{"Retracted papers, as Retraction Watch reports them through OpenAlex, and journal front matter are never counted or listed. Two records with the same title, 25 characters or longer, and the same first author's surname count as one paper, such as a preprint and its article under one title."}</p>
+      </AccordionItem>
+      <AccordionItem key="checked" aria-label="How was the text checked?" title="How was the text checked?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={`A second AI model checked every sentence about a paper${edition.by ? `, and ${edition.by.name} read it before it was published` : ""}.`}>
+        <p>{"AI wrote the text from these titles and abstracts, not from the full papers. Once it is written, OpenScholar asks a second AI model, from another company, to check each sentence about a paper against that paper's title and abstract, and the writer corrects or removes what it flags."}{edition.by && ` ${edition.by.name} checked the text before it was published.`}</p>
+      </AccordionItem>
+    </Accordion>
   </div>;
 }
 
