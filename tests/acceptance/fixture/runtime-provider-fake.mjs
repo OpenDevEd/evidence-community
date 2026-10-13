@@ -174,6 +174,7 @@ async function collectionInvitation(request, response, action) {
 	if (action === "invite") {
 		const email = String(body.email ?? "").trim().toLowerCase();
 		if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)) return json(response, 400, { error: "invalid_email" });
+		if (verifiedEmails(body.clerkUserId).includes(email)) return json(response, 400, { error: "own_address" });
 		// One still waiting at an address and collection is sent again; one answered, cancelled or expired is replaced by a new invitation with its own ID.
 		const existing = [...collectionInvitations.values()].find((invitation) => invitation.libraryId === libraryId && invitation.collectionId === body.collectionId && invitation.email === email);
 		if (existing && !pendingNow(existing)) collectionInvitations.delete(existing.id);

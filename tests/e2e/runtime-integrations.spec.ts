@@ -519,6 +519,11 @@ test("shares a private collection by email: OpenScholar sends the invitation and
 	const listUrl = `/api/user/items/${owner.readerId}?collectionId=${id}`;
 	expect((await request.get(listUrl, { headers: { cookie: invitee.cookie } })).status()).toBe(403);
 
+	// The owner's own address is theirs already: OpenScholar refuses it, and the reader is told why.
+	const own = await request.post(`/api/reader/collections/${id}/invitations`, { data: { email: `owner${run}@example.org`, role: "viewer" }, headers: { cookie: owner.cookie } });
+	expect(own.status()).toBe(400);
+	expect(await own.json()).toMatchObject({ code: "own_address" });
+
 	const invited = await request.post(`/api/reader/collections/${id}/invitations`, {
 		data: { email: `invitee${run}@example.org`, role: "editor" },
 		headers: { cookie: owner.cookie },

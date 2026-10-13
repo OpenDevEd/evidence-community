@@ -78,6 +78,7 @@ export async function changeForRecord(request: Request, change: (itemKey: string
 /** What a reader is told when OpenScholar refuses an invitation change, by the code it refused with. */
 const INVITATION_REFUSALS: Record<string, [number, string]> = {
 	invalid_email: [400, "Enter a valid email address."],
+	own_address: [400, "That's your own address."],
 	rate_limited: [429, "You sent many invitations at once. Try again in a minute."],
 	too_many_invitations: [409, "This person has too many invitations waiting."],
 	not_found: [404, "This invitation is no longer open."],
