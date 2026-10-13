@@ -11,6 +11,7 @@ import {
 	PDF_IMPORT_MAX_CRITERIA,
 	PDF_IMPORT_MAX_CRITERION_LENGTH,
 	PDF_IMPORT_MAX_FILE_BYTES,
+	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
 	type AdminPdfReadResponse,
 } from "@/lib/admin/item-import-contract";
 import { previewEntries } from "@/lib/admin/item-import-service";
@@ -34,6 +35,12 @@ function criteriaFrom(value: FormDataEntryValue | null) {
 	return parsed as string[];
 }
 
+function guidanceFrom(value: FormDataEntryValue | null) {
+	const guidance = typeof value === "string" ? value.trim() : "";
+	if (guidance.length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new AdminValidationError(`Keep the guidance under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters.`);
+	return guidance;
+}
+
 /** Reads one PDF into an import preview row and checks it against the library's criteria. */
 export async function POST(request: NextRequest) {
 	const denied = await requireAdminSession(request);
@@ -45,11 +52,12 @@ export async function POST(request: NextRequest) {
 		if (!(file instanceof File) || !file.size) throw new AdminValidationError("Choose a PDF file.");
 		if (file.size > PDF_IMPORT_MAX_FILE_BYTES) throw new AdminValidationError(`${file.name} is larger than 50 MB.`);
 		const criteria = criteriaFrom(form.get("criteria"));
+		const guidance = guidanceFrom(form.get("guidance"));
 		const bytes = new Uint8Array(await file.arrayBuffer());
 		assertPdfHeader(bytes);
 
 		const started = Date.now();
-		const [reading, pdf] = await Promise.all([readImportPdf(bytes, file.name, criteria), readPdfProperties(bytes)]);
+		const [reading, pdf] = await Promise.all([readImportPdf(bytes, file.name, criteria, guidance), readPdfProperties(bytes)]);
 		const { records } = await previewEntries(await getDatabase(), [
 			{ method: "file", source: file.name, zoteroItem: reading.zoteroItem },
 		]);

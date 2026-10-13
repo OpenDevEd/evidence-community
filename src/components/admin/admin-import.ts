@@ -4,6 +4,7 @@ import {
 	PDF_IMPORT_MAX_CRITERIA,
 	PDF_IMPORT_MAX_CRITERION_LENGTH,
 	PDF_IMPORT_MAX_FILE_BYTES,
+	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
 	type PdfCheckResult,
 	type TopicSuggestion,
 	ADMIN_IMPORT_MAX_FILE_BYTES,
@@ -142,6 +143,10 @@ export function validateChecks(checks: readonly string[]) {
 	}
 	const long = checks.find((check) => check.length > PDF_IMPORT_MAX_CRITERION_LENGTH);
 	if (long) throw new ImportInputError(`Keep each check under ${PDF_IMPORT_MAX_CRITERION_LENGTH} characters.`);
+}
+
+export function validateGuidance(guidance: string) {
+	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the guidance under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters.`);
 }
 
 const emptyRow = { abstractWritten: false, checks: [], costUsd: 0, fixApplied: false, pdf: null, rightsFix: null, topics: [] };
@@ -356,6 +361,7 @@ export function reviewChecks(row: ImportRow): ReviewCheck[] {
 // shortcut: the mock keeps the library's checks and each draft's results in
 // this browser; the real build stores both in the library's database.
 const CHECKS_KEY = "evidence-library:pdf-import-check-texts";
+const GUIDANCE_KEY = "evidence-library:pdf-import-guidance";
 const RESULTS_KEY = "evidence-library:pdf-import-results:";
 // shortcut: placeholder wording for the FCDO demo until Jenny's checklist arrives.
 const DEFAULT_CHECKS = [
@@ -374,7 +380,7 @@ function parseJson(text: string): unknown {
 }
 
 /** The checks saved in this browser, or the defaults when none are. */
-export function checksFrom(stored: string | null): string[] {
+function checksFrom(stored: string | null): string[] {
 	const parsed = stored === null ? null : parseJson(stored);
 	return Array.isArray(parsed) && parsed.every((check) => typeof check === "string") ? parsed : DEFAULT_CHECKS;
 }
@@ -385,6 +391,13 @@ export function storedChecks() {
 
 export function storeChecks(checks: readonly string[]) {
 	localStorage.setItem(CHECKS_KEY, JSON.stringify(checks));
+}
+
+/** The library's guidance for the AI, saved in this browser like the checks. */
+export const storedGuidance = () => localStorage.getItem(GUIDANCE_KEY) ?? "";
+
+export function storeGuidance(guidance: string) {
+	localStorage.setItem(GUIDANCE_KEY, guidance);
 }
 
 export type StoredReview = { abstractWritten: boolean; checks: ReviewCheck[]; topics: TopicSuggestion[] };

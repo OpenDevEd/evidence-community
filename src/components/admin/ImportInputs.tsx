@@ -23,7 +23,6 @@ import { ImportPager, pageOf } from "./ImportPager";
 import { PDF_IMPORT_MAX_FILES } from "./admin-import";
 
 const COVERS_PER_PAGE = 10;
-const DOIS_SHOWN = 12;
 export const PDF_ACCEPT = "application/pdf,.pdf";
 
 export function megabytes(bytes: number) {
@@ -36,7 +35,7 @@ export function withNew(current: readonly File[], chosen: readonly File[]) {
 	return [...current, ...chosen.filter((file) => !known.has(`${file.name}:${file.size}`))];
 }
 
-export function SectionLabel({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
+function SectionLabel({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
 	return (
 		<div className="mb-2 flex h-6 items-center gap-2">
 			<h3 className="text-sm font-medium text-black/85 dark:text-white/85">{children}</h3>
@@ -116,50 +115,6 @@ export function RemoveButton({ busy, name, onPress }: { busy: boolean; name: str
 	);
 }
 
-export function CoverGrid({ busy, files, onFilesChange }: { busy: boolean; files: File[]; onFilesChange: (files: File[]) => void }) {
-	const [page, setPage] = useState(1);
-	const { current, items, pages } = pageOf(files, page, COVERS_PER_PAGE);
-	const total = files.reduce((sum, file) => sum + file.size, 0);
-	return (
-		<div>
-			<SectionLabel aside={megabytes(total)}>{files.length} {files.length === 1 ? "PDF" : "PDFs"}</SectionLabel>
-			<ul className="grid grid-cols-5 gap-x-3 gap-y-4">
-				{items.map((file) => (
-					<li className="group/cover relative min-w-0" key={`${file.name}:${file.size}`}>
-						<ImportCover className="w-full" file={file} size={20} />
-						<span className="absolute end-1 top-1 rounded-md bg-white opacity-0 shadow-sm transition-opacity duration-150 focus-within:opacity-100 group-hover/cover:opacity-100 dark:bg-black/70">
-							<RemoveButton
-								busy={busy}
-								name={file.name}
-								onPress={() => {
-									const next = files.filter((other) => other !== file);
-									onFilesChange(next);
-									setPage((value) => Math.min(value, Math.max(1, Math.ceil(next.length / COVERS_PER_PAGE))));
-								}}
-							/>
-						</span>
-						<span className="mt-1.5 block text-xs text-black/70 dark:text-white/70">
-							<TruncatedText text={file.name} />
-						</span>
-					</li>
-				))}
-			</ul>
-			<ImportPager label="Pages of chosen PDFs" onChange={setPage} page={current} pages={pages} perPage={COVERS_PER_PAGE} total={files.length} />
-			<div className="mt-4 flex gap-2">
-				<DropArea accept={PDF_ACCEPT} busy={busy} className="h-14 flex-1 !flex-row gap-2" label="Add more PDFs" onFiles={(chosen) => onFilesChange(withNew(files, chosen))}>
-					<HugeiconsIcon aria-hidden className="text-black/40 dark:text-white/40" icon={Upload04Icon} size={16} />
-					<span className="text-sm text-black/65 dark:text-white/65">
-						Add more, or <span className="font-medium text-accent">browse</span>
-					</span>
-				</DropArea>
-				<Button className="h-14" isDisabled={busy} onPress={() => onFilesChange([])} size="sm" variant="transparent">
-					Clear all
-				</Button>
-			</div>
-		</div>
-	);
-}
-
 /**
  * A one-line field that wraps and grows with its text: a hidden copy of the
  * text sizes the grid cell the textarea fills.
@@ -206,8 +161,7 @@ function GrowingText({
 }
 
 /** The library's checks, one per row, saved as they are edited. */
-/** `heading` and `fileNote` drop the editor's own title and its note about the file checks, for a design that shows them itself. */
-export function ChecksEditor({ busy, criteria, fileNote = true, heading = true, onChange }: { busy: boolean; criteria: string[]; fileNote?: boolean; heading?: boolean; onChange: (criteria: string[]) => void }) {
+export function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: string[]; onChange: (criteria: string[]) => void }) {
 	const [draft, setDraft] = useState("");
 	const full = criteria.length >= PDF_IMPORT_MAX_CRITERIA;
 	const add = () => {
@@ -222,12 +176,7 @@ export function ChecksEditor({ busy, criteria, fileNote = true, heading = true, 
 	};
 	return (
 		<div>
-			{heading ? (
-				<>
-					<SectionLabel aside={`${criteria.length} of ${PDF_IMPORT_MAX_CRITERIA}`}>Checks</SectionLabel>
-					<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library. The AI answers each one for every PDF, with the quote and page it rests on.</p>
-				</>
-			) : null}
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library, up to {PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on.</p>
 			<ol className="flex flex-col">
 				{criteria.map((criterion, index) => (
 					<li className="group/check flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]" key={index}>
@@ -265,83 +214,40 @@ export function ChecksEditor({ busy, criteria, fileNote = true, heading = true, 
 					/>
 				</li>
 			</ol>
-			{fileNote ? <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">Every PDF is also checked from the file itself: tagged for screen readers, PDF/UA and PDF/A.</p> : null}
 		</div>
 	);
 }
 
-/** Two columns: the PDFs, and the checks every one of them is read against. */
-export function PdfInput({
-	busy,
-	criteria,
-	files,
-	onCriteriaChange,
-	onFilesChange,
-}: {
-	busy: boolean;
-	criteria: string[];
-	files: File[];
-	onCriteriaChange: (criteria: string[]) => void;
-	onFilesChange: (files: File[]) => void;
-}) {
-	return (
-		<div className="grid min-h-full grid-cols-[minmax(0,1fr)_18rem] gap-8">
-			{files.length ? (
-				<CoverGrid busy={busy} files={files} onFilesChange={onFilesChange} />
-			) : (
-				<DropArea accept={PDF_ACCEPT} busy={busy} className="min-h-[31rem]" label="PDFs" onFiles={(chosen) => onFilesChange(withNew(files, chosen))}>
-					<DropText hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. Claude Haiku 5.5 reads each one.`} what="PDFs" />
-				</DropArea>
-			)}
-			<div className="border-s border-black/[0.06] ps-8 dark:border-white/[0.06]">
-				<ChecksEditor busy={busy} criteria={criteria} onChange={onCriteriaChange} />
-			</div>
-		</div>
-	);
-}
-
-/** The pasted text beside the DOIs read from it, so nothing is looked up by surprise. */
-export function DoiInput({ busy, narrow = false, onChange, text }: { busy: boolean; narrow?: boolean; onChange: (text: string) => void; text: string }) {
+/** The pasted DOIs, with the entries that are not DOIs listed under them so nothing is looked up by surprise. */
+export function DoiInput({ busy, onChange, text }: { busy: boolean; onChange: (text: string) => void; text: string }) {
 	const { dois, invalid } = parseDoiList(text);
 	return (
-		<div className={`grid min-h-full gap-8 ${narrow ? "grid-cols-1" : "grid-cols-[minmax(0,1fr)_18rem]"}`}>
-			<div>
-				<SectionLabel aside={narrow && (dois.length || invalid.length) ? `${dois.length} to look up${invalid.length ? `, ${invalid.length} not DOIs` : ""}` : undefined}>DOIs or doi.org links</SectionLabel>
-				<Textarea
-					aria-label="DOIs"
-					classNames={{ input: "min-h-[24rem] font-mono text-[13px] leading-6" }}
-					isDisabled={busy}
-					maxRows={30}
-					minRows={12}
-					onValueChange={onChange}
-					placeholder={"10.1000/xyz123\nhttps://doi.org/10.1000/abc456"}
-					value={text}
-				/>
-				<p className="mt-2 text-xs text-black/45 dark:text-white/45">One per line or separated by commas, up to {ADMIN_IMPORT_MAX_RECORDS}.</p>
-			</div>
-			<div className={`border-s border-black/[0.06] ps-8 dark:border-white/[0.06] ${narrow ? "hidden" : ""}`}>
-				<SectionLabel aside={dois.length ? `${dois.length}` : undefined}>To look up</SectionLabel>
-				{dois.length || invalid.length ? (
-					<ul className="flex flex-col gap-1 font-mono text-xs">
-						{invalid.slice(0, 4).map((entry) => (
-							<li className="flex items-center gap-1.5 text-danger" key={`invalid-${entry}`}>
-								<HugeiconsIcon aria-label="Not a DOI" className="shrink-0" icon={AlertCircleIcon} size={12} />
-								<span className="min-w-0 flex-1">
-									<TruncatedText text={entry} />
-								</span>
-							</li>
-						))}
-						{dois.slice(0, DOIS_SHOWN).map((doi) => (
-							<li className="text-black/65 dark:text-white/65" key={doi}>
-								<TruncatedText text={doi} />
-							</li>
-						))}
-						{dois.length > DOIS_SHOWN ? <li className="font-sans text-black/45 dark:text-white/45">and {dois.length - DOIS_SHOWN} more</li> : null}
-					</ul>
-				) : (
-					<p className="text-xs text-black/45 dark:text-white/45">The DOIs you paste show here.</p>
-				)}
-			</div>
+		<div>
+			<SectionLabel aside={dois.length ? `${dois.length} to look up` : undefined}>DOIs or doi.org links</SectionLabel>
+			<Textarea
+				aria-label="DOIs"
+				classNames={{ input: "min-h-[20rem] font-mono text-[13px] leading-6" }}
+				isDisabled={busy}
+				maxRows={30}
+				minRows={12}
+				onValueChange={onChange}
+				placeholder={"10.1000/xyz123\nhttps://doi.org/10.1000/abc456"}
+				value={text}
+			/>
+			<p className="mt-2 text-xs text-black/45 dark:text-white/45">One per line or separated by commas, up to {ADMIN_IMPORT_MAX_RECORDS}.</p>
+			{invalid.length ? (
+				<ul className="mt-3 flex flex-col gap-1 font-mono text-xs">
+					{invalid.slice(0, 4).map((entry) => (
+						<li className="flex items-center gap-1.5 text-danger" key={`invalid-${entry}`}>
+							<HugeiconsIcon aria-label="Not a DOI" className="shrink-0" icon={AlertCircleIcon} size={12} />
+							<span className="min-w-0 flex-1">
+								<TruncatedText text={entry} />
+							</span>
+						</li>
+					))}
+					{invalid.length > 4 ? <li className="font-sans text-danger">and {invalid.length - 4} more that are not DOIs</li> : null}
+				</ul>
+			) : null}
 		</div>
 	);
 }

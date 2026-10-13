@@ -54,7 +54,7 @@ const toneClass: Record<Tone, string> = {
 	ready: "text-emerald-700 dark:text-emerald-400",
 };
 
-export type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
+type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
 
 /** What a row's status says, from its reading, its preview, its import and its PDF. */
 export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
@@ -86,7 +86,7 @@ export function StatusText({ status }: { status: Status }) {
 
 /** A check's look: the AI's answer, or a pass labelled fixed once the editor fixed it. */
 const fixedLook = { ...resultLook.met, label: "Fixed" };
-export const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[check.result]);
+const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[check.result]);
 
 /** One small bar per check, coloured by its result; grey until the PDF is read. */
 export function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number }) {
@@ -126,9 +126,8 @@ export function usd(amount: number) {
 
 export type ReviewCounts = Record<"attention" | "done" | "existing" | "improve" | "ready" | "total", number>;
 
-/** The filters, each with its count, and reading progress while PDFs are read. */
-export function ReviewBar({ costUsd, counts, filter, kind, onFilter, progress = true }: { costUsd: number; counts: ReviewCounts; filter: ReviewFilter; kind: ImportKind; onFilter: (filter: ReviewFilter) => void; progress?: boolean }) {
-	const reading = counts.done < counts.total;
+/** The filters, each with its count. */
+export function ReviewBar({ counts, filter, kind, onFilter }: { counts: ReviewCounts; filter: ReviewFilter; kind: ImportKind; onFilter: (filter: ReviewFilter) => void }) {
 	return (
 		<div className="flex h-8 items-center gap-4">
 			<div aria-label="Show" className="flex items-center gap-0.5" role="group">
@@ -149,115 +148,12 @@ export function ReviewBar({ costUsd, counts, filter, kind, onFilter, progress = 
 					);
 				})}
 			</div>
-			{kind === "pdfs" && progress ? (
-				<div className="ms-auto flex items-center gap-2.5">
-					<span className="text-xs tabular-nums text-black/55 dark:text-white/55">{reading ? `${counts.done} of ${counts.total} read` : `Read for ${usd(costUsd)}`}</span>
-					<span aria-hidden className={`relative h-1 w-24 overflow-hidden rounded-full bg-black/[0.08] transition-opacity duration-500 dark:bg-white/10 ${reading ? "" : "opacity-0"}`}>
-						<span className="absolute inset-0 origin-left rounded-full bg-accent transition-transform duration-700 ease-out motion-reduce:transition-none" style={{ transform: `scaleX(${counts.total ? counts.done / counts.total : 0})` }} />
-					</span>
-				</div>
-			) : null}
-		</div>
-	);
-}
-
-export function ReviewList({
-	activeId,
-	attach,
-	checksOf,
-	criteriaCount,
-	filter,
-	locked,
-	onActivate,
-	onSelectedChange,
-	readyIds,
-	results,
-	rows,
-	selected,
-}: {
-	activeId: string | null;
-	attach: ReadonlyMap<string, AttachState>;
-	checksOf: (row: ImportRow) => ReviewCheck[];
-	criteriaCount: number;
-	filter: ReviewFilter;
-	locked: boolean;
-	onActivate: (id: string) => void;
-	onSelectedChange: (selected: Set<string>) => void;
-	/** Every ready record in the import, shown or not, for the choose-all box. */
-	readyIds: string[];
-	results: AdminImportCommitResult[] | null;
-	rows: ImportRow[];
-	selected: Set<string>;
-}) {
-	const [pageByFilter, setPageByFilter] = useState<Partial<Record<ReviewFilter, number>>>({});
-	const { current, items, pages } = pageOf(rows, pageByFilter[filter] ?? 1, ROWS_PER_PAGE);
-	const all = readyIds.length > 0 && readyIds.every((id) => selected.has(id));
-	const resultById = new Map((results ?? []).map((result) => [result.id, result]));
-	return (
-		<div className="flex flex-col">
-			<div className="flex h-9 items-center gap-3 border-b border-black/[0.06] px-2 text-xs text-black/50 dark:border-white/[0.06] dark:text-white/50">
-				<Checkbox
-					aria-label="Choose every ready record"
-					isDisabled={locked || !readyIds.length}
-					isIndeterminate={selected.size > 0 && !all}
-					isSelected={all}
-					onValueChange={(checked) => onSelectedChange(new Set(checked ? readyIds : []))}
-					size="sm"
-				/>
-				<span className="tabular-nums">
-					{selected.size} of {readyIds.length} chosen
-				</span>
-			</div>
-			<ul className="flex flex-col py-1">
-				{items.map((row) => {
-					const active = row.id === activeId;
-					const status = rowStatus(row, resultById.get(row.id), attach.get(row.id));
-					const title = row.record?.title ?? row.file?.name ?? row.record?.source ?? "";
-					return (
-						<li className={`flex h-[4.5rem] items-center gap-3 rounded-lg px-2 transition-colors duration-150 ${active ? "bg-black/[0.05] dark:bg-white/[0.07]" : "hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"}`} key={row.id}>
-							<Checkbox
-								aria-label={`Import ${title}`}
-								isDisabled={locked || row.record?.state !== "ready"}
-								isSelected={selected.has(row.id)}
-								onValueChange={(checked) => {
-									const next = new Set(selected);
-									if (checked) next.add(row.id);
-									else next.delete(row.id);
-									onSelectedChange(next);
-								}}
-								size="sm"
-							/>
-							<button aria-current={active || undefined} className="flex min-w-0 flex-1 items-center gap-3 self-stretch rounded-md text-start outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onActivate(row.id)} type="button">
-								<ImportCover className="w-9" file={row.file} itemType={row.record?.itemType} reading={row.state === "reading"} size={13} />
-								<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-									<span className={`line-clamp-2 text-sm leading-5 ${row.record?.title ? "font-medium text-black/85 dark:text-white/85" : "text-black/45 dark:text-white/45"}`}>{title}</span>
-									<span className="flex items-center gap-2">
-										{status.label === "Ready" ? (
-											<span className="flex min-w-0 flex-1 gap-2 text-xs text-black/50 dark:text-white/50">
-												<span className="truncate">{creatorsLine(row.record!.creators) || "No authors"}</span>
-												{row.record!.year ? <span className="shrink-0 tabular-nums">{row.record!.year}</span> : null}
-											</span>
-										) : (
-											<span className="min-w-0 flex-1">
-												<StatusText status={status} />
-											</span>
-										)}
-										<CheckMeter checks={checksOf(row)} count={row.file ? criteriaCount : 0} />
-									</span>
-								</span>
-							</button>
-						</li>
-					);
-				})}
-				{!items.length ? <li className="flex h-28 items-center justify-center text-sm text-black/45 dark:text-white/45">Nothing here</li> : null}
-			</ul>
-			<ImportPager label="Pages of records" onChange={(page) => setPageByFilter((value) => ({ ...value, [filter]: page }))} page={current} pages={pages} perPage={ROWS_PER_PAGE} total={rows.length} />
 		</div>
 	);
 }
 
 /** The answer to each check, and for a failed one that the Rights fix covers, whether it is applied. */
-export function CheckList({ checks, onPage }: { checks: ReviewCheck[]; onPage?: (page: number) => void }) {
+function CheckList({ checks }: { checks: ReviewCheck[] }) {
 	return (
 		<ul className="flex flex-col gap-4">
 			{checks.map((check) => {
@@ -270,13 +166,7 @@ export function CheckList({ checks, onPage }: { checks: ReviewCheck[]; onPage?: 
 							{check.quote ? (
 								<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
 									{check.file ? check.quote : <q>{check.quote}</q>}
-									{check.page && onPage ? (
-										<button className="ms-1.5 whitespace-nowrap rounded tabular-nums text-accent outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onPage(check.page!)} type="button">
-											p. {check.page}
-										</button>
-									) : check.page ? (
-										<span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span>
-									) : null}
+									{check.page ? <span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span> : null}
 								</p>
 							) : null}
 							{check.recommendation ? (
@@ -300,11 +190,11 @@ export function CheckList({ checks, onPage }: { checks: ReviewCheck[]; onPage?: 
 }
 
 /** The library's checks, then the ones read from the file itself, with what goes between them. */
-export function Checks({ checks, children, onPage }: { checks: ReviewCheck[]; children?: ReactNode; onPage?: (page: number) => void }) {
+export function Checks({ checks, children }: { checks: ReviewCheck[]; children?: ReactNode }) {
 	const file = checks.filter((check) => check.file);
 	return (
 		<>
-			<CheckList checks={checks.filter((check) => !check.file)} onPage={onPage} />
+			<CheckList checks={checks.filter((check) => !check.file)} />
 			{children}
 			{file.length ? (
 				<>
@@ -424,7 +314,7 @@ export function ReadingPlaceholder() {
 	);
 }
 
-export const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
+const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "title", label: "Title" },
 	{ field: "authors", label: "Authors" },
 	{ field: "subject", label: "Subject" },
@@ -433,12 +323,12 @@ export const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
 	{ field: "doi", label: "DOI" },
 ];
 
-export const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
+const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
 	const value = properties[field];
 	return Array.isArray(value) ? value.join(field === "authors" ? "; " : ", ") : value;
 };
 
-export type PropertyChange = "added" | "changed" | "removed";
+type PropertyChange = "added" | "changed" | "removed";
 
 const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: string; tone: string }> = {
 	added: { icon: PlusSignIcon, label: "Added", tone: "text-emerald-700 dark:text-emerald-400" },
@@ -447,7 +337,7 @@ const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: strin
 };
 
 /** What publishing does to one property. A missing DOI isn't removed: Zenodo allocates one at publishing. */
-export function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
+function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
 	const value = propertyText(after, field) || (field === "doi" ? "pending" : "");
 	const before = propertyText(now, field);
 	if (value === before) return null;
@@ -515,111 +405,6 @@ export async function openWithProperties(file: File, properties: PdfProperties) 
 	const { writePdfProperties } = await import("@/lib/admin/pdf-properties");
 	const bytes = await writePdfProperties(new Uint8Array(await file.arrayBuffer()), properties);
 	window.open(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })), "_blank", "noopener");
-}
-
-export function ReviewDetail({
-	attach,
-	checks,
-	chosenTopics,
-	criteriaCount,
-	locked,
-	onOpenRecord,
-	onToggleFix,
-	onToggleTopic,
-	properties,
-	result,
-	row,
-}: {
-	attach: AttachState | undefined;
-	checks: ReviewCheck[];
-	chosenTopics: ReadonlySet<string>;
-	criteriaCount: number;
-	locked: boolean;
-	onOpenRecord: (itemKey: string) => void;
-	onToggleFix: () => void;
-	onToggleTopic: (topicId: string) => void;
-	/** What publishing writes into the PDF. */
-	properties: PdfProperties;
-	result: AdminImportCommitResult | undefined;
-	row: ImportRow;
-}) {
-	const record = row.record;
-	const payload = record?.payload ?? {};
-	const abstract = typeof payload.abstractNote === "string" ? payload.abstractNote : null;
-	const settled = row.state === "read" || row.state === "failed";
-	const passed = checks.filter(checkPasses).length;
-	const openKey = result?.itemKey ?? record?.existingKey;
-	const kindLine = [record?.itemType ? humanizeAdminField(record.itemType) : null, record?.year].filter(Boolean);
-	const writable = row.pdf?.writable === true;
-	return (
-		<article className="flex flex-col gap-6">
-			<header className="flex gap-4">
-				<ImportCover className="w-[4.5rem]" file={row.file} itemType={record?.itemType} reading={row.state === "reading"} size={20} />
-				<div className="flex min-w-0 flex-1 flex-col gap-1">
-					<p className="flex h-4 gap-3 text-xs text-black/45 dark:text-white/45">
-						{kindLine.map((part) => (
-							<span key={String(part)}>{part}</span>
-						))}
-					</p>
-					<h3 className={`line-clamp-3 text-base font-semibold leading-6 ${record?.title ? "text-black/90 dark:text-white/90" : "text-black/40 dark:text-white/40"}`}>{record?.title ?? row.file?.name ?? record?.source}</h3>
-					{record?.creators.length ? <p className="line-clamp-2 text-sm text-black/60 dark:text-white/60">{record.creators.join(", ")}</p> : null}
-					<div className="mt-1">
-						<StatusText status={rowStatus(row, result, attach)} />
-					</div>
-					{record?.message && record.state !== "ready" ? <p className="text-xs text-black/55 dark:text-white/55">{record.message}</p> : null}
-					{row.message ? <p className="text-xs text-danger">{row.message}</p> : null}
-				</div>
-			</header>
-
-			{!settled ? (
-				<ReadingPlaceholder />
-			) : (
-				<div className="flex animate-fade-in flex-col gap-6 [animation-duration:300ms]">
-					{record ? <MetadataLine payload={payload} /> : null}
-					{abstract ? (
-						<DetailSection aside={row.abstractWritten ? "Written by AI, the PDF has none" : undefined} title="Abstract">
-							<Abstract text={abstract} />
-						</DetailSection>
-					) : null}
-					{row.topics.length ? (
-						<DetailSection aside={`${chosenTopics.size} of ${row.topics.length} chosen`} title="Topics">
-							<TopicList chosen={chosenTopics} locked={locked} onToggle={onToggleTopic} topics={row.topics} />
-						</DetailSection>
-					) : null}
-					{row.file && criteriaCount ? (
-						<DetailSection aside={`${passed} of ${criteriaCount} pass`} title="Checks">
-							<Checks checks={checks}>{row.rightsFix ? <RightsFixLine applied={row.fixApplied} fix={row.rightsFix} locked={locked} onToggle={onToggleFix} stated={typeof payload.rights === "string" ? payload.rights : ""} /> : null}</Checks>
-						</DetailSection>
-					) : null}
-					{row.file && record && row.pdf ? (
-						<DetailSection aside={propertiesAside(properties, row.pdf)} title="PDF properties">
-							<PdfPropertiesList after={properties} now={row.pdf} />
-						</DetailSection>
-					) : null}
-				</div>
-			)}
-
-			{row.file || openKey ? (
-				<div className="flex flex-wrap gap-2">
-					{row.file ? (
-						<Button onPress={() => window.open(URL.createObjectURL(row.file!), "_blank", "noopener")} size="xs" startContent={<HugeiconsIcon aria-hidden icon={SquareArrowUpRight02Icon} size={14} />} variant="muted">
-							Open PDF
-						</Button>
-					) : null}
-					{row.file && record && writable ? (
-						<Button onPress={() => void openWithProperties(row.file!, properties)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={FileExportIcon} size={14} />} variant="muted">
-							Open with new properties
-						</Button>
-					) : null}
-					{openKey ? (
-						<Button onPress={() => onOpenRecord(openKey)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={ArrowRight01Icon} size={14} />} variant="muted">
-							{result?.itemKey ? "Open the draft" : "Open the record"}
-						</Button>
-					) : null}
-				</div>
-			) : null}
-		</article>
-	);
 }
 
 const unchanging = () => () => undefined;

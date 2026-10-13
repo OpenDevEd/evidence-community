@@ -2,7 +2,7 @@
 
 import { Folder01Icon } from "@hugeicons/core-free-icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { use, useDeferredValue, useState, useSyncExternalStore } from "react";
+import { use, useDeferredValue, useState } from "react";
 import { toast } from "sonner";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -41,10 +41,13 @@ import {
 	startImportBatch,
 	storeChecks,
 	storedChecks,
+	storedGuidance,
+	storeGuidance,
 	storeReview,
 	summarizeImportResults,
 	useImportBatch,
 	validateChecks,
+	validateGuidance,
 	validateImportFiles,
 	validatePdfFiles,
 	type AttachState,
@@ -54,7 +57,7 @@ import {
 import { uploadPdfFile } from "./admin-pdf";
 import { pdfPageCount } from "./pdf-thumbnail";
 
-export function errorMessage(error: unknown) {
+function errorMessage(error: unknown) {
 	if (error instanceof AdminApiError) {
 		const fieldMessages = Object.values(error.fields);
 		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
@@ -62,13 +65,14 @@ export function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly string[]) {
+function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly string[], guidance: string) {
 	try {
 		if (kind === "dois") doiPreviewRequest(doiText);
 		else if (kind === "files") validateImportFiles(files);
 		else {
 			validatePdfFiles(pdfs);
 			validateChecks(checks);
+			validateGuidance(guidance);
 		}
 		return null;
 	} catch (error) {
@@ -76,14 +80,14 @@ function inputError(kind: ImportKind, doiText: string, files: readonly File[], p
 	}
 }
 
-export const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 /** "Read 5 PDFs", or "Read PDFs" before there are any. */
 export const action = (verb: string, count: number, one: string, many: string) => (count ? `${verb} ${plural(count, one, many)}` : `${verb} ${many}`);
 
 const pageTotals = new WeakMap<readonly File[], Promise<number | null>>();
 
 /** The chosen PDFs' pages added up, once per selection. Null when one can't be opened. */
-export function pagesIn(files: readonly File[]) {
+function pagesIn(files: readonly File[]) {
 	let total = pageTotals.get(files);
 	if (!total) {
 		total = Promise.all(files.map(pdfPageCount)).then((counts) => (counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0)));
@@ -97,8 +101,10 @@ export function CostEstimate({ files, stale }: { files: readonly File[]; stale: 
 	const pages = use(pagesIn(files));
 	if (pages === null) return null;
 	return (
-		<p className={`animate-fade-in text-xs tabular-nums text-black/50 transition-opacity duration-200 [animation-duration:300ms] dark:text-white/50 ${stale ? "opacity-50" : ""}`}>
-			About {usd(estimatePdfImportCost(pages, files.length))} for {pages} pages
+		<p className="animate-fade-in text-xs tabular-nums text-black/50 [animation-duration:300ms] dark:text-white/50">
+			<span className={`transition-opacity duration-200 ${stale ? "opacity-50" : ""}`}>
+				About {usd(estimatePdfImportCost(pages, files.length))} for {pages} pages
+			</span>
 		</p>
 	);
 }
@@ -148,13 +154,14 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const [pdfs, setPdfs] = useState<File[]>([]);
 	const estimateFiles = useDeferredValue(pdfs);
 	const [checks, setChecksState] = useState(() => (typeof window === "undefined" ? [] : storedChecks()));
+	const [guidance, setGuidanceState] = useState(() => (typeof window === "undefined" ? "" : storedGuidance()));
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [filter, setFilter] = useState<ReviewFilter>("all");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
 	const stage: ImportStage = batch?.results ? "done" : batch ? "review" : "input";
-	const problem = inputError(kind, doiText, files, pdfs, checks);
+	const problem = inputError(kind, doiText, files, pdfs, checks, guidance);
 	const rows = batch?.rows ?? [];
 	const counts = reviewCounts(rows);
 	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
@@ -191,7 +198,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				const pending = pendingPdfRows(pdfs);
 				setActiveId(pending[0]?.id ?? null);
 				startImportBatch({ checks, importId, kind, rows: pending });
-				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks), errorMessage);
+				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks, guidance.trim()), errorMessage);
 				return;
 			}
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
@@ -283,6 +290,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		files,
 		filter,
 		finish,
+		guidance,
 		/** The input's problem, shown once there is something to read. The DOI box marks bad entries itself. */
 		footerProblem: stage === "input" && kind !== "dois" && (files.length || pdfs.length) ? problem : null,
 		kind,
@@ -313,6 +321,10 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		setCollections: (keys: string[]) => changeImportBatch(importId, (current) => ({ ...current, collections: keys })),
 		setDoiText,
 		setFiles,
+		setGuidance: (value: string) => {
+			setGuidanceState(value);
+			storeGuidance(value);
+		},
 		setFilter,
 		setKind: (value: ImportKind) => {
 			setKindState(value);
@@ -338,61 +350,3 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 }
 
 export type ImportFlowState = ReturnType<typeof useImportFlow>;
-
-// shortcut: the mock offers five designs of the dialog side by side; the
-// chosen one is kept in this browser until one is picked for the real build.
-export const IMPORT_DESIGNS = [
-	{ id: "now", label: "As it is now", short: "Now" },
-	{ id: "document", label: "The PDF beside its record", short: "1 Document" },
-	{ id: "sheet", label: "Spreadsheet", short: "2 Sheet" },
-	{ id: "queue", label: "One record at a time", short: "3 One by one" },
-	{ id: "checks", label: "By check", short: "4 By check" },
-	{ id: "drawer", label: "Side sheet", short: "5 Side sheet" },
-] as const;
-
-export type ImportDesign = (typeof IMPORT_DESIGNS)[number]["id"];
-
-const DESIGN_KEY = "evidence-library:import-design";
-const designListeners = new Set<() => void>();
-
-function readDesign(): ImportDesign {
-	const stored = localStorage.getItem(DESIGN_KEY);
-	return IMPORT_DESIGNS.some(({ id }) => id === stored) ? (stored as ImportDesign) : "document";
-}
-
-export function useImportDesign() {
-	return useSyncExternalStore(
-		(listener) => {
-			designListeners.add(listener);
-			return () => designListeners.delete(listener);
-		},
-		readDesign,
-		() => "document" as ImportDesign,
-	);
-}
-
-function chooseDesign(design: ImportDesign) {
-	localStorage.setItem(DESIGN_KEY, design);
-	for (const listener of designListeners) listener();
-}
-
-/** Mock only: moves between the designs, keeping what was added and read. */
-export function DesignSwitch() {
-	const design = useImportDesign();
-	return (
-		<div aria-label="Design" className="flex items-center gap-0.5 rounded-lg bg-black/[0.04] p-0.5 dark:bg-white/[0.06]" role="group">
-			{IMPORT_DESIGNS.map((option) => (
-				<button
-					aria-label={option.label}
-					aria-pressed={design === option.id}
-					className={`h-6 whitespace-nowrap rounded-md px-2 text-xs tabular-nums outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent ${design === option.id ? "bg-white font-medium text-black/85 shadow-sm dark:bg-white/15 dark:text-white/90" : "text-black/50 hover:text-black/80 dark:text-white/50 dark:hover:text-white/80"}`}
-					key={option.id}
-					onClick={() => chooseDesign(option.id)}
-					type="button"
-				>
-					{option.short}
-				</button>
-			))}
-		</div>
-	);
-}

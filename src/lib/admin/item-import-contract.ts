@@ -113,6 +113,8 @@ export type AdminImportPreviewResponse = {
 export const PDF_IMPORT_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const PDF_IMPORT_MAX_CRITERIA = 20;
 export const PDF_IMPORT_MAX_CRITERION_LENGTH = 300;
+/** The library's guidance for the AI: free text it follows when it reads each PDF. */
+export const PDF_IMPORT_MAX_GUIDANCE_LENGTH = 2000;
 
 export type PdfCheckResult = {
 	criterion: string;
@@ -150,7 +152,7 @@ export type AdminPdfReadResponse = {
 };
 
 /** OpenRouter's price for Claude Haiku 5.5 per token, checked 2026-10-12. */
-export const PDF_IMPORT_PRICE = { input: 0.1 / 1_000_000, output: 0.5 / 1_000_000 };
+const PDF_IMPORT_PRICE = { input: 0.1 / 1_000_000, output: 0.5 / 1_000_000 };
 
 export function pdfImportCost(inputTokens: number, outputTokens: number) {
 	return inputTokens * PDF_IMPORT_PRICE.input + outputTokens * PDF_IMPORT_PRICE.output;

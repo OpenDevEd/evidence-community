@@ -11,10 +11,10 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { ImportSteps, type ImportKind, type ImportStage } from "./ImportSteps";
+import type { ImportKind, ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
 import { FILE_CHECKS } from "./admin-import";
-import { CostEstimate, DesignSwitch, type ImportFlowState } from "./import-flow";
+import { CostEstimate, type ImportFlowState } from "./import-flow";
 import { pdfPageCount } from "./pdf-thumbnail";
 
 /** The stage's content, faded in when the stage changes. */
@@ -26,21 +26,6 @@ export function StageFade({ children, className = "flex min-h-0 flex-1 flex-col"
 				{children}
 			</motion.div>
 		</AnimatePresence>
-	);
-}
-
-/** The title, where the import is, the mock's design switch, and anything the design adds on the right. */
-export function DesignHeader({ children, lead, stage }: { children?: ReactNode; lead?: ReactNode; stage: ImportStage }) {
-	return (
-		<header className="flex h-14 shrink-0 items-center gap-4 border-b border-black/[0.06] px-6 dark:border-white/[0.06]">
-			{lead}
-			<h2 className="text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
-			<ImportSteps stage={stage} />
-			<span className="ms-auto flex items-center gap-3">
-				<DesignSwitch />
-				{children}
-			</span>
-		</header>
 	);
 }
 
@@ -81,26 +66,13 @@ export function InputNote({ flow }: { flow: ImportFlowState }) {
 	return null;
 }
 
-export function ErrorNote({ flow }: { flow: ImportFlowState }) {
-	return flow.error ? (
-		<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
-			{flow.error}
-		</p>
-	) : null;
-}
-
-/** A keyboard key, shown beside the control it presses. */
-export function Kbd({ children }: { children: ReactNode }) {
-	return <kbd className="inline-flex h-5 min-w-5 items-center justify-center rounded border border-black/10 px-1 font-sans text-[11px] text-black/50 dark:border-white/15 dark:text-white/50">{children}</kbd>;
-}
-
 function Pages({ file }: { file: File }) {
 	const count = use(pdfPageCount(file));
 	return count ? <>{count} {count === 1 ? "page" : "pages"}</> : null;
 }
 
 /** A chosen PDF's page count, read in the browser; the space is held while it is counted. */
-export function PageCount({ file }: { file: File }) {
+function PageCount({ file }: { file: File }) {
 	return (
 		<span className="inline-block min-w-[4.5rem] text-xs tabular-nums text-black/45 dark:text-white/45">
 			<Suspense fallback={null}>

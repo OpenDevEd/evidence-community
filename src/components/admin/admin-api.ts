@@ -611,10 +611,11 @@ export function previewAdminImport(
 }
 
 /** Reads one PDF into an import row and checks it against the library's criteria. */
-export async function readAdminImportPdf(file: File, criteria: readonly string[]) {
+export async function readAdminImportPdf(file: File, criteria: readonly string[], guidance: string) {
 	const body = new FormData();
 	body.append("file", file);
 	body.append("criteria", JSON.stringify(criteria));
+	body.append("guidance", guidance);
 	const response = await fetch("/api/admin/items/import/pdf", { body, cache: "no-store", method: "POST" });
 	if (!response.ok) {
 		const payload = (await response.json().catch(() => null)) as AdminErrorPayload | null;

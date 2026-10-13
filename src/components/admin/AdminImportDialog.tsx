@@ -1,12 +1,15 @@
 "use client";
 
 import { ArrowDown01Icon, ArrowRight02Icon, Cancel01Icon, FileExportIcon, SquareArrowUpRight02Icon } from "@hugeicons/core-free-icons";
+import { Drawer, DrawerContent } from "@nextui-org/react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
+import { Textarea } from "@/components/nextui/Textarea";
+import { PDF_IMPORT_MAX_GUIDANCE_LENGTH } from "@/lib/admin/item-import-contract";
 
 import { DraftState, publishView } from "./ImportDone";
 import { BibliographyInput, ChecksEditor, DoiInput, DropArea, DropText, PDF_ACCEPT, withNew } from "./ImportInputs";
@@ -14,35 +17,63 @@ import { ImportCover } from "./ImportCover";
 import { ImportSteps } from "./ImportSteps";
 import { Abstract, CheckMeter, Checks, creatorsLine, DetailSection, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, ReviewBar, RightsFixLine, rowStatus, StatusText, TopicList, usd } from "./ImportReview";
 import { checkPasses, FILE_CHECKS, PDF_IMPORT_MAX_FILES, type ImportRow } from "./admin-import";
-import { FileChecksList, InputNote, inSentence, NarrowPager, PdfRows, SourceTabs, StageFade } from "./import-design-parts";
-import { action, CollectionsButton, DesignSwitch, type ImportFlowState } from "./import-flow";
+import { FileChecksList, InputNote, inSentence, NarrowPager, PdfRows, SourceTabs, StageFade } from "./import-parts";
+import { action, CollectionsButton, useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 import { pageOf } from "./ImportPager";
 
 const ROWS_PER_PAGE = 7;
 
 /**
- * Design 5, the side sheet: the import slides in over the admin's record
- * table, which stays in view. Everything runs in one column: what to add,
- * the records opening in place one at a time, and the drafts to publish.
+ * Import records from PDFs, a pasted DOI list or bibliography files, in a
+ * sheet that slides in over the record table, which stays in view. PDFs are
+ * read by AI, which fills their metadata, judges their OpenAlex topics and
+ * answers the library's checks, following the library's guidance. Every
+ * source ends in the same review, and the chosen records become unpublished
+ * drafts in one call.
  */
-export function DesignDrawer({ flow }: { flow: ImportFlowState }) {
+export function AdminImportDialog({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	// Each opening starts fresh; closing keeps the contents while the sheet slides out.
+	const [opening, setOpening] = useState(0);
+	const [wasOpen, setWasOpen] = useState(isOpen);
+	if (isOpen !== wasOpen) {
+		setWasOpen(isOpen);
+		if (isOpen) setOpening((value) => value + 1);
+	}
+	return <ImportHost isOpen={isOpen} key={opening} {...props} />;
+}
+
+function ImportHost({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	const flow = useImportFlow(props);
+	return (
+		<Drawer
+			classNames={{ base: "max-w-[36rem] border-s border-black/10 bg-background_light dark:border-white/10 dark:bg-card" }}
+			hideCloseButton
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) props.onClose();
+			}}
+			placement="right"
+			size="2xl"
+		>
+			<DrawerContent>{isOpen ? <ImportSheet flow={flow} /> : null}</DrawerContent>
+		</Drawer>
+	);
+}
+
+/** One column: what to add, the records opening in place one at a time, and the drafts to publish. */
+function ImportSheet({ flow }: { flow: ImportFlowState }) {
 	const { batch, stage } = flow;
 	const view = stage === "done" && batch ? publishView(batch, flow.choosePublish) : null;
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<header className="shrink-0 border-b border-black/[0.06] px-5 pb-3 pt-4 dark:border-white/[0.06]">
-				<div className="flex items-center gap-3">
-					<h2 className="text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
-					<span className="ms-auto">
-						<ImportSteps stage={stage} />
-					</span>
-					<Button aria-label="Close" className="size-8 min-w-8" isIconOnly onPress={flow.onClose} size="xs" variant="transparent">
-						<HugeiconsIcon aria-hidden icon={Cancel01Icon} size={16} />
-					</Button>
-				</div>
-				<div className="mt-2.5">
-					<DesignSwitch />
-				</div>
+			<header className="flex h-14 shrink-0 items-center gap-3 border-b border-black/[0.06] px-5 dark:border-white/[0.06]">
+				<h2 className="text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
+				<span className="ms-auto">
+					<ImportSteps stage={stage} />
+				</span>
+				<Button aria-label="Close" className="size-8 min-w-8" isIconOnly onPress={flow.onClose} size="xs" variant="transparent">
+					<HugeiconsIcon aria-hidden icon={Cancel01Icon} size={16} />
+				</Button>
 			</header>
 			<StageFade stage={stage}>
 				{stage === "input" ? <DrawerInput flow={flow} /> : null}
@@ -89,13 +120,50 @@ export function DesignDrawer({ flow }: { flow: ImportFlowState }) {
 	);
 }
 
-function DrawerInput({ flow }: { flow: ImportFlowState }) {
+/** A section that folds away, with a line saying what is inside while it is shut. */
+function Fold({ children, summary, title }: { children: ReactNode; summary: string; title: string }) {
 	const reduceMotion = useReducedMotion();
-	const [checksOpen, setChecksOpen] = useState(false);
+	const [open, setOpen] = useState(false);
+	return (
+		<section className="border-t border-black/[0.06] pt-3 dark:border-white/[0.06]">
+			<button aria-expanded={open} className="flex h-9 w-full items-center gap-2 rounded-lg px-1 text-start outline-none hover:bg-black/[0.03] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/[0.04]" onClick={() => setOpen(!open)} type="button">
+				<span className="shrink-0 text-sm font-medium text-black/85 dark:text-white/85">{title}</span>
+				<span className="min-w-0 truncate text-xs tabular-nums text-black/45 dark:text-white/45">{summary}</span>
+				<HugeiconsIcon aria-hidden className={`ms-auto shrink-0 text-black/40 transition-transform duration-200 dark:text-white/40 ${open ? "rotate-180" : ""}`} icon={ArrowDown01Icon} size={15} />
+			</button>
+			<AnimatePresence initial={false}>
+				{open ? (
+					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={{ duration: reduceMotion ? 0 : 0.2 }}>
+						<div className="px-1 pb-2 pt-3">{children}</div>
+					</motion.div>
+				) : null}
+			</AnimatePresence>
+		</section>
+	);
+}
+
+const GUIDANCE_EXAMPLE = ["Write in British English.", "Don't copy the PDF's abstract. Write three sentences for a policy reader instead.", "Give the organisation's full name as the author, not its acronym."].join("\n");
+
+/** Free text the AI follows when it reads every PDF: language, how to write the abstract, anything the checks don't cover. */
+function GuidanceEditor({ flow }: { flow: ImportFlowState }) {
+	const length = flow.guidance.trim().length;
+	return (
+		<div>
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library and sent to the AI with every PDF. Where it conflicts with how the AI works by default, the guidance wins, but it never makes the AI invent facts.</p>
+			<Textarea aria-label="Guidance for the AI" classNames={{ input: "text-sm leading-6" }} isDisabled={flow.busy} maxLength={PDF_IMPORT_MAX_GUIDANCE_LENGTH} maxRows={14} minRows={5} onValueChange={flow.setGuidance} placeholder={GUIDANCE_EXAMPLE} value={flow.guidance} />
+			<p className={`mt-1.5 text-end text-xs tabular-nums transition-opacity duration-200 ${length > PDF_IMPORT_MAX_GUIDANCE_LENGTH * 0.8 ? "text-black/50 dark:text-white/50" : "opacity-0"}`}>
+				{length} of {PDF_IMPORT_MAX_GUIDANCE_LENGTH}
+			</p>
+		</div>
+	);
+}
+
+function DrawerInput({ flow }: { flow: ImportFlowState }) {
+	const guidance = flow.guidance.trim();
 	return (
 		<div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 pt-4">
 			<SourceTabs
-				dois={<DoiInput busy={flow.busy} narrow onChange={flow.setDoiText} text={flow.doiText} />}
+				dois={<DoiInput busy={flow.busy} onChange={flow.setDoiText} text={flow.doiText} />}
 				files={<BibliographyInput busy={flow.busy} files={flow.files} onFilesChange={flow.setFiles} />}
 				flow={flow}
 				panel="px-0 pb-0 pt-4"
@@ -105,26 +173,16 @@ function DrawerInput({ flow }: { flow: ImportFlowState }) {
 							<DropText hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each.`} what="PDFs" />
 						</DropArea>
 						{flow.pdfs.length ? <PdfRows busy={flow.busy} files={flow.pdfs} onFilesChange={flow.setPdfs} perPage={6} /> : null}
-						<section className="border-t border-black/[0.06] pt-3 dark:border-white/[0.06]">
-							<button aria-expanded={checksOpen} className="flex h-9 w-full items-center gap-2 rounded-lg px-1 text-start outline-none hover:bg-black/[0.03] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/[0.04]" onClick={() => setChecksOpen(!checksOpen)} type="button">
-								<span className="text-sm font-medium text-black/85 dark:text-white/85">Checks</span>
-								<span className="text-xs tabular-nums text-black/45 dark:text-white/45">
-									{flow.checks.length} for this library, {FILE_CHECKS.length} from the file
-								</span>
-								<HugeiconsIcon aria-hidden className={`ms-auto text-black/40 transition-transform duration-200 dark:text-white/40 ${checksOpen ? "rotate-180" : ""}`} icon={ArrowDown01Icon} size={15} />
-							</button>
-							<AnimatePresence initial={false}>
-								{checksOpen ? (
-									<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={{ duration: reduceMotion ? 0 : 0.2 }}>
-										<div className="pb-2 pt-3">
-											<ChecksEditor busy={flow.busy} criteria={flow.checks} fileNote={false} onChange={flow.setChecks} />
-											<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">From the file itself, for every PDF</p>
-											<FileChecksList />
-										</div>
-									</motion.div>
-								) : null}
-							</AnimatePresence>
-						</section>
+						<div className="flex flex-col gap-1">
+							<Fold summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} from the file`} title="Checks">
+								<ChecksEditor busy={flow.busy} criteria={flow.checks} onChange={flow.setChecks} />
+								<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">From the file itself, for every PDF</p>
+								<FileChecksList />
+							</Fold>
+							<Fold summary={guidance ? guidance.split("\n")[0]! : "None yet"} title="Guidance">
+								<GuidanceEditor flow={flow} />
+							</Fold>
+						</div>
 					</div>
 				}
 			/>
@@ -142,7 +200,7 @@ function DrawerReview({ flow }: { flow: ImportFlowState }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div className="shrink-0 px-4 py-2.5">
-				<ReviewBar costUsd={flow.costUsd} counts={flow.counts} filter={flow.filter} kind={batch.kind} onFilter={flow.setFilter} progress={false} />
+				<ReviewBar counts={flow.counts} filter={flow.filter} kind={batch.kind} onFilter={flow.setFilter} />
 			</div>
 			<div className="flex h-9 shrink-0 items-center gap-3 border-y border-black/[0.06] px-5 text-xs text-black/50 dark:border-white/[0.06] dark:text-white/50">
 				<Checkbox aria-label="Choose every ready record" isDisabled={flow.locked || !flow.readyIds.length} isIndeterminate={flow.selected.size > 0 && !all} isSelected={all} onValueChange={(checked) => flow.setSelected(new Set(checked ? flow.readyIds : []))} size="sm" />
