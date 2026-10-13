@@ -102,11 +102,11 @@ export function CostEstimate({ files, stale }: { files: readonly File[]; stale: 
 	if (pages === null) return null;
 	const cost = estimatePdfImportCost(pages, files.length);
 	return (
-		<p className="animate-fade-in text-xs tabular-nums text-black/50 [animation-duration:300ms] dark:text-white/50">
+		<span className="min-w-0 animate-fade-in truncate [animation-duration:300ms]">
 			<span className={`transition-opacity duration-200 ${stale ? "opacity-50" : ""}`}>
 				{cost < 0.01 ? "Under $0.01" : `About ${usd(cost)}`} for {plural(pages, "page", "pages")}
 			</span>
-		</p>
+		</span>
 	);
 }
 

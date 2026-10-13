@@ -13,7 +13,7 @@ import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
 import { FILE_CHECKS } from "./admin-import";
-import { CostEstimate, type ImportFlowState } from "./import-flow";
+import type { ImportFlowState } from "./import-flow";
 import { pdfPageCount } from "./pdf-thumbnail";
 
 /** The stage's content, faded in when the stage changes. */
@@ -36,13 +36,6 @@ export function InputNote({ flow }: { flow: ImportFlowState }) {
 			<p className="min-w-0 flex-1 text-sm leading-5 text-danger [overflow-wrap:anywhere]" role="alert">
 				{problem}
 			</p>
-		);
-	}
-	if (flow.stage === "input" && flow.kind === "pdfs" && flow.estimateFiles.length) {
-		return (
-			<Suspense fallback={null}>
-				<CostEstimate files={flow.estimateFiles} stale={flow.estimateFiles !== flow.pdfs} />
-			</Suspense>
 		);
 	}
 	return null;

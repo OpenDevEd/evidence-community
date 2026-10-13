@@ -15,7 +15,7 @@ import { ImportSteps } from "./ImportSteps";
 import { Abstract, CheckMeter, Checks, creatorsLine, DetailSection, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, ReviewBar, RightsFixLine, rowStatus, StatusText, TopicList, usd } from "./ImportReview";
 import { checkPasses, type ImportRow } from "./admin-import";
 import { InputNote, inSentence, NarrowPager, StageFade } from "./import-parts";
-import { ImportAdd, SourceTabs, UploadButton } from "./ImportAdd";
+import { DropHint, ImportAdd, SheetDrop, SourceTabs, UploadButton } from "./ImportAdd";
 import { action, CollectionsButton, useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 import { pageOf } from "./ImportPager";
 
@@ -67,7 +67,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 	const { batch, stage } = flow;
 	const view = stage === "done" && batch ? publishView(batch, flow.choosePublish) : null;
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<SheetDrop flow={flow}>
 			<header className="flex h-14 shrink-0 items-center gap-3 px-5">
 				<h2 className="whitespace-nowrap text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
 				<span className="flex-1" />
@@ -88,7 +88,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 				</StageFade>
 				{/* On a phone the actions wrap under the collections rather than clip them. */}
 				<footer className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-t border-black/[0.06] px-5 py-3 dark:border-white/[0.06]">
-					{stage === "input" || flow.error ? <InputNote flow={flow} /> : null}
+					{flow.error || flow.footerProblem ? <InputNote flow={flow} /> : <DropHint flow={flow} />}
 					{stage === "review" && !flow.error ? <CollectionsButton collections={flow.collections} locked={flow.locked} onChange={flow.setCollections} sources={flow.sources} /> : null}
 					<span className="ms-auto flex shrink-0 items-center gap-2">
 						{stage === "input" ? (
@@ -127,7 +127,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 					</span>
 				</footer>
 			</div>
-		</div>
+		</SheetDrop>
 	);
 }
 

@@ -2,7 +2,7 @@
 
 import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -18,7 +18,7 @@ import type { ImportKind } from "./ImportSteps";
 import { adminPanelTabState } from "./admin-tab-styles";
 import { FILE_CHECKS, PDF_IMPORT_MAX_FILES } from "./admin-import";
 import { FileChecksList, PdfRows } from "./import-parts";
-import type { ImportFlowState } from "./import-flow";
+import { CostEstimate, type ImportFlowState } from "./import-flow";
 
 const SOURCES: { icon: typeof Pdf01Icon; kind: ImportKind; label: string }[] = [
 	{ icon: Pdf01Icon, kind: "pdfs", label: "PDFs" },
@@ -175,11 +175,11 @@ function Settings({ flow }: { flow: ImportFlowState }) {
 }
 
 /** What was added so far, its size, and a way to start again. */
-function UploadHeader({ aside, busy, onClear, title }: { aside?: string; busy: boolean; onClear?: () => void; title: string }) {
+function UploadHeader({ aside, busy, onClear, title }: { aside?: ReactNode; busy: boolean; onClear?: () => void; title: string }) {
 	return (
 		<div className="flex h-8 shrink-0 items-center gap-3">
 			<h3 className="whitespace-nowrap text-sm font-medium text-black/85 dark:text-white/85">{title}</h3>
-			{aside ? <span className="min-w-0 truncate text-xs tabular-nums text-black/45 dark:text-white/45">{aside}</span> : null}
+			{aside ? <span className="flex min-w-0 items-center gap-3 truncate text-xs tabular-nums text-black/45 dark:text-white/45">{aside}</span> : null}
 			{onClear ? (
 				<Button className="ms-auto h-7 min-h-7" isDisabled={busy} onPress={onClear} size="xs" variant="transparent">
 					Clear all
@@ -210,11 +210,24 @@ function PdfUpload({ flow }: { flow: ImportFlowState }) {
 		<>
 			{count ? (
 				<>
-					<UploadHeader aside={totalSize(flow.pdfs)} busy={flow.busy} onClear={() => flow.setPdfs([])} title={`${count} ${count === 1 ? "PDF" : "PDFs"}`} />
+					<UploadHeader
+						aside={
+							<>
+								<span className="shrink-0">{totalSize(flow.pdfs)}</span>
+								<Suspense fallback={null}>
+									<CostEstimate files={flow.estimateFiles} stale={flow.estimateFiles !== flow.pdfs} />
+								</Suspense>
+							</>
+						}
+						busy={flow.busy}
+						onClear={() => flow.setPdfs([])}
+						title={`${count} ${count === 1 ? "PDF" : "PDFs"}`}
+					/>
 					<PdfRows busy={flow.busy} files={flow.pdfs} onFilesChange={flow.setPdfs} perPage={8} />
 				</>
-			) : null}
-			<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. Claude Haiku 5.5 reads each one.`} label={count ? "Add more PDFs" : "PDFs"} onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what={count ? "more PDFs" : "PDFs"} />
+			) : (
+				<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. Claude Haiku 5.5 reads each one.`} label="PDFs" onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what="PDFs" />
+			)}
 		</>
 	);
 }
@@ -279,17 +292,87 @@ function FileUpload({ flow }: { flow: ImportFlowState }) {
 						<ImportPager label="Pages of chosen files" onChange={setPage} page={current} pages={pages} perPage={FILES_PER_PAGE} total={count} />
 					</div>
 				</>
-			) : null}
-			<Dropzone
-				accept={ADMIN_IMPORT_FILE_EXTENSIONS}
-				busy={flow.busy}
-				hint={`${ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to ${ADMIN_IMPORT_MAX_FILES} files, 5 MB each.`}
-				label={count ? "Add more bibliography files" : "Bibliography files"}
-				onFiles={(chosen) => flow.setFiles(withNew(flow.files, chosen))}
-				what={count ? "more files" : "bibliography files"}
-			/>
+			) : (
+				<Dropzone
+					accept={ADMIN_IMPORT_FILE_EXTENSIONS}
+					busy={flow.busy}
+					hint={`${ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to ${ADMIN_IMPORT_MAX_FILES} files, 5 MB each.`}
+					label="Bibliography files"
+					onFiles={(chosen) => flow.setFiles(withNew(flow.files, chosen))}
+					what="bibliography files"
+				/>
+			)}
 		</>
 	);
+}
+
+const droppedFilesName = (kind: ImportKind) => (kind === "pdfs" ? "PDFs" : "bibliography files");
+
+/**
+ * The whole sheet takes dropped PDFs or bibliography files, wherever its list
+ * has scrolled to, so there is no drop box to find. While files are dragged
+ * over it, the sheet says it will take them.
+ */
+export function SheetDrop({ children, flow }: { children: ReactNode; flow: ImportFlowState }) {
+	const reduceMotion = useReducedMotion();
+	const [dragging, setDragging] = useState(false);
+	// Entering a child fires before leaving its parent, so count to know when the drag has left the sheet.
+	const depth = useRef(0);
+	const accepts = flow.stage === "input" && flow.kind !== "dois" && !flow.busy;
+	const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
+	const stop = () => {
+		depth.current = 0;
+		setDragging(false);
+	};
+	return (
+		<div
+			className="relative flex h-full min-h-0 flex-col"
+			onDragEnter={(event) => {
+				if (!accepts || !carriesFiles(event)) return;
+				depth.current += 1;
+				setDragging(true);
+			}}
+			onDragLeave={() => {
+				if (!dragging) return;
+				depth.current -= 1;
+				if (depth.current <= 0) stop();
+			}}
+			onDragOver={(event) => {
+				if (accepts && carriesFiles(event)) event.preventDefault();
+			}}
+			onDrop={(event) => {
+				stop();
+				// The empty list's own drop box has taken them already.
+				if (!accepts || event.defaultPrevented) return;
+				event.preventDefault();
+				const chosen = Array.from(event.dataTransfer.files);
+				if (flow.kind === "pdfs") flow.setPdfs(withNew(flow.pdfs, chosen));
+				else flow.setFiles(withNew(flow.files, chosen));
+			}}
+		>
+			{children}
+			<AnimatePresence>
+				{dragging ? (
+					<motion.div
+						animate={{ opacity: 1 }}
+						className="pointer-events-none absolute inset-2 z-30 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-accent bg-card_light/95 dark:bg-card/95"
+						exit={{ opacity: 0 }}
+						initial={{ opacity: 0 }}
+						transition={{ duration: reduceMotion ? 0 : 0.15 }}
+					>
+						<HugeiconsIcon aria-hidden className="text-accent" icon={Upload04Icon} size={26} />
+						<p className="text-sm font-medium text-black/85 dark:text-white/85">Drop to add {droppedFilesName(flow.kind)}</p>
+					</motion.div>
+				) : null}
+			</AnimatePresence>
+		</div>
+	);
+}
+
+/** Says, beside the upload button, that files can be dropped anywhere on the sheet. */
+export function DropHint({ flow }: { flow: ImportFlowState }) {
+	if (flow.stage !== "input" || flow.kind === "dois") return null;
+	return <p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">Drop {droppedFilesName(flow.kind)} anywhere on this sheet</p>;
 }
 
 /** Choose PDFs or bibliography files from the footer, beside the button that reads them. */
