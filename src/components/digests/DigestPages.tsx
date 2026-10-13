@@ -104,7 +104,7 @@ function Steps({ steps }: { steps: Step[] }) {
 }
 /** Which date of a publication puts it in an edition, by what the library's digests cover. */
 const ENTERED_BY = {
-  published: {icon: Calendar03Icon, lead: "Entered by publication date.", text: "The date OpenAlex gives, usually the day a work first came out online."},
+  published: {icon: Calendar03Icon, lead: "Entered by publication date.", text: "The date on the record, usually the day a work first came out online."},
   added: {icon: Calendar03Icon, lead: "Entered by the day it joined the library.", text: "Whenever it was published."},
 } as const;
 /** Whether the period holds 1 January, the day OpenAlex gives a work it knows only the year of. */

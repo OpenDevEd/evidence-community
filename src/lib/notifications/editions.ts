@@ -100,9 +100,8 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
         JOIN "sourceConnection" c ON c.key = s."sourceConnectionKey" AND c.status <> 'removed' AND c.provider IN (${sql.join(OPENALEX_WORK_PROVIDERS.map(provider => sql`${provider}`), sql`, `)})
         WHERE s."itemKey" = ${item.key} AND jsonb_typeof(s."payload" #> '{open_access,is_oa}') = 'boolean'
         ORDER BY s."remoteVersion" DESC NULLS LAST, s."fetchedAt" DESC, s."sourceConnectionKey" LIMIT 1) work ON true
-      -- ponytail: matches the DOI field only, not one a record gives in Extra; ranking alone reads it this way.
-      LEFT JOIN LATERAL (SELECT "isOpenAccess" AS open FROM "itemOpenAccessLookup"
-        WHERE "itemKey" = ${item.key} AND doi = lower(regexp_replace(trim(${item.DOI}), '^(https?://(dx\\.)?doi\\.org/|doi:\\s*)', '', 'i'))) lookup ON true
+      -- The last answer for the record's DOI, wherever the record gives it: a changed DOI is looked up again soon after.
+      LEFT JOIN LATERAL (SELECT "isOpenAccess" AS open FROM "itemOpenAccessLookup" WHERE "itemKey" = ${item.key}) lookup ON true
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
