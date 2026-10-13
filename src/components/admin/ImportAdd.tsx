@@ -17,6 +17,7 @@ import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
 import { ListHeader, PdfRows, Setting, SettingsGroup, SheetTabs } from "./import-parts";
 import type { ImportFlowState } from "./import-flow";
+import { reviewCounts } from "./admin-import";
 
 const SOURCES: { icon: typeof Pdf01Icon; id: ImportKind; label: string }[] = [
 	{ icon: Pdf01Icon, id: "pdfs", label: "PDFs" },
@@ -147,7 +148,30 @@ function Dropzone({ accept, busy, hint, label, onFiles, what }: { accept: string
 
 const totalSize = (files: readonly File[]) => megabytes(files.reduce((sum, file) => sum + file.size, 0));
 
+/**
+ * The library's open PDF import, in place of the drop box: only one is open
+ * at a time, so more PDFs wait until it is imported or discarded.
+ */
+function OpenPdfImport({ batch }: { batch: NonNullable<ImportFlowState["openPdfs"]> }) {
+	const { done, total } = reviewCounts(batch);
+	return (
+		<div className="flex min-h-32 flex-1 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-black/15 px-6 text-center dark:border-white/15">
+			<HugeiconsIcon aria-hidden className="text-black/35 dark:text-white/35" icon={Pdf01Icon} size={22} />
+			<p className="text-sm font-medium text-black/80 dark:text-white/80">
+				{total} {total === 1 ? "PDF" : "PDFs"} in the open import
+			</p>
+			<div aria-label="PDFs read" aria-valuemax={total} aria-valuemin={0} aria-valuenow={done} className="h-1.5 w-48 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/[0.08]" role="progressbar">
+				<div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
+			</div>
+			<p className="text-xs tabular-nums text-black/50 dark:text-white/50">
+				{done} of {total} read. Import or discard it to read more PDFs.
+			</p>
+		</div>
+	);
+}
+
 function PdfUpload({ flow }: { flow: ImportFlowState }) {
+	if (flow.openPdfs) return <OpenPdfImport batch={flow.openPdfs} />;
 	const count = flow.pdfs.length;
 	return (
 		<>
@@ -254,7 +278,7 @@ export function SheetDrop({ children, flow }: { children: ReactNode; flow: Impor
 	const [dragging, setDragging] = useState(false);
 	// Entering a child fires before leaving its parent, so count to know when the drag has left the sheet.
 	const depth = useRef(0);
-	const accepts = flow.stage === "input" && flow.kind !== "dois" && !flow.busy;
+	const accepts = flow.stage === "input" && flow.fileKind !== null && !flow.busy;
 	const carriesFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
 	const stop = () => {
 		depth.current = 0;
@@ -307,15 +331,15 @@ export function SheetDrop({ children, flow }: { children: ReactNode; flow: Impor
 
 /** Says, beside the upload button, that files can be dropped anywhere on the sheet. */
 export function DropHint({ flow }: { flow: ImportFlowState }) {
-	if (flow.stage !== "input" || flow.kind === "dois") return null;
-	return <p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">Drop {droppedFilesName(flow.kind)} anywhere on this sheet</p>;
+	if (flow.stage !== "input" || !flow.fileKind) return null;
+	return <p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">Drop {droppedFilesName(flow.fileKind)} anywhere on this sheet</p>;
 }
 
 /** Choose PDFs or bibliography files from the footer, beside the button that reads them. */
 export function UploadButton({ flow }: { flow: ImportFlowState }) {
 	const input = useRef<HTMLInputElement>(null);
-	if (flow.kind === "dois") return null;
-	const pdfs = flow.kind === "pdfs";
+	if (!flow.fileKind) return null;
+	const pdfs = flow.fileKind === "pdfs";
 	return (
 		<>
 			<input
@@ -347,7 +371,7 @@ export function UploadButton({ flow }: { flow: ImportFlowState }) {
 export function ImportAdd({ flow }: { flow: ImportFlowState }) {
 	return (
 		<div aria-labelledby={`import-source-panel-tab-${flow.kind}`} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 pt-5 [scrollbar-gutter:stable]" id="import-source-panel" role="tabpanel">
-			<Settings flow={flow} />
+			{flow.pdfsWaiting ? null : <Settings flow={flow} />}
 			<div className="flex min-h-[18rem] flex-[1_0_auto] flex-col gap-2">
 				{flow.kind === "pdfs" ? <PdfUpload flow={flow} /> : flow.kind === "dois" ? <DoiUpload flow={flow} /> : <FileUpload flow={flow} />}
 			</div>

@@ -29,7 +29,6 @@ import {
 	changeImportBatch,
 	chosenOf,
 	createdKeys,
-	currentImportBatch,
 	doiPreviewRequest,
 	endImportBatch,
 	filePreviewRequest,
@@ -42,8 +41,9 @@ import {
 	rowsFromRecords,
 	selectedIds,
 	selectedImportRecords,
+	otherImportBatch,
 	startImportBatch,
-	useImportBatch,
+	useImportBatches,
 	usePdfImportStatus,
 	validateChecks,
 	validateGuidance,
@@ -108,7 +108,11 @@ export type ImportFlowProps = {
  */
 export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
-	const batch = useImportBatch();
+	const imports = useImportBatches();
+	// An editor can step out of the PDF import's review to import DOIs or files; it carries on meanwhile, and only one is open.
+	const [besidePdfs, setBesidePdfs] = useState(false);
+	const openPdfs = imports.pdfs && !imports.pdfs.results ? imports.pdfs : null;
+	const batch = imports.other ?? (besidePdfs && openPdfs ? null : imports.pdfs);
 	const last = usePdfImportStatus().data?.last;
 	const [kind, setKindState] = useState<ImportKind>(batch?.kind ?? "pdfs");
 	const [doiText, setDoiText] = useState("");
@@ -129,7 +133,11 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const [error, setError] = useState<string | null>(null);
 
 	const stage: ImportStage = batch?.results ? "done" : batch ? "review" : "input";
-	const problem = inputError(kind, doiText, files, pdfs, checks, guidance);
+	// With a PDF import open, the PDFs tab leads back to it rather than reading more.
+	const pdfsWaiting = kind === "pdfs" && openPdfs !== null;
+	// The files the Add step takes now, by drop or upload: none for DOIs, or for PDFs while an import is open.
+	const fileKind = kind === "dois" || pdfsWaiting ? null : kind;
+	const problem = pdfsWaiting ? null : inputError(kind, doiText, files, pdfs, checks, guidance);
 	const rows = batch?.rows ?? [];
 	const counts = reviewCounts(batch);
 	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
@@ -160,6 +168,10 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const start = () =>
 		run(async () => {
 			setFilter("all");
+			if (kind === "pdfs" && openPdfs) {
+				setBesidePdfs(false);
+				return;
+			}
 			if (kind === "pdfs") {
 				// The import and its rows exist on the server first, so the review shows every PDF while they upload.
 				const started = await startAdminPdfImport({ checks, collections, filenames: pdfs.map(({ name }) => name), instructions: guidance });
@@ -170,7 +182,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			const importId = crypto.randomUUID();
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
 			// The dialog may have closed and started another import while this lookup ran.
-			if (currentImportBatch()) return;
+			if (otherImportBatch()) return;
 			const previewRows = rowsFromRecords(response.records);
 			setActiveId(previewRows[0]?.id ?? null);
 			startImportBatch({ checks: [], collections, importId, kind, rows: previewRows });
@@ -269,7 +281,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			await closeAdminPdfImport(batch.importId);
 			await mutate(PDF_IMPORT_KEY);
 		}
-		endImportBatch();
+		if (batch) endImportBatch(batch.importId);
 	};
 
 	const restart = () =>
@@ -313,10 +325,15 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		onClose,
 		onOpenRecord,
 		pdfs,
-		primaryLabel: { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: action("Read", pdfs.length, "PDF", "PDFs") }[kind],
+		primaryLabel: { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: openPdfs ? action("Review", openPdfs.rows.length, "PDF", "PDFs") : action("Read", pdfs.length, "PDF", "PDFs") }[kind],
 		problem,
 		propertiesOf,
 		reading,
+		/** Steps out of the open PDF import's review to the Add step, leaving the import as it is. */
+		addBeside: () => setBesidePdfs(true),
+		fileKind,
+		openPdfs,
+		pdfsWaiting,
 		restart: () => void restart(),
 		resultById,
 		rows,

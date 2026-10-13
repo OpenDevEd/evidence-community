@@ -208,25 +208,24 @@ export type ImportBatch = {
 /** What the AI chooses from a library's own lists for a record. */
 export type ChoiceKind = "collections" | "topics";
 
-let batch: ImportBatch | null = null;
+// The library's PDF import, kept on the server, and a DOI or bibliography import, kept in this tab, each with the
+// editor's choices on it. They are kept apart, so importing DOIs while a PDF import waits keeps what was chosen in it.
+let pdfs: ImportBatch | null = null;
+let other: ImportBatch | null = null;
 const listeners = new Set<() => void>();
 
-function setBatch(next: ImportBatch | null) {
-	batch = next;
+function setSlot(slot: "other" | "pdfs", next: ImportBatch | null) {
+	if (slot === "pdfs") pdfs = next;
+	else other = next;
 	for (const listener of listeners) listener();
 }
 
 export function startImportBatch(start: Pick<ImportBatch, "checks" | "collections" | "importId" | "kind" | "rows">) {
-	setBatch({ ...start, ...blankChoices, results: null });
+	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
 const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: "zenodo" as const, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
-/**
- * Takes in the server's PDF import, keeping the editor's choices on it. A
- * DOI or bibliography import under review stays; the PDF import shows once
- * it ends.
- */
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
 
@@ -238,16 +237,12 @@ function fromServer(server: AdminPdfImport) {
 /** The server's import with no choices made on it yet. */
 const pdfBatch = (server: AdminPdfImport): ImportBatch => ({ ...blankChoices, ...fromServer(server), collections: server.collections, importId: server.id, kind: "pdfs" });
 
+/** Takes in the server's PDF import, keeping the editor's choices on it. */
 function syncPdfImport({ import: server }: AdminPdfImportStatus) {
-	if (batch && batch.kind !== "pdfs") return;
 	const answer = JSON.stringify(server);
-	if (answer === synced && (server ? batch?.importId === server.id : !batch)) return;
+	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
-	if (!server) {
-		if (batch) setBatch(null);
-		return;
-	}
-	setBatch(batch?.importId === server.id ? { ...batch, ...fromServer(server) } : pdfBatch(server));
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server) } : pdfBatch(server)) : null);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
@@ -260,15 +255,18 @@ export function usePdfImportStatus() {
 	});
 }
 
-export const currentImportBatch = () => batch;
+/** This tab's DOI or bibliography import, which a lookup that ends late must not replace. */
+export const otherImportBatch = () => other;
 
-export function endImportBatch() {
-	setBatch(null);
+export function endImportBatch(importId: string) {
+	if (pdfs?.importId === importId) setSlot("pdfs", null);
+	if (other?.importId === importId) setSlot("other", null);
 }
 
-/** Changes the batch, unless another one replaced it since the change began. */
+/** Changes an import, unless it ended or another replaced it since the change began. */
 export function changeImportBatch(importId: string, change: (current: ImportBatch) => ImportBatch) {
-	if (batch?.importId === importId) setBatch(change(batch));
+	if (pdfs?.importId === importId) setSlot("pdfs", change(pdfs));
+	else if (other?.importId === importId) setSlot("other", change(other));
 }
 
 function subscribe(listener: () => void) {
@@ -276,11 +274,19 @@ function subscribe(listener: () => void) {
 	return () => listeners.delete(listener);
 }
 
-export function useImportBatch() {
-	const stored = useSyncExternalStore(subscribe, () => batch, () => null);
+/** The open imports: the library's PDF import and this tab's DOI or bibliography import. */
+export function useImportBatches() {
+	const storedPdfs = useSyncExternalStore(subscribe, () => pdfs, () => null);
+	const storedOther = useSyncExternalStore(subscribe, () => other, () => null);
 	const served = usePdfImportStatus().data?.import;
-	// Until the first answer is taken in, the import as the page was served, so nothing changes size once it loads.
-	return stored ?? (served ? pdfBatch(served) : null);
+	// Until the first answer is taken in, the PDF import as the page was served, so nothing changes size once it loads.
+	return { other: storedOther, pdfs: storedPdfs ?? (served ? pdfBatch(served) : null) };
+}
+
+/** The import the toolbar shows: a DOI or bibliography import in hand, else the PDF import. */
+export function useImportBatch() {
+	const { other: inHand, pdfs: library } = useImportBatches();
+	return inHand ?? library;
 }
 
 /** The toolbar's Import button: how far the reading is while the dialog is closed, and that a review waits after. A batch holds the button at one width so the count doesn't move the toolbar. */

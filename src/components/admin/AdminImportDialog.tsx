@@ -87,7 +87,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 					{flow.error || flow.footerProblem ? (
 						<InputNote flow={flow} />
 					) : stage === "review" ? (
-						<p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">{flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts"}</p>
+						<p className="min-w-0 flex-1 basis-full text-xs leading-5 text-black/50 sm:basis-0 dark:text-white/50">{flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts"}</p>
 					) : stage === "done" ? null : (
 						<DropHint flow={flow} />
 					)}
@@ -102,6 +102,11 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 						) : null}
 						{stage === "review" ? (
 							<>
+								{flow.batch?.kind === "pdfs" ? (
+									<Button isDisabled={flow.locked} onPress={flow.addBeside} size="sm" variant="transparent">
+										Back
+									</Button>
+								) : null}
 								<Button isDisabled={flow.locked} onPress={flow.restart} size="sm" variant="transparent">
 									{flow.batch?.kind === "pdfs" ? "Discard" : "Back"}
 								</Button>
