@@ -48,7 +48,7 @@ export function DropArea({
 	};
 	return (
 		<label
-			className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-center transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent ${dragging ? "border-accent bg-accent/[0.05]" : "border-black/15 hover:border-black/30 dark:border-white/15 dark:hover:border-white/30"} ${className}`}
+			className={`relative flex cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed text-center transition-colors duration-150 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent ${dragging ? "border-accent bg-accent/[0.05]" : "border-black/15 hover:border-black/30 dark:border-white/15 dark:hover:border-white/30"} ${className}`}
 			onDragLeave={() => setDragging(false)}
 			onDragOver={(event) => {
 				event.preventDefault();
