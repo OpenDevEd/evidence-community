@@ -1,5 +1,8 @@
 import { answerOpenScholar, readerFor, refusals } from "@/lib/openscholar/library-reads";
-import { MAX_COLLECTIONS_PAGE_SIZE, readProfileCollections, readSharedCollections } from "@/lib/readers/data";
+import { readProfileCollections, readSharedCollections } from "@/lib/readers/data";
+
+/** Most collections one page holds: OpenScholar lists a person's collections here in one read. */
+const PAGE_SIZE_MAX = 100;
 
 /**
  * A page of a person's collections here: `list=own` their own, private ones too, oldest first; `list=shared` the
@@ -12,7 +15,7 @@ export async function GET(request: Request, props: { params: Promise<{ clerkUser
 		const list = params.get("list") ?? "own";
 		if (list !== "own" && list !== "shared") return refusals.invalid("`list` is own or shared.");
 		const page = Math.max(1, Number(params.get("page")) || 1);
-		const pageSize = Math.min(MAX_COLLECTIONS_PAGE_SIZE, Math.max(1, Number(params.get("pageSize")) || MAX_COLLECTIONS_PAGE_SIZE));
+		const pageSize = Math.min(PAGE_SIZE_MAX, Math.max(1, Number(params.get("pageSize")) || PAGE_SIZE_MAX));
 		const readerId = await readerFor(config, database, (await props.params).clerkUserId);
 		if (!readerId) return { body: { rows: [], page: 1, pages: 1, total: 0 } };
 		const read = list === "own"
