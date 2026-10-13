@@ -329,7 +329,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 		assert(withdrawn.state === "withdrawn", "Creator could not withdraw their review");
 		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);
 		const [stillPublic] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, reviewAttachment.itemKey));
-		assert(stillPublic?.sha256 === fileHash(reviewPdf), "Staging removal changed the public file before approval");
+		assert(stillPublic?.sha256 === approvedFile.sha256, "Staging removal changed the public file before approval");
 		assert(reviewStorage.publicFiles.has(stillPublic.objectPath), "Staging removal deleted the public PDF");
 		await undoNativePdfRemoval(db, reviewAttachment.itemKey);
 		await stageNativePdfRemoval(db, reviewStorage, reviewAttachment.itemKey);

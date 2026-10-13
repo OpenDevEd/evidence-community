@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, PencilEdit02Icon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -10,9 +10,9 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { Abstract, CheckMeter, Checks, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, RightsFixLine, rowStatus, StatusText, TopicList, usd } from "./ImportReview";
+import { Abstract, CheckMeter, Checks, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, SuggestionList, TopicList } from "./ImportReview";
 import { humanizeAdminField } from "./admin-schema";
-import { checkPasses, rowPasses, type ImportRow, type ReviewFilter } from "./admin-import";
+import { checkPasses, recordPayload, rowPasses, type ImportRow, type ReviewFilter } from "./admin-import";
 import { CollectionsSetting } from "./ImportAdd";
 import { ListHeader, Setting, SettingsGroup, SheetTabs } from "./import-parts";
 import type { ImportFlowState } from "./import-flow";
@@ -85,19 +85,19 @@ function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onO
 			</SettingsGroup>
 			<div className="flex flex-col gap-2">
 				<ListHeader
-					aside={pdfs ? (flow.reading ? `${flow.counts.done} of ${flow.counts.total} read` : `Read for ${usd(flow.costUsd)}`) : undefined}
+					aside={pdfs && flow.reading ? `${flow.counts.done} of ${flow.counts.total} read` : undefined}
 					lead={<Checkbox aria-label="Choose every ready record" isDisabled={flow.locked || !flow.readyIds.length} isIndeterminate={flow.selected.size > 0 && !all} isSelected={all} onValueChange={(checked) => flow.setSelected(new Set(checked ? flow.readyIds : []))} size="sm" />}
 					title={`${flow.selected.size} of ${flow.readyIds.length} chosen`}
 				/>
 				<ul className="flex flex-col">
 					{items.map((row) => {
-						const title = row.record?.title ?? row.file?.name ?? row.record?.source ?? "";
+						const title = row.record?.title ?? row.source?.filename ?? row.record?.source ?? "";
 						const status = rowStatus(row, flow.resultById.get(row.id), flow.batch?.attach.get(row.id));
 						return (
 							<li className="flex items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" key={row.id}>
 								<Checkbox aria-label={`Import ${title}`} isDisabled={flow.locked || row.record?.state !== "ready"} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm" />
 								<button className="flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-md py-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onOpen(row.id)} type="button">
-									<ImportCover className="w-8" file={row.file} itemType={row.record?.itemType} reading={row.state === "reading"} size={12} />
+									<ImportCover className="w-8" pdf={row.source?.url ?? null} itemType={row.record?.itemType} reading={row.state === "reading"} size={12} />
 									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 										<span className={`line-clamp-2 text-sm leading-5 ${row.record?.title ? "font-medium text-black/85 dark:text-white/85" : "text-black/45 dark:text-white/45"}`}>{title}</span>
 										<span className="flex items-center gap-2">
@@ -108,7 +108,7 @@ function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onO
 													<StatusText status={status} />
 												</span>
 											)}
-											<CheckMeter checks={flow.checksOf(row)} count={row.file ? flow.checkCount : 0} />
+											<CheckMeter checks={flow.checksOf(row)} count={row.source ? flow.checkCount : 0} />
 										</span>
 									</span>
 									<HugeiconsIcon aria-hidden className="shrink-0 text-black/30 dark:text-white/30" icon={ArrowRight01Icon} size={15} />
@@ -137,14 +137,17 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 	const next = flow.shown[index + 1];
 	const record = row.record;
 	const payload = record?.payload ?? {};
-	const abstract = typeof payload.abstractNote === "string" ? payload.abstractNote : null;
+	const applied = flow.appliedFor(row);
+	const edited = recordPayload(row, applied);
+	const abstract = typeof edited.abstractNote === "string" ? edited.abstractNote : null;
+	const abstractWritten = row.suggestions.some(({ field }, index) => field === "abstractNote" && applied.has(index));
 	const settled = row.state === "read" || row.state === "failed";
 	const checks = flow.checksOf(row);
 	const result = flow.resultById.get(row.id);
 	const openKey = result?.itemKey ?? record?.existingKey;
 	const properties = flow.propertiesOf(row);
 	const kindLine = [record?.itemType ? humanizeAdminField(record.itemType) : null, record?.year].filter(Boolean);
-	const title = record?.title ?? row.file?.name ?? record?.source ?? "";
+	const title = record?.title ?? row.source?.filename ?? record?.source ?? "";
 	return (
 		<div className="flex flex-col gap-5">
 			<div className="-mx-1.5 -mt-2 flex h-9 items-center gap-1">
@@ -162,7 +165,7 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 				</Button>
 			</div>
 			<header className="flex gap-4">
-				<ImportCover className="w-16 self-start" file={row.file} itemType={record?.itemType} reading={row.state === "reading"} size={18} />
+				<ImportCover className="w-16 self-start" pdf={row.source?.url ?? null} itemType={record?.itemType} reading={row.state === "reading"} size={18} />
 				<div className="flex min-w-0 flex-1 flex-col gap-1">
 					<p className="flex h-4 gap-3 text-xs text-black/45 dark:text-white/45">
 						{kindLine.map((part) => (
@@ -185,20 +188,25 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 					{record?.state === "attention" ? <p className="text-xs leading-5 text-danger">{attentionReason(record)}</p> : null}
 				</div>
 			</header>
-			{record ? <MetadataLine payload={payload} /> : null}
+			{record ? <MetadataLine payload={edited} /> : null}
 			{!settled ? (
 				<ReadingPlaceholder />
 			) : (
 				<div className="animate-fade-in [animation-duration:300ms]">
 					<SettingsGroup>
 						{abstract ? (
-							<Setting icon={TextIcon} summary={row.abstractWritten ? "Written by AI" : "From the PDF"} title="Abstract">
+							<Setting icon={TextIcon} summary={abstractWritten ? "Written by AI" : "From the PDF"} title="Abstract">
 								<Abstract text={abstract} />
 							</Setting>
 						) : null}
-						{row.file && flow.checkCount ? (
-							<Setting defaultOpen={!rowPasses(row)} icon={CheckListIcon} summary={`${checks.filter(checkPasses).length} of ${flow.checkCount} pass`} title="AI checks">
-								<Checks checks={checks}>{row.rightsFix ? <RightsFixLine applied={row.fixApplied} fix={row.rightsFix} locked={flow.locked} onToggle={() => flow.toggleFix(row.id)} stated={typeof payload.rights === "string" ? payload.rights : ""} /> : null}</Checks>
+						{row.source && flow.checkCount ? (
+							<Setting defaultOpen={!rowPasses(row, applied)} icon={CheckListIcon} summary={`${checks.filter(checkPasses).length} of ${flow.checkCount} pass`} title="AI checks">
+								<Checks checks={checks} />
+							</Setting>
+						) : null}
+						{row.suggestions.length ? (
+							<Setting defaultOpen={row.suggestions.some((_, index) => !applied.has(index))} icon={PencilEdit02Icon} summary={`${applied.size} of ${row.suggestions.length} applied`} title="Suggested changes">
+								<SuggestionList applied={applied} checks={flow.batch?.checks ?? []} locked={flow.locked} onToggle={(index) => flow.toggleSuggestion(row.id, index)} payload={payload} suggestions={row.suggestions} />
 							</Setting>
 						) : null}
 						{row.topics.length ? (
@@ -206,7 +214,7 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 								<TopicList chosen={flow.topicsOf(row)} locked={flow.locked} onToggle={(topicId) => flow.toggleTopic(row.id, topicId)} topics={row.topics} />
 							</Setting>
 						) : null}
-						{row.file && record && row.pdf ? (
+						{row.source && record && row.pdf ? (
 							<Setting icon={FileEditIcon} summary={propertiesAside(properties, row.pdf)} title="PDF properties">
 								<PdfPropertiesList after={properties} now={row.pdf} />
 							</Setting>
@@ -215,13 +223,13 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 				</div>
 			)}
 			<div className="flex flex-wrap gap-2 empty:hidden">
-				{row.file ? (
-					<Button onPress={() => window.open(URL.createObjectURL(row.file!), "_blank", "noopener")} size="xs" startContent={<HugeiconsIcon aria-hidden icon={SquareArrowUpRight02Icon} size={13} />} variant="muted">
+				{row.source ? (
+				<Button onPress={() => window.open(row.source!.url, "_blank", "noopener")} size="xs" startContent={<HugeiconsIcon aria-hidden icon={SquareArrowUpRight02Icon} size={13} />} variant="muted">
 						Open PDF
 					</Button>
 				) : null}
-				{row.file && record && row.pdf?.writable ? (
-					<Button onPress={() => void openWithProperties(row.file!, properties)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={FileExportIcon} size={13} />} variant="muted">
+				{row.source && record && row.pdf?.writable ? (
+				<Button onPress={() => void openWithProperties(row.source!.url, properties)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={FileExportIcon} size={13} />} variant="muted">
 						Open with new properties
 					</Button>
 				) : null}

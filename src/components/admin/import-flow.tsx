@@ -1,30 +1,40 @@
 "use client";
 
-import { use, useDeferredValue, useState } from "react";
+import { useState } from "react";
+import { mutate } from "swr";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
+import { parseDoiList } from "@/lib/admin/item-import-contract";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
-import { usd } from "./ImportReview";
 import type { ImportKind, ImportStage } from "./ImportSteps";
-import { AdminApiError, approveAdminReview, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf, reserveAdminCrossrefDoi, saveAdminPublishingChoice, submitAdminReview } from "./admin-api";
 import {
-	FILE_CHECKS,
+	AdminApiError,
+	approveAdminReview,
+	closeAdminPdfImport,
+	commitAdminImport,
+	commitAdminPdfImport,
+	PDF_IMPORT_KEY,
+	previewAdminImport,
+	reserveAdminCrossrefDoi,
+	saveAdminPublishingChoice,
+	startAdminPdfImport,
+	submitAdminReview,
+	uploadAdminPdfImportFile,
+} from "./admin-api";
+import {
+	appliedOf,
 	changeImportBatch,
-	changeImportRow,
 	chosenTopics,
 	createdKeys,
 	currentImportBatch,
 	doiPreviewRequest,
 	endImportBatch,
 	filePreviewRequest,
-	pendingPdfRows,
 	publishedProperties,
-	readPdfs,
 	readyIds,
-	recordRights,
+	recordPayload,
 	reviewChecks,
 	reviewCounts,
 	reviewMatches,
@@ -32,22 +42,16 @@ import {
 	selectedIds,
 	selectedImportRecords,
 	startImportBatch,
-	storeChecks,
-	storedChecks,
-	storedGuidance,
-	storeGuidance,
 	useImportBatch,
+	usePdfImportStatus,
 	validateChecks,
 	validateGuidance,
 	validateImportFiles,
 	validatePdfFiles,
-	type AttachState,
 	type ImportRow,
 	type PublishState,
 	type ReviewFilter,
 } from "./admin-import";
-import { uploadPdfFile } from "./admin-pdf";
-import { pdfPageCount } from "./pdf-thumbnail";
 
 function errorMessage(error: unknown) {
 	if (error instanceof AdminApiError) {
@@ -85,31 +89,8 @@ const plural = (count: number, one: string, many: string) => `${count} ${count =
 /** "Read 5 PDFs", or "Read PDFs" before there are any. */
 export const action = (verb: string, count: number, one: string, many: string) => (count ? `${verb} ${plural(count, one, many)}` : `${verb} ${many}`);
 
-const pageTotals = new WeakMap<readonly File[], Promise<number | null>>();
-
-/** The chosen PDFs' pages added up, once per selection. Null when one can't be opened. */
-function pagesIn(files: readonly File[]) {
-	let total = pageTotals.get(files);
-	if (!total) {
-		total = Promise.all(files.map(pdfPageCount)).then((counts) => (counts.includes(null) ? null : counts.reduce<number>((sum, count) => sum + (count ?? 0), 0)));
-		pageTotals.set(files, total);
-	}
-	return total;
-}
-
-/** What reading the chosen PDFs should cost. Render inside Suspense. */
-export function CostEstimate({ files, stale }: { files: readonly File[]; stale: boolean }) {
-	const pages = use(pagesIn(files));
-	if (pages === null) return null;
-	const cost = estimatePdfImportCost(pages, files.length);
-	return (
-		<span className="min-w-0 animate-fade-in truncate [animation-duration:300ms]">
-			<span className={`transition-opacity duration-200 ${stale ? "opacity-50" : ""}`}>
-				{cost < 0.01 ? "Under $0.01" : `About ${usd(cost)}`} for {plural(pages, "page", "pages")}
-			</span>
-		</span>
-	);
-}
+// PDFs sent to the server at once while an import starts.
+const UPLOAD_CONCURRENCY = 3;
 
 export type ImportFlowProps = {
 	onClose: () => void;
@@ -126,14 +107,17 @@ export type ImportFlowProps = {
 export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
 	const batch = useImportBatch();
+	const last = usePdfImportStatus().data?.last;
 	const [kind, setKindState] = useState<ImportKind>(batch?.kind ?? "pdfs");
 	const [doiText, setDoiText] = useState("");
 	const [files, setFiles] = useState<File[]>([]);
 	const [pdfs, setPdfs] = useState<File[]>([]);
-	const estimateFiles = useDeferredValue(pdfs);
-	const [checks, setChecksState] = useState(() => (typeof window === "undefined" ? [] : storedChecks()));
+	// The library's last import's checks and instructions until the editor changes them here.
+	const [editedChecks, setEditedChecks] = useState<string[] | null>(null);
+	const checks = editedChecks ?? last?.checks ?? [];
 	// A list, so a row emptied while it is being edited stays until it loses focus.
-	const [instructions, setInstructionsState] = useState<string[]>(() => (typeof window === "undefined" ? [] : storedGuidance().split("\n").filter((line) => line.trim())));
+	const [editedInstructions, setEditedInstructions] = useState<string[] | null>(null);
+	const instructions = editedInstructions ?? (last?.instructions ?? "").split("\n").filter((line) => line.trim());
 	const guidance = instructions.map((line) => line.trim()).filter(Boolean).join("\n");
 	// Chosen before reading starts; the batch carries them from then on.
 	const [collections, setCollectionsState] = useState<string[]>([]);
@@ -145,19 +129,19 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const stage: ImportStage = batch?.results ? "done" : batch ? "review" : "input";
 	const problem = inputError(kind, doiText, files, pdfs, checks, guidance);
 	const rows = batch?.rows ?? [];
-	const counts = reviewCounts(rows);
+	const counts = reviewCounts(batch);
 	const reading = batch?.kind === "pdfs" && counts.done < counts.total;
 	const locked = busy || batch?.committing === true;
-	const shown = rows.filter((row) => reviewMatches(row, filter));
+	const shown = rows.filter((row) => reviewMatches(batch, row, filter));
 	const activeRow = rows.find(({ id }) => id === activeId) ?? shown[0] ?? null;
 	const resultById = new Map((batch?.results ?? []).map((result) => [result.id, result]));
 	const selected = batch ? selectedIds(batch) : new Set<string>();
-	const checksOf = (row: ImportRow) => reviewChecks(row);
-	// The library's checks, and for PDFs the ones read from the file.
-	const checkCount = (batch?.checks.length ?? 0) + (batch?.kind === "pdfs" ? FILE_CHECKS.length : 0);
+	const appliedFor = (row: ImportRow) => appliedOf(batch, row);
+	const checksOf = (row: ImportRow) => reviewChecks(row, appliedFor(row));
+	const checkCount = batch?.checks.length ?? 0;
 	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
-	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row));
+	const propertiesOf = (row: ImportRow) => publishedProperties(row, appliedFor(row), topicNames(row));
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -174,15 +158,14 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const start = () =>
 		run(async () => {
 			setFilter("all");
-			const importId = crypto.randomUUID();
 			if (kind === "pdfs") {
-				storeChecks(checks);
-				const pending = pendingPdfRows(pdfs);
-				setActiveId(pending[0]?.id ?? null);
-				startImportBatch({ checks, collections, importId, kind, rows: pending });
-				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks, guidance), errorMessage);
+				// The import and its rows exist on the server first, so the review shows every PDF while they upload.
+				const started = await startAdminPdfImport({ checks, collections, filenames: pdfs.map(({ name }) => name), instructions: guidance });
+				await mutate(PDF_IMPORT_KEY);
+				void uploadPdfs(started.files.map(({ id }, index) => ({ file: pdfs[index]!, id })));
 				return;
 			}
+			const importId = crypto.randomUUID();
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
 			// The dialog may have closed and started another import while this lookup ran.
 			if (currentImportBatch()) return;
@@ -191,21 +174,19 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			startImportBatch({ checks: [], collections, importId, kind, rows: previewRows });
 		});
 
-	const attachPdfs = async (importId: string, created: AdminImportCommitResult[]) => {
-		const rowById = new Map(rows.map((row) => [row.id, row]));
-		const mark = (id: string, state: AttachState) => changeImportBatch(importId, (current) => ({ ...current, attach: new Map(current.attach).set(id, state) }));
-		for (const { id } of created) mark(id, "attaching");
+	/** Sends the PDFs to the server a few at a time; the worker reads each as it arrives. */
+	const uploadPdfs = async (queue: { file: File; id: string }[]) => {
+		let next = 0;
 		await Promise.all(
-			created.map(async ({ id, itemKey }) => {
-				const row = rowById.get(id);
-				if (!row?.file || !itemKey) return;
-				try {
-					const attachment = await createAdminDraft({ collections: [], itemType: "attachment", parentItem: itemKey, tags: [], title: row.file.name });
-					await uploadPdfFile(attachment.itemKey, row.file, () => undefined);
-					mark(id, "attached");
-				} catch (caught) {
-					console.error("Attaching the PDF failed", row.file.name, caught);
-					mark(id, "failed");
+			Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, async () => {
+				while (next < queue.length) {
+					const { file, id } = queue[next++]!;
+					try {
+						await uploadAdminPdfImportFile(id, file);
+					} catch (caught) {
+						setError(`${file.name} could not be uploaded. ${errorMessage(caught)}`);
+					}
+					void mutate(PDF_IMPORT_KEY);
 				}
 			}),
 		);
@@ -221,19 +202,25 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			).map((record) => {
 				const row = rowById.get(record.id)!;
 				const topics = [...topicsOf(row)];
-				const rights = recordRights(row);
-				return { ...record, payload: { ...record.payload, ...(topicsEnabled && topics.length ? { topics } : {}), ...(rights ? { rights } : {}) } };
+				return { ...record, payload: { ...recordPayload(row, appliedFor(row)), ...(topicsEnabled && topics.length ? { topics } : {}) } };
 			});
+			const input = { collections: batch.collections, importId: batch.importId, records };
 			changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
-			const response = await commitAdminImport({ collections: batch.collections, importId: batch.importId, records }).catch((caught: unknown) => {
+			try {
+				// A PDF import is kept on the server, which gives each new draft its PDF.
+				if (batch.kind === "pdfs") {
+					const { results } = await commitAdminPdfImport(input);
+					await mutate(PDF_IMPORT_KEY);
+					await onImported(createdKeys(results));
+				} else {
+					const { results } = await commitAdminImport(input);
+					changeImportBatch(batch.importId, (current) => ({ ...current, results }));
+					// The finish step says what the import did, so no toast covers its buttons.
+					await onImported(createdKeys(results));
+				}
+			} finally {
 				changeImportBatch(batch.importId, (current) => ({ ...current, committing: false }));
-				throw caught;
-			});
-			changeImportBatch(batch.importId, (current) => ({ ...current, committing: false, results: response.results }));
-			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
-			if (batch.kind === "pdfs") void attachPdfs(batch.importId, created);
-			// The finish step says what the import did, so no toast covers its buttons.
-			await onImported(createdKeys(response.results));
+			}
 		});
 
 	/**
@@ -273,20 +260,30 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		await onImported(created);
 	};
 
-	const restart = () => {
-		endImportBatch();
-		setError(null);
-		if (stage === "done") {
-			setPdfs([]);
-			setFiles([]);
-			setDoiText("");
+	/** Ends the import here and, for a PDF import, on the server, which removes its stored PDFs. */
+	const end = async () => {
+		if (batch?.kind === "pdfs") {
+			await closeAdminPdfImport(batch.importId);
+			await mutate(PDF_IMPORT_KEY);
 		}
+		endImportBatch();
 	};
 
-	const finish = () => {
-		endImportBatch();
-		onClose();
-	};
+	const restart = () =>
+		run(async () => {
+			await end();
+			if (stage === "done") {
+				setPdfs([]);
+				setFiles([]);
+				setDoiText("");
+			}
+		});
+
+	const finish = () =>
+		run(async () => {
+			await end();
+			onClose();
+		});
 
 	const importId = batch?.importId ?? "";
 	return {
@@ -301,10 +298,9 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		counts,
 		doiText,
 		error,
-		estimateFiles,
 		files,
 		filter,
-		finish,
+		finish: () => void finish(),
 		guidance,
 		instructions,
 		// The DOI box lists entries that are not DOIs itself; the footer explains the rest, such as too many DOIs.
@@ -318,7 +314,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		problem,
 		propertiesOf,
 		reading,
-		restart,
+		restart: () => void restart(),
 		resultById,
 		rows,
 		selected,
@@ -327,20 +323,13 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		stage,
 		start: () => void start(),
 		topicsOf,
-		costUsd: rows.reduce((sum, row) => sum + row.costUsd, 0),
 		readyIds: readyIds(rows),
 		setActiveId,
-		setChecks: (value: string[]) => {
-			setChecksState(value);
-			storeChecks(value);
-		},
+		setChecks: setEditedChecks,
 		setCollections: (keys: string[]) => (batch ? changeImportBatch(importId, (current) => ({ ...current, collections: keys })) : setCollectionsState(keys)),
 		setDoiText,
 		setFiles,
-		setInstructions: (items: string[]) => {
-			setInstructionsState(items);
-			storeGuidance(items.join("\n"));
-		},
+		setInstructions: setEditedInstructions,
 		setFilter,
 		setKind: (value: ImportKind) => {
 			setKindState(value);
@@ -353,8 +342,16 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		/** Publishes the drafts when `approve` (editors and owners), else submits them for review. */
 		send: (drafts: Parameters<typeof send>[1], approve: boolean) => void send(importId, drafts, approve),
 		setPublishRoute: (route: PublishingChoice["route"]) => changeImportBatch(importId, (current) => ({ ...current, publishRoute: route })),
-		setFix: (rowId: string, applied: boolean) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: applied })),
-		toggleFix: (rowId: string) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: !row.fixApplied })),
+		appliedFor,
+		toggleSuggestion: (rowId: string, index: number) =>
+			changeImportBatch(importId, (current) => {
+				const row = current.rows.find(({ id }) => id === rowId);
+				if (!row) return current;
+				const next = new Set(appliedOf(current, row));
+				if (next.has(index)) next.delete(index);
+				else next.add(index);
+				return { ...current, applied: new Map(current.applied).set(rowId, next) };
+			}),
 		toggleTopic: (rowId: string, topicId: string) =>
 			changeImportBatch(importId, (current) => {
 				const row = current.rows.find(({ id }) => id === rowId);

@@ -25,25 +25,25 @@ const TYPE_ICONS: Record<string, typeof Pdf01Icon> = {
 	thesis: Mortarboard01Icon,
 };
 
-function Thumbnail({ file }: { file: File }) {
-	const url = use(pdfThumbnail(file));
+function Thumbnail({ pdf }: { pdf: File | string }) {
+	const url = use(pdfThumbnail(pdf));
 	if (!url) return null;
 	return <Image alt="" className="animate-fade-in object-cover object-top [animation-duration:400ms]" fill sizes="180px" src={url} unoptimized />;
 }
 
 /**
- * A record's cover: the PDF's first page when there is a PDF, its type's icon
+ * A record's cover: the first page of its PDF, chosen or stored, when it has one, its type's icon
  * otherwise. While the AI reads the PDF a light passes down the page.
  */
 export function ImportCover({
 	className = "",
-	file,
+	pdf,
 	itemType,
 	reading = false,
 	size = 18,
 }: {
 	className?: string;
-	file: File | null;
+	pdf: File | string | null;
 	itemType?: string | null;
 	reading?: boolean;
 	size?: number;
@@ -51,11 +51,11 @@ export function ImportCover({
 	return (
 		<span className={`relative block aspect-[3/4] shrink-0 overflow-hidden rounded-[4px] bg-white shadow-sm ring-1 ring-black/10 dark:bg-white/[0.06] dark:ring-white/10 ${className}`}>
 			<span className="absolute inset-0 flex items-center justify-center text-black/20 dark:text-white/20">
-				<HugeiconsIcon aria-hidden icon={file ? Pdf01Icon : (TYPE_ICONS[itemType ?? ""] ?? File02Icon)} size={size} />
+				<HugeiconsIcon aria-hidden icon={pdf ? Pdf01Icon : (TYPE_ICONS[itemType ?? ""] ?? File02Icon)} size={size} />
 			</span>
-			{file ? (
+			{pdf ? (
 				<Suspense fallback={null}>
-					<Thumbnail file={file} />
+					<Thumbnail pdf={pdf} />
 				</Suspense>
 			) : null}
 			{reading ? (

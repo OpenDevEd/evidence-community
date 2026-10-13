@@ -2,22 +2,21 @@
 
 import { AlertCircleIcon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { useRef, useState, type DragEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_GUIDANCE_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
+import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_FILES, PDF_IMPORT_MAX_GUIDANCE_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { DropArea, ListEditor, megabytes, PDF_ACCEPT, RemoveButton, withNew } from "./ImportInputs";
 import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
-import { FILE_CHECKS, PDF_IMPORT_MAX_FILES } from "./admin-import";
-import { FileChecksList, ListHeader, PdfRows, Setting, SettingsGroup, SheetTabs } from "./import-parts";
-import { CostEstimate, type ImportFlowState } from "./import-flow";
+import { ListHeader, PdfRows, Setting, SettingsGroup, SheetTabs } from "./import-parts";
+import type { ImportFlowState } from "./import-flow";
 
 const SOURCES: { icon: typeof Pdf01Icon; id: ImportKind; label: string }[] = [
 	{ icon: Pdf01Icon, id: "pdfs", label: "PDFs" },
@@ -43,7 +42,7 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 	const shared = "col-start-1 row-start-1 whitespace-pre-wrap break-words px-4 py-3 text-sm leading-6";
 	return (
 		<div>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library and given to the AI with every PDF it reads. They win over how it works by default, but never make it invent facts.</p>
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Given to the AI with every PDF it reads, and kept for the library&rsquo;s next import. They win over how it works by default, but never make it invent facts.</p>
 			<div className="overflow-hidden rounded-xl bg-card_light shadow-sm ring-1 ring-black/[0.07] transition-shadow focus-within:ring-2 focus-within:ring-focus dark:bg-white/[0.05] dark:ring-white/[0.08]">
 				<div className="grid min-h-[8.5rem]">
 					<span aria-hidden className={`${shared} invisible`}>{`${text || INSTRUCTIONS_EXAMPLE} `}</span>
@@ -94,19 +93,17 @@ function Settings({ flow }: { flow: ImportFlowState }) {
 		<SettingsGroup>
 			{flow.kind === "pdfs" ? (
 				<>
-					<Setting icon={CheckListIcon} summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} on every file`} title="AI checks">
+					<Setting icon={CheckListIcon} summary={flow.checks.length ? `${flow.checks.length} ${flow.checks.length === 1 ? "check" : "checks"}` : "None yet"} title="AI checks">
 						<ListEditor
 							addLabel="Add a check"
 							busy={flow.busy}
-							intro={`Saved for this library, up to ${PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on.`}
+							intro={`Up to ${PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on. The library's next import starts from these.`}
 							itemLabel="Check"
 							items={flow.checks}
 							max={PDF_IMPORT_MAX_CRITERIA}
 							maxLength={PDF_IMPORT_MAX_CRITERION_LENGTH}
 							onChange={flow.setChecks}
 						/>
-						<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">Also checked in every PDF, from how the file was exported</p>
-						<FileChecksList />
 					</Setting>
 					<Setting icon={NoteEditIcon} summary={instructions ? `${instructions} ${instructions === 1 ? "instruction" : "instructions"}` : "None yet"} title="AI instructions">
 						<InstructionsEditor flow={flow} />
@@ -157,14 +154,7 @@ function PdfUpload({ flow }: { flow: ImportFlowState }) {
 			{count ? (
 				<>
 					<UploadHeader
-						aside={
-							<>
-								<span className="shrink-0">{totalSize(flow.pdfs)}</span>
-								<Suspense fallback={null}>
-									<CostEstimate files={flow.estimateFiles} stale={flow.estimateFiles !== flow.pdfs} />
-								</Suspense>
-							</>
-						}
+						aside={totalSize(flow.pdfs)}
 						busy={flow.busy}
 						onClear={() => flow.setPdfs([])}
 						title={`${count} ${count === 1 ? "PDF" : "PDFs"}`}
@@ -172,7 +162,7 @@ function PdfUpload({ flow }: { flow: ImportFlowState }) {
 					<PdfRows busy={flow.busy} files={flow.pdfs} onFilesChange={flow.setPdfs} perPage={8} />
 				</>
 			) : (
-				<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. Claude Haiku 5.5 reads each one.`} label="PDFs" onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what="PDFs" />
+				<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. The library's AI reads each one.`} label="PDFs" onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what="PDFs" />
 			)}
 		</>
 	);

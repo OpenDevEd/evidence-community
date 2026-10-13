@@ -16,7 +16,6 @@ import {
 	PencilEdit02Icon,
 	PlusSignIcon,
 	Tick02Icon,
-	CopyrightIcon,
 	Undo02Icon,
 } from "@hugeicons/core-free-icons";
 import { useState, type ReactNode } from "react";
@@ -24,9 +23,10 @@ import { useState, type ReactNode } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
-import type { AdminImportCommitResult, PdfCheckResult, RightsFix, TopicSuggestion } from "@/lib/admin/item-import-contract";
+import type { AdminImportCommitResult, PdfCheckResult, PdfSuggestion, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
+import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
 
 const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
@@ -47,11 +47,11 @@ type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
 
 /** What a row's status says, from its reading, its preview, its import and its PDF. */
 export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
+	if (row.state === "uploading") return { icon: null, label: "Uploading", tone: "progress" };
 	if (row.state === "waiting") return { icon: null, label: "Queued", tone: "progress" };
 	if (row.state === "reading") return { icon: null, label: "Reading", tone: "progress" };
 	if (row.state === "failed" || !row.record) return { icon: AlertCircleIcon, label: "Could not read", tone: "attention" };
 	if (result?.outcome === "failed") return { icon: AlertCircleIcon, label: "Not imported", tone: "attention" };
-	if (attach === "attaching") return { icon: null, label: "Attaching the PDF", tone: "progress" };
 	if (attach === "failed") return { icon: AlertCircleIcon, label: "PDF not attached", tone: "attention" };
 	if (result?.outcome === "created") return { icon: Tick02Icon, label: "Draft created", tone: "ready" };
 	const states = {
@@ -100,13 +100,8 @@ export function creatorsLine(creators: readonly string[]) {
 	return `${creators[0]} and ${creators.length - 1} more`;
 }
 
-/** Dollars to the cent, and "under $0.01" below that. */
-export function usd(amount: number) {
-	return amount > 0 && amount < 0.01 ? "under $0.01" : `$${amount.toFixed(2)}`;
-}
-
-/** The answer to each check, and for a failed one that the Rights fix covers, whether it is applied. */
-function CheckList({ checks }: { checks: ReviewCheck[] }) {
+/** The answer to each check, and for a failed one that a suggested change meets, whether it is applied. */
+export function Checks({ checks }: { checks: ReviewCheck[] }) {
 	return (
 		<ul className="flex flex-col gap-4">
 			{checks.map((check) => {
@@ -118,7 +113,7 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 							<p className="text-black/85 dark:text-white/85">{check.criterion}</p>
 							{check.quote ? (
 								<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
-									{check.file ? check.quote : <q>{check.quote}</q>}
+									<q>{check.quote}</q>
 									{check.page ? <span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span> : null}
 								</p>
 							) : null}
@@ -130,8 +125,8 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 							) : null}
 							{check.fixable ? (
 								<p className="mt-1 flex gap-1.5 text-xs leading-5 text-black/55 dark:text-white/55">
-									<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={CopyrightIcon} size={12} />
-									{check.fixed ? "Fixed by the new Rights" : "The suggested Rights below fixes this"}
+									<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={PencilEdit02Icon} size={12} />
+									{check.fixed ? "Met by an applied change" : "A suggested change meets this"}
 								</p>
 							) : null}
 						</div>
@@ -142,43 +137,50 @@ function CheckList({ checks }: { checks: ReviewCheck[] }) {
 	);
 }
 
-/** The library's checks, then the ones read from how the file was exported, with what goes between them. */
-export function Checks({ checks, children }: { checks: ReviewCheck[]; children?: ReactNode }) {
-	const file = checks.filter((check) => check.file);
+/**
+ * The changes the AI suggests to the record's fields, each beside what the
+ * PDF states, with its reason and the checks it meets. The editor applies
+ * or undoes each one; the ones the library's instructions ask for start
+ * applied.
+ */
+export function SuggestionList({ applied, checks, locked, onToggle, payload, suggestions }: { applied: ReadonlySet<number>; checks: readonly string[]; locked: boolean; onToggle: (index: number) => void; payload: Record<string, unknown>; suggestions: PdfSuggestion[] }) {
 	return (
-		<>
-			<CheckList checks={checks.filter((check) => !check.file)} />
-			{children}
-			{file.length ? (
-				<>
-					<p className="mb-2.5 mt-5 text-xs text-black/45 dark:text-white/45">Also checked in every PDF, from how the file was exported</p>
-					<CheckList checks={file} />
-				</>
-			) : null}
-		</>
-	);
-}
-
-/** The Rights statement the AI suggests so the failed rights checks pass, beside what the PDF says now. */
-export function RightsFixLine({ applied, fix, locked, onToggle, stated }: { applied: boolean; fix: RightsFix; locked: boolean; onToggle: () => void; stated: string }) {
-	return (
-		<div className="mt-5 flex items-start gap-2.5">
-			<HugeiconsIcon aria-hidden className="mt-0.5 shrink-0 text-black/40 dark:text-white/40" icon={CopyrightIcon} size={16} />
-			<div className="min-w-0 flex-1 text-sm">
-				<p className="text-black/85 dark:text-white/85">{applied ? "Rights changed" : "Suggested Rights"}</p>
-				<p className="mt-1 text-xs leading-5 text-black/70 dark:text-white/70">
-					<q>{fix.statement}</q>
-				</p>
-				{stated ? (
-					<p className="mt-1 text-xs leading-5 text-black/45 dark:text-white/45">
-						The PDF says <q>{stated}</q>
-					</p>
-				) : null}
-			</div>
-			<Button className="h-8 min-h-8 min-w-[4.5rem] shrink-0" isDisabled={locked} onPress={onToggle} size="xs" startContent={<HugeiconsIcon aria-hidden icon={applied ? Undo02Icon : Tick02Icon} size={13} />} variant={applied ? "transparent" : "muted"}>
-				{applied ? "Undo" : "Apply"}
-			</Button>
-		</div>
+		<ul className="flex flex-col gap-5">
+			{suggestions.map((suggestion, index) => {
+				const on = applied.has(index);
+				const stated = typeof payload[suggestion.field] === "string" ? (payload[suggestion.field] as string) : "";
+				const meets = suggestion.checks.map((check) => checks[check]).filter(Boolean);
+				return (
+					<li className="flex items-start gap-2.5" key={`${suggestion.field}-${index}`}>
+						<HugeiconsIcon aria-hidden className={`mt-0.5 shrink-0 ${on ? "text-emerald-600 dark:text-emerald-400" : "text-black/40 dark:text-white/40"}`} icon={on ? CheckmarkCircle02Icon : PencilEdit02Icon} size={16} />
+						<div className="min-w-0 flex-1 text-sm">
+							<p className="text-black/85 dark:text-white/85">
+								{humanizeAdminField(suggestion.field)}
+								<span className="ms-2 text-xs text-black/45 dark:text-white/45">{on ? "Applied" : "Suggested"}</span>
+							</p>
+							<p className="mt-1 line-clamp-4 text-xs leading-5 text-black/70 dark:text-white/70">{suggestion.value}</p>
+							<p className="mt-1 line-clamp-2 text-xs leading-5 text-black/45 dark:text-white/45">
+								{stated ? (
+									<>
+										The PDF says <del className="decoration-black/25 dark:decoration-white/25">{stated}</del>
+									</>
+								) : (
+									"The PDF leaves it empty"
+								)}
+							</p>
+							<p className="mt-1 flex gap-1.5 text-xs leading-5 text-black/55 dark:text-white/55">
+								<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={Idea01Icon} size={12} />
+								{suggestion.reason}
+							</p>
+							{meets.length ? <p className="mt-1 text-xs leading-5 text-black/45 dark:text-white/45">Meets {meets.map((check) => `“${check}”`).join(", ")}</p> : null}
+						</div>
+						<Button className="h-8 min-h-8 min-w-[4.5rem] shrink-0" isDisabled={locked} onPress={() => onToggle(index)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={on ? Undo02Icon : Tick02Icon} size={13} />} variant={on ? "transparent" : "muted"}>
+							{on ? "Undo" : "Apply"}
+						</Button>
+					</li>
+				);
+			})}
+		</ul>
 	);
 }
 
@@ -189,10 +191,7 @@ export function TopicList({ chosen, locked, onToggle, topics }: { chosen: Readon
 				<li className="flex gap-2.5" key={topic.id}>
 					<Checkbox aria-label={`Add ${topic.name}`} className="mt-0.5 self-start" isDisabled={locked} isSelected={chosen.has(topic.id)} onValueChange={() => onToggle(topic.id)} size="sm" />
 					<div className="min-w-0 flex-1">
-						<p className="flex items-baseline gap-2 text-sm">
-							<span className="text-black/85 dark:text-white/85">{topic.name}</span>
-							<span className={`ms-auto shrink-0 text-xs ${topic.fit === "strong" ? "text-emerald-700 dark:text-emerald-400" : "text-black/40 dark:text-white/40"}`}>{topic.fit === "strong" ? "Strong fit" : "Partial fit"}</span>
-						</p>
+						<p className="text-sm text-black/85 dark:text-white/85">{topic.name}</p>
 						<p className="text-xs text-black/40 dark:text-white/40">{topicPath(topic.path).join(" › ")}</p>
 						<p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{topic.reason}</p>
 					</div>
@@ -288,7 +287,7 @@ function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProp
 /**
  * What publishing writes into the PDF, beside what it carries now, each
  * property marked added, changed or removed. Every published PDF gets the
- * record's properties; fixes reach the file through Rights.
+ * record's properties, with the changes the editor applied.
  */
 export function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPropertiesReading }) {
 	if (!now.writable) {
@@ -342,8 +341,8 @@ export function propertiesAside(after: PdfProperties, now: PdfPropertiesReading)
 	return parts.length ? `Publishing ${parts.join(", ")}` : "Already in the file";
 }
 
-export async function openWithProperties(file: File, properties: PdfProperties) {
+export async function openWithProperties(url: string, properties: PdfProperties) {
 	const { writePdfProperties } = await import("@/lib/admin/pdf-properties");
-	const bytes = await writePdfProperties(new Uint8Array(await file.arrayBuffer()), properties);
+	const bytes = await writePdfProperties(new Uint8Array(await (await fetch(url)).arrayBuffer()), properties);
 	window.open(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })), "_blank", "noopener");
 }

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	appliedOf,
 	checkPasses,
 	createdKeys,
 	doiPreviewRequest,
 	filePreviewRequest,
-	recordRights,
+	recordPayload,
 	reviewChecks,
-	rowPasses,
 	rowsFromRecords,
 	selectedImportRecords,
 	type ImportRow,
@@ -51,36 +51,28 @@ describe("import input checks", () => {
 	});
 });
 
-describe("the record's Rights and the AI's fix", () => {
-	const row = (fixApplied: boolean): ImportRow => ({
-		...rowsFromRecords([record({ id: "1", payload: { rights: "© EdTech Hub 2024. CC BY 4.0" } })])[0]!,
+describe("the changes the AI suggests", () => {
+	const row: ImportRow = {
+		...rowsFromRecords([record({ id: "1", payload: { rights: "© EdTech Hub 2024. CC BY 4.0", title: "Girls' learning" } })])[0]!,
 		checks: (["met", "not_met", "not_met"] as const).map((result) => ({ criterion: result, page: null, quote: null, recommendation: null, result })),
-		fixApplied,
-		rightsFix: { checks: [1], statement: "© Crown copyright 2024. Licensed under the Open Government Licence v3.0" },
+		suggestions: [
+			{ apply: false, checks: [1], field: "rights", reason: "The check asks for Crown copyright", value: "© Crown copyright 2024" },
+			{ apply: true, checks: [], field: "title", reason: "The instructions ask for British English", value: "Girls' learning in Sierra Leone" },
+		],
+	};
+
+	it("starts with the ones the library's instructions call for", () => {
+		expect([...appliedOf(null, row)]).toEqual([1]);
 	});
 
-	it("keeps what the PDF states until the editor applies the fix", () => {
-		expect(recordRights(row(false))).toBe("© EdTech Hub 2024. CC BY 4.0");
-		expect(checkPasses(reviewChecks(row(false))[1]!)).toBe(false);
+	it("keeps what the PDF states until the editor applies a change", () => {
+		expect(recordPayload(row, new Set([1]))).toMatchObject({ rights: "© EdTech Hub 2024. CC BY 4.0", title: "Girls' learning in Sierra Leone" });
+		expect(reviewChecks(row, new Set([1])).map(checkPasses)).toEqual([true, false, false]);
 	});
 
-	it("uses the AI's statement once applied, and passes only the checks it names", () => {
-		expect(recordRights(row(true))).toBe("© Crown copyright 2024. Licensed under the Open Government Licence v3.0");
-		expect(reviewChecks(row(true)).map(checkPasses)).toEqual([true, true, false]);
-	});
-});
-
-describe("the checks a PDF gets from its own file", () => {
-	const properties = { authors: [], doi: "", keywords: [], rights: "", subject: "", title: "" };
-	const row = (pdfua: string): ImportRow => ({
-		...rowsFromRecords([record({ id: "1" })])[0]!,
-		checks: [{ criterion: "Credits the funder", page: 1, quote: "Funded by UK aid", recommendation: null, result: "met" }],
-		pdf: { properties, standards: { pdfa: "2B", pdfua, tagged: true }, writable: true },
-	});
-
-	it("passes every check only when the file also meets the accessibility and archiving standards", () => {
-		expect(rowPasses(row("1"))).toBe(true);
-		expect(rowPasses(row(""))).toBe(false);
+	it("uses an applied change, and passes only the checks it names", () => {
+		expect(recordPayload(row, new Set([0]))).toMatchObject({ rights: "© Crown copyright 2024", title: "Girls' learning" });
+		expect(reviewChecks(row, new Set([0])).map(checkPasses)).toEqual([true, true, false]);
 	});
 });
 

@@ -12,7 +12,6 @@ import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
 import { adminPanelTabState } from "./admin-tab-styles";
-import { FILE_CHECKS } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 import { pdfPageCount } from "./pdf-thumbnail";
 
@@ -66,7 +65,7 @@ export function PdfRows({ busy, files, onFilesChange, perPage = 6 }: { busy: boo
 			<ul className="flex flex-col">
 				{items.map((file) => (
 					<li className="flex h-12 items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" key={`${file.name}:${file.size}`}>
-						<ImportCover className="w-7" file={file} size={12} />
+						<ImportCover className="w-7" pdf={file} size={12} />
 						<span className="min-w-0 flex-1 text-sm text-black/80 dark:text-white/80">
 							<TruncatedText text={file.name} />
 						</span>
@@ -80,21 +79,6 @@ export function PdfRows({ busy, files, onFilesChange, perPage = 6 }: { busy: boo
 		</div>
 	);
 }
-
-/** The checks every PDF gets from how its file was exported, under the library's checks and lined up with their text. */
-export function FileChecksList() {
-	return (
-		<ul className="flex flex-col">
-			{FILE_CHECKS.map((check) => (
-				<li className="flex items-start gap-2.5 py-1 pe-1 ps-2" key={check.criterion}>
-					<span aria-hidden className="w-4 shrink-0" />
-					<span className="py-1 text-sm leading-5 text-black/55 dark:text-white/55">{check.criterion}</span>
-				</li>
-			))}
-		</ul>
-	);
-}
-
 
 type SheetTab<Id extends string> = { count?: number; icon?: typeof ArrowLeft01Icon; id: Id; label: string };
 

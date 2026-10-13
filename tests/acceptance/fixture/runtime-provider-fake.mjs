@@ -124,6 +124,33 @@ function crossrefValue(tag) {
 		: null;
 }
 
+/** An OpenAlex topic as a node of OpenScholar's topic catalogue. */
+function topicNode(topic) {
+	return {
+		childCount: 0,
+		id: topic.id.replace("https://openalex.org/", ""),
+		level: "topic",
+		name: topic.display_name,
+		parent: topic.subfield.id.replace("https://openalex.org/", ""),
+		path: [topic.domain.display_name, topic.field.display_name, topic.subfield.display_name],
+	};
+}
+
+/**
+ * OpenScholar's topic catalogue, answered from OpenAlex, where OpenScholar's
+ * comes from: a search or an id lookup returns topics, and the top level
+ * returns none, which is all the runtime asks of it here.
+ */
+async function topicCatalog(body) {
+	const openAlex = async (path) => (await fetch(`https://api.openalex.org${path}`, { headers: { "User-Agent": "evidence-library-acceptance-fixture (mailto:doi-acceptance@example.org)" } })).json();
+	const nodes = body.query
+		? (await openAlex(`/topics?search=${encodeURIComponent(body.query)}&per-page=${Math.min(body.limit ?? 25, 50)}`)).results.map(topicNode)
+		: body.ids
+			? await Promise.all(body.ids.filter((id) => /^T\d+$/u.test(id)).map(async (id) => topicNode(await openAlex(`/topics/${id}`))))
+			: [];
+	return { contractVersion: 1, nextCursor: null, nodes, publicBaseUrl: "https://openalex.org", revision: "openalex" };
+}
+
 // fallow-ignore-next-line complexity
 const server = createServer(async (request, response) => {
 	const url = new URL(
@@ -133,6 +160,9 @@ const server = createServer(async (request, response) => {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/api/v1/evidence-libraries/topics/catalog" && method === "POST") {
+		return json(response, 200, await topicCatalog(JSON.parse((await readBody(request)).toString("utf8"))));
+	}
 	if (url.pathname === "/export" && method === "POST") {
 		const items = JSON.parse((await readBody(request)).toString("utf8"));
 		return json(response, 200, items.map((item, index) => ({

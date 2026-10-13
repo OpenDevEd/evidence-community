@@ -111,6 +111,7 @@ export type AdminImportPreviewResponse = {
 };
 
 export const PDF_IMPORT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const PDF_IMPORT_MAX_FILES = 100;
 export const PDF_IMPORT_MAX_CRITERIA = 20;
 export const PDF_IMPORT_MAX_CRITERION_LENGTH = 300;
 /** The library's instructions for the AI, free text it follows when it reads each PDF. */
@@ -124,48 +125,69 @@ export type PdfCheckResult = {
 	result: "met" | "not_met" | "unclear";
 };
 
-/** An OpenAlex topic the AI judged to fit a PDF, with its domain, field and subfield. */
+/** A topic from the library's catalogue that the AI found fits the PDF. */
 export type TopicSuggestion = {
-	fit: "partial" | "strong";
 	id: string;
 	name: string;
 	path: string[];
 	reason: string;
 };
 
-/** The Rights statement the AI proposes when checks fail over copyright or licence, and the checks it fixes, by their place in the list. */
-export type RightsFix = { checks: number[]; statement: string };
+/**
+ * A value the AI suggests a record field should have instead of what the
+ * PDF states: to follow the library's instructions, to meet a check, or to
+ * fill something the PDF leaves out. `checks` are the checks it makes pass,
+ * by their place in the list; `apply` says it starts applied, as the
+ * library's instructions call for it.
+ */
+export type PdfSuggestion = {
+	apply: boolean;
+	checks: number[];
+	field: string;
+	reason: string;
+	value: string;
+};
 
-export type AdminPdfReadResponse = {
-	/** The PDF had no abstract, so the AI's summary is the record's abstract. */
-	abstractWritten: boolean;
+/** What the AI made of one PDF. */
+export type PdfReading = {
 	checks: PdfCheckResult[];
-	topics: TopicSuggestion[];
-	costUsd: number;
-	inputTokens: number;
-	ms: number;
-	outputTokens: number;
 	/** The properties the PDF carries now, before publishing writes the record into it. */
 	pdf: PdfPropertiesReading;
 	record: AdminImportPreviewRecord;
-	rightsFix: RightsFix | null;
+	suggestions: PdfSuggestion[];
+	topics: TopicSuggestion[];
 };
 
-/** OpenRouter's price for Claude Haiku 5.5 per token, checked 2026-10-12. */
-const PDF_IMPORT_PRICE = { input: 0.1 / 1_000_000, output: 0.5 / 1_000_000 };
+export type PdfImportFileState = "uploading" | "waiting" | "reading" | "read" | "failed";
 
-export function pdfImportCost(inputTokens: number, outputTokens: number) {
-	return inputTokens * PDF_IMPORT_PRICE.input + outputTokens * PDF_IMPORT_PRICE.output;
-}
+/** One PDF of the library's import, as the worker has got with it. */
+export type AdminPdfImportFile = {
+	filename: string;
+	id: string;
+	message: string | null;
+	/** Its row and record id in the review, from its place in the import. */
+	rowId: string;
+	reading: PdfReading | null;
+	state: PdfImportFileState;
+};
 
-// Measured on the sample reports: each page costs about 2,000 input tokens;
-// the subfield list, the instructions and the topic call add the rest.
-const ESTIMATE_TOKENS = { page: 2_000, pdf: 17_000, output: 4_000 };
+/** The library's one PDF import: what it reads against, its PDFs, and once imported, what became of each. */
+export type AdminPdfImport = {
+	attach: Record<string, "attached" | "failed">;
+	checks: string[];
+	collections: string[];
+	createdAt: string;
+	files: AdminPdfImportFile[];
+	id: string;
+	instructions: string;
+	results: AdminImportCommitResult[] | null;
+};
 
-/** What reading these PDFs should cost, from their page counts. */
-export function estimatePdfImportCost(pages: number, pdfs: number) {
-	return pdfImportCost(pages * ESTIMATE_TOKENS.page + pdfs * ESTIMATE_TOKENS.pdf, pdfs * ESTIMATE_TOKENS.output);
-}
+export type AdminPdfImportStatus = {
+	import: AdminPdfImport | null;
+	/** The checks and instructions of the import before, which a new one starts from. */
+	last: { checks: string[]; instructions: string };
+};
 
 
 export type AdminImportCommitResult = {

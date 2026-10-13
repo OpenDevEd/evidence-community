@@ -62,7 +62,7 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 						return (
 							<li className="flex min-h-16 items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" key={row.id}>
 								{publishing ? <Checkbox aria-label={`${view.verbs.act} ${title}`} isDisabled={view.started || !view.publishable.includes(row.id)} isSelected={view.chosen.has(row.id)} onValueChange={(checked) => view.toggle(row.id, checked)} size="sm" /> : null}
-								<ImportCover className="w-8" file={row.file} itemType={row.record?.itemType} size={12} />
+								<ImportCover className="w-8" pdf={row.source?.url ?? null} itemType={row.record?.itemType} size={12} />
 								<span className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
 									<span className="line-clamp-2 text-sm font-medium leading-5 text-black/85 dark:text-white/85">{title}</span>
 									<DraftState attach={batch.attach.get(row.id)} draft={draft} publish={batch.publish.get(row.id)} verbs={view.verbs} />

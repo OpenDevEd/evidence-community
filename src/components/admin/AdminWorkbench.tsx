@@ -63,7 +63,7 @@ import { Link } from "@/i18n/routing";
 
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
-import { importButtonLabel, useImportBatch } from "./admin-import";
+import { importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
@@ -515,6 +515,8 @@ export default function AdminWorkbench({
 	}, [setFilters, digestsOpen, digestsShow, setDigestsParam, forgetDigestsShow]);
 	const [newItemOpen, setNewItemOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
+	// The library's PDF import reads on the server; its status shows on the Import button wherever the admin is open.
+	usePdfImportStatus();
 	const importLabel = importButtonLabel(useImportBatch());
 	const [newItemSearch, setNewItemSearch] = useState("");
 	const [collectionDialog, setCollectionDialog] =

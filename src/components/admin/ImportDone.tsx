@@ -6,10 +6,10 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
-import { checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { appliedOf, checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 import { useAdminPublication } from "./useAdminPublication";
 
-type Draft = { itemKey: string; kind: "created" | "imported" | undefined; row: ImportRow };
+type Draft = { applied: ReadonlySet<number>; itemKey: string; kind: "created" | "imported" | undefined; row: ImportRow };
 
 const note = "flex min-w-0 items-center gap-1.5 text-xs";
 
@@ -30,7 +30,7 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 
 /** Where a new draft stands: on its way, published with its DOI, waiting for an editor, or how its checks went. */
 export function DraftState({ attach, draft, publish, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; verbs: SendVerbs }) {
-	const { row } = draft;
+	const { applied, row } = draft;
 	if (publish?.state === "sending") {
 		return (
 			<span className={`${note} text-black/50 dark:text-white/50`}>
@@ -59,8 +59,8 @@ export function DraftState({ attach, draft, publish, verbs }: { attach: AttachSt
 		);
 	}
 	if (!row.checks.length) return <span className="text-xs text-black/45 dark:text-white/45">In Drafts</span>;
-	if (rowPasses(row)) return <span className="text-xs text-emerald-700 dark:text-emerald-400">Passes every check</span>;
-	const failing = reviewChecks(row).filter((check) => !checkPasses(check)).length;
+	if (rowPasses(row, applied)) return <span className="text-xs text-emerald-700 dark:text-emerald-400">Passes every check</span>;
+	const failing = reviewChecks(row, applied).filter((check) => !checkPasses(check)).length;
 	return (
 		<span className={`${note} text-amber-700 dark:text-amber-400`}>
 			<HugeiconsIcon aria-hidden icon={AlertCircleIcon} size={13} />
@@ -91,16 +91,16 @@ type SendVerbs = ReturnType<typeof sendVerbs>;
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, kind, row: rowById.get(id)! }] : []));
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
-	const publishable = drafts.filter(({ row }) => row.file && batch.attach.get(row.id) !== "failed");
+	const publishable = drafts.filter(({ row }) => row.source && batch.attach.get(row.id) !== "failed");
 	const publishableIds = publishable.map(({ row }) => row.id);
 	const started = batch.publish.size > 0;
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
-	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ row }) => rowPasses(row)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
+	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ applied, row }) => rowPasses(row, applied)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
 	const sent = [...batch.publish.values()].filter(({ state }) => state === "published" || state === "submitted").length;
-	const pdfs = drafts.filter(({ row }) => row.file).map(({ row }) => batch.attach.get(row.id));
+	const pdfs = drafts.filter(({ row }) => row.source).map(({ row }) => batch.attach.get(row.id));
 	const toggle = (id: string, checked: boolean) => {
 		const next = new Set(chosen);
 		if (checked) next.add(id);
@@ -111,13 +111,13 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		all: publishableIds.length > 0 && publishableIds.every((id) => chosen.has(id)),
 		attached: pdfs.filter((state) => state === "attached").length,
 		/** Drafts made in the library, which take the import's DOI route. Known once the import returns, so the row never comes or goes later. */
-		created: drafts.some(({ kind, row }) => kind === "created" && row.file),
+		created: drafts.some(({ kind, row }) => kind === "created" && row.source),
 		chosen,
 		drafts,
 		failedPdfs: pdfs.some((state) => state === "failed"),
 		/** Drafts read from PDFs can be sent on. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
-		offered: drafts.some(({ row }) => row.file),
-		passing: publishable.filter(({ row }) => rowPasses(row)).length,
+		offered: drafts.some(({ row }) => row.source),
+		passing: publishable.filter(({ applied, row }) => rowPasses(row, applied)).length,
 		pdfs: pdfs.length,
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
 		/** "Publish 3", "Submit 3 for review", then the progress. */
@@ -128,8 +128,6 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		started,
 		toggle,
 		toggleAll: (checked: boolean) => onChoose(new Set(checked ? publishableIds : [])),
-		/** A chosen draft's PDF is still uploading, and a record is submitted with its files. */
-		waiting: [...chosen].some((id) => batch.attach.get(id) === "attaching"),
 		existing: results.filter(({ outcome }) => outcome === "skipped").length,
 		failed: results.filter(({ outcome }) => outcome === "failed").length,
 	};

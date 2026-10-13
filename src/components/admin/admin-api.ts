@@ -41,8 +41,9 @@ import type {
 	AdminImportCommitRequest,
 	AdminImportCommitResponse,
 	AdminImportPreviewRequest,
+	AdminImportCommitResult,
 	AdminImportPreviewResponse,
-	AdminPdfReadResponse,
+	AdminPdfImportStatus,
 } from "@/lib/admin/item-import-contract";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
@@ -610,19 +611,41 @@ export function previewAdminImport(
 	});
 }
 
-/** Reads one PDF into an import row and checks it against the library's criteria. */
-export async function readAdminImportPdf(file: File, criteria: readonly string[], guidance: string) {
+const PDF_IMPORT_PATH = "/api/admin/items/import/pdf";
+export const PDF_IMPORT_KEY = "admin-pdf-import";
+
+/** The library's PDF import as the publication worker has read it so far. */
+export const getAdminPdfImport = () => requestJson<AdminPdfImportStatus>(PDF_IMPORT_PATH);
+
+/** Opens the library's import for these PDFs, reading against these checks and instructions. */
+export function startAdminPdfImport(input: { checks: string[]; collections: string[]; filenames: string[]; instructions: string }) {
+	return requestJson<{ files: { filename: string; id: string }[]; id: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "start", ...input }), method: "POST" });
+}
+
+/** Sends one PDF of the import to the server, which queues it for reading. */
+export async function uploadAdminPdfImportFile(fileId: string, file: File) {
 	const body = new FormData();
+	body.append("fileId", fileId);
 	body.append("file", file);
-	body.append("criteria", JSON.stringify(criteria));
-	body.append("guidance", guidance);
-	const response = await fetch("/api/admin/items/import/pdf", { body, cache: "no-store", method: "POST" });
+	const response = await fetch(PDF_IMPORT_PATH, { body, cache: "no-store", method: "POST" });
 	if (!response.ok) {
 		const payload = (await response.json().catch(() => null)) as AdminErrorPayload | null;
 		throw new AdminApiError(parsedError(payload?.error, response.status), response.status);
 	}
-	return response.json() as Promise<AdminPdfReadResponse>;
 }
+
+/** Imports the chosen records as drafts, each with its PDF. */
+export function commitAdminPdfImport(input: Omit<AdminImportCommitRequest, "action">) {
+	return requestJson<{ attach: Record<string, "attached" | "failed">; results: AdminImportCommitResult[] }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "commit", ...input }), method: "POST" });
+}
+
+/** Ends the import, imported or discarded. */
+export function closeAdminPdfImport(importId: string) {
+	return requestJson<{ closed: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "close", importId }), method: "POST" });
+}
+
+/** Where the review opens one of the import's PDFs. */
+export const pdfImportFileUrl = (fileId: string) => `${PDF_IMPORT_PATH}/${encodeURIComponent(fileId)}`;
 
 /** Creates native drafts for the chosen import candidates in one server call. */
 export function commitAdminImport(

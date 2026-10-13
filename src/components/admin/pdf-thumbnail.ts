@@ -6,7 +6,9 @@ const THUMBNAIL_WIDTH = 360;
 const AT_ONCE = 3;
 
 let library: Promise<PdfJs> | null = null;
+// A chosen file is drawn once per file, a stored PDF once per address.
 const thumbnails = new WeakMap<File, Promise<string | null>>();
+const storedThumbnails = new Map<string, Promise<string | null>>();
 const pageCounts = new WeakMap<File, Promise<number | null>>();
 let running = 0;
 const waiting: Array<() => void> = [];
@@ -30,9 +32,11 @@ async function inTurn<T>(work: () => Promise<T>) {
 	}
 }
 
-async function render(file: File) {
+const bytesOf = async (source: File | string) => new Uint8Array(await (typeof source === "string" ? (await fetch(source)).arrayBuffer() : source.arrayBuffer()));
+
+async function render(source: File | string) {
 	const lib = await pdfjs();
-	const task = lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
+	const task = lib.getDocument({ data: await bytesOf(source) });
 	const document = await task.promise;
 	try {
 		const page = await document.getPage(1);
@@ -49,14 +53,16 @@ async function render(file: File) {
 }
 
 /**
- * The first page of a chosen PDF as an image URL, drawn once per file in the
- * browser so covers show before anything is uploaded. Null when it can't be drawn.
+ * The first page of a PDF as an image URL, drawn in the browser: a chosen
+ * file before anything is uploaded, or one stored with the import. Null
+ * when it can't be drawn.
  */
-export function pdfThumbnail(file: File) {
-	let thumbnail = thumbnails.get(file);
+export function pdfThumbnail(source: File | string) {
+	let thumbnail = typeof source === "string" ? storedThumbnails.get(source) : thumbnails.get(source);
 	if (!thumbnail) {
-		thumbnail = inTurn(() => render(file)).catch(() => null);
-		thumbnails.set(file, thumbnail);
+		thumbnail = inTurn(() => render(source)).catch(() => null);
+		if (typeof source === "string") storedThumbnails.set(source, thumbnail);
+		else thumbnails.set(source, thumbnail);
 	}
 	return thumbnail;
 }

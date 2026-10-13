@@ -1,6 +1,7 @@
 import { runTopicAssociationCycle } from "../src/lib/topics/association-delivery";
 import { runNotificationCycle } from "../src/lib/notifications/worker";
 import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
+import { runPdfImportCycle } from "../src/lib/admin/pdf-import-reading";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
@@ -165,6 +166,8 @@ async function main() {
 	}, 5_000);
 	let fatalError: unknown = null;
 	let consecutiveCycleFailures = 0;
+	// Each PDF takes seconds to read, so the import reads beside the other cycles instead of holding them up.
+	let pdfImportReading: Promise<unknown> | null = null;
 
 	try {
 		await report({ ...initialProgress, stage: "idle" }, true);
@@ -172,6 +175,11 @@ async function main() {
 			try {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				await runTopicAssociationCycle(resource.database, config, abortController.signal);
+				pdfImportReading ??= runPdfImportCycle(resource.database, storage, config)
+					.catch((error: unknown) => console.error(`PDF import cycle failed: ${errorMessage(error)}`))
+					.finally(() => {
+						pdfImportReading = null;
+					});
 				const notificationError = await runNotificationCycle(resource.database, config, abortController.signal);
 				const cycle = await runPublicationWorkerCycle(
 					resource.database,
