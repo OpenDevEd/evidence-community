@@ -12,7 +12,6 @@ import type { ModelMessage } from "ai";
 import {
 	liftToolResultFilesToUserMessage,
 	researchStepLimit,
-	withLatestToolResultCacheBreakpoint,
 } from "@/lib/ai/agent";
 
 function readToolMessage(): ModelMessage {
@@ -97,44 +96,5 @@ describe("handing read PDFs to the model", () => {
 		const twice = liftToolResultFilesToUserMessage(once);
 
 		expect(twice).toHaveLength(once.length);
-	});
-});
-
-describe("marking what the gateway may cache", () => {
-	it("marks the newest read for models that need an explicit marker", () => {
-		const messages = liftToolResultFilesToUserMessage([readToolMessage()]);
-
-		const cached = withLatestToolResultCacheBreakpoint(messages, {
-			provider: "openrouter",
-			modelId: "anthropic/claude-opus-5",
-		});
-
-		const handoff = cached?.at(-1);
-		const files = (
-			handoff?.content as Array<{
-				type: string;
-				providerOptions?: Record<string, unknown>;
-			}>
-		).filter((part) => part.type === "file");
-		expect(files.at(-1)?.providerOptions).toMatchObject({
-			openrouter: { cacheControl: { type: "ephemeral", ttl: "1h" } },
-		});
-	});
-
-	it("leaves models that cache on their own untouched", () => {
-		const messages = liftToolResultFilesToUserMessage([readToolMessage()]);
-
-		expect(
-			withLatestToolResultCacheBreakpoint(messages, {
-				provider: "openrouter",
-				modelId: "openai/gpt-5.6-luna",
-			}),
-		).toBeUndefined();
-		expect(
-			withLatestToolResultCacheBreakpoint(messages, {
-				provider: "google",
-				modelId: "gemini-2.5-pro",
-			}),
-		).toBeUndefined();
 	});
 });

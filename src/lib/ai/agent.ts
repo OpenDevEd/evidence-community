@@ -15,7 +15,6 @@ import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ResolvedAIModel } from "./model-resolution";
 import {
 	OPENROUTER_RESPONSE_CACHE_TTL,
-	openRouterCacheBreakpoint,
 	openRouterMaximumReasoningSettings,
 	openRouterModelSettings,
 	openRouterResponseCacheHeaders,
@@ -139,7 +138,8 @@ const PDF_HANDOFF_TEXT =
  * tool message carrying a file is translated into each provider's own
  * function-response format, and some providers then never show the model the
  * file at all. A file in a user message works the same way everywhere.
- * Rebuilt from the raw step messages each time, so running it twice is safe.
+ * The messages a step prepares carry into the next step, so this also runs
+ * on its own earlier output. A lifted result has no files left to lift.
  */
 export function liftToolResultFilesToUserMessage(
 	messages: ModelMessage[],
@@ -204,73 +204,6 @@ export function liftToolResultFilesToUserMessage(
 	return result;
 }
 
-/**
- * Marks the newest tool output as the end of the reusable prompt, so the
- * gateway can cache everything before it. Only models that need an explicit
- * marker get one.
- */
-export function withLatestToolResultCacheBreakpoint(
-	messages: ModelMessage[],
-	selectedModel: Pick<ResolvedAIModel, "provider" | "modelId">,
-) {
-	const cacheBreakpoint = openRouterCacheBreakpoint(
-		selectedModel.provider,
-		selectedModel.modelId,
-	);
-	if (!cacheBreakpoint) return undefined;
-
-	for (
-		let messageIndex = messages.length - 1;
-		messageIndex >= 0;
-		messageIndex -= 1
-	) {
-		const message = messages[messageIndex];
-		// For a publication read the newest output is the user message
-		// carrying the lifted PDFs, so the PDF itself gets cached.
-		const isPdfHandoff =
-			message.role === "user" &&
-			Array.isArray(message.content) &&
-			message.content[0]?.type === "text" &&
-			message.content[0].text === PDF_HANDOFF_TEXT;
-		if (message.role !== "tool" && !isPdfHandoff) continue;
-		if (!Array.isArray(message.content)) continue;
-
-		const partIndex = message.content.findLastIndex((part) =>
-			isPdfHandoff ? part.type === "file" : part.type === "tool-result",
-		);
-		if (partIndex < 0) continue;
-
-		const part = message.content[partIndex] as {
-			type: string;
-			providerOptions?: Record<string, unknown>;
-		};
-		const currentOpenRouterOptions = part.providerOptions?.openrouter;
-		const content = [...message.content] as typeof message.content;
-		content[partIndex] = {
-			...part,
-			providerOptions: {
-				...part.providerOptions,
-				openrouter: {
-					...(typeof currentOpenRouterOptions === "object" &&
-					currentOpenRouterOptions !== null
-						? currentOpenRouterOptions
-						: {}),
-					...cacheBreakpoint.openrouter,
-				},
-			},
-		} as unknown as (typeof content)[number];
-
-		const cachedMessages = [...messages];
-		cachedMessages[messageIndex] = {
-			...message,
-			content,
-		} as ModelMessage;
-		return cachedMessages;
-	}
-
-	return undefined;
-}
-
 export function researchStepLimit(mode: ResearchMode) {
 	return mode === "research" ? RESEARCH_STEP_LIMIT : QUICK_STEP_LIMIT;
 }
@@ -323,10 +256,7 @@ export function createResearchAgent({
 		stopWhen: isStepCount(researchStepLimit(mode)),
 		prepareStep: ({ steps, messages: rawMessages, stepNumber }) => {
 			const messages = liftToolResultFilesToUserMessage(rawMessages);
-			const preparedMessages =
-				withLatestToolResultCacheBreakpoint(messages, selectedModel) ??
-				messages;
-			const stepSettings = { messages: preparedMessages };
+			const stepSettings = { messages };
 
 			logDevelopmentAgent("step.started", {
 				sessionId,

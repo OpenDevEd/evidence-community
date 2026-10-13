@@ -83,6 +83,9 @@ export function openRouterModelSettings(
 					},
 				}
 			: {}),
+		// Anthropic moves this one mark to the end of every request, and each
+		// agent step reads the steps before it from cache. A request may carry
+		// at most four marks in all, so no step adds marks of its own.
 		...(breakpoint ? { cache_control: breakpoint } : {}),
 		...(options.sessionId
 			? { extraBody: { session_id: options.sessionId } }
