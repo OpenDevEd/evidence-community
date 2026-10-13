@@ -183,6 +183,22 @@ describe("signing in with OpenScholar", () => {
 	});
 });
 
+describe("telling OpenScholar who signs in", () => {
+	it("tells it on every sign-in, a new reader's first included", async () => {
+		await withReaders(async ({ db }) => {
+			const signedIn: string[] = [];
+			const context = await createReaderAuth(config, db, undefined, (userId) => signedIn.push(userId)).$context;
+			const profile = { sub: "user_first", email: "first@example.org", given_name: "First" };
+			const result = await handleOAuthUserInfo({ context } as Parameters<typeof handleOAuthUserInfo>[0], {
+				userInfo: { id: profile.sub, ...openScholarReader(profile) },
+				account: { providerId: "openscholar", accountId: profile.sub },
+				callbackURL: "/admin",
+			});
+			expect(signedIn).toEqual([result.data?.user.id]);
+		});
+	});
+});
+
 describe("the background account check", () => {
 	function fakeAuth(getAccessToken: () => Promise<{ accessToken: string }>) {
 		return { api: { getAccessToken } } as unknown as ReaderAuth;
@@ -202,10 +218,17 @@ describe("the background account check", () => {
 			}));
 			await checkReaderSoon({ auth: fakeAuth(async () => { throw new Error("Failed to get a valid access token"); }), config, database: db, userId: amina });
 
-			expect(statusCalls).toEqual([{
-				url: `${config.authentication.openScholar.convexSiteUrl}/api/v1/evidence-libraries/reader-status`,
-				body: { libraryId: config.authentication.openScholar.libraryId, clerkUserId: "user_amina" },
-			}]);
+			// It tells OpenScholar the reader was here, then asks after the account.
+			expect(statusCalls).toEqual([
+				{
+					url: `${config.authentication.openScholar.convexSiteUrl}/api/v1/evidence-libraries/readers/seen`,
+					body: { libraryId: config.authentication.openScholar.libraryId, clerkUserId: "user_amina" },
+				},
+				{
+					url: `${config.authentication.openScholar.convexSiteUrl}/api/v1/evidence-libraries/reader-status`,
+					body: { libraryId: config.authentication.openScholar.libraryId, clerkUserId: "user_amina" },
+				},
+			]);
 			expect(await db.select().from(readerUser).where(eq(readerUser.id, amina))).toEqual([]);
 		});
 	});
@@ -221,7 +244,8 @@ describe("the background account check", () => {
 			await checkReaderSoon({ auth: failingAuth, config, database: db, userId: amina });
 			await checkReaderSoon({ auth: failingAuth, config, database: db, userId: amina });
 
-			expect(fetcher).toHaveBeenCalledTimes(1);
+			// The first check's report and status question; the second check is too soon to call at all.
+			expect(fetcher).toHaveBeenCalledTimes(2);
 			expect(await getSignedInReader(signedInHeaders("user_amina"), await getLibraryConfig())).toMatchObject({ id: amina });
 		});
 	});

@@ -396,6 +396,10 @@ export async function getPublicItems(
 	};
 }
 
+/** What keeps a search to public records: no excluded type, nothing deleted, nothing hidden. */
+export const publicRecordFilters = (hiddenTags: readonly string[]) =>
+	buildSearchFilters({ author: "", collections: [], country: [], hiddenTags, institution: [], range: null, scope: "" });
+
 /** The public list copies of these records, as a result list holds them, in one search; hidden and deleted ones are left out. */
 export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> {
 	if (keys.length === 0) return [];
@@ -408,7 +412,7 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 			attributesToRetrieve: [...LIST_ITEM_FIELDS],
 			filter: [
 				`key IN ${JSON.stringify(keys)}`,
-				...buildSearchFilters({ author: "", collections: [], country: [], hiddenTags: tags.hidden, institution: [], range: null, scope: "" }),
+				...publicRecordFilters(tags.hidden),
 			],
 		}),
 		getCachedCollections(libraryConfig),

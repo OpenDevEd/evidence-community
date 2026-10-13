@@ -516,6 +516,41 @@ export async function toggleCollectionItem(database: Database, userId: string, c
 }
 
 /** The Clerk user ID OpenScholar knows the reader by, which every call about them to OpenScholar carries. */
+/** The reader an OpenScholar account signed in as, by its Clerk user ID; null for one that never signed in here. */
+export async function readerIdOfClerkUser(database: Pick<Database, "select">, clerkUserId: string) {
+	const [account] = await database
+		.select({ userId: readerAccount.userId })
+		.from(readerAccount)
+		.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, clerkUserId)));
+	return account?.userId ?? null;
+}
+
+/** A page of the Clerk accounts that signed in here, in their order, from after `after`. */
+export async function readOpenScholarReaders(database: Pick<Database, "select">, after: string | null, limit: number) {
+	const rows = await database
+		.select({ clerkUserId: readerAccount.accountId })
+		.from(readerAccount)
+		.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), after ? sql`${readerAccount.accountId} > ${after}` : undefined))
+		.orderBy(asc(readerAccount.accountId))
+		.limit(limit + 1);
+	return { readers: rows.slice(0, limit).map((row) => row.clerkUserId), next: rows.length > limit ? rows[limit - 1]!.clerkUserId : null };
+}
+
+/**
+ * One collection as a viewer may see it, with its owner and the viewer's access: a private one is refused to anyone
+ * but its owner and its members.
+ */
+export async function readCollectionFor(database: Database, collectionId: string, viewerUserId: string | null) {
+	if (!isReaderCollectionId(collectionId)) return { refused: 404 as const };
+	const [row] = await collectionSummaries(database, eq(readerCollection.id, collectionId));
+	if (!row) return { refused: 404 as const };
+	const access: CollectionAccess = viewerUserId === row.userId ? "owner" : viewerUserId ? await memberRole(database, collectionId, viewerUserId) : null;
+	if (row.private && !access) return { refused: 403 as const };
+	const [person] = await database.select({ id: readerUser.id, name: readerUser.name, image: readerUser.image }).from(readerUser).where(eq(readerUser.id, row.userId));
+	const { userId: ownerId, createdAt, ...rest } = row;
+	return { collection: { ...rest, createdAt: createdAt.toISOString(), access, ownerId, owner: person ?? null } };
+}
+
 export async function clerkUserIdOf(database: Pick<Database, "select">, userId: string) {
 	const [account] = await database
 		.select({ clerkUserId: readerAccount.accountId })

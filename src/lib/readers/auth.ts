@@ -18,6 +18,7 @@ export function createReaderAuth(
 	config: LibraryServerConfig,
 	database: Database,
 	onSessionRead?: (userId: string) => void,
+	onSignIn?: (userId: string) => void,
 ) {
 	const { oauth } = config.authentication.openScholar;
 	return betterAuth({
@@ -42,6 +43,8 @@ export function createReaderAuth(
 		// One reader per Clerk account: never attach another account to a reader.
 		account: { encryptOAuthTokens: true, accountLinking: { enabled: false } },
 		rateLimit: { enabled: true },
+		// Every sign-in makes a session: OpenScholar hears of it then, a new reader's first included.
+		databaseHooks: { session: { create: { after: async (session) => onSignIn?.(session.userId) } } },
 		advanced: { cookiePrefix: "evidence-library" },
 		plugins: [
 			genericOAuth({
