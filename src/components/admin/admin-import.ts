@@ -18,6 +18,7 @@ import {
 	type RightsFix,
 } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
 
 import type { ImportKind } from "./ImportSteps";
 
@@ -160,7 +161,7 @@ export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): I
 }
 
 export type AttachState = "attaching" | "attached" | "failed";
-export type PublishState = { doi: string | null; state: "published" | "publishing" };
+export type PublishState = { message?: string; state: "failed" | "published" | "publishing" };
 
 /**
  * The import being reviewed. It lives outside the dialog, so closing the
@@ -181,6 +182,8 @@ export type ImportBatch = {
 	importId: string;
 	kind: ImportKind;
 	publish: ReadonlyMap<string, PublishState>;
+	/** How drafts made from PDFs get their DOI, as on a record made in the library. */
+	publishRoute: PublishingChoice["route"];
 	results: AdminImportCommitResult[] | null;
 	rows: ImportRow[];
 	/** The drafts ticked for publishing, once the editor changes the default. */
@@ -198,7 +201,7 @@ function setBatch(next: ImportBatch | null) {
 }
 
 export function startImportBatch(start: Pick<ImportBatch, "checks" | "collections" | "importId" | "kind" | "rows">) {
-	setBatch({ ...start, attach: new Map(), committing: false, excluded: new Set(), publish: new Map(), results: null, toPublish: null, topics: new Map() });
+	setBatch({ ...start, attach: new Map(), committing: false, excluded: new Set(), publish: new Map(), publishRoute: "zenodo", results: null, toPublish: null, topics: new Map() });
 }
 
 export const currentImportBatch = () => batch;
@@ -310,11 +313,11 @@ export function recordRights(row: ImportRow) {
 }
 
 /** What publishing writes into the PDF: the record as the editor leaves it. */
-export function publishedProperties(row: ImportRow, topicNames: readonly string[], doi: string | null): PdfProperties {
+export function publishedProperties(row: ImportRow, topicNames: readonly string[]): PdfProperties {
 	const text = (field: string) => (typeof row.record?.payload?.[field] === "string" ? (row.record.payload[field] as string) : "");
 	return {
 		authors: row.record?.creators ?? [],
-		doi: doi ?? text("DOI"),
+		doi: text("DOI"),
 		keywords: [...topicNames],
 		rights: recordRights(row),
 		subject: text("abstractNote"),
@@ -362,7 +365,6 @@ export function reviewChecks(row: ImportRow): ReviewCheck[] {
 // this browser; the real build stores both in the library's database.
 const CHECKS_KEY = "evidence-library:pdf-import-check-texts";
 const GUIDANCE_KEY = "evidence-library:pdf-import-guidance";
-const RESULTS_KEY = "evidence-library:pdf-import-results:";
 // shortcut: placeholder wording for the FCDO demo until Jenny's checklist arrives.
 const DEFAULT_CHECKS = [
 	"Credits UK International Development (FCDO) or UK aid as the funder",
@@ -398,47 +400,6 @@ export const storedGuidance = () => localStorage.getItem(GUIDANCE_KEY) ?? "";
 
 export function storeGuidance(guidance: string) {
 	localStorage.setItem(GUIDANCE_KEY, guidance);
-}
-
-export type StoredReview = { abstractWritten: boolean; checks: ReviewCheck[]; topics: TopicSuggestion[] };
-
-/** The saved review as text, so a store snapshot compares equal between reads. */
-export function storedReview(itemKey: string) {
-	return localStorage.getItem(RESULTS_KEY + itemKey);
-}
-
-/** A draft's saved review. Reviews saved by earlier mocks lack the fixed flag; anything unreadable reads as none. */
-export function reviewFrom(stored: string): StoredReview | null {
-	const review = parseJson(stored) as Partial<StoredReview> | null | undefined;
-	if (!Array.isArray(review?.checks) || !Array.isArray(review?.topics)) return null;
-	return {
-		abstractWritten: review.abstractWritten === true,
-		checks: review.checks.map((check) => ({ ...check, file: check.file === true, fixable: check.fixable === true, fixed: check.fixed === true })),
-		topics: review.topics,
-	};
-}
-
-// shortcut: the mock pretends to publish and to get a DOI from the Zenodo
-// sandbox; the real build sets each record's publishing choice, approves it
-// and lets the publication worker allocate the DOI.
-export async function publishImported(importId: string, ids: readonly string[]) {
-	const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-	const mark = (id: string, state: PublishState) => changeImportBatch(importId, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
-	for (const id of ids) mark(id, { doi: null, state: "publishing" });
-	let next = 0;
-	await Promise.all(
-		Array.from({ length: 2 }, async () => {
-			while (next < ids.length) {
-				const id = ids[next++]!;
-				await wait(900 + Math.random() * 900);
-				mark(id, { doi: `10.5072/zenodo.${Math.floor(1_000_000 + Math.random() * 9_000_000)}`, state: "published" });
-			}
-		}),
-	);
-}
-
-export function storeReview(itemKey: string, review: StoredReview) {
-	if (review.checks.length || review.topics.length || review.abstractWritten) localStorage.setItem(RESULTS_KEY + itemKey, JSON.stringify(review));
 }
 
 /** A path without a level that repeats the one above it ("Social Sciences" as both domain and field). */

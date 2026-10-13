@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 		const started = Date.now();
 		const [reading, pdf] = await Promise.all([readImportPdf(bytes, file.name, criteria, guidance), readPdfProperties(bytes)]);
 		const { records } = await previewEntries(await getDatabase(), [
-			{ method: "file", source: file.name, zoteroItem: reading.zoteroItem },
+			{ method: "pdf", source: file.name, zoteroItem: reading.zoteroItem },
 		]);
 		const response: AdminPdfReadResponse = {
 			abstractWritten: reading.abstractWritten,

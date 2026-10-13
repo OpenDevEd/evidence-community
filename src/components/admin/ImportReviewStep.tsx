@@ -40,7 +40,14 @@ export function ReviewTabs({ flow }: { flow: ImportFlowState }) {
 export function ImportReviewStep({ flow }: { flow: ImportFlowState }) {
 	const reduceMotion = useReducedMotion();
 	const [openId, setOpenId] = useState<string | null>(null);
+	// Here rather than in the list, so coming back from a record keeps the page.
+	const [page, setPage] = useState(1);
 	const open = flow.shown.find(({ id }) => id === openId) ?? null;
+	const back = () => {
+		// The page holding the record last open, which Next may have moved past the one left.
+		if (open) setPage(Math.floor(flow.shown.indexOf(open) / ROWS_PER_PAGE) + 1);
+		setOpenId(null);
+	};
 	return (
 		<div aria-labelledby={`import-review-panel-tab-${flow.filter}`} className="relative flex min-h-0 flex-1 flex-col" id="import-review-panel" role="tabpanel">
 			<AnimatePresence initial={false} mode="popLayout">
@@ -52,7 +59,7 @@ export function ImportReviewStep({ flow }: { flow: ImportFlowState }) {
 					key={open ? "record" : "list"}
 					transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.32, 0.72, 0, 1] }}
 				>
-					{open ? <RecordPage flow={flow} onBack={() => setOpenId(null)} onOpen={setOpenId} row={open} /> : <RecordList flow={flow} onOpen={setOpenId} />}
+					{open ? <RecordPage flow={flow} key={open.id} onBack={back} onOpen={setOpenId} row={open} /> : <RecordList flow={flow} onOpen={setOpenId} onPage={setPage} page={page} />}
 				</motion.div>
 			</AnimatePresence>
 		</div>
@@ -66,8 +73,7 @@ function choose(flow: ImportFlowState, id: string, checked: boolean) {
 	flow.setSelected(next);
 }
 
-function RecordList({ flow, onOpen }: { flow: ImportFlowState; onOpen: (id: string) => void }) {
-	const [page, setPage] = useState(1);
+function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onOpen: (id: string) => void; onPage: (page: number) => void; page: number }) {
 	const { current, items, pages } = pageOf(flow.shown, page, ROWS_PER_PAGE);
 	const all = flow.readyIds.length > 0 && flow.readyIds.every((id) => flow.selected.has(id));
 	const pdfs = flow.batch?.kind === "pdfs";
@@ -111,7 +117,7 @@ function RecordList({ flow, onOpen }: { flow: ImportFlowState; onOpen: (id: stri
 					})}
 					{!items.length ? <li className="flex h-28 items-center justify-center text-sm text-black/45 dark:text-white/45">Nothing here</li> : null}
 				</ul>
-				<ImportPager label="Pages of records" onChange={setPage} page={current} pages={pages} perPage={ROWS_PER_PAGE} total={flow.shown.length} />
+				<ImportPager label="Pages of records" onChange={onPage} page={current} pages={pages} perPage={ROWS_PER_PAGE} total={flow.shown.length} />
 			</div>
 		</div>
 	);
@@ -149,7 +155,7 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 				</Button>
 			</div>
 			<header className="flex gap-4">
-				<ImportCover className="w-16" file={row.file} itemType={record?.itemType} reading={row.state === "reading"} size={18} />
+				<ImportCover className="w-16 self-start" file={row.file} itemType={record?.itemType} reading={row.state === "reading"} size={18} />
 				<div className="flex min-w-0 flex-1 flex-col gap-1">
 					<p className="flex h-4 gap-3 text-xs text-black/45 dark:text-white/45">
 						{kindLine.map((part) => (

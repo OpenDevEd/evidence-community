@@ -319,7 +319,7 @@ export async function previewImportRecords(
 /** Validates translated entries and marks the ones the library already has. */
 export async function previewEntries(
 	db: Executor,
-	translated: readonly (TranslatedEntry & { method: "doi" | "file" })[],
+	translated: readonly (TranslatedEntry & { method: "doi" | "file" | "pdf" })[],
 ): Promise<AdminImportPreviewResponse> {
 	// Attachments, notes and annotations belong to a parent record and are
 	// out of scope for imports.
@@ -381,7 +381,7 @@ export async function commitImportRecords(
 	type PreparedRecord = DuplicateCandidate & {
 		fields?: AdminFieldErrors;
 		id: string;
-		method: "doi" | "file";
+		method: "doi" | "file" | "pdf";
 		message?: string;
 		payload: Record<string, unknown> | null;
 	};
@@ -444,14 +444,19 @@ export async function commitImportRecords(
 		// any identifier can only repeat when the first commit succeeded but
 		// its response was lost; a schema-level import id would close that.
 		const keys = new Map<string, string>();
+		const kinds = new Map<string, "created" | "imported">();
 		for (const record of ready) {
 			const key = await reserveItemIdentity(transaction, {
 				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
 			});
+			// A PDF with no DOI is the library's own work, so it publishes
+			// with a DOI the library registers, like a record made here.
+			const kind = record.method === "pdf" && !record.identifiers?.doi ? "created" : "imported";
 			await transaction.update(itemIdentity)
-				.set({ kind: "imported", importMethod: record.method })
+				.set(kind === "created" ? { kind, importMethod: null } : { kind, importMethod: record.method === "pdf" ? "file" : record.method })
 				.where(eq(itemIdentity.key, key));
 			keys.set(record.id, key);
+			kinds.set(record.id, kind);
 		}
 		if (ready.length) {
 			await transaction.insert(itemDraft).values(
@@ -468,6 +473,7 @@ export async function commitImportRecords(
 					return {
 						id: record.id,
 						itemKey: keys.get(record.id)!,
+						kind: kinds.get(record.id),
 						outcome: "created",
 					};
 				}

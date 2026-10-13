@@ -8,6 +8,8 @@ const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
+// Files uploaded through signed URLs, by bucket and path; anything else reads as the acceptance PDF.
+const storedObjects = new Map();
 const adminUsers = { editor: "user_acceptance_admin", creator: "user_acceptance_creator", owner: "user_acceptance_owner" };
 function requiredEnvironment(name) {
 	const value = process.env[name];
@@ -204,9 +206,34 @@ const server = createServer(async (request, response) => {
 		return json(response, 200, { role });
 	}
 
+	// Signed uploads as the admin's PDF upload makes them: the server signs a
+	// path, then the browser sends the file to it from another origin.
+	const signed = url.pathname.match(/^\/storage\/v1\/object\/upload\/sign\/(.+)$/u);
+	if (signed) {
+		const cors = { "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "PUT", "Access-Control-Allow-Origin": "*" };
+		if (method === "OPTIONS") {
+			response.writeHead(204, cors);
+			return response.end();
+		}
+		if (method === "POST") return json(response, 200, { url: `/object/upload/sign/${signed[1]}?token=fixture` });
+		if (method === "PUT") {
+			const form = await new Request(url, { body: await readBody(request), headers: { "content-type": request.headers["content-type"] ?? "" }, method }).formData().catch(() => null);
+			const file = form && [...form.values()].find((value) => typeof value !== "string");
+			if (!file) return json(response, 400, { error: "Send the file as multipart form data" });
+			storedObjects.set(signed[1], Buffer.from(await file.arrayBuffer()));
+			response.writeHead(200, { ...cors, "Content-Type": "application/json" });
+			return response.end(JSON.stringify({ Key: signed[1] }));
+		}
+	}
+
 	if (url.pathname.startsWith("/storage/v1/object/")) {
+		const objectPath = url.pathname.slice("/storage/v1/object/".length).replace(/^(?:authenticated|public)\//u, "");
 		if (method === "GET") {
-			return text(response, 200, storageBytes, "application/pdf");
+			return text(response, 200, storedObjects.get(objectPath) ?? storageBytes, "application/pdf");
+		}
+		if (method === "POST" || method === "PUT") {
+			storedObjects.set(objectPath, await readBody(request));
+			return json(response, 200, { Key: objectPath });
 		}
 		if (method === "DELETE") return json(response, 200, []);
 	}

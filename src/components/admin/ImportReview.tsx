@@ -5,7 +5,6 @@ import {
 	Building03Icon,
 	Calendar03Icon,
 	CancelCircleIcon,
-	CheckListIcon,
 	CheckmarkCircle02Icon,
 	Copy01Icon,
 	Globe02Icon,
@@ -20,7 +19,7 @@ import {
 	CopyrightIcon,
 	Undo02Icon,
 } from "@hugeicons/core-free-icons";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -28,8 +27,7 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import type { AdminImportCommitResult, PdfCheckResult, RightsFix, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
-import { InspectorSection } from "./InspectorSection";
-import { checkPasses, reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
+import { checkPasses, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
 
 const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
 	met: { bar: "bg-emerald-500", icon: CheckmarkCircle02Icon, label: "Met", tone: "text-emerald-600 dark:text-emerald-400" },
@@ -348,26 +346,4 @@ export async function openWithProperties(file: File, properties: PdfProperties) 
 	const { writePdfProperties } = await import("@/lib/admin/pdf-properties");
 	const bytes = await writePdfProperties(new Uint8Array(await file.arrayBuffer()), properties);
 	window.open(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })), "_blank", "noopener");
-}
-
-const unchanging = () => () => undefined;
-
-/** What the AI found in the PDF this draft was imported from: its topics and the library's checks. */
-export function ImportReviewSection({ itemKey }: { itemKey: string }) {
-	const stored = useSyncExternalStore(unchanging, () => storedReview(itemKey), () => null);
-	const review = stored ? reviewFrom(stored) : null;
-	if (!review) return null;
-	return (
-		<InspectorSection icon={CheckListIcon} id="admin-import-review" title="PDF review">
-			<div className="flex flex-col gap-4">
-				{review.abstractWritten ? <p className="text-xs text-black/55 dark:text-white/55">The AI wrote the abstract.</p> : null}
-				{review.topics.length ? <p className="text-sm text-black/70 dark:text-white/70">{review.topics.map(({ name }) => name).join(", ")}</p> : null}
-				{review.checks.length ? (
-					<div>
-						<Checks checks={review.checks} />
-					</div>
-				) : null}
-			</div>
-		</InspectorSection>
-	);
 }

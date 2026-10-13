@@ -19,6 +19,39 @@ function defaultPublishingChoice(lockedPolicy: PublishingChoiceState["lockedIden
 		: { route: "zenodo", identifierPolicy: "mint-zenodo" };
 }
 
+/** The two ways a record made in the library gets its DOI, shared with the import's Publish step. */
+export function doiProviderOptions(
+	lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined,
+	crossrefPolicy: "reuse-crossref" | "mint-zenodo",
+) {
+	return [
+		{
+			key: "zenodo",
+			disabledReason: zenodoPolicyChangeReason(lockedPolicy, "mint-zenodo"),
+			label: "Zenodo",
+			content: <ZenodoIcon className="h-4 w-12" aria-hidden />,
+		},
+		{
+			key: "crossref-zenodo",
+			disabledReason: zenodoPolicyChangeReason(lockedPolicy, crossrefPolicy),
+			label: "Crossref + Zenodo",
+			content: (
+				<>
+					<CrossrefIcon className="h-4 w-3 shrink-0" />
+					<span className="whitespace-nowrap">Crossref +</span>
+					<ZenodoIcon className="h-3 w-9" aria-hidden />
+				</>
+			),
+		},
+	] as const;
+}
+
+/** What publishing does on each route, under the provider choice. */
+export const DOI_PROVIDER_HELP = {
+	zenodo: "Archive the files and receive a Zenodo DOI.",
+	"crossref-zenodo": "Register with Crossref. Archive the files on Zenodo.",
+} as const;
+
 export function PublishingChoicePanel({
 	detail,
 	readOnly = false,
@@ -107,41 +140,10 @@ export function PublishingChoicePanel({
 						value={route}
 						onChange={setRoute}
 						disabled={controlsDisabled}
-						options={[
-							{
-								key: "zenodo",
-								disabledReason: zenodoPolicyChangeReason(lockedPolicy, "mint-zenodo"),
-								label: "Zenodo",
-								content: (
-									<ZenodoIcon
-										className="h-4 w-12"
-										aria-hidden
-									/>
-								),
-							},
-							{
-								key: "crossref-zenodo",
-								disabledReason: zenodoPolicyChangeReason(lockedPolicy, crossrefPolicy),
-								label: "Crossref + Zenodo",
-								content: (
-									<>
-										<CrossrefIcon className="h-4 w-3 shrink-0" />
-										<span className="whitespace-nowrap">
-											Crossref +
-										</span>
-										<ZenodoIcon
-											className="h-3 w-9"
-											aria-hidden
-										/>
-									</>
-								),
-							},
-						]}
+						options={doiProviderOptions(lockedPolicy, crossrefPolicy)}
 					/>
 					<p className="px-3 py-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
-						{route === "crossref-zenodo"
-							? "Register with Crossref. Archive the files on Zenodo."
-							: "Archive the files and receive a Zenodo DOI."}
+						{DOI_PROVIDER_HELP[route ?? "zenodo"]}
 					</p>
 					<div>
 						{route === "crossref-zenodo" && (

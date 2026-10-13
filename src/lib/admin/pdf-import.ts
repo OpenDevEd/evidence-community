@@ -64,7 +64,7 @@ const pdfReadingSchema = z.object({
 		abstractNote: z.string().nullable().describe("The abstract or summary section printed in the PDF, copied verbatim. Null when the PDF has none; never write a note about it being missing"),
 		DOI: z.string().nullable(),
 		publicationTitle: z.string().nullable().describe("Journal or series name"),
-		publisher: z.string().nullable(),
+		publisher: z.string().nullable().describe("The organisation that published or issued it, such as a ministry, agency, university or publishing house"),
 		place: z.string().nullable(),
 		language: z.string().nullable().describe("ISO 639-1 code"),
 		url: z.string().nullable(),
@@ -117,8 +117,8 @@ const total = (usages: Usage[], key: keyof Usage) => usages.reduce((sum, usage) 
 
 /**
  * Puts each field under the name its item type uses (a conference paper's
- * journal is its proceedings title) and drops the ones the type lacks.
- * Institutions are picked from the catalogue, so the AI never fills them.
+ * journal is its proceedings title, a report's publisher its institution)
+ * and drops the ones the type lacks.
  */
 function zoteroItemFrom(metadata: z.infer<typeof pdfReadingSchema>["metadata"]) {
 	const { creators, itemType, ...fields } = metadata;
@@ -129,7 +129,7 @@ function zoteroItemFrom(metadata: z.infer<typeof pdfReadingSchema>["metadata"]) 
 		const descriptor =
 			descriptors.find((candidate) => candidate.field === field) ??
 			descriptors.find((candidate) => candidate.semanticField === field);
-		if (!descriptor || descriptor.field === "institution" || descriptor.field === "university") continue;
+		if (!descriptor) continue;
 		kept[descriptor.field] = value;
 	}
 	return kept;

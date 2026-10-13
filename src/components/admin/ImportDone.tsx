@@ -4,29 +4,54 @@ import { AlertCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 
+import { publicationPresentation } from "./AdminPublicationStatus";
 import { checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { useAdminPublication } from "./useAdminPublication";
 
-type Draft = { itemKey: string; row: ImportRow };
+type Draft = { itemKey: string; kind: "created" | "imported" | undefined; row: ImportRow };
 
-/** Where a new record stands: publishing, published with its DOI, or how its checks went. */
-export function DraftState({ publish, row }: { publish: PublishState | undefined; row: ImportRow }) {
+const note = "flex min-w-0 items-center gap-1.5 text-xs";
+
+/** A published draft's DOI, polled and labelled as the record inspector's header shows it. */
+function PublishedDoi({ itemKey }: { itemKey: string }) {
+	const { publication } = useAdminPublication(itemKey);
+	if (!publication) return <span className="text-xs text-black/45 dark:text-white/45">Published</span>;
+	const { Icon, color, label, spin } = publicationPresentation(publication);
+	const doi = publication.identifiers.doi?.value;
+	return (
+		<span className={`${note} animate-fade-in ${color}`}>
+			<HugeiconsIcon aria-hidden className={`shrink-0 ${spin ? "animate-spin motion-reduce:animate-none" : ""}`} icon={Icon} size={13} />
+			<span className="shrink-0">{label}</span>
+			{doi ? <span className="min-w-0 truncate font-mono text-[11px] text-black/60 dark:text-white/60">{doi}</span> : null}
+		</span>
+	);
+}
+
+/** Where a new draft stands: publishing, its DOI once published, or how its checks went. */
+export function DraftState({ attach, draft, publish }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined }) {
+	const { row } = draft;
 	if (publish?.state === "publishing") {
 		return (
-			<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
+			<span className={`${note} text-black/50 dark:text-white/50`}>
 				<HugeiconsIcon aria-hidden className="animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} />
 				Publishing
 			</span>
 		);
 	}
-	if (publish?.doi) {
-		// shortcut: a made-up sandbox DOI, so it isn't a link.
-		return <span className="min-w-0 animate-fade-in truncate text-xs tabular-nums text-black/70 dark:text-white/70">DOI {publish.doi}</span>;
+	if (publish?.state === "published") return <PublishedDoi itemKey={draft.itemKey} />;
+	if (publish?.state === "failed" || attach === "failed") {
+		return (
+			<span className="flex min-w-0 items-start gap-1.5 text-xs leading-4 text-danger">
+				<HugeiconsIcon aria-hidden className="mt-px shrink-0" icon={AlertCircleIcon} size={13} />
+				<span className="line-clamp-2 min-w-0">{publish?.message ?? "The PDF didn't attach, so it stays a draft"}</span>
+			</span>
+		);
 	}
 	if (!row.checks.length) return <span className="text-xs text-black/45 dark:text-white/45">In Drafts</span>;
 	if (rowPasses(row)) return <span className="text-xs text-emerald-700 dark:text-emerald-400">Passes every check</span>;
 	const failing = reviewChecks(row).filter((check) => !checkPasses(check)).length;
 	return (
-		<span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+		<span className={`${note} text-amber-700 dark:text-amber-400`}>
 			<HugeiconsIcon aria-hidden icon={AlertCircleIcon} size={13} />
 			{failing} {failing === 1 ? "check fails" : "checks fail"}
 		</span>
@@ -34,31 +59,23 @@ export function DraftState({ publish, row }: { publish: PublishState | undefined
 }
 
 /**
- * The import's outcome: the counts that matter, then the new drafts. Drafts
- * read from a PDF can be published with a DOI from here; the ones that pass
- * every check start ticked, and the editor decides on the rest.
+ * What the finish screen knows: the new drafts, which are ticked for
+ * publishing, and how the import went. Only editors and owners publish, as
+ * anywhere in the admin; a creator's import ends with the drafts. Drafts
+ * read from a PDF are publishable once their PDF is attached; the ones that
+ * pass every check start ticked, and the editor decides on the rest.
  */
-/** What the finish screen knows: the new drafts, which are ticked for publishing, and how the import went. */
-export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void) {
+export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, row: rowById.get(id)! }] : []));
-	const publishable = drafts.filter(({ row }) => row.file).map(({ row }) => row.id);
-	const passing = drafts.filter(({ row }) => row.file && rowPasses(row)).length;
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, kind, row: rowById.get(id)! }] : []));
+	const publishable = canPublish ? drafts.filter(({ row }) => row.file && batch.attach.get(row.id) !== "failed") : [];
+	const publishableIds = publishable.map(({ row }) => row.id);
 	const started = batch.publish.size > 0;
 	// Once publishing starts, the ticks are the drafts it was started for.
-	const chosen = started ? new Set(batch.publish.keys()) : (batch.toPublish ?? new Set(drafts.filter(({ row }) => row.file && rowPasses(row)).map(({ row }) => row.id)));
+	const chosen = started ? new Set(batch.publish.keys()) : (batch.toPublish ?? new Set(publishable.filter(({ row }) => rowPasses(row)).map(({ row }) => row.id)));
 	const published = [...batch.publish.values()].filter(({ state }) => state === "published").length;
-	const all = publishable.length > 0 && publishable.every((id) => chosen.has(id));
-	const pdfs = [...batch.attach.values()];
-	const count = (state: AttachState) => pdfs.filter((value) => value === state).length;
-	const tally = [
-		{ count: count("attached"), label: "PDFs attached", tone: "" },
-		{ count: count("attaching"), label: "PDFs attaching", tone: "" },
-		{ count: count("failed"), label: "PDFs not attached", tone: "text-amber-700 dark:text-amber-400" },
-		{ count: results.filter(({ outcome }) => outcome === "skipped").length, label: "Already in the library", tone: "" },
-		{ count: results.filter(({ outcome }) => outcome === "failed").length, label: "Not imported", tone: "text-danger" },
-	].filter((line) => line.count > 0);
+	const pdfs = drafts.filter(({ row }) => row.file).map(({ row }) => batch.attach.get(row.id));
 	const toggle = (id: string, checked: boolean) => {
 		const next = new Set(chosen);
 		if (checked) next.add(id);
@@ -66,17 +83,25 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		onChoose(next);
 	};
 	return {
-		all,
+		all: publishableIds.length > 0 && publishableIds.every((id) => chosen.has(id)),
+		attached: pdfs.filter((state) => state === "attached").length,
+		/** Drafts made in the library, which take the import's DOI route. */
+		created: publishable.some(({ kind }) => kind === "created"),
 		chosen,
 		drafts,
-		headline: published ? `${published} published, ${drafts.length - published} in Drafts` : `${drafts.length} ${drafts.length === 1 ? "draft" : "drafts"} created`,
-		passing,
-		publishLabel: started ? `${published} of ${chosen.size} published` : chosen.size ? `Publish ${chosen.size} with DOIs` : "Publish with DOIs",
-		publishable,
+		failedPdfs: pdfs.some((state) => state === "failed"),
+		passing: publishable.filter(({ row }) => rowPasses(row)).length,
+		pdfs: pdfs.length,
+		publish: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
+		publishLabel: started ? `${published} of ${chosen.size} published` : chosen.size ? `Publish ${chosen.size}` : "Publish",
+		publishable: publishableIds,
 		published,
 		started,
-		tally,
 		toggle,
-		toggleAll: (checked: boolean) => onChoose(new Set(checked ? publishable : [])),
+		toggleAll: (checked: boolean) => onChoose(new Set(checked ? publishableIds : [])),
+		/** A chosen draft's PDF is still uploading, and a record is submitted with its files. */
+		waiting: [...chosen].some((id) => batch.attach.get(id) === "attaching"),
+		existing: results.filter(({ outcome }) => outcome === "skipped").length,
+		failed: results.filter(({ outcome }) => outcome === "failed").length,
 	};
 }

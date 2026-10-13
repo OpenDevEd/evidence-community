@@ -5,11 +5,12 @@ import { toast } from "sonner";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
 import { usd } from "./ImportReview";
 import type { ImportKind, ImportStage } from "./ImportSteps";
-import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
+import { AdminApiError, approveAdminReview, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf, reserveAdminCrossrefDoi, saveAdminPublishingChoice, submitAdminReview } from "./admin-api";
 import {
 	FILE_CHECKS,
 	changeImportBatch,
@@ -20,7 +21,6 @@ import {
 	endImportBatch,
 	filePreviewRequest,
 	pendingPdfRows,
-	publishImported,
 	publishedProperties,
 	readPdfs,
 	readyIds,
@@ -36,7 +36,6 @@ import {
 	storedChecks,
 	storedGuidance,
 	storeGuidance,
-	storeReview,
 	summarizeImportResults,
 	useImportBatch,
 	validateChecks,
@@ -45,6 +44,7 @@ import {
 	validatePdfFiles,
 	type AttachState,
 	type ImportRow,
+	type PublishState,
 	type ReviewFilter,
 } from "./admin-import";
 import { uploadPdfFile } from "./admin-pdf";
@@ -56,6 +56,12 @@ function errorMessage(error: unknown) {
 		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
 	}
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
+
+/** What a draft lacks to publish, such as a publisher for Crossref, rather than the request's summary. */
+function publishError(error: unknown) {
+	const missing = error instanceof AdminApiError ? Object.values(error.fields).map((text) => text.replace(/\.$/u, "")) : [];
+	return missing.length ? `${missing.join(". ")}.` : errorMessage(error);
 }
 
 function inputError(kind: ImportKind, doiText: string, files: readonly File[], pdfs: readonly File[], checks: readonly string[], guidance: string) {
@@ -72,6 +78,9 @@ function inputError(kind: ImportKind, doiText: string, files: readonly File[], p
 		return errorMessage(error);
 	}
 }
+
+// Each publish approves a review and reindexes the record, so a few at a time.
+const PUBLISH_CONCURRENCY = 2;
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 /** "Read 5 PDFs", or "Read PDFs" before there are any. */
@@ -149,7 +158,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const checkCount = (batch?.checks.length ?? 0) + (batch?.kind === "pdfs" ? FILE_CHECKS.length : 0);
 	const topicsOf = (row: ImportRow) => (batch ? chosenTopics(batch, row) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => topicsOf(row).has(id)).map(({ name }) => name);
-	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row), batch?.publish.get(row.id)?.doi ?? null);
+	const propertiesOf = (row: ImportRow) => publishedProperties(row, topicNames(row));
 
 	const run = async (work: () => Promise<void>) => {
 		setError(null);
@@ -223,15 +232,46 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			});
 			changeImportBatch(batch.importId, (current) => ({ ...current, committing: false, results: response.results }));
 			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
-			for (const { id, itemKey } of created) {
-				const row = rowById.get(id)!;
-				storeReview(itemKey!, { abstractWritten: row.abstractWritten, checks: checksOf(row), topics: row.topics.filter((topic) => topicsOf(row).has(topic.id)) });
-			}
 			const summary = summarizeImportResults(response.results);
 			if (batch.kind === "pdfs") void attachPdfs(batch.importId, created);
 			await onImported(summary.createdKeys);
 			(summary.failed ? toast.warning : toast.success)(summary.message);
 		});
+
+	/**
+	 * Publishes drafts the way an editor publishes any record. A draft made
+	 * from a PDF takes the import's DOI route, and on Crossref its DOI is
+	 * reserved first; then the draft is submitted and approved, and the
+	 * publication worker activates the DOI.
+	 */
+	const publish = async (importId: string, drafts: readonly { id: string; itemKey: string; kind: "created" | "imported" | undefined }[]) => {
+		const route = batch?.publishRoute ?? "zenodo";
+		const created = summarizeImportResults(batch?.results ?? []).createdKeys;
+		const mark = (id: string, state: PublishState) => changeImportBatch(importId, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
+		for (const { id } of drafts) mark(id, { state: "publishing" });
+		let next = 0;
+		await Promise.all(
+			Array.from({ length: Math.min(PUBLISH_CONCURRENCY, drafts.length) }, async () => {
+				while (next < drafts.length) {
+					const { id, itemKey, kind } = drafts[next++]!;
+					try {
+						if (kind === "created") {
+							await saveAdminPublishingChoice(itemKey, route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route });
+							if (route === "crossref-zenodo") await reserveAdminCrossrefDoi(itemKey);
+						}
+						const review = await submitAdminReview(itemKey);
+						await approveAdminReview(review.id, review.revision);
+						mark(id, { state: "published" });
+					} catch (caught) {
+						console.error("Publishing the draft failed", itemKey, caught);
+						mark(id, { message: publishError(caught), state: "failed" });
+					}
+				}
+			}),
+		);
+		// The table shows them published; the import's drafts stay the selection.
+		await onImported(created);
+	};
 
 	const restart = () => {
 		endImportBatch();
@@ -310,7 +350,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		/** Ready records not in `next` stay out of the import. */
 		setSelected: (next: ReadonlySet<string>) => changeImportBatch(importId, (current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
 		choosePublish: (ids: ReadonlySet<string>) => changeImportBatch(importId, (current) => ({ ...current, toPublish: ids })),
-		publish: (ids: string[]) => void publishImported(importId, ids),
+		publish: (drafts: Parameters<typeof publish>[1]) => void publish(importId, drafts),
+		setPublishRoute: (route: PublishingChoice["route"]) => changeImportBatch(importId, (current) => ({ ...current, publishRoute: route })),
 		setFix: (rowId: string, applied: boolean) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: applied })),
 		toggleFix: (rowId: string) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: !row.fixApplied })),
 		toggleTopic: (rowId: string, topicId: string) =>

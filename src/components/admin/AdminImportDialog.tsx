@@ -7,8 +7,9 @@ import { useState } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 
+import { useAdminSession } from "./AdminSessionProvider";
 import { publishView } from "./ImportDone";
-import { DoneHint, ImportDoneStep } from "./ImportDoneStep";
+import { ImportDoneStep } from "./ImportDoneStep";
 import { ImportReviewStep, ReviewTabs } from "./ImportReviewStep";
 import { ImportSteps } from "./ImportSteps";
 import { InputNote, StageFade } from "./import-parts";
@@ -59,7 +60,8 @@ function ImportHost({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean })
  */
 function ImportSheet({ flow }: { flow: ImportFlowState }) {
 	const { batch, stage } = flow;
-	const view = stage === "done" && batch ? publishView(batch, flow.choosePublish) : null;
+	const { canPublish } = useAdminSession();
+	const view = stage === "done" && batch ? publishView(batch, flow.choosePublish, canPublish) : null;
 	return (
 		<SheetDrop flow={flow}>
 			<header className="flex h-14 shrink-0 items-center gap-3 px-5">
@@ -86,9 +88,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 						<InputNote flow={flow} />
 					) : stage === "review" ? (
 						<p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">{flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts"}</p>
-					) : stage === "done" ? (
-						<DoneHint flow={flow} />
-					) : (
+					) : stage === "done" ? null : (
 						<DropHint flow={flow} />
 					)}
 					<span className="ms-auto flex shrink-0 items-center gap-2">
@@ -116,7 +116,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 									Import more
 								</Button>
 								{view.publishable.length ? (
-									<Button className="min-w-40" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.publish([...view.chosen])} size="sm" variant="solid">
+									<Button className="min-w-32" color="accent" isDisabled={view.started || view.waiting || !view.chosen.size} onPress={() => flow.publish(view.publish())} size="sm" variant="solid">
 										{view.publishLabel}
 									</Button>
 								) : null}

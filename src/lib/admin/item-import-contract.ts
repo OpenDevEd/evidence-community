@@ -54,7 +54,7 @@ const adminImportCommitRequestSchema = z.object({
 		.array(
 			z.object({
 				id: z.string().min(1).max(32),
-				method: z.enum(["doi", "file"]),
+				method: z.enum(["doi", "file", "pdf"]),
 				payload: z.record(z.string(), z.unknown()),
 			}),
 		)
@@ -95,7 +95,7 @@ export type AdminImportPreviewRecord = {
 	fields?: AdminFieldErrors;
 	id: string;
 	itemType: string | null;
-	method: "doi" | "file";
+	method: "doi" | "file" | "pdf";
 	message?: string;
 	/** Validated draft payload, present only when the record is `ready`. */
 	payload: Record<string, unknown> | null;
@@ -173,6 +173,8 @@ export type AdminImportCommitResult = {
 	fields?: AdminFieldErrors;
 	id: string;
 	itemKey?: string;
+	/** For a created draft: made here, so it publishes with the library's DOI, or imported with its own. */
+	kind?: "created" | "imported";
 	message?: string;
 	outcome: "created" | "failed" | "skipped";
 };
