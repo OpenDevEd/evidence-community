@@ -95,6 +95,34 @@ describe("keeping a copy of the conversation", () => {
 		expect(markdown).not.toContain("PAGE/]");
 	});
 
+	it("links a page citation whose opening PAGE marker the model dropped", async () => {
+		const markdown = await chatTranscriptContent(
+			"markdown",
+			[
+				{
+					id: "message-5",
+					role: "assistant",
+					parts: [
+						{
+							type: "text",
+							text: "Human feedback stayed stronger [/lib/27BGDU89/download/IUA7YXN9 — 1 PAGE/]. [see table 2] [/lib/B88FNQ7J/download/IJEFHXHF — 17 PAGE/]",
+						},
+					],
+				},
+			] as never,
+			labels,
+			"https://library.example.org",
+			{
+				"feedback.pdf": "/lib/27BGDU89/download/IUA7YXN9",
+				"essays.pdf": "/lib/B88FNQ7J/download/IJEFHXHF",
+			},
+		);
+
+		expect(markdown).toContain(
+			"Human feedback stayed stronger [Source, p. 1](https://library.example.org/lib/27BGDU89/download/IUA7YXN9#page=1). [see table 2] [Source, p. 17](https://library.example.org/lib/B88FNQ7J/download/IJEFHXHF#page=17)",
+		);
+	});
+
 	it("reads as plain sentences without markup", async () => {
 		const plaintext = await chatTranscriptContent(
 			"plaintext",
