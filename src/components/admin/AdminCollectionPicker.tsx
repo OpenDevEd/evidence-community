@@ -695,6 +695,7 @@ export function AdminCollectionPicker({
 								sourceSelectionPending ? "opacity-50 delay-300" : "opacity-100"
 							}`}
 							data-admin-collection-picker-source-content
+							inert={sourceSelectionPending ? true : undefined}
 						>
 							{availableSources.map((source) => (
 								<button

@@ -777,7 +777,7 @@ test.describe("overlay lifecycle", () => {
 			await page.setViewportSize({ width: cycle % 2 ? 1280 : 820, height: 900 });
 			await dialog.getByRole("tab", { name: "DOIs", exact: true }).click();
 			await expect(dialog.getByRole("textbox", { name: "DOIs", exact: true })).toBeVisible();
-			await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+			await dialog.getByRole("button", { name: "Close", exact: true }).click();
 			await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
 			const search = page.getByRole("textbox", { name: "Search records" });
 			await search.click();
@@ -1543,51 +1543,31 @@ test("keeps collection results stable and inactive while browsing", async ({
 
 	await expect(results).toHaveAttribute("aria-busy", "true");
 	await expect(content).toHaveAttribute("inert", "");
-	await expect(content).toHaveCSS("opacity", "0.4");
+	await expect(content).toHaveCSS("opacity", "0.5");
+	// The search box stays usable while a page loads: disabling it dropped the editor's focus.
 	await expect(
 		dialog.getByRole("textbox", { name: "Search collections" }),
-	).toBeDisabled();
+	).toBeEnabled();
+	// So do the breadcrumbs, and the old results stay in place, dimmed, with no spinner over them.
 	await expect(
 		dialog.getByRole("button", { name: "Native", exact: true }),
-	).toBeDisabled();
+	).toBeEnabled();
 	await expect(content.getByText(parent.name, { exact: true })).toBeVisible();
 	await expect(
 		results.getByRole("status", { name: "Loading collections" }),
-	).toBeVisible();
+	).toHaveCount(0);
 	const loadingGeometry = await results.evaluate((element) => {
-		const contentElement = element.querySelector<HTMLElement>(
-			"[data-admin-collection-picker-content]",
-		)!;
-		const indicator = element.querySelector<HTMLElement>(
-			'[role="status"][aria-label="Loading collections"]',
-		)!;
-		const spinner = indicator.querySelector("svg")!;
 		const scroll = element.querySelector<HTMLElement>(
 			"[data-admin-collection-picker-scroll]",
 		)!;
-		const contentStyle = getComputedStyle(contentElement);
-		const spinnerStyle = getComputedStyle(spinner);
 		return {
 			height: Number.parseFloat(getComputedStyle(element).height),
-			indicatorAnchoredToWrapper:
-				indicator.parentElement?.parentElement === element,
-			indicatorVisible: indicator.getBoundingClientRect().height > 0,
-			opacity: contentStyle.opacity,
-			pointerEvents: contentStyle.pointerEvents,
 			scrollOverflowY: getComputedStyle(scroll).overflowY,
-			spinnerHeight: Number.parseFloat(spinnerStyle.height),
-			spinnerWidth: Number.parseFloat(spinnerStyle.width),
 		};
 	});
 	expect(loadingGeometry).toEqual({
 		height: heightBefore,
-		indicatorAnchoredToWrapper: true,
-		indicatorVisible: true,
-		opacity: "0.4",
-		pointerEvents: "none",
 		scrollOverflowY: "auto",
-		spinnerHeight: 14,
-		spinnerWidth: 14,
 	});
 
 	releaseChildPage();
@@ -1708,33 +1688,25 @@ test("uses the same collection traversal model for multi-select", async ({
 	await expect(sources).toHaveAttribute("aria-busy", "true");
 	await expect(
 		picker.getByRole("textbox", { name: "Search collections" }),
-	).toBeDisabled();
+	).toBeEnabled();
+	// The sources stay where they were, out of reach until the chosen one loads, with no spinner over them.
 	await expect(
 		sources.locator("[data-admin-collection-picker-source-content]"),
 	).toHaveAttribute("inert", "");
 	await expect(
 		sources.getByRole("status", { name: "Loading collections" }),
-	).toBeVisible();
+	).toHaveCount(0);
 	const sourceLoadingGeometry = await sources.evaluate((element) => {
-		const indicator = element.querySelector<HTMLElement>(
-			'[role="status"][aria-label="Loading collections"]',
-		)!;
 		const scroll = element.querySelector<HTMLElement>(
 			"[data-admin-collection-picker-source-scroll]",
 		)!;
-		const indicatorRect = indicator.getBoundingClientRect();
-		const wrapperRect = element.getBoundingClientRect();
 		return {
 			height: Number.parseFloat(getComputedStyle(element).height),
-			indicatorInsideViewport:
-				indicatorRect.top >= wrapperRect.top &&
-				indicatorRect.bottom <= wrapperRect.bottom,
 			scrollTop: scroll.scrollTop,
 		};
 	});
 	expect(sourceLoadingGeometry).toEqual({
 		height: sourceHeight,
-		indicatorInsideViewport: true,
 		scrollTop: sourceScrollTop,
 	});
 	await expect(
@@ -2490,9 +2462,7 @@ test("filters by searched native and imported collections without loading an opt
 				pickerRect.left >= rect.left && pickerRect.right <= rect.right,
 			footerInsideViewport:
 				footer.top >= 0 && footer.bottom <= window.innerHeight,
-			resultsMaxHeight: Number.parseFloat(
-				getComputedStyle(results).maxHeight,
-			),
+			resultsHeight: Number.parseFloat(getComputedStyle(results).height),
 		};
 	});
 	expect(geometry).toMatchObject({
@@ -2503,7 +2473,7 @@ test("filters by searched native and imported collections without loading an opt
 	expect(geometry.dialogBottom).toBeLessThanOrEqual(420);
 	expect(geometry.dialogHeight).toBeLessThanOrEqual(348);
 	expect(geometry.dialogWidth).toBeLessThanOrEqual(560);
-	expect(geometry.resultsMaxHeight).toBeLessThanOrEqual(320);
+	expect(geometry.resultsHeight).toBeLessThanOrEqual(320);
 	const apply = dialog.getByRole("button", { name: "Apply", exact: true });
 	await apply.click();
 	await expect(dialog).toBeHidden();
