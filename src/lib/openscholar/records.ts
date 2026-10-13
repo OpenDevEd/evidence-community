@@ -44,7 +44,7 @@ function doiOf(doi: string | null | undefined) {
 
 type RecordSource = Pick<ListItem, "key" | "revision" | "itemType" | "title" | "abstractNote" | "creators" | "year" | "date" | "publicationTitle" | "url" | "DOI" | "provider"> & {
 	sourceRecordKey?: string | null;
-	attachmentsData?: Array<{ key: string; filename?: string | null; contentType?: string | null; linkMode?: string | null }>;
+	attachmentsData?: Array<{ key: string; filename?: string | null; contentType?: string | null; linkMode?: string | null; url?: string | null }>;
 };
 
 /** A record, from the search index's copy of it with its public attachments only, as OpenScholar reads it. */
@@ -65,8 +65,9 @@ export function toOpenScholarRecord(record: RecordSource): OpenScholarRecord {
 		venue: cut(record.publicationTitle, RECORD_NAME_MAX),
 		url: record.url?.trim() || null,
 		crossRefs: { ...(openalexId ? { openalexId } : {}), ...(doi ? { doi } : {}) },
+		// A file the download route serves: a PDF with a stored address.
 		files: (record.attachmentsData ?? []).flatMap((file) =>
-			file.contentType?.toLowerCase().includes("pdf") ? [{ attachmentKey: file.key, filename: file.filename ?? null, contentType: "application/pdf" }] : [],
+			file.url && file.contentType?.toLowerCase().includes("pdf") ? [{ attachmentKey: file.key, filename: file.filename ?? null, contentType: "application/pdf" }] : [],
 		),
 	};
 }
