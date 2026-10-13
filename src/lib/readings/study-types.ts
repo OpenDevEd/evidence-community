@@ -44,7 +44,7 @@ export const STUDY_TYPES = [
 		criterion: "Other quantitative study: numbers collected or analysed without comparing assigned conditions, such as a survey, a correlational or observational study, a single-group before-and-after test, or statistical analysis of existing data.",
 	},
 	{
-		key: "qualitative", level: "primary", label: "Qualitative study",
+		key: "qualitative", level: "primary", label: "Qualitative or mixed methods",
 		criterion: "Qualitative or mixed-methods study: interviews, focus groups, case studies, ethnography or document analysis, alone or combined with quantitative data.",
 	},
 	{
@@ -60,7 +60,7 @@ export const STUDY_TYPES = [
 		criterion: "Commentary or conceptual paper: an editorial, opinion, perspective, policy analysis, theory or framework with no new data.",
 	},
 	{
-		key: "not-research", level: "other", label: "Not a research paper",
+		key: "not-research", level: "other", label: "Other",
 		criterion: "Not a research paper: a dataset, software, correction, book review, peer-review report, conference programme, news item, or a file that accompanies another paper.",
 	},
 ] as const satisfies readonly { key: string; level: StudyLevel; label: string; criterion: string }[];

@@ -1039,7 +1039,7 @@
     "uncertain": "incertain",
     "editor": "Défini par un éditeur de cette bibliothèque.",
     "metadata": "Déterminé à partir de la notice elle-même.",
-    "ai": "Lu par un modèle d'IA à partir {input, select, abstract {du titre et du résumé} title {du titre seul, la notice n'ayant pas de résumé} other {du début de son PDF, une lecture précédente étant restée incertaine}}, sûr à {percent} %{uncertain, select, yes {, donc marqué incertain} other {}}.",
+    "ai": "Lu par une <ai>IA</ai> à partir {input, select, abstract {du titre et du résumé} title {du titre seul, la notice n'ayant pas de résumé} other {du début de son PDF, une lecture précédente étant restée incertaine}}, sûr à {percent} %{uncertain, select, yes {, donc marqué incertain} other {}}.",
     "method": "Le type de chaque notice est lu à son entrée dans la bibliothèque. Un modèle d'IA lit son titre et son résumé et choisit le type qui convient le mieux ; une notice sans résumé est jugée sur son titre. Quand deux types conviennent, une revue systématique qui regroupe statistiquement ses résultats compte comme une méta-analyse, et une étude qui ajoute des chiffres à des entretiens ou à des études de cas compte comme qualitative. Les jeux de données, logiciels, corrections et protocoles enregistrés sont typés à partir de la notice elle-même, sans IA. Un type dont le modèle est sûr à moins de 60 % est marqué incertain, puis relu à partir du PDF dès que la notice en a un. Un éditeur peut corriger n'importe quel type. Choisir plusieurs types affiche les notices de chacun d'eux.",
     "levels": {
       "synthesis": "Revues et synthèses",
@@ -1050,67 +1050,80 @@
       "review-of-reviews": {
         "label": "Revue de revues",
         "plural": "Revues de revues",
-        "description": "Rassemble et résume des revues ou méta-analyses antérieures, comme une revue parapluie."
+        "description": "Rassemble et résume des revues ou méta-analyses antérieures, comme une revue parapluie.",
+        "not": "Pas une revue d'études individuelles, qui est une revue systématique ou narrative."
       },
       "meta-analysis": {
         "label": "Méta-analyse",
         "plural": "Méta-analyses",
-        "description": "Les auteurs regroupent eux-mêmes statistiquement les résultats de plusieurs études antérieures. Citer le résultat regroupé d'un autre travail ne compte pas."
+        "description": "Les auteurs regroupent eux-mêmes statistiquement les résultats de plusieurs études antérieures. Citer le résultat regroupé d'un autre travail ne compte pas.",
+        "not": "Pas une revue qui cite le résultat regroupé d'autres auteurs ou qui ne regroupe rien, qui est une revue systématique."
       },
       "systematic-review": {
         "label": "Revue systématique",
         "plural": "Revues systématiques",
-        "description": "Résume des études antérieures trouvées par une recherche et des critères d'inclusion déclarés, sans regrouper leurs résultats. Inclut les revues de portée et les revues rapides."
+        "description": "Résume des études antérieures trouvées par une recherche et des critères d'inclusion déclarés, sans regrouper leurs résultats. Inclut les revues de portée et les revues rapides.",
+        "not": "Pas une revue qui regroupe statistiquement les résultats, qui est une méta-analyse, ni une revue sans recherche déclarée, qui est une revue narrative."
       },
       "literature-review": {
         "label": "Revue narrative",
         "plural": "Revues narratives",
-        "description": "Une revue narrative, critique ou intégrative sans méthode de recherche déclarée."
+        "description": "Une revue narrative, critique ou intégrative sans méthode de recherche déclarée.",
+        "not": "Pas une revue avec une recherche et des critères d'inclusion déclarés, qui est une revue systématique."
       },
       "bibliometric": {
         "label": "Étude bibliométrique",
         "plural": "Études bibliométriques",
-        "description": "Compte et cartographie les publications, auteurs ou citations sur un sujet, plutôt que ce que les études ont trouvé."
+        "description": "Compte et cartographie les publications, auteurs ou citations sur un sujet, plutôt que ce que les études ont trouvé.",
+        "not": "Pas une revue de ce que les études ont trouvé, qui est une revue systématique ou narrative."
       },
       "rct": {
         "label": "Essai randomisé",
         "plural": "Essais randomisés",
-        "description": "Les participants, groupes ou lieux ont été répartis au hasard entre les conditions."
+        "description": "Les participants, groupes ou lieux ont été répartis au hasard entre les conditions.",
+        "not": "Pas une comparaison sans répartition aléatoire, qui est une quasi-expérience, ni une revue d'essais."
       },
       "quasi-experiment": {
         "label": "Quasi-expérience",
         "plural": "Quasi-expériences",
-        "description": "Une intervention comparée à un groupe de comparaison choisi sans répartition aléatoire."
+        "description": "Une intervention comparée à un groupe de comparaison choisi sans répartition aléatoire.",
+        "not": "Pas une étude à répartition aléatoire, qui est un essai randomisé, ni une étude sans groupe de comparaison, qui est une étude quantitative."
       },
       "quantitative": {
         "label": "Étude quantitative",
-        "plural": "Autres quantitatives",
-        "description": "Enquêtes, études corrélationnelles et observationnelles, tests avant-après sur un seul groupe, analyses de données existantes."
+        "plural": "Études quantitatives",
+        "description": "Enquêtes, études corrélationnelles et observationnelles, tests avant-après sur un seul groupe, analyses de données existantes.",
+        "not": "Pas une comparaison de groupes répartis, qui est un essai ou une quasi-expérience, ni la construction ou le test d'un modèle, qui est une étude de modélisation."
       },
       "qualitative": {
-        "label": "Étude qualitative",
-        "plural": "Qualitatives et mixtes",
-        "description": "Entretiens, groupes de discussion, études de cas, ethnographie ou analyse documentaire, seuls ou avec des données quantitatives."
+        "label": "Qualitatif ou méthodes mixtes",
+        "plural": "Qualitatif ou méthodes mixtes",
+        "description": "Entretiens, groupes de discussion, études de cas, ethnographie ou analyse documentaire, seuls ou avec des données quantitatives.",
+        "not": "Pas seulement des chiffres, sans entretiens, cas ni documents, ce qui est une étude quantitative."
       },
       "modelling": {
         "label": "Étude de modélisation",
         "plural": "Études de modélisation",
-        "description": "Construit, simule, projette ou teste un modèle, une méthode, un outil ou un système, jugé sur ses performances."
+        "description": "Construit, simule, projette ou teste un modèle, une méthode, un outil ou un système, jugé sur ses performances.",
+        "not": "Pas des statistiques sur des données collectées sans construire ni tester de modèle, ce qui est une étude quantitative."
       },
       "protocol": {
         "label": "Protocole",
         "plural": "Protocoles",
-        "description": "Une étude ou une revue prévue ou en cours, sans résultats pour l'instant."
+        "description": "Une étude ou une revue prévue ou en cours, sans résultats pour l'instant.",
+        "not": "Pas une étude qui rapporte des résultats."
       },
       "commentary": {
         "label": "Commentaire",
         "plural": "Commentaires",
-        "description": "Un éditorial, une opinion, une analyse de politiques, une théorie ou un cadre sans nouvelles données."
+        "description": "Un éditorial, une opinion, une analyse de politiques, une théorie ou un cadre sans nouvelles données.",
+        "not": "Pas un article avec de nouvelles données, ni une revue d'études."
       },
       "not-research": {
-        "label": "Pas un article de recherche",
+        "label": "Autre",
         "plural": "Autres",
-        "description": "Un jeu de données, un logiciel, une correction, un compte rendu de livre ou un fichier qui accompagne un autre article."
+        "description": "Un jeu de données, un logiciel, une correction, un compte rendu de livre ou un fichier qui accompagne un autre article.",
+        "not": "Pas un texte d'opinion ou de politique, qui est un commentaire."
       }
     }
   }
