@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import OpenScholar from "@/components/icons/OpenScholar";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { CloudIcon, HardDriveIcon } from "@hugeicons/core-free-icons";
@@ -39,8 +39,7 @@ export function SourceProviderIcon({
 		return <OpenAlexIcon size={size} className={props.className} style={props.style} />;
 	}
 	if (provider === "openscholar") {
-		// OpenScholar's own icon, as its logo shows it.
-		return <Image src="/icons/openscholar.svg" alt="" aria-hidden width={size} height={size} className={props.className} style={props.style} />;
+		return <OpenScholar aria-hidden width={size} height={size} className={props.className} style={props.style} />;
 	}
 	return <HugeiconsIcon icon={CloudIcon} aria-hidden size={size} {...props} />;
 }
