@@ -78,6 +78,12 @@ export const describeStudyTypeChoice = (value: unknown) => (typeof value === "st
  */
 export type StudyReading =
 	| { type: StudyTypeKey; by: "editor" }
-	| { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf" };
-/** Below this, Jev's type is shown as uncertain, and asked again from the record's PDF once it has one. */
-export const SURE = 0.6;
+	| { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf"; uncertain?: Uncertainty };
+/** Below this, the AI's type is uncertain, and asked again from the record's PDF once it has one. */
+const SURE = 0.6;
+/** Why a type the AI gave is uncertain: it was unsure, or it called a type whose words the record's text lacks. */
+export type Uncertainty = "unsure" | "words";
+export const uncertaintyOf = (confidence: number, typeWords: boolean | null): Uncertainty | undefined =>
+	confidence < SURE ? "unsure" : typeWords === false ? "words" : undefined;
+/** The filter value of records whose type is uncertain, when a library shows them apart. */
+export const UNCERTAIN = "uncertain";

@@ -24,6 +24,7 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { itemReading } from "@/db/schema/readings";
 import { studyReadingOf } from "@/lib/readings/reading";
+import { UNCERTAIN } from "@/lib/readings/study-types";
 import { contentHashOf, readingText } from "@/lib/readings/reading-text";
 import type { StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
@@ -78,7 +79,10 @@ type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 function readingFields(row: (Parameters<typeof studyReadingOf>[0] & { contentHash: string }) | undefined, record: ItemRow) {
 	const current = row?.contentHash === contentHashOf(readingText(record.title, record.abstractNote)) ? row : undefined;
 	const reading = studyReadingOf(current, record.studyType);
-	return reading ? { studyType: reading.type, reading } : {};
+	if (!reading) return {};
+	// The type as a library that shows uncertain types apart counts and filters it.
+	const studyTypeShown = reading.by !== "editor" && reading.uncertain ? UNCERTAIN : reading.type;
+	return { studyType: reading.type, studyTypeShown, reading };
 }
 
 function uniqueSorted(values: Iterable<string>) {
@@ -328,7 +332,7 @@ async function buildSearchProjectionPlanForKeys(
 		(await database
 			.select({
 				key: itemReading.itemKey, screenedOut: itemReading.screenedOut, studyType: itemReading.studyType,
-				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash,
+				typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, typeWords: itemReading.typeWords, contentHash: itemReading.contentHash,
 			})
 			.from(itemReading)
 			.where(inArray(itemReading.itemKey, topLevelKeys)))

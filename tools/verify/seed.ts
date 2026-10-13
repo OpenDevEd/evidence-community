@@ -8,6 +8,7 @@
 import { QUESTION_SET } from "../../src/lib/readings/questions";
 import { STUDY_TYPE_KEYS } from "../../src/lib/readings/study-types";
 import { contentHashOf, readingText } from "../../src/lib/readings/reading-text";
+import { typeWordsFound } from "../../src/lib/readings/type-words";
 
 const KEY_ALPHABET = "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
 
@@ -184,7 +185,9 @@ function readingRow(itemKey: string, index: number, text: { title: string; abstr
 	if (index % 7 === 3) return [];
 	const type = STUDY_TYPE_KEYS[index % STUDY_TYPE_KEYS.length];
 	const confidence = index % 11 === 0 ? 0.45 : 0.9;
-	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', ${sql(contentHashOf(text))}, ${QUESTION_SET}, 'typesafe/jev-1.13');`];
+	// A meta-analysis or trial call is checked for its words as the worker checks it.
+	const words = typeWordsFound(type, { ...text, pdf: "" });
+	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "typeWords", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', ${sql(contentHashOf(text))}, ${words === null ? "NULL" : words}, ${QUESTION_SET}, 'typesafe/jev-1.13');`];
 }
 
 function itemRows(index: number, members: Map<string, string[]>): string[] {

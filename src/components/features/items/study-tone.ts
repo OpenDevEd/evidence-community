@@ -7,6 +7,9 @@ const LEVEL_RAMP: Record<StudyLevel, string[]> = {
 	other: ["bg-black/15 dark:bg-white/15", "bg-black/10 dark:bg-white/10", "bg-black/[0.06] dark:bg-white/[0.06]"],
 };
 
+/** Records with no settled type, unread or uncertain: an outline, since they have no type's colour. */
+export const UNSETTLED_TONE = "border border-dashed border-black/35 dark:border-white/40";
+
 /** A study type's colour in bars and swatches, wherever types are counted. */
 export const studyTone = (key: StudyTypeKey) => {
 	const type = studyType(key)!;

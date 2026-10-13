@@ -51,13 +51,20 @@ export function getRuntimeSearchAttributes(
 	});
 }
 
+/**
+ * The search field study types are counted and filtered by. With uncertain types apart, it holds "uncertain" in place of
+ * the type of a record whose type is uncertain.
+ */
+export const studyTypeFacet = (filters: Pick<RuntimeFilters, "uncertainStudyTypes">) =>
+	filters.uncertainStudyTypes === "separate" ? "studyTypeShown" : "studyType";
+
 export function getRuntimeSearchFacets(
 	search: RuntimeSearch,
 	filters: RuntimeFilters,
 	topicsEnabled: boolean,
 ) {
 	// Item types, study types and PDFs describe the results beside the list. Authors are counted apart, on their own cached request.
-	const facets = ["collectionsAncestry", "itemType", "studyType", PDF_PRESENCE_ATTRIBUTE];
+	const facets = ["collectionsAncestry", "itemType", studyTypeFacet(filters), PDF_PRESENCE_ATTRIBUTE];
 	if (topicsEnabled) {
 		facets.push("topicAncestors");
 	}

@@ -24,6 +24,11 @@ export const itemReading = pgTable("itemReading", {
 	/** What Jev read: the title and abstract, the title alone when the record has no abstract, or the PDF's opening. */
 	input: text("input").$type<"abstract" | "title" | "pdf">().notNull(),
 	contentHash: text("contentHash").notNull(),
+	/**
+	 * Whether a call of a type that needs its words (a meta-analysis, a randomised trial) found them in the record's
+	 * title, abstract or PDF text; without them the call is uncertain. Null for other types, and until it is checked.
+	 */
+	typeWords: boolean("typeWords"),
 	questionSet: integer("questionSet").notNull(),
 	model: text("model").notNull(),
 	readAt: timestamp("readAt", { withTimezone: true }).notNull().defaultNow(),

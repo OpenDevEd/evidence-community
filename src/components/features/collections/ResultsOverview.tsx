@@ -10,8 +10,10 @@ import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
-import { STUDY_LEVELS, STUDY_TYPES } from "@/lib/readings/study-types";
-import { studyTone } from "@/components/features/items/study-tone";
+import { STUDY_LEVELS, STUDY_TYPES, UNCERTAIN } from "@/lib/readings/study-types";
+import { UNSETTLED_TONE, studyTone } from "@/components/features/items/study-tone";
+import { studyTypeFacet } from "@/config/library-config/search";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { STUDY_TYPE_TIP, StudyTypeExplanation } from "@/components/features/items/StudyTypeLabel";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import useSWR from "swr";
@@ -251,14 +253,27 @@ function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect, hint }: 
  * filters the results, and hovering it says what the type means. Records not read yet are counted apart, and the card
  * says how types are read.
  */
-function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void }) {
+/**
+ * The results' study types as the library counts them: a library that shows uncertain types apart counts them under
+ * Uncertain, in place of their types. Types with none are left out unless chosen.
+ */
+function useStudyTypeCounts(facets: FacetDistribution | undefined, selected: string[]) {
+	const { filters } = useLibraryConfig();
+	const field = studyTypeFacet(filters);
+	const counts = facets?.[field] ?? {};
+	const base = useFacetTotal(field);
+	const shown = STUDY_TYPES.filter((type) => (counts[type.key] ?? 0) > 0 || selected.includes(type.key));
+	const uncertain = counts[UNCERTAIN] ?? 0;
+	const showUncertain = uncertain > 0 || selected.includes(UNCERTAIN);
+	const read = shown.reduce((sum, type) => sum + (counts[type.key] ?? 0), uncertain);
+	return { counts, shown, uncertain, showUncertain, read, unread: Math.max(0, base - read) };
+}
+
+function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistribution | undefined; selected: string[]; onSelect: (type: string) => void }) {
 	const t = useTranslations("studyTypes");
 	const format = useFormatter();
-	const base = useFacetTotal("studyType");
-	const shown = STUDY_TYPES.filter((type) => (counts?.[type.key] ?? 0) > 0 || selected.includes(type.key));
-	if (shown.length === 0) return null;
-	const read = shown.reduce((sum, type) => sum + (counts?.[type.key] ?? 0), 0);
-	const unread = Math.max(0, base - read);
+	const { counts, shown, uncertain, showUncertain, read, unread } = useStudyTypeCounts(facets, selected);
+	if (shown.length === 0 && !showUncertain) return null;
 	const dimmed = (key: string) => selected.length > 0 && !selected.includes(key);
 	return (
 		<SidebarCard
@@ -267,8 +282,9 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
 					{shown.map((type) => (
-						<span key={type.key} className={twMerge("h-full transition-opacity", studyTone(type.key), dimmed(type.key) && "opacity-25")} style={{ flexGrow: counts?.[type.key] ?? 0, flexBasis: 0 }} />
+						<span key={type.key} className={twMerge("h-full transition-opacity", studyTone(type.key), dimmed(type.key) && "opacity-25")} style={{ flexGrow: counts[type.key] ?? 0, flexBasis: 0 }} />
 					))}
+					{showUncertain && <span className={twMerge("h-full rounded-[2px] transition-opacity", UNSETTLED_TONE, dimmed(UNCERTAIN) && "opacity-25")} style={{ flexGrow: uncertain, flexBasis: 0 }} />}
 				</div>
 			}
 		>
@@ -281,12 +297,17 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 							<h5 className={`px-3 pb-1 text-sm ${MUTED}`}>{t(`levels.${level.key}`)}</h5>
 							<ul className="flex flex-col">
 								{rows.map((type) => (
-									<TypeRow key={type.key} label={t(`types.${type.key}.plural`)} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} hint={<StudyTypeExplanation type={type.key} />} />
+									<TypeRow key={type.key} label={t(`types.${type.key}.plural`)} count={counts[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} hint={<StudyTypeExplanation type={type.key} />} />
 								))}
 							</ul>
 						</section>
 					);
 				})}
+				{showUncertain && (
+					<ul className="flex flex-col">
+						<TypeRow label={t("uncertainType.label")} count={uncertain} total={read} tone={UNSETTLED_TONE} chosen={selected.includes(UNCERTAIN)} dimmed={dimmed(UNCERTAIN)} onSelect={() => onSelect(UNCERTAIN)} hint={<StudyTypeExplanation type={UNCERTAIN} />} />
+					</ul>
+				)}
 			</div>
 			<div className="flex flex-col gap-2 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10">
 				{unread > 0 && selected.length === 0 && (
@@ -749,7 +770,7 @@ export function ResultsOverview({
 		<>
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
-			<StudyTypeRows counts={facetDistribution?.studyType} selected={studies} onSelect={onStudySelect} />
+			<StudyTypeRows facets={facetDistribution} selected={studies} onSelect={onStudySelect} />
 			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} shown={shown} />}
 			<MostCited shown={shown} />
 		</>

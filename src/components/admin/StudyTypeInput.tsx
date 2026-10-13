@@ -6,13 +6,20 @@ import { STUDY_LEVELS, STUDY_TYPES, studyType, type StudyReading, type StudyType
 
 const FROM_READING = "reading";
 
+/** Why readers see the AI's type as uncertain, after the sentence that gives it. */
+const UNCERTAIN_BECAUSE = {
+	unsure: " Readers see it as uncertain, below 60% sure.",
+	words: " Readers see it as uncertain: its title, abstract and PDF never name that design.",
+	none: "",
+} as const;
+
 /** What the reading found, in a sentence for the editor. */
 function readingSays(reading: StudyReading | null) {
 	if (!reading || reading.by === "editor") return "This record has not been read yet.";
 	const label = studyType(reading.type)?.label ?? reading.type;
 	return reading.by === "metadata"
 		? `Its metadata says “${label}”.`
-		: `Read by AI as “${label}”, ${Math.round(reading.confidence * 100)}% sure.`;
+		: `Read by AI as “${label}”, ${Math.round(reading.confidence * 100)}% sure.${UNCERTAIN_BECAUSE[reading.uncertain ?? "none"]}`;
 }
 
 /** What kind of work a record is: what its reading found, or an editor's correction, which wins. */

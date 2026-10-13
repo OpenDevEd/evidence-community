@@ -968,6 +968,17 @@ counts add up to its `publicationCount`. The page's Publications card shows
 each type listed out of the period's. An edition listed before types has no
 period counts and shows what it lists.
 
+A type the AI gave is uncertain when it was less than 60% sure, or when it
+called a record a meta-analysis or randomised trial whose title, abstract and
+PDF text never name that design (`itemReading.typeWords` is false; the words,
+in the libraries' languages, are in `src/lib/readings/type-words.ts`). An
+uncertain type is asked again from the record's PDF once it has one. The
+library's `filters.uncertainStudyTypes` chooses how readers see it: `marked`
+(the default) shows the type marked uncertain; `separate` shows Uncertain in
+its place on the record and as its own row in the Study types filter. The
+search document stores both `studyType` and `studyTypeShown`, which holds
+`uncertain` for an uncertain type, so switching needs no new index.
+
 To write the digest of a past period, or rewrite the edition that already ends
 when it does, send the period to the manual digest route with the library's
 machine credential:

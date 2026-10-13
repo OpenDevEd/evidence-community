@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { metadataStudyType } from "@/lib/readings/metadata-type";
 import { QUESTION_SET, gradeOf, readingAnswers, readingQuestions } from "@/lib/readings/questions";
+import { typeWordsFound } from "@/lib/readings/type-words";
 import { planRead } from "@/lib/readings/worker";
 
 const record = { key: "AAAA1111", title: "Heat and maize yields", abstract: "We pooled 40 trials.", pdf: "", itemType: "JournalArticle", openAlexType: "article", doi: null, sources: ["oa"] };
 const climate = { key: "oa", subject: "Climate adaptation", hash: "climate" };
 /** What a whole read of `record` stored, as Jev typed it. */
-const readAs = (contentHash: string, questionSet = QUESTION_SET) => ({ contentHash, questionSet, studyType: "meta-analysis" as const, typedBy: "ai" as const, typeConfidence: 0.9, input: "abstract" as const });
+const readAs = (contentHash: string, questionSet = QUESTION_SET) => ({ contentHash, questionSet, studyType: "meta-analysis" as const, typedBy: "ai" as const, typeConfidence: 0.9, input: "abstract" as const, typeWords: true as boolean | null });
 
 describe("what a record's own metadata says it is", () => {
 	it("types datasets, software, corrections, editorials and registered protocols without asking Jev", () => {
@@ -15,6 +16,28 @@ describe("what a record's own metadata says it is", () => {
 		expect(metadataStudyType({ itemType: "JournalArticle", openAlexType: "editorial", doi: null })).toBe("commentary");
 		expect(metadataStudyType({ itemType: "Report", openAlexType: null, doi: "https://doi.org/10.37766/inplasy2026.9.0012" })).toBe("protocol");
 		expect(metadataStudyType({ itemType: "JournalArticle", openAlexType: "article", doi: "10.1000/xyz" })).toBeNull();
+	});
+});
+
+describe("the words a meta-analysis or randomised trial needs", () => {
+	const text = (title: string, abstract = "", pdf = "") => ({ title, abstract, pdf });
+
+	it("finds them however the title, abstract or PDF writes them", () => {
+		expect(typeWordsFound("meta-analysis", text("Feedback in surgical training: A Systematic Review and Meta‐Analysis"))).toBe(true);
+		expect(typeWordsFound("meta-analysis", text("Aprendizagem baseada em jogos", "Uma metanálise de 40 estudos."))).toBe(true);
+		expect(typeWordsFound("meta-analysis", text("Tutoring at scale", "", "We ran a meta-analytic review of 12 trials."))).toBe(true);
+		expect(typeWordsFound("rct", text("Chatbots and anxiety", "A cluster-randomized trial in 20 schools."))).toBe(true);
+		expect(typeWordsFound("rct", text("Feedback timing", "An RCT with 300 students."))).toBe(true);
+		expect(typeWordsFound("rct", text("Tutoría entre pares", "Ensayo aleatorizado en cuatro escuelas."))).toBe(true);
+	});
+
+	it("does not find them in a record that never names the design", () => {
+		expect(typeWordsFound("meta-analysis", text("Heat and maize yields", "We pooled 40 trials."))).toBe(false);
+		expect(typeWordsFound("rct", text("Chatting with an AI tutor", "Students were split into two groups."))).toBe(false);
+	});
+
+	it("asks nothing of the other types", () => {
+		expect(typeWordsFound("quantitative", text("A survey of teachers"))).toBeNull();
 	});
 });
 
@@ -62,6 +85,23 @@ describe("planning a read", () => {
 		expect(planRead({ ...record, pdf: "Methods. We searched five databases." }, { reading: unsure, grades: graded }, [climate]))
 			.toMatchObject({ pdf: true, ask: { type: true, details: false, subjects: [] } });
 		expect(planRead({ ...record, pdf: "Methods." }, { reading: { ...unsure, input: "pdf" }, grades: graded }, [climate])).toBeNull();
+	});
+
+	it("checks an earlier meta-analysis or trial call for its words without asking Jev", () => {
+		const first = planRead(record, { grades: new Map() }, [climate])!;
+		const graded = new Map([["oa", ["climate", null]]]);
+		const unchecked = { ...readAs(first.contentHash), typeWords: null };
+		expect(planRead(record, { reading: unchecked, grades: graded }, [climate]))
+			.toMatchObject({ check: "meta-analysis", ask: { type: false, details: false, subjects: [] } });
+		expect(planRead(record, { reading: { ...unchecked, studyType: "quantitative" }, grades: graded }, [climate])).toBeNull();
+	});
+
+	it("asks the type again from the PDF when a call's words are missing from the abstract", () => {
+		const first = planRead(record, { grades: new Map() }, [climate])!;
+		const graded = new Map([["oa", ["climate", null]]]);
+		const wordless = { ...readAs(first.contentHash), typeWords: false };
+		expect(planRead({ ...record, pdf: "Methods. We pooled the trials in a meta-analysis." }, { reading: wordless, grades: graded }, [climate]))
+			.toMatchObject({ pdf: true, ask: { type: true, details: false, subjects: [] } });
 	});
 
 	it("does not ask the type of a record its metadata types", () => {

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -61,8 +62,8 @@ it("reads each published record once, again only when its text or its source's s
 		const first = jev(answering);
 		await runReadingCycle(db, configWith("Climate adaptation in farming"), undefined, first.request);
 		expect(first.asked).toEqual([["type", "pooled", "region", "effects", "grade_0"]]);
-		expect(await db.select({ type: itemReading.studyType, typedBy: itemReading.typedBy, region: itemReading.region, input: itemReading.input }).from(itemReading))
-			.toEqual([{ type: "meta-analysis", typedBy: "ai", region: "sub-saharan-africa", input: "abstract" }]);
+		expect(await db.select({ type: itemReading.studyType, typedBy: itemReading.typedBy, region: itemReading.region, input: itemReading.input, typeWords: itemReading.typeWords }).from(itemReading))
+			.toEqual([{ type: "meta-analysis", typedBy: "ai", region: "sub-saharan-africa", input: "abstract", typeWords: true }]);
 		expect((await db.select({ score: itemGrade.score }).from(itemGrade)).map((grade) => grade.score)).toEqual([2.8]);
 		expect((await db.select({ reads: readingSpend.reads }).from(readingSpend))[0]?.reads).toBe(1);
 
@@ -279,7 +280,31 @@ it("asks a type Jev was unsure of again from the record's PDF once it arrives", 
 		expect(fromPdf.asked).toEqual([["type"]]);
 		const sent = JSON.parse(String(vi.mocked(fromPdf.request).mock.calls[0]![1]!.body)) as { state: { fullTextOpening?: string } };
 		expect(sent.state.fullTextOpening).toContain("pooled 30 trials");
-		expect(await db.select({ type: itemReading.studyType, input: itemReading.input }).from(itemReading)).toEqual([{ type: "meta-analysis", input: "pdf" }]);
+		// Read from the PDF, the call stands as Jev made it; a PDF that never says meta-analysis leaves it uncertain.
+		expect(await db.select({ type: itemReading.studyType, input: itemReading.input, typeWords: itemReading.typeWords }).from(itemReading))
+			.toEqual([{ type: "meta-analysis", input: "pdf", typeWords: false }]);
+		expect((await readPublicItem(db, "UNSURE22", config))).toMatchObject({ studyType: "meta-analysis", studyTypeShown: "uncertain", reading: { uncertain: "words" } });
+	});
+}, 120_000);
+
+it("checks the words of a trial called before they were checked, as its migration queues it, without asking Jev", async () => {
+	await withIsolatedPublicationDatabase(async (db, client) => {
+		const config = configWith("Climate adaptation in farming");
+		await publish(client, "TRIALWD2", "Chatting with an AI tutor", "Students were split into two groups.");
+		await store(db, config);
+		const trial = (questions: string[]) => Response.json({
+			model: "typesafe/jev-1.13", usage: { input_tokens: 900, cost: 0.00004 },
+			answers: Object.fromEntries(questions.map((id) => [id, id === "type" ? { type: "choice", choice: "rct", confidence: 0.8 } : ANSWERS[id]])),
+		});
+		await runReadingCycle(db, config, undefined, jev(trial).request);
+		// As the reading stood before the words were checked, then queued by the migration's own statement.
+		await client.query(`UPDATE "itemReading" SET "typeWords" = NULL`);
+		await client.query(readFileSync("drizzle/0090_reading-type-words.sql", "utf8").split("--> statement-breakpoint")[1]!);
+		const none = jev(answering);
+		await runReadingCycle(db, config, undefined, none.request);
+		expect(none.asked).toEqual([]);
+		expect(await db.select({ typeWords: itemReading.typeWords }).from(itemReading)).toEqual([{ typeWords: false }]);
+		expect((await readPublicItem(db, "TRIALWD2", config))).toMatchObject({ studyTypeShown: "uncertain", reading: { type: "rct", uncertain: "words" } });
 	});
 }, 120_000);
 

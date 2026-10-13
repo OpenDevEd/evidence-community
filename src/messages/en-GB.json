@@ -1037,10 +1037,15 @@
     "notRead": "Not read yet",
     "chip": "Study type",
     "uncertain": "uncertain",
+    "uncertainType": {
+      "label": "Uncertain",
+      "description": "The AI was less than 60% sure of the type, or called it a meta-analysis or randomised trial that its title, abstract and PDF never name.",
+      "guess": "Best guess: {type}"
+    },
     "editor": "Set by an editor of this library.",
     "metadata": "Typed from the record itself.",
-    "ai": "Read by <ai>AI</ai> from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
-    "method": "Each record's type is read when it enters the library. An AI model reads its title and abstract and picks the one type that fits best; a record with no abstract is judged on its title. Where two could fit, a systematic review that pools its results counts as a meta-analysis, and a study that adds numbers to interviews or case studies counts as qualitative. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type the model is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type. Choosing several types shows records of any of them.",
+    "ai": "Read by <ai>AI</ai> from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, unsure {, so it is marked uncertain} words {, but its text never names that design, so it is marked uncertain} other {}}.",
+    "method": "Each record's type is read when it enters the library. An AI model reads its title and abstract and picks the one type that fits best; a record with no abstract is judged on its title. Where two could fit, a systematic review that pools its results counts as a meta-analysis, and a study that adds numbers to interviews or case studies counts as qualitative. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type is uncertain when the model is less than 60% sure of it, or when it is a meta-analysis or randomised trial whose title, abstract and PDF never name that design; an uncertain type is read again from the PDF once the record has one. An editor can correct any type. Choosing several types shows records of any of them.",
     "levels": {
       "synthesis": "Reviews and syntheses",
       "primary": "Primary studies",
@@ -1056,7 +1061,7 @@
       "meta-analysis": {
         "label": "Meta-analysis",
         "plural": "Meta-analyses",
-        "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count.",
+        "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count. Uncertain unless the title, abstract or PDF names it.",
         "not": "Not a review that quotes someone else's pooled result or doesn't pool at all, which is a systematic review."
       },
       "systematic-review": {
@@ -1080,7 +1085,7 @@
       "rct": {
         "label": "Randomised trial",
         "plural": "Randomised trials",
-        "description": "Participants, groups or places were randomly assigned to conditions.",
+        "description": "Participants, groups or places were randomly assigned to conditions. Uncertain unless the title, abstract or PDF names it.",
         "not": "Not a comparison without random assignment, which is a quasi-experiment, or a review of trials."
       },
       "quasi-experiment": {

@@ -9,7 +9,8 @@ import { QUESTION_SET, gradeOf, readingAnswers, readingQuestions, type ReadingAs
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { contentHashOf, readingText } from "./reading-text";
 import { keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
-import { SURE, type StudyTypeKey } from "./study-types";
+import { uncertaintyOf, type StudyTypeKey } from "./study-types";
+import { typeNeedsWords, typeWordsFound } from "./type-words";
 
 /** Records claimed at once, and how many of them are read at the same time. */
 const BATCH = 32;
@@ -29,7 +30,7 @@ type RecordFacts = { key: string; title: string; abstract: string; pdf: string; 
  * the subject hashes each source's grade and pending grade were made against.
  */
 type Stored = {
-	reading?: { contentHash: string; questionSet: number; studyType: StudyTypeKey; typedBy: "ai" | "metadata"; typeConfidence: number; input: "abstract" | "title" | "pdf" };
+	reading?: { contentHash: string; questionSet: number; studyType: StudyTypeKey; typedBy: "ai" | "metadata"; typeConfidence: number; input: "abstract" | "title" | "pdf"; typeWords: boolean | null };
 	grades: Map<string, readonly (string | null)[]>;
 };
 type Subject = { key: string; subject: string; hash: string };
@@ -47,36 +48,48 @@ type Reading = NonNullable<Stored["reading"]>;
 const metadataChanged = (reading: Reading, metadataType: StudyTypeKey | null) =>
 	metadataType ? reading.typedBy !== "metadata" || reading.studyType !== metadataType : reading.typedBy === "metadata";
 
-/** Whether Jev's type, unsure from the abstract, can be asked again from the PDF the record now has. */
+/** Whether Jev's type, uncertain from the abstract, can be asked again from the PDF the record now has. */
 const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
-	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < SURE;
+	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && uncertaintyOf(reading.typeConfidence, reading.typeWords) !== undefined;
+
+/** Whether Jev's call of a type that needs its words was made before the words were checked. */
+const wordsUnchecked = (reading: Reading) => reading.typedBy === "ai" && reading.typeWords === null && typeNeedsWords(reading.studyType);
+
+/**
+ * What a reading of the record's current text still needs: a retype when its metadata changed, the type asked again
+ * from the PDF, or an earlier call checked for its words without asking Jev, which asking from the PDF does as well.
+ */
+function freshNeeds(record: RecordFacts, reading: Reading, metadataType: StudyTypeKey | null) {
+	const retype = metadataChanged(reading, metadataType);
+	const pdf = !retype && !metadataType && pdfCanSettle(record, reading);
+	return { retype, pdf, check: !retype && !pdf && wordsUnchecked(reading) ? reading.studyType : null };
+}
 
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
 	const contentHash = contentHashOf(record);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
 	const metadataType = metadataStudyType(record);
-	const retype = fresh && metadataChanged(stored.reading!, metadataType);
-	const pdf = fresh && !retype && !metadataType && pdfCanSettle(record, stored.reading!);
+	const { retype, pdf, check } = fresh ? freshNeeds(record, stored.reading!, metadataType) : { retype: false, pdf: false, check: null };
 	const stale = fresh ? subjects.filter((subject) => !stored.grades.get(subject.key)?.includes(subject.hash)) : subjects;
-	if (fresh && !stale.length && !retype && !pdf) return null;
+	if (fresh && !stale.length && !retype && !pdf && !check) return null;
 	const graded = stale.slice(0, GRADES_PER_CALL);
 	const ask: ReadingAsk = { type: !metadataType && (!fresh || retype || pdf), details: !fresh, subjects: graded.map((subject) => subject.subject) };
-	return { ask, contentHash, fresh, retype: retype || pdf, pdf, metadataType, graded, more: stale.length > graded.length };
+	return { ask, contentHash, fresh, retype: retype || pdf, pdf, check, metadataType, graded, more: stale.length > graded.length };
 }
 type Plan = NonNullable<ReturnType<typeof planRead>>;
 /** Whether a plan needs Jev at all: a metadata retype alone does not. */
 const asksJev = (ask: ReadingAsk) => ask.type || ask.details || ask.subjects.length > 0;
 
-/** The type a read stores: the metadata's, else Jev's answer. */
-const typeFields = (plan: Plan, read: ReadingAnswers): { studyType: StudyTypeKey; typeConfidence: number; typedBy: "ai" | "metadata" } =>
+/** The type a read stores: the metadata's, else Jev's answer, with whether the record's text has the words it needs. */
+const typeFields = (record: RecordFacts, plan: Plan, read: ReadingAnswers): { studyType: StudyTypeKey; typeConfidence: number; typedBy: "ai" | "metadata"; typeWords: boolean | null } =>
 	plan.metadataType
-		? { studyType: plan.metadataType, typeConfidence: 1, typedBy: "metadata" }
-		: { studyType: read.type!.key, typeConfidence: read.type!.confidence, typedBy: "ai" };
+		? { studyType: plan.metadataType, typeConfidence: 1, typedBy: "metadata", typeWords: null }
+		: { studyType: read.type!.key, typeConfidence: read.type!.confidence, typedBy: "ai", typeWords: typeWordsFound(read.type!.key, record) };
 
 /** The reading row a whole read stores. */
 function readingRow(record: RecordFacts, plan: Plan, read: ReadingAnswers, model: string) {
 	return {
-		itemKey: record.key, ...typeFields(plan, read),
+		itemKey: record.key, ...typeFields(record, plan, read),
 		pooled: read.details!.pooled, region: read.details!.region, effects: read.details!.effects,
 		input: record.abstract ? "abstract" as const : "title" as const, contentHash: plan.contentHash, questionSet: QUESTION_SET, model, readAt: new Date(),
 	};
@@ -108,7 +121,7 @@ async function recordFacts(database: Database, keys: string[]) {
 				ORDER BY c.key LIMIT 1) AS pdf
 		FROM "item" i WHERE i.key = ANY(${list}) AND coalesce(i.deleted, 0) <> 1 AND coalesce(i."parentItem", '') = ''`);
 	const readings = await database.execute<NonNullable<Stored["reading"]> & { itemKey: string }>(sql`
-		SELECT "itemKey", "contentHash", "questionSet", "studyType", "typedBy", "typeConfidence", "input" FROM "itemReading" WHERE "itemKey" = ANY(${list})`);
+		SELECT "itemKey", "contentHash", "questionSet", "studyType", "typedBy", "typeConfidence", "input", "typeWords" FROM "itemReading" WHERE "itemKey" = ANY(${list})`);
 	const grades = await database.execute<{ itemKey: string; sourceConnectionKey: string; subjectHash: string; pendingSubjectHash: string | null }>(sql`
 		SELECT "itemKey", "sourceConnectionKey", "subjectHash", "pendingSubjectHash" FROM "itemGrade" WHERE "itemKey" = ANY(${list})`);
 	return rows.map((row) => ({
@@ -178,9 +191,9 @@ async function reprojectRecord(tx: DatabaseTransaction, key: string) {
 	if (rows[0]) await enqueueItemSearchReprojections(tx, [{ itemKey: key, revision: Number(rows[0].revision) }], new Date());
 }
 
-/** A type Jev was unsure of from the abstract, of a record with a PDF: it is queued again to be asked from the PDF. */
+/** A type uncertain from the abstract, of a record with a PDF: it is queued again to be asked from the PDF. */
 const askFromPdf = (record: RecordFacts, plan: Plan, read: ReadingAnswers) =>
-	Boolean(record.pdf) && !plan.pdf && read.type !== undefined && read.type.confidence < SURE;
+	Boolean(record.pdf) && !plan.pdf && read.type !== undefined && uncertaintyOf(read.type.confidence, typeWordsFound(read.type.key, record)) !== undefined;
 
 /**
  * Stores a read's answers, only while the claim is still this cycle's, so a record queued again during the call is
@@ -203,8 +216,11 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 			await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
 			await reprojectRecord(tx, record.key);
 		} else if (plan.retype) {
-			await tx.update(itemReading).set({ ...typeFields(plan, read), ...(plan.pdf ? { input: "pdf" as const } : {}) })
+			await tx.update(itemReading).set({ ...typeFields(record, plan, read), ...(plan.pdf ? { input: "pdf" as const } : {}) })
 				.where(sql`${itemReading.itemKey} = ${record.key}`);
+			await reprojectRecord(tx, record.key);
+		} else if (plan.check) {
+			await tx.update(itemReading).set({ typeWords: typeWordsFound(plan.check, record) }).where(sql`${itemReading.itemKey} = ${record.key}`);
 			await reprojectRecord(tx, record.key);
 		}
 		for (const [index, subject] of plan.graded.entries()) await saveGrade(tx, record.key, subject, read.scores[index]!);

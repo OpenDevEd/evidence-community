@@ -1131,6 +1131,7 @@ export async function ensureSearchIndex(
 					country: "count",
 					topicAncestors: "count",
 					studyType: "count",
+					studyTypeShown: "count",
 					fullNames: "count",
 					[INSTITUTION_FILTER_FIELD]: "count",
 				},
@@ -1151,6 +1152,7 @@ export async function ensureSearchIndex(
 					attributePatterns: [
 						"itemType",
 						"studyType",
+						"studyTypeShown",
 						"deleted",
 						"tags",
 						INSTITUTION_FILTER_FIELD,

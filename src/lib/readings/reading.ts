@@ -3,14 +3,16 @@ import type { Database } from "@/db/database-schema";
 import { itemReading } from "@/db/schema/readings";
 import { item } from "@/db/schema/tables/item";
 import { contentHashOf, readingText } from "./reading-text";
-import type { StudyReading, StudyTypeKey } from "./study-types";
+import { uncertaintyOf, type StudyReading, type StudyTypeKey } from "./study-types";
 
-type ReadingRow = Pick<typeof itemReading.$inferSelect, "studyType" | "typeConfidence" | "typedBy" | "input">;
+type ReadingRow = Pick<typeof itemReading.$inferSelect, "studyType" | "typeConfidence" | "typedBy" | "input" | "typeWords">;
 
 /** A record's study type as readers see it: an editor's correction wins over what the reading found. */
 export function studyReadingOf(row: ReadingRow | undefined, corrected: StudyTypeKey | null | undefined): StudyReading | null {
 	if (corrected) return { type: corrected, by: "editor" };
-	return row ? { type: row.studyType, confidence: row.typeConfidence, by: row.typedBy, input: row.input } : null;
+	if (!row) return null;
+	const uncertain = row.typedBy === "ai" ? uncertaintyOf(row.typeConfidence, row.typeWords) : undefined;
+	return { type: row.studyType, confidence: row.typeConfidence, by: row.typedBy, input: row.input, ...(uncertain ? { uncertain } : {}) };
 }
 
 /**
@@ -19,7 +21,7 @@ export function studyReadingOf(row: ReadingRow | undefined, corrected: StudyType
  */
 export async function readStudyReading(db: Pick<Database, "select">, itemKey: string) {
 	const [row] = await db
-		.select({ studyType: itemReading.studyType, typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, contentHash: itemReading.contentHash, title: item.title, abstractNote: item.abstractNote })
+		.select({ studyType: itemReading.studyType, typeConfidence: itemReading.typeConfidence, typedBy: itemReading.typedBy, input: itemReading.input, typeWords: itemReading.typeWords, contentHash: itemReading.contentHash, title: item.title, abstractNote: item.abstractNote })
 		.from(itemReading)
 		.innerJoin(item, eq(item.key, itemReading.itemKey))
 		.where(eq(itemReading.itemKey, itemKey))
