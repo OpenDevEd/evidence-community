@@ -62,14 +62,14 @@ it("makes a reader's collection once, changes its records as its owner or editor
 		// Its owner puts records in; a record the library doesn't show isn't added, and is said so.
 		const id = made.body.collection.id as string;
 		const records = (verb: typeof add, clerkUserId: string, keys: string[]) => verb(request(verb === add ? "POST" : "DELETE", `/api/v1/openscholar/readers/${clerkUserId}/collections/${id}/records`, { keys }), { params: Promise.resolve({ clerkUserId, id }) });
-		expect((await json(await records(add, "user_amina", [work, native, hidden]))).body).toEqual({ count: 2, changed: 2, missing: [hidden] });
-		expect((await json(await records(add, "user_amina", [work]))).body).toEqual({ count: 2, changed: 0, missing: [] });
+		expect((await json(await records(add, "user_amina", [work, native, hidden]))).body).toEqual({ count: 2, changed: expect.arrayContaining([work, native]), missing: [hidden] });
+		expect((await json(await records(add, "user_amina", [work]))).body).toEqual({ count: 2, changed: [], missing: [] });
 
 		// Someone it's shared with to view can't change it; once they edit it they can.
 		await database.insert(readerCollectionMember).values({ collectionId: id, userId: "reader-bob", role: "viewer" });
 		expect(await json(await records(remove, "user_bob", [work]))).toMatchObject({ status: 403, body: { error: "role" } });
 		await database.update(readerCollectionMember).set({ role: "editor" }).where(eq(readerCollectionMember.userId, "reader-bob"));
-		expect((await json(await records(remove, "user_bob", [work]))).body).toEqual({ count: 1, changed: 1, missing: [] });
+		expect((await json(await records(remove, "user_bob", [work]))).body).toEqual({ count: 1, changed: [work], missing: [] });
 		expect((await json(await add(request("POST", `/api/v1/openscholar/readers/user_amina/collections/${randomUUID()}/records`, { keys: [work] }), { params: Promise.resolve({ clerkUserId: "user_amina", id: randomUUID() }) }))).status).toBe(404);
 
 		// Papers by their OpenAlex ID in any form, a repeat's included, or their DOI, each to the record that holds it, the

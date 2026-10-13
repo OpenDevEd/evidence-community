@@ -469,7 +469,7 @@ export async function createReaderCollectionOnce(
 
 /**
  * Puts records into a collection the reader owns or edits, or takes them out, whoever added them. Answers how many it
- * holds after, how many changed and the keys it took; `refused` when the reader can't change it (`404` no such
+ * holds after, the keys that went in or came out, and the keys it took; `refused` when the reader can't change it (`404` no such
  * collection, `403` they may only view it). `allowed` names the keys an add may put in, read in the same transaction.
  */
 export async function changeCollectionItems(
@@ -490,7 +490,7 @@ export async function changeCollectionItems(
 			? await transaction.insert(readerCollectionItem).values(taken.map((itemKey) => ({ collectionId, itemKey }))).onConflictDoNothing().returning({ itemKey: readerCollectionItem.itemKey })
 			: await transaction.delete(readerCollectionItem).where(and(eq(readerCollectionItem.collectionId, collectionId), inArray(readerCollectionItem.itemKey, taken))).returning({ itemKey: readerCollectionItem.itemKey });
 		const [held] = await transaction.select({ count: count() }).from(readerCollectionItem).where(eq(readerCollectionItem.collectionId, collectionId));
-		return { count: held?.count ?? 0, changed: changed.length, taken };
+		return { count: held?.count ?? 0, changed: changed.map((row) => row.itemKey), taken };
 	});
 }
 

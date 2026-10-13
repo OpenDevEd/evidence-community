@@ -12,7 +12,7 @@ type Props = { params: Promise<{ clerkUserId: string; id: string }> };
 
 /**
  * Puts records into a collection, or takes them out, as a person who owns or edits it here. Answers how many it holds
- * after, how many changed, and the keys the library doesn't show, which are never added.
+ * after, the keys that went in or came out, and the keys the library doesn't show, which are never added.
  */
 function change(request: Request, props: Props, kind: "add" | "remove") {
 	return answerOpenScholar(request, `readers/collections/records:${kind}`, async ({ config, database }) => {
