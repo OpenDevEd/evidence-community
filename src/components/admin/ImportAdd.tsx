@@ -122,13 +122,16 @@ function Settings({ flow }: { flow: ImportFlowState }) {
 			) : null}
 			<Setting icon={Folder01Icon} summary={flow.collections.length ? `${flow.collections.length} chosen` : "None"} title="Collections">
 				<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">The new drafts go into these.</p>
-				<AdminCollectionPicker
-					allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], flow.sources)}
+				{/* Locked while a lookup runs: the batch takes the collections chosen when it starts. */}
+				<div className={`transition-opacity ${flow.busy ? "opacity-50" : ""}`} inert={flow.busy}>
+					<AdminCollectionPicker
+						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], flow.sources)}
 					onSelectionChange={flow.setCollections}
 					selectedKeys={flow.collections}
-					selectionMode="multiple"
-					sources={flow.sources}
-				/>
+						selectionMode="multiple"
+						sources={flow.sources}
+					/>
+				</div>
 			</Setting>
 		</div>
 	);

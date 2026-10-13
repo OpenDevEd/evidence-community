@@ -70,10 +70,12 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 		<div className="flex h-full min-h-0 flex-col">
 			<header className="flex h-14 shrink-0 items-center gap-3 px-5">
 				<h2 className="whitespace-nowrap text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
-				<span className="ms-auto">
+				<span className="flex-1" />
+				{/* The steps make way for Close on a phone. */}
+				<span className="hidden sm:block">
 					<ImportSteps stage={stage} />
 				</span>
-				<Button aria-label="Close" className="-me-1.5 size-8 min-w-8" isIconOnly onPress={flow.onClose} size="xs" variant="transparent">
+				<Button aria-label="Close" className="-me-1.5 size-8 !min-w-8 shrink-0" isIconOnly onPress={flow.onClose} size="xs" variant="transparent">
 					<HugeiconsIcon aria-hidden icon={Cancel01Icon} size={16} />
 				</Button>
 			</header>
@@ -84,7 +86,8 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 					{stage === "review" && batch ? <DrawerReview flow={flow} /> : null}
 					{view ? <DrawerDrafts flow={flow} /> : null}
 				</StageFade>
-				<footer className="flex h-16 shrink-0 items-center gap-2 border-t border-black/[0.06] px-5 dark:border-white/[0.06]">
+				{/* On a phone the actions wrap under the collections rather than clip them. */}
+				<footer className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-t border-black/[0.06] px-5 py-3 dark:border-white/[0.06]">
 					{stage === "input" || flow.error ? <InputNote flow={flow} /> : null}
 					{stage === "review" && !flow.error ? <CollectionsButton collections={flow.collections} locked={flow.locked} onChange={flow.setCollections} sources={flow.sources} /> : null}
 					<span className="ms-auto flex shrink-0 items-center gap-2">
@@ -134,7 +137,7 @@ function DrawerReview({ flow }: { flow: ImportFlowState }) {
 	const all = flow.readyIds.length > 0 && flow.readyIds.every((id) => flow.selected.has(id));
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<div className="shrink-0 overflow-x-auto px-4 py-2.5 [scrollbar-width:none] [&>div]:w-max">
+			<div className="shrink-0 overflow-x-auto px-4 py-2.5 [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] [scrollbar-width:none] [&>div]:w-max">
 				<ReviewBar counts={flow.counts} filter={flow.filter} kind={batch.kind} onFilter={flow.setFilter} />
 			</div>
 			<div className="flex h-9 shrink-0 items-center gap-3 border-y border-black/[0.06] px-5 text-xs text-black/50 dark:border-white/[0.06] dark:text-white/50">

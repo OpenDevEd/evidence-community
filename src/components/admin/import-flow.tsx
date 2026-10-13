@@ -294,8 +294,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		filter,
 		finish,
 		guidance,
-		/** The input's problem, shown once there is something to read. The DOI box marks bad entries itself. */
-		footerProblem: stage === "input" && (kind === "pdfs" ? pdfs.length : kind === "files" ? files.length : 0) ? problem : null,
+		// The DOI box lists entries that are not DOIs itself; the footer explains the rest, such as too many DOIs.
+		footerProblem: stage === "input" && (kind === "pdfs" ? pdfs.length : kind === "files" ? files.length : doiText.trim() && !parseDoiList(doiText).invalid.length) ? problem : null,
 		kind,
 		locked,
 		onClose,

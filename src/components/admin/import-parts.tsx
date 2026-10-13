@@ -33,7 +33,7 @@ export function InputNote({ flow }: { flow: ImportFlowState }) {
 	const problem = flow.error ?? flow.footerProblem;
 	if (problem) {
 		return (
-			<p className="min-w-0 flex-1 truncate text-sm text-danger" role="alert">
+			<p className="min-w-0 flex-1 text-sm leading-5 text-danger" role="alert">
 				{problem}
 			</p>
 		);
