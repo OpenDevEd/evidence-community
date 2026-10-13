@@ -14,6 +14,9 @@ import {
 	Idea01Icon,
 	Link01Icon,
 	Loading03Icon,
+	MinusSignIcon,
+	PencilEdit02Icon,
+	PlusSignIcon,
 	SquareArrowUpRight02Icon,
 	Tick02Icon,
 	CopyrightIcon,
@@ -429,10 +432,26 @@ const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => 
 	return Array.isArray(value) ? value.join(field === "authors" ? "; " : ", ") : value;
 };
 
+type PropertyChange = "added" | "changed" | "removed";
+
+const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: string; tone: string }> = {
+	added: { icon: PlusSignIcon, label: "Added", tone: "text-emerald-700 dark:text-emerald-400" },
+	changed: { icon: PencilEdit02Icon, label: "Changed", tone: "text-amber-700 dark:text-amber-400" },
+	removed: { icon: MinusSignIcon, label: "Removed", tone: "text-black/50 dark:text-white/50" },
+};
+
+/** What publishing does to one property. A missing DOI isn't removed: Zenodo allocates one at publishing. */
+function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
+	const value = propertyText(after, field) || (field === "doi" ? "pending" : "");
+	const before = propertyText(now, field);
+	if (value === before) return null;
+	return !before ? "added" : value ? "changed" : "removed";
+}
+
 /**
- * What publishing writes into the PDF, beside what it carries now. Every
- * published PDF gets the record's properties; fixes reach the file through
- * Rights.
+ * What publishing writes into the PDF, beside what it carries now, each
+ * property marked added, changed or removed. Every published PDF gets the
+ * record's properties; fixes reach the file through Rights.
  */
 function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPropertiesReading }) {
 	if (!now.writable) {
@@ -443,16 +462,31 @@ function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPrope
 		);
 	}
 	return (
-		<dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-4 gap-y-2.5">
+		<dl className="grid grid-cols-[4.5rem_minmax(0,1fr)_5rem] gap-x-4 gap-y-2.5">
 			{PROPERTY_ROWS.map(({ field, label }) => {
 				const value = propertyText(after, field);
 				const before = propertyText(now.properties, field);
+				const change = changeOf(field, after, now.properties);
+				const look = change ? changeLook[change] : null;
+				const shown = value || (field === "doi" ? "From Zenodo when published" : "Left empty");
 				return (
 					<div className="contents" key={field}>
 						<dt className="pt-px text-xs leading-5 text-black/45 dark:text-white/45">{label}</dt>
 						<dd className="min-w-0 text-xs leading-5">
-							<p className={`line-clamp-2 ${value ? "text-black/80 dark:text-white/80" : "text-black/40 dark:text-white/40"}`}>{value || (field === "doi" ? "Added when Zenodo allocates the DOI" : "Left empty")}</p>
-							{before && before !== value ? <p className="line-clamp-1 text-black/40 line-through decoration-black/25 dark:text-white/40 dark:decoration-white/25">{before}</p> : null}
+							<p className={`line-clamp-2 ${value ? "text-black/80 dark:text-white/80" : "text-black/40 dark:text-white/40"}`}>{change === "added" || change === "changed" ? <ins className="no-underline">{shown}</ins> : shown}</p>
+							{change === "changed" || change === "removed" ? (
+								<p className="line-clamp-1 text-black/40 dark:text-white/40">
+									<del className="decoration-black/25 dark:decoration-white/25">{before}</del>
+								</p>
+							) : null}
+						</dd>
+						<dd className={`flex h-5 items-center justify-end gap-1 text-xs ${look?.tone ?? ""}`}>
+							{look ? (
+								<>
+									<HugeiconsIcon aria-hidden className="shrink-0" icon={look.icon} size={12} />
+									{look.label}
+								</>
+							) : null}
 						</dd>
 					</div>
 				);
@@ -461,11 +495,14 @@ function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPrope
 	);
 }
 
-/** The section's note: when the properties are written, and how many the file lacks now. */
+/** The section's note: what publishing does to the file's properties, in the marks the rows carry. */
 function propertiesAside(after: PdfProperties, now: PdfPropertiesReading) {
 	if (!now.writable) return undefined;
-	const missing = PROPERTY_ROWS.filter(({ field }) => propertyText(after, field) && !propertyText(now.properties, field)).length;
-	return missing ? `Written when published, ${missing} not in the file now` : "Written when published";
+	const changes = PROPERTY_ROWS.map(({ field }) => changeOf(field, after, now.properties));
+	const count = (change: PropertyChange) => changes.filter((value) => value === change).length;
+	const verbs = { added: "adds", changed: "changes", removed: "removes" } as const;
+	const parts = (["added", "changed", "removed"] as const).filter((change) => count(change)).map((change) => `${verbs[change]} ${count(change)}`);
+	return parts.length ? `Publishing ${parts.join(", ")}` : "Already in the file";
 }
 
 async function openWithProperties(file: File, properties: PdfProperties) {
