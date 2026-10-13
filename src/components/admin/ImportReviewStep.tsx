@@ -123,6 +123,12 @@ function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onO
 	);
 }
 
+/** Why a record can't be imported: each field it gets wrong, or the general message. */
+function attentionReason(record: NonNullable<ImportRow["record"]>) {
+	const fields = Object.entries(record.fields ?? {});
+	return fields.length ? fields.map(([field, message]) => `${humanizeAdminField(field)}: ${message}`).join(" ") : record.message;
+}
+
 /** One record as its own page: who wrote it, then its parts in rows like the Add step's settings. */
 function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBack: () => void; onOpen: (id: string) => void; row: ImportRow }) {
 	const index = flow.shown.findIndex(({ id }) => id === row.id);
@@ -175,6 +181,7 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 						) : null}
 					</div>
 					{row.message ? <p className="text-xs text-danger">{row.message}</p> : null}
+					{record?.state === "attention" ? <p className="text-xs leading-5 text-danger">{attentionReason(record)}</p> : null}
 				</div>
 			</header>
 			{record ? <MetadataLine payload={payload} /> : null}

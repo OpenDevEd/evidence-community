@@ -31,7 +31,7 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 	const batch = flow.batch!;
 	const view = publishView(batch, flow.choosePublish, canPublish);
 	const { current, items, pages } = pageOf(view.drafts, page, ROWS_PER_PAGE);
-	const publishing = view.publishable.length > 0;
+	const publishing = view.offered;
 	// Every row is known once the import returns, so none appears later and pushes the list.
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 pt-5 [scrollbar-gutter:stable]">
@@ -52,7 +52,7 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 			<div className="flex flex-col gap-2">
 				<ListHeader
 					aside={publishing ? (view.started ? undefined : `${view.passing} pass every check`) : canPublish ? undefined : "Editors and owners publish them"}
-					lead={publishing ? <Checkbox aria-label="Choose every draft to publish" isDisabled={view.started} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" /> : undefined}
+					lead={publishing ? <Checkbox aria-label="Choose every draft to publish" isDisabled={view.started || !view.publishable.length} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" /> : undefined}
 					title={publishing ? (view.started ? `${view.published} of ${view.chosen.size} published` : `${view.chosen.size} of ${view.publishable.length} to publish`) : `${view.drafts.length} ${view.drafts.length === 1 ? "draft" : "drafts"}`}
 				/>
 				<ul className="flex flex-col">

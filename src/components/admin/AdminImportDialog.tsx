@@ -115,7 +115,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 								<Button onPress={flow.restart} size="sm" variant="transparent">
 									Import more
 								</Button>
-								{view.publishable.length ? (
+								{view.offered ? (
 									<Button className="min-w-32" color="accent" isDisabled={view.started || view.waiting || !view.chosen.size} onPress={() => flow.publish(view.publish())} size="sm" variant="solid">
 										{view.publishLabel}
 									</Button>

@@ -3,6 +3,7 @@
 import { AlertCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
 import { checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
@@ -41,9 +42,10 @@ export function DraftState({ attach, draft, publish }: { attach: AttachState | u
 	if (publish?.state === "published") return <PublishedDoi itemKey={draft.itemKey} />;
 	if (publish?.state === "failed" || attach === "failed") {
 		return (
-			<span className="flex min-w-0 items-start gap-1.5 text-xs leading-4 text-danger">
-				<HugeiconsIcon aria-hidden className="mt-px shrink-0" icon={AlertCircleIcon} size={13} />
-				<span className="line-clamp-2 min-w-0">{publish?.message ?? "The PDF didn't attach, so it stays a draft"}</span>
+			<span className={`${note} text-danger`}>
+				<HugeiconsIcon aria-hidden className="shrink-0" icon={AlertCircleIcon} size={13} />
+				{/* One line, as every other state, so a failure doesn't make the row taller. */}
+				<TruncatedText className="min-w-0" focusable text={publish?.message ?? "The PDF didn't attach, so it stays a draft"} />
 			</span>
 		);
 	}
@@ -72,8 +74,9 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	const publishable = canPublish ? drafts.filter(({ row }) => row.file && batch.attach.get(row.id) !== "failed") : [];
 	const publishableIds = publishable.map(({ row }) => row.id);
 	const started = batch.publish.size > 0;
-	// Once publishing starts, the ticks are the drafts it was started for.
-	const chosen = started ? new Set(batch.publish.keys()) : (batch.toPublish ?? new Set(publishable.filter(({ row }) => rowPasses(row)).map(({ row }) => row.id)));
+	// Once publishing starts, the ticks are the drafts it was started for. Before
+	// that, a ticked draft whose PDF then fails to attach drops out.
+	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ row }) => rowPasses(row)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
 	const published = [...batch.publish.values()].filter(({ state }) => state === "published").length;
 	const pdfs = drafts.filter(({ row }) => row.file).map(({ row }) => batch.attach.get(row.id));
 	const toggle = (id: string, checked: boolean) => {
@@ -85,11 +88,13 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	return {
 		all: publishableIds.length > 0 && publishableIds.every((id) => chosen.has(id)),
 		attached: pdfs.filter((state) => state === "attached").length,
-		/** Drafts made in the library, which take the import's DOI route. */
-		created: publishable.some(({ kind }) => kind === "created"),
+		/** Drafts made in the library, which take the import's DOI route. Known once the import returns, so the row never comes or goes later. */
+		created: canPublish && drafts.some(({ kind, row }) => kind === "created" && row.file),
 		chosen,
 		drafts,
 		failedPdfs: pdfs.some((state) => state === "failed"),
+		/** Publishing is offered: an editor or owner, and drafts read from PDFs. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
+		offered: canPublish && drafts.some(({ row }) => row.file),
 		passing: publishable.filter(({ row }) => rowPasses(row)).length,
 		pdfs: pdfs.length,
 		publish: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),

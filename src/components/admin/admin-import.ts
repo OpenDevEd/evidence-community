@@ -86,21 +86,9 @@ export function selectedImportRecords(
 	);
 }
 
-export function summarizeImportResults(
-	results: readonly AdminImportCommitResult[],
-) {
-	const createdKeys = results.flatMap(({ itemKey, outcome }) =>
-		outcome === "created" && itemKey ? [itemKey] : [],
-	);
-	const failed = results.filter(({ outcome }) => outcome === "failed").length;
-	const drafts = createdKeys.length === 1 ? "draft" : "drafts";
-	return {
-		createdKeys,
-		failed,
-		message: failed
-			? `${createdKeys.length} ${drafts} created, ${failed} failed`
-			: `${createdKeys.length} ${drafts} created`,
-	};
+/** The drafts an import created, which the table selects. */
+export function createdKeys(results: readonly AdminImportCommitResult[]) {
+	return results.flatMap(({ itemKey, outcome }) => (outcome === "created" && itemKey ? [itemKey] : []));
 }
 
 /** One record in the review, from a DOI, a bibliography file or a PDF the AI reads. */

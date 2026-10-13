@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	checkPasses,
+	createdKeys,
 	doiPreviewRequest,
 	filePreviewRequest,
 	recordRights,
@@ -9,7 +10,6 @@ import {
 	rowPasses,
 	rowsFromRecords,
 	selectedImportRecords,
-	summarizeImportResults,
 	type ImportRow,
 } from "@/components/admin/admin-import";
 import type { AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
@@ -96,13 +96,13 @@ describe("import preview selection", () => {
 		]);
 	});
 
-	it("summarizes created keys and failures for the toast", () => {
+	it("selects only the drafts an import created", () => {
 		expect(
-			summarizeImportResults([
+			createdKeys([
 				{ id: "1", itemKey: "AAAA2345", outcome: "created" },
 				{ id: "2", outcome: "skipped" },
 				{ id: "3", outcome: "failed" },
 			]),
-		).toEqual({ createdKeys: ["AAAA2345"], failed: 1, message: "1 draft created, 1 failed" });
+		).toEqual(["AAAA2345"]);
 	});
 });

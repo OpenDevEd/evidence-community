@@ -41,6 +41,23 @@ function guidanceFrom(value: FormDataEntryValue | null) {
 	return guidance;
 }
 
+// A record can't be imported without these, so they are never left out.
+const NEEDED_FIELDS = new Set(["creators", "itemType", "title"]);
+
+/**
+ * The reading as an import row. A field the AI got wrong, such as a web
+ * address without https://, would hold back the whole record, so it is left
+ * out and the record checked again; the editor can add it to the draft.
+ */
+async function previewReading(source: string, zoteroItem: Record<string, unknown>) {
+	const db = await getDatabase();
+	const [first] = (await previewEntries(db, [{ method: "pdf", source, zoteroItem }])).records;
+	const wrong = Object.keys(first!.fields ?? {}).filter((field) => field in zoteroItem && !NEEDED_FIELDS.has(field));
+	if (!wrong.length) return first!;
+	const kept = Object.fromEntries(Object.entries(zoteroItem).filter(([field]) => !wrong.includes(field)));
+	return (await previewEntries(db, [{ method: "pdf", source, zoteroItem: kept }])).records[0]!;
+}
+
 /** Reads one PDF into an import preview row and checks it against the library's criteria. */
 export async function POST(request: NextRequest) {
 	const denied = await requireAdminSession(request);
@@ -58,9 +75,7 @@ export async function POST(request: NextRequest) {
 
 		const started = Date.now();
 		const [reading, pdf] = await Promise.all([readImportPdf(bytes, file.name, criteria, guidance), readPdfProperties(bytes)]);
-		const { records } = await previewEntries(await getDatabase(), [
-			{ method: "pdf", source: file.name, zoteroItem: reading.zoteroItem },
-		]);
+		const record = await previewReading(file.name, reading.zoteroItem);
 		const response: AdminPdfReadResponse = {
 			abstractWritten: reading.abstractWritten,
 			checks: reading.checks,
@@ -69,7 +84,7 @@ export async function POST(request: NextRequest) {
 			ms: Date.now() - started,
 			outputTokens: reading.outputTokens,
 			pdf,
-			record: records[0]!,
+			record,
 			rightsFix: reading.rightsFix,
 			topics: reading.topics,
 		};

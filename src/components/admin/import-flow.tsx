@@ -1,7 +1,6 @@
 "use client";
 
 import { use, useDeferredValue, useState } from "react";
-import { toast } from "sonner";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
@@ -16,6 +15,7 @@ import {
 	changeImportBatch,
 	changeImportRow,
 	chosenTopics,
+	createdKeys,
 	currentImportBatch,
 	doiPreviewRequest,
 	endImportBatch,
@@ -36,7 +36,6 @@ import {
 	storedChecks,
 	storedGuidance,
 	storeGuidance,
-	summarizeImportResults,
 	useImportBatch,
 	validateChecks,
 	validateGuidance,
@@ -232,10 +231,9 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			});
 			changeImportBatch(batch.importId, (current) => ({ ...current, committing: false, results: response.results }));
 			const created = response.results.filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
-			const summary = summarizeImportResults(response.results);
 			if (batch.kind === "pdfs") void attachPdfs(batch.importId, created);
-			await onImported(summary.createdKeys);
-			(summary.failed ? toast.warning : toast.success)(summary.message);
+			// The finish step says what the import did, so no toast covers its buttons.
+			await onImported(createdKeys(response.results));
 		});
 
 	/**
@@ -246,7 +244,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	 */
 	const publish = async (importId: string, drafts: readonly { id: string; itemKey: string; kind: "created" | "imported" | undefined }[]) => {
 		const route = batch?.publishRoute ?? "zenodo";
-		const created = summarizeImportResults(batch?.results ?? []).createdKeys;
+		const created = createdKeys(batch?.results ?? []);
 		const mark = (id: string, state: PublishState) => changeImportBatch(importId, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
 		for (const { id } of drafts) mark(id, { state: "publishing" });
 		let next = 0;
