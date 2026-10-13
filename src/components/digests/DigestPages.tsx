@@ -582,6 +582,26 @@ const FAQ_ITEM = {
   content: "pb-5 pt-0 text-sm leading-6 text-black/70 dark:text-white/70",
 };
 
+/** What the AI read: every publication of the period, or the ones a size limit kept, less any taken down since. */
+function readRows(edition: DigestEdition, n: (count: number) => string) {
+  // A record hidden after the edition was written leaves its list, so the list can be shorter than what was read.
+  const hidden = edition.read - edition.listed;
+  return [
+    edition.read < edition.publicationCount
+      ? {icon: FilterHorizontalIcon, lead: "At most 1,000 publications or 1.5\u00a0MB of text.", text: `A period with more is cut to the ${n(edition.read)} that rank highest, in the order below.`}
+      : {icon: BookOpen01Icon, lead: "Every publication in the period.", text: "They are listed in the order below."},
+    hidden > 0 && {icon: Delete02Icon, lead: `${n(hidden)} taken down since.`, text: `So ${n(edition.listed)} are listed.`},
+  ];
+}
+
+/** How the text was checked, and by whom when the library names who read it. */
+const checkSteps = (by: DigestEdition["by"]): Step[] => [
+  {title: "Written from titles and abstracts", text: "Not from the full papers."},
+  {title: "Checked sentence by sentence", text: "A second AI model, from another company, checks each sentence about a paper against that paper's title and abstract."},
+  {title: "Corrected or removed", text: "The writer fixes what the check flags, or takes it out."},
+  ...(by ? [{title: `Read by ${by.name}`, text: "Before it was published."}] : []),
+];
+
 /**
  * How the edition was made, as the questions a reader asks of it: what the AI read, why these publications are listed
  * in this order (`reviewStanding`, then an abstract, then the score), what is left out, and how the text was checked.
@@ -590,8 +610,6 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
   const reducedMotion = useReducedMotion();
   const n = (count: number) => count.toLocaleString(locale);
   const cut = edition.read < edition.publicationCount;
-  // A record hidden after the edition was written leaves its list, so the list can be shorter than what was read.
-  const hidden = edition.read - edition.listed;
   const order: Step[] = [
     {title: "Reviews and syntheses", text: "Reviews of reviews, meta-analyses, systematic reviews, narrative reviews and bibliometric studies come first. Each paper's study type is the one an AI model read when it entered the library, or an editor's correction."},
     {title: "An abstract of 200 characters or more", text: "The writer works from abstracts, so papers with one come before papers without."},
@@ -599,22 +617,12 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
       <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{what}</dd>
     </Fragment>)}</dl>},
   ];
-  const checks: Step[] = [
-    {title: "Written from titles and abstracts", text: "Not from the full papers."},
-    {title: "Checked sentence by sentence", text: "A second AI model, from another company, checks each sentence about a paper against that paper's title and abstract."},
-    {title: "Corrected or removed", text: "The writer fixes what the check flags, or takes it out."},
-    ...(edition.by ? [{title: `Read by ${edition.by.name}`, text: "Before it was published."}] : []),
-  ];
   return <div className="mb-10 rounded-2xl bg-card_light px-6 pt-5 pb-1 dark:bg-card">
     <h3 className="font-heading text-lg font-medium">How this edition was made</h3>
     <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={FAQ_ITEM} disableAnimation={Boolean(reducedMotion)}>
       <AccordionItem key="read" aria-label="What did the AI read?" title="What did the AI read?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
         subtitle={<>The titles and abstracts of <Em>{cut ? n(edition.read) : "all"}</Em> of the period&rsquo;s <Em>{n(edition.publicationCount)}</Em> publications. The text cites <Em>{n(edition.cited)}</Em>.</>}>
-        <Facts rows={[
-          cut ? {icon: FilterHorizontalIcon, lead: "At most 1,000 publications or 1.5\u00a0MB of text.", text: `A period with more is cut to the ${n(edition.read)} that rank highest, in the order below.`}
-            : {icon: BookOpen01Icon, lead: "Every publication in the period.", text: "They are listed in the order below."},
-          hidden > 0 && {icon: Delete02Icon, lead: `${n(hidden)} taken down since.`, text: `So ${n(edition.listed)} are listed.`},
-        ]} />
+        <Facts rows={readRows(edition, n)} />
       </AccordionItem>
       <AccordionItem key="order" aria-label="Why these publications, in this order?" title="Why these publications, in this order?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
         subtitle={<><Em>Reviews and syntheses</Em> first, then those <Em>with an abstract</Em>, then <Em>by a score</Em>.</>}>
@@ -630,7 +638,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
       </AccordionItem>
       <AccordionItem key="checked" aria-label="How was the text checked?" title="How was the text checked?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
         subtitle={<>A second AI model checked <Em>every sentence</Em> about a paper{edition.by && <>, and <Em>{edition.by.name}</Em> read it before it was published</>}.</>}>
-        <Steps steps={checks} />
+        <Steps steps={checkSteps(edition.by)} />
       </AccordionItem>
     </Accordion>
   </div>;
