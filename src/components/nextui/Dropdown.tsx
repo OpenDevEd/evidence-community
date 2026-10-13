@@ -1,7 +1,8 @@
+import type { ComponentProps } from "react";
 import { extendVariants } from "@nextui-org/react";
 import { Dropdown as NextUIDropdown } from "@nextui-org/react";
 
-export const Dropdown = extendVariants(NextUIDropdown, {
+const StyledDropdown = extendVariants(NextUIDropdown, {
 	variants: {
 		color: {
 			secondary: {
@@ -30,3 +31,12 @@ export const Dropdown = extendVariants(NextUIDropdown, {
 		color: "secondary",
 	},
 });
+
+/**
+ * An open dialog hides from screen readers everything added to the page outside it, and NextUI never takes that back
+ * from a menu opened inside the dialog, so its choices were unreadable. A top layer, as React Aria marks its own, is
+ * left visible.
+ */
+export function Dropdown(props: ComponentProps<typeof StyledDropdown>) {
+	return <StyledDropdown data-react-aria-top-layer="true" {...props} />;
+}
