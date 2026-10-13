@@ -332,12 +332,13 @@ it("lists every edition a page at a time with where each stands", async () => {
     expect(first.editions.slice(0, 4).map(row => [row.state, row.title, row.publicationCount, row.checkedBy?.name ?? null])).toEqual([
       ["writing", null, 22, null], ["failed", null, 21, null], ["draft", "August", 20, null], ["review", "Changed", 19, "Gugulethu Dube"],
     ]);
-    // An edition is dated by the end of its period, in the library's days.
-    expect(first.editions[2]).toMatchObject({ day: "25", month: "May", period: "18 to 25 May" });
+    // An edition is dated by the end of its window, and its period runs to the day before, the last day it counts, in the library's days.
+    // Node's date data puts spaces around the range's dash in some versions, not others.
+    expect(first.editions[2]).toMatchObject({ day: "25", month: "May", period: expect.stringMatching(/^18\s?–\s?24 May 2026$/) });
     expect((await list({ page: 2 })).editions.map(row => row.state)).toEqual(["published", "published", "published"]);
     expect((await list({ page: 7 })).page).toBe(2);
     expect(await list({ show: "review" })).toMatchObject({ total: 1, pages: 1, editions: [{ title: "Changed" }] });
-    expect((await list({ show: "published", sort: "oldest" })).editions[0]).toMatchObject({ day: "5", month: "Jan", period: "29 December to 5 January", state: "published" });
+    expect((await list({ show: "published", sort: "oldest" })).editions[0]).toMatchObject({ day: "5", month: "Jan", period: "29 December 2025\u2009–\u20094 January 2026", state: "published" });
   });
 }, 120_000);
 

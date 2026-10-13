@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { getFormatter, getLocale, getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimePageAvailability } from "@/config/library-config/pages";
@@ -14,7 +14,7 @@ const ROW = "group/row flex min-w-0 flex-col gap-1 rounded-xl p-2 -mx-2 outline-
 export async function LibraryHighlights() {
 	// The library config is only known per request, so this never prerenders.
 	await connection();
-	const [locale, format, t, config] = await Promise.all([getLocale(), getFormatter(), getTranslations("sidebar"), getLibraryConfig()]);
+	const [locale, t, config] = await Promise.all([getLocale(), getTranslations("sidebar"), getLibraryConfig()]);
 	const digests = await loadLatestDigests(locale);
 	const pages = getRuntimePageAvailability(config);
 	const [latest, ...earlier] = digests?.editions ?? [];
@@ -33,7 +33,7 @@ export async function LibraryHighlights() {
 								<li key={edition.slug}>
 									<Link href={`/digests/${edition.slug}`} className={ROW}>
 										<span className="text-sm tabular-nums text-black/60 dark:text-white/60">
-											{format.dateTime(new Date(edition.published.at), { dateStyle: "medium" })}
+											{edition.period.label}
 										</span>
 										<span className="line-clamp-2 font-heading text-base font-medium leading-snug text-black/80 transition-colors group-hover/row:text-accent dark:text-white/80">{edition.title}</span>
 									</Link>

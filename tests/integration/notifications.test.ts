@@ -385,6 +385,23 @@ it("covers what was published in the period whenever it was added, and lists a r
   });
 }, 120_000);
 
+it("lists an open-access publication before a closed one of the same standing, and tells the writer which is open", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
+    const abstract = "A study of attention in classrooms. ".repeat(8);
+    await dated(client, "BEHINDAA", "2026-09-10", abstract);
+    await dated(client, "FREEAAAA", "2026-09-11", abstract);
+    await client.query(`UPDATE item SET "openAccess" = (key = 'FREEAAAA')`);
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-14T09:00:00Z"));
+    const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(edition.publications.map(({key, openAccess}) => ({key, openAccess}))).toEqual([{key: "FREEAAAA", openAccess: true}, {key: "BEHINDAA", openAccess: false}]);
+    // Its page says how many of the papers its text cites are open.
+    await client.query(`UPDATE "notificationEdition" SET title = 'Attention', summary = 'Two studies.', "publishedAt" = now(),
+      markdown = 'One [Free, 2026](/lib/FREEAAAA) and one [Behind, 2026](/lib/BEHINDAA).' WHERE id = $1`, [edition.id]);
+    expect(await getDigestEdition(db, publishedConfig, "en-GB", edition.id)).toMatchObject({cited: 2, citedOpen: 1});
+  });
+}, 120_000);
+
 it("skips scheduled digests while paused, then covers everything since the last one at the next scheduled time", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const paused = {...publishedConfig, notifications: {...publishedConfig.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
@@ -564,7 +581,7 @@ it("writes a past period's digest by publication date, rewrites it as a draft wh
     expect(await prepareNotificationEditions(db, publishedConfig, due)).toEqual({status: "empty"});
     expect((await db.select().from(notificationState))[0].digestThrough).toEqual(due);
     expect((await db.select().from(notificationEdition).where(eq(notificationEdition.windowEnd, due))).map(edition => edition.id)).toEqual([manual.status === "queued" ? manual.editionId : null]);
-    expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, published: {date: "1 September 2026"}});
+    expect((await listDigestEditions(db, publishedConfig, "en-GB")).editions[0]).toMatchObject({slug: editions[0].id, period: {first: "2026-08-01", last: "2026-08-31", label: "August 2026"}});
   });
 }, 120_000);
 

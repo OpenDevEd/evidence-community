@@ -5,8 +5,11 @@ import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { readOpenAccess } from "@/lib/search-index/open-access";
+import { getPublicItemCards } from "@/lib/public-item-card";
 import { storedSynthesis, storedTypeOrder } from "./digest-types";
-import { nextDigestDate } from "./schedule";
+import { citedKeys } from "./digest-text";
+import { digestPeriod, nextDigestDate, type DigestPeriod } from "./schedule";
 import type { DigestSigner, DigestTypeCounts } from "./types";
 
 const ARCHIVE_PAGE_SIZE = 20;
@@ -19,13 +22,13 @@ const EDITION_PAGE_SIZE = 12;
 export type DigestDate = {at: string; day: string; month: string; monthYear: string; /** The year in the library's time zone, as the other parts are. */ year: string; weekday: string; dayName: string; date: string; time: string};
 /** Who stands behind a digest: the Editor or Owner who checked it, or null when it went out as AI wrote it. Their account is not told. */
 export type DigestSignature = Omit<DigestSigner, "id"> | null;
-/** `by` is left out when the library does not tell readers who checks its digests. */
-export type DigestSummary = {slug: string; published: DigestDate; title: string; summary: string; publicationCount: number; cover: string | null; by?: DigestSignature};
+/** `by` is left out when the library does not tell readers who checks its digests. `period` is the days the edition covers. */
+export type DigestSummary = {slug: string; period: DigestPeriod; title: string; summary: string; publicationCount: number; cover: string | null; by?: DigestSignature};
 /**
  * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
  * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
  */
-export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; types: EditionTypes};
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; types: EditionTypes; /** The day its publications were counted and listed, so a reader knows what came later is not in it. */ counted: string; /** How many publications the writer read: the list as it was made, before any was hidden. */ read: number; /** How many publications its text cites. */ cited: number; /** How many of those readers can open without a subscription. */ citedOpen: number};
 /**
  * An edition's publications by study type: those listed that are public now, and every one the period had when the
  * list was made. A digest listed before types has only the first.
@@ -45,11 +48,11 @@ const CHART_EDITIONS = 24;
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {
-  id: notificationEdition.id, windowEnd: notificationEdition.windowEnd, title: notificationEdition.title,
+  id: notificationEdition.id, windowStart: notificationEdition.windowStart, windowEnd: notificationEdition.windowEnd, title: notificationEdition.title,
   summary: notificationEdition.summary, publicationCount: notificationEdition.publicationCount, cover: notificationEdition.cover,
   checkedBy: notificationEdition.checkedBy,
 };
-type SummaryRow = {id: string; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null; checkedBy: DigestSigner | null};
+type SummaryRow = {id: string; windowStart: Date; windowEnd: Date; title: string | null; summary: string | null; publicationCount: number; cover: string | null; checkedBy: DigestSigner | null};
 
 /** Who checked an edition, as readers are told. Undefined when the library does not say. */
 export function digestSignature(config: LibraryServerConfig, checkedBy: DigestSigner | null): DigestSignature | undefined {
@@ -67,9 +70,10 @@ function digestDate(value: Date, locale: string, config: LibraryServerConfig): D
 }
 
 function editionSummary(row: SummaryRow, locale: string, config: LibraryServerConfig): DigestSummary {
-  // An edition is dated by the end of its period, so one written later for a past period keeps that period's date.
+  // An edition is dated by its period, so one written later for a past period keeps that period's dates.
   const by = digestSignature(config, row.checkedBy);
-  return {slug: row.id, published: digestDate(row.windowEnd, locale, config), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover, ...(by === undefined ? {} : {by})};
+  const {digestCovers, schedule} = config.notifications;
+  return {slug: row.id, period: digestPeriod(row.windowStart, row.windowEnd, digestCovers, schedule.timezone, locale), title: row.title!, summary: row.summary!, publicationCount: row.publicationCount, cover: row.cover, ...(by === undefined ? {} : {by})};
 }
 const visibleEdition = and(eq(notificationEdition.stream, "digest"), isNotNull(notificationEdition.publishedAt));
 
@@ -123,10 +127,17 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
   return rows.map(row => editionSummary(row, locale, config));
 }
 
+/** How many of these publications are public and open access, as their cards say. */
+async function openCount(db: Database, config: LibraryServerConfig, keys: string[]) {
+  if (!keys.length) return 0;
+  const [openAccessOf, cards] = await Promise.all([readOpenAccess(db, keys), getPublicItemCards(db, keys, config)]);
+  return cards.filter(card => openAccessOf(card.key, card.DOI ?? null) === true).length;
+}
+
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
-  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note, studyTypes: notificationEdition.studyTypes})
+  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note, studyTypes: notificationEdition.studyTypes, requestedAt: notificationEdition.requestedAt, publishedAt: notificationEdition.publishedAt, read: sql<number>`jsonb_array_length(${notificationEdition.publications})`})
     .from(notificationEdition).where(and(visibleEdition, eq(notificationEdition.id, uuid))).limit(1);
   if (!row) return undefined;
   // Pages hold only the listed records that are public now, so hiding one
@@ -148,7 +159,10 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   const {rows: listedTypes} = await db.execute<{type: keyof DigestTypeCounts; publications: number}>(sql`
     SELECT coalesce(stored.entry->>'studyType', 'unread') AS type, count(*)::int AS publications ${listedNow} GROUP BY 1`);
   const types = {listed: Object.fromEntries(listedTypes.map(entry => [entry.type, entry.publications])), period: row.studyTypes};
-  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types};
+  // The list is counted and made just before the writer is asked for its text; an edition with no record of that asking has the day it was published.
+  const counted = (row.requestedAt ?? row.publishedAt!).toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: config.notifications.schedule.timezone});
+  const cited = citedKeys(row.markdown!);
+  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types, counted, read: row.read, cited: cited.length, citedOpen: await openCount(db, config, cited)};
   const reviews = await list(sql`AND ${storedSynthesis}`, reviewsPage);
   if (!reviews.listed) return {...edition, ...await list(sql``, page)};
   const others = await list(sql`AND NOT ${storedSynthesis}`, page);

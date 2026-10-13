@@ -7,6 +7,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
+import { readOpenAccess } from "@/lib/search-index/open-access";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
@@ -53,7 +55,9 @@ function publishedIn(db: DatabaseTransaction, config: LibraryServerConfig, windo
 /**
  * Counts a digest's publications, by study type too, and picks the ones it lists. Every review and synthesis is
  * picked first, by the type an editor gave it or its reading found. The rest follow best first: a real abstract, then
- * a score of the journal's standing, references, known institutions and citations. `keys` is the order they are
+ * a score of the journal's standing, open access, references, known institutions and citations. Open access weighs as
+ * much as a core journal, so readers without a subscription can read most of what is listed, yet a much stronger
+ * closed paper still comes first. `keys` is the order they are
  * picked in, which a size limit cuts from the end; `ranked` is the same publications best first, the order the
  * edition lists them in. `types` counts every publication the period has, so it adds up to `total`, and `typed` is the
  * type of each picked one that has one: both from the one query, so a reading that lands meanwhile changes neither.
@@ -73,6 +77,7 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
           THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
           ELSE ${item.key} END AS work,
         CASE WHEN record.core THEN 3 ELSE 0 END
+          + CASE WHEN coalesce(${item.openAccess}, work.open, lookup.open, false) THEN 3 ELSE 0 END
           + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
           + CASE WHEN EXISTS (SELECT 1 FROM "itemInstitution" WHERE "itemKey" = ${item.key}) THEN 1 ELSE 0 END
           + 2 * ln(1 + coalesce(metric.citations, 0))
@@ -88,6 +93,15 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,
           bool_or("payload" ->> 'is_retracted' = 'true' OR "payload" ->> 'is_paratext' = 'true') AS withdrawn
         FROM "sourceSnapshot" WHERE "itemKey" = ${item.key}) record ON true
+      -- Open access as readers see it (readOpenAccess): an editor's choice, else the newest copy of the record's OpenAlex
+      -- work that a search still finds, else what OpenAlex said about the record's DOI.
+      LEFT JOIN LATERAL (SELECT (s."payload" #>> '{open_access,is_oa}')::boolean AS open FROM "sourceSnapshot" s
+        JOIN "itemSourceLink" link ON link."itemKey" = s."itemKey" AND link."sourceConnectionKey" = s."sourceConnectionKey" AND NOT link."remoteDeleted"
+        JOIN "sourceConnection" c ON c.key = s."sourceConnectionKey" AND c.status <> 'removed' AND c.provider IN (${sql.join(OPENALEX_WORK_PROVIDERS.map(provider => sql`${provider}`), sql`, `)})
+        WHERE s."itemKey" = ${item.key} AND jsonb_typeof(s."payload" #> '{open_access,is_oa}') = 'boolean'
+        ORDER BY s."remoteVersion" DESC NULLS LAST, s."fetchedAt" DESC, s."sourceConnectionKey" LIMIT 1) work ON true
+      -- The last answer for the record's DOI, wherever the record gives it: a changed DOI is looked up again soon after.
+      LEFT JOIN LATERAL (SELECT "isOpenAccess" AS open FROM "itemOpenAccessLookup" WHERE "itemKey" = ${item.key}) lookup ON true
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (
@@ -141,12 +155,16 @@ function inRankOrder(publications: NotificationPublication[], ranked: string[] |
 async function listPublications(db: DatabaseTransaction, config: LibraryServerConfig, keys: string[], types = new Map<string, StudyTypeKey>()) {
   const publications: NotificationPublication[] = [];
   let metadataBytes = 0;
-  const cards = new Map((await getPublicItemCards(db, keys, config)).map(card => [card.key, card]));
+  const [cards, openAccessOf] = await Promise.all([
+    getPublicItemCards(db, keys, config).then(list => new Map(list.map(card => [card.key, card]))),
+    readOpenAccess(db, keys),
+  ]);
   for (const key of keys) {
     const card = cards.get(key);
     if (!card) continue;
     const type = types.get(key);
-    const metadata = { ...digestMetadata(card), ...(type ? { studyType: type } : {}) };
+    const open = openAccessOf(key, card.DOI ?? null);
+    const metadata = { ...digestMetadata(card), ...(type ? { studyType: type } : {}), ...(open === null ? {} : { openAccess: open }) };
     // The limit covers the serialized array, so count its brackets and commas too.
     metadataBytes += Buffer.byteLength(JSON.stringify(metadata)) + (publications.length ? 1 : 2);
     if (metadataBytes > 1_500_000) break;

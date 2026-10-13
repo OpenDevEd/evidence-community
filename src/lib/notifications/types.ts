@@ -14,6 +14,8 @@ export type NotificationPublication = {
   doi: string | null;
   /** Its study type when the edition was listed: an editor's correction or what its reading found. Absent while unread. */
   studyType?: StudyTypeKey;
+  /** Whether readers can read it without a subscription, as its card says; absent when that is not known. */
+  openAccess?: boolean;
   item: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>;
 };
 /** A digest's publications by study type when its list was made, `unread` for those not read yet; they add up to its count. */
