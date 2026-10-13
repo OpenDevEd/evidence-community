@@ -190,7 +190,7 @@ export function Checks({ checks, children }: { checks: ReviewCheck[]; children?:
 			{children}
 			{file.length ? (
 				<>
-					<p className="mb-2.5 mt-5 text-xs text-black/45 dark:text-white/45">From how the file was exported</p>
+					<p className="mb-2.5 mt-5 text-xs text-black/45 dark:text-white/45">Also checked in every PDF, from how the file was exported</p>
 					<CheckList checks={file} />
 				</>
 			) : null}
