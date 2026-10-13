@@ -49,7 +49,8 @@ export function ImportReviewStep({ flow }: { flow: ImportFlowState }) {
 		setOpenId(null);
 	};
 	return (
-		<div aria-labelledby={`import-review-panel-tab-${flow.filter}`} className="relative flex min-h-0 flex-1 flex-col" id="import-review-panel" role="tabpanel">
+		// Clips the 16 px slide between list and record, or the sheet scrolls sideways while it runs.
+		<div aria-labelledby={`import-review-panel-tab-${flow.filter}`} className="relative flex min-h-0 flex-1 flex-col overflow-hidden" id="import-review-panel" role="tabpanel">
 			<AnimatePresence initial={false} mode="popLayout">
 				<motion.div
 					animate={{ opacity: 1, x: 0 }}
