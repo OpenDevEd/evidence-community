@@ -24,6 +24,7 @@ import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
 import { filterPublicAttachments } from "@/lib/tags";
+import { normalizeDoi } from "@/lib/doi";
 import { openAlexItemKeys } from "@/lib/source-ingestion/openalex/references";
 import { toOpenScholarRecord, type OpenScholarRecord } from "./records";
 
@@ -275,9 +276,10 @@ const workOf = (id: string | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)
  */
 export async function matchRecords(config: LibraryServerConfig, database: Database, papers: z.infer<typeof matchRequestSchema>["papers"]) {
 	const works = [...new Set(papers.flatMap((paper) => workOf(paper.openalexId) ?? []))];
-	const dois = [...new Set(papers.flatMap((paper) => doiForm(paper.doi) ?? []))];
+	const dois = [...new Set(papers.flatMap((paper) => normalizeDoi(paper.doi) ?? []))];
 	if (!works.length && !dois.length) return [];
-	const bareDoi = sql<string>`trim(regexp_replace(regexp_replace(lower(trim(${item.DOI})), '^https?://(dx\\.)?doi\\.org/', ''), '^doi:', ''))`;
+	// normalizeDoi in SQL: without its address, `doi:` or angle brackets, in lower case.
+	const bareDoi = sql<string>`lower(regexp_replace(regexp_replace(regexp_replace(trim(${item.DOI}), '^https?://(dx\\.)?doi\\.org/', '', 'i'), '^doi:\\s*', '', 'i'), '^<(.+)>$', '\\1'))`;
 	const [workKeys, doiRows] = await Promise.all([
 		openAlexItemKeys(database, works),
 		dois.length ? database.select({ key: item.key, doi: bareDoi }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(bareDoi, dois))).orderBy(item.key) : [],
@@ -287,12 +289,8 @@ export async function matchRecords(config: LibraryServerConfig, database: Databa
 	for (const row of doiRows) if (!byDoi.has(row.doi)) byDoi.set(row.doi, row.key);
 	return papers.flatMap((paper, at) => {
 		const work = workKeys.get(workOf(paper.openalexId) ?? "");
-		const key = (work && shown.has(work) ? work : undefined) ?? byDoi.get(doiForm(paper.doi) ?? "");
+		const key = (work && shown.has(work) ? work : undefined) ?? byDoi.get(normalizeDoi(paper.doi) ?? "");
 		return key ? [{ at, key }] : [];
 	});
 }
 
-/** A DOI in one form: lower case, without its address. */
-function doiForm(doi: string | undefined) {
-	return doi?.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//u, "").replace(/^doi:/u, "").trim() || null;
-}

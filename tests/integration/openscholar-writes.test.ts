@@ -40,8 +40,9 @@ it("makes a reader's collection once, changes its records as its owner or editor
 		// W70 was withdrawn as a repeat of W7; two native records share a DOI stored with a space after its prefix.
 		await sql.query(`INSERT INTO "sourceRecordAlias" ("sourceConnectionKey", "aliasKey", "itemKey", "kind") VALUES ('openalex-main', 'W70', $1, 'duplicate-of')`, [work]);
 		const twins = [generateCanonicalRecordKey(), generateCanonicalRecordKey()];
-		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1), ($2, 'native', $2)`, twins);
-		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "DOI") VALUES ($1, 'native', $1, 'JournalArticle', 'Twin', 'doi: 10.2000/twin'), ($2, 'native', $2, 'JournalArticle', 'Twin', 'doi: 10.2000/twin')`, twins);
+		const bracketed = generateCanonicalRecordKey();
+		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1), ($2, 'native', $2), ($3, 'native', $3)`, [...twins, bracketed]);
+		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "DOI") VALUES ($1, 'native', $1, 'JournalArticle', 'Twin', 'doi: 10.2000/twin'), ($2, 'native', $2, 'JournalArticle', 'Twin', 'doi: 10.2000/twin'), ($3, 'native', $3, 'JournalArticle', 'Bracketed', '<10.3000/Bracket>')`, [...twins, bracketed]);
 
 		await database.insert(readerUser).values([
 			{ id: "reader-amina", name: "Amina", email: "amina@readers.openscholar.invalid" },
@@ -74,7 +75,7 @@ it("makes a reader's collection once, changes its records as its owner or editor
 
 		// Papers by their OpenAlex ID in any form, a repeat's included, or their DOI, each to the record that holds it, the
 		// first by key when two share a DOI; a hidden record holds none.
-		const matched = await json(await match(request("POST", "/api/v1/openscholar/records/match", { reader: "user_amina", papers: [{ openalexId: "https://openalex.org/W7" }, { doi: "10.1000/abc" }, { openalexId: "W8" }, { doi: "10.9/none" }, {}, { openalexId: "W70" }, { doi: "10.2000/TWIN" }] })));
-		expect(matched.body).toEqual({ matches: [{ at: 0, key: work }, { at: 1, key: native }, { at: 5, key: work }, { at: 6, key: twins.toSorted()[0] }] });
+		const matched = await json(await match(request("POST", "/api/v1/openscholar/records/match", { reader: "user_amina", papers: [{ openalexId: "https://openalex.org/W7" }, { doi: "10.1000/abc" }, { openalexId: "W8" }, { doi: "10.9/none" }, {}, { openalexId: "W70" }, { doi: "10.2000/TWIN" }, { doi: "https://doi.org/10.3000/bracket" }] })));
+		expect(matched.body).toEqual({ matches: [{ at: 0, key: work }, { at: 1, key: native }, { at: 5, key: work }, { at: 6, key: twins.toSorted()[0] }, { at: 7, key: bracketed }] });
 	});
 });
