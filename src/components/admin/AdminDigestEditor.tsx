@@ -338,9 +338,10 @@ export function AdminDigestEditor({ editionId, markdown, onChange, tools }: { ed
 	const on = useEditorState({ editor, selector: ({ editor: current }) => ({ heading: current?.isActive("heading", { level: 2 }) ?? false, bold: current?.isActive("bold") ?? false }) });
 	// Read from the text in hand, not from the editor, so it is known on the first frame.
 	const cited = citedIn(markdown);
+	// A click leaves the focus in the text, so what is typed straight after it isn't lost while the editor takes it back.
 	const tool = (label: string, icon: IconSvgElement, pressed: boolean, run: () => void) =>
 		<Tooltip content={label}>
-			<button type="button" aria-label={label} aria-pressed={pressed} onClick={run} className={`grid size-8 place-items-center rounded-lg transition-colors ${pressed ? "bg-black/[0.08] text-black dark:bg-white/15 dark:text-white" : "text-black/50 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.08]"}`}>
+			<button type="button" aria-label={label} aria-pressed={pressed} onMouseDown={(event) => event.preventDefault()} onClick={run} className={`grid size-8 place-items-center rounded-lg transition-colors ${pressed ? "bg-black/[0.08] text-black dark:bg-white/15 dark:text-white" : "text-black/50 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/50 dark:hover:bg-white/[0.08]"}`}>
 				<HugeiconsIcon icon={icon} aria-hidden size={16} />
 			</button>
 		</Tooltip>;
