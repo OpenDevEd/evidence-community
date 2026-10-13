@@ -45,13 +45,23 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
   paragraph wherever they appear.
 - Accuracy is measured before it is quoted: PubMed's own publication types on
   the biomedical records, plus a hand-checked sample per library.
+  - Changed 2026-10-13. The sample of 200 records per library is typed blind
+    by a second AI model (Claude) instead of a person, the user's choice, and
+    the methods text says so. PubMed checks trials for how many Jev finds
+    only: its tag covers clinical trials, while Jev's trials include
+    randomised field, laboratory and behavioural experiments, so its share of
+    Jev's types PubMed confirms covers meta-analyses and systematic reviews.
+    Proof: of ECCAR's 52 trials PubMed does not tag, nearly all are such
+    experiments (#592).
 - Digests keep counting publications by publication date.
 - The grading card in the source settings appears only when something needs
   grading: an edited subject, or records not graded against the current one.
 
 Measured on ECCAR (2,910 records, 2026-10-12): a full read costs $0.0000746 a
 record and a grade-only read 42% of that; 13% of types came back under 0.6
-confidence. Backfill estimate: AIED about $25, TVET $21, ECCAR $12.
+confidence. Backfill estimate: AIED about $25, TVET $21, ECCAR $12. Spent
+(2026-10-13): AIED $25.00 for 312,768 records, TVET $19.16 for 279,781,
+ECCAR $10.77 for 152,775.
 
 ## Design
 

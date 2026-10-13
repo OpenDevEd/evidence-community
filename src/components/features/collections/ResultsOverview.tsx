@@ -10,7 +10,7 @@ import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
-import { STUDY_LEVELS, STUDY_TYPES, studyType, type StudyLevel, type StudyTypeKey } from "@/lib/readings/study-types";
+import { STUDY_LEVELS, STUDY_TYPES, STUDY_TYPE_ACCURACY, studyType, type StudyLevel, type StudyTypeKey } from "@/lib/readings/study-types";
 import useSWR from "swr";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
@@ -255,6 +255,16 @@ const studyTone = (key: StudyTypeKey) => {
 	return LEVEL_RAMP[type.level][STUDY_TYPES.filter((other) => other.level === type.level).findIndex((other) => other.key === key)];
 };
 
+/** The measured accuracy as the methods text states it, the day it was measured written in UTC so no time zone moves it. */
+const accuracyValues = (format: ReturnType<typeof useFormatter>) => {
+	const { measured, pubmed, sample } = STUDY_TYPE_ACCURACY;
+	return {
+		measured: format.dateTime(new Date(`${measured}T00:00:00Z`), { dateStyle: "long", timeZone: "UTC" }),
+		pubmed: pubmed.records, metaAnalyses: pubmed.metaAnalyses, systematicReviews: pubmed.systematicReviews, trials: pubmed.trials, confirmed: pubmed.confirmed,
+		sample: sample.records, types: sample.types, levels: sample.levels,
+	};
+};
+
 /**
  * What kind of work the results are, as Jev read them, under the three levels of evidence; choosing a row filters the
  * results. Records not read yet are counted apart, and the card says how types are read.
@@ -300,7 +310,7 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 				{unread > 0 && selected.length === 0 && (
 					<p className="flex items-baseline justify-between gap-4"><span className="font-medium">{t("notRead")}</span><span className="tabular-nums">{format.number(unread)}</span></p>
 				)}
-				<p className={MUTED}>{t("method")}</p>
+				<p className={MUTED}>{t("method")} {t("accuracy", accuracyValues(format))}</p>
 			</div>
 		</SidebarCard>
 	);

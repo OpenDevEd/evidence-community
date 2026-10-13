@@ -1041,6 +1041,7 @@
     "metadata": "Tipo obtido do próprio registro.",
     "ai": "Lido por Jev a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
     "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Jev, um classificador de IA, lê o título e o resumo e escolhe um destes tipos; um registro sem resumo é avaliado pelo título. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza de Jev é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo.",
+    "accuracy": "Medido em {measured} nos registros de três bibliotecas: entre {pubmed, number} registros classificados pelos indexadores do PubMed, Jev encontrou {metaAnalyses}% das meta-análises, {systematicReviews}% das revisões sistemáticas e de escopo e {trials}% dos ensaios randomizados, e o PubMed deu o mesmo tipo a {confirmed}% dos registros que Jev classificou como meta-análises ou revisões sistemáticas. Em {sample, number} registros classificados às cegas por um segundo modelo de IA, os dois concordaram no tipo de {types}% e no nível de evidência de {levels}%.",
     "levels": {
       "synthesis": "Revisões e sínteses",
       "primary": "Estudos primários",
