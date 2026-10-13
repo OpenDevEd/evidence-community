@@ -21,7 +21,7 @@ import { studyTone } from "@/components/features/items/study-tone";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
-import { Hint } from "@/components/nextui/Tooltip";
+import { Hint, Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
@@ -355,9 +355,10 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
         </CitedPublications>
         <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
-      <aside className="order-first space-y-4 lg:sticky lg:top-8 lg:order-none">
-        <Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} />
+      {/* The publications scroll away with the page; the contents, last in the rail, stay in view to move between sections. */}
+      <aside className="order-first flex flex-col gap-4 lg:order-none lg:self-stretch">
         <EditionShare edition={edition} locale={locale} />
+        <div className="lg:sticky lg:top-8"><Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} /></div>
       </aside>
     </div>
   </>;
@@ -456,28 +457,53 @@ function ShareBand({rows, unread, listed, total, n}: {rows: TypeShare[]; unread:
   </>;
 }
 
-/** The types under the three levels of evidence, each row opening the list it is in. */
-function ShareLevels({rows, href, n}: {rows: TypeShare[]; href: (level: StudyLevel) => string; n: (count: number) => string}) {
-  const t = useTranslations("studyTypes");
-  return <div className="-mx-3 -my-2 flex flex-col gap-3">{STUDY_LEVELS.map(level => {
-    const shown = rows.filter(row => row.type.level === level.key);
-    if (!shown.length) return null;
-    return <section key={level.key} aria-label={t(`levels.${level.key}`)}>
-      <h5 className={`px-3 pb-1 text-xs ${muted}`}>{t(`levels.${level.key}`)}</h5>
-      <ul className="flex flex-col">{shown.map(row => <TypeShareRow key={row.type.key} tone={studyTone(row.type.key)} label={t(`types.${row.type.key}.plural`)} href={href(level.key)} listed={n(row.listed)} inPeriod={row.period === null ? null : n(row.period)} />)}</ul>
-    </section>;
-  })}</div>;
+/** How many of a set of types are listed, and how many the period had; null when the period was not counted by type. */
+function totalShare(rows: TypeShare[]) {
+  return {listed: rows.reduce((sum, row) => sum + row.listed, 0), period: rows.some(row => row.period === null) ? null : rows.reduce((sum, row) => sum + (row.period ?? 0), 0)};
 }
 
-/** One study type in the Publications card: its swatch, its name, and how many are listed of the period's. */
-function TypeShareRow({tone, label, href, listed, inPeriod}: {tone: string; label: string; href: string; listed: string; inPeriod: string | null}) {
-  return <li>
-    <a href={href} className={railRow}>
-      <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${tone}`} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{listed}</span>{inPeriod !== null && <span className={muted}> of {inPeriod}</span>}</span>
-    </a>
-  </li>;
+/**
+ * The reviews and syntheses type by type, since readers start there, then the primary studies and the other work as a
+ * row each, their types on hover. Each row opens the list it is in.
+ */
+function ShareLevels({rows, href, n}: {rows: TypeShare[]; href: (level: StudyLevel) => string; n: (count: number) => string}) {
+  const t = useTranslations("studyTypes");
+  const syntheses = rows.filter(row => row.type.level === "synthesis");
+  const folded = STUDY_LEVELS.filter(level => level.key !== "synthesis").map(level => ({level, rows: rows.filter(row => row.type.level === level.key)})).filter(group => group.rows.length);
+  return <div className="-mx-3 -my-2 flex flex-col gap-3">
+    {syntheses.length > 0 && <section aria-label={t("levels.synthesis")}>
+      <h5 className={`px-3 pb-1 text-xs ${muted}`}>{t("levels.synthesis")}</h5>
+      <ul className="flex flex-col">{syntheses.map(row => <TypeShareRow key={row.type.key} tone={studyTone(row.type.key)} label={t(`types.${row.type.key}.plural`)} href={href("synthesis")} listed={n(row.listed)} inPeriod={row.period === null ? null : n(row.period)} />)}</ul>
+    </section>}
+    {folded.length > 0 && <ul className="flex flex-col">{folded.map(({level, rows: types}) => {
+      const total = totalShare(types);
+      return <TypeShareRow key={level.key} tone={studyTone(types[0]!.type.key)} label={t(`levels.${level.key}`)} href={href(level.key)} listed={n(total.listed)} inPeriod={total.period === null ? null : n(total.period)}
+        hint={<LevelTypes name={t(`levels.${level.key}`)} rows={types} n={n} />} />;
+    })}</ul>}
+  </div>;
+}
+
+/** A folded level's types, on hover: each with its swatch and how many are listed of the period's. */
+function LevelTypes({name, rows, n}: {name: string; rows: TypeShare[]; n: (count: number) => string}) {
+  const t = useTranslations("studyTypes");
+  return <span className="flex flex-col gap-2">
+    <span className="font-medium">{name}</span>
+    <ul className="flex flex-col gap-1.5">{rows.map(row => <li key={row.type.key} className="flex items-center gap-2.5">
+      <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${studyTone(row.type.key)}`} />
+      <span className="min-w-0 flex-1">{t(`types.${row.type.key}.plural`)}</span>
+      <span className="shrink-0 tabular-nums"><span className="font-semibold">{n(row.listed)}</span>{row.period !== null && <span className={muted}> of {n(row.period)}</span>}</span>
+    </li>)}</ul>
+  </span>;
+}
+
+/** One row of the Publications card: its swatch, its name, how many are listed of the period's, and on hover its parts. */
+function TypeShareRow({tone, label, href, listed, inPeriod, hint}: {tone: string; label: string; href: string; listed: string; inPeriod: string | null; hint?: ReactNode}) {
+  const row = <a href={href} className={railRow}>
+    <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${tone}`} />
+    <span className="min-w-0 flex-1 truncate">{label}</span>
+    <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{listed}</span>{inPeriod !== null && <span className={muted}> of {inPeriod}</span>}</span>
+  </a>;
+  return <li>{hint ? <Tooltip content={hint} placement="left" className="min-w-64 p-3 text-sm">{row}</Tooltip> : row}</li>;
 }
 
 /** The records not read yet when the list was made, apart from the types, as the library's Study types card counts them. */
