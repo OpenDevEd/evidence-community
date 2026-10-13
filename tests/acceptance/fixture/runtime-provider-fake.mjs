@@ -142,17 +142,22 @@ function topicNode(topic) {
  * returns none, which is all the runtime asks of it here.
  */
 async function topicCatalog(body) {
-	const openAlex = async (path) => (await fetch(`https://api.openalex.org${path}`, { headers: { "User-Agent": "evidence-library-acceptance-fixture (mailto:doi-acceptance@example.org)" } })).json();
+	// OpenAlex limits how fast it may be searched; a refused or slow answer is no topics, not a failure.
+	const openAlex = async (path) => {
+		const access = process.env.OPENALEX_API_KEY ? `api_key=${process.env.OPENALEX_API_KEY}` : "mailto=doi-acceptance@example.org";
+		const response = await fetch(`https://api.openalex.org${path}${path.includes("?") ? "&" : "?"}${access}`, { signal: AbortSignal.timeout(10_000) }).catch(() => null);
+		return response?.ok ? response.json() : null;
+	};
 	const nodes = body.query
-		? (await openAlex(`/topics?search=${encodeURIComponent(body.query)}&per-page=${Math.min(body.limit ?? 25, 50)}`)).results.map(topicNode)
+		? ((await openAlex(`/topics?search=${encodeURIComponent(body.query)}&per-page=${Math.min(body.limit ?? 25, 50)}`))?.results ?? []).map(topicNode)
 		: body.ids
-			? await Promise.all(body.ids.filter((id) => /^T\d+$/u.test(id)).map(async (id) => topicNode(await openAlex(`/topics/${id}`))))
+			? (await Promise.all(body.ids.filter((id) => /^T\d+$/u.test(id)).map((id) => openAlex(`/topics/${id}`)))).filter(Boolean).map(topicNode)
 			: [];
 	return { contractVersion: 1, nextCursor: null, nodes, publicBaseUrl: "https://openalex.org", revision: "openalex" };
 }
 
 // fallow-ignore-next-line complexity
-const server = createServer(async (request, response) => {
+async function handle(request, response) {
 	const url = new URL(
 		request.url ?? "/",
 		`http://${request.headers.host ?? "fixture"}`,
@@ -484,6 +489,15 @@ const server = createServer(async (request, response) => {
 
 	return json(response, 404, {
 		message: `Unhandled ${method} ${url.pathname}`,
+	});
+}
+
+// One request that throws answers 500; it must not stop the process, which also holds the uploaded files.
+const server = createServer((request, response) => {
+	handle(request, response).catch((error) => {
+		console.error("Fake request failed", request.method, request.url, error);
+		if (!response.headersSent) json(response, 500, { error: "fixture_failure", message: String(error?.message ?? error) });
+		else response.end();
 	});
 });
 

@@ -81,40 +81,60 @@ export async function removeClosedImportFiles(db: Database, storage: EvidenceFil
 	await db.update(pdfImportFile).set({ objectPath: null }).where(inArray(pdfImportFile.id, files.map(({ id }) => id)));
 }
 
-export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, signal?: AbortSignal) {
-	await removeClosedImportFiles(db, storage).catch((error: unknown) => console.error("Removing closed imports' PDFs failed", error));
+/** Claims the next PDF waiting to be read, with a lease, as the association queues do. */
+async function claimNext(db: Database) {
 	const token = randomUUID();
 	const claimed = await db.execute<{ id: string }>(sql`
 		UPDATE "pdfImportFile" SET "leaseToken" = ${token}, "leaseExpiresAt" = now() + ${LEASE}::interval
-		WHERE "id" IN (SELECT "id" FROM "pdfImportFile"
+		WHERE "id" = (SELECT "id" FROM "pdfImportFile"
 			WHERE "nextAttemptAt" <= now() AND "objectPath" IS NOT NULL AND "reading" IS NULL
 				AND ("leaseExpiresAt" IS NULL OR "leaseExpiresAt" < now())
 				AND "importId" IN (SELECT "id" FROM "pdfImport" WHERE "closedAt" IS NULL)
-			ORDER BY "nextAttemptAt", "position" FOR UPDATE SKIP LOCKED LIMIT ${READ_AT_ONCE})
+			ORDER BY "nextAttemptAt", "position" FOR UPDATE SKIP LOCKED LIMIT 1)
 		RETURNING "id"`);
-	if (!claimed.rows.length) return false;
-	const files = await db.select().from(pdfImportFile).where(and(eq(pdfImportFile.leaseToken, token)));
+	const id = claimed.rows[0]?.id;
+	if (!id) return null;
+	const [file] = await db.select().from(pdfImportFile).where(eq(pdfImportFile.id, id));
+	return file ? { file, token } : null;
+}
+
+async function readClaimed(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, token: string, signal: AbortSignal | undefined) {
+	const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
+	try {
+		const reading = await readOne(db, storage, config, file, signal);
+		await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading }).where(mine);
+	} catch (error) {
+		// A worker asked to stop hands the PDF back for the next one, without counting a failed read.
+		if (signal?.aborted) {
+			await db.update(pdfImportFile).set({ leaseExpiresAt: null, leaseToken: null }).where(mine);
+			return;
+		}
+		const message = error instanceof Error ? error.message : String(error);
+		const attempts = file.attempts + 1;
+		console.error("Reading an imported PDF failed", { attempts, error: message, file: file.filename, id: file.id });
+		await db
+			.update(pdfImportFile)
+			.set({ attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt: attempts >= MAX_ATTEMPTS ? null : new Date(Date.now() + 10_000 * 2 ** attempts) })
+			.where(mine);
+	}
+}
+
+/**
+ * The publication worker's PDF import cycle: a few readers each take the
+ * next PDF waiting as soon as they finish one, until none waits, so a slow
+ * PDF holds up only its own reader. A failed read is retried a few times,
+ * then shown as failed with its error.
+ */
+export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, signal?: AbortSignal) {
+	await removeClosedImportFiles(db, storage).catch((error: unknown) => console.error("Removing closed imports' PDFs failed", error));
+	let read = false;
 	await Promise.all(
-		files.map(async (file) => {
-			const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
-			try {
-				const reading = await readOne(db, storage, config, file, signal);
-				await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading }).where(mine);
-			} catch (error) {
-				// A worker asked to stop hands the PDF back for the next one, without counting a failed read.
-				if (signal?.aborted) {
-					await db.update(pdfImportFile).set({ leaseExpiresAt: null, leaseToken: null }).where(mine);
-					return;
-				}
-				const message = error instanceof Error ? error.message : String(error);
-				const attempts = file.attempts + 1;
-				console.error("Reading an imported PDF failed", { attempts, error: message, file: file.filename, id: file.id });
-				await db
-					.update(pdfImportFile)
-					.set({ attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt: attempts >= MAX_ATTEMPTS ? null : new Date(Date.now() + 10_000 * 2 ** attempts) })
-					.where(mine);
+		Array.from({ length: READ_AT_ONCE }, async () => {
+			for (let next = await claimNext(db); next && !signal?.aborted; next = await claimNext(db)) {
+				read = true;
+				await readClaimed(db, storage, config, next.file, next.token, signal);
 			}
 		}),
 	);
-	return true;
+	return read;
 }

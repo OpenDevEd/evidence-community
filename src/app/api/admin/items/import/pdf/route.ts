@@ -8,12 +8,11 @@ import { handleAdminJson, readAdminJson } from "@/lib/admin/http";
 import {
 	PDF_IMPORT_MAX_CRITERIA,
 	PDF_IMPORT_MAX_CRITERION_LENGTH,
-	PDF_IMPORT_MAX_FILE_BYTES,
 	PDF_IMPORT_MAX_FILES,
 	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
 	adminImportRequestSchema,
 } from "@/lib/admin/item-import-contract";
-import { closePdfImport, commitPdfImport, failPdfImportUpload, pdfImportStatus, startPdfImport, storePdfImportFile } from "@/lib/admin/pdf-import-service";
+import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, startPdfImport } from "@/lib/admin/pdf-import-service";
 
 // Importing gives each new draft its PDF, which takes a moment per file.
 export const maxDuration = 300;
@@ -28,6 +27,8 @@ const startSchema = z.object({
 
 const closeSchema = z.object({ action: z.literal("close"), importId: z.string().uuid() });
 
+const uploadedSchema = z.object({ action: z.literal("uploaded"), fileId: z.string().uuid() });
+
 const uploadFailedSchema = z.object({ action: z.literal("upload-failed"), fileId: z.string().uuid(), message: z.string().max(500) });
 
 /** The library's PDF import, as the publication worker has read it so far. */
@@ -36,22 +37,20 @@ export function GET(request: NextRequest) {
 }
 
 /**
- * Starts the import, takes its PDFs one per request (or hears that one
- * couldn't be sent), imports the chosen records with their PDFs, or closes it.
+ * Starts the import with a signed upload for each PDF, hears that one
+ * arrived or couldn't be sent, imports the chosen records with their PDFs,
+ * or closes it.
  */
 export function POST(request: NextRequest) {
 	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async (session) => {
 		const runtime = await getNativeFileRuntime();
-		if (request.headers.get("content-type")?.startsWith("multipart/form-data")) {
-			const form = await request.formData();
-			const [file, fileId] = [form.get("file"), form.get("fileId")];
-			if (!(file instanceof File) || !file.size || typeof fileId !== "string") throw new AdminValidationError("Choose a PDF file.");
-			if (file.size > PDF_IMPORT_MAX_FILE_BYTES) throw new AdminValidationError(`${file.name} is larger than 50 MB.`);
-			await storePdfImportFile(runtime.db, runtime.storage, fileId, new Uint8Array(await file.arrayBuffer()));
+		const body = (await readAdminJson(request)) as { action?: unknown };
+		if (body.action === "start") return startPdfImport(runtime.db, runtime.storage, { ...startSchema.parse(body), createdBy: session.clerkUserId });
+		if (body.action === "uploaded") {
+			const { fileId } = uploadedSchema.parse(body);
+			await confirmPdfImportUpload(runtime.db, runtime.storage, fileId);
 			return { stored: fileId };
 		}
-		const body = (await readAdminJson(request)) as { action?: unknown };
-		if (body.action === "start") return startPdfImport(runtime.db, { ...startSchema.parse(body), createdBy: session.clerkUserId });
 		if (body.action === "upload-failed") {
 			const { fileId, message } = uploadFailedSchema.parse(body);
 			await failPdfImportUpload(runtime.db, fileId, message);

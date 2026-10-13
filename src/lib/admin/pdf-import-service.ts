@@ -14,7 +14,6 @@ import { commitImportRecords } from "./item-import-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-service";
 import { createNativeItemDraft } from "./native-item-service";
 import { removeClosedImportFiles } from "./pdf-import-reading";
-import { assertPdfHeader } from "./pdf-processing";
 
 const PDF = "application/pdf";
 
@@ -57,9 +56,16 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 	return { import: view, last: lastUsed };
 }
 
-/** Opens the library's import with a row for each PDF the editor chose; they're read as they arrive. */
-export async function startPdfImport(db: Database, input: { checks: string[]; collections: string[]; createdBy: string; filenames: string[]; instructions: string }) {
-	return db.transaction(async (transaction) => {
+const importObjectPath = (importId: string, fileId: string) => `imports/${importId}/${fileId}.pdf`;
+
+/**
+ * Opens the library's import with a row for each PDF the editor chose, and
+ * a signed upload for each: the PDFs go straight to private storage, as an
+ * attachment's PDF does, because a request through the app is cut off at
+ * 10 MB. They're read as they arrive.
+ */
+export async function startPdfImport(db: Database, storage: EvidenceFileStorage, input: { checks: string[]; collections: string[]; createdBy: string; filenames: string[]; instructions: string }) {
+	const started = await db.transaction(async (transaction) => {
 		const [open] = await transaction.select({ id: pdfImport.id }).from(pdfImport).where(isNull(pdfImport.closedAt)).limit(1);
 		if (open) throw new AdminValidationError("Another import is open. Finish or discard it first.");
 		const [created] = await transaction
@@ -72,20 +78,15 @@ export async function startPdfImport(db: Database, input: { checks: string[]; co
 			.returning({ filename: pdfImportFile.filename, id: pdfImportFile.id });
 		return { files, id: created!.id };
 	});
+	const files = await Promise.all(started.files.map(async (file) => ({ ...file, upload: await storage.createSignedUpload(importObjectPath(started.id, file.id)) })));
+	return { files, id: started.id };
 }
 
-/** Keeps one uploaded PDF in private storage and queues it for the worker. */
-export async function storePdfImportFile(db: Database, storage: EvidenceFileStorage, fileId: string, bytes: Uint8Array) {
-	assertPdfHeader(bytes);
-	const [file] = await db
-		.select({ importId: pdfImportFile.importId })
-		.from(pdfImportFile)
-		.innerJoin(pdfImport, eq(pdfImport.id, pdfImportFile.importId))
-		.where(and(eq(pdfImportFile.id, fileId), isNull(pdfImport.closedAt), isNull(pdfImportFile.objectPath)));
+/** Queues a PDF the editor's tab sent to storage, while its import is open; one discarded meanwhile loses it. */
+export async function confirmPdfImportUpload(db: Database, storage: EvidenceFileStorage, fileId: string) {
+	const [file] = await db.select({ importId: pdfImportFile.importId }).from(pdfImportFile).where(and(eq(pdfImportFile.id, fileId), isNull(pdfImportFile.objectPath)));
 	if (!file) throw new AdminValidationError("This PDF is not waiting for an upload.");
-	const objectPath = `imports/${file.importId}/${fileId}.pdf`;
-	await storage.uploadPrivate(objectPath, bytes, PDF);
-	// Only while the import is still open: one discarded during the upload has already collected its PDFs.
+	const objectPath = importObjectPath(file.importId, fileId);
 	const [stored] = await db
 		.update(pdfImportFile)
 		.set({ nextAttemptAt: new Date(), objectPath })

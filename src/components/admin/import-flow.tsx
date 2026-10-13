@@ -163,7 +163,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				// The import and its rows exist on the server first, so the review shows every PDF while they upload.
 				const started = await startAdminPdfImport({ checks, collections, filenames: pdfs.map(({ name }) => name), instructions: guidance });
 				await mutate(PDF_IMPORT_KEY);
-				void uploadPdfs(started.files.map(({ id }, index) => ({ file: pdfs[index]!, id })));
+				void uploadPdfs(started.files.map(({ id, upload }, index) => ({ file: pdfs[index]!, id, signedUrl: upload.signedUrl })));
 				return;
 			}
 			const importId = crypto.randomUUID();
@@ -176,14 +176,14 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		});
 
 	/** Sends the PDFs to the server a few at a time; the worker reads each as it arrives. */
-	const uploadPdfs = async (queue: { file: File; id: string }[]) => {
+	const uploadPdfs = async (queue: { file: File; id: string; signedUrl: string }[]) => {
 		let next = 0;
 		await Promise.all(
 			Array.from({ length: Math.min(UPLOAD_CONCURRENCY, queue.length) }, async () => {
 				while (next < queue.length) {
-					const { file, id } = queue[next++]!;
+					const { file, id, signedUrl } = queue[next++]!;
 					try {
-						await uploadAdminPdfImportFile(id, file);
+						await uploadAdminPdfImportFile(id, signedUrl, file);
 					} catch (caught) {
 						// The import goes ahead without it; its row says why.
 						await failAdminPdfImportUpload(id, errorMessage(caught)).catch(() => undefined);

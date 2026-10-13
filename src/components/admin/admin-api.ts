@@ -617,21 +617,15 @@ export { PDF_IMPORT_KEY } from "@/lib/admin/item-import-contract";
 /** The library's PDF import as the publication worker has read it so far. */
 export const getAdminPdfImport = () => requestJson<AdminPdfImportStatus>(PDF_IMPORT_PATH);
 
-/** Opens the library's import for these PDFs, reading against these checks and instructions. */
+/** Opens the library's import for these PDFs, reading against these checks and instructions, with a signed upload for each. */
 export function startAdminPdfImport(input: { checks: string[]; collections: string[]; filenames: string[]; instructions: string }) {
-	return requestJson<{ files: { filename: string; id: string }[]; id: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "start", ...input }), method: "POST" });
+	return requestJson<{ files: { filename: string; id: string; upload: { signedUrl: string } }[]; id: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "start", ...input }), method: "POST" });
 }
 
-/** Sends one PDF of the import to the server, which queues it for reading. */
-export async function uploadAdminPdfImportFile(fileId: string, file: File) {
-	const body = new FormData();
-	body.append("fileId", fileId);
-	body.append("file", file);
-	const response = await fetch(PDF_IMPORT_PATH, { body, cache: "no-store", method: "POST" });
-	if (!response.ok) {
-		const payload = (await response.json().catch(() => null)) as AdminErrorPayload | null;
-		throw new AdminApiError(parsedError(payload?.error, response.status), response.status);
-	}
+/** Sends one PDF of the import straight to storage, as an attachment's PDF goes, then queues it for reading. */
+export async function uploadAdminPdfImportFile(fileId: string, signedUrl: string, file: File) {
+	await uploadAdminPdf(signedUrl, file);
+	await requestJson<{ stored: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "uploaded", fileId }), method: "POST" });
 }
 
 /** Tells the server a PDF couldn't be sent, so the import goes ahead without it. */
