@@ -5,8 +5,9 @@ import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { storedSynthesis, storedTypeOrder } from "./digest-types";
 import { nextDigestDate } from "./schedule";
-import type { DigestSigner } from "./types";
+import type { DigestSigner, DigestTypeCounts } from "./types";
 
 const ARCHIVE_PAGE_SIZE = 20;
 const EDITION_PAGE_SIZE = 12;
@@ -24,9 +25,14 @@ export type DigestSummary = {slug: string; published: DigestDate; title: string;
  * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
  * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
  */
-export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews};
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; types: EditionTypes};
 /**
- * One page of an edition's meta-analyses and reviews, which are a list of their own with its own pages when the
+ * An edition's publications by study type: those listed that are public now, and every one the period had when the
+ * list was made. A digest listed before types has only the first.
+ */
+export type EditionTypes = {listed: DigestTypeCounts; period: DigestTypeCounts | null};
+/**
+ * One page of an edition's reviews and syntheses, which are a list of their own with its own pages when the
  * edition has any. `keys` on the edition then holds the other publications; `listed` still counts both.
  */
 export type DigestReviews = {listed: number; page: number; pages: number; keys: string[]};
@@ -120,7 +126,7 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
-  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note})
+  const [row] = await db.select({...summaryColumns, markdown: notificationEdition.markdown, note: notificationEdition.note, studyTypes: notificationEdition.studyTypes})
     .from(notificationEdition).where(and(visibleEdition, eq(notificationEdition.id, uuid))).limit(1);
   if (!row) return undefined;
   // Pages hold only the listed records that are public now, so hiding one
@@ -129,22 +135,23 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
     FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS stored(entry, position)
     JOIN ${item} ON ${item.key} = stored.entry->>'key'
     WHERE ${notificationEdition.id} = ${uuid} AND ${publicParentVisibility(db, config.content.tags.hidden)}`;
-  // A record read as a meta-analysis or a review. One nobody has read yet is listed with the others.
-  const review = sql`coalesce(stored.entry->>'kind' IN ('meta-analysis', 'review'), false)`;
   const list = async (which: SQL, wanted: number) => {
     const {rows: [{listed}]} = await db.execute<{listed: number}>(sql`SELECT count(*)::int AS listed ${listedNow} ${which}`);
     const pages = Math.max(1, Math.ceil(listed / EDITION_PAGE_SIZE));
     const current = Math.min(wanted, pages);
     const {rows: keys} = await db.execute<{key: string}>(sql`
       SELECT stored.entry->>'key' AS key ${listedNow} ${which}
-      ORDER BY stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
+      ORDER BY ${storedTypeOrder}, stored.position LIMIT ${EDITION_PAGE_SIZE} OFFSET ${(current - 1) * EDITION_PAGE_SIZE}`);
     return {listed, page: current, pages, keys: keys.map(entry => entry.key)};
   };
   const summary = editionSummary(row, locale, config);
-  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null};
-  const reviews = await list(sql`AND ${review}`, reviewsPage);
+  const {rows: listedTypes} = await db.execute<{type: keyof DigestTypeCounts; publications: number}>(sql`
+    SELECT coalesce(stored.entry->>'studyType', 'unread') AS type, count(*)::int AS publications ${listedNow} GROUP BY 1`);
+  const types = {listed: Object.fromEntries(listedTypes.map(entry => [entry.type, entry.publications])), period: row.studyTypes};
+  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types};
+  const reviews = await list(sql`AND ${storedSynthesis}`, reviewsPage);
   if (!reviews.listed) return {...edition, ...await list(sql``, page)};
-  const others = await list(sql`AND NOT ${review}`, page);
+  const others = await list(sql`AND NOT ${storedSynthesis}`, page);
   return {...edition, ...others, listed: others.listed + reviews.listed, reviews};
 }
 

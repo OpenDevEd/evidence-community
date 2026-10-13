@@ -8,6 +8,7 @@ import { ItemMutationConflictError, ItemNotFoundError } from "@/lib/admin/native
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { projectPublicItems } from "@/lib/search-index/projection";
 import { checkedDigestDraft, citedKeys, digestDraftSchema } from "./digest-text";
+import { storedSynthesis } from "./digest-types";
 import { getNextDigestEdition } from "./public";
 import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner } from "./types";
 
@@ -336,7 +337,7 @@ export async function getDigestPapers(db: Database, config: LibraryServerConfig,
   if (!keys.length) return { papers: [] as DigestPaper[] };
   const wanted = sql`ARRAY[${sql.join(keys.slice(0, 100).map(key => sql`${key}`), sql`, `)}]::text[]`;
   const { rows } = await db.execute<{ key: string; title: string; creators: unknown; date: string | null; review: boolean }>(sql`
-    SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, coalesce(stored.entry->>'kind' IN ('meta-analysis', 'review'), false) AS review
+    SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, ${storedSynthesis} AS review
     FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) AS stored(entry)
     WHERE ${notificationEdition.id} = ${id} AND ${digest} AND stored.entry->>'key' = ANY(${wanted})`);
   return { papers: rows.map((row): DigestPaper => ({ key: row.key, label: citationLabel(Array.isArray(row.creators) ? row.creators : [], row.date), title: row.title, date: row.date, review: row.review })) };
@@ -350,20 +351,19 @@ export async function getDigestPapers(db: Database, config: LibraryServerConfig,
 export async function listDigestPapers(db: Database, config: LibraryServerConfig, id: string, query: DigestPapersQuery) {
   const words = query.query.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8);
   const matches = and(...words.map(word => sql`lower((stored.entry->>'title') || ' ' || (stored.entry->'creators')::text) LIKE ${`%${word.replace(/[\\%_]/g, "\\$&")}%`}`));
-  const review = sql`stored.entry->>'kind' IN ('meta-analysis', 'review')`;
   const uncited = query.cited.length ? sql`NOT (stored.entry->>'key' = ANY(${sql`ARRAY[${sql.join(query.cited.map(key => sql`${key}`), sql`, `)}]::text[]`}))` : sql`true`;
   const listed = sql`
     FROM ${notificationEdition}, jsonb_array_elements(${notificationEdition.publications}) WITH ORDINALITY AS stored(entry, position)
     JOIN ${item} ON ${item.key} = stored.entry->>'key'
     WHERE ${notificationEdition.id} = ${id} AND ${digest} AND ${publicParentVisibility(db, config.content.tags.hidden)} AND ${matches ?? sql`true`}`;
   const { rows: [counts] } = await db.execute<{ all: number; reviews: number; uncited: number }>(sql`
-    SELECT count(*)::int AS "all", count(*) FILTER (WHERE ${review})::int AS reviews, count(*) FILTER (WHERE ${uncited})::int AS uncited ${listed}`);
+    SELECT count(*)::int AS "all", count(*) FILTER (WHERE ${storedSynthesis})::int AS reviews, count(*) FILTER (WHERE ${uncited})::int AS uncited ${listed}`);
   const total = counts[query.show];
   const pages = Math.max(1, Math.ceil(total / PAPERS_PAGE_SIZE));
   const page = Math.min(Math.max(1, query.page), pages);
-  const shown = query.show === "reviews" ? review : query.show === "uncited" ? uncited : sql`true`;
+  const shown = query.show === "reviews" ? storedSynthesis : query.show === "uncited" ? uncited : sql`true`;
   const { rows } = await db.execute<{ key: string; title: string; creators: unknown; date: string | null; review: boolean }>(sql`
-    SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, coalesce(${review}, false) AS review
+    SELECT stored.entry->>'key' AS key, stored.entry->>'title' AS title, stored.entry->'creators' AS creators, stored.entry->>'date' AS date, ${storedSynthesis} AS review
     ${listed} AND ${shown} ORDER BY ${SORTS[query.sort]} LIMIT ${PAPERS_PAGE_SIZE} OFFSET ${(page - 1) * PAPERS_PAGE_SIZE}`);
   const papers: DigestPaper[] = rows.map(row => ({ key: row.key, label: citationLabel(Array.isArray(row.creators) ? row.creators : [], row.date), title: row.title, date: row.date, review: row.review }));
   return { papers, page, pages, total, counts };

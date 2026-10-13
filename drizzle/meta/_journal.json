@@ -624,6 +624,13 @@
       "when": 1791841362299,
       "tag": "0088_item-study-type",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1791844688408,
+      "tag": "0089_digest-study-types",
+      "breakpoints": true
     }
   ]
 }
