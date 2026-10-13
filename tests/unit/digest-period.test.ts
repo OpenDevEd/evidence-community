@@ -22,6 +22,10 @@ describe("digestPeriod", () => {
     expect(days("2026-03-01T00:00:00Z", "2026-03-29T23:00:00Z", "published", "Europe/London")).toEqual(["2026-03-01", "2026-03-29"]);
   });
 
+  it("names both years on a period that crosses New Year", () => {
+    expect(digestPeriod(new Date("2025-12-29T00:00:00Z"), new Date("2026-01-05T00:00:00Z"), "published", "UTC", "en-GB").monthsYear).toMatch(/^Dec 2025\s?–\s?Jan 2026$/);
+  });
+
   it("covers the day an additions digest closes on", () => {
     expect(days("2026-09-29T13:50:51Z", "2026-10-05T09:00:00Z", "added")).toEqual(["2026-09-29", "2026-10-05"]);
   });

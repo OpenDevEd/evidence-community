@@ -26,9 +26,10 @@ export function timeZoneLabel(timezone: string) {
  * The days an edition covers, as readers are told. A digest of publication dates covers whole days in the library's
  * time zone, from the day its window starts to the day before the one it ends on (`publishedIn`); a digest of
  * additions covers the days its window touches. `first` and `last` are those days as YYYY-MM-DD, `label` the period in
- * words ("September 2026" for a whole month), and `days` and `months` the two lines of a date tile.
+ * words ("September 2026" for a whole month), `days` and `months` the two lines of a date tile, and `monthsYear` its
+ * months with their years, both when the period crosses New Year ("Dec 2025 – Jan 2026").
  */
-export type DigestPeriod = {first: string; last: string; label: string; from: string; to: string; days: string; months: string; year: string};
+export type DigestPeriod = {first: string; last: string; label: string; from: string; to: string; days: string; months: string; monthsYear: string; year: string};
 export function digestPeriod(start: Date, end: Date, covers: "published" | "added", timeZone: string, locale: string): DigestPeriod {
   const day = (date: Date) => date.toLocaleDateString("en-CA", {timeZone});
   const first = day(start);
@@ -48,6 +49,7 @@ export function digestPeriod(start: Date, end: Date, covers: "published" | "adde
     label: wholeMonth ? format({month: "long", year: "numeric"}).format(b) : long.formatRange(a, b),
     days: first === last ? dayOnly.format(a) : sameMonth ? dayOnly.formatRange(a, b) : `${dayOnly.format(a)}–${dayOnly.format(b)}`,
     months: format({month: "short"}).formatRange(a, b),
+    monthsYear: format({month: "short", year: "numeric"}).formatRange(a, b),
   };
 }
 

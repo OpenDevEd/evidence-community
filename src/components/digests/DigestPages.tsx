@@ -114,7 +114,7 @@ function periodFacts(period: DigestPeriod, timezone: string, covers: keyof typeo
   return [
     ENTERED_BY[covers],
     {icon: Globe02Icon, lead: `Days in ${timeZoneLabel(timezone)}.`},
-    covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: "Year-only works count here too.", text: "OpenAlex dates a work it knows only the year of 1 January."},
+    covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: "Many 1 January dates are year-only.", text: "OpenAlex dates a work it knows only the year of 1 January, so some of this period's works may have come out later that year."},
   ];
 }
 /** The first and last day an edition covers, joined by a line, and which date of a publication puts it in. */
