@@ -394,13 +394,10 @@ export async function commitImportRecords(
 		message?: string;
 		payload: Record<string, unknown> | null;
 	};
-	// The import's collections, and those a record was given on its own, such as the ones the AI chose for a PDF.
-	const collectionsOf = (payload: Record<string, unknown>) => [
-		...new Set([
-			...input.collections,
-			...(Array.isArray(payload.collections) ? payload.collections.filter((key): key is string => typeof key === "string") : []),
-		]),
-	];
+	// The import's collections, and those a record was given on its own, such as the ones the AI chose for a PDF. A value
+	// that isn't a list goes to validation as it is, which refuses it.
+	const collectionsOf = (payload: Record<string, unknown>) =>
+		payload.collections === undefined ? input.collections : Array.isArray(payload.collections) ? [...new Set([...input.collections, ...payload.collections])] : payload.collections;
 	const prepared = input.records.map((record): PreparedRecord => {
 		try {
 			const validated = validateNativeItemDraft(
@@ -444,7 +441,7 @@ export async function commitImportRecords(
 			transaction,
 			null,
 			NATIVE_SOURCE_CONNECTION_KEY,
-			[...new Set(input.records.flatMap(({ payload }) => collectionsOf(payload)))],
+			[...new Set(prepared.flatMap(({ payload }) => (Array.isArray(payload?.collections) ? (payload.collections as string[]) : [])))],
 		);
 		const existing = await findExistingRecords(
 			transaction,

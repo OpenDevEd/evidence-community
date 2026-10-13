@@ -162,17 +162,21 @@ export async function readImportPdf(
 	// The collections the tool shows during this read: a key the AI gives counts only when it is one of them.
 	const collectionsFound = new Map<string, { name: string; path: string[] }>();
 	const searchCollections = tool({
-		description: "Browse or search the library's collections. With a query, finds collections by words in their name; without one, lists the collections inside parent, or the top level when parent is empty. Returns each collection's key, name, the collections above it, and whether it has collections inside.",
-		inputSchema: z.object({ parent: z.string().describe("A collection's key, or empty for the top level"), query: z.string().describe("Words of a collection's name, or empty to list") }),
-		execute: async ({ parent, query }) => {
-			const page = query.trim()
-				? await searchAdminCollections(database, { pageSize: 50, query, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY })
-				: await getAdminCollectionChildrenPage(database, { pageSize: 100, parentCollection: parent.trim() || null, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY });
-			return page.items.map(({ ancestors, hasChildren, key, name }) => {
+		description: "Browse or search the library's collections. With a query, finds collections by words in their name; without one, lists the collections inside parent, or the top level when parent is empty. Returns each collection's key, name, the collections above it and whether it has collections inside, and a nextCursor when there are more to see.",
+		inputSchema: z.object({
+			cursor: z.string().describe("The nextCursor of the previous call with the same parent and query, to see more, or empty"),
+			parent: z.string().describe("A collection's key, or empty for the top level"),
+			query: z.string().describe("Words of a collection's name, or empty to list"),
+		}),
+		execute: async ({ cursor, parent, query }) => {
+			const paging = { cursor: cursor.trim() || null, pageSize: 100, sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY };
+			const page = query.trim() ? await searchAdminCollections(database, { ...paging, query }) : await getAdminCollectionChildrenPage(database, { ...paging, parentCollection: parent.trim() || null });
+			const collections = page.items.map(({ ancestors, hasChildren, key, name }) => {
 				const path = ancestors.map(({ name: above }) => above);
 				collectionsFound.set(key, { name, path });
 				return { hasChildren, key, name, path };
 			});
+			return { collections, nextCursor: page.nextCursor };
 		},
 	});
 	// Time spent in the tools, summed across parallel calls, for the log below.
