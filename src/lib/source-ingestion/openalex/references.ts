@@ -1,12 +1,13 @@
 import { and, eq, inArray, or } from "drizzle-orm";
-import type { DatabaseTransaction } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemSourceLink, sourceConnection, sourceRecordAlias } from "@/db/schema/source";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { sourceReference } from "@/db/schema/topics";
 import { replaceSourceLinks } from "@/lib/links/item-links";
 import type { SourceItemUpsert } from "../batch-schema";
 
-async function openAlexItemKeys(tx: DatabaseTransaction, recordKeys: string[]) {
+/** The record each OpenAlex work is in here: the one imported from it, or the one kept when it was withdrawn as a repeat. */
+export async function openAlexItemKeys(tx: Pick<Database, "select">, recordKeys: string[]) {
   const identities = new Map<string, string>();
   for (let offset = 0; offset < recordKeys.length; offset += 1000) {
     const found = await tx.select({record: itemSourceLink.sourceRecordKey, key: itemSourceLink.itemKey, withdrawn: itemSourceLink.remoteDeleted}).from(itemSourceLink)

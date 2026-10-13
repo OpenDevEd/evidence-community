@@ -22,11 +22,11 @@ function change(request: Request, props: Props, kind: "add" | "remove") {
 		const { clerkUserId, id } = await props.params;
 		const readerId = await readerFor(config, database, clerkUserId);
 		if (!readerId) return refusals.notReader;
-		// Only records the library shows go in; any may come out.
-		const keys = kind === "add" ? await publicKeys(config, database, body.data.keys) : [...new Set(body.data.keys)];
-		const changed = await changeCollectionItems(database, readerId, id, keys, kind);
+		// Only records the library shows go in, read as the change is made; any may come out.
+		const keys = [...new Set(body.data.keys)];
+		const changed = await changeCollectionItems(database, readerId, id, keys, kind, (transaction, wanted) => publicKeys(config, transaction, wanted, { lock: true }));
 		if ("refused" in changed) return changed.refused === 403 ? refusals.role : refusals.notFound;
-		return { body: { ...changed, missing: body.data.keys.filter((key) => !keys.includes(key)) } };
+		return { body: { count: changed.count, changed: changed.changed, missing: keys.filter((key) => !changed.taken.includes(key)) } };
 	});
 }
 

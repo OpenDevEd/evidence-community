@@ -36,6 +36,12 @@ it("makes a reader's collection once, changes its records as its owner or editor
 		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'openalex-main', 'W7'), ($2, 'openalex-main', 'W8'), ($3, 'native', $3)`, [work, hidden, native]);
 		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "DOI") VALUES ($1, 'openalex-main', 'W7', 'JournalArticle', 'Tutoring', NULL), ($2, 'openalex-main', 'W8', 'JournalArticle', 'Hidden', NULL), ($3, 'native', $3, 'JournalArticle', 'Camps', 'https://doi.org/10.1000/ABC')`, [work, hidden, native]);
 		await sql.query(`UPDATE "item" SET "deleted" = 1 WHERE key = $1`, [hidden]);
+		await sql.query(`INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'openalex-main', 'W7'), ($2, 'openalex-main', 'W8')`, [work, hidden]);
+		// W70 was withdrawn as a repeat of W7; two native records share a DOI stored with a space after its prefix.
+		await sql.query(`INSERT INTO "sourceRecordAlias" ("sourceConnectionKey", "aliasKey", "itemKey", "kind") VALUES ('openalex-main', 'W70', $1, 'duplicate-of')`, [work]);
+		const twins = [generateCanonicalRecordKey(), generateCanonicalRecordKey()];
+		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1), ($2, 'native', $2)`, twins);
+		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "DOI") VALUES ($1, 'native', $1, 'JournalArticle', 'Twin', 'doi: 10.2000/twin'), ($2, 'native', $2, 'JournalArticle', 'Twin', 'doi: 10.2000/twin')`, twins);
 
 		await database.insert(readerUser).values([
 			{ id: "reader-amina", name: "Amina", email: "amina@readers.openscholar.invalid" },
@@ -66,8 +72,9 @@ it("makes a reader's collection once, changes its records as its owner or editor
 		expect((await json(await records(remove, "user_bob", [work]))).body).toEqual({ count: 1, changed: 1, missing: [] });
 		expect((await json(await add(request("POST", `/api/v1/openscholar/readers/user_amina/collections/${randomUUID()}/records`, { keys: [work] }), { params: Promise.resolve({ clerkUserId: "user_amina", id: randomUUID() }) }))).status).toBe(404);
 
-		// Papers by their OpenAlex ID in any form or their DOI, each to the record that holds it; a hidden record holds none.
-		const matched = await json(await match(request("POST", "/api/v1/openscholar/records/match", { reader: "user_amina", papers: [{ openalexId: "https://openalex.org/W7" }, { doi: "10.1000/abc" }, { openalexId: "W8" }, { doi: "10.9/none" }, {}] })));
-		expect(matched.body).toEqual({ matches: [{ at: 0, key: work }, { at: 1, key: native }] });
+		// Papers by their OpenAlex ID in any form, a repeat's included, or their DOI, each to the record that holds it, the
+		// first by key when two share a DOI; a hidden record holds none.
+		const matched = await json(await match(request("POST", "/api/v1/openscholar/records/match", { reader: "user_amina", papers: [{ openalexId: "https://openalex.org/W7" }, { doi: "10.1000/abc" }, { openalexId: "W8" }, { doi: "10.9/none" }, {}, { openalexId: "W70" }, { doi: "10.2000/TWIN" }] })));
+		expect(matched.body).toEqual({ matches: [{ at: 0, key: work }, { at: 1, key: native }, { at: 5, key: work }, { at: 6, key: twins.toSorted()[0] }] });
 	});
 });

@@ -1,7 +1,6 @@
 import "server-only";
 
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { sourceConnection } from "@opendeved/evidence-library-core";
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -25,7 +24,7 @@ import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
 import { filterPublicAttachments } from "@/lib/tags";
-import { isOpenAlexWorkProvider } from "@/lib/source-providers";
+import { openAlexItemKeys } from "@/lib/source-ingestion/openalex/references";
 import { toOpenScholarRecord, type OpenScholarRecord } from "./records";
 
 /**
@@ -146,9 +145,11 @@ async function resolveLibrary(config: LibraryServerConfig, database: Database, {
 }
 
 /** The keys given that name a public record now, each once, in the order given: what the database says, which the search index follows a moment later. */
-export async function publicKeys(config: LibraryServerConfig, database: Database, keys: string[]) {
+export async function publicKeys(config: LibraryServerConfig, database: Pick<Database, "select">, keys: string[], { lock = false } = {}) {
 	const unique = [...new Set(keys)];
-	const rows = await database.select({ key: item.key }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(item.key, unique)));
+	const query = database.select({ key: item.key }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(item.key, unique)));
+	// Locked, a record read as public can't be deleted before the caller's transaction ends.
+	const rows = await (lock ? query.for("share", { of: item }) : query);
 	const live = new Set(rows.map((row) => row.key));
 	return unique.filter((key) => live.has(key));
 }
@@ -268,23 +269,25 @@ const workOf = (id: string | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)
 
 /**
  * The public records this library holds for papers named by their OpenAlex ID or DOI, each with the paper's place in
- * the list (`at`): a record imported from OpenAlex by its work, any record by its DOI. A paper it doesn't hold has none.
+ * the list (`at`): a record imported from OpenAlex by its work, or by a work merged into it as a repeat; any record by
+ * its DOI, the first by key when several share one. A paper it doesn't hold has none.
  * ponytail: a DOI is matched by scanning the library's records; index it if libraries grow past a few hundred thousand.
  */
 export async function matchRecords(config: LibraryServerConfig, database: Database, papers: z.infer<typeof matchRequestSchema>["papers"]) {
 	const works = [...new Set(papers.flatMap((paper) => workOf(paper.openalexId) ?? []))];
 	const dois = [...new Set(papers.flatMap((paper) => doiForm(paper.doi) ?? []))];
 	if (!works.length && !dois.length) return [];
-	const bareDoi = sql<string>`regexp_replace(regexp_replace(lower(trim(${item.DOI})), '^https?://(dx\\.)?doi\\.org/', ''), '^doi:', '')`;
-	const rows = await database
-		.select({ key: item.key, provider: sourceConnection.provider, work: item.sourceRecordKey, doi: bareDoi })
-		.from(item)
-		.innerJoin(sourceConnection, eq(item.sourceConnectionKey, sourceConnection.key))
-		.where(and(publicParentVisibility(database, config.content.tags.hidden), or(works.length ? inArray(item.sourceRecordKey, works) : undefined, dois.length ? inArray(bareDoi, dois) : undefined)));
-	const byWork = new Map(rows.flatMap((row) => (isOpenAlexWorkProvider(row.provider) && row.work ? [[row.work, row.key] as const] : [])));
-	const byDoi = new Map(rows.flatMap((row) => (row.doi ? [[row.doi, row.key] as const] : [])));
+	const bareDoi = sql<string>`trim(regexp_replace(regexp_replace(lower(trim(${item.DOI})), '^https?://(dx\\.)?doi\\.org/', ''), '^doi:', ''))`;
+	const [workKeys, doiRows] = await Promise.all([
+		openAlexItemKeys(database, works),
+		dois.length ? database.select({ key: item.key, doi: bareDoi }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(bareDoi, dois))).orderBy(item.key) : [],
+	]);
+	const shown = new Set(await publicKeys(config, database, [...workKeys.values()]));
+	const byDoi = new Map<string, string>();
+	for (const row of doiRows) if (!byDoi.has(row.doi)) byDoi.set(row.doi, row.key);
 	return papers.flatMap((paper, at) => {
-		const key = byWork.get(workOf(paper.openalexId) ?? "") ?? byDoi.get(doiForm(paper.doi) ?? "");
+		const work = workKeys.get(workOf(paper.openalexId) ?? "");
+		const key = (work && shown.has(work) ? work : undefined) ?? byDoi.get(doiForm(paper.doi) ?? "");
 		return key ? [{ at, key }] : [];
 	});
 }
