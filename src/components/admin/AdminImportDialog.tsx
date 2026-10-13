@@ -93,7 +93,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 					) : stage === "done" ? null : (
 						<DropHint flow={flow} />
 					)}
-					<span className="ms-auto flex shrink-0 items-center gap-2">
+					<span className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
 						{stage === "input" ? (
 							<>
 								<UploadButton flow={flow} />
