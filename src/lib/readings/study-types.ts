@@ -81,3 +81,5 @@ export type StudyReading =
 	| { type: StudyTypeKey; confidence: number; by: "ai" | "metadata"; input: "abstract" | "title" | "pdf" };
 /** Below this, Jev's type is shown as uncertain, and asked again from the record's PDF once it has one. */
 export const SURE = 0.6;
+/** The filter value of records whose type is uncertain, when a library shows them apart. */
+export const UNCERTAIN = "uncertain";

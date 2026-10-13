@@ -1,0 +1,2 @@
+-- Rollback for 0090_type-words: nothing to undo. It only queued records, and the earlier runtime finds nothing to read
+-- in them. Types already asked again keep their new answers.

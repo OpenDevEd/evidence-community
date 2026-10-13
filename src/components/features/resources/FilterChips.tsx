@@ -1,5 +1,5 @@
 "use client";
-import { studyType } from "@/lib/readings/study-types";
+import { UNCERTAIN, studyType } from "@/lib/readings/study-types";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Delete02Icon } from "@hugeicons/core-free-icons";
@@ -289,7 +289,7 @@ export function FilterChips() {
 						>
 							<Chip
 								group={studyTypes("chip")}
-								title={studyType(study) ? studyTypes(`types.${study}.label`) : study}
+								title={study === UNCERTAIN ? studyTypes("uncertainType.label") : studyType(study) ? studyTypes(`types.${study}.label`) : study}
 								callback={() => itemsContext.handleStudySelect(study)}
 								classNames={{
 									button: "bg-success/80 dark:bg-success/80",

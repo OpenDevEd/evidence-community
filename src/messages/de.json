@@ -1037,10 +1037,15 @@
     "notRead": "Noch nicht bestimmt",
     "chip": "Studientyp",
     "uncertain": "unsicher",
+    "uncertainType": {
+      "label": "Unsicher",
+      "description": "Die KI war sich des Typs zu weniger als 60 % sicher.",
+      "guess": "Beste Schätzung: {type}"
+    },
     "editor": "Von einer Redakteurin oder einem Redakteur dieser Bibliothek festgelegt.",
     "metadata": "Aus dem Eintrag selbst bestimmt.",
     "ai": "Von <ai>KI</ai> anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
-    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Ein KI-Modell liest Titel und Abstract und wählt den passendsten dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Passen zwei, gilt ein systematisches Review, das seine Ergebnisse statistisch zusammenführt, als Metaanalyse, und eine Studie, die Interviews oder Fallstudien um Zahlen ergänzt, als qualitativ. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Ein Typ, bei dem das Modell zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren. Wer mehrere Typen wählt, sieht Einträge jedes dieser Typen.",
+    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Ein KI-Modell liest Titel und Abstract und wählt den passendsten dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Passen zwei, gilt ein systematisches Review, das seine Ergebnisse statistisch zusammenführt, als Metaanalyse, und eine Studie, die Interviews oder Fallstudien um Zahlen ergänzt, als qualitativ. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Metaanalyse und randomisierte Studie stehen dem Modell nur zur Wahl, wenn Titel, Abstract oder PDF es sagen. Ein Typ, bei dem das Modell zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren. Wer mehrere Typen wählt, sieht Einträge jedes dieser Typen.",
     "levels": {
       "synthesis": "Reviews und Synthesen",
       "primary": "Primärstudien",
@@ -1056,8 +1061,8 @@
       "meta-analysis": {
         "label": "Metaanalyse",
         "plural": "Metaanalysen",
-        "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht.",
-        "not": "Kein Review, das ein fremdes gepooltes Ergebnis zitiert oder gar nicht poolt: Das ist ein systematisches Review."
+        "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht. Nur vergeben, wenn Titel, Abstract oder PDF es sagen.",
+        "not": "Kein Review, das ein fremdes gepooltes Ergebnis zitiert oder gar nicht poolt: Das ist ein systematisches oder narratives Review."
       },
       "systematic-review": {
         "label": "Systematisches Review",
@@ -1080,7 +1085,7 @@
       "rct": {
         "label": "Randomisierte Studie",
         "plural": "Randomisierte Studien",
-        "description": "Teilnehmende, Gruppen oder Orte wurden den Bedingungen zufällig zugeteilt.",
+        "description": "Teilnehmende, Gruppen oder Orte wurden den Bedingungen zufällig zugeteilt. Nur vergeben, wenn Titel, Abstract oder PDF es sagen.",
         "not": "Kein Vergleich ohne Zufallszuteilung (Quasi-Experiment) und kein Review von Studien."
       },
       "quasi-experiment": {

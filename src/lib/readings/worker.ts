@@ -10,6 +10,8 @@ import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { contentHashOf, readingText } from "./reading-text";
 import { keyArray, readingKey, refreshScreenedOut, screeningSubjects, settleScreening } from "./screening";
 import { SURE, type StudyTypeKey } from "./study-types";
+import { ruledOutTypes } from "./type-words";
+import { abstractPlainText } from "@/lib/abstract-text";
 
 /** Records claimed at once, and how many of them are read at the same time. */
 const BATCH = 32;
@@ -22,8 +24,11 @@ const PDF_PAGE_MARK = /\*\*\|\|\s*PAGE\s+\d+\s*\|\|\*\*/giu;
 /** Grades asked in one call, so a record many sources hold stays inside Jev's context; the rest are asked next. */
 const GRADES_PER_CALL = 8;
 
-/** A record as a read needs it; `pdf` is the opening of its PDF's text, empty without one. */
-type RecordFacts = { key: string; title: string; abstract: string; pdf: string; itemType: string; openAlexType: string | null; doi: string | null; sources: string[] };
+/**
+ * A record as a read needs it: the title and abstract Jev reads, the whole abstract its type's words are looked for in,
+ * and `pdf`, the opening of its PDF's text, empty without one.
+ */
+type RecordFacts = { key: string; title: string; abstract: string; wholeAbstract: string; pdf: string; itemType: string; openAlexType: string | null; doi: string | null; sources: string[] };
 /**
  * What is stored about a record already: its reading's text hash, question set, type and what it was read from, and
  * the subject hashes each source's grade and pending grade were made against.
@@ -40,6 +45,7 @@ type Subject = { key: string; subject: string; hash: string };
  * source graded again. The type is never asked when the record's own metadata gives it, and a change in what the
  * metadata says retypes a record whose text has not changed: at no cost when the metadata now gives the type, with a
  * type-only question when it no longer does. A type Jev was unsure of from the abstract is asked again from the PDF.
+ * Jev is not offered a type whose words the record lacks, and a type it gave before that rule is asked again without it.
  */
 type Reading = NonNullable<Stored["reading"]>;
 
@@ -47,21 +53,36 @@ type Reading = NonNullable<Stored["reading"]>;
 const metadataChanged = (reading: Reading, metadataType: StudyTypeKey | null) =>
 	metadataType ? reading.typedBy !== "metadata" || reading.studyType !== metadataType : reading.typedBy === "metadata";
 
-/** Whether Jev's type, unsure from the abstract, can be asked again from the PDF the record now has. */
-const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
-	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < SURE;
+/** Whether the record's PDF names a type its title and abstract do not, which Jev was not offered without it. */
+const pdfUnlocks = (record: RecordFacts, ruledOut: StudyTypeKey[]) =>
+	ruledOutTypes({ title: record.title, abstract: record.wholeAbstract, pdf: "" }).some((type) => !ruledOut.includes(type));
+
+/**
+ * Why the type of a record whose text has not changed is set again, or null: its metadata says something else now, Jev
+ * was unsure and the record has a PDF, Jev gave a type the record's words rule out, or a PDF that came later names a
+ * type Jev was not offered. Each PDF reason asks once: the type is then read from the PDF.
+ */
+function retypeOf(record: RecordFacts, reading: Reading, metadataType: StudyTypeKey | null, ruledOut: StudyTypeKey[]) {
+	if (metadataChanged(reading, metadataType)) return "metadata";
+	if (metadataType || reading.typedBy !== "ai") return null;
+	const fromPdf = Boolean(record.pdf) && reading.input !== "pdf";
+	if (fromPdf && (reading.typeConfidence < SURE || pdfUnlocks(record, ruledOut))) return "pdf";
+	return ruledOut.includes(reading.studyType) ? "words" : null;
+}
 
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
 	const contentHash = contentHashOf(record);
 	const fresh = stored.reading?.contentHash === contentHash && stored.reading.questionSet === QUESTION_SET;
 	const metadataType = metadataStudyType(record);
-	const retype = fresh && metadataChanged(stored.reading!, metadataType);
-	const pdf = fresh && !retype && !metadataType && pdfCanSettle(record, stored.reading!);
+	const ruledOut = ruledOutTypes({ title: record.title, abstract: record.wholeAbstract, pdf: record.pdf });
+	const retype = fresh ? retypeOf(record, stored.reading!, metadataType, ruledOut) : null;
 	const stale = fresh ? subjects.filter((subject) => !stored.grades.get(subject.key)?.includes(subject.hash)) : subjects;
-	if (fresh && !stale.length && !retype && !pdf) return null;
+	if (fresh && !stale.length && !retype) return null;
 	const graded = stale.slice(0, GRADES_PER_CALL);
-	const ask: ReadingAsk = { type: !metadataType && (!fresh || retype || pdf), details: !fresh, subjects: graded.map((subject) => subject.subject) };
-	return { ask, contentHash, fresh, retype: retype || pdf, pdf, metadataType, graded, more: stale.length > graded.length };
+	const ask: ReadingAsk = { type: !metadataType && (!fresh || retype !== null), ruledOut, details: !fresh, subjects: graded.map((subject) => subject.subject) };
+	// A type read from the PDF and asked again for its words is asked from the PDF again.
+	const pdf = retype === "pdf" || (retype === "words" && stored.reading!.input === "pdf" && Boolean(record.pdf));
+	return { ask, contentHash, fresh, retype: retype !== null, pdf, metadataType, graded, more: stale.length > graded.length };
 }
 type Plan = NonNullable<ReturnType<typeof planRead>>;
 /** Whether a plan needs Jev at all: a metadata retype alone does not. */
@@ -73,12 +94,15 @@ const typeFields = (plan: Plan, read: ReadingAnswers): { studyType: StudyTypeKey
 		? { studyType: plan.metadataType, typeConfidence: 1, typedBy: "metadata" }
 		: { studyType: read.type!.key, typeConfidence: read.type!.confidence, typedBy: "ai" };
 
+/** What Jev read: the PDF's opening, else the abstract, else the title alone. */
+const inputOf = (record: RecordFacts, plan: Plan) => plan.pdf ? "pdf" as const : record.abstract ? "abstract" as const : "title" as const;
+
 /** The reading row a whole read stores. */
 function readingRow(record: RecordFacts, plan: Plan, read: ReadingAnswers, model: string) {
 	return {
 		itemKey: record.key, ...typeFields(plan, read),
 		pooled: read.details!.pooled, region: read.details!.region, effects: read.details!.effects,
-		input: record.abstract ? "abstract" as const : "title" as const, contentHash: plan.contentHash, questionSet: QUESTION_SET, model, readAt: new Date(),
+		input: inputOf(record, plan), contentHash: plan.contentHash, questionSet: QUESTION_SET, model, readAt: new Date(),
 	};
 }
 
@@ -113,7 +137,7 @@ async function recordFacts(database: Database, keys: string[]) {
 		SELECT "itemKey", "sourceConnectionKey", "subjectHash", "pendingSubjectHash" FROM "itemGrade" WHERE "itemKey" = ANY(${list})`);
 	return rows.map((row) => ({
 		record: {
-			key: row.key, ...readingText(row.title, row.abstractNote),
+			key: row.key, ...readingText(row.title, row.abstractNote), wholeAbstract: abstractPlainText(row.abstractNote),
 			pdf: (row.pdf ?? "").replace(PDF_PAGE_MARK, "\n").trim(),
 			itemType: row.itemType, openAlexType: row.openAlexType, doi: row.DOI, sources: row.sources,
 		},
@@ -203,7 +227,8 @@ async function saveRead(database: Database, record: RecordFacts, plan: Plan, ans
 			await tx.insert(itemReading).values(row).onConflictDoUpdate({ target: itemReading.itemKey, set: row });
 			await reprojectRecord(tx, record.key);
 		} else if (plan.retype) {
-			await tx.update(itemReading).set({ ...typeFields(plan, read), ...(plan.pdf ? { input: "pdf" as const } : {}) })
+			// What Jev read this time, when it was asked: a type asked again from the abstract no longer comes from the PDF.
+			await tx.update(itemReading).set({ ...typeFields(plan, read), ...(plan.ask.type ? { input: inputOf(record, plan) } : {}) })
 				.where(sql`${itemReading.itemKey} = ${record.key}`);
 			await reprojectRecord(tx, record.key);
 		}
