@@ -183,6 +183,22 @@ describe("signing in with OpenScholar", () => {
 	});
 });
 
+describe("telling OpenScholar who signs in", () => {
+	it("tells it on every sign-in, a new reader's first included", async () => {
+		await withReaders(async ({ db }) => {
+			const signedIn: string[] = [];
+			const context = await createReaderAuth(config, db, undefined, (userId) => signedIn.push(userId)).$context;
+			const profile = { sub: "user_first", email: "first@example.org", given_name: "First" };
+			const result = await handleOAuthUserInfo({ context } as Parameters<typeof handleOAuthUserInfo>[0], {
+				userInfo: { id: profile.sub, ...openScholarReader(profile) },
+				account: { providerId: "openscholar", accountId: profile.sub },
+				callbackURL: "/admin",
+			});
+			expect(signedIn).toEqual([result.data?.user.id]);
+		});
+	});
+});
+
 describe("the background account check", () => {
 	function fakeAuth(getAccessToken: () => Promise<{ accessToken: string }>) {
 		return { api: { getAccessToken } } as unknown as ReaderAuth;

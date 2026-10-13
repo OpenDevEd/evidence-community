@@ -101,6 +101,15 @@ async function reportReaderSeen(config: LibraryServerConfig, clerkUserId: string
 	}
 }
 
+/** Tells OpenScholar a reader signed in, by the OpenScholar account they signed in with. */
+export async function reportReaderSignIn({ config, database, userId }: Pick<ReaderCheck, "config" | "database" | "userId">) {
+	const account = await database.query.readerAccount.findFirst({
+		where: and(eq(readerAccount.userId, userId), eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID)),
+		columns: { accountId: true },
+	});
+	if (account) await reportReaderSeen(config, account.accountId);
+}
+
 /**
  * Checks an active reader's OpenScholar account, at most once every 15
  * minutes per reader. Better Auth reports every refresh failure the same way,

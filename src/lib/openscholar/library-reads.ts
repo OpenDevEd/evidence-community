@@ -64,12 +64,13 @@ export async function answerOpenScholar(
 	await connection();
 	const config = await getLibraryConfig();
 	const libraryId = config.authentication.openScholar.libraryId;
-	const reader = await readerOfRequest(request);
 	const denied = await requireOpenScholarBearer(request, config.authentication.openScholar.machineCredential);
 	if (denied) {
-		console.warn("[library sources] refused", { libraryId, call, reader, error: "credential", status: denied.status });
+		console.warn("[library sources] refused", { libraryId, call, reader: await readerOfRequest(request, null), error: "credential", status: denied.status });
 		return denied;
 	}
+	// A body is read for its reader only once the credential holds, and only for a log line.
+	const copy = request.method === "POST" ? request.clone() : null;
 	const answer = request.headers.get("openscholar-contract") === OPENSCHOLAR_CONTRACT
 		? await run({ config, database: await getDatabaseForConfig(config) }).catch((error: unknown) => error)
 		: refusals.contract;
@@ -78,21 +79,20 @@ export async function answerOpenScholar(
 	}
 	if (answer && typeof answer === "object" && "error" in answer && "status" in answer && typeof answer.status === "number") {
 		const { error, message, status } = answer as Refusal;
-		console.warn("[library sources] refused", { libraryId, call, reader, error, message });
+		console.warn("[library sources] refused", { libraryId, call, reader: await readerOfRequest(request, copy), error, message });
 		return NextResponse.json({ error, message }, { status, headers: { ...ADMIN_RESPONSE_HEADERS, "OpenScholar-Contract": OPENSCHOLAR_CONTRACT } });
 	}
-	console.error("[library sources] failed", { libraryId, call, reader, error: String(answer) });
+	console.error("[library sources] failed", { libraryId, call, reader: await readerOfRequest(request, copy), error: String(answer) });
 	return adminErrorResponse(answer);
 }
 
-/** The Clerk user a call names, wherever it names one, for its log lines. */
-async function readerOfRequest(request: Request): Promise<string | null> {
+/** The Clerk user a call names, for its log lines: in its address, or in `body`, a copy of its body. */
+async function readerOfRequest(request: Request, body: Request | null): Promise<string | null> {
 	const url = new URL(request.url);
 	const named = url.searchParams.get("reader") ?? url.pathname.match(/\/readers\/([^/]+)\//)?.[1];
 	if (named) return named.slice(0, 512);
-	if (request.method !== "POST") return null;
-	const body: unknown = await request.clone().json().catch(() => null);
-	return body && typeof body === "object" && "reader" in body && typeof body.reader === "string" ? body.reader.slice(0, 512) : null;
+	const json: unknown = body ? await body.json().catch(() => null) : null;
+	return json && typeof json === "object" && "reader" in json && typeof json.reader === "string" ? json.reader.slice(0, 512) : null;
 }
 
 /** The person a call is about: their reader here, or null for someone who never signed in to this library. */
@@ -141,12 +141,17 @@ async function resolveLibrary(config: LibraryServerConfig, database: Database, {
 	return { keys: keys.map((row) => row.key), total: Number(status?.totalItems ?? 0), truncated: false };
 }
 
-/** A list of records as given, without the ones that aren't public. */
-async function resolveRecords(config: LibraryServerConfig, database: Database, records: string[], { first, until }: Range): Promise<Resolved> {
-	const unique = [...new Set(records)];
+/** The keys given that name a public record now, each once, in the order given: what the database says, which the search index follows a moment later. */
+async function publicKeys(config: LibraryServerConfig, database: Database, keys: string[]) {
+	const unique = [...new Set(keys)];
 	const rows = await database.select({ key: item.key }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(item.key, unique)));
 	const live = new Set(rows.map((row) => row.key));
-	const keys = unique.filter((key) => live.has(key));
+	return unique.filter((key) => live.has(key));
+}
+
+/** A list of records as given, without the ones that aren't public. */
+async function resolveRecords(config: LibraryServerConfig, database: Database, records: string[], { first, until }: Range): Promise<Resolved> {
+	const keys = await publicKeys(config, database, records);
 	return { keys: keys.slice(first - 1, until), total: keys.length, truncated: false };
 }
 
@@ -214,8 +219,10 @@ export const batchRequestSchema = z.object({ keys: z.array(z.string().min(1).max
  * Public records by key, in the order asked, as the search index holds them with their public files. Keys that name
  * no public record are left out; ones past the byte budget come back in `unread`, to be asked for again.
  */
-export async function readRecords(config: LibraryServerConfig, keys: string[]): Promise<{ records: OpenScholarRecord[]; unread: string[] }> {
-	const unique = [...new Set(keys)];
+export async function readRecords(config: LibraryServerConfig, database: Database, keys: string[]): Promise<{ records: OpenScholarRecord[]; unread: string[] }> {
+	// Public now in the database, and in the index, which may still hold a record hidden or deleted since.
+	const unique = await publicKeys(config, database, keys);
+	if (!unique.length) return { records: [], unread: [] };
 	const { index } = await getMeilisearchForConfig(config);
 	// The index keeps hidden and deleted records too: a record hidden since the source was resolved isn't read.
 	const found = await index.search("", { filter: [meilisearchIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)], limit: unique.length, attributesToRetrieve: await getMainAttributes(config) });
