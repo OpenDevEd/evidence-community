@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, count, desc, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -440,6 +441,49 @@ export async function createReaderCollection(
 		.values({ userId, name: input.name, description: input.description ?? null, private: input.private })
 		.returning({ id: readerCollection.id });
 	return collection!;
+}
+
+/**
+ * The ID a reader's collection made for one request gets: the same reader and request always give the same ID, so a
+ * request made again makes nothing new (OpenScholar's `requestId`).
+ */
+function requestedCollectionId(userId: string, requestId: string) {
+	const hex = createHash("sha256").update(`${userId}\n${requestId}`).digest("hex");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${((parseInt(hex[16]!, 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+/** Makes a collection for the reader once per `requestId`, and answers its ID: the collection that request made before, if it did. */
+export async function createReaderCollectionOnce(
+	database: Database,
+	userId: string,
+	input: z.output<typeof readerCollectionInputSchema>,
+	requestId: string,
+) {
+	const id = requestedCollectionId(userId, requestId);
+	await database
+		.insert(readerCollection)
+		.values({ id, userId, name: input.name, description: input.description ?? null, private: input.private })
+		.onConflictDoNothing();
+	return id;
+}
+
+/**
+ * Puts records into a collection the reader owns or edits, or takes them out, whoever added them. Answers how many it
+ * holds after and how many changed; `refused` when the reader can't change it (`404` no such collection, `403` they may
+ * only view it). Keys must be records the library has.
+ */
+export async function changeCollectionItems(database: Database, userId: string, collectionId: string, keys: string[], change: "add" | "remove") {
+	const access = await collectionAccess(database, userId, collectionId);
+	if (access !== "owner" && access !== "editor") return { refused: access ? (403 as const) : (404 as const) };
+	return database.transaction(async (transaction) => {
+		// One change to a collection at a time, as a single record's toggle takes it.
+		await transaction.select({ id: readerCollection.id }).from(readerCollection).where(eq(readerCollection.id, collectionId)).for("update", { of: readerCollection });
+		const changed = keys.length === 0 ? [] : change === "add"
+			? await transaction.insert(readerCollectionItem).values(keys.map((itemKey) => ({ collectionId, itemKey }))).onConflictDoNothing().returning({ itemKey: readerCollectionItem.itemKey })
+			: await transaction.delete(readerCollectionItem).where(and(eq(readerCollectionItem.collectionId, collectionId), inArray(readerCollectionItem.itemKey, keys))).returning({ itemKey: readerCollectionItem.itemKey });
+		const [held] = await transaction.select({ count: count() }).from(readerCollectionItem).where(eq(readerCollectionItem.collectionId, collectionId));
+		return { count: held?.count ?? 0, changed: changed.length };
+	});
 }
 
 function ownedCollection(userId: string, collectionId: string) {

@@ -1,5 +1,8 @@
+import { z } from "zod";
+import { fromError } from "zod-validation-error";
+
 import { answerOpenScholar, readerFor, refusals } from "@/lib/openscholar/library-reads";
-import { readProfileCollections, readSharedCollections } from "@/lib/readers/data";
+import { createReaderCollectionOnce, readCollectionFor, readerCollectionInputSchema, readProfileCollections, readSharedCollections } from "@/lib/readers/data";
 
 /** Most collections one page holds: OpenScholar lists a person's collections here in one read. */
 const PAGE_SIZE_MAX = 100;
@@ -29,5 +32,27 @@ export async function GET(request: Request, props: { params: Promise<{ clerkUser
 				total: read.total,
 			},
 		};
+	});
+}
+
+const createSchema = readerCollectionInputSchema.extend({ requestId: z.string().trim().min(1).max(200) }).strict();
+
+/**
+ * Makes a collection for a person who signed in here, as their profile does. The same `requestId` again answers the
+ * collection it made, so a retry never makes two.
+ */
+export async function POST(request: Request, props: { params: Promise<{ clerkUserId: string }> }) {
+	return answerOpenScholar(request, "readers/collections:create", async ({ config, database }) => {
+		if (!config.features.readerAccounts) return refusals.readerAccountsOff;
+		const input = createSchema.safeParse(await request.json().catch(() => null));
+		if (!input.success) return refusals.invalid(fromError(input.error).toString());
+		const readerId = await readerFor(config, database, (await props.params).clerkUserId);
+		if (!readerId) return refusals.notReader;
+		const { requestId, ...collection } = input.data;
+		const id = await createReaderCollectionOnce(database, readerId, collection, requestId);
+		const read = await readCollectionFor(database, id, readerId);
+		if (!("collection" in read) || !read.collection) return refusals.notFound;
+		const { ownerId: _owner, owner, ...made } = read.collection;
+		return { body: { collection: { ...made, owner: owner ? { name: owner.name, image: owner.image } : null } }, status: 201 };
 	});
 }
