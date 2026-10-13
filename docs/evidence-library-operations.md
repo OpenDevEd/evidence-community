@@ -947,32 +947,26 @@ role. Their account ID is never sent to readers. Off, the default, readers see
 neither the name nor the note.
 
 A digest lists at most 1,000 publications and 1.5 MB of their metadata. When a
-period has more, every meta-analysis and review is picked first, then the likely
-ones nobody has read yet, as many as one request has read (300), then the rest
-by rank: a record with an abstract of at least 200 characters first, then by a
-score of 3 for a journal OpenAlex marks as core, 2 for ten or more references
-(1 for fewer), 1 for a known institution and twice the natural log of one plus
-the citation count. A dataset or software record loses 1. A retracted record
-or a journal's front matter is in no digest. The edition stores and sends what
-was picked in that rank order, so each of its two lists on the digest's page,
-meta-analyses and reviews and other publications, is one ranking once the
-likely reviews are read. The page shows how its publications were chosen
-whenever it lists fewer than the period has.
+period has more, every review and synthesis is picked first, by its study type
+(review of reviews, meta-analysis, systematic review, literature review or
+bibliometric study), then the rest by rank: a record with an abstract of at
+least 200 characters first, then by a score of 3 for a journal OpenAlex marks
+as core, 2 for ten or more references (1 for fewer), 1 for a known institution
+and twice the natural log of one plus the citation count. A dataset or software
+record loses 1. A retracted record or a journal's front matter is in no digest.
+The edition stores and sends what was picked in that rank order, so each of its
+two lists on the digest's page, reviews and syntheses and other publications,
+is one ranking. The page shows how its publications were chosen whenever it
+lists fewer than the period has.
 
-A meta-analysis or review is told from a single study by reading it. A record
-is a likely one when its title, its abstract or its OpenAlex type (`review`)
-suggests it; the patterns are in `src/lib/notifications/kinds.ts` and are wide
-on purpose. The library sends `candidate` for every publication in a digest
-request, and OpenScholar has Jev read the title and abstract of each candidate
-that has no answer yet. The answers come back as `kinds` (`meta-analysis`,
-`review` or `study`), also when the writer itself fails, and are kept in
-`notificationItemKind` and on the edition's stored publications, which later
-requests send as `kind`. An edition listed before another digest had a record
-read takes that answer on when its own request first goes out
-(`notificationEdition.requestedAt`). So a record is read once, only when a
-digest first covers it, and never because it sits in the library. A read that fails leaves
-the record a likely review: it is picked first and read again with the next
-digest that covers it.
+A record's study type is the one an editor set, or else the one its reading
+found (`itemReading`, see the record reading plan). A digest request sends
+each publication's `studyType`, and leaves it out for a record not read yet.
+When the list is made, the edition stores the period's publications by type in
+`notificationEdition.studyTypes`, with `unread` for those not read yet, so the
+counts add up to its `publicationCount`. The page's Publications card shows
+each type listed out of the period's. An edition listed before types has no
+period counts and shows what it lists.
 
 To write the digest of a past period, or rewrite the edition that already ends
 when it does, send the period to the manual digest route with the library's

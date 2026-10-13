@@ -1,4 +1,5 @@
 import type { getPublicItemCard } from "@/lib/public-item-card";
+import type { StudyTypeKey } from "@/lib/readings/study-types";
 
 /** The most characters a digest's text may have. The editor checks it too, before a page is left. */
 export const MOST_TEXT = 50_000;
@@ -11,14 +12,12 @@ export type NotificationPublication = {
   abstract: string | null;
   publicationType: string;
   doi: string | null;
-  /** Its title, abstract or OpenAlex type suggests a meta-analysis or a review. Absent from editions listed before records were marked. */
-  candidate?: boolean;
-  /** What reading it found, once it has been read. */
-  kind?: PublicationKind;
+  /** Its study type when the edition was listed: an editor's correction or what its reading found. Absent while unread. */
+  studyType?: StudyTypeKey;
   item: NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>;
 };
-/** What a likely review turned out to be when its title and abstract were read. */
-export type PublicationKind = "meta-analysis" | "review" | "study";
+/** A digest's publications by study type when its list was made, `unread` for those not read yet; they add up to its count. */
+export type DigestTypeCounts = Partial<Record<StudyTypeKey | "unread", number>>;
 export type NotificationStream = "hourly" | "digest";
 /** A digest's words: what the writer returns, and what an edition publishes. */
 export type DigestText = { title: string; summary: string; markdown: string };

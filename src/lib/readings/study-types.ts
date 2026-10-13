@@ -67,6 +67,8 @@ export const STUDY_TYPES = [
 export type StudyTypeKey = (typeof STUDY_TYPES)[number]["key"];
 export const STUDY_TYPE_KEYS = STUDY_TYPES.map((type) => type.key) as [StudyTypeKey, ...StudyTypeKey[]];
 export const studyType = (key: string) => STUDY_TYPES.find((type) => type.key === key);
+/** The reviews and syntheses, in the order readers start from: a digest lists them first. */
+export const SYNTHESIS_TYPES = STUDY_TYPES.filter((type) => type.level === "synthesis").map((type) => type.key);
 /** An editor's study type choice in words: the type, or none, which leaves it to the reading. */
 export const describeStudyTypeChoice = (value: unknown) => (typeof value === "string" && studyType(value)?.label) || "From the reading";
 

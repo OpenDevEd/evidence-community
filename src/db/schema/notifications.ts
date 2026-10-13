@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
-import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner, DigestText, NotificationPublication, NotificationStream, PublicationKind } from "@/lib/notifications/types";
+import type { DigestDraft, DigestEventKind, DigestPerson, DigestSigner, DigestText, DigestTypeCounts, NotificationPublication, NotificationStream } from "@/lib/notifications/types";
 
 const date = (name: string) => timestamp(name, {withTimezone: true});
 export const notificationItem = pgTable("notificationItem", {
@@ -16,13 +16,6 @@ export const notificationItem = pgTable("notificationItem", {
   index("notificationItem_hourly_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.hourlyEditionId} IS NULL`),
   index("notificationItem_digest_pending_idx").on(table.firstPublishedAt).where(sql`${table.eligible} = true AND ${table.digestEditionId} IS NULL`),
 ]);
-
-// What a likely meta-analysis or review was read as, kept so a record is read once.
-export const notificationItemKind = pgTable("notificationItemKind", {
-  itemKey: varchar("itemKey", {length: 8}).primaryKey(),
-  kind: text("kind").$type<PublicationKind>().notNull(),
-  readAt: date("readAt").notNull().defaultNow(),
-});
 
 export const notificationState = pgTable("notificationState", {
   singleton: boolean("singleton").primaryKey().default(true),
@@ -60,6 +53,8 @@ export const notificationEdition = pgTable("notificationEdition", {
   publications: jsonb("publications").$type<NotificationPublication[]>().notNull(),
   // Every publication the window covered, including those past the listed cap.
   publicationCount: integer("publicationCount").notNull().default(0),
+  // The publications counted by study type when the list was made. Null on an additions email, and on a digest listed before types.
+  studyTypes: jsonb("studyTypes").$type<DigestTypeCounts>(),
   cover: text("cover"),
   title: text("title"),
   summary: text("summary"),

@@ -1,18 +1,20 @@
 "use client";
 
 import { Suspense, use, useEffect, useOptimistic, useState, useTransition, type ReactNode } from "react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
 import { AiMagicIcon, ArrowRight01Icon, Calendar03Icon, BookOpen01Icon, Notification03Icon } from "@hugeicons/core-free-icons";
-import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary } from "@/lib/notifications/public";
+import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary, EditionTypes } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { AuthorProfile } from "@/lib/authors/profiles";
 import { Pagination } from "@/components/nextui/Pagination";
 import { describeDigestSchedule, timeZoneLabel } from "@/lib/notifications/schedule";
-import { DIGEST_SIGNER_ROLE } from "@/lib/notifications/types";
+import { DIGEST_SIGNER_ROLE, type DigestTypeCounts } from "@/lib/notifications/types";
+import { STUDY_LEVELS, STUDY_TYPES, type StudyLevel } from "@/lib/readings/study-types";
+import { studyTone } from "@/components/features/items/study-tone";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -368,30 +370,83 @@ function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition:
     </li>)}</ul>
   </SidebarCard>;
 }
-/** The edition's two lists as shares of the period's new publications; the bar's empty track is the rest of the period. */
-/** The edition's lists as rows: its meta-analyses and reviews and its other publications, or one list when it has no review. */
-function shareRows({reviews, listed}: DigestEdition) {
-  if (!reviews) return [{href: "#publications", label: "Publications", count: listed, tone: "bg-accent/45"}];
-  return [
-    {href: "#reviews", label: "Meta-analyses and reviews", count: reviews.listed, tone: "bg-accent"},
-    {href: "#other-publications", label: "Other publications", count: listed - reviews.listed, tone: "bg-accent/45"},
-  ].filter(row => row.count > 0);
+/** Records not read yet, in the bar and beside their count: an outline, since their type is not known. */
+const UNREAD_TONE = "border border-dashed border-black/35 dark:border-white/40";
+/** How many of a study type a count holds; none when it was not counted. */
+const share = (counts: DigestTypeCounts | null, key: keyof DigestTypeCounts) => counts?.[key] ?? 0;
+type TypeShare = {type: (typeof STUDY_TYPES)[number]; listed: number; period: number | null};
+
+/** Each type the edition lists or its period had: how many it lists, and how many the period had, null when not counted. */
+function typeShares({listed, period}: EditionTypes): TypeShare[] {
+  return STUDY_TYPES.map(type => ({type, listed: share(listed, type.key), period: period && share(period, type.key)}))
+    .filter(row => row.listed > 0 || Boolean(row.period));
 }
+
+/** Where a level's rows lead: its own list, or the one list of an edition without reviews. */
+function levelList(edition: DigestEdition, level: StudyLevel) {
+  if (!edition.reviews) return "#publications";
+  return level === "synthesis" ? "#reviews" : "#other-publications";
+}
+
+/**
+ * The edition's list by study type under the three levels of evidence: for each type, how many are listed of how many
+ * the period had when the list was made. The bar is the listed records by type; its empty track is the rest of the
+ * period. A digest listed before types were read has no period counts, and shows what it lists.
+ */
 function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
-  const rows = shareRows(edition);
-  const total = edition.publicationCount;
-  return <SidebarCard title="Publications" band={<>
-    <HeadFigure value={edition.listed.toLocaleString(locale)} label={edition.listed < total ? `of ${total.toLocaleString(locale)} new publications` : "new publications"} />
-    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.map(row => <span key={row.label} className={`h-full min-w-[3px] ${row.tone}`} style={{width: `${(row.count / total) * 100}%`}} />)}{edition.listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
-  </>}>
-    <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.label}>
-      <a href={row.href} className={railRow}><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${row.tone}`} /><span className="min-w-0 flex-1">{row.label}</span><span className="text-sm font-semibold tabular-nums">{row.count.toLocaleString(locale)}</span></a>
-    </li>)}</ul>
+  const rows = typeShares(edition.types);
+  const n = (count: number) => count.toLocaleString(locale);
+  const unread = share(edition.types.listed, "unread");
+  return <SidebarCard title="Publications" band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} n={n} />}>
+    <ShareLevels rows={rows} href={level => levelList(edition, level)} n={n} />
+    <UnreadShare listed={unread} period={edition.types.period && share(edition.types.period, "unread")} n={n} />
   </SidebarCard>;
 }
 
-/** How the lists are ordered, step by step, as the library ranks them (`reviewStanding`, then an abstract, then the score). */
-const ORDER = ["Meta-analyses and reviews", "With an abstract"];
+/** How many the edition lists of the period's, and a bar of the listed records by type, those not read yet last. */
+function ShareBand({rows, unread, listed, total, n}: {rows: TypeShare[]; unread: number; listed: number; total: number; n: (count: number) => string}) {
+  return <>
+    <HeadFigure value={n(listed)} label={listed < total ? `of ${n(total)} new publications` : "new publications"} />
+    <div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">{rows.filter(row => row.listed > 0).map(row => <span key={row.type.key} className={`h-full min-w-[3px] ${studyTone(row.type.key)}`} style={{width: `${(row.listed / total) * 100}%`}} />)}{unread > 0 && <span className={`h-full min-w-[3px] rounded-[2px] ${UNREAD_TONE}`} style={{width: `${(unread / total) * 100}%`}} />}{listed < total && <span className="h-full min-w-[3px] flex-1 bg-black/10 dark:bg-white/15" />}</div>
+  </>;
+}
+
+/** The types under the three levels of evidence, each row opening the list it is in. */
+function ShareLevels({rows, href, n}: {rows: TypeShare[]; href: (level: StudyLevel) => string; n: (count: number) => string}) {
+  const t = useTranslations("studyTypes");
+  return <div className="-mx-3 -my-2 flex flex-col gap-3">{STUDY_LEVELS.map(level => {
+    const shown = rows.filter(row => row.type.level === level.key);
+    if (!shown.length) return null;
+    return <section key={level.key} aria-label={t(`levels.${level.key}`)}>
+      <h5 className={`px-3 pb-1 text-xs ${muted}`}>{t(`levels.${level.key}`)}</h5>
+      <ul className="flex flex-col">{shown.map(row => <TypeShareRow key={row.type.key} tone={studyTone(row.type.key)} label={t(`types.${row.type.key}.plural`)} href={href(level.key)} listed={n(row.listed)} inPeriod={row.period === null ? null : n(row.period)} />)}</ul>
+    </section>;
+  })}</div>;
+}
+
+/** One study type in the Publications card: its swatch, its name, and how many are listed of the period's. */
+function TypeShareRow({tone, label, href, listed, inPeriod}: {tone: string; label: string; href: string; listed: string; inPeriod: string | null}) {
+  return <li>
+    <a href={href} className={railRow}>
+      <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${tone}`} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{listed}</span>{inPeriod !== null && <span className={muted}> of {inPeriod}</span>}</span>
+    </a>
+  </li>;
+}
+
+/** The records not read yet when the list was made, apart from the types, as the library's Study types card counts them. */
+function UnreadShare({listed, period, n}: {listed: number; period: number | null; n: (count: number) => string}) {
+  const t = useTranslations("studyTypes");
+  if (!listed && !period) return null;
+  return <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-black/5 pt-3 text-sm dark:border-white/10">
+    <span className="flex items-center gap-3 font-medium"><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${UNREAD_TONE}`} />{t("notRead")}</span>
+    <span className="tabular-nums"><span className="font-semibold">{n(listed)}</span>{period !== null && <span className={muted}> of {n(period)}</span>}</span>
+  </p>;
+}
+
+/** How the lists are ordered, step by step, as the library ranks them (study type, then an abstract, then the score). */
+const ORDER = ["Reviews and syntheses", "With an abstract"];
 const RANKED_BY = ["Journal standing", "References", "Known institutions", "Citations"];
 function ListOrder() {
   const chip = "inline-flex h-7 items-center rounded-full px-2.5 text-xs font-medium";
@@ -402,7 +457,7 @@ function ListOrder() {
   </ol>;
 }
 
-/** The edition's publications: its meta-analyses and reviews first as a list of their own, then the others, each with its own pages. */
+/** The edition's publications: its reviews and syntheses first as a list of their own, by type, then the others, each with its own pages. */
 function EditionLists({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
   const {reviews} = edition;
   const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <Paged page={page} pages={pages} href={href} anchor={anchor}>
@@ -410,7 +465,7 @@ function EditionLists({edition, records, path, locale}: {edition: DigestEdition;
   </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
-    <ListHeading id="reviews" title="Meta-analyses and reviews" count={reviews.listed} locale={locale} />
+    <ListHeading id="reviews" title="Reviews and syntheses" count={reviews.listed} locale={locale} />
     {list("reviews", reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
     <div className="mt-12"><ListHeading id="other-publications" title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
     {list("other-publications", edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
