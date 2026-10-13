@@ -2673,11 +2673,12 @@ export default function AdminWorkbench({
 					</div>
 					</div>
 
+					{/* Clip, not hidden: scrollIntoView scrolls a hidden box too, which pushed the inspector's top out of view on a jump to a section. */}
 					<aside
 						aria-label="Record editor"
 						id="admin-inspector-pane"
 						tabIndex={-1}
-						className={`relative z-10 min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+						className={`relative z-10 min-h-0 overflow-clip rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
 							mobilePane === "inspector" ? "block" : "hidden"
 						} xl:block xl:w-[22.5rem] xl:flex-none`}
 					>
