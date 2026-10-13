@@ -30,18 +30,50 @@ function xmpOf(document: PDFDocument) {
 	return stream instanceof PDFRawStream ? new TextDecoder().decode(decodePDFRawStream(stream).decode()) : "";
 }
 
-// ponytail: matches the usual prefixes (dc, pdf, prism, xmp, xmpRights,
-// pdfaid, pdfuaid), not a custom prefix bound to the same namespace; parse
-// the XML with namespaces if that turns up.
-/** The `rdf:li` entries of one XMP property, such as every `dc:creator`. */
+const NAMESPACES: Record<string, string> = {
+	dc: "http://purl.org/dc/elements/1.1/",
+	pdf: "http://ns.adobe.com/pdf/1.3/",
+	pdfaid: "http://www.aiim.org/pdfa/ns/id/",
+	pdfuaid: "http://www.aiim.org/pdfua/ns/id/",
+	prism: "http://prismstandard.org/namespaces/basic/3.0/",
+	xmp: "http://ns.adobe.com/xap/1.0/",
+	xmpRights: "http://ns.adobe.com/xap/1.0/rights/",
+};
+
+// ponytail: resolves prefixes from the block's xmlns declarations rather than
+// parsing XML, so one prefix bound to two namespaces in different elements
+// would confuse it; parse the XML with namespaces if that turns up.
+/** Every name a property goes by in this XMP block: its usual prefix, and any other prefix the block binds to the same namespace. */
+function namesOf(xmp: string, property: string) {
+	const [prefix, local] = property.split(":") as [string, string];
+	const bound = [...xmp.matchAll(/xmlns:([\w.-]+)=["']([^"']+)["']/g)].filter((match) => match[2] === NAMESPACES[prefix]).map((match) => match[1]!);
+	return [...new Set([prefix, ...bound])].map((name) => `${name}:${local}`);
+}
+
+/** The list entries of one XMP property, such as every `dc:creator`. */
 function xmpList(xmp: string, property: string) {
-	const block = new RegExp(`<${property}(?:\\s[^>]*)?>([\\s\\S]*?)</${property}>`).exec(xmp)?.[1] ?? "";
-	return [...block.matchAll(/<rdf:li[^>]*>([\s\S]*?)<\/rdf:li>/g)].map((match) => unescapeXml(match[1]!.trim())).filter(Boolean);
+	for (const name of namesOf(xmp, property)) {
+		const block = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`).exec(xmp)?.[1];
+		if (block) return [...block.matchAll(/<(?:[\w.-]+:)?li\b[^>]*>([\s\S]*?)<\/(?:[\w.-]+:)?li>/g)].map((match) => unescapeXml(match[1]!.trim())).filter(Boolean);
+	}
+	return [];
 }
 
 /** A simple XMP value, written as an element or as an attribute of its description. */
-const xmpText = (xmp: string, property: string) =>
-	unescapeXml((new RegExp(`<${property}(?:\\s[^>]*)?>([^<]*)</${property}>`).exec(xmp) ?? new RegExp(`\\s${property}=["']([^"']*)["']`).exec(xmp))?.[1]?.trim() ?? "");
+function xmpText(xmp: string, property: string) {
+	for (const name of namesOf(xmp, property)) {
+		const value = (new RegExp(`<${name}(?:\\s[^>]*)?>([^<]*)</${name}>`).exec(xmp) ?? new RegExp(`\\s${name}=["']([^"']*)["']`).exec(xmp))?.[1]?.trim();
+		if (value) return unescapeXml(value);
+	}
+	return "";
+}
+
+/** The PDF/A part and level the file declares ("2B"). Parts 1 to 3 need both; PDF/A-4 has no required level. */
+function pdfaOf(xmp: string) {
+	const part = xmpText(xmp, "pdfaid:part");
+	const level = xmpText(xmp, "pdfaid:conformance").toUpperCase();
+	return part && (level || Number(part) >= 4) ? part + level : "";
+}
 
 /** The DOI publishing wrote as `dc:identifier`, or one another tool wrote as `prism:doi`. */
 function doiOf(xmp: string) {
@@ -67,7 +99,6 @@ export async function readPdfProperties(bytes: Uint8Array): Promise<PdfPropertie
 	const xmp = safely(() => xmpOf(document), "");
 	const author = safely(() => document.getAuthor()?.trim() ?? "", "");
 	const keywords = safely(() => document.getKeywords()?.trim() ?? "", "");
-	const pdfa = xmpText(xmp, "pdfaid:part");
 	return {
 		writable: true,
 		properties: {
@@ -78,7 +109,7 @@ export async function readPdfProperties(bytes: Uint8Array): Promise<PdfPropertie
 			subject: safely(() => document.getSubject()?.trim() ?? "", "") || (xmpList(xmp, "dc:description")[0] ?? ""),
 			title: safely(() => document.getTitle()?.trim() ?? "", "") || (xmpList(xmp, "dc:title")[0] ?? ""),
 		},
-		standards: { pdfa: pdfa && pdfa + xmpText(xmp, "pdfaid:conformance").toUpperCase(), pdfua: xmpText(xmp, "pdfuaid:part"), tagged: safely(() => taggedOf(document), false) },
+		standards: { pdfa: pdfaOf(xmp), pdfua:xmpText(xmp, "pdfuaid:part"), tagged: safely(() => taggedOf(document), false) },
 	};
 }
 
@@ -96,9 +127,12 @@ function safely<T>(read: () => T, fallback: T) {
  */
 const WRITTEN = ["dc:creator", "dc:description", "dc:identifier", "dc:rights", "dc:subject", "dc:title", "pdf:Keywords", "prism:doi", "xmp:MetadataDate", "xmp:ModifyDate", "xmpRights:Marked"];
 
-/** The XMP block without one property, whether written as an element or as an attribute. */
+/** The XMP block without one property under any of its names, whether written as an element or as an attribute. */
 const withoutProperty = (xmp: string, property: string) =>
-	xmp.replace(new RegExp(`<${property}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${property}>)`, "g"), "").replace(new RegExp(`\\s${property}=(?:"[^"]*"|'[^']*')`, "g"), "");
+	namesOf(xmp, property).reduce(
+		(text, name) => text.replace(new RegExp(`<${name}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${name}>)`, "g"), "").replace(new RegExp(`\\s${name}=(?:"[^"]*"|'[^']*')`, "g"), ""),
+		xmp,
+	);
 
 /**
  * The record as one `rdf:Description`, in schemas PDF/A accepts without an
@@ -109,7 +143,7 @@ function recordDescription(properties: PdfProperties, date: string) {
 	const list = (name: string, kind: "Bag" | "Seq", values: string[]) => (values.length ? `<${name}><rdf:${kind}>${values.map((value) => `<rdf:li>${escapeXml(value)}</rdf:li>`).join("")}</rdf:${kind}></${name}>` : "");
 	const text = (name: string, value: string) => (value ? `<${name}>${escapeXml(value)}</${name}>` : "");
 	return [
-		'<rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/">',
+		'<rdf:Description rdf:about="" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:pdf="http://ns.adobe.com/pdf/1.3/" xmlns:xmp="http://ns.adobe.com/xap/1.0/" xmlns:xmpRights="http://ns.adobe.com/xap/1.0/rights/">',
 		alt("dc:title", properties.title),
 		list("dc:creator", "Seq", properties.authors),
 		alt("dc:description", properties.subject),
@@ -127,7 +161,9 @@ function recordDescription(properties: PdfProperties, date: string) {
 /** The file's XMP block with the record written over the properties publishing owns, or a new block when it has none. */
 function mergedXmp(existing: string, properties: PdfProperties, date: string) {
 	const description = recordDescription(properties, date);
-	if (existing.includes("</rdf:RDF>")) return WRITTEN.reduce(withoutProperty, existing).replace("</rdf:RDF>", `${description}</rdf:RDF>`);
+	// The RDF element closes as </rdf:RDF> or under whatever prefix the file binds RDF to.
+	const close = /<\/(?:[\w.-]+:)?RDF>/;
+	if (close.test(existing)) return WRITTEN.reduce(withoutProperty, existing).replace(close, (tag) => description + tag);
 	return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">${description}</rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
 }
 
@@ -157,7 +193,14 @@ export async function writePdfProperties(bytes: Uint8Array, properties: PdfPrope
 	const current = document.catalog.get(METADATA);
 	if (current instanceof PDFRef) document.context.assign(current, stream);
 	else document.catalog.set(METADATA, document.context.register(stream));
-	// Object streams need PDF 1.5. An older file, which every PDF/A-1 file is, keeps its plain cross-reference table.
-	const minor = Number(/%PDF-1\.(\d)/.exec(document.context.header.toString())?.[1] ?? 7);
-	return document.save({ useObjectStreams: minor >= 5 });
+	return document.save({ useObjectStreams: usesObjectStreams(bytes) });
 }
+
+/**
+ * Whether the file already packs objects into streams, in any section,
+ * hybrid ones included. Saving keeps the file's own choice: plain tables
+ * everywhere would grow such files by up to half, and PDF/A-1 forbids
+ * streams. pdf-lib always writes a 1.7 header, so the header can't tell.
+ * Stream dictionaries are never compressed, so their types show in the bytes.
+ */
+const usesObjectStreams = (bytes: Uint8Array) => /\/Type\s*\/(?:ObjStm|XRef)\b|\/XRefStm\b/.test(new TextDecoder("latin1").decode(bytes));
