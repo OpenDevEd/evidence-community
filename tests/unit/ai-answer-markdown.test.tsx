@@ -93,6 +93,32 @@ describe("what an AI answer shows the reader", () => {
 		expect(container.textContent).not.toContain("PAGE");
 	});
 
+	it("opens the cited page when the model drops the opening PAGE marker", async () => {
+		// From an AIED answer on Haiku 5.5. A plain bracket nearby must stay text.
+		await render(
+			"Human feedback stayed stronger for argument development [/lib/27BGDU89/download/IUA7YXN9 — 1 PAGE/]. " +
+				"Later rounds agreed [/lib/27BGDU89/download/IUA7YXN9 — 6 PAGE/] [/lib/27BGDU89/download/IUA7YXN9 — 7 PAGE/] " +
+				"[see table 2] [/lib/B88FNQ7J/download/IJEFHXHF — 17 PAGE/]",
+			{
+				"feedback.pdf": "/lib/27BGDU89/download/IUA7YXN9",
+				"essays.pdf": "/lib/B88FNQ7J/download/IJEFHXHF",
+			},
+		);
+
+		expect(
+			[...container.querySelectorAll("a")].map((link) =>
+				link.getAttribute("href"),
+			),
+		).toEqual([
+			"/lib/27BGDU89/download/IUA7YXN9#page=1",
+			"/lib/27BGDU89/download/IUA7YXN9#page=6",
+			"/lib/27BGDU89/download/IUA7YXN9#page=7",
+			"/lib/B88FNQ7J/download/IJEFHXHF#page=17",
+		]);
+		expect(container.textContent).toContain("[see table 2]");
+		expect(container.textContent).not.toContain("PAGE/");
+	});
+
 	it("shows the page but no citation link when the source is unknown", async () => {
 		await render("A claim from an unknown file. [PAGE notes.pdf — 3 PAGE/]");
 
