@@ -395,6 +395,10 @@ it("lists an open-access publication before a closed one of the same standing, a
     await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-14T09:00:00Z"));
     const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
     expect(edition.publications.map(({key, openAccess}) => ({key, openAccess}))).toEqual([{key: "FREEAAAA", openAccess: true}, {key: "BEHINDAA", openAccess: false}]);
+    // Its page says how many of the papers its text cites are open.
+    await client.query(`UPDATE "notificationEdition" SET title = 'Attention', summary = 'Two studies.', "publishedAt" = now(),
+      markdown = 'One [Free, 2026](/lib/FREEAAAA) and one [Behind, 2026](/lib/BEHINDAA).' WHERE id = $1`, [edition.id]);
+    expect(await getDigestEdition(db, publishedConfig, "en-GB", edition.id)).toMatchObject({cited: 2, citedOpen: 1});
   });
 }, 120_000);
 

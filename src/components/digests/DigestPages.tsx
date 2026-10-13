@@ -567,6 +567,7 @@ function UnreadShare({listed, period, n}: {listed: number; period: number | null
 /** The score's parts, as `rankPublications` adds them up. */
 const SCORE = [
   ["+3", "Published in a journal or series on the CWTS Core list, the sources behind the Leiden Ranking"],
+  ["+3", "Open access, so readers without a subscription can read it"],
   ["+2", "Ten or more references that OpenAlex matched, or +1 for one to nine"],
   ["+1", "At least one author's institution on record"],
   ["+2 × ln(1 + n)", "n citations in OpenAlex, about +5 for 10 and +9 for 100"],
@@ -621,7 +622,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
     <h3 className="font-heading text-lg font-medium">How this edition was made</h3>
     <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={FAQ_ITEM} disableAnimation={Boolean(reducedMotion)}>
       <AccordionItem key="read" aria-label="What did the AI read?" title="What did the AI read?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<>The titles and abstracts of <Em>{cut ? n(edition.read) : "all"}</Em> of the period&rsquo;s <Em>{n(edition.publicationCount)}</Em> publications. The text cites <Em>{n(edition.cited)}</Em>.</>}>
+        subtitle={<>The titles and abstracts of <Em>{cut ? n(edition.read) : "all"}</Em> of the period&rsquo;s <Em>{n(edition.publicationCount)}</Em> publications. The text cites <Em>{n(edition.cited)}</Em>{edition.cited > 0 && <>, <Em>{n(edition.citedOpen)}</Em> of them open access</>}.</>}>
         <Facts rows={readRows(edition, n)} />
       </AccordionItem>
       <AccordionItem key="order" aria-label="Why these publications, in this order?" title="Why these publications, in this order?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}

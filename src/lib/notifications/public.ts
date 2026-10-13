@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { and, count, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { readOpenAccess } from "@/lib/search-index/open-access";
 import { storedSynthesis, storedTypeOrder } from "./digest-types";
 import { citedKeys } from "./digest-text";
 import { digestPeriod, nextDigestDate, type DigestPeriod } from "./schedule";
@@ -26,7 +27,7 @@ export type DigestSummary = {slug: string; period: DigestPeriod; title: string; 
  * An edition with one page of its listed publications that are public now; `listed` can be lower than `publicationCount`.
  * `note` is the words of the person who checked it, shown above the text with their name, so only when readers are told who that is.
  */
-export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; types: EditionTypes; /** The day its publications were counted and listed, so a reader knows what came later is not in it. */ counted: string; /** How many publications the writer read: the list as it was made, before any was hidden. */ read: number; /** How many publications its text cites. */ cited: number};
+export type DigestEdition = DigestSummary & {markdown: string; note: string | null; listed: number; page: number; pages: number; keys: string[]; reviews?: DigestReviews; types: EditionTypes; /** The day its publications were counted and listed, so a reader knows what came later is not in it. */ counted: string; /** How many publications the writer read: the list as it was made, before any was hidden. */ read: number; /** How many publications its text cites. */ cited: number; /** How many of those readers can open without a subscription. */ citedOpen: number};
 /**
  * An edition's publications by study type: those listed that are public now, and every one the period had when the
  * list was made. A digest listed before types has only the first.
@@ -125,6 +126,13 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
   return rows.map(row => editionSummary(row, locale, config));
 }
 
+/** How many of these publications are open access, as their cards say. */
+async function openCount(db: Database, keys: string[]) {
+  if (!keys.length) return 0;
+  const [openAccessOf, records] = await Promise.all([readOpenAccess(db, keys), db.select({key: item.key, doi: item.DOI}).from(item).where(inArray(item.key, keys))]);
+  return records.filter(record => openAccessOf(record.key, record.doi) === true).length;
+}
+
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
   const uuid = editionId(id);
   if (!uuid) return undefined;
@@ -152,7 +160,8 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   const types = {listed: Object.fromEntries(listedTypes.map(entry => [entry.type, entry.publications])), period: row.studyTypes};
   // The list is counted and made just before the writer is asked for its text; an edition with no record of that asking has the day it was published.
   const counted = (row.requestedAt ?? row.publishedAt!).toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: config.notifications.schedule.timezone});
-  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types, counted, read: row.read, cited: citedKeys(row.markdown!).length};
+  const cited = citedKeys(row.markdown!);
+  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types, counted, read: row.read, cited: cited.length, citedOpen: await openCount(db, cited)};
   const reviews = await list(sql`AND ${storedSynthesis}`, reviewsPage);
   if (!reviews.listed) return {...edition, ...await list(sql``, page)};
   const others = await list(sql`AND NOT ${storedSynthesis}`, page);
