@@ -2,7 +2,8 @@
 
 type PdfJs = typeof import("pdfjs-dist");
 
-const THUMBNAIL_WIDTH = 360;
+// Covers show 28 to 64 px wide; this is sharp at twice that.
+const THUMBNAIL_WIDTH = 160;
 const AT_ONCE = 3;
 
 let library: Promise<PdfJs> | null = null;

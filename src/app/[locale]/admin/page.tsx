@@ -2,6 +2,7 @@ import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema"
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
+import { SWRConfig } from "swr";
 
 import { AdminNoAccess } from "@/components/admin/AdminNoAccess";
 import { AdminSessionProvider } from "@/components/admin/AdminSessionProvider";
@@ -15,7 +16,9 @@ import {
 import { ADMIN_CONTENT_PERMISSION, authorizeAdminRequest } from "@/lib/admin/access";
 import { getAdminCollectionChildrenPage } from "@/lib/admin/collection-catalog-service";
 import { ADMIN_COLLECTION_PAGE_SIZE, NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { PDF_IMPORT_KEY } from "@/lib/admin/item-import-contract";
 import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
+import { pdfImportStatus } from "@/lib/admin/pdf-import-service";
 import { ADMIN_HOME_PATH, buildAdminSignInPath } from "@/lib/runtime-routing";
 
 /** The library's source settings on OpenScholar's page for this library. */
@@ -28,13 +31,14 @@ function openScholarConfigurationHref(libraryUrl: string) {
 }
 
 /**
- * The sources and the first page of the library's own collections as the page is served, so the sidebar is whole at
- * first paint. When either cannot be read the admin still opens, and says so when it reads them again.
+ * The sources, the first page of the library's own collections and the library's PDF import as the page is served, so
+ * the sidebar and the Import button are whole at first paint. When one cannot be read the admin still opens, and reads
+ * it again.
  */
 async function sidebarWithThePage() {
 	// One promise for the database, so a library whose database cannot be reached falls back like a failed read.
 	const database = getDatabase();
-	const [initialLibrary, firstCollections] = await Promise.all([
+	const [initialLibrary, firstCollections, pdfImport] = await Promise.all([
 		database.then(getAdminLibrarySnapshot).catch((error: unknown) => {
 			console.error("The admin's sources were not read with the page", error);
 			return { sources: [] };
@@ -43,8 +47,12 @@ async function sidebarWithThePage() {
 			console.error("The admin's collections were not read with the page", error);
 			return null;
 		}),
+		database.then(pdfImportStatus).catch((error: unknown) => {
+			console.error("The admin's PDF import was not read with the page", error);
+			return null;
+		}),
 	]);
-	return { initialLibrary, firstCollections };
+	return { initialLibrary, firstCollections, pdfImport };
 }
 
 export default async function AdminPage({
@@ -81,7 +89,7 @@ export default async function AdminPage({
 		redirect(buildAdminSignInPath(query ? `${pathname}?${query}` : pathname));
 	}
 
-	const { initialLibrary, firstCollections } = await sidebarWithThePage();
+	const { initialLibrary, firstCollections, pdfImport } = await sidebarWithThePage();
 	const definitions = getZoteroSchema().itemTypes.map((definition) => ({
 		creatorTypes: definition.creatorTypes,
 		fields: definition.fields,
@@ -90,12 +98,14 @@ export default async function AdminPage({
 
 	return (
 		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image }}>
-		<AdminWorkbench
-			configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
-			definitions={definitions}
-			initialCollections={firstCollections}
-			initialLibrary={initialLibrary}
-		/>
+		<SWRConfig value={{ fallback: pdfImport ? { [PDF_IMPORT_KEY]: pdfImport } : {} }}>
+			<AdminWorkbench
+				configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
+				definitions={definitions}
+				initialCollections={firstCollections}
+				initialLibrary={initialLibrary}
+			/>
+		</SWRConfig>
 		</AdminSessionProvider>
 	);
 }

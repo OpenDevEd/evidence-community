@@ -612,7 +612,7 @@ export function previewAdminImport(
 }
 
 const PDF_IMPORT_PATH = "/api/admin/items/import/pdf";
-export const PDF_IMPORT_KEY = "admin-pdf-import";
+export { PDF_IMPORT_KEY } from "@/lib/admin/item-import-contract";
 
 /** The library's PDF import as the publication worker has read it so far. */
 export const getAdminPdfImport = () => requestJson<AdminPdfImportStatus>(PDF_IMPORT_PATH);

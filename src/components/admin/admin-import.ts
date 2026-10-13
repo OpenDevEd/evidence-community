@@ -217,14 +217,27 @@ const blankChoices = { applied: new Map(), attach: new Map(), committing: false,
  * DOI or bibliography import under review stays; the PDF import shows once
  * it ends.
  */
+// The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
+let synced = "";
+
+/** What the server says of its import, as the review takes it. */
+function fromServer(server: AdminPdfImport) {
+	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, results: server.results, rows: rowsFromImport(server) };
+}
+
+/** The server's import with no choices made on it yet. */
+const pdfBatch = (server: AdminPdfImport): ImportBatch => ({ ...blankChoices, ...fromServer(server), collections: server.collections, importId: server.id, kind: "pdfs" });
+
 function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	if (batch && batch.kind !== "pdfs") return;
+	const answer = JSON.stringify(server);
+	if (answer === synced && (server ? batch?.importId === server.id : !batch)) return;
+	synced = answer;
 	if (!server) {
 		if (batch) setBatch(null);
 		return;
 	}
-	const fromServer = { attach: new Map(Object.entries(server.attach)), checks: server.checks, results: server.results, rows: rowsFromImport(server) };
-	setBatch(batch?.importId === server.id ? { ...batch, ...fromServer } : { ...blankChoices, ...fromServer, collections: server.collections, importId: server.id, kind: "pdfs" });
+	setBatch(batch?.importId === server.id ? { ...batch, ...fromServer(server) } : pdfBatch(server));
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
@@ -254,7 +267,10 @@ function subscribe(listener: () => void) {
 }
 
 export function useImportBatch() {
-	return useSyncExternalStore(subscribe, () => batch, () => null);
+	const stored = useSyncExternalStore(subscribe, () => batch, () => null);
+	const served = usePdfImportStatus().data?.import;
+	// Until the first answer is taken in, the import as the page was served, so nothing changes size once it loads.
+	return stored ?? (served ? pdfBatch(served) : null);
 }
 
 /** The toolbar's Import button: how far the reading is while the dialog is closed, and that a review waits after. A batch holds the button at one width so the count doesn't move the toolbar. */

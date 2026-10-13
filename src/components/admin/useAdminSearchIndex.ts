@@ -108,6 +108,9 @@ function rememberLatestRevision(
 	return true;
 }
 
+/** The same answer as before, so state keeps the object it has. */
+const sameContent = (current: unknown, next: unknown) => JSON.stringify(current) === JSON.stringify(next);
+
 export function useAdminSearchIndex() {
 	const [overview, setOverview] = useState<AdminSearchIndexOverview | null>(
 		null,
@@ -120,8 +123,8 @@ export function useAdminSearchIndex() {
 	const [receiptUnavailable, setReceiptUnavailable] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [retrying, setRetrying] = useState(false);
-	const [statusRequestFailures, setStatusRequestFailures] = useState(0);
 	const receiptsRef = useRef(receipts);
+	const overviewRef = useRef<AdminSearchIndexOverview | null>(null);
 	const statusRequestFailuresRef = useRef(0);
 	const latestRevisionByEntityRef = useRef(new Map<string, number>());
 	const receiptWaitersRef = useRef(new Set<ReceiptWaiter>());
@@ -133,7 +136,8 @@ export function useAdminSearchIndex() {
 		requestRef.current?.abort();
 		const controller = new AbortController();
 		requestRef.current = controller;
-		setLoading(true);
+		// Only the first check shows as loading; a poll changes nothing on screen until its answer differs.
+		if (!overviewRef.current) setLoading(true);
 		try {
 			const tracked = new Map<string, AdminSearchIndexReceipt>(
 				receiptsRef.current.map((receipt) => [
@@ -173,7 +177,8 @@ export function useAdminSearchIndex() {
 				);
 			}
 			if (controller.signal.aborted) return;
-			setOverview(nextOverview);
+			overviewRef.current = nextOverview;
+			setOverview((current) => (sameContent(current, nextOverview) ? current : nextOverview));
 			const receivedStatuses = receiptResponses.flatMap(
 				(response) => response.receipts,
 			);
@@ -189,15 +194,13 @@ export function useAdminSearchIndex() {
 			}
 			setReceiptUnavailable(hasUnknown);
 			receiptsRef.current = remaining;
-			setReceipts(remaining);
+			setReceipts((current) => (sameContent(current, remaining) ? current : remaining));
 			statusRequestFailuresRef.current = 0;
-			setStatusRequestFailures(0);
 			setError(null);
 		} catch (caught) {
 			if (!isAbortError(caught)) {
 				const failureCount = statusRequestFailuresRef.current + 1;
 				statusRequestFailuresRef.current = failureCount;
-				setStatusRequestFailures(failureCount);
 				if (failureCount >= ADMIN_SEARCH_INDEX_STATUS_FAILURE_LIMIT) {
 					const message = errorMessage(caught);
 					setError(message);
@@ -221,24 +224,27 @@ export function useAdminSearchIndex() {
 	}, [refresh]);
 
 	const fastPolling = adminSearchIndexShouldPollFast(overview, receipts);
+	// The poll schedules its own next check, so an answer that changes nothing
+	// re-renders nothing; a change of pace starts it again at the new pace.
 	useEffect(() => {
 		if (error || receiptUnavailable) return;
-		const timer = window.setTimeout(
-			() => void refresh(),
-			fastPolling
-				? ADMIN_SEARCH_INDEX_ACTIVE_POLL_MS
-				: ADMIN_SEARCH_INDEX_IDLE_POLL_MS,
-		);
-		return () => window.clearTimeout(timer);
-	}, [
-		error,
-		fastPolling,
-		overview,
-		receiptUnavailable,
-		receipts,
-		refresh,
-		statusRequestFailures,
-	]);
+		let timer = 0;
+		let stopped = false;
+		const schedule = () => {
+			if (stopped) return;
+			timer = window.setTimeout(
+				() => void refresh().then(schedule),
+				fastPolling
+					? ADMIN_SEARCH_INDEX_ACTIVE_POLL_MS
+					: ADMIN_SEARCH_INDEX_IDLE_POLL_MS,
+			);
+		};
+		schedule();
+		return () => {
+			stopped = true;
+			window.clearTimeout(timer);
+		};
+	}, [error, fastPolling, receiptUnavailable, refresh]);
 
 	const queueReceipts = useCallback(
 		(incoming: readonly AdminSearchIndexReceipt[]) => {

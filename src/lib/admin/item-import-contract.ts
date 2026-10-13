@@ -185,6 +185,9 @@ export type AdminPdfImport = {
 	results: AdminImportCommitResult[] | null;
 };
 
+/** Where the admin keeps the import's status, also filled by the page as it is served. */
+export const PDF_IMPORT_KEY = "admin-pdf-import";
+
 export type AdminPdfImportStatus = {
 	import: AdminPdfImport | null;
 	/** The checks and instructions of the import before, which a new one starts from. */
