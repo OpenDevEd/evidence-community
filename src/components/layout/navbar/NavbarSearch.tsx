@@ -250,7 +250,7 @@ export default function NavbarSearch() {
 		searchDraft?.source === params.search
 			? searchDraft.value
 			: params.search;
-	const [debounceSearch] = useDebounce(
+	const [debounceSearch, , , searchNow] = useDebounce(
 		(value: string) => setParams({ search: value, page: 1 }),
 		250,
 	);
@@ -381,6 +381,8 @@ export default function NavbarSearch() {
 			setHighlight((h) => Math.max(h - 1, -1));
 		} else if (event.key === "Enter") {
 			event.preventDefault();
+			// What was typed is the search from here on, whatever its wait had left.
+			searchNow();
 			if (highlight >= 0 && results[highlight]) {
 				goToItem(results[highlight].key);
 			} else {

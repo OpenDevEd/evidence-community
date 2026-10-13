@@ -70,7 +70,7 @@ export function SearchBar({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, , cancelSearch] = useDebounce(
+	const [debouncedSearch, , cancelSearch, searchNow] = useDebounce(
 		handleSearchChange,
 		300,
 	);
@@ -102,12 +102,16 @@ export function SearchBar({
 			baseRef={baseRef}
 			autoCorrect="off"
 			onKeyDown={(event) => {
-				if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) {
+				if (event.key !== "Enter") return;
+				if (!(event.metaKey || event.ctrlKey)) {
+					// Searched at once: what the page acts on next, such as Open in OpenScholar, is what was typed.
+					searchNow();
 					return;
 				}
 				event.preventDefault();
 				ask();
 			}}
+			onBlur={searchNow}
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;
