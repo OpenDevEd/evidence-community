@@ -37,7 +37,7 @@ function criteriaFrom(value: FormDataEntryValue | null) {
 
 function guidanceFrom(value: FormDataEntryValue | null) {
 	const guidance = typeof value === "string" ? value.trim() : "";
-	if (guidance.length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new AdminValidationError(`Keep the guidance under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters.`);
+	if (guidance.length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new AdminValidationError(`Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`);
 	return guidance;
 }
 

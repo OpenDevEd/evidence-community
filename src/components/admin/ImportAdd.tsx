@@ -1,19 +1,18 @@
 "use client";
 
-import { AlertCircleIcon, ArrowDown01Icon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import { Textarea } from "@/components/nextui/Textarea";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_GUIDANCE_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
+import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
-import { ChecksEditor, DropArea, megabytes, PDF_ACCEPT, RemoveButton, withNew } from "./ImportInputs";
+import { DropArea, ListEditor, megabytes, PDF_ACCEPT, RemoveButton, withNew } from "./ImportInputs";
 import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
 import { adminPanelTabState } from "./admin-tab-styles";
@@ -87,36 +86,80 @@ function Setting({ children, icon, summary, title }: { children: ReactNode; icon
 	);
 }
 
-const GUIDANCE_EXAMPLE = ["Write in British English.", "Don't copy the PDF's abstract. Write three sentences for a policy reader instead.", "Give the organisation's full name as the author, not its acronym."].join("\n");
+const MAX_INSTRUCTIONS = 12;
+const MAX_INSTRUCTION_LENGTH = 400;
 
-/** Free text the AI follows when it reads every PDF: language, how to write the abstract, anything the checks don't cover. */
-function GuidanceEditor({ flow }: { flow: ImportFlowState }) {
-	const length = flow.guidance.trim().length;
+/** Instructions libraries often give, one press from the list. */
+const SUGGESTED_INSTRUCTIONS = [
+	{ label: "British English", text: "Write in British English." },
+	{ label: "Write our own abstract", text: "Don't copy the PDF's abstract. Write three sentences for a policy reader instead." },
+	{ label: "Organisations in full", text: "Give an organisation's full name as the author, not its acronym." },
+	{ label: "Sentence-case titles", text: "Write titles in sentence case." },
+];
+
+/** The library's instructions for the AI, one per row, saved as lines of text. */
+const instructionsOf = (guidance: string) => (guidance ? guidance.split("\n") : []);
+
+function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
+	const instructions = instructionsOf(flow.guidance);
+	const save = (items: string[]) => flow.setGuidance(items.join("\n"));
+	const full = instructions.length >= MAX_INSTRUCTIONS;
+	const suggestions = SUGGESTED_INSTRUCTIONS.filter(({ text }) => !instructions.includes(text));
 	return (
 		<div>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library and sent to the AI with every PDF. Where it conflicts with how the AI works by default, the guidance wins, but it never makes the AI invent facts.</p>
-			<Textarea aria-label="Guidance for the AI" classNames={{ input: "text-sm leading-6" }} isDisabled={flow.busy} maxLength={PDF_IMPORT_MAX_GUIDANCE_LENGTH} maxRows={14} minRows={5} onValueChange={flow.setGuidance} placeholder={GUIDANCE_EXAMPLE} value={flow.guidance} />
-			<p className={`mt-1.5 h-4 text-end text-xs tabular-nums transition-opacity duration-200 ${length > PDF_IMPORT_MAX_GUIDANCE_LENGTH * 0.8 ? "text-black/50 dark:text-white/50" : "opacity-0"}`}>
-				{length} of {PDF_IMPORT_MAX_GUIDANCE_LENGTH}
-			</p>
+			<ListEditor
+				addLabel="Add an instruction"
+				busy={flow.busy}
+				intro="Saved for this library and given to the AI with every PDF it reads. They win over how it works by default, but never make it invent facts."
+				itemLabel="Instruction"
+				items={instructions}
+				max={MAX_INSTRUCTIONS}
+				maxLength={MAX_INSTRUCTION_LENGTH}
+				onChange={save}
+			/>
+			{suggestions.length && !full ? (
+				<div className="mt-3 flex flex-wrap items-center gap-1.5 ps-2">
+					{suggestions.map((suggestion) => (
+						<button
+							className="flex h-7 items-center gap-1 rounded-lg bg-black/[0.05] pe-2.5 ps-2 text-xs font-medium text-black/65 outline-none transition-colors hover:bg-black/[0.08] hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50 dark:bg-white/[0.07] dark:text-white/65 dark:hover:bg-white/[0.1] dark:hover:text-white/85"
+							disabled={flow.busy}
+							key={suggestion.text}
+							onClick={() => save([...instructions.filter((item) => item.trim()), suggestion.text])}
+							type="button"
+						>
+							<HugeiconsIcon aria-hidden className="text-black/40 dark:text-white/40" icon={Add01Icon} size={12} />
+							{suggestion.label}
+						</button>
+					))}
+				</div>
+			) : null}
 		</div>
 	);
 }
 
 /** The settings an editor keeps changing, at the top: what the AI checks and follows for PDFs, and where the drafts go. */
 function Settings({ flow }: { flow: ImportFlowState }) {
-	const guidance = flow.guidance.trim();
+	const instructions = instructionsOf(flow.guidance).filter((item) => item.trim()).length;
 	return (
 		<div className="shrink-0 divide-y divide-black/[0.05] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.06] dark:bg-white/[0.035]">
 			{flow.kind === "pdfs" ? (
 				<>
-					<Setting icon={CheckListIcon} summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} for every PDF`} title="Checks">
-						<ChecksEditor busy={flow.busy} criteria={flow.checks} onChange={flow.setChecks} />
+					<Setting icon={CheckListIcon} summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} on every file`} title="AI checks">
+						<ListEditor
+							addLabel="Add a check"
+							busy={flow.busy}
+							intro={`Saved for this library, up to ${PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on.`}
+							itemLabel="Check"
+							items={flow.checks}
+							max={PDF_IMPORT_MAX_CRITERIA}
+							maxLength={PDF_IMPORT_MAX_CRITERION_LENGTH}
+							onChange={flow.setChecks}
+						/>
 						<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">Also checked in every PDF, from how the file was exported</p>
 						<FileChecksList />
 					</Setting>
-					<Setting icon={NoteEditIcon} summary={guidance ? guidance.split("\n")[0]! : "None yet"} title="Guidance">
-						<GuidanceEditor flow={flow} />
+					<Setting icon={NoteEditIcon} summary={instructions ? `${instructions} ${instructions === 1 ? "instruction" : "instructions"}` : "None yet"} title="AI instructions">
+						<InstructionsEditor flow={flow} />
 					</Setting>
 				</>
 			) : null}
@@ -251,6 +294,35 @@ function FileUpload({ flow }: { flow: ImportFlowState }) {
 				onFiles={(chosen) => flow.setFiles(withNew(flow.files, chosen))}
 				what={count ? "more files" : "bibliography files"}
 			/>
+		</>
+	);
+}
+
+/** Choose PDFs or bibliography files from the footer, beside the button that reads them. */
+export function UploadButton({ flow }: { flow: ImportFlowState }) {
+	const input = useRef<HTMLInputElement>(null);
+	if (flow.kind === "dois") return null;
+	const pdfs = flow.kind === "pdfs";
+	return (
+		<>
+			<input
+				accept={pdfs ? PDF_ACCEPT : ADMIN_IMPORT_FILE_EXTENSIONS}
+				aria-hidden
+				className="hidden"
+				multiple
+				onChange={(event) => {
+					const chosen = Array.from(event.currentTarget.files ?? []);
+					if (pdfs) flow.setPdfs(withNew(flow.pdfs, chosen));
+					else flow.setFiles(withNew(flow.files, chosen));
+					event.currentTarget.value = "";
+				}}
+				ref={input}
+				tabIndex={-1}
+				type="file"
+			/>
+			<Button className="shrink-0" isDisabled={flow.busy} onPress={() => input.current?.click()} size="sm" startContent={<HugeiconsIcon aria-hidden icon={Upload04Icon} size={15} />} variant="muted">
+				{pdfs ? "Upload PDFs" : "Upload files"}
+			</Button>
 		</>
 	);
 }

@@ -131,7 +131,8 @@ export function useResolvedAdminCollections(
 		}),
 		error: current ? resolution.error : false,
 		keySet,
-		loading: stableKeys.some((key) => known(key) === undefined),
+		// Pending only until this selection's lookup has answered, even when some keys failed.
+		loading: !current && stableKeys.some((key) => known(key) === undefined),
 		retry,
 		stableKeys,
 	};

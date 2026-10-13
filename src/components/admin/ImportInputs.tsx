@@ -6,10 +6,6 @@ import { useState, type DragEvent, type KeyboardEvent, type ReactNode } from "re
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import {
-	PDF_IMPORT_MAX_CRITERIA,
-	PDF_IMPORT_MAX_CRITERION_LENGTH,
-} from "@/lib/admin/item-import-contract";
 
 
 export const PDF_ACCEPT = "application/pdf,.pdf";
@@ -91,6 +87,7 @@ function GrowingText({
 	className,
 	disabled,
 	label,
+	maxLength,
 	onBlur,
 	onChange,
 	onKeyDown,
@@ -100,6 +97,7 @@ function GrowingText({
 	className: string;
 	disabled: boolean;
 	label: string;
+	maxLength: number;
 	onBlur: () => void;
 	onChange: (value: string) => void;
 	onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -116,7 +114,7 @@ function GrowingText({
 				aria-label={label}
 				className={`${shared} ${className} resize-none overflow-hidden`}
 				disabled={disabled}
-				maxLength={PDF_IMPORT_MAX_CRITERION_LENGTH}
+				maxLength={maxLength}
 				onBlur={onBlur}
 				onChange={(event) => onChange(event.target.value.replace(/\n/g, " "))}
 				onKeyDown={onKeyDown}
@@ -129,55 +127,81 @@ function GrowingText({
 }
 
 /** The library's checks, one per row, saved as they are edited. */
-export function ChecksEditor({ busy, criteria, onChange }: { busy: boolean; criteria: string[]; onChange: (criteria: string[]) => void }) {
+/**
+ * A numbered list edited in place: each row edits its item, the last row adds
+ * one, and a row left empty goes. The AI's checks and instructions both use it.
+ */
+export function ListEditor({
+	addLabel,
+	busy,
+	intro,
+	itemLabel,
+	items,
+	max,
+	maxLength,
+	onChange,
+}: {
+	addLabel: string;
+	busy: boolean;
+	intro: ReactNode;
+	/** One item's name, such as "Check", for its field's label. */
+	itemLabel: string;
+	items: string[];
+	max: number;
+	maxLength: number;
+	onChange: (items: string[]) => void;
+}) {
 	const [draft, setDraft] = useState("");
-	const full = criteria.length >= PDF_IMPORT_MAX_CRITERIA;
+	const full = items.length >= max;
 	const add = () => {
 		const text = draft.trim();
 		if (!text || full) return;
-		onChange([...criteria, text]);
+		onChange([...items, text]);
 		setDraft("");
 	};
 	const input = "min-w-0 flex-1 bg-transparent text-sm text-black/85 outline-none placeholder:text-black/40 dark:text-white/85 dark:placeholder:text-white/40";
 	const stopNewLine = (event: KeyboardEvent<HTMLTextAreaElement>) => {
 		if (event.key === "Enter") event.preventDefault();
 	};
+	const name = itemLabel.toLowerCase();
 	return (
 		<div>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library, up to {PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on.</p>
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">{intro}</p>
 			<ol className="flex flex-col">
-				{criteria.map((criterion, index) => (
-					<li className="group/check flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]" key={index}>
+				{items.map((item, index) => (
+					<li className="group/item flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2 hover:bg-black/[0.03] focus-within:bg-black/[0.03] dark:hover:bg-white/[0.04] dark:focus-within:bg-white/[0.04]" key={index}>
 						<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/40 dark:text-white/40">{index + 1}</span>
 						<GrowingText
 							className={input}
 							disabled={busy}
-							label={`Check ${index + 1}`}
+							label={`${itemLabel} ${index + 1}`}
+							maxLength={maxLength}
 							onBlur={() => {
-								if (!criterion.trim()) onChange(criteria.filter((_, other) => other !== index));
+								if (!item.trim()) onChange(items.filter((_, other) => other !== index));
 							}}
-							onChange={(value) => onChange(criteria.map((text, other) => (other === index ? value : text)))}
+							onChange={(value) => onChange(items.map((text, other) => (other === index ? value : text)))}
 							onKeyDown={stopNewLine}
-							value={criterion}
+							value={item}
 						/>
-						<span className="opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/check:opacity-100">
-							<RemoveButton busy={busy} name={`check ${index + 1}`} onPress={() => onChange(criteria.filter((_, other) => other !== index))} />
+						<span className="opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/item:opacity-100">
+							<RemoveButton busy={busy} name={`${name} ${index + 1}`} onPress={() => onChange(items.filter((_, other) => other !== index))} />
 						</span>
 					</li>
 				))}
 				<li className="flex items-start gap-2.5 rounded-lg py-1 pe-1 ps-2">
-					<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/30 dark:text-white/30">{criteria.length + 1}</span>
+					<span className="w-4 shrink-0 pt-1 text-end text-xs leading-5 tabular-nums text-black/30 dark:text-white/30">{items.length + 1}</span>
 					<GrowingText
 						className={input}
 						disabled={busy || full}
-						label="Add a check"
+						label={addLabel}
+						maxLength={maxLength}
 						onBlur={add}
 						onChange={setDraft}
 						onKeyDown={(event) => {
 							stopNewLine(event);
 							if (event.key === "Enter") add();
 						}}
-						placeholder={full ? "No room for more checks" : "Add a check"}
+						placeholder={full ? `No room for more ${name}s` : addLabel}
 						value={draft}
 					/>
 				</li>

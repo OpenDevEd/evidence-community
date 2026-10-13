@@ -32,11 +32,19 @@ const FIRST_LOAD_HEIGHT = 3 * 54;
 // back to a folder with its list already there. Cleared when collections change.
 const pages = new Map<string, CollectionPage>();
 const preloads = new Map<string, Promise<void>>();
-if (typeof window !== "undefined") window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, () => pages.clear());
+// Counts invalidations, so an answer to a request made before one is not cached after it.
+let cacheGeneration = 0;
+if (typeof window !== "undefined") {
+	window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, () => {
+		cacheGeneration += 1;
+		pages.clear();
+	});
+}
 
 const pageKey = (query: string, sourceKey: string | null, parent: string | null) => [query, sourceKey ?? "all", parent ?? "root"].join("\u0000");
 
-function storePage(key: string, page: CollectionPage) {
+function storePage(key: string, page: CollectionPage, generation: number) {
+	if (generation !== cacheGeneration) return;
 	pages.set(key, page);
 	rememberAdminCollections(page.items);
 }
@@ -45,10 +53,11 @@ function storePage(key: string, page: CollectionPage) {
 export function preloadAdminCollections(sourceConnectionKey: string) {
 	const key = pageKey("", sourceConnectionKey, null);
 	if (pages.has(key) || preloads.has(key)) return;
+	const generation = cacheGeneration;
 	preloads.set(
 		key,
 		getAdminCollectionChildren({ cursor: null, pageSize: 50, parentCollection: null, sourceConnectionKey })
-			.then((page) => storePage(key, page))
+			.then((page) => storePage(key, page, generation))
 			.catch(() => undefined)
 			.finally(() => preloads.delete(key)),
 	);
@@ -316,6 +325,10 @@ export function AdminCollectionPicker({
 	// A cached or preloaded top level opens at once; otherwise the first load is under way from the first frame.
 	const initialPage = pages.get(pageKey("", defaultSourceKey, null));
 	const [items, setItems] = useState<AdminCollectionCatalogEntry[]>(() => initialPage?.items ?? []);
+	// The list the shown rows came from; rows from another folder or search stay inert until theirs arrive.
+	const [itemsKey, setItemsKey] = useState<string | null>(() => (initialPage ? pageKey("", defaultSourceKey, null) : null));
+	// A cached page is on screen while its first page is fetched again; Load more waits for it.
+	const [refreshing, setRefreshing] = useState(false);
 	const [nextCursor, setNextCursor] = useState<string | null>(() => initialPage?.nextCursor ?? null);
 	const [loading, setLoading] = useState(() => Boolean(defaultSourceKey) && !initialPage);
 	const [loadingMore, setLoadingMore] = useState(false);
@@ -373,6 +386,7 @@ export function AdminCollectionPicker({
 			signal?: AbortSignal,
 		) => {
 			const requestContext = contextKey;
+			const generation = cacheGeneration;
 			if (!sourceKey && (!debouncedQuery || allowedSourceSet)) return;
 			const page = debouncedQuery
 				? await searchAdminCollectionCatalog(
@@ -395,8 +409,11 @@ export function AdminCollectionPicker({
 						signal,
 					);
 			if (contextKeyRef.current !== requestContext) return;
-			if (append) rememberAdminCollections(page.items);
-			else storePage(pageKey(debouncedQuery, sourceKey, activeParent), page);
+			const key = pageKey(debouncedQuery, sourceKey, activeParent);
+			if (!append) {
+				storePage(key, page, generation);
+				setItemsKey(key);
+			} else if (generation === cacheGeneration) rememberAdminCollections(page.items);
 			setItems((current) =>
 				append ? uniqueEntries(current, page.items) : page.items,
 			);
@@ -411,6 +428,7 @@ export function AdminCollectionPicker({
 		setLoadingMore(false);
 		if (!sourceKey && (!debouncedQuery || allowedSourceSet)) {
 			setItems([]);
+			setItemsKey(pageKey(debouncedQuery, sourceKey, activeParent));
 			setNextCursor(null);
 			setError(null);
 			setLoading(false);
@@ -418,9 +436,11 @@ export function AdminCollectionPicker({
 			return;
 		}
 		// A page seen before shows at once and is refreshed quietly behind it.
-		const cachedPage = pages.get(pageKey(debouncedQuery, sourceKey, activeParent));
+		const cachedKey = pageKey(debouncedQuery, sourceKey, activeParent);
+		const cachedPage = pages.get(cachedKey);
 		if (cachedPage) {
 			setItems(cachedPage.items);
+			setItemsKey(cachedKey);
 			setNextCursor(cachedPage.nextCursor);
 			setSourceSelectionPending(false);
 		}
@@ -428,6 +448,7 @@ export function AdminCollectionPicker({
 		const version = ++requestVersion.current;
 		setError(null);
 		setLoading(!cachedPage);
+		setRefreshing(Boolean(cachedPage));
 		void loadPage(null, false, controller.signal)
 			.catch((caught: unknown) => {
 				if (
@@ -443,13 +464,15 @@ export function AdminCollectionPicker({
 				setSourceSelectionPending(false);
 			})
 			.finally(() => {
-				if (version === requestVersion.current) setLoading(false);
+				if (version !== requestVersion.current) return;
+				setLoading(false);
+				setRefreshing(false);
 			});
 		return () => controller.abort();
 	}, [activeParent, allowedSourceSet, contextKey, debouncedQuery, loadPage, sourceKey]);
 
 	const loadMore = useCallback(() => {
-		if (!nextCursor || loading || loadingMore) return;
+		if (!nextCursor || loading || loadingMore || refreshing) return;
 		loadMoreController.current?.abort();
 		const controller = new AbortController();
 		const requestContext = contextKey;
@@ -472,7 +495,7 @@ export function AdminCollectionPicker({
 				if (contextKeyRef.current === requestContext)
 					setLoadingMore(false);
 			});
-	}, [contextKey, loadPage, loading, loadingMore, nextCursor]);
+	}, [contextKey, loadPage, loading, loadingMore, nextCursor, refreshing]);
 
 	// TanStack Virtual intentionally returns unstable callbacks; this component's
 	// `use no memo` directive keeps React Compiler away from the virtualizer.
@@ -486,6 +509,7 @@ export function AdminCollectionPicker({
 	// The list's height follows what it shows, so it grows and shrinks smoothly
 	// instead of jumping: the rows, a gap held for a first load, or the empty note.
 	const topLevelHeight = showTopLevel ? 44 : 0;
+	const stale = itemsKey !== pageKey(debouncedQuery, sourceKey, activeParent);
 	const listHeight = topLevelHeight + (items.length ? virtualizer.getTotalSize() : loading ? FIRST_LOAD_HEIGHT : 56);
 
 	const toggleEntry = (entry: AdminCollectionCatalogEntry) => {
@@ -709,7 +733,7 @@ export function AdminCollectionPicker({
 								error ? "pointer-events-none select-none opacity-40" : loading ? "opacity-50 delay-300" : "opacity-100"
 							}`}
 							data-admin-collection-picker-content
-							inert={error ? true : undefined}
+							inert={error || stale ? true : undefined}
 						>
 							{showTopLevel ? (
 								<button
@@ -759,7 +783,7 @@ export function AdminCollectionPicker({
 													>
 														<Button
 															isDisabled={
-																loadingMore
+																loadingMore || refreshing
 															}
 															onPress={loadMore}
 															size="xs"

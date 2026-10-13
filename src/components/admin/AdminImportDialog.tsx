@@ -15,7 +15,7 @@ import { ImportSteps } from "./ImportSteps";
 import { Abstract, CheckMeter, Checks, creatorsLine, DetailSection, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, ReviewBar, RightsFixLine, rowStatus, StatusText, TopicList, usd } from "./ImportReview";
 import { checkPasses, type ImportRow } from "./admin-import";
 import { InputNote, inSentence, NarrowPager, StageFade } from "./import-parts";
-import { ImportAdd, SourceTabs } from "./ImportAdd";
+import { ImportAdd, SourceTabs, UploadButton } from "./ImportAdd";
 import { action, CollectionsButton, useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 import { pageOf } from "./ImportPager";
 
@@ -92,9 +92,12 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 					{stage === "review" && !flow.error ? <CollectionsButton collections={flow.collections} locked={flow.locked} onChange={flow.setCollections} sources={flow.sources} /> : null}
 					<span className="ms-auto flex shrink-0 items-center gap-2">
 						{stage === "input" ? (
-							<Button className="min-w-28" color="accent" isDisabled={flow.problem !== null} isLoading={flow.busy} onPress={flow.start} size="sm" variant="solid">
-								{flow.primaryLabel}
-							</Button>
+							<>
+								<UploadButton flow={flow} />
+								<Button className="min-w-28" color="accent" isDisabled={flow.problem !== null} isLoading={flow.busy} onPress={flow.start} size="sm" variant="solid">
+									{flow.primaryLabel}
+								</Button>
+							</>
 						) : null}
 						{stage === "review" ? (
 							<>

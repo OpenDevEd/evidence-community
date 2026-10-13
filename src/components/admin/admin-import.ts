@@ -146,7 +146,7 @@ export function validateChecks(checks: readonly string[]) {
 }
 
 export function validateGuidance(guidance: string) {
-	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the guidance under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters.`);
+	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`);
 }
 
 const emptyRow = { abstractWritten: false, checks: [], costUsd: 0, fixApplied: false, pdf: null, rightsFix: null, topics: [] };
