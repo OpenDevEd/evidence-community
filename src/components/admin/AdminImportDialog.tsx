@@ -174,9 +174,9 @@ function DrawerInput({ flow }: { flow: ImportFlowState }) {
 						</DropArea>
 						{flow.pdfs.length ? <PdfRows busy={flow.busy} files={flow.pdfs} onFilesChange={flow.setPdfs} perPage={6} /> : null}
 						<div className="flex flex-col gap-1">
-							<Fold summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} from the file`} title="Checks">
+							<Fold summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} for every PDF`} title="Checks">
 								<ChecksEditor busy={flow.busy} criteria={flow.checks} onChange={flow.setChecks} />
-								<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">From the file itself, for every PDF</p>
+								<p className="mb-1 mt-4 text-xs text-black/45 dark:text-white/45">Also checked in every PDF, from how the file was exported</p>
 								<FileChecksList />
 							</Fold>
 							<Fold summary={guidance ? guidance.split("\n")[0]! : "None yet"} title="Guidance">

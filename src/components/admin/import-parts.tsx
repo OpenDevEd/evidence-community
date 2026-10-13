@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, LockIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Suspense, use, useState, type ReactNode } from "react";
 
@@ -106,13 +106,13 @@ export function PdfRows({ busy, files, onFilesChange, perPage = 6 }: { busy: boo
 	);
 }
 
-/** The checks every PDF gets from its own file, shown where the library's checks are edited. */
+/** The checks every PDF gets from how its file was exported, under the library's checks and lined up with their text. */
 export function FileChecksList() {
 	return (
 		<ul className="flex flex-col">
 			{FILE_CHECKS.map((check) => (
 				<li className="flex items-start gap-2.5 py-1 pe-1 ps-2" key={check.criterion}>
-					<HugeiconsIcon aria-label="Always checked" className="mt-1.5 w-4 shrink-0 text-black/30 dark:text-white/30" icon={LockIcon} size={12} />
+					<span aria-hidden className="w-4 shrink-0" />
 					<span className="py-1 text-sm leading-5 text-black/55 dark:text-white/55">{check.criterion}</span>
 				</li>
 			))}
