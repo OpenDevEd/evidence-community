@@ -1040,13 +1040,13 @@
     "uncertain": "haina uhakika",
     "uncertainType": {
       "label": "Haina uhakika",
-      "description": "AI ilikuwa na uhakika chini ya 60% kuhusu aina, au iliiita uchambuzi-meta au jaribio la nasibu ambalo kichwa, muhtasari na PDF havilitaji.",
+      "description": "AI ilikuwa na uhakika chini ya 60% kuhusu aina.",
       "guess": "Kisio bora: {type}"
     },
     "editor": "Imewekwa na mhariri wa maktaba hii.",
     "metadata": "Aina imetambuliwa kutoka kwenye rekodi yenyewe.",
-    "ai": "Imesomwa na <ai>AI</ai> kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, unsure {, hivyo imewekwa alama ya kutokuwa na uhakika} words {, lakini maandishi yake hayataji muundo huo, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
-    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Modeli ya AI husoma kichwa na muhtasari wake na kuchagua aina inayofaa zaidi kati ya hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Aina mbili zinapofaa, mapitio ya kimfumo yanayounganisha matokeo yake kitakwimu huhesabiwa kuwa uchambuzi-meta, na utafiti unaoongeza takwimu kwenye mahojiano au uchunguzi kifani huhesabiwa kuwa wa kiubora. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Aina haina uhakika modeli inapokuwa na uhakika chini ya 60%, au uchambuzi-meta au jaribio la nasibu lisipotaja muundo huo kwenye kichwa, muhtasari wala PDF; aina isiyo na uhakika husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo. Mhariri anaweza kusahihisha aina yoyote. Kuchagua aina kadhaa huonyesha rekodi za yoyote kati yake.",
+    "ai": "Imesomwa na <ai>AI</ai> kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, yes {, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
+    "method": "Aina ya kila rekodi husomwa inapoingia kwenye maktaba. Modeli ya AI husoma kichwa na muhtasari wake na kuchagua aina inayofaa zaidi kati ya hizi; rekodi isiyo na muhtasari hupimwa kwa kichwa chake. Aina mbili zinapofaa, mapitio ya kimfumo yanayounganisha matokeo yake kitakwimu huhesabiwa kuwa uchambuzi-meta, na utafiti unaoongeza takwimu kwenye mahojiano au uchunguzi kifani huhesabiwa kuwa wa kiubora. Seti za data, programu, masahihisho na itifaki zilizosajiliwa hutambuliwa kutoka kwenye rekodi yenyewe, bila AI. Modeli hupewa chaguo la uchambuzi-meta au jaribio la nasibu tu ikiwa kichwa, muhtasari au PDF inasema hivyo. Aina ambayo modeli ina uhakika nayo chini ya 60% huwekwa alama ya kutokuwa na uhakika, na husomwa tena kutoka kwenye PDF mara rekodi inapokuwa nayo. Mhariri anaweza kusahihisha aina yoyote. Kuchagua aina kadhaa huonyesha rekodi za yoyote kati yake.",
     "levels": {
       "synthesis": "Mapitio na usanisi",
       "primary": "Tafiti za msingi",
@@ -1062,7 +1062,7 @@
       "meta-analysis": {
         "label": "Uchambuzi-meta",
         "plural": "Uchambuzi-meta",
-        "description": "Waandishi wenyewe huunganisha kitakwimu matokeo ya tafiti kadhaa za awali. Kunukuu matokeo yaliyounganishwa na mtu mwingine hakuhesabiki. Haina uhakika ikiwa kichwa, muhtasari au PDF haikitaji.",
+        "description": "Waandishi wenyewe huunganisha kitakwimu matokeo ya tafiti kadhaa za awali. Kunukuu matokeo yaliyounganishwa na mtu mwingine hakuhesabiki. Hutolewa tu ikiwa kichwa, muhtasari au PDF inasema hivyo.",
         "not": "Si mapitio yanayonukuu matokeo yaliyounganishwa na wengine au yasiyounganisha kabisa; hayo ni mapitio ya kimfumo."
       },
       "systematic-review": {
@@ -1086,7 +1086,7 @@
       "rct": {
         "label": "Jaribio la nasibu",
         "plural": "Majaribio ya nasibu",
-        "description": "Washiriki, vikundi au maeneo yaligawiwa kwa hali mbalimbali kwa nasibu. Haina uhakika ikiwa kichwa, muhtasari au PDF haikitaji.",
+        "description": "Washiriki, vikundi au maeneo yaligawiwa kwa hali mbalimbali kwa nasibu. Hutolewa tu ikiwa kichwa, muhtasari au PDF inasema hivyo.",
         "not": "Si ulinganisho usio na ugawaji wa nasibu (huo ni jaribio-nusu), wala mapitio ya majaribio."
       },
       "quasi-experiment": {

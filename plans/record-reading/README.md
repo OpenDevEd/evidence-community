@@ -52,12 +52,15 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
     planned and PR #603 closed unmerged.
 - Readers never see the model's name: copy says "an AI model". (The user,
   2026-10-13.)
-- A meta-analysis or randomised trial call needs its words: the title,
-  abstract or PDF text must name the design, or the type is uncertain.
-  Björn's rule (2026-10-13): mentioning the words does not make a record one,
-  but their absence means it is not. On the PubMed-indexed records it cut
-  wrong trial calls from 117 to 33 and wrong meta-analysis calls from 15 to 6,
-  losing 10 real trials and 1 meta-analysis.
+- Meta-analysis and randomised trial are offered to the AI only when the
+  title, abstract or PDF opening has their words. Björn's rule (2026-10-13):
+  mentioning the words does not make a record one, but their absence means it
+  is not, so string match, then AI. On the PubMed-indexed records it cut wrong
+  trial calls from 117 to 33 and wrong meta-analysis calls from 15 to 6, losing
+  10 real trials and 1 meta-analysis. Earlier calls without the words are asked
+  again without the type. Systematic reviews are left to the AI: they name
+  themselves too many ways. (The user, 2026-10-13: fix the tagging, not how
+  the result is shown.)
 - How readers see an uncertain type is the library's choice
   (`filters.uncertainStudyTypes`): marked beside its type, the default, or
   apart as an Uncertain type with the AI's best guess. (The user,

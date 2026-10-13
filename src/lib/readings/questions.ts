@@ -5,6 +5,8 @@ import { STUDY_TYPES, STUDY_TYPE_KEYS, type StudyTypeKey } from "./study-types";
 /**
  * Goes up whenever a question or its options change. A record read with an older set is read again with the new one
  * when it changes or when its owner asks; until then it counts as not read, so the spend is the owner's to start.
+ * Leaving out the types a record's words rule out did not raise it: only a record whose answer was one of them answers
+ * differently, and those are asked again on their own.
  */
 export const QUESTION_SET = 1;
 
@@ -32,11 +34,11 @@ const GRADE_CRITERIA: Record<ScreeningGrade, string> = {
 };
 
 /**
- * What one read asks. `type` asks the study type, unless the record's own metadata says it; `details` asks whether
- * the authors pooled results, the region and whether the abstract reports numbers; `subjects` holds the subject of
- * each screening source the record is graded for, in order.
+ * What one read asks. `type` asks the study type, unless the record's own metadata says it, without the types its words
+ * rule out; `details` asks whether the authors pooled results, the region and whether the abstract reports numbers;
+ * `subjects` holds the subject of each screening source the record is graded for, in order.
  */
-export type ReadingAsk = { type: boolean; details: boolean; subjects: string[] };
+export type ReadingAsk = { type: boolean; ruledOut?: readonly StudyTypeKey[]; details: boolean; subjects: string[] };
 
 type Question =
 	| { type: "choice"; instructions: string; criteria: Record<string, string> }
@@ -48,7 +50,7 @@ export function readingQuestions(ask: ReadingAsk): Record<string, Question> {
 	if (ask.type) questions.type = {
 		type: "choice",
 		instructions: `What kind of work is this, going by its title, its abstract and, when given, the opening of its full text? Judge what the authors did in this work, not what they cite.${UNTRUSTED}`,
-		criteria: Object.fromEntries(STUDY_TYPES.map((type) => [type.key, type.criterion])),
+		criteria: Object.fromEntries(STUDY_TYPES.filter((type) => !ask.ruledOut?.includes(type.key)).map((type) => [type.key, type.criterion])),
 	};
 	if (ask.details) {
 		questions.pooled = {

@@ -6,16 +6,16 @@ import type { ReactNode } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Hint } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { UNCERTAIN, studyType, type StudyReading, type StudyTypeKey, type Uncertainty } from "@/lib/readings/study-types";
+import { SURE, UNCERTAIN, studyType, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { twMerge } from "@/lib/tw-merge";
 
 const ICONS = { ai: AiMagicIcon, metadata: Database02Icon, editor: UserEdit01Icon } as const;
 
 /** How the type was set: by an editor, from the record itself, or read by AI and how surely, the AI mark before the word. */
-function howTyped(t: ReturnType<typeof useTranslations>, reading: StudyReading, uncertain: Uncertainty | undefined): ReactNode {
+function howTyped(t: ReturnType<typeof useTranslations>, reading: StudyReading, uncertain: boolean): ReactNode {
 	if (reading.by !== "ai") return t(reading.by);
 	return t.rich("ai", {
-		input: reading.input, percent: Math.round(reading.confidence * 100), uncertain: uncertain ?? "no",
+		input: reading.input, percent: Math.round(reading.confidence * 100), uncertain: uncertain ? "yes" : "no",
 		ai: (word) => <span className="whitespace-nowrap"><HugeiconsIcon icon={AiMagicIcon} className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />{word}</span>,
 	});
 }
@@ -25,7 +25,7 @@ export const STUDY_TYPE_TIP = "max-w-80 p-3 text-sm";
 
 /**
  * What a study type means and what it is not, by name, and on a record how it was read. The Uncertain type of a library
- * that shows uncertain types apart says why a type is uncertain, and on a record the AI's best guess.
+ * that shows uncertain types apart says what that means, and on a record the AI's best guess.
  */
 export function StudyTypeExplanation({ type, guess, how }: { type: StudyTypeKey | typeof UNCERTAIN; guess?: StudyTypeKey; how?: ReactNode }) {
 	const t = useTranslations("studyTypes");
@@ -60,8 +60,8 @@ export function StudyTypeLabel({ reading, className }: { reading: StudyReading |
 	const { filters } = useLibraryConfig();
 	const type = reading && studyType(reading.type);
 	if (!reading || !type) return null;
-	const uncertain = reading.by === "ai" ? reading.uncertain : undefined;
-	const apart = Boolean(uncertain) && filters.uncertainStudyTypes === "separate";
+	const uncertain = reading.by === "ai" && reading.confidence < SURE;
+	const apart = uncertain && filters.uncertainStudyTypes === "separate";
 	const how = howTyped(t, reading, uncertain);
 	return (
 		<Hint

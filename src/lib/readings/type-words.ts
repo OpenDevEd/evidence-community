@@ -4,20 +4,17 @@ import type { StudyTypeKey } from "./study-types";
 const JOIN = "[-\\u2010\\u2011\\u2012\\u2013\\s]?";
 
 /**
- * The words a call of these types needs in the record's text before it stands. A paper that is a meta-analysis or a
- * randomised trial says so, in English or the libraries' other languages; one that only mentions them may still not be
- * one, which the reading decides. Without the words, the call is uncertain.
+ * The words a record of these types has in its text, in English or the libraries' other languages. A meta-analysis or
+ * a randomised trial says what it is, so a record without the words is not one. A record that has them may only
+ * mention the design, which the AI decides.
  */
-const TYPE_WORDS: Partial<Record<StudyTypeKey, RegExp>> = {
-	"meta-analysis": new RegExp(`m[eé]ta${JOIN}a?n[aá]l[iy][st]|meta${JOIN}分析|荟萃分析|元分析|تحليل تلوي|मेटा${JOIN}विश्लेषण|uchambuzi${JOIN}meta`, "iu"),
-	rct: /randomi[sz]|\bRCTs?\b|random(ly)? (assign|allocat)|aleatori[sz]ad|随机|عشوائي|यादृच्छिक|nasibu/iu,
-};
+const TYPE_WORDS = {
+	"meta-analysis": new RegExp(`m[eé]ta${JOIN}a?n[aá]l[iy][st]|meta${JOIN}分析|荟萃分析|元分析|تحليل\\S*\\s+(ال)?تلوي|मेटा${JOIN}विश्लेषण|uchambuzi${JOIN}meta`, "iu"),
+	rct: /randomi[sz]|\bRCTs?\b|random(ly)? (assign|allocat)|aleatori[sz]ad|随机|عشوائي|معش[اّ]|यादृच्छिक|nasibu/iu,
+} satisfies Partial<Record<StudyTypeKey, RegExp>>;
 
-/** Whether calls of this type need their words in the record's text. */
-export const typeNeedsWords = (type: StudyTypeKey) => type in TYPE_WORDS;
-
-/** Whether the record's title, abstract or PDF text has the words its type needs; null for a type that needs none. */
-export function typeWordsFound(type: StudyTypeKey, text: { title: string; abstract: string; pdf: string }) {
-	const words = TYPE_WORDS[type];
-	return words ? words.test(`${text.title}\n${text.abstract}\n${text.pdf}`) : null;
+/** The types whose words the record's title, whole abstract and PDF opening lack, so the AI is not offered them. */
+export function ruledOutTypes(text: { title: string; abstract: string; pdf: string }): StudyTypeKey[] {
+	const words = `${text.title}\n${text.abstract}\n${text.pdf}`;
+	return (Object.keys(TYPE_WORDS) as (keyof typeof TYPE_WORDS)[]).filter((type) => !TYPE_WORDS[type].test(words));
 }
