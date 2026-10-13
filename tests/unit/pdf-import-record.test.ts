@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { zoteroItemFrom, type ReadRecord } from "@/lib/admin/pdf-import-record";
 
 const read: ReadRecord = {
-	countries: ["my", "CN", "XX"],
 	creators: [
 		{ affiliations: ["Universiti Sains Malaysia", " ", "Universiti Sains Malaysia"], creatorType: "author", firstName: "Wenxuan", lastName: "Wang", profileId: "profile_1" },
 		{ affiliations: [], creatorType: "author", firstName: "Yan", lastName: "Peng", profileId: "profile_invented" },
@@ -21,7 +20,7 @@ const read: ReadRecord = {
 
 describe("a record read from a PDF", () => {
 	it("keeps each author's affiliations, and a profile only when a search found it", () => {
-		const item = zoteroItemFrom(read, { cites: [], countries: null, profiles: new Set(["profile_1"]) });
+		const item = zoteroItemFrom(read, { cites: [], profiles: new Set(["profile_1"]) });
 		expect(item.creators).toEqual([
 			{ authorProfileId: "profile_1", creatorType: "author", firstName: "Wenxuan", institutions: [{ display_name: "Universiti Sains Malaysia" }], lastName: "Wang" },
 			{ creatorType: "author", firstName: "Yan", lastName: "Peng" },
@@ -29,24 +28,19 @@ describe("a record read from a PDF", () => {
 	});
 
 	it("takes the PDF's keywords as tags and links the records it cites", () => {
-		const item = zoteroItemFrom(read, { cites: ["ABCD2345"], countries: null, profiles: new Set() });
+		const item = zoteroItemFrom(read, { cites: ["ABCD2345"], profiles: new Set() });
 		expect(item.tags).toEqual([{ tag: "personalized feedback" }]);
 		expect(item.links).toEqual({ cites: ["ABCD2345"] });
 	});
 
 	it("keeps only the fields its type has", () => {
-		const item = zoteroItemFrom(read, { cites: [], countries: null, profiles: new Set() });
+		const item = zoteroItemFrom(read, { cites: [], profiles: new Set() });
 		expect(item).toMatchObject({ itemType: "journalArticle", language: "en", publicationTitle: "Journal of Educational Computing Research", rights: "© The Author(s) 2025" });
 		expect(item).not.toHaveProperty("reportNumber");
 		expect(item).not.toHaveProperty("links");
 	});
 
-	it("keeps the countries the library knows, and only when it keeps a country focus", () => {
-		expect(zoteroItemFrom(read, { cites: [], countries: new Set(["CN", "MY"]), profiles: new Set() }).countryFocus).toEqual(["MY", "CN"]);
-		expect(zoteroItemFrom(read, { cites: [], countries: null, profiles: new Set() })).not.toHaveProperty("countryFocus");
-	});
-
 	it("files a type it doesn't know as a document", () => {
-		expect(zoteroItemFrom({ ...read, itemType: "blogPostAboutCats" }, { cites: [], countries: null, profiles: new Set() }).itemType).toBe("document");
+		expect(zoteroItemFrom({ ...read, itemType: "blogPostAboutCats" }, { cites: [], profiles: new Set() }).itemType).toBe("document");
 	});
 });

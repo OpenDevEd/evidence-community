@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, EarthIcon, FileEditIcon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -11,7 +11,6 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
 import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, SuggestionList, TagList, TopicList } from "./ImportReview";
-import { countryFocusNames } from "@/lib/country-focus";
 
 import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, recordPayload, rowPasses, type ImportRow, type ReviewFilter } from "./admin-import";
@@ -147,7 +146,6 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 	const affiliated = creators.filter(({ institutions }) => institutions?.length).length;
 	const linked = creators.filter(({ authorProfileId }) => authorProfileId).length;
 	const tags = Array.isArray(edited.tags) ? (edited.tags as string[]) : [];
-	const countries = Array.isArray(edited.countryFocus) ? (edited.countryFocus as string[]).map((code) => countryFocusNames[code] ?? code) : [];
 	const settled = row.state === "read" || row.state === "failed";
 	const checks = flow.checksOf(row);
 	const result = flow.resultById.get(row.id);
@@ -219,11 +217,6 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 						{tags.length ? (
 							<Setting icon={HashtagIcon} summary={`${tags.length} ${tags.length === 1 ? "keyword" : "keywords"}`} title="Tags">
 								<TagList tags={tags} />
-							</Setting>
-						) : null}
-						{countries.length ? (
-							<Setting icon={EarthIcon} summary={countries.join(", ")} title="Countries">
-								<TagList tags={countries} />
 							</Setting>
 						) : null}
 						{row.cites.length ? (

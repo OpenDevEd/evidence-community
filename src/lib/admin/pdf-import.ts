@@ -10,7 +10,6 @@ import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { openRouterCacheBreakpoint } from "@/lib/ai/openrouter";
 import { createResearchTools } from "@/lib/ai/tools";
 import { searchAuthorProfiles } from "@/lib/authors/catalog-search";
-import { COUNTRIES } from "@/constants/misc";
 import { normalizeDoi } from "@/lib/doi";
 import { existingItemKeys } from "@/lib/links/item-links";
 import { readPublicTopicCatalog, resolveTopicNodes } from "@/lib/topics/catalog";
@@ -27,7 +26,7 @@ const INSTRUCTIONS = [
 	"Read the whole PDF, including the cover, front matter, acknowledgements and back cover. The file's own properties are given too: its document metadata, whether it is tagged for screen readers, and the PDF/A and PDF/UA parts it claims.",
 	"The record holds what the PDF states, copied as it is, and nothing else. Choose its type, then go through every field of that type in the list, one by one, and give each one the PDF states anywhere: the cover, the running header and footer, the first page, the copyright page and the end matter. Each field's meaning follows its name in brackets, such as a report's institution being the organisation that published it.",
 	"What the text itself shows counts as stated: its language, as a language tag such as en; its copyright or licence line, word for word, as its rights; and the journal or series, volume, issue, pages, ISSN, ISBN and publisher as printed. The abstract is the abstract or summary section the PDF prints, copied as it is; when it prints neither, the record's abstract stays empty. Never invent a DOI, ISBN, date or author.",
-	"Give each author's affiliations as the PDF prints them, the keywords the PDF lists as the record's tags, and the countries the work studies or is about, as two-letter ISO codes, from the whole PDF; none for a work about no particular country.",
+	"Give each author's affiliations as the PDF prints them, and the keywords the PDF lists as the record's tags.",
 	"For each check, answer met, not_met or unclear. Quote the exact words that decide it and give the page number in the PDF viewer (1 is the first page). When it is not met or unclear, say what the publisher should add or change in the PDF.",
 	"Everything the record should say beyond or instead of what the PDF states is a suggested change, never part of the record. A change the library's instructions ask for, such as an abstract written for its readers, is marked to apply. Your own recommendation for the editor is left unapplied. Suggest only a value you know is right from the PDF, the library's instructions or its checks; when you would have to guess, such as a licence the PDF doesn't state, suggest nothing. Never suggest a placeholder or a note. List only the failed checks a change would make pass, and give a short reason for each change.",
 	"List every work in its reference list, with its DOI as printed when it has one.",
@@ -61,7 +60,6 @@ const readingSchema = z.object({
 		),
 		fields: z.array(z.object({ field: z.string(), value: z.string() })).describe("The type's other fields the PDF states, by their names in the list"),
 		tags: z.array(z.string()).describe("The keywords the PDF lists"),
-		countries: z.array(z.string()).describe("Two-letter ISO codes of the countries the work studies or is about"),
 	}),
 	references: z.array(z.object({ doi: z.string().describe("Its DOI as the PDF prints it, or empty"), title: z.string() })).describe("Every work in its reference list"),
 	checks: z.array(
@@ -191,7 +189,7 @@ export async function readImportPdf(
 	});
 	const { checks: answers, record, references, suggestions, topics } = result.output;
 	const cites = await citedRecords(database, references);
-	const zoteroItem = zoteroItemFrom(record, { cites: cites.map(({ key }) => key), countries: config.features.countryFocus ? new Set(Object.keys(COUNTRIES)) : null, profiles: profilesFound });
+	const zoteroItem = zoteroItemFrom(record, { cites: cites.map(({ key }) => key), profiles: profilesFound });
 	const fields = new Set(describeZoteroItemTypeFields(String(zoteroItem.itemType)).map(({ field }) => field));
 	const byNumber = new Map(answers.map((answer) => [answer.number, answer]));
 	const found = config.topics.enabled ? await resolveTopicNodes(topics.map(({ id }) => id), topicContext, { allowUnknown: true }) : [];
