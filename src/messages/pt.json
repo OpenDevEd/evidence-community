@@ -1039,8 +1039,8 @@
     "uncertain": "incerto",
     "editor": "Definido por um editor desta biblioteca.",
     "metadata": "Tipo obtido do próprio registro.",
-    "ai": "Lido por Jev a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
-    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Jev, um classificador de IA, lê o título e o resumo e escolhe um destes tipos; um registro sem resumo é avaliado pelo título. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza de Jev é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo.",
+    "ai": "Lido por um modelo de IA a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
+    "method": "O tipo de cada registro é lido quando ele entra na biblioteca. Um modelo de IA lê o título e o resumo e escolhe o tipo que melhor se encaixa; um registro sem resumo é avaliado pelo título. Quando dois tipos servem, uma revisão sistemática que combina estatisticamente seus resultados conta como meta-análise, e um estudo que acrescenta números a entrevistas ou estudos de caso conta como qualitativo. Conjuntos de dados, software, correções e protocolos registrados são classificados a partir do próprio registro, sem IA. Um tipo com menos de 60% de certeza do modelo é marcado como incerto e lido novamente a partir do PDF quando o registro tiver um. Um editor pode corrigir qualquer tipo. Escolher vários tipos mostra os registros de qualquer um deles.",
     "levels": {
       "synthesis": "Revisões e sínteses",
       "primary": "Estudos primários",
@@ -1063,8 +1063,8 @@
         "description": "Resume estudos anteriores encontrados com uma busca e critérios de inclusão declarados, sem combinar os resultados. Inclui revisões de escopo e revisões rápidas."
       },
       "literature-review": {
-        "label": "Revisão de literatura",
-        "plural": "Outras revisões de literatura",
+        "label": "Revisão narrativa",
+        "plural": "Revisões narrativas",
         "description": "Uma revisão narrativa, crítica ou integrativa sem método de busca declarado."
       },
       "bibliometric": {
@@ -1109,7 +1109,7 @@
       },
       "not-research": {
         "label": "Não é um artigo de pesquisa",
-        "plural": "Não são artigos de pesquisa",
+        "plural": "Outros",
         "description": "Um conjunto de dados, software, correção, resenha de livro ou arquivo que acompanha outro artigo."
       }
     }

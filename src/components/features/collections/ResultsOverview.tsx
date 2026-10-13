@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
-import { useId, useRef, useState, useSyncExternalStore } from "react";
+import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -12,6 +12,8 @@ import { Button } from "@/components/nextui/Button";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import { STUDY_LEVELS, STUDY_TYPES } from "@/lib/readings/study-types";
 import { studyTone } from "@/components/features/items/study-tone";
+import { STUDY_TYPE_TIP, StudyTypeExplanation } from "@/components/features/items/StudyTypeLabel";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import useSWR from "swr";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
@@ -229,25 +231,25 @@ function YearBars({ counts, range, onRangeChange }: { counts: Record<string, num
 const toneOf = (index: number) => RAMP[Math.min(index, RAMP.length - 1)];
 
 /** One type: its swatch, name, share and count; choosing it filters the results. */
-function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect }: { label: string; count: number; total: number; tone: string; chosen: boolean; dimmed: boolean; onSelect: () => void }) {
+function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect, hint }: { label: string; count: number; total: number; tone: string; chosen: boolean; dimmed: boolean; onSelect: () => void; hint?: ReactNode }) {
 	const format = useFormatter();
-	return (
-		<li>
-			{/* The ring sits inside the row, so the opening list's clip never cuts it. */}
-			<button type="button" aria-pressed={chosen} onClick={onSelect} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
-				<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone, dimmed && "opacity-25")} />
-				<TruncatedText text={label} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
-				<Tick shown={chosen} />
-				<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
-				<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
-			</button>
-		</li>
+	// The ring sits inside the row, so the opening list's clip never cuts it.
+	const row = (
+		<button type="button" aria-pressed={chosen} onClick={onSelect} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
+			<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone, dimmed && "opacity-25")} />
+			<TruncatedText text={label} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+			<Tick shown={chosen} />
+			<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
+			<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>
+		</button>
 	);
+	return <li>{hint ? <Tooltip content={hint} placement="right" className={STUDY_TYPE_TIP}>{row}</Tooltip> : row}</li>;
 }
 
 /**
- * What kind of work the results are, as Jev read them, under the three levels of evidence; choosing a row filters the
- * results. Records not read yet are counted apart, and the card says how types are read.
+ * What kind of work the results are, as an AI model read them, under the three levels of evidence; choosing a row
+ * filters the results, and hovering it says what the type means. Records not read yet are counted apart, and the card
+ * says how types are read.
  */
 function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, number> | undefined; selected: string[]; onSelect: (type: string) => void }) {
 	const t = useTranslations("studyTypes");
@@ -279,7 +281,7 @@ function StudyTypeRows({ counts, selected, onSelect }: { counts: Record<string, 
 							<h5 className={`px-3 pb-1 text-sm ${MUTED}`}>{t(`levels.${level.key}`)}</h5>
 							<ul className="flex flex-col">
 								{rows.map((type) => (
-									<TypeRow key={type.key} label={t(`types.${type.key}.plural`)} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} />
+									<TypeRow key={type.key} label={t(`types.${type.key}.plural`)} count={counts?.[type.key] ?? 0} total={read} tone={studyTone(type.key)} chosen={selected.includes(type.key)} dimmed={dimmed(type.key)} onSelect={() => onSelect(type.key)} hint={<StudyTypeExplanation type={type.key} />} />
 								))}
 							</ul>
 						</section>

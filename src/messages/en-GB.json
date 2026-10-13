@@ -1039,8 +1039,8 @@
     "uncertain": "uncertain",
     "editor": "Set by an editor of this library.",
     "metadata": "Typed from the record itself.",
-    "ai": "Read by Jev from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
-    "method": "Each record's type is read when it enters the library. Jev, an AI classifier, reads its title and abstract and picks one of these types; a record with no abstract is judged on its title. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type Jev is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type.",
+    "ai": "Read by an AI model from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
+    "method": "Each record's type is read when it enters the library. An AI model reads its title and abstract and picks the one type that fits best; a record with no abstract is judged on its title. Where two could fit, a systematic review that pools its results counts as a meta-analysis, and a study that adds numbers to interviews or case studies counts as qualitative. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. A type the model is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type. Choosing several types shows records of any of them.",
     "levels": {
       "synthesis": "Reviews and syntheses",
       "primary": "Primary studies",
@@ -1063,8 +1063,8 @@
         "description": "Sums up earlier studies found with a stated search and inclusion rules, without pooling them. Includes scoping and rapid reviews."
       },
       "literature-review": {
-        "label": "Literature review",
-        "plural": "Other literature reviews",
+        "label": "Narrative review",
+        "plural": "Narrative reviews",
         "description": "A narrative, critical or integrative review with no stated search method."
       },
       "bibliometric": {
@@ -1109,7 +1109,7 @@
       },
       "not-research": {
         "label": "Not a research paper",
-        "plural": "Not research papers",
+        "plural": "Other",
         "description": "A dataset, software, correction, book review, or a file that accompanies another paper."
       }
     }

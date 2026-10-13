@@ -24,7 +24,7 @@ export const STUDY_TYPES = [
 		criterion: "Systematic or scoping review: it sums up earlier studies found with a stated search and inclusion rules, without pooling their results. Includes rapid reviews and systematic maps.",
 	},
 	{
-		key: "literature-review", level: "synthesis", label: "Literature review",
+		key: "literature-review", level: "synthesis", label: "Narrative review",
 		criterion: "Other literature review: a narrative, critical, integrative or state-of-the-art review with no stated search method.",
 	},
 	{

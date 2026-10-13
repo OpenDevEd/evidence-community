@@ -45,6 +45,13 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
   paragraph wherever they appear.
 - Accuracy is measured before it is quoted: PubMed's own publication types on
   the biomedical records, plus a hand-checked sample per library.
+  - Changed 2026-10-13. The library states no accuracy figure; the user found
+    it unneeded once measured. The methods paragraph says how types are read,
+    that each record gets one type and which wins where two fit, and that
+    choosing several types shows records of any of them. #592 closed as not
+    planned and PR #603 closed unmerged.
+- Readers never see the model's name: copy says "an AI model". (The user,
+  2026-10-13.)
 - Digests keep counting publications by publication date.
 - The grading card in the source settings appears only when something needs
   grading: an edited subject, or records not graded against the current one.
@@ -161,7 +168,7 @@ Each slice is one PR with its focused tests; the issue carries the checks.
    #590, OpenScholar #899)
 6. Editors correct a type. (new-el #591)
 7. Accuracy: PubMed tags and a hand-checked sample; the methods text states
-   the result. (new-el #592)
+   the result. (new-el #592, not planned since 2026-10-13)
 
 ## Checks
 
@@ -176,9 +183,7 @@ Each slice is one PR with its focused tests; the issue carries the checks.
 ## Completion
 
 Every record of AIED, TVET and ECCAR carries a study type, the three libraries'
-sources screen against a subject their owner wrote, the digest counts types,
-the accuracy figures are published, and no kinds code remains in either
-repository.
+sources screen against a subject their owner wrote, the digest counts types, and no kinds code remains in either repository.
 
 ## Risks
 
