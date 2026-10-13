@@ -9,7 +9,7 @@ import { Button } from "@/components/nextui/Button";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
+import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_INSTRUCTION_LENGTH, PDF_IMPORT_MAX_INSTRUCTIONS, parseDoiList } from "@/lib/admin/item-import-contract";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { DropArea, ListEditor, megabytes, PDF_ACCEPT, RemoveButton, withNew } from "./ImportInputs";
@@ -86,8 +86,6 @@ function Setting({ children, icon, summary, title }: { children: ReactNode; icon
 	);
 }
 
-const MAX_INSTRUCTIONS = 12;
-const MAX_INSTRUCTION_LENGTH = 400;
 
 /** Instructions libraries often give, one press from the list. */
 const SUGGESTED_INSTRUCTIONS = [
@@ -97,13 +95,9 @@ const SUGGESTED_INSTRUCTIONS = [
 	{ label: "Sentence-case titles", text: "Write titles in sentence case." },
 ];
 
-/** The library's instructions for the AI, one per row, saved as lines of text. */
-const instructionsOf = (guidance: string) => (guidance ? guidance.split("\n") : []);
-
 function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
-	const instructions = instructionsOf(flow.guidance);
-	const save = (items: string[]) => flow.setGuidance(items.join("\n"));
-	const full = instructions.length >= MAX_INSTRUCTIONS;
+	const { instructions, setInstructions: save } = flow;
+	const full = instructions.length >= PDF_IMPORT_MAX_INSTRUCTIONS;
 	const suggestions = SUGGESTED_INSTRUCTIONS.filter(({ text }) => !instructions.includes(text));
 	return (
 		<div>
@@ -113,8 +107,8 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 				intro="Saved for this library and given to the AI with every PDF it reads. They win over how it works by default, but never make it invent facts."
 				itemLabel="Instruction"
 				items={instructions}
-				max={MAX_INSTRUCTIONS}
-				maxLength={MAX_INSTRUCTION_LENGTH}
+				max={PDF_IMPORT_MAX_INSTRUCTIONS}
+				maxLength={PDF_IMPORT_MAX_INSTRUCTION_LENGTH}
 				onChange={save}
 			/>
 			{suggestions.length && !full ? (
@@ -139,7 +133,7 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 
 /** The settings an editor keeps changing, at the top: what the AI checks and follows for PDFs, and where the drafts go. */
 function Settings({ flow }: { flow: ImportFlowState }) {
-	const instructions = instructionsOf(flow.guidance).filter((item) => item.trim()).length;
+	const instructions = flow.instructions.filter((item) => item.trim()).length;
 	return (
 		<div className="shrink-0 divide-y divide-black/[0.05] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.06] dark:bg-white/[0.035]">
 			{flow.kind === "pdfs" ? (

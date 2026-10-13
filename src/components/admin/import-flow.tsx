@@ -100,10 +100,11 @@ function pagesIn(files: readonly File[]) {
 export function CostEstimate({ files, stale }: { files: readonly File[]; stale: boolean }) {
 	const pages = use(pagesIn(files));
 	if (pages === null) return null;
+	const cost = estimatePdfImportCost(pages, files.length);
 	return (
 		<p className="animate-fade-in text-xs tabular-nums text-black/50 [animation-duration:300ms] dark:text-white/50">
 			<span className={`transition-opacity duration-200 ${stale ? "opacity-50" : ""}`}>
-				About {usd(estimatePdfImportCost(pages, files.length))} for {pages} pages
+				{cost < 0.01 ? "Under $0.01" : `About ${usd(cost)}`} for {plural(pages, "page", "pages")}
 			</span>
 		</p>
 	);
@@ -154,7 +155,9 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const [pdfs, setPdfs] = useState<File[]>([]);
 	const estimateFiles = useDeferredValue(pdfs);
 	const [checks, setChecksState] = useState(() => (typeof window === "undefined" ? [] : storedChecks()));
-	const [guidance, setGuidanceState] = useState(() => (typeof window === "undefined" ? "" : storedGuidance()));
+	// A list, so a row emptied while it is being edited stays until it loses focus.
+	const [instructions, setInstructionsState] = useState<string[]>(() => (typeof window === "undefined" ? [] : storedGuidance().split("\n").filter((line) => line.trim())));
+	const guidance = instructions.map((line) => line.trim()).filter(Boolean).join("\n");
 	// Chosen before reading starts; the batch carries them from then on.
 	const [collections, setCollectionsState] = useState<string[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
@@ -200,7 +203,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				const pending = pendingPdfRows(pdfs);
 				setActiveId(pending[0]?.id ?? null);
 				startImportBatch({ checks, collections, importId, kind, rows: pending });
-				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks, guidance.trim()), errorMessage);
+				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks, guidance), errorMessage);
 				return;
 			}
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
@@ -294,6 +297,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		filter,
 		finish,
 		guidance,
+		instructions,
 		// The DOI box lists entries that are not DOIs itself; the footer explains the rest, such as too many DOIs.
 		footerProblem: stage === "input" && (kind === "pdfs" ? pdfs.length : kind === "files" ? files.length : doiText.trim() && !parseDoiList(doiText).invalid.length) ? problem : null,
 		kind,
@@ -324,9 +328,9 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		setCollections: (keys: string[]) => (batch ? changeImportBatch(importId, (current) => ({ ...current, collections: keys })) : setCollectionsState(keys)),
 		setDoiText,
 		setFiles,
-		setGuidance: (value: string) => {
-			setGuidanceState(value);
-			storeGuidance(value);
+		setInstructions: (items: string[]) => {
+			setInstructionsState(items);
+			storeGuidance(items.join("\n"));
 		},
 		setFilter,
 		setKind: (value: ImportKind) => {

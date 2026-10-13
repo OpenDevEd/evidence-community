@@ -113,8 +113,11 @@ export type AdminImportPreviewResponse = {
 export const PDF_IMPORT_MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const PDF_IMPORT_MAX_CRITERIA = 20;
 export const PDF_IMPORT_MAX_CRITERION_LENGTH = 300;
-/** The library's guidance for the AI: free text it follows when it reads each PDF. */
-export const PDF_IMPORT_MAX_GUIDANCE_LENGTH = 2000;
+/** The library's instructions for the AI, one per line, which it follows when it reads each PDF. */
+export const PDF_IMPORT_MAX_INSTRUCTIONS = 12;
+export const PDF_IMPORT_MAX_INSTRUCTION_LENGTH = 400;
+/** A full list, with the line breaks between its instructions. */
+export const PDF_IMPORT_MAX_GUIDANCE_LENGTH = PDF_IMPORT_MAX_INSTRUCTIONS * (PDF_IMPORT_MAX_INSTRUCTION_LENGTH + 1);
 
 export type PdfCheckResult = {
 	criterion: string;
