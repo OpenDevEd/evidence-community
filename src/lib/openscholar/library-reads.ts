@@ -19,7 +19,8 @@ import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { meilisearchIn } from "@/lib/meilisearch-filter";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readCollectionFor, readerIdOfClerkUser, readReaderListKeys } from "@/lib/readers/data";
-import { getMainAttributes } from "@/lib/search";
+import { getMainAttributes, publicRecordFilters } from "@/lib/search";
+import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
 import { filterPublicAttachments } from "@/lib/tags";
@@ -62,9 +63,13 @@ export async function answerOpenScholar(
 ) {
 	await connection();
 	const config = await getLibraryConfig();
-	const denied = await requireOpenScholarBearer(request, config.authentication.openScholar.machineCredential);
-	if (denied) return denied;
 	const libraryId = config.authentication.openScholar.libraryId;
+	const reader = await readerOfRequest(request);
+	const denied = await requireOpenScholarBearer(request, config.authentication.openScholar.machineCredential);
+	if (denied) {
+		console.warn("[library sources] refused", { libraryId, call, reader, error: "credential", status: denied.status });
+		return denied;
+	}
 	const answer = request.headers.get("openscholar-contract") === OPENSCHOLAR_CONTRACT
 		? await run({ config, database: await getDatabaseForConfig(config) }).catch((error: unknown) => error)
 		: refusals.contract;
@@ -73,11 +78,21 @@ export async function answerOpenScholar(
 	}
 	if (answer && typeof answer === "object" && "error" in answer && "status" in answer && typeof answer.status === "number") {
 		const { error, message, status } = answer as Refusal;
-		console.warn("[library sources] refused", { libraryId, call, error, message });
+		console.warn("[library sources] refused", { libraryId, call, reader, error, message });
 		return NextResponse.json({ error, message }, { status, headers: { ...ADMIN_RESPONSE_HEADERS, "OpenScholar-Contract": OPENSCHOLAR_CONTRACT } });
 	}
-	console.error("[library sources] failed", { libraryId, call, error: String(answer) });
+	console.error("[library sources] failed", { libraryId, call, reader, error: String(answer) });
 	return adminErrorResponse(answer);
+}
+
+/** The Clerk user a call names, wherever it names one, for its log lines. */
+async function readerOfRequest(request: Request): Promise<string | null> {
+	const url = new URL(request.url);
+	const named = url.searchParams.get("reader") ?? url.pathname.match(/\/readers\/([^/]+)\//)?.[1];
+	if (named) return named.slice(0, 512);
+	if (request.method !== "POST") return null;
+	const body: unknown = await request.clone().json().catch(() => null);
+	return body && typeof body === "object" && "reader" in body && typeof body.reader === "string" ? body.reader.slice(0, 512) : null;
 }
 
 /** The person a call is about: their reader here, or null for someone who never signed in to this library. */
@@ -149,8 +164,8 @@ async function resolveSearch(config: LibraryServerConfig, database: Database, re
 		? searchContext(source.search, readerList)
 		: normalizeLibrarySearchContext("libraryCollection" in source ? { collections: [source.libraryCollection] } : { readerList });
 	try {
-		const keys = await readSearchKeys(config, context, allowed, signal);
-		return { keys: keys.slice(first - 1, Math.min(until, RESOLVE_MAX_KEYS)), total: Math.min(keys.length, RESOLVE_MAX_KEYS), truncated: keys.length > RESOLVE_MAX_KEYS };
+		const { keys, total } = await readSearchKeys(config, context, allowed, signal, { offset: first - 1, count: until - first + 1 });
+		return { keys, total, truncated: false };
 	} catch (error) {
 		if (!(error instanceof LibraryExportError)) throw error;
 		return error.code === "exportChanged" ? refusals.indexChanged : refusals.invalid(error.message);
@@ -177,6 +192,22 @@ export async function resolveSource(
 	return await resolveSearch(config, database, readerId, source, range, signal);
 }
 
+/**
+ * How many public records the library holds, and its own collections, each with the public records a search of it
+ * finds (its sub-collections' too), which is what resolving it reads.
+ */
+export async function readLibraryOverview(config: LibraryServerConfig, database: Database) {
+	const [status, collections, { index }] = await Promise.all([readPublicLibraryStatus(database, config), getCachedCollections(config), getMeilisearchForConfig(config)]);
+	const counted = await index.search("", { limit: 0, facets: ["collectionsAncestry"], filter: publicRecordFilters(config.content.tags.hidden) });
+	const records = counted.facetDistribution?.collectionsAncestry ?? {};
+	return {
+		records: Number(status?.totalItems ?? 0),
+		collections: collections
+			.filter((collection) => !collection.deleted)
+			.map((collection) => ({ key: collection.key, name: collection.title || collection.name || collection.key, parent: collection.parentCollection ?? null, records: records[collection.key] ?? 0 })),
+	};
+}
+
 export const batchRequestSchema = z.object({ keys: z.array(z.string().min(1).max(64)).min(1).max(BATCH_MAX_KEYS) }).strict();
 
 /**
@@ -186,7 +217,8 @@ export const batchRequestSchema = z.object({ keys: z.array(z.string().min(1).max
 export async function readRecords(config: LibraryServerConfig, keys: string[]): Promise<{ records: OpenScholarRecord[]; unread: string[] }> {
 	const unique = [...new Set(keys)];
 	const { index } = await getMeilisearchForConfig(config);
-	const found = await index.search("", { filter: meilisearchIn("key", unique), limit: unique.length, attributesToRetrieve: await getMainAttributes(config) });
+	// The index keeps hidden and deleted records too: a record hidden since the source was resolved isn't read.
+	const found = await index.search("", { filter: [meilisearchIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)], limit: unique.length, attributesToRetrieve: await getMainAttributes(config) });
 	const tags = config.content.tags;
 	const byKey = new Map(found.hits.map((hit) => [String(hit.key), hit]));
 	const records: OpenScholarRecord[] = [];

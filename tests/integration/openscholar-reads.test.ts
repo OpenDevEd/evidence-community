@@ -24,6 +24,7 @@ import { GET as readerCollections } from "@/app/api/v1/openscholar/readers/[cler
 import { GET as oneCollection } from "@/app/api/v1/openscholar/collections/[id]/route";
 import { POST as resolve } from "@/app/api/v1/openscholar/sources/resolve/route";
 import { POST as batch } from "@/app/api/v1/openscholar/records/batch/route";
+import { GET as overview } from "@/app/api/v1/openscholar/library/route";
 
 let client: Meilisearch;
 let host: string;
@@ -65,6 +66,7 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 		const json = async (response: Response) => ({ status: response.status, body: await response.json() });
 
 		const keys = Array.from({ length: 3 }, () => generateCanonicalRecordKey()).sort();
+		const camps = generateCanonicalRecordKey();
 		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") SELECT key, 'native', key FROM unnest($1::text[]) key`, [keys]);
 		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "date") SELECT key, 'native', key, 'JournalArticle', 'Saved ' || key, '2024' FROM unnest($1::text[]) key`, [keys]);
 		const index = client.index(config.services.search.index);
@@ -72,9 +74,14 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 		await successful(index.updateSettings({ pagination: { maxTotalHits: 30_000 }, filterableAttributes: ["key", "itemType", "deleted", "tags", "year", "collectionsAncestry"], sortableAttributes: ["title", "dateSortKey"] }));
 		await successful(index.addDocuments([
 			{ key: keys[0], title: "Tutoring at scale", itemType: "JournalArticle", deleted: 0, tags: [], year: 2021, date: "2021-03-01", provider: "openalex", sourceRecordKey: "W7", DOI: "https://doi.org/10.1000/ABC", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Okafor" }], abstractNote: "Tutors help.", publicationTitle: "A journal", attachmentsData: [{ key: "PDFAAAAA", itemType: "Attachment", contentType: "application/pdf", filename: "paper.pdf", url: "https://files.example.test/paper.pdf", deleted: 0, tags: [] }, { key: "PDFBBBBB", itemType: "Attachment", contentType: "application/pdf", filename: "unstored.pdf", deleted: 0, tags: [] }, { key: "NOTEAAAA", itemType: "Note", deleted: 0, tags: [] }] },
-			{ key: keys[1], title: "Reading camps", itemType: "JournalArticle", deleted: 0, tags: [], year: 2022, collectionsAncestry: ["camps"] },
+			{ key: keys[1], title: "Reading camps", itemType: "JournalArticle", deleted: 0, tags: [], year: 2022, collectionsAncestry: [camps] },
 			{ key: keys[2], title: "Coaching", itemType: "Report", deleted: 0, tags: [], year: 2023 },
+			// Deleted since a source was resolved: the index still holds it.
+			{ key: "GONEGONE", title: "Withdrawn", itemType: "JournalArticle", deleted: 1, tags: [], year: 2020, collectionsAncestry: [camps] },
 		]));
+		await sql.query(`INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1)`, [camps]);
+		await sql.query(`INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems", "sortOrder") VALUES ($1, 'native', $1, 'Camps', 0, 1)`, [camps]);
+		config.collections = [{ id: camps, title: "Camps", enabled: true, order: 1 }];
 
 		const amina = "reader-user_amina";
 		const bob = "reader-user_bob";
@@ -115,14 +122,18 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 		expect(await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { readerCollection: randomUUID() } })))).toMatchObject({ status: 404 });
 
 		// The library's own collection, the whole library from a place in it, and a list, each as the library holds them.
-		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { libraryCollection: "camps" } })))).body.keys).toEqual([keys[1]]);
+		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { libraryCollection: camps } })))).body.keys).toEqual([keys[1]]);
+		// The library's own collections count what resolving them reads, whatever their stored count says.
+		expect((await json(await overview(get("/api/v1/openscholar/library")))).body).toEqual({ records: 3, collections: [{ key: camps, name: "Camps", parent: null, records: 1 }] });
+		// A window past the first records of a search.
+		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: "user_amina", source: { readerCollection: mine }, first: 2, last: 2 })))).body).toMatchObject({ keys: [expect.any(String)], total: 2 });
 		const whole = await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { library: true }, first: 2, last: 3 })));
 		expect(whole.body.keys).toEqual(keys.slice(1, 3));
 		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { records: [keys[2], "NOSUCHKY", keys[0]] } })))).body).toEqual({ keys: [keys[2], keys[0]], total: 2, truncated: false });
 		expect(await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { library: true }, first: 1, last: 20_001 })))).toMatchObject({ status: 413, body: { error: "too_many" } });
 
 		// Records by key, with what finds them elsewhere and their public PDFs only.
-		const records = await json(await batch(post("/api/v1/openscholar/records/batch", { keys: [keys[0], "NOSUCHKY", keys[1]] })));
+		const records = await json(await batch(post("/api/v1/openscholar/records/batch", { keys: [keys[0], "NOSUCHKY", "GONEGONE", keys[1]] })));
 		expect(records.body.unread).toEqual([]);
 		expect(records.body.records.map((record: { key: string }) => record.key)).toEqual([keys[0], keys[1]]);
 		expect(records.body.records[0]).toMatchObject({ title: "Tutoring at scale", abstract: "Tutors help.", creators: [{ name: "Ada Okafor" }], year: 2021, venue: "A journal", crossRefs: { openalexId: "W7", doi: "10.1000/abc" }, files: [{ attachmentKey: "PDFAAAAA", filename: "paper.pdf", contentType: "application/pdf" }] });
