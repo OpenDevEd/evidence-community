@@ -101,6 +101,15 @@ function pageCitation(
 	};
 }
 
+/**
+ * Stands in for a PAGE token's opening `PAGE` marker when a model drops it:
+ * `[/lib/KEY/download/ATTACHMENT — 6 PAGE/]`. Only a bracket that opens on a
+ * library PDF and a page and closes with `PAGE/]`, with no other bracket in
+ * between and no link after it, counts, so an ordinary bracket or link never
+ * turns into a citation.
+ */
+export const MISSING_PAGE_MARKER = String.raw`(?=\/lib\/[^/?#\s\[\]]+\/download\/[^/?#\s\[\]]+ — [^\[\]]*? PAGE\/\](?![(\[]))`;
+
 // Where one packed entry ends and the next begins: "PAGE/, PAGE " or "PAGE/, ".
 const PACKED_ENTRY_SEPARATOR = /\s+PAGE\/\s*,?\s*(?:PAGE\s+)?/;
 
