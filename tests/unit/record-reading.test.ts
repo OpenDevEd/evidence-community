@@ -102,6 +102,17 @@ describe("planning a read", () => {
 			.toMatchObject({ pdf: true, ask: { type: true } });
 	});
 
+	it("asks a type again from a PDF that names a design its title and abstract do not, once", () => {
+		const wordless = { ...record, abstract: "We pooled 40 trials.", wholeAbstract: "We pooled 40 trials." };
+		const first = planRead(wordless, { grades: new Map() }, [climate])!;
+		const graded = new Map([["oa", ["climate", null]]]);
+		const review = { ...readAs(first.contentHash), studyType: "systematic-review" as const };
+		expect(planRead({ ...wordless, pdf: "We searched five databases." }, { reading: review, grades: graded }, [climate])).toBeNull();
+		expect(planRead({ ...wordless, pdf: "A systematic review and meta-analysis." }, { reading: review, grades: graded }, [climate]))
+			.toMatchObject({ pdf: true, ask: { type: true, ruledOut: ["rct"] } });
+		expect(planRead({ ...wordless, pdf: "A systematic review and meta-analysis." }, { reading: { ...review, input: "pdf" }, grades: graded }, [climate])).toBeNull();
+	});
+
 	it("looks for the words in the whole abstract, past the part Jev reads", () => {
 		const long = { ...record, abstract: "We pooled 40 trials.", wholeAbstract: `We pooled 40 trials. ${"Background. ".repeat(300)}A meta-analysis.` };
 		const first = planRead(long, { grades: new Map() }, [climate])!;

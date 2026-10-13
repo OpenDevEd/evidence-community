@@ -53,19 +53,21 @@ type Reading = NonNullable<Stored["reading"]>;
 const metadataChanged = (reading: Reading, metadataType: StudyTypeKey | null) =>
 	metadataType ? reading.typedBy !== "metadata" || reading.studyType !== metadataType : reading.typedBy === "metadata";
 
-/** Whether Jev's type, unsure from the abstract, can be asked again from the PDF the record now has. */
-const pdfCanSettle = (record: RecordFacts, reading: Reading) =>
-	Boolean(record.pdf) && reading.typedBy === "ai" && reading.input !== "pdf" && reading.typeConfidence < SURE;
+/** Whether the record's PDF names a type its title and abstract do not, which Jev was not offered without it. */
+const pdfUnlocks = (record: RecordFacts, ruledOut: StudyTypeKey[]) =>
+	ruledOutTypes({ title: record.title, abstract: record.wholeAbstract, pdf: "" }).some((type) => !ruledOut.includes(type));
 
 /**
  * Why the type of a record whose text has not changed is set again, or null: its metadata says something else now, Jev
- * was unsure and the record has a PDF, or Jev gave a type the record's words rule out.
+ * was unsure and the record has a PDF, Jev gave a type the record's words rule out, or a PDF that came later names a
+ * type Jev was not offered. Each PDF reason asks once: the type is then read from the PDF.
  */
 function retypeOf(record: RecordFacts, reading: Reading, metadataType: StudyTypeKey | null, ruledOut: StudyTypeKey[]) {
 	if (metadataChanged(reading, metadataType)) return "metadata";
-	if (metadataType) return null;
-	if (pdfCanSettle(record, reading)) return "pdf";
-	return reading.typedBy === "ai" && ruledOut.includes(reading.studyType) ? "words" : null;
+	if (metadataType || reading.typedBy !== "ai") return null;
+	const fromPdf = Boolean(record.pdf) && reading.input !== "pdf";
+	if (fromPdf && (reading.typeConfidence < SURE || pdfUnlocks(record, ruledOut))) return "pdf";
+	return ruledOut.includes(reading.studyType) ? "words" : null;
 }
 
 export function planRead(record: RecordFacts, stored: Stored, subjects: Subject[]) {
