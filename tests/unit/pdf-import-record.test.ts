@@ -19,28 +19,29 @@ const read: ReadRecord = {
 };
 
 describe("a record read from a PDF", () => {
-	it("keeps each author's affiliations, and a profile only when a search found it", () => {
-		const item = zoteroItemFrom(read, { cites: [], profiles: new Set(["profile_1"]) });
+	// An editor's link renames the author to the profile; the read links the same way.
+	it("keeps each author's affiliations, and links a profile only when a search found it, under the profile's name", () => {
+		const item = zoteroItemFrom(read, { cites: [], profiles: new Map([["profile_1", { id: "profile_1", name: "Wang Wenxuan" }]]) });
 		expect(item.creators).toEqual([
-			{ authorProfileId: "profile_1", creatorType: "author", firstName: "Wenxuan", institutions: [{ display_name: "Universiti Sains Malaysia" }], lastName: "Wang" },
+			{ authorProfileId: "profile_1", creatorType: "author", firstName: "", institutions: [{ display_name: "Universiti Sains Malaysia" }], lastName: "Wang Wenxuan" },
 			{ creatorType: "author", firstName: "Yan", lastName: "Peng" },
 		]);
 	});
 
 	it("takes the PDF's keywords as tags and links the records it cites", () => {
-		const item = zoteroItemFrom(read, { cites: ["ABCD2345"], profiles: new Set() });
+		const item = zoteroItemFrom(read, { cites: ["ABCD2345"], profiles: new Map() });
 		expect(item.tags).toEqual([{ tag: "personalized feedback" }]);
 		expect(item.links).toEqual({ cites: ["ABCD2345"] });
 	});
 
 	it("keeps only the fields its type has", () => {
-		const item = zoteroItemFrom(read, { cites: [], profiles: new Set() });
+		const item = zoteroItemFrom(read, { cites: [], profiles: new Map() });
 		expect(item).toMatchObject({ itemType: "journalArticle", language: "en", publicationTitle: "Journal of Educational Computing Research", rights: "© The Author(s) 2025" });
 		expect(item).not.toHaveProperty("reportNumber");
 		expect(item).not.toHaveProperty("links");
 	});
 
 	it("files a type it doesn't know as a document", () => {
-		expect(zoteroItemFrom({ ...read, itemType: "blogPostAboutCats" }, { cites: [], profiles: new Set() }).itemType).toBe("document");
+		expect(zoteroItemFrom({ ...read, itemType: "blogPostAboutCats" }, { cites: [], profiles: new Map() }).itemType).toBe("document");
 	});
 });

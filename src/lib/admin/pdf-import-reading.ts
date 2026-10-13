@@ -2,15 +2,17 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { canonicalZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
 import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
+import { canonicalItemFieldToDatabaseField } from "@/lib/item-field-codec";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import type { PdfReading } from "./item-import-contract";
-import { importPayloadFromZoteroItem, previewEntries } from "./item-import-service";
+import { previewEntries } from "./item-import-service";
 import { readImportPdf } from "./pdf-import";
 import { readPdfProperties } from "./pdf-properties";
 
@@ -40,13 +42,8 @@ async function previewReading(db: Database, source: string, zoteroItem: Record<s
 	return (await previewEntries(db, [{ method: "pdf", source, zoteroItem: kept }])).records[0]!;
 }
 
-const FIELD_PROBE = "pdf-import-field-probe";
-
-/** The record's own name for a field the AI named as Zotero does, as the import maps it: a report's institution is its publisher. */
-function recordField(itemType: unknown, field: string) {
-	const payload = importPayloadFromZoteroItem({ creators: [], itemType, title: "", [field]: FIELD_PROBE }) as Record<string, unknown>;
-	return Object.keys(payload).find((key) => payload[key] === FIELD_PROBE) ?? field;
-}
+/** The record's own name for a field the AI named as Zotero does: a report's institution is its publisher, a language its languageName. */
+const recordField = (itemType: unknown, field: string) => canonicalItemFieldToDatabaseField(canonicalZoteroFieldName(String(itemType), field) ?? field);
 
 async function readOne(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, signal: AbortSignal | undefined): Promise<PdfReading> {
 	const [owner] = await db.select().from(pdfImport).where(eq(pdfImport.id, file.importId));

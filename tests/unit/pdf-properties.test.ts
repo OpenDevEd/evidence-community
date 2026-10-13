@@ -107,8 +107,10 @@ describe("writing a record into a PDF", () => {
 		expect(reading).toMatchObject({ properties: { ...ARTICLE, isbn: "", issn: "", issue: "", pages: "", publicationTitle: "", seriesNumber: "", seriesTitle: "" } });
 	});
 
-	it("leaves out a date or language XMP can't take", async () => {
-		for (const [date, language] of [["Spring 2026", "English"], ["2026-02-30", "en GB"], ["2026-13", ""]] as const) {
+	it("leaves out a date or language XMP can't take, and writes a named language as its code", async () => {
+		const named = await readPdfProperties(await writePdfProperties(await archivalPdf(), { ...ARTICLE, language: "English" }));
+		expect(named).toMatchObject({ properties: { language: "en" } });
+		for (const [date, language] of [["Spring 2026", "Klingonese"], ["2026-02-30", "en GB"], ["2026-13", ""]] as const) {
 			const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), { ...ARTICLE, date, language }));
 			expect(reading).toMatchObject({ properties: { date: "", language: "", title: ARTICLE.title } });
 		}
@@ -118,8 +120,14 @@ describe("writing a record into a PDF", () => {
 describe("the PDF properties of a record", () => {
 	// The review shows these before publishing writes them, so both must agree.
 	it("hold only what publishing writes, the series included", () => {
-		const report = { date: "2026-02-30", itemType: "report", language: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls"], title: "A report" };
-		expect(pdfPropertiesOfRecord(report, { authors: [], doi: "", keywords: ["Education"] })).toMatchObject({ date: "", keywords: ["Education", "girls"], language: "", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report" });
-		expect(pdfPropertiesOfRecord({ itemType: "book", language: "en-GB", series: "Studies in Education" }, { authors: [], doi: "", keywords: [] })).toMatchObject({ language: "en-GB", seriesTitle: "Studies in Education" });
+		const report = { date: "2026-02-30", itemType: "report", languageName: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls"], title: "A report" };
+		expect(pdfPropertiesOfRecord(report, { authors: [], doi: "", keywords: ["Education"] })).toMatchObject({ date: "", keywords: ["Education", "girls"], language: "en", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report" });
+		expect(pdfPropertiesOfRecord({ itemType: "book", languageName: "en-GB", series: "Studies in Education" }, { authors: [], doi: "", keywords: [] })).toMatchObject({ language: "en-GB", seriesTitle: "Studies in Education" });
+	});
+
+	// Records hold a language as free text, often its name; XMP takes only a tag.
+	it("write a language the record names as its code, and leave out one it can't name", () => {
+		const language = (languageName: string) => pdfPropertiesOfRecord({ languageName }, { authors: [], doi: "", keywords: [] }).language;
+		expect(["Swahili", "portuguese", "Hebrew", "Klingonese"].map(language)).toEqual(["sw", "pt", "he", ""]);
 	});
 });

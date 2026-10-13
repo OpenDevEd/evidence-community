@@ -25,7 +25,7 @@ const INSTRUCTIONS = [
 	"You catalogue one PDF for an evidence library and check it against the library's checks. Work in this order: read the PDF, use the tools, then answer.",
 	"Read the whole PDF, including the cover, front matter, acknowledgements and back cover. The file's own properties are given too: its document metadata, whether it is tagged for screen readers, and the PDF/A and PDF/UA parts it claims.",
 	"The record holds what the PDF states, copied as it is, and nothing else. Choose its type, then go through every field of that type in the list, one by one, and give each one the PDF states anywhere: the cover, the running header and footer, the first page, the copyright page and the end matter. Each field's meaning follows its name in brackets, such as a report's institution being the organisation that published it.",
-	"What the text itself shows counts as stated: its language, as a language tag such as en; its copyright or licence line, word for word, as its rights; and the journal or series, volume, issue, pages, ISSN, ISBN and publisher as printed. The abstract is the abstract or summary section the PDF prints, copied as it is; when it prints neither, the record's abstract stays empty. Never invent a DOI, ISBN, date or author.",
+	"What the text itself shows counts as stated: its language; its copyright or licence line, word for word, as its rights; and the journal or series, volume, issue, pages, ISSN, ISBN and publisher as printed. The abstract is the abstract or summary section the PDF prints, copied as it is; when it prints neither, the record's abstract stays empty. Never invent a DOI, ISBN, date or author.",
 	"Give each author's affiliations as the PDF prints them, and the keywords the PDF lists as the record's tags.",
 	"For each check, answer met, not_met or unclear. Quote the exact words that decide it and give the page number in the PDF viewer (1 is the first page). When it is not met or unclear, say what the publisher should add or change in the PDF.",
 	"Everything the record should say beyond or instead of what the PDF states is a suggested change, never part of the record. A change the library's instructions ask for, such as an abstract written for its readers, is marked to apply. Your own recommendation for the editor is left unapplied. Suggest only a value you know is right from the PDF, the library's instructions or its checks; when you would have to guess, such as a licence the PDF doesn't state, suggest nothing. Never suggest a placeholder or a note. List only the failed checks a change would make pass, and give a short reason for each change.",
@@ -147,13 +147,13 @@ export async function readImportPdf(
 		},
 	});
 	// The profiles the searches return during this read: a profile id the AI gives counts only when it is one of them.
-	const profilesFound = new Set<string>();
+	const profilesFound = new Map<string, { id: string; name: string }>();
 	const searchAuthors = tool({
 		description: "Search the library's author profiles by a person's name. Returns profiles with their id, name, headline and affiliation.",
 		inputSchema: z.object({ name: z.string() }),
 		execute: async ({ name }) => {
 			const profiles = await searchAuthorProfiles(config.authentication.openScholar, name, signal);
-			for (const { id } of profiles) profilesFound.add(id);
+			for (const { id, name: profileName } of profiles) profilesFound.set(id, { id, name: profileName });
 			return profiles.map(({ affiliation, headline, id, name: profileName }) => ({ affiliation, headline, id, name: profileName }));
 		},
 	});

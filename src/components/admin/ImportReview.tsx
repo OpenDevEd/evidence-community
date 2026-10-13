@@ -257,9 +257,9 @@ export function MetadataLine({ payload }: { payload: Record<string, unknown> }) 
 	const text = (field: string) => (typeof payload[field] === "string" && payload[field] ? (payload[field] as string) : null);
 	const doi = text("DOI");
 	const items = [
-		{ icon: Building03Icon, label: "Published by", value: text("publicationTitle") ?? text("proceedingsTitle") ?? text("publisher") ?? text("institution") },
+		{ icon: Building03Icon, label: "Published by", value: text("publicationTitle") ?? text("publisher") },
 		{ icon: Calendar03Icon, label: "Date", value: text("date") },
-		{ icon: Globe02Icon, label: "Language", value: (text("languageName") ?? text("language"))?.toUpperCase() ?? null },
+		{ icon: Globe02Icon, label: "Language", value: text("languageName") },
 	].filter((item) => item.value);
 	if (!items.length && !doi) return null;
 	return (

@@ -30,7 +30,23 @@ const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "
 
 // XMP dates and language tags have set forms; a record's value is only written when it has them.
 const xmpDate = (value: string) => (parseBibliographicDate(value).kind === "parsed" ? value : "");
-const languageTag = (value: string) => (/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(value) ? value : "");
+
+let codesByName: Map<string, string> | undefined;
+/** Two-letter language codes by their English names, "swahili" to "sw". */
+function languageCodes() {
+	if (codesByName) return codesByName;
+	const names = new Intl.DisplayNames(["en"], { fallback: "none", type: "language" });
+	const letters = [..."abcdefghijklmnopqrstuvwxyz"];
+	codesByName = new Map(letters.flatMap((first) => letters.flatMap((second) => {
+		const name = names.of(first + second);
+		// A retired code names the same language as its successor: "iw" is "he".
+		return name ? [[name.toLowerCase(), Intl.getCanonicalLocales(first + second)[0]!] as const] : [];
+	})));
+	return codesByName;
+}
+
+/** A record's language as XMP writes it: the tag it holds ("en-GB"), or the code of the language it names ("English"); otherwise none. */
+const languageTag = (value: string) => (/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(value) ? value : (languageCodes().get(value.toLowerCase()) ?? ""));
 
 /**
  * What a published PDF carries in its own metadata: the record as the
@@ -47,7 +63,7 @@ export function pdfPropertiesOfRecord(payload: Record<string, unknown>, { author
 		issn: textOf(payload.ISSN),
 		issue: textOf(payload.issue),
 		keywords: [...new Set([...keywords, ...tags])],
-		language: languageTag(textOf(payload.language) || textOf(payload.languageName)),
+		language: languageTag(textOf(payload.languageName)),
 		pages: textOf(payload.pages),
 		publicationTitle: textOf(payload.publicationTitle),
 		publisher: textOf(payload.publisher),
@@ -251,7 +267,7 @@ function recordDescription(properties: PdfProperties, date: string, prism: { nam
 		text("dc:identifier", properties.doi && `doi:${properties.doi}`),
 		list("dc:date", "Seq", xmpDate(properties.date) ? [properties.date] : []),
 		list("dc:publisher", "Bag", properties.publisher ? [properties.publisher] : []),
-		list("dc:language", "Bag", languageTag(properties.language) ? [properties.language] : []),
+		list("dc:language", "Bag", languageTag(properties.language) ? [languageTag(properties.language)] : []),
 		...prism.map(({ name, value }) => text(`prism:${name}`, value)),
 		properties.rights ? "<xmpRights:Marked>True</xmpRights:Marked>" : "",
 		text("pdf:Keywords", properties.keywords.join(", ")),
