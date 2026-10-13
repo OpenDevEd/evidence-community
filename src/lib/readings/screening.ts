@@ -37,18 +37,18 @@ export function screeningSubjects(config: LibraryServerConfig) {
  */
 export async function refreshScreenedOut(tx: DatabaseTransaction, keys: SQL) {
 	const { rows } = await tx.execute<{ itemKey: string; revision: number | null }>(sql`
+		-- Each record once, grouped, so a source's whole regrade is a join rather than a scan of every holder per record.
 		WITH holding AS (
-			SELECT l."itemKey", l."sourceConnectionKey" FROM "itemSourceLink" l
+			SELECT l."itemKey", bool_and(EXISTS (SELECT 1 FROM "itemGrade" g JOIN "sourceScreening" s ON s."sourceConnectionKey" = g."sourceConnectionKey"
+				WHERE g."itemKey" = l."itemKey" AND g."sourceConnectionKey" = l."sourceConnectionKey" AND g."grade" = ANY(s."keptOut"))) AS "keptOut"
+			FROM "itemSourceLink" l
 			JOIN "sourceConnection" c ON c.key = l."sourceConnectionKey" AND c.status <> 'removed'
 			WHERE NOT l."remoteDeleted" AND l."itemKey" IN (${keys})
+			GROUP BY l."itemKey"
 		), decided AS (
-			SELECT r."itemKey", (
-				EXISTS (SELECT 1 FROM holding l WHERE l."itemKey" = r."itemKey")
-				AND NOT EXISTS (SELECT 1 FROM holding l WHERE l."itemKey" = r."itemKey"
-					AND NOT EXISTS (SELECT 1 FROM "itemGrade" g JOIN "sourceScreening" s ON s."sourceConnectionKey" = g."sourceConnectionKey"
-						WHERE g."itemKey" = l."itemKey" AND g."sourceConnectionKey" = l."sourceConnectionKey" AND g."grade" = ANY(s."keptOut")))
-			) AS "out"
-			FROM "itemReading" r WHERE r."itemKey" IN (${keys})
+			SELECT r."itemKey", coalesce(h."keptOut", false) AS "out"
+			FROM "itemReading" r LEFT JOIN holding h ON h."itemKey" = r."itemKey"
+			WHERE r."itemKey" IN (${keys})
 		)
 		UPDATE "itemReading" r SET "screenedOut" = d."out" FROM decided d
 		WHERE r."itemKey" = d."itemKey" AND r."screenedOut" <> d."out"
