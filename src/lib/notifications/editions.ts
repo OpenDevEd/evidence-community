@@ -8,6 +8,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { notificationEdition, notificationItem, notificationState } from "@/db/schema/notifications";
 import { getPublicItemCard, getPublicItemCards } from "@/lib/public-item-card";
 import { readOpenAccess } from "@/lib/search-index/open-access";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { draftIsEdited, queueEditionDeliveries, recordDigestEvent } from "./editorial";
 import { completedHourlyWindow, nextDigestDate } from "./schedule";
@@ -76,7 +77,7 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
           THEN trim(lower(regexp_replace(${item.title}, '[[:space:][:punct:]]+', ' ', 'g'))) || '|' || author.surname
           ELSE ${item.key} END AS work,
         CASE WHEN record.core THEN 3 ELSE 0 END
-          + CASE WHEN coalesce(${item.openAccess}, record.open, lookup.open, false) THEN 3 ELSE 0 END
+          + CASE WHEN coalesce(${item.openAccess}, work.open, lookup.open, false) THEN 3 ELSE 0 END
           + CASE WHEN metric.refs >= 10 THEN 2 WHEN metric.refs > 0 THEN 1 ELSE 0 END
           + CASE WHEN EXISTS (SELECT 1 FROM "itemInstitution" WHERE "itemKey" = ${item.key}) THEN 1 ELSE 0 END
           + 2 * ln(1 + coalesce(metric.citations, 0))
@@ -90,11 +91,18 @@ async function rankPublications(db: DatabaseTransaction, candidates: SQL | undef
       LEFT JOIN LATERAL (SELECT max("citedByCount") AS citations, max("referencedWorksCount") AS refs
         FROM "itemCitationMetric" WHERE "itemKey" = ${item.key}) metric ON true
       LEFT JOIN LATERAL (SELECT bool_or("payload" #>> '{primary_location,source,is_core}' = 'true') AS core,
-          bool_or("payload" #>> '{open_access,is_oa}' = 'true') AS open,
           bool_or("payload" ->> 'is_retracted' = 'true' OR "payload" ->> 'is_paratext' = 'true') AS withdrawn
         FROM "sourceSnapshot" WHERE "itemKey" = ${item.key}) record ON true
-      -- What OpenAlex said about the DOI of a record no OpenAlex search holds.
-      LEFT JOIN LATERAL (SELECT "isOpenAccess" AS open FROM "itemOpenAccessLookup" WHERE "itemKey" = ${item.key}) lookup ON true
+      -- Open access as readers see it (readOpenAccess): an editor's choice, else the newest copy of the record's OpenAlex
+      -- work that a search still finds, else what OpenAlex said about the record's DOI.
+      LEFT JOIN LATERAL (SELECT (s."payload" #>> '{open_access,is_oa}')::boolean AS open FROM "sourceSnapshot" s
+        JOIN "itemSourceLink" link ON link."itemKey" = s."itemKey" AND link."sourceConnectionKey" = s."sourceConnectionKey" AND NOT link."remoteDeleted"
+        JOIN "sourceConnection" c ON c.key = s."sourceConnectionKey" AND c.status <> 'removed' AND c.provider IN (${sql.join(OPENALEX_WORK_PROVIDERS.map(provider => sql`${provider}`), sql`, `)})
+        WHERE s."itemKey" = ${item.key} AND jsonb_typeof(s."payload" #> '{open_access,is_oa}') = 'boolean'
+        ORDER BY s."remoteVersion" DESC NULLS LAST, s."fetchedAt" DESC, s."sourceConnectionKey" LIMIT 1) work ON true
+      -- ponytail: matches the DOI field only, not one a record gives in Extra; ranking alone reads it this way.
+      LEFT JOIN LATERAL (SELECT "isOpenAccess" AS open FROM "itemOpenAccessLookup"
+        WHERE "itemKey" = ${item.key} AND doi = lower(regexp_replace(trim(${item.DOI}), '^(https?://(dx\\.)?doi\\.org/|doi:\\s*)', '', 'i'))) lookup ON true
       -- A retracted record, or a journal's front matter, is in no digest.
       WHERE ${candidates} AND NOT coalesce(record.withdrawn, false)
     ), chosen AS (

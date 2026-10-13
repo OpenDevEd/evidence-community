@@ -102,21 +102,30 @@ function Steps({ steps }: { steps: Step[] }) {
     </div>
   </li>)}</ol>;
 }
+/** Which date of a publication puts it in an edition, by what the library's digests cover. */
+const ENTERED_BY = {
+  published: {icon: Calendar03Icon, lead: "Entered by publication date.", text: "The date OpenAlex gives, usually the day a work first came out online."},
+  added: {icon: Calendar03Icon, lead: "Entered by the day it joined the library.", text: "Whenever it was published."},
+} as const;
+/** Whether the period holds 1 January, the day OpenAlex gives a work it knows only the year of. */
+const holdsNewYear = (period: DigestPeriod) => period.first <= `${period.year}-01-01` && `${period.year}-01-01` <= period.last;
+/** Which date of a publication puts it in the period, in which time zone, and when year-only works count too. */
+function periodFacts(period: DigestPeriod, timezone: string, covers: keyof typeof ENTERED_BY) {
+  return [
+    ENTERED_BY[covers],
+    {icon: Globe02Icon, lead: `Days in ${timeZoneLabel(timezone)}.`},
+    covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: "Year-only works count here too.", text: "OpenAlex dates a work it knows only the year of 1 January."},
+  ];
+}
 /** The first and last day an edition covers, joined by a line, and which date of a publication puts it in. */
 function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: string }) {
-  // OpenAlex gives a work it knows only the year of 1 January, so a period that includes that day says so.
-  const newYear = `${period.year}-01-01`;
-  const yearOnly = period.first <= newYear && newYear <= period.last;
+  const covers = useLibraryConfig().notifications.digestCovers;
   const end = (label: string, date: string) => <span className="min-w-0"><span className={`block text-xs ${muted}`}>{label}</span><span className="block whitespace-nowrap font-medium tabular-nums">{date}</span></span>;
   return <div className="flex flex-col gap-3">
     <div className="grid grid-cols-[auto_minmax(1.5rem,1fr)_auto] items-end gap-3">
       {end("First day", period.from)}<span aria-hidden className="mb-2.5 h-0.5 rounded-full bg-accent/40" />{end("Last day", period.to)}
     </div>
-    <Facts rows={[
-      {icon: Calendar03Icon, lead: "Entered by publication date.", text: "The date OpenAlex gives, usually the day a work first came out online."},
-      {icon: Globe02Icon, lead: `Days in ${timeZoneLabel(timezone)}.`},
-      yearOnly && {icon: InformationCircleIcon, lead: "Year-only works count here too.", text: "OpenAlex dates a work it knows only the year of 1 January."},
-    ]} />
+    <Facts rows={periodFacts(period, timezone, covers)} />
   </div>;
 }
 /**
@@ -126,8 +135,9 @@ function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: stri
  */
 function CountCard({ edition, locale }: { edition: DigestEdition; locale: string }) {
   const n = (count: number) => count.toLocaleString(locale);
+  const published = useLibraryConfig().notifications.digestCovers === "published";
   const rows = [
-    {count: edition.publicationCount, label: "dated in this period"},
+    {count: edition.publicationCount, label: published ? "dated in this period" : "added to the library in this period"},
     {count: edition.read, label: "read by the AI that wrote the text"},
     {count: edition.listed, label: "listed in this edition"},
     {count: edition.cited, label: "cited in the text"},
@@ -598,7 +608,7 @@ function readRows(edition: DigestEdition, n: (count: number) => string) {
 /** How the text was checked, and by whom when the library names who read it. */
 const checkSteps = (by: DigestEdition["by"]): Step[] => [
   {title: "Written from titles and abstracts", text: "Not from the full papers."},
-  {title: "Checked sentence by sentence", text: "A second AI model, from another company, checks each sentence about a paper against that paper's title and abstract."},
+  {title: "Checked sentence by sentence", text: "A second AI model, from another company, checks each sentence of the AI's draft about a paper against that paper's title and abstract."},
   {title: "Corrected or removed", text: "The writer fixes what the check flags, or takes it out."},
   ...(by ? [{title: `Read by ${by.name}`, text: "Before it was published."}] : []),
 ];
@@ -638,7 +648,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
         ]} />
       </AccordionItem>
       <AccordionItem key="checked" aria-label="How was the text checked?" title="How was the text checked?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<>A second AI model checked <Em>every sentence</Em> about a paper{edition.by && <>, and <Em>{edition.by.name}</Em> read it before it was published</>}.</>}>
+        subtitle={<>A second AI model checks <Em>the AI&rsquo;s draft</Em>, sentence by sentence{edition.by && <>, and <Em>{edition.by.name}</Em> read it before it was published</>}.</>}>
         <Steps steps={checkSteps(edition.by)} />
       </AccordionItem>
     </Accordion>

@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { and, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { notificationEdition, notificationState } from "@/db/schema/notifications";
 import { item } from "@/db/schema/tables/item";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readOpenAccess } from "@/lib/search-index/open-access";
+import { getPublicItemCards } from "@/lib/public-item-card";
 import { storedSynthesis, storedTypeOrder } from "./digest-types";
 import { citedKeys } from "./digest-text";
 import { digestPeriod, nextDigestDate, type DigestPeriod } from "./schedule";
@@ -126,11 +127,11 @@ export async function listEarlierDigests(db: Database, config: LibraryServerConf
   return rows.map(row => editionSummary(row, locale, config));
 }
 
-/** How many of these publications are open access, as their cards say. */
-async function openCount(db: Database, keys: string[]) {
+/** How many of these publications are public and open access, as their cards say. */
+async function openCount(db: Database, config: LibraryServerConfig, keys: string[]) {
   if (!keys.length) return 0;
-  const [openAccessOf, records] = await Promise.all([readOpenAccess(db, keys), db.select({key: item.key, doi: item.DOI}).from(item).where(inArray(item.key, keys))]);
-  return records.filter(record => openAccessOf(record.key, record.doi) === true).length;
+  const [openAccessOf, cards] = await Promise.all([readOpenAccess(db, keys), getPublicItemCards(db, keys, config)]);
+  return cards.filter(card => openAccessOf(card.key, card.DOI ?? null) === true).length;
 }
 
 export async function getDigestEdition(db: Database, config: LibraryServerConfig, locale: string, id: string, page = 1, reviewsPage = 1): Promise<DigestEdition | undefined> {
@@ -161,7 +162,7 @@ export async function getDigestEdition(db: Database, config: LibraryServerConfig
   // The list is counted and made just before the writer is asked for its text; an edition with no record of that asking has the day it was published.
   const counted = (row.requestedAt ?? row.publishedAt!).toLocaleDateString(locale, {day: "numeric", month: "long", year: "numeric", timeZone: config.notifications.schedule.timezone});
   const cited = citedKeys(row.markdown!);
-  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types, counted, read: row.read, cited: cited.length, citedOpen: await openCount(db, cited)};
+  const edition = {...summary, markdown: row.markdown!, note: summary.by ? row.note : null, types, counted, read: row.read, cited: cited.length, citedOpen: await openCount(db, config, cited)};
   const reviews = await list(sql`AND ${storedSynthesis}`, reviewsPage);
   if (!reviews.listed) return {...edition, ...await list(sql``, page)};
   const others = await list(sql`AND NOT ${storedSynthesis}`, page);
