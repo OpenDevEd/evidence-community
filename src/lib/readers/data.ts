@@ -2,9 +2,10 @@ import "server-only";
 
 import { and, asc, count, desc, eq, exists, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	READER_COLLECTION_DESCRIPTION_LIMIT,
 	READER_COLLECTION_NAME_LIMIT,
@@ -440,6 +441,74 @@ export async function createReaderCollection(
 		.values({ userId, name: input.name, description: input.description ?? null, private: input.private })
 		.returning({ id: readerCollection.id });
 	return collection!;
+}
+
+/**
+ * The ID a reader's collection made for one request gets: the same reader and request always give the same ID, so a
+ * request made again makes nothing new (OpenScholar's `requestId`).
+ */
+function requestedCollectionId(userId: string, requestId: string) {
+	const hex = createHash("sha256").update(`${userId}\n${requestId}`).digest("hex");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${((parseInt(hex[16]!, 16) & 3) | 8).toString(16)}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+/** Makes a collection for the reader once per `requestId`, and answers its ID: the collection that request made before, if it did. */
+export async function createReaderCollectionOnce(
+	database: Database,
+	userId: string,
+	input: z.output<typeof readerCollectionInputSchema>,
+	requestId: string,
+) {
+	const id = requestedCollectionId(userId, requestId);
+	await database
+		.insert(readerCollection)
+		.values({ id, userId, name: input.name, description: input.description ?? null, private: input.private })
+		.onConflictDoNothing();
+	return id;
+}
+
+/**
+ * Puts records into a collection the reader owns or edits, or takes them out, whoever added them. Answers how many it
+ * holds after, the keys that went in or came out, and the keys it took; `refused` when the reader can't change it (`404` no such
+ * collection, `403` they may only view it). `allowed` names the keys an add may put in, read in the same transaction.
+ */
+export async function changeCollectionItems(
+	database: Database,
+	userId: string,
+	collectionId: string,
+	keys: string[],
+	change: "add" | "remove",
+	allowed: (transaction: DatabaseTransaction, keys: string[]) => Promise<string[]> = async (_transaction, all) => all,
+) {
+	if (!isReaderCollectionId(collectionId)) return { refused: 404 as const };
+	return database.transaction(async (transaction) => {
+		const access = await lockedAccess(transaction, userId, collectionId);
+		if (access !== "owner" && access !== "editor") return { refused: access ? (403 as const) : (404 as const) };
+		const unique = [...new Set(keys)];
+		const taken = change === "add" ? await allowed(transaction, unique) : unique;
+		const changed = taken.length === 0 ? [] : change === "add"
+			? await transaction.insert(readerCollectionItem).values(taken.map((itemKey) => ({ collectionId, itemKey }))).onConflictDoNothing().returning({ itemKey: readerCollectionItem.itemKey })
+			: await transaction.delete(readerCollectionItem).where(and(eq(readerCollectionItem.collectionId, collectionId), inArray(readerCollectionItem.itemKey, taken))).returning({ itemKey: readerCollectionItem.itemKey });
+		const [held] = await transaction.select({ count: count() }).from(readerCollectionItem).where(eq(readerCollectionItem.collectionId, collectionId));
+		return { count: held?.count ?? 0, changed: changed.map((row) => row.itemKey), taken };
+	});
+}
+
+/**
+ * The reader's access to a collection, with the collection locked, one change to it at a time as a single record's
+ * toggle takes it, and their membership under a share lock, so an owner's change to their role waits for the caller's
+ * transaction and a role taken away is never used after.
+ */
+async function lockedAccess(transaction: DatabaseTransaction, userId: string, collectionId: string): Promise<CollectionAccess> {
+	const [collection] = await transaction.select({ owner: readerCollection.userId }).from(readerCollection).where(eq(readerCollection.id, collectionId)).for("update", { of: readerCollection });
+	if (!collection) return null;
+	if (collection.owner === userId) return "owner";
+	const [member] = await transaction
+		.select({ role: readerCollectionMember.role })
+		.from(readerCollectionMember)
+		.where(and(eq(readerCollectionMember.collectionId, collectionId), eq(readerCollectionMember.userId, userId)))
+		.for("share");
+	return member?.role ?? null;
 }
 
 function ownedCollection(userId: string, collectionId: string) {

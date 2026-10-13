@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -24,6 +24,8 @@ import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
 import { filterPublicAttachments } from "@/lib/tags";
+import { normalizeDoi } from "@/lib/doi";
+import { openAlexItemKeys } from "@/lib/source-ingestion/openalex/references";
 import { toOpenScholarRecord, type OpenScholarRecord } from "./records";
 
 /**
@@ -50,6 +52,8 @@ export const refusals = {
 	readerAccountsOff: refusal("reader_accounts_off", "This library has no reader accounts.", 403),
 	tooMany: refusal("too_many", `A source gives at most ${RESOLVE_MAX_KEYS.toLocaleString("en")} records at once.`, 413),
 	indexChanged: refusal("index_changed", "The library's search changed while it was read. Ask again.", 409),
+	notReader: refusal("not_reader", "This person has never signed in to this library.", 404),
+	role: refusal("role", "Only the collection's owner and its editors can change it.", 403),
 } as const;
 
 /**
@@ -59,7 +63,7 @@ export const refusals = {
 export async function answerOpenScholar(
 	request: Request,
 	call: string,
-	run: (input: { config: LibraryServerConfig; database: Database }) => Promise<{ body: unknown } | Refusal>,
+	run: (input: { config: LibraryServerConfig; database: Database }) => Promise<{ body: unknown; status?: number } | Refusal>,
 ) {
 	await connection();
 	const config = await getLibraryConfig();
@@ -75,7 +79,7 @@ export async function answerOpenScholar(
 		? await run({ config, database: await getDatabaseForConfig(config) }).catch((error: unknown) => error)
 		: refusals.contract;
 	if (answer && typeof answer === "object" && "body" in answer) {
-		return NextResponse.json(answer.body, { headers: { ...ADMIN_RESPONSE_HEADERS, "OpenScholar-Contract": OPENSCHOLAR_CONTRACT } });
+		return NextResponse.json(answer.body, { status: "status" in answer && typeof answer.status === "number" ? answer.status : 200, headers: { ...ADMIN_RESPONSE_HEADERS, "OpenScholar-Contract": OPENSCHOLAR_CONTRACT } });
 	}
 	if (answer && typeof answer === "object" && "error" in answer && "status" in answer && typeof answer.status === "number") {
 		const { error, message, status } = answer as Refusal;
@@ -142,9 +146,11 @@ async function resolveLibrary(config: LibraryServerConfig, database: Database, {
 }
 
 /** The keys given that name a public record now, each once, in the order given: what the database says, which the search index follows a moment later. */
-async function publicKeys(config: LibraryServerConfig, database: Database, keys: string[]) {
+export async function publicKeys(config: LibraryServerConfig, database: Pick<Database, "select">, keys: string[], { lock = false } = {}) {
 	const unique = [...new Set(keys)];
-	const rows = await database.select({ key: item.key }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(item.key, unique)));
+	const query = database.select({ key: item.key }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(item.key, unique)));
+	// Locked, a record read as public can't be deleted before the caller's transaction ends.
+	const rows = await (lock ? query.for("share", { of: item }) : query);
 	const live = new Set(rows.map((row) => row.key));
 	return unique.filter((key) => live.has(key));
 }
@@ -249,3 +255,42 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 	}
 	return { records, unread };
 }
+
+/** Most papers one match takes. */
+const MATCH_MAX = 500;
+export const matchRequestSchema = z
+	.object({
+		reader: z.string().max(512).nullable().optional(),
+		papers: z.array(z.object({ openalexId: z.string().max(64).optional(), doi: z.string().max(512).optional() }).strict()).max(MATCH_MAX),
+	})
+	.strict();
+
+/** An OpenAlex work in one form, W and its number, from an address or an ID. */
+const workOf = (id: string | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)$/iu)?.[1]?.toUpperCase() ?? null;
+
+/**
+ * The public records this library holds for papers named by their OpenAlex ID or DOI, each with the paper's place in
+ * the list (`at`): a record imported from OpenAlex by its work, or by a work merged into it as a repeat; any record by
+ * its DOI, the first by key when several share one. A paper it doesn't hold has none.
+ * ponytail: a DOI is matched by scanning the library's records; index it if libraries grow past a few hundred thousand.
+ */
+export async function matchRecords(config: LibraryServerConfig, database: Database, papers: z.infer<typeof matchRequestSchema>["papers"]) {
+	const works = [...new Set(papers.flatMap((paper) => workOf(paper.openalexId) ?? []))];
+	const dois = [...new Set(papers.flatMap((paper) => normalizeDoi(paper.doi) ?? []))];
+	if (!works.length && !dois.length) return [];
+	// normalizeDoi in SQL: without its address, `doi:` or angle brackets, in lower case.
+	const bareDoi = sql<string>`lower(regexp_replace(regexp_replace(regexp_replace(trim(${item.DOI}), '^https?://(dx\\.)?doi\\.org/', '', 'i'), '^doi:\\s*', '', 'i'), '^<(.+)>$', '\\1'))`;
+	const [workKeys, doiRows] = await Promise.all([
+		openAlexItemKeys(database, works),
+		dois.length ? database.select({ key: item.key, doi: bareDoi }).from(item).where(and(publicParentVisibility(database, config.content.tags.hidden), inArray(bareDoi, dois))).orderBy(item.key) : [],
+	]);
+	const shown = new Set(await publicKeys(config, database, [...workKeys.values()]));
+	const byDoi = new Map<string, string>();
+	for (const row of doiRows) if (!byDoi.has(row.doi)) byDoi.set(row.doi, row.key);
+	return papers.flatMap((paper, at) => {
+		const work = workKeys.get(workOf(paper.openalexId) ?? "");
+		const key = (work && shown.has(work) ? work : undefined) ?? byDoi.get(normalizeDoi(paper.doi) ?? "");
+		return key ? [{ at, key }] : [];
+	});
+}
+
