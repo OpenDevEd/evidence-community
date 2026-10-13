@@ -194,10 +194,10 @@ export async function readImportPdf(
 		],
 	});
 	// How long each step took and what it read and wrote, and which tools the read used, for checking how a library's model works with them.
+	// It reads only the steps: the answer may be missing when a read fails, which is when this matters most.
 	console.info("PDF import read", {
 		filename,
 		ms: Date.now() - started,
-		citedDois: result.output.citedDois.length,
 		steps: result.steps.map(({ toolCalls, usage }, index) => ({
 			cached: usage.inputTokenDetails.cacheReadTokens,
 			in: usage.inputTokens,
