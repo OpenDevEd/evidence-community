@@ -105,7 +105,7 @@ describe("keeping a copy of the conversation", () => {
 					parts: [
 						{
 							type: "text",
-							text: "Human feedback stayed stronger [/lib/27BGDU89/download/IUA7YXN9 — 1 PAGE/]. [see table 2] [/lib/B88FNQ7J/download/IJEFHXHF — 17 PAGE/]",
+							text: "Human feedback stayed stronger [/lib/27BGDU89/download/IUA7YXN9 — 1 PAGE/]. [see table 2] [/lib/B88FNQ7J/download/IJEFHXHF — 17 PAGE/] [/lib/B88FNQ7J/download/IJEFHXHF — 2 PAGE/](https://example.org/original)",
 						},
 					],
 				},
@@ -119,7 +119,7 @@ describe("keeping a copy of the conversation", () => {
 		);
 
 		expect(markdown).toContain(
-			"Human feedback stayed stronger [Source, p. 1](https://library.example.org/lib/27BGDU89/download/IUA7YXN9#page=1). [see table 2] [Source, p. 17](https://library.example.org/lib/B88FNQ7J/download/IJEFHXHF#page=17)",
+			"Human feedback stayed stronger [Source, p. 1](https://library.example.org/lib/27BGDU89/download/IUA7YXN9#page=1). [see table 2] [Source, p. 17](https://library.example.org/lib/B88FNQ7J/download/IJEFHXHF#page=17) [/lib/B88FNQ7J/download/IJEFHXHF — 2 PAGE/](https://example.org/original)",
 		);
 	});
 
