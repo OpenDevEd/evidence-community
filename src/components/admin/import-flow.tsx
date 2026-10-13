@@ -1,19 +1,12 @@
 "use client";
 
-import { Folder01Icon } from "@hugeicons/core-free-icons";
-import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { use, useDeferredValue, useState } from "react";
 import { toast } from "sonner";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Button } from "@/components/nextui/Button";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
-import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
 import { estimatePdfImportCost, parseDoiList, type AdminImportCommitResult } from "@/lib/admin/item-import-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
-import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { usd } from "./ImportReview";
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import { AdminApiError, commitAdminImport, createAdminDraft, previewAdminImport, readAdminImportPdf } from "./admin-api";
@@ -107,30 +100,6 @@ export function CostEstimate({ files, stale }: { files: readonly File[]; stale: 
 				{cost < 0.01 ? "Under $0.01" : `About ${usd(cost)}`} for {plural(pages, "page", "pages")}
 			</span>
 		</span>
-	);
-}
-
-/** Collections for the new drafts, picked in a popover so the review keeps its room. */
-export function CollectionsButton({ collections, locked, onChange, sources }: { collections: string[]; locked: boolean; onChange: (keys: string[]) => void; sources: readonly AdminSource[] }) {
-	return (
-		<Popover placement="top-start">
-			<PopoverTrigger>
-				<Button isDisabled={locked} size="sm" startContent={<HugeiconsIcon aria-hidden icon={Folder01Icon} size={15} />} variant="muted">
-					{collections.length ? plural(collections.length, "collection", "collections") : "Add to collections"}
-				</Button>
-			</PopoverTrigger>
-			<PopoverContent className="w-[24rem] p-3">
-				<div className="max-h-[22rem] w-full overflow-y-auto [scrollbar-gutter:stable]">
-					<AdminCollectionPicker
-						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], sources)}
-						onSelectionChange={onChange}
-						selectedKeys={collections}
-						selectionMode="multiple"
-						sources={sources}
-					/>
-				</div>
-			</PopoverContent>
-		</Popover>
 	);
 }
 

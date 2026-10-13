@@ -1,17 +1,17 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, use, useState, type ReactNode } from "react";
+import { Suspense, use, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Button } from "@/components/nextui/Button";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
+import { adminPanelTabState } from "./admin-tab-styles";
 import { FILE_CHECKS } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 import { pdfPageCount } from "./pdf-thumbnail";
@@ -95,23 +95,100 @@ export function FileChecksList() {
 	);
 }
 
-/** Previous and next for a narrow list, with the range shown. */
-export function NarrowPager({ onChange, page, pages, perPage, total }: { onChange: (page: number) => void; page: number; pages: number; perPage: number; total: number }) {
-	if (pages < 2) return null;
+
+type SheetTab<Id extends string> = { count?: number; icon?: typeof ArrowLeft01Icon; id: Id; label: string };
+
+/**
+ * The sheet's tabs, in the admin's panel style as in the record inspector:
+ * the chosen tab joins the panel below it. Used for the source on the Add
+ * step and the filter on the review.
+ */
+export function SheetTabs<Id extends string>({ disabled = false, label, onSelect, panelId, selected, tabs }: { disabled?: boolean; label: string; onSelect: (id: Id) => void; panelId: string; selected: Id; tabs: SheetTab<Id>[] }) {
+	const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+		const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+		if (!step) return;
+		event.preventDefault();
+		const next = tabs[(index + step + tabs.length) % tabs.length]!;
+		onSelect(next.id);
+		document.getElementById(`${panelId}-tab-${next.id}`)?.focus();
+	};
 	return (
-		<div className="flex items-center gap-1 pt-2">
-			<span className="me-auto text-xs tabular-nums text-black/50 dark:text-white/50">
-				{(page - 1) * perPage + 1} to {Math.min(page * perPage, total)} of {total}
-			</span>
-			<Button aria-label="Previous page" className="size-7 min-w-7" isDisabled={page <= 1} isIconOnly onPress={() => onChange(page - 1)} size="xs" variant="transparent">
-				<HugeiconsIcon aria-hidden icon={ArrowLeft01Icon} size={14} />
-			</Button>
-			<Button aria-label="Next page" className="size-7 min-w-7" isDisabled={page >= pages} isIconOnly onPress={() => onChange(page + 1)} size="xs" variant="transparent">
-				<HugeiconsIcon aria-hidden icon={ArrowRight01Icon} size={14} />
-			</Button>
+		<div aria-label={label} className="flex shrink-0 overflow-x-auto px-3 [scrollbar-width:none]" role="tablist">
+			{tabs.map((tab, index) => {
+				const active = tab.id === selected;
+				return (
+					<button
+						aria-controls={panelId}
+						aria-selected={active}
+						className={`flex min-h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium outline-none transition-background-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed ${adminPanelTabState(active)}`}
+						disabled={disabled}
+						id={`${panelId}-tab-${tab.id}`}
+						key={tab.id}
+						onClick={() => onSelect(tab.id)}
+						onKeyDown={(event) => move(event, index)}
+						role="tab"
+						tabIndex={active ? 0 : -1}
+						type="button"
+					>
+						{tab.icon ? <HugeiconsIcon aria-hidden className="shrink-0" icon={tab.icon} size={18} strokeWidth={1.8} /> : null}
+						{tab.label}
+						{tab.count === undefined ? null : <span className="tabular-nums text-black/40 dark:text-white/40">{tab.count}</span>}
+					</button>
+				);
+			})}
 		</div>
 	);
 }
 
-/** A tally label inside a sentence: "Already in the library" becomes "already in the library", "PDFs not attached" stays. */
-export const inSentence = (label: string) => (/^[A-Z][a-z]/.test(label) ? label[0]!.toLowerCase() + label.slice(1) : label);
+/** A group of rows on a soft surface: the settings at the top of each step, and a record's parts. */
+export function SettingsGroup({ children }: { children: ReactNode }) {
+	return <div className="shrink-0 divide-y divide-black/[0.05] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.06] dark:bg-white/[0.035]">{children}</div>;
+}
+
+const rowClass = "flex h-12 w-full items-center gap-3 px-4 text-start";
+
+/** One row of a group: what it holds now, and what it shows when it opens in place. */
+export function Setting({ children, defaultOpen = false, icon, summary, title }: { children: ReactNode; defaultOpen?: boolean; icon: typeof ArrowLeft01Icon; summary: ReactNode; title: string }) {
+	const reduceMotion = useReducedMotion();
+	const [open, setOpen] = useState(defaultOpen);
+	return (
+		<div>
+			<button aria-expanded={open} className={`${rowClass} outline-none transition-colors duration-150 hover:bg-black/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/[0.03]`} onClick={() => setOpen(!open)} type="button">
+				<HugeiconsIcon aria-hidden className="shrink-0 text-black/45 dark:text-white/45" icon={icon} size={17} />
+				<span className="shrink-0 text-sm font-medium text-black/85 dark:text-white/85">{title}</span>
+				<span className="flex min-w-0 flex-1 justify-end truncate text-xs text-black/45 dark:text-white/45">{summary}</span>
+				<HugeiconsIcon aria-hidden className={`shrink-0 text-black/35 transition-transform duration-200 dark:text-white/35 ${open ? "rotate-180" : ""}`} icon={ArrowDown01Icon} size={15} />
+			</button>
+			<AnimatePresence initial={false}>
+				{open ? (
+					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.32, 0.72, 0, 1] }}>
+						<div className="px-4 pb-4 pt-1">{children}</div>
+					</motion.div>
+				) : null}
+			</AnimatePresence>
+		</div>
+	);
+}
+
+/** A row of a group that only states something, such as how many drafts were created. */
+export function SummaryRow({ icon, title, tone = "", value }: { icon: typeof ArrowLeft01Icon; title: string; tone?: string; value: ReactNode }) {
+	return (
+		<div className={rowClass}>
+			<HugeiconsIcon aria-hidden className="shrink-0 text-black/45 dark:text-white/45" icon={icon} size={17} />
+			<span className="min-w-0 flex-1 truncate text-sm text-black/80 dark:text-white/80">{title}</span>
+			<span className={`shrink-0 text-sm font-medium tabular-nums text-black/85 dark:text-white/85 ${tone}`}>{value}</span>
+		</div>
+	);
+}
+
+/** A list's title row: what it holds, a note beside it, and an action at the end. */
+export function ListHeader({ action, aside, lead, title }: { action?: ReactNode; aside?: ReactNode; lead?: ReactNode; title: ReactNode }) {
+	return (
+		<div className="flex h-8 shrink-0 items-center gap-3">
+			{lead}
+			<h3 className="whitespace-nowrap text-sm font-medium text-black/85 dark:text-white/85">{title}</h3>
+			{aside ? <span className="flex min-w-0 items-center gap-3 truncate text-xs tabular-nums text-black/45 dark:text-white/45">{aside}</span> : null}
+			{action ? <span className="ms-auto flex shrink-0 items-center">{action}</span> : null}
+		</div>
+	);
+}

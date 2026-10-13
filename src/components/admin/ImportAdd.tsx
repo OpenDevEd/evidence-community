@@ -1,133 +1,89 @@
 "use client";
 
-import { Add01Icon, AlertCircleIcon, ArrowDown01Icon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, Book02Icon, CheckListIcon, Folder01Icon, Link01Icon, NoteEditIcon, Pdf01Icon, Upload04Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, useRef, useState, type DragEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_INSTRUCTION_LENGTH, PDF_IMPORT_MAX_INSTRUCTIONS, parseDoiList } from "@/lib/admin/item-import-contract";
+import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_GUIDANCE_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
 
 import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { DropArea, ListEditor, megabytes, PDF_ACCEPT, RemoveButton, withNew } from "./ImportInputs";
 import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportKind } from "./ImportSteps";
-import { adminPanelTabState } from "./admin-tab-styles";
 import { FILE_CHECKS, PDF_IMPORT_MAX_FILES } from "./admin-import";
-import { FileChecksList, PdfRows } from "./import-parts";
+import { FileChecksList, ListHeader, PdfRows, Setting, SettingsGroup, SheetTabs } from "./import-parts";
 import { CostEstimate, type ImportFlowState } from "./import-flow";
 
-const SOURCES: { icon: typeof Pdf01Icon; kind: ImportKind; label: string }[] = [
-	{ icon: Pdf01Icon, kind: "pdfs", label: "PDFs" },
-	{ icon: Link01Icon, kind: "dois", label: "DOIs" },
-	{ icon: Book02Icon, kind: "files", label: "Bibliography files" },
+const SOURCES: { icon: typeof Pdf01Icon; id: ImportKind; label: string }[] = [
+	{ icon: Pdf01Icon, id: "pdfs", label: "PDFs" },
+	{ icon: Link01Icon, id: "dois", label: "DOIs" },
+	{ icon: Book02Icon, id: "files", label: "Bibliography files" },
 ];
 
-/** What to import from, in the admin's panel tabs: the chosen one joins the sheet below it. */
+/** What to import from. */
 export function SourceTabs({ flow }: { flow: ImportFlowState }) {
-	const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-		const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
-		if (!step) return;
-		event.preventDefault();
-		const next = SOURCES[(index + step + SOURCES.length) % SOURCES.length]!;
-		flow.setKind(next.kind);
-		document.getElementById(`import-source-${next.kind}`)?.focus();
-	};
-	return (
-		<div aria-label="Import from" className="flex shrink-0 px-3" role="tablist">
-			{SOURCES.map((source, index) => {
-				const selected = flow.kind === source.kind;
-				return (
-					<button
-						aria-controls="import-source-panel"
-						aria-selected={selected}
-						className={`flex min-h-11 flex-auto items-center justify-center gap-1.5 whitespace-nowrap px-3 text-xs font-medium outline-none transition-background-text focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus disabled:cursor-not-allowed ${adminPanelTabState(selected)}`}
-						disabled={flow.busy}
-						id={`import-source-${source.kind}`}
-						key={source.kind}
-						onClick={() => flow.setKind(source.kind)}
-						onKeyDown={(event) => move(event, index)}
-						role="tab"
-						tabIndex={selected ? 0 : -1}
-						type="button"
-					>
-						<HugeiconsIcon aria-hidden className="shrink-0" icon={source.icon} size={18} strokeWidth={1.8} />
-						{source.label}
-					</button>
-				);
-			})}
-		</div>
-	);
+	return <SheetTabs disabled={flow.busy} label="Import from" onSelect={flow.setKind} panelId="import-source-panel" selected={flow.kind} tabs={SOURCES} />;
 }
 
-/** One setting in the group at the top: what it holds now, and the editor when it opens. */
-function Setting({ children, icon, summary, title }: { children: ReactNode; icon: typeof Pdf01Icon; summary: string; title: string }) {
-	const reduceMotion = useReducedMotion();
-	const [open, setOpen] = useState(false);
-	return (
-		<div>
-			<button aria-expanded={open} className="flex h-12 w-full items-center gap-3 px-4 text-start outline-none transition-colors duration-150 hover:bg-black/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/[0.03]" onClick={() => setOpen(!open)} type="button">
-				<HugeiconsIcon aria-hidden className="shrink-0 text-black/45 dark:text-white/45" icon={icon} size={17} />
-				<span className="shrink-0 text-sm font-medium text-black/85 dark:text-white/85">{title}</span>
-				<span className="min-w-0 flex-1 truncate text-end text-xs text-black/45 dark:text-white/45">{summary}</span>
-				<HugeiconsIcon aria-hidden className={`shrink-0 text-black/35 transition-transform duration-200 dark:text-white/35 ${open ? "rotate-180" : ""}`} icon={ArrowDown01Icon} size={15} />
-			</button>
-			<AnimatePresence initial={false}>
-				{open ? (
-					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.32, 0.72, 0, 1] }}>
-						<div className="px-4 pb-4 pt-1">{children}</div>
-					</motion.div>
-				) : null}
-			</AnimatePresence>
-		</div>
-	);
-}
+const INSTRUCTIONS_EXAMPLE = ["Write in British English.", "Don't copy the PDF's abstract. Write three sentences for a policy reader instead.", "Give an organisation's full name as the author, not its acronym."].join("\n");
 
-
-/** Instructions libraries often give, one press from the list. */
-const SUGGESTED_INSTRUCTIONS = [
-	{ label: "British English", text: "Write in British English." },
-	{ label: "Write our own abstract", text: "Don't copy the PDF's abstract. Write three sentences for a policy reader instead." },
-	{ label: "Organisations in full", text: "Give an organisation's full name as the author, not its acronym." },
-	{ label: "Sentence-case titles", text: "Write titles in sentence case." },
-];
-
+/**
+ * The library's instructions for the AI, written freely in a box of their
+ * own, one per line: something to write in, unlike the checks, which are a
+ * list of questions.
+ */
 function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
-	const { instructions, setInstructions: save } = flow;
-	const full = instructions.length >= PDF_IMPORT_MAX_INSTRUCTIONS;
-	const suggestions = SUGGESTED_INSTRUCTIONS.filter(({ text }) => !instructions.includes(text));
+	const text = flow.instructions.join("\n");
+	// A hidden copy of the text sizes the box, so it grows with what is written.
+	const shared = "col-start-1 row-start-1 whitespace-pre-wrap break-words px-4 py-3 text-sm leading-6";
 	return (
 		<div>
-			<ListEditor
-				addLabel="Add an instruction"
-				busy={flow.busy}
-				intro="Saved for this library and given to the AI with every PDF it reads. They win over how it works by default, but never make it invent facts."
-				itemLabel="Instruction"
-				items={instructions}
-				max={PDF_IMPORT_MAX_INSTRUCTIONS}
-				maxLength={PDF_IMPORT_MAX_INSTRUCTION_LENGTH}
-				onChange={save}
-			/>
-			{suggestions.length && !full ? (
-				<div className="mt-3 flex flex-wrap items-center gap-1.5 ps-2">
-					{suggestions.map((suggestion) => (
-						<button
-							className="flex h-7 items-center gap-1 rounded-lg bg-black/[0.05] pe-2.5 ps-2 text-xs font-medium text-black/65 outline-none transition-colors hover:bg-black/[0.08] hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50 dark:bg-white/[0.07] dark:text-white/65 dark:hover:bg-white/[0.1] dark:hover:text-white/85"
-							disabled={flow.busy}
-							key={suggestion.text}
-							onClick={() => save([...instructions.filter((item) => item.trim()), suggestion.text])}
-							type="button"
-						>
-							<HugeiconsIcon aria-hidden className="text-black/40 dark:text-white/40" icon={Add01Icon} size={12} />
-							{suggestion.label}
-						</button>
-					))}
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Saved for this library and given to the AI with every PDF it reads. They win over how it works by default, but never make it invent facts.</p>
+			<div className="overflow-hidden rounded-xl bg-card_light shadow-sm ring-1 ring-black/[0.07] transition-shadow focus-within:ring-2 focus-within:ring-focus dark:bg-white/[0.05] dark:ring-white/[0.08]">
+				<div className="grid min-h-[8.5rem]">
+					<span aria-hidden className={`${shared} invisible`}>{`${text || INSTRUCTIONS_EXAMPLE} `}</span>
+					<textarea
+						aria-label="AI instructions"
+						className={`${shared} resize-none overflow-hidden bg-transparent text-black/85 outline-none placeholder:text-black/35 disabled:opacity-50 dark:text-white/85 dark:placeholder:text-white/30`}
+						disabled={flow.busy}
+						maxLength={PDF_IMPORT_MAX_GUIDANCE_LENGTH}
+						onChange={(event) => flow.setInstructions(event.target.value.split("\n"))}
+						placeholder={INSTRUCTIONS_EXAMPLE}
+						value={text}
+					/>
 				</div>
-			) : null}
+				<div className="flex h-9 items-center gap-3 border-t border-black/[0.05] px-4 text-xs text-black/45 dark:border-white/[0.06] dark:text-white/45">
+					<span>One instruction per line</span>
+					<span className="ms-auto tabular-nums">
+						{text.length.toLocaleString("en-GB")} of {PDF_IMPORT_MAX_GUIDANCE_LENGTH.toLocaleString("en-GB")}
+					</span>
+				</div>
+			</div>
 		</div>
+	);
+}
+
+/** Where the new drafts go, on the Add step and again in the review. */
+export function CollectionsSetting({ flow }: { flow: ImportFlowState }) {
+	return (
+		<Setting icon={Folder01Icon} summary={flow.collections.length ? `${flow.collections.length} chosen` : "None"} title="Collections">
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">The new drafts go into these.</p>
+			{/* Locked while a lookup or the import runs: the batch takes the collections chosen when it starts. */}
+			<div className={`transition-opacity ${flow.busy || flow.locked ? "opacity-50" : ""}`} inert={flow.busy || flow.locked}>
+				<AdminCollectionPicker
+					allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], flow.sources)}
+					onSelectionChange={flow.setCollections}
+					selectedKeys={flow.collections}
+					selectionMode="multiple"
+					sources={flow.sources}
+				/>
+			</div>
+		</Setting>
 	);
 }
 
@@ -135,7 +91,7 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 function Settings({ flow }: { flow: ImportFlowState }) {
 	const instructions = flow.instructions.filter((item) => item.trim()).length;
 	return (
-		<div className="shrink-0 divide-y divide-black/[0.05] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.06] dark:bg-white/[0.035]">
+		<SettingsGroup>
 			{flow.kind === "pdfs" ? (
 				<>
 					<Setting icon={CheckListIcon} summary={`${flow.checks.length} for this library, ${FILE_CHECKS.length} on every file`} title="AI checks">
@@ -157,35 +113,25 @@ function Settings({ flow }: { flow: ImportFlowState }) {
 					</Setting>
 				</>
 			) : null}
-			<Setting icon={Folder01Icon} summary={flow.collections.length ? `${flow.collections.length} chosen` : "None"} title="Collections">
-				<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">The new drafts go into these.</p>
-				{/* Locked while a lookup runs: the batch takes the collections chosen when it starts. */}
-				<div className={`transition-opacity ${flow.busy ? "opacity-50" : ""}`} inert={flow.busy}>
-					<AdminCollectionPicker
-						allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], flow.sources)}
-					onSelectionChange={flow.setCollections}
-					selectedKeys={flow.collections}
-						selectionMode="multiple"
-						sources={flow.sources}
-					/>
-				</div>
-			</Setting>
-		</div>
+			<CollectionsSetting flow={flow} />
+		</SettingsGroup>
 	);
 }
 
 /** What was added so far, its size, and a way to start again. */
 function UploadHeader({ aside, busy, onClear, title }: { aside?: ReactNode; busy: boolean; onClear?: () => void; title: string }) {
 	return (
-		<div className="flex h-8 shrink-0 items-center gap-3">
-			<h3 className="whitespace-nowrap text-sm font-medium text-black/85 dark:text-white/85">{title}</h3>
-			{aside ? <span className="flex min-w-0 items-center gap-3 truncate text-xs tabular-nums text-black/45 dark:text-white/45">{aside}</span> : null}
-			{onClear ? (
-				<Button className="ms-auto h-7 min-h-7" isDisabled={busy} onPress={onClear} size="xs" variant="transparent">
-					Clear all
-				</Button>
-			) : null}
-		</div>
+		<ListHeader
+			action={
+				onClear ? (
+					<Button className="h-7 min-h-7" isDisabled={busy} onPress={onClear} size="xs" variant="transparent">
+						Clear all
+					</Button>
+				) : undefined
+			}
+			aside={aside}
+			title={title}
+		/>
 	);
 }
 
@@ -410,7 +356,7 @@ export function UploadButton({ flow }: { flow: ImportFlowState }) {
  */
 export function ImportAdd({ flow }: { flow: ImportFlowState }) {
 	return (
-		<div aria-labelledby={`import-source-${flow.kind}`} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 pt-5 [scrollbar-gutter:stable]" id="import-source-panel" role="tabpanel">
+		<div aria-labelledby={`import-source-panel-tab-${flow.kind}`} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 pt-5 [scrollbar-gutter:stable]" id="import-source-panel" role="tabpanel">
 			<Settings flow={flow} />
 			<div className="flex min-h-[18rem] flex-[1_0_auto] flex-col gap-2">
 				{flow.kind === "pdfs" ? <PdfUpload flow={flow} /> : flow.kind === "dois" ? <DoiUpload flow={flow} /> : <FileUpload flow={flow} />}

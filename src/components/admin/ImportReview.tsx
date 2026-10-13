@@ -28,9 +28,8 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 import type { AdminImportCommitResult, PdfCheckResult, RightsFix, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfProperties, PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 
-import type { ImportKind } from "./ImportSteps";
 import { InspectorSection } from "./InspectorSection";
-import { checkPasses, reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck, type ReviewFilter } from "./admin-import";
+import { checkPasses, reviewFrom, storedReview, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
 
 const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
 	met: { bar: "bg-emerald-500", icon: CheckmarkCircle02Icon, label: "Met", tone: "text-emerald-600 dark:text-emerald-400" },
@@ -103,45 +102,9 @@ export function creatorsLine(creators: readonly string[]) {
 	return `${creators[0]} and ${creators.length - 1} more`;
 }
 
-const FILTERS: { filter: ReviewFilter; label: string; pdfOnly?: boolean }[] = [
-	{ filter: "all", label: "All" },
-	{ filter: "ready", label: "Ready" },
-	{ filter: "existing", label: "In the library" },
-	{ filter: "attention", label: "Needs attention" },
-	{ filter: "improve", label: "Checks to improve", pdfOnly: true },
-];
-
 /** Dollars to the cent, and "under $0.01" below that. */
 export function usd(amount: number) {
 	return amount > 0 && amount < 0.01 ? "under $0.01" : `$${amount.toFixed(2)}`;
-}
-
-export type ReviewCounts = Record<"attention" | "done" | "existing" | "improve" | "ready" | "total", number>;
-
-/** The filters, each with its count. */
-export function ReviewBar({ counts, filter, kind, onFilter }: { counts: ReviewCounts; filter: ReviewFilter; kind: ImportKind; onFilter: (filter: ReviewFilter) => void }) {
-	return (
-		<div className="flex h-8 items-center gap-4">
-			<div aria-label="Show" className="flex items-center gap-0.5" role="group">
-				{FILTERS.filter((option) => kind === "pdfs" || !option.pdfOnly).map((option) => {
-					const active = filter === option.filter;
-					const count = option.filter === "all" ? counts.total : counts[option.filter];
-					return (
-						<button
-							aria-pressed={active}
-							className={`flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-accent ${active ? "bg-black/[0.06] font-medium text-black/85 dark:bg-white/10 dark:text-white/90" : "text-black/55 hover:bg-black/[0.03] hover:text-black/75 dark:text-white/55 dark:hover:bg-white/[0.05] dark:hover:text-white/75"}`}
-							key={option.filter}
-							onClick={() => onFilter(option.filter)}
-							type="button"
-						>
-							{option.label}
-							<span className="tabular-nums text-black/40 dark:text-white/40">{count}</span>
-						</button>
-					);
-				})}
-			</div>
-		</div>
-	);
 }
 
 /** The answer to each check, and for a failed one that the Rights fix covers, whether it is applied. */
@@ -238,18 +201,6 @@ export function TopicList({ chosen, locked, onToggle, topics }: { chosen: Readon
 				</li>
 			))}
 		</ul>
-	);
-}
-
-export function DetailSection({ aside, children, title }: { aside?: ReactNode; children: ReactNode; title: string }) {
-	return (
-		<section>
-			<div className="mb-2.5 flex h-6 items-center gap-2">
-				<h4 className="text-sm font-medium text-black/85 dark:text-white/85">{title}</h4>
-				{aside ? <span className="ms-auto text-xs tabular-nums text-black/45 dark:text-white/45">{aside}</span> : null}
-			</div>
-			{children}
-		</section>
 	);
 }
 
