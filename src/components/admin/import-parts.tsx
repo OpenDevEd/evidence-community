@@ -6,12 +6,11 @@ import { Suspense, use, useState, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import { Tab, Tabs } from "@/components/nextui/Tabs";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import type { ImportKind, ImportStage } from "./ImportSteps";
+import type { ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
 import { FILE_CHECKS } from "./admin-import";
 import { CostEstimate, type ImportFlowState } from "./import-flow";
@@ -26,23 +25,6 @@ export function StageFade({ children, className = "flex min-h-0 flex-1 flex-col"
 				{children}
 			</motion.div>
 		</AnimatePresence>
-	);
-}
-
-/** PDFs, DOIs or bibliography files, in the product's tabs. */
-export function SourceTabs({ className = "", dois, files, flow, pdfs, panel = "px-0 pb-0 pt-5" }: { className?: string; dois: ReactNode; files: ReactNode; flow: ImportFlowState; pdfs: ReactNode; panel?: string }) {
-	return (
-		<Tabs aria-label="Import from" className={className} classNames={{ panel }} isDisabled={flow.busy} onSelectionChange={(key) => flow.setKind(key as ImportKind)} selectedKey={flow.kind}>
-			<Tab key="pdfs" title="PDFs">
-				{pdfs}
-			</Tab>
-			<Tab key="dois" title="DOIs">
-				{dois}
-			</Tab>
-			<Tab key="files" title="Bibliography files">
-				{files}
-			</Tab>
-		</Tabs>
 	);
 }
 

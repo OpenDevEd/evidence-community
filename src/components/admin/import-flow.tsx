@@ -155,6 +155,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const estimateFiles = useDeferredValue(pdfs);
 	const [checks, setChecksState] = useState(() => (typeof window === "undefined" ? [] : storedChecks()));
 	const [guidance, setGuidanceState] = useState(() => (typeof window === "undefined" ? "" : storedGuidance()));
+	// Chosen before reading starts; the batch carries them from then on.
+	const [collections, setCollectionsState] = useState<string[]>([]);
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [filter, setFilter] = useState<ReviewFilter>("all");
 	const [busy, setBusy] = useState(false);
@@ -197,7 +199,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				storeChecks(checks);
 				const pending = pendingPdfRows(pdfs);
 				setActiveId(pending[0]?.id ?? null);
-				startImportBatch({ checks, importId, kind, rows: pending });
+				startImportBatch({ checks, collections, importId, kind, rows: pending });
 				void readPdfs(importId, pending, (file) => readAdminImportPdf(file, checks, guidance.trim()), errorMessage);
 				return;
 			}
@@ -206,7 +208,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			if (currentImportBatch()) return;
 			const previewRows = rowsFromRecords(response.records);
 			setActiveId(previewRows[0]?.id ?? null);
-			startImportBatch({ checks: [], importId, kind, rows: previewRows });
+			startImportBatch({ checks: [], collections, importId, kind, rows: previewRows });
 		});
 
 	const attachPdfs = async (importId: string, created: AdminImportCommitResult[]) => {
@@ -282,6 +284,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		checkCount,
 		checks,
 		checksOf,
+		collections: batch?.collections ?? collections,
 		commit: () => void commit(),
 		counts,
 		doiText,
@@ -292,7 +295,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		finish,
 		guidance,
 		/** The input's problem, shown once there is something to read. The DOI box marks bad entries itself. */
-		footerProblem: stage === "input" && kind !== "dois" && (files.length || pdfs.length) ? problem : null,
+		footerProblem: stage === "input" && (kind === "pdfs" ? pdfs.length : kind === "files" ? files.length : 0) ? problem : null,
 		kind,
 		locked,
 		onClose,
@@ -318,7 +321,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			setChecksState(value);
 			storeChecks(value);
 		},
-		setCollections: (keys: string[]) => changeImportBatch(importId, (current) => ({ ...current, collections: keys })),
+		setCollections: (keys: string[]) => (batch ? changeImportBatch(importId, (current) => ({ ...current, collections: keys })) : setCollectionsState(keys)),
 		setDoiText,
 		setFiles,
 		setGuidance: (value: string) => {

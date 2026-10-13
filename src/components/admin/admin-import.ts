@@ -197,8 +197,8 @@ function setBatch(next: ImportBatch | null) {
 	for (const listener of listeners) listener();
 }
 
-export function startImportBatch(start: Pick<ImportBatch, "checks" | "importId" | "kind" | "rows">) {
-	setBatch({ ...start, attach: new Map(), collections: [], committing: false, excluded: new Set(), publish: new Map(), results: null, toPublish: null, topics: new Map() });
+export function startImportBatch(start: Pick<ImportBatch, "checks" | "collections" | "importId" | "kind" | "rows">) {
+	setBatch({ ...start, attach: new Map(), committing: false, excluded: new Set(), publish: new Map(), results: null, toPublish: null, topics: new Map() });
 }
 
 export const currentImportBatch = () => batch;
