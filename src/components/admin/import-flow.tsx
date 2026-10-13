@@ -57,7 +57,7 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Something went wrong. Try again.";
 }
 
-/** What a draft lacks to publish, such as a publisher for Crossref, rather than the request's summary. */
+/** What a draft lacks to be submitted, such as a publisher for Crossref, rather than the request's summary. */
 function publishError(error: unknown) {
 	const missing = error instanceof AdminApiError ? Object.values(error.fields).map((text) => text.replace(/\.$/u, "")) : [];
 	return missing.length ? `${missing.join(". ")}.` : errorMessage(error);
@@ -78,8 +78,8 @@ function inputError(kind: ImportKind, doiText: string, files: readonly File[], p
 	}
 }
 
-// Each publish approves a review and reindexes the record, so a few at a time.
-const PUBLISH_CONCURRENCY = 2;
+// Each draft is submitted and may be approved and reindexed, so a few at a time.
+const SEND_CONCURRENCY = 2;
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 /** "Read 5 PDFs", or "Read PDFs" before there are any. */
@@ -237,37 +237,39 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		});
 
 	/**
-	 * Publishes drafts the way an editor publishes any record. A draft made
-	 * from a PDF takes the import's DOI route, and on Crossref its DOI is
-	 * reserved first; then the draft is submitted and approved, and the
-	 * publication worker activates the DOI.
+	 * Sends drafts on the way the record inspector does. A draft made from a
+	 * PDF takes the import's DOI route, and on Crossref its DOI is reserved;
+	 * then the draft is submitted for review. Editors and owners approve it
+	 * at once, which publishes it, and the publication worker activates the
+	 * DOI; anyone else leaves it for an editor.
 	 */
-	const publish = async (importId: string, drafts: readonly { id: string; itemKey: string; kind: "created" | "imported" | undefined }[]) => {
+	const send = async (importId: string, drafts: readonly { id: string; itemKey: string; kind: "created" | "imported" | undefined }[], approve: boolean) => {
 		const route = batch?.publishRoute ?? "zenodo";
 		const created = createdKeys(batch?.results ?? []);
 		const mark = (id: string, state: PublishState) => changeImportBatch(importId, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
-		for (const { id } of drafts) mark(id, { state: "publishing" });
+		for (const { id } of drafts) mark(id, { state: "sending" });
 		let next = 0;
 		await Promise.all(
-			Array.from({ length: Math.min(PUBLISH_CONCURRENCY, drafts.length) }, async () => {
+			Array.from({ length: Math.min(SEND_CONCURRENCY, drafts.length) }, async () => {
 				while (next < drafts.length) {
 					const { id, itemKey, kind } = drafts[next++]!;
 					try {
+						let doi: string | undefined;
 						if (kind === "created") {
 							await saveAdminPublishingChoice(itemKey, route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route });
-							if (route === "crossref-zenodo") await reserveAdminCrossrefDoi(itemKey);
+							if (route === "crossref-zenodo") doi = (await reserveAdminCrossrefDoi(itemKey)).doi;
 						}
 						const review = await submitAdminReview(itemKey);
-						await approveAdminReview(review.id, review.revision);
-						mark(id, { state: "published" });
+						if (approve) await approveAdminReview(review.id, review.revision);
+						mark(id, approve ? { state: "published" } : { doi, state: "submitted" });
 					} catch (caught) {
-						console.error("Publishing the draft failed", itemKey, caught);
+						console.error("Sending the draft on failed", itemKey, caught);
 						mark(id, { message: publishError(caught), state: "failed" });
 					}
 				}
 			}),
 		);
-		// The table shows them published; the import's drafts stay the selection.
+		// The table shows their new state; the import's drafts stay the selection.
 		await onImported(created);
 	};
 
@@ -348,7 +350,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		/** Ready records not in `next` stay out of the import. */
 		setSelected: (next: ReadonlySet<string>) => changeImportBatch(importId, (current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
 		choosePublish: (ids: ReadonlySet<string>) => changeImportBatch(importId, (current) => ({ ...current, toPublish: ids })),
-		publish: (drafts: Parameters<typeof publish>[1]) => void publish(importId, drafts),
+		/** Publishes the drafts when `approve` (editors and owners), else submits them for review. */
+		send: (drafts: Parameters<typeof send>[1], approve: boolean) => void send(importId, drafts, approve),
 		setPublishRoute: (route: PublishingChoice["route"]) => changeImportBatch(importId, (current) => ({ ...current, publishRoute: route })),
 		setFix: (rowId: string, applied: boolean) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: applied })),
 		toggleFix: (rowId: string) => changeImportRow(importId, rowId, (row) => ({ ...row, fixApplied: !row.fixApplied })),

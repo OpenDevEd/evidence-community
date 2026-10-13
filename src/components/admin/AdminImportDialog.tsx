@@ -88,6 +88,8 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 						<InputNote flow={flow} />
 					) : stage === "review" ? (
 						<p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">{flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts"}</p>
+					) : view?.waiting && !view.started ? (
+						<p className="min-w-0 flex-1 text-xs leading-5 text-black/50 dark:text-white/50">{view.verbs.doing} waits for the PDFs to upload</p>
 					) : stage === "done" ? null : (
 						<DropHint flow={flow} />
 					)}
@@ -116,8 +118,8 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 									Import more
 								</Button>
 								{view.offered ? (
-									<Button className="min-w-32" color="accent" isDisabled={view.started || view.waiting || !view.chosen.size} onPress={() => flow.publish(view.publish())} size="sm" variant="solid">
-										{view.publishLabel}
+									<Button className="min-w-32" color="accent" isDisabled={view.started || view.waiting || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
+										{view.label}
 									</Button>
 								) : null}
 								<Button className="min-w-20" onPress={flow.finish} size="sm" variant="muted">

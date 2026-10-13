@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircleIcon, Loading03Icon } from "@hugeicons/core-free-icons";
+import { AlertCircleIcon, InboxIcon, Loading03Icon } from "@hugeicons/core-free-icons";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -28,18 +28,27 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 	);
 }
 
-/** Where a new draft stands: publishing, its DOI once published, or how its checks went. */
-export function DraftState({ attach, draft, publish }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined }) {
+/** Where a new draft stands: on its way, published with its DOI, waiting for an editor, or how its checks went. */
+export function DraftState({ attach, draft, publish, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; verbs: SendVerbs }) {
 	const { row } = draft;
-	if (publish?.state === "publishing") {
+	if (publish?.state === "sending") {
 		return (
 			<span className={`${note} text-black/50 dark:text-white/50`}>
 				<HugeiconsIcon aria-hidden className="animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} />
-				Publishing
+				{verbs.doing}
 			</span>
 		);
 	}
 	if (publish?.state === "published") return <PublishedDoi itemKey={draft.itemKey} />;
+	if (publish?.state === "submitted") {
+		return (
+			<span className={`${note} animate-fade-in text-black/55 dark:text-white/55`}>
+				<HugeiconsIcon aria-hidden className="shrink-0" icon={InboxIcon} size={13} />
+				<span className="shrink-0">Waiting for an editor</span>
+				{publish.doi ? <span className="min-w-0 truncate font-mono text-[11px]">{publish.doi}</span> : null}
+			</span>
+		);
+	}
 	if (publish?.state === "failed" || attach === "failed") {
 		return (
 			<span className={`${note} text-danger`}>
@@ -61,23 +70,36 @@ export function DraftState({ attach, draft, publish }: { attach: AttachState | u
 }
 
 /**
- * What the finish screen knows: the new drafts, which are ticked for
- * publishing, and how the import went. Only editors and owners publish, as
- * anywhere in the admin; a creator's import ends with the drafts. Drafts
- * read from a PDF are publishable once their PDF is attached; the ones that
- * pass every check start ticked, and the editor decides on the rest.
+ * The finish step's words for the role, as anywhere in the admin: editors
+ * and owners publish (submit and approve at once), and everyone else
+ * submits for an editor to approve.
+ */
+function sendVerbs(canPublish: boolean) {
+	return canPublish
+		? { act: "Publish", after: "", doing: "Publishing", done: "published", to: "to publish" }
+		: { act: "Submit", after: " for review", doing: "Submitting", done: "submitted", to: "to submit" };
+}
+
+type SendVerbs = ReturnType<typeof sendVerbs>;
+
+/**
+ * What the finish screen knows: the new drafts, which are ticked to publish
+ * or submit, and how the import went. Drafts read from a PDF can go once
+ * their PDF is attached; the ones that pass every check start ticked, and
+ * the person importing decides on the rest.
  */
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ itemKey, kind, row: rowById.get(id)! }] : []));
-	const publishable = canPublish ? drafts.filter(({ row }) => row.file && batch.attach.get(row.id) !== "failed") : [];
+	const verbs = sendVerbs(canPublish);
+	const publishable = drafts.filter(({ row }) => row.file && batch.attach.get(row.id) !== "failed");
 	const publishableIds = publishable.map(({ row }) => row.id);
 	const started = batch.publish.size > 0;
-	// Once publishing starts, the ticks are the drafts it was started for. Before
+	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
 	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ row }) => rowPasses(row)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
-	const published = [...batch.publish.values()].filter(({ state }) => state === "published").length;
+	const sent = [...batch.publish.values()].filter(({ state }) => state === "published" || state === "submitted").length;
 	const pdfs = drafts.filter(({ row }) => row.file).map(({ row }) => batch.attach.get(row.id));
 	const toggle = (id: string, checked: boolean) => {
 		const next = new Set(chosen);
@@ -89,18 +111,20 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		all: publishableIds.length > 0 && publishableIds.every((id) => chosen.has(id)),
 		attached: pdfs.filter((state) => state === "attached").length,
 		/** Drafts made in the library, which take the import's DOI route. Known once the import returns, so the row never comes or goes later. */
-		created: canPublish && drafts.some(({ kind, row }) => kind === "created" && row.file),
+		created: drafts.some(({ kind, row }) => kind === "created" && row.file),
 		chosen,
 		drafts,
 		failedPdfs: pdfs.some((state) => state === "failed"),
-		/** Publishing is offered: an editor or owner, and drafts read from PDFs. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
-		offered: canPublish && drafts.some(({ row }) => row.file),
+		/** Drafts read from PDFs can be sent on. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
+		offered: drafts.some(({ row }) => row.file),
 		passing: publishable.filter(({ row }) => rowPasses(row)).length,
 		pdfs: pdfs.length,
-		publish: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
-		publishLabel: started ? `${published} of ${chosen.size} published` : chosen.size ? `Publish ${chosen.size}` : "Publish",
+		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
+		/** "Publish 3", "Submit 3 for review", then the progress. */
+		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${verbs.act}${chosen.size ? ` ${chosen.size}` : ""}${verbs.after}`,
 		publishable: publishableIds,
-		published,
+		sent,
+		verbs,
 		started,
 		toggle,
 		toggleAll: (checked: boolean) => onChoose(new Set(checked ? publishableIds : [])),

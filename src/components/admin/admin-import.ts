@@ -149,7 +149,8 @@ export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): I
 }
 
 export type AttachState = "attaching" | "attached" | "failed";
-export type PublishState = { message?: string; state: "failed" | "published" | "publishing" };
+/** A draft sent on from the finish step: published by an editor or owner, or submitted for one, with its reserved Crossref DOI. */
+export type PublishState = { doi?: string; message?: string; state: "failed" | "published" | "sending" | "submitted" };
 
 /**
  * The import being reviewed. It lives outside the dialog, so closing the

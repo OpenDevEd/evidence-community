@@ -21,9 +21,9 @@ const ROUTE_LABELS = { "crossref-zenodo": "Crossref + Zenodo", zenodo: "Zenodo" 
 
 /**
  * The finish step, built like the Add step: what the import did as a group
- * of rows at the top, then the new drafts as a list. Editors and owners
- * choose how drafts made from PDFs get their DOI and tick the ones to
- * publish; for anyone else the import ends with the drafts.
+ * of rows at the top, then the new drafts as a list. Drafts made from PDFs
+ * get their DOI route here and are ticked to send on: editors and owners
+ * publish them, anyone else submits them for review, as in the inspector.
  */
 export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 	const [page, setPage] = useState(1);
@@ -51,9 +51,9 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 			</SettingsGroup>
 			<div className="flex flex-col gap-2">
 				<ListHeader
-					aside={publishing ? (view.started ? undefined : `${view.passing} pass every check`) : canPublish ? undefined : "Editors and owners publish them"}
-					lead={publishing ? <Checkbox aria-label="Choose every draft to publish" isDisabled={view.started || !view.publishable.length} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" /> : undefined}
-					title={publishing ? (view.started ? `${view.published} of ${view.chosen.size} published` : `${view.chosen.size} of ${view.publishable.length} to publish`) : `${view.drafts.length} ${view.drafts.length === 1 ? "draft" : "drafts"}`}
+					aside={publishing && !view.started ? `${view.passing} pass every check` : undefined}
+					lead={publishing ? <Checkbox aria-label={`Choose every draft ${view.verbs.to}`} isDisabled={view.started || !view.publishable.length} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" /> : undefined}
+					title={publishing ? (view.started ? `${view.sent} of ${view.chosen.size} ${view.verbs.done}` : `${view.chosen.size} of ${view.publishable.length} ${view.verbs.to}`) : `${view.drafts.length} ${view.drafts.length === 1 ? "draft" : "drafts"}`}
 				/>
 				<ul className="flex flex-col">
 					{items.map((draft) => {
@@ -61,11 +61,11 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 						const title = row.record?.title ?? row.record?.source;
 						return (
 							<li className="flex min-h-16 items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" key={row.id}>
-								{publishing ? <Checkbox aria-label={`Publish ${title}`} isDisabled={view.started || !view.publishable.includes(row.id)} isSelected={view.chosen.has(row.id)} onValueChange={(checked) => view.toggle(row.id, checked)} size="sm" /> : null}
+								{publishing ? <Checkbox aria-label={`${view.verbs.act} ${title}`} isDisabled={view.started || !view.publishable.includes(row.id)} isSelected={view.chosen.has(row.id)} onValueChange={(checked) => view.toggle(row.id, checked)} size="sm" /> : null}
 								<ImportCover className="w-8" file={row.file} itemType={row.record?.itemType} size={12} />
 								<span className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
 									<span className="line-clamp-2 text-sm font-medium leading-5 text-black/85 dark:text-white/85">{title}</span>
-									<DraftState attach={batch.attach.get(row.id)} draft={draft} publish={batch.publish.get(row.id)} />
+									<DraftState attach={batch.attach.get(row.id)} draft={draft} publish={batch.publish.get(row.id)} verbs={view.verbs} />
 								</span>
 								<Button onPress={() => flow.onOpenRecord(itemKey)} size="xs" variant="transparent">
 									Open
