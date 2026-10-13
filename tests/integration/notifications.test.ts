@@ -385,6 +385,19 @@ it("covers what was published in the period whenever it was added, and lists a r
   });
 }, 120_000);
 
+it("lists an open-access publication before a closed one of the same standing, and tells the writer which is open", async () => {
+  await withIsolatedPublicationDatabase(async (db, client) => {
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-09T00:00:00Z"));
+    const abstract = "A study of attention in classrooms. ".repeat(8);
+    await dated(client, "BEHINDAA", "2026-09-10", abstract);
+    await dated(client, "FREEAAAA", "2026-09-11", abstract);
+    await client.query(`UPDATE item SET "openAccess" = (key = 'FREEAAAA')`);
+    await prepareNotificationEditions(db, publishedConfig, new Date("2026-09-14T09:00:00Z"));
+    const [edition] = await db.select().from(notificationEdition).where(eq(notificationEdition.stream, "digest"));
+    expect(edition.publications.map(({key, openAccess}) => ({key, openAccess}))).toEqual([{key: "FREEAAAA", openAccess: true}, {key: "BEHINDAA", openAccess: false}]);
+  });
+}, 120_000);
+
 it("skips scheduled digests while paused, then covers everything since the last one at the next scheduled time", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const paused = {...publishedConfig, notifications: {...publishedConfig.notifications, pausedSince: "2026-09-13T08:00:00.000Z"}};
