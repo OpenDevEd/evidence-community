@@ -86,12 +86,12 @@ export const SURE = 0.6;
  * How often the types are right, as `npm run readings:accuracy` measured them on AIED, TVET and ECCAR (new-el#592).
  * PubMed: of the records its indexers typed, the share of their meta-analyses, systematic and scoping reviews and
  * randomised trials Jev found, and the share of the records Jev called meta-analyses or systematic reviews that PubMed
- * typed the same. Sample: records a second AI model typed without seeing Jev's answers, agreeing on the type and on the
- * level. Each figure pools the three libraries' counts and is rounded to a whole percent. Measure again whenever the
- * question set changes.
+ * typed the same. Sample: records Jev read from their title and abstract, typed by a second AI model without seeing
+ * Jev's answers, agreeing on the type and on the level. Each figure pools the three libraries' counts and is rounded
+ * to a whole percent. Measure again whenever the question set changes.
  */
 export const STUDY_TYPE_ACCURACY = {
 	measured: "2026-10-13",
-	pubmed: { records: 14_907, metaAnalyses: 89, systematicReviews: 87, trials: 80, confirmed: 79 },
-	sample: { records: 600, types: 81, levels: 88 },
+	pubmed: { records: 14_429, metaAnalyses: 89, systematicReviews: 87, trials: 80, confirmed: 79 },
+	sample: { records: 576, types: 83, levels: 89 },
 };

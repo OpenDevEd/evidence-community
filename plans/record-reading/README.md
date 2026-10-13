@@ -52,7 +52,8 @@ meta-analyses in AIED's September edition. Researchers will read these numbers.
     randomised field, laboratory and behavioural experiments, so its share of
     Jev's types PubMed confirms covers meta-analyses and systematic reviews.
     Proof: of ECCAR's 52 trials PubMed does not tag, nearly all are such
-    experiments (#592).
+    experiments (#592). The sample leaves out types Jev read from a PDF,
+    since the sheet shows only the title and abstract: 24 of the 600 typed.
 - Digests keep counting publications by publication date.
 - The grading card in the source settings appears only when something needs
   grading: an edited subject, or records not graded against the current one.
