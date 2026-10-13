@@ -92,6 +92,6 @@ export const SURE = 0.6;
  */
 export const STUDY_TYPE_ACCURACY = {
 	measured: "2026-10-13",
-	pubmed: { records: 14_429, metaAnalyses: 89, systematicReviews: 87, trials: 80, confirmed: 79 },
-	sample: { records: 576, types: 83, levels: 89 },
+	pubmed: { records: 12_981, metaAnalyses: 89, systematicReviews: 89, trials: 81, confirmed: 80 },
+	sample: { records: 557, types: 83, levels: 89 },
 };

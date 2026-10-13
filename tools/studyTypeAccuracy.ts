@@ -6,18 +6,20 @@
  *     systematic review and randomised trial. Only citations PubMed has fully indexed (status MEDLINE) count: the others
  *     have not had their types assigned yet.
  *   DATABASE_URL=… npm run -s readings:accuracy -- sample 200 sheet.tsv
- *     A random sample of the records Jev read from their title and abstract, as a sheet to type blind. Jev's answers go
- *     to sheet.jev.tsv as they stood when the sample was drawn; the person or model typing the sheet does not open it.
+ *     A random sample of the records Jev read from their title and abstract, as a sheet to type blind against the
+ *     question Jev was asked, written to sheet.question.md. Jev's answers go to sheet.jev.tsv as they stood when the
+ *     sample was drawn; the person or model typing the sheet does not open it.
  *   npm run -s readings:accuracy -- score sheet.tsv
  *     Compares the types in the sheet's last column with the answers in sheet.jev.tsv.
  *
- * Only the types a library shows are measured: Jev's, under the current question set, of the text the record has now.
- * Types from a record's metadata, and editors' corrections, are left out.
+ * Only the types readers see are measured: Jev's, under the current question set, of the text the record has now, on
+ * records the library shows. Types from a record's metadata, and editors' corrections, are left out.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { Pool } from "pg";
 import { abstractPlainText } from "../src/lib/abstract-text";
-import { QUESTION_SET } from "../src/lib/readings/questions";
+import { isPublicTopLevelItem } from "../src/lib/admin/item-fields";
+import { QUESTION_SET, readingQuestions } from "../src/lib/readings/questions";
 import { contentHashOf, readingText } from "../src/lib/readings/reading-text";
 import { STUDY_TYPE_KEYS, studyType } from "../src/lib/readings/study-types";
 
@@ -25,17 +27,18 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 const query = async <Row>(text: string, values: unknown[] = []) => (await pool.query(text, values)).rows as Row[];
 
 /**
- * The readings that meet `condition`, as the library shows them: Jev's, under the current question set, and of the
- * record's current text, which the search projection checks the same way. `randomly` draws that many at random.
+ * The readings that meet `condition`, as readers see them: Jev's, under the current question set, of the record's
+ * current text, on a record the search index holds (top level, not deleted, not screened out), checked the way the
+ * search projection checks them. `randomly` draws that many at random.
  */
 async function shownReadings(condition: string, randomly?: number) {
-	const rows = await query<{ key: string; type: string; contentHash: string; title: string | null; abstract: string | null; doi: string | null; pmid: string | null }>(`
-		SELECT r."itemKey" AS key, r."studyType" AS type, r."contentHash", i.title, i."abstractNote" AS abstract, i."DOI" AS doi,
-			substring(i."PMID" FROM '(\\d+)\\s*$') AS pmid
+	const rows = await query<{ key: string; type: string; contentHash: string; itemType: string; parentItem: string | null; title: string | null; abstract: string | null; doi: string | null; pmid: string | null }>(`
+		SELECT r."itemKey" AS key, r."studyType" AS type, r."contentHash", i."itemType", i."parentItem", i.title, i."abstractNote" AS abstract,
+			i."DOI" AS doi, substring(i."PMID" FROM '(\\d+)\\s*$') AS pmid
 		FROM "itemReading" r JOIN item i ON i.key = r."itemKey"
-		WHERE r."typedBy" = 'ai' AND r."questionSet" = $1 AND ${condition}
+		WHERE r."typedBy" = 'ai' AND r."questionSet" = $1 AND NOT r."screenedOut" AND i.deleted IS DISTINCT FROM 1 AND ${condition}
 		${randomly ? "ORDER BY random() LIMIT $2" : ""}`, randomly ? [QUESTION_SET, randomly] : [QUESTION_SET]);
-	return rows.filter((row) => row.contentHash === contentHashOf(readingText(row.title, row.abstract)));
+	return rows.filter((row) => isPublicTopLevelItem(row) && row.contentHash === contentHashOf(readingText(row.title, row.abstract)));
 }
 
 /**
@@ -106,20 +109,31 @@ async function comparePubmed() {
 }
 
 const share = (part: number, whole: number) => (whole ? Math.round((part / whole) * 1000) / 10 : null);
-const cell = (text: string) => text.replace(/[\t\r\n]+/g, " ").trim();
+/** One line of a sheet cell. A spreadsheet would run text that starts like a formula, so that text starts with a quote. */
+const cell = (text: string) => text.replace(/[\t\r\n]+/g, " ").trim().replace(/^[=+\-@]/, "'$&");
 
 /** Where a sheet's Jev answers are kept: sheet.jev.tsv beside sheet.tsv. */
 const answersOf = (sheet: string) => sheet.replace(/(\.tsv)?$/, ".jev.tsv");
+/** Where the question Jev was asked is written for the typist: sheet.question.md beside sheet.tsv. */
+const questionOf = (sheet: string) => sheet.replace(/(\.tsv)?$/, ".question.md");
+
+/** Jev's own type question and criteria, so the sheet is typed against the same definitions. */
+function typeQuestion() {
+	const question = readingQuestions({ type: true, details: false, subjects: [] }).type!;
+	const criteria = question.type === "choice" ? Object.entries(question.criteria).map(([key, text]) => `- \`${key}\`: ${text}`) : [];
+	return [question.instructions, "", "Put one of these keys in the sheet's last column:", "", ...criteria].join("\n") + "\n";
+}
 
 async function sampleSheet(size: number, path: string) {
 	// The sheet shows the title and abstract, so a type Jev read from the PDF would be judged on other text. A few drawn
 	// readings may be of text the record no longer has; drawing twice as many leaves enough once they are dropped.
 	const rows = (await shownReadings(`r.input <> 'pdf'`, size * 2)).slice(0, size);
 	const header = ["key", "title", "abstract", "doi", `type (${STUDY_TYPE_KEYS.join(", ")})`].join("\t");
-	const lines = rows.map((row) => [row.key, cell(row.title ?? ""), cell(abstractPlainText(row.abstract).slice(0, 3000)), row.doi ?? "", ""].join("\t"));
+	const lines = rows.map((row) => [row.key, cell(row.title ?? ""), cell(abstractPlainText(row.abstract).slice(0, 3000)), cell(row.doi ?? ""), ""].join("\t"));
 	writeFileSync(path, [header, ...lines].join("\n") + "\n");
+	writeFileSync(questionOf(path), typeQuestion());
 	writeFileSync(answersOf(path), rows.map((row) => `${row.key}\t${row.type}`).join("\n") + "\n");
-	console.error(`${rows.length} records in ${path}, Jev's answers in ${answersOf(path)}`);
+	console.error(`${rows.length} records in ${path}, the question in ${questionOf(path)}, Jev's answers in ${answersOf(path)}`);
 }
 
 /** The typed rows of a filled sheet: each record's key and the type in its last column. */
