@@ -4,7 +4,7 @@ import { QUESTION_SET, gradeOf, readingAnswers, readingQuestions } from "@/lib/r
 import { ruledOutTypes } from "@/lib/readings/type-words";
 import { planRead } from "@/lib/readings/worker";
 
-const record = { key: "AAAA1111", title: "Heat and maize yields", abstract: "We pooled 40 trials in a meta-analysis.", pdf: "", itemType: "JournalArticle", openAlexType: "article", doi: null, sources: ["oa"] };
+const record = { key: "AAAA1111", title: "Heat and maize yields", abstract: "We pooled 40 trials in a meta-analysis.", wholeAbstract: "We pooled 40 trials in a meta-analysis.", pdf: "", itemType: "JournalArticle", openAlexType: "article", doi: null, sources: ["oa"] };
 const climate = { key: "oa", subject: "Climate adaptation", hash: "climate" };
 /** What a whole read of `record` stored, as Jev typed it. */
 const readAs = (contentHash: string, questionSet = QUESTION_SET) => ({ contentHash, questionSet, studyType: "meta-analysis" as const, typedBy: "ai" as const, typeConfidence: 0.9, input: "abstract" as const });
@@ -27,6 +27,7 @@ describe("the words a meta-analysis or randomised trial says it is in", () => {
 			text("Feedback in surgical training: A Systematic Review and Meta‐Analysis"),
 			text("Aprendizagem baseada em jogos", "Uma metanálise de 40 estudos."),
 			text("Tutoring at scale", "", "We ran a meta-analytic review of 12 trials."),
+			text("Tutoring at scale", "", "A systematic review and meta-\nanalysis of 12 trials."),
 		]) expect(ruledOutTypes(named)).not.toContain("meta-analysis");
 		for (const named of [
 			text("Chatbots and anxiety", "A cluster-randomized trial in 20 schools."),
@@ -90,12 +91,22 @@ describe("planning a read", () => {
 	});
 
 	it("asks a meta-analysis or trial typed before the words counted again, type only and without it, when the record never names it", () => {
-		const wordless = { ...record, abstract: "We pooled 40 trials." };
+		const wordless = { ...record, abstract: "We pooled 40 trials.", wholeAbstract: "We pooled 40 trials." };
 		const first = planRead(wordless, { grades: new Map() }, [climate])!;
 		const graded = new Map([["oa", ["climate", null]]]);
 		expect(planRead(wordless, { reading: readAs(first.contentHash), grades: graded }, [climate]))
 			.toMatchObject({ retype: true, pdf: false, ask: { type: true, ruledOut: ["meta-analysis", "rct"], details: false, subjects: [] } });
 		expect(planRead(wordless, { reading: { ...readAs(first.contentHash), studyType: "systematic-review" }, grades: graded }, [climate])).toBeNull();
+		// One read from its PDF is asked again from the PDF.
+		expect(planRead({ ...wordless, pdf: "Methods." }, { reading: { ...readAs(first.contentHash), input: "pdf" }, grades: graded }, [climate]))
+			.toMatchObject({ pdf: true, ask: { type: true } });
+	});
+
+	it("looks for the words in the whole abstract, past the part Jev reads", () => {
+		const long = { ...record, abstract: "We pooled 40 trials.", wholeAbstract: `We pooled 40 trials. ${"Background. ".repeat(300)}A meta-analysis.` };
+		const first = planRead(long, { grades: new Map() }, [climate])!;
+		expect(first.ask.ruledOut).toEqual(["rct"]);
+		expect(planRead(long, { reading: readAs(first.contentHash), grades: new Map([["oa", ["climate", null]]]) }, [climate])).toBeNull();
 	});
 
 	it("does not ask the type of a record its metadata types", () => {

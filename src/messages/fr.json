@@ -1062,7 +1062,7 @@
         "label": "Méta-analyse",
         "plural": "Méta-analyses",
         "description": "Les auteurs regroupent eux-mêmes statistiquement les résultats de plusieurs études antérieures. Citer le résultat regroupé d'un autre travail ne compte pas. Attribué seulement si le titre, le résumé ou le PDF le dit.",
-        "not": "Pas une revue qui cite le résultat regroupé d'autres auteurs ou qui ne regroupe rien, qui est une revue systématique."
+        "not": "Pas une revue qui cite le résultat regroupé d'autres auteurs ou qui ne regroupe rien, qui est une revue systématique ou narrative."
       },
       "systematic-review": {
         "label": "Revue systématique",

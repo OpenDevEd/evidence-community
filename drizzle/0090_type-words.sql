@@ -5,4 +5,7 @@
 INSERT INTO "itemReadingQueue" ("itemKey", "revision")
 SELECT r."itemKey", i.revision FROM "itemReading" r JOIN "item" i ON i.key = r."itemKey"
 WHERE r."typedBy" = 'ai' AND r."studyType" IN ('meta-analysis', 'rct')
-ON CONFLICT ("itemKey") DO UPDATE SET "nextAttemptAt" = now(), "attempts" = 0, "lastError" = NULL;
+-- A read under way, or an owner's request for some sources only, would settle the record without the check, so both
+-- are dropped, as a change to the record drops them.
+ON CONFLICT ("itemKey") DO UPDATE SET "nextAttemptAt" = now(), "attempts" = 0, "lastError" = NULL,
+  "requestedFor" = NULL, "leaseToken" = NULL, "leaseExpiresAt" = NULL;

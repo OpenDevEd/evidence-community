@@ -303,8 +303,10 @@ it("asks a trial typed before the words counted again, without the type, when it
 		await publish(client, "TRIALYS2", "Tutoring at scale", "A randomised trial in 40 schools.");
 		await store(db, config);
 		await runReadingCycle(db, config, undefined, jev(answering).request);
-		// As a runtime before the rule typed both.
+		// As a runtime before the rule typed both, with a read under way and an owner's request for another source.
 		await client.query(`UPDATE "itemReading" SET "studyType" = 'rct'`);
+		await client.query(`UPDATE "itemReadingQueue" SET "nextAttemptAt" = now(), "requestedFor" = ARRAY['zotero-other'],
+			"leaseToken" = 'earlier', "leaseExpiresAt" = now() + interval '3 minutes' WHERE "itemKey" = 'TRIALWD2'`);
 		await client.query(readFileSync("drizzle/0090_type-words.sql", "utf8"));
 
 		const again = jev(answering);

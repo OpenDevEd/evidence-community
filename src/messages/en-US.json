@@ -1051,7 +1051,7 @@
         "label": "Meta-analysis",
         "plural": "Meta-analyses",
         "description": "The authors statistically pool results from several earlier studies themselves. Quoting someone else's pooled result does not count. Given only when the title, abstract or PDF says so.",
-        "not": "Not a review that quotes someone else's pooled result or doesn't pool at all, which is a systematic review."
+        "not": "Not a review that quotes someone else's pooled result or doesn't pool at all, which is a systematic or narrative review."
       },
       "systematic-review": {
         "label": "Systematic review",

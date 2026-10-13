@@ -239,7 +239,8 @@ function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect, hint }: 
 	const row = (
 		<button type="button" aria-pressed={chosen} onClick={onSelect} className="flex h-10 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5">
 			<span aria-hidden className={twMerge("size-3 shrink-0 rounded-[4px] transition-opacity", tone, dimmed && "opacity-25")} />
-			<TruncatedText text={label} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />
+			{/* A row that explains itself shows a cut name in full in its own tooltip, so the name has none of its own. */}
+			{hint ? <span className={twMerge("min-w-0 flex-1 truncate text-base font-medium", chosen && "text-accent")}>{label}</span> : <TruncatedText text={label} className={twMerge("flex-1 text-base font-medium", chosen && "text-accent")} />}
 			<Tick shown={chosen} />
 			<span className={`w-10 shrink-0 text-right text-sm tabular-nums ${MUTED}`}>{shareOf(format, count, total)}</span>
 			<span className="w-14 shrink-0 text-right text-base font-bold tabular-nums">{format.number(count)}</span>

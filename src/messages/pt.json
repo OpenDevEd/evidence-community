@@ -1062,7 +1062,7 @@
         "label": "Meta-análise",
         "plural": "Meta-análises",
         "description": "Os próprios autores combinam estatisticamente os resultados de vários estudos anteriores. Citar o resultado combinado de outro trabalho não conta. Atribuído só quando o título, o resumo ou o PDF o diz.",
-        "not": "Não é uma revisão que cita o resultado combinado de outros autores ou que não combina nada, que é uma revisão sistemática."
+        "not": "Não é uma revisão que cita o resultado combinado de outros autores ou que não combina nada, que é uma revisão sistemática ou narrativa."
       },
       "systematic-review": {
         "label": "Revisão sistemática",

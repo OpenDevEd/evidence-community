@@ -1062,7 +1062,7 @@
         "label": "Metaanalyse",
         "plural": "Metaanalysen",
         "description": "Die Autorinnen und Autoren fassen die Ergebnisse mehrerer früherer Studien selbst statistisch zusammen. Ein zitiertes gepooltes Ergebnis aus einer anderen Arbeit zählt nicht. Nur vergeben, wenn Titel, Abstract oder PDF es sagen.",
-        "not": "Kein Review, das ein fremdes gepooltes Ergebnis zitiert oder gar nicht poolt: Das ist ein systematisches Review."
+        "not": "Kein Review, das ein fremdes gepooltes Ergebnis zitiert oder gar nicht poolt: Das ist ein systematisches oder narratives Review."
       },
       "systematic-review": {
         "label": "Systematisches Review",

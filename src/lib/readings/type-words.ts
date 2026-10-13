@@ -1,7 +1,7 @@
 import type { StudyTypeKey } from "./study-types";
 
-/** A hyphen of any kind, a space, or nothing, as titles join "meta" and "analysis". */
-const JOIN = "[-\\u2010\\u2011\\u2012\\u2013\\s]?";
+/** A hyphen of any kind, spaces or a line break, or nothing, as titles and PDFs join "meta" and "analysis". */
+const JOIN = "[-\\u2010\\u2011\\u2012\\u2013]?\\s*";
 
 /**
  * The words a record of these types has in its text, in English or the libraries' other languages. A meta-analysis or
