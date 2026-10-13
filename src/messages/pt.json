@@ -574,7 +574,11 @@
     "noMatchingCollections": "Nenhuma coleção corresponde",
     "collectionsRange": "{from} a {to} de {total}",
     "openCollection": "Abrir coleção",
-    "invitationsUnread": "Não foi possível carregar os convites pendentes"
+    "invitationsUnread": "Não foi possível carregar os convites pendentes",
+    "continueInOpenScholar": "Continuar no OpenScholar",
+    "openInOpenScholar": "Abrir no OpenScholar",
+    "screenAllInOpenScholar": "Analisar todas as {total} no OpenScholar",
+    "openInOpenScholarFailed": "Não foi possível abrir no OpenScholar"
   },
   "ai": {
     "sourcesTitle": "Fontes",

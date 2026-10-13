@@ -560,6 +560,11 @@ export default async function proxy(request: NextRequest) {
 		if (libraryConfig.features.ai && isRateLimitedAIRequest(request)) {
 			return getAIRateLimitResponse(request, libraryConfig);
 		}
+		// Anyone may hand records to OpenScholar, which keeps each hand-off a week under this library's credential:
+		// a visitor's hand-offs take from the same windows as their AI requests, where the library keeps them.
+		if (request.method === "POST" && request.nextUrl.pathname === "/api/handoff" && libraryConfig.services.redis) {
+			return getAIRateLimitResponse(request, libraryConfig);
+		}
 		return NextResponse.next();
 	}
 

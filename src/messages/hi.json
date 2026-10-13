@@ -574,7 +574,11 @@
     "noMatchingCollections": "कोई संग्रह मेल नहीं खाता",
     "collectionsRange": "{total} में से {from} से {to}",
     "openCollection": "संग्रह खोलें",
-    "invitationsUnread": "प्रतीक्षारत आमंत्रण लोड नहीं हो सके"
+    "invitationsUnread": "प्रतीक्षारत आमंत्रण लोड नहीं हो सके",
+    "continueInOpenScholar": "OpenScholar में जारी रखें",
+    "openInOpenScholar": "OpenScholar में खोलें",
+    "screenAllInOpenScholar": "OpenScholar में सभी {total} की स्क्रीनिंग करें",
+    "openInOpenScholarFailed": "OpenScholar में नहीं खुल सका"
   },
   "ai": {
     "sourcesTitle": "स्रोत",

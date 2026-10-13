@@ -575,7 +575,11 @@
     "noMatchingCollections": "Hakuna makusanyo yanayolingana",
     "collectionsRange": "{from} hadi {to} kati ya {total}",
     "openCollection": "Fungua mkusanyiko",
-    "invitationsUnread": "Imeshindikana kupakia mialiko inayosubiri"
+    "invitationsUnread": "Imeshindikana kupakia mialiko inayosubiri",
+    "continueInOpenScholar": "Endelea kwenye OpenScholar",
+    "openInOpenScholar": "Fungua kwenye OpenScholar",
+    "screenAllInOpenScholar": "Chunguza zote {total} kwenye OpenScholar",
+    "openInOpenScholarFailed": "Imeshindwa kufungua kwenye OpenScholar"
   },
   "ai": {
     "sourcesTitle": "Vyanzo",

@@ -1,3 +1,4 @@
+import { DrizzleQueryError } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { clientAIError } from "@/lib/ai/client";
@@ -78,6 +79,15 @@ describe("controlled AI failures", () => {
 				}),
 			).message,
 		).toMatch(/The provider is unavailable\./);
+	});
+
+	it("blames the library, not the AI provider, when its database fails", () => {
+		const error = normalizeAIError(
+			new DrizzleQueryError("select 1", [], new Error("timeout exceeded when trying to connect")),
+		);
+		expect(error.code).toBe("LIBRARY_UNAVAILABLE");
+		expect(error.status).toBe(503);
+		expect(error.message).not.toMatch(/provider/i);
 	});
 
 	it("passes an AIError through untouched", () => {

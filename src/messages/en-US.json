@@ -563,7 +563,11 @@
     "noMatchingCollections": "No collections match",
     "collectionsRange": "{from} to {to} of {total}",
     "openCollection": "Open collection",
-    "invitationsUnread": "Couldn't load the invitations waiting"
+    "invitationsUnread": "Couldn't load the invitations waiting",
+    "continueInOpenScholar": "Continue in OpenScholar",
+    "openInOpenScholar": "Open in OpenScholar",
+    "screenAllInOpenScholar": "Screen all {total} in OpenScholar",
+    "openInOpenScholarFailed": "Couldn't open this in OpenScholar"
   },
   "ai": {
     "sourcesTitle": "Sources",

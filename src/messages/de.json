@@ -574,7 +574,11 @@
     "noMatchingCollections": "Keine passenden Sammlungen",
     "collectionsRange": "{from} bis {to} von {total}",
     "openCollection": "Sammlung öffnen",
-    "invitationsUnread": "Die offenen Einladungen konnten nicht geladen werden"
+    "invitationsUnread": "Die offenen Einladungen konnten nicht geladen werden",
+    "continueInOpenScholar": "In OpenScholar fortfahren",
+    "openInOpenScholar": "In OpenScholar öffnen",
+    "screenAllInOpenScholar": "Alle {total} in OpenScholar prüfen",
+    "openInOpenScholarFailed": "Konnte nicht in OpenScholar geöffnet werden"
   },
   "ai": {
     "sourcesTitle": "Quellen",
