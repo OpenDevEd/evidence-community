@@ -9,6 +9,7 @@ import MainWrapper from "./MainWrapper";
 import SiteChrome from "./SiteChrome";
 import { Suspense } from "react";
 import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
+import EarlyTypingScript from "@/app/_components/EarlyTypingScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
@@ -99,6 +100,7 @@ export default async function Base({
 	return (
 		<html lang={locale} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
 			<body>
+				<EarlyTypingScript />
 				<ConsentDefaultsScript />
 				<link
 					rel="unapi-server"

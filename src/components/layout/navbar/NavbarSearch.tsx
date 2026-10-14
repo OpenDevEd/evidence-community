@@ -28,6 +28,7 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { listingParams, searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useEarlyTyping } from "@/hooks/useEarlyTyping";
 import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { SORT_OPTIONS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
@@ -385,6 +386,8 @@ export default function NavbarSearch() {
 		// still a valid query.
 		setIsOpen(true);
 	};
+
+	useEarlyTyping(containerRef, searchInput, handleInput);
 
 	const handleKeyDown = (event: React.KeyboardEvent) => {
 		if (event.key === "ArrowDown") {
