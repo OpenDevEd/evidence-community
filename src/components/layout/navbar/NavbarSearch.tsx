@@ -28,6 +28,7 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { listingParams, searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
+import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { SORT_OPTIONS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
 import { countryFacetOptions } from "@/constants/misc";
@@ -158,7 +159,7 @@ function SuggestionRow({
 	href,
 	isCurrent,
 	isHighlighted,
-	onOpenChange,
+	onFollow,
 	onHighlight,
 	preview,
 	title,
@@ -167,7 +168,7 @@ function SuggestionRow({
 	href: string;
 	isCurrent: boolean;
 	isHighlighted: boolean;
-	onOpenChange: (open: boolean) => void;
+	onFollow: (event: React.MouseEvent) => void;
 	onHighlight: () => void;
 	preview: PublicationPreviewData;
 	title?: string;
@@ -176,7 +177,7 @@ function SuggestionRow({
 	return (
 		<Link
 			href={href}
-			onClick={() => onOpenChange(false)}
+			onClick={onFollow}
 			onMouseEnter={onHighlight}
 			role="option"
 			aria-selected={isHighlighted}
@@ -250,7 +251,7 @@ export default function NavbarSearch() {
 		searchDraft?.source === params.search
 			? searchDraft.value
 			: params.search;
-	const [debounceSearch, , , searchNow] = useDebounce(
+	const [debounceSearch, , cancelSearch] = useDebounce(
 		(value: string) => setParams({ search: value, page: 1 }),
 		250,
 	);
@@ -337,13 +338,17 @@ export default function NavbarSearch() {
 		};
 	}, [params.page, params.search, runtimeParams, searchInput]);
 
+	// The address these open carries what was typed. A search still waiting would
+	// write this page's address under that navigation and keep the reader here.
 	const goToLibrary = useCallback(() => {
+		cancelSearch();
 		setIsOpen(false);
 		router.push("/lib" + serializeSearchParams(buildTargetParams()));
-	}, [router, buildTargetParams]);
+	}, [router, buildTargetParams, cancelSearch]);
 
 	const goToItem = useCallback(
 		(key: string) => {
+			cancelSearch();
 			setIsOpen(false);
 			// Open the item carrying the same params, so its navbar search picks
 			// up exactly where the user was.
@@ -351,7 +356,17 @@ export default function NavbarSearch() {
 				`/lib/${key}` + serializeSearchParams(buildTargetParams()),
 			);
 		},
-		[router, buildTargetParams],
+		[router, buildTargetParams, cancelSearch],
+	);
+
+	// A suggestion is a link of its own to the address goToItem builds. Opened in another tab, this one stays, and so
+	// does its search.
+	const followSuggestion = useCallback(
+		(event: React.MouseEvent) => {
+			if (followsInThisTab(event)) cancelSearch();
+			setIsOpen(false);
+		},
+		[cancelSearch],
 	);
 
 	const handlePreviewPageChange = useCallback(
@@ -381,8 +396,6 @@ export default function NavbarSearch() {
 			setHighlight((h) => Math.max(h - 1, -1));
 		} else if (event.key === "Enter") {
 			event.preventDefault();
-			// What was typed is the search from here on, whatever its wait had left.
-			searchNow();
 			if (highlight >= 0 && results[highlight]) {
 				goToItem(results[highlight].key);
 			} else {
@@ -509,7 +522,7 @@ export default function NavbarSearch() {
 														isHighlighted={
 															highlight === index
 														}
-														onOpenChange={setIsOpen}
+														onFollow={followSuggestion}
 														onHighlight={() =>
 															setHighlight(index)
 														}

@@ -8,10 +8,52 @@ import { twMerge } from "@/lib/tw-merge";
 import { PropsOf } from "@nextui-org/react";
 import { Input } from "@/components/nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
+import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 
 /** A focus request older than this belongs to an earlier page visit. */
 const FOCUS_REQUEST_MAX_AGE_MS = 1000;
+
+type Draft = { sourceSearch: string; value: string };
+
+/**
+ * The field's search, run once typing stops: run, cancel, and run now. A search still waiting when the field goes away
+ * (a result followed straight after typing) never runs, since it would write the next page's address. It stops being
+ * what was typed, and a page kept for Back shows the search it has again, not the words that never ran.
+ */
+function useWaitingSearch(
+	handleSearchChange: (search: string) => void,
+	setDraft: (update: (draft: Draft) => Draft) => void,
+	onTyped?: (text: string | null) => void,
+) {
+	const [run, , cancel, now] = useDebounce((text: string) => {
+		onTyped?.(null);
+		handleSearchChange(text);
+	}, 300);
+	// The timer is the outside system: this drops what it still holds.
+	useEffect(
+		() => () => {
+			cancel();
+			onTyped?.(null);
+			setDraft((draft) => ({ ...draft, value: draft.sourceSearch }));
+		},
+		[cancel, onTyped, setDraft],
+	);
+	// The document's clicks: a link followed in this tab straight after typing leaves the page, and the waiting search
+	// must not write this page's address under that navigation. Listened to in capture, before the link navigates.
+	useEffect(() => {
+		const leave = (event: MouseEvent) => {
+			const link = (event.target as Element | null)?.closest?.("a[href]");
+			if (!link || !followsInThisTab(event) || link.getAttribute("target") === "_blank") return;
+			if (link.getAttribute("href")?.startsWith("#")) return;
+			cancel();
+			onTyped?.(null);
+		};
+		document.addEventListener("click", leave, true);
+		return () => document.removeEventListener("click", leave, true);
+	}, [cancel, onTyped]);
+	return [run, cancel, now] as const;
+}
 
 export function SearchBar({
 	handleSearchChange,
@@ -69,16 +111,14 @@ export function SearchBar({
 		element.focus({ preventScroll: true });
 		element.setSelectionRange(element.value.length, element.value.length);
 	}, [focusOnRequest, searchFocusRequest]);
-	const [draft, setDraft] = useState({
+	const [draft, setDraft] = useState<Draft>({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, , cancelSearch, searchNow] = useDebounce(
-		(text: string) => {
-			onTyped?.(null);
-			handleSearchChange(text);
-		},
-		300,
+	const [debouncedSearch, cancelSearch, searchNow] = useWaitingSearch(
+		handleSearchChange,
+		setDraft,
+		onTyped,
 	);
 	const t = useTranslations("ui");
 	const localValue =
@@ -111,14 +151,14 @@ export function SearchBar({
 			onKeyDown={(event) => {
 				if (event.key !== "Enter") return;
 				if (!(event.metaKey || event.ctrlKey)) {
-					// Searched at once: what the page acts on next, such as Open in OpenScholar, is what was typed.
+					// Searched at once on Enter only. Searching when the box loses focus moved the results under the button
+					// being pressed, and that click was lost. Open in OpenScholar reads what was typed itself (onTyped).
 					searchNow();
 					return;
 				}
 				event.preventDefault();
 				ask();
 			}}
-			onBlur={searchNow}
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;
