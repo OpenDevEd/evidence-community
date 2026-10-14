@@ -186,7 +186,13 @@ export const writesProperties = (row: ImportRow) => Boolean(row.record && row.pd
 /** Whether importing gave a draft its PDF; the server does it while the drafts are made. */
 export type AttachState = "attached" | "failed";
 /** A draft sent on from the finish step: published by an editor or owner, or submitted for one, with its reserved Crossref DOI. */
-export type PublishState = { doi?: string; message?: string; state: "failed" | "published" | "sending" | "submitted" };
+export type PublishState = {
+	doi?: string;
+	message?: string;
+	/** The review a send submitted before it failed to approve it, which a retry approves instead of submitting again. */
+	review?: { id: string; revision: number };
+	state: "failed" | "published" | "sending" | "submitted";
+};
 
 /**
  * The import being reviewed. It lives outside the dialog, so closing the

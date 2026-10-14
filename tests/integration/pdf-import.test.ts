@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 
 import type { LibraryServerConfig } from "../../src/config/library-config/schema";
 import { itemDraft } from "@opendeved/evidence-library-core";
-import { pdfImportFile } from "../../src/db/schema/pdf-import";
+import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
 import { runPdfImportCycle } from "../../src/lib/admin/pdf-import-reading";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, startPdfImport } from "../../src/lib/admin/pdf-import-service";
 import { createPdf, MemoryFileStorage } from "../helpers/file-storage";
@@ -31,7 +31,7 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		// The AI names fields as Zotero does: a report's institution is the record's publisher.
 		suggestions: [
 			{ apply: true, checks: [], field: "institution", reason: "The PDF names its publisher on page 2.", value: "FCDO" },
-			{ apply: true, checks: [], field: "language", reason: "The library writes language codes.", value: "en" },
+			{ apply: true, checks: [], field: "language", reason: "The library writes language codes.", value: "English" },
 		],
 		topics: [],
 		// No record type has a corporate author, and publishing needs a language code; the record takes both in the library's forms.
@@ -59,7 +59,7 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		const [read, failed] = status.import!.files;
 		expect(read).toMatchObject({ state: "read", stored: true });
 		expect(read!.reading!.record).toMatchObject({ payload: { creators: [{ creatorType: "author" }, { creatorType: "author", lastName: "Babbage" }], languageName: "en" }, state: "ready" });
-		// The language suggestion changes nothing now, so only the publisher is left to apply.
+		// The language suggestion becomes a code too, which changes nothing now, so only the publisher is left to apply.
 		expect(read!.reading!.suggestions).toEqual([expect.objectContaining({ field: "publisher", value: "FCDO" })]);
 		expect(failed).toMatchObject({ message: "The connection dropped.", state: "failed", stored: false });
 
@@ -154,8 +154,10 @@ test("finds a PDF that is the same file as one already in the library or earlier
 		const records = (await pdfImportStatus(db)).import!.files.map(({ reading }) => reading!.record);
 		expect(records.map(({ state }) => state)).toEqual(["existing", "ready", "repeated"]);
 		expect(records[0]).toMatchObject({ existingKey: done.results[0]!.itemKey, title: "A report without a DOI" });
-		// The file already in the library cost no read.
-		expect(readImportPdf.mock.calls.map(([, { filename }]) => filename)).not.toContain("again.pdf");
+		// The file already in the library cost no read, and of two copies read at the same moment only one went to the AI.
+		const read = readImportPdf.mock.calls.map(([, { filename }]) => filename);
+		expect(read).not.toContain("again.pdf");
+		expect(read.filter((filename) => filename.startsWith("other"))).toHaveLength(1);
 	});
 }, 60_000);
 
@@ -171,5 +173,21 @@ test("doesn't read a PDF larger than the library takes", async () => {
 		// It fails for good at once: trying again can't make it smaller.
 		expect((await pdfImportStatus(db)).import!.files[0]).toMatchObject({ message: expect.stringContaining("larger than the library takes"), state: "failed" });
 		expect(readImportPdf).not.toHaveBeenCalled();
+	});
+});
+
+test("won't close an import while its records are being imported, and waits for a slow tab while its PDFs keep arriving", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("first.pdf"), pdfFile("second.pdf")], instructions: "" });
+		// Started 20 minutes ago, and its tab is still sending: the first PDF arrived a moment ago.
+		await db.update(pdfImport).set({ createdAt: new Date(Date.now() - 20 * 60_000) }).where(eq(pdfImport.id, started.id));
+		await storage.uploadPrivate(started.files[0]!.upload.path, await createPdf("First"), "application/pdf");
+		await confirmPdfImportUpload(db, storage, started.files[0]!.id);
+		expect((await pdfImportStatus(db)).import!.files[1]).toMatchObject({ state: "uploading" });
+
+		// Another tab is importing the records right now.
+		await db.update(pdfImport).set({ commitStartedAt: new Date() }).where(eq(pdfImport.id, started.id));
+		await expect(closePdfImport(db, storage, started.id)).rejects.toThrow("being imported");
 	});
 });

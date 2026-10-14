@@ -93,14 +93,13 @@ function sendVerbs(canPublish: boolean) {
 type SendVerbs = ReturnType<typeof sendVerbs>;
 
 /**
- * Where sending stands: the drafts already published or submitted, and
- * whether a run holds the ticks, which it does while it sends and once it
- * sent every draft. A run that left failures lets the failed ones be sent again.
+ * Where sending stands: the drafts already published or submitted, which
+ * can't go again, and whether a run holds the ticks while it sends. Once it
+ * is done, drafts it failed on and drafts whose PDF came later can go.
  */
 function sending(batch: ImportBatch) {
-	const states = [...batch.publish.values()].map(({ state }) => state);
 	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
-	return { sentIds, started: states.length > 0 && (states.includes("sending") || !states.includes("failed")) };
+	return { sentIds, started: [...batch.publish.values()].some(({ state }) => state === "sending") };
 }
 
 /**
@@ -144,6 +143,8 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
 		/** "Publish 3", "Submit 3 for review", then the progress. */
 		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${verbs.act}${chosen.size ? ` ${chosen.size}` : ""}${verbs.after}`,
+		/** Drafts sent on so far, which stay out of the ticks. */
+		sentIds,
 		publishable: publishableIds,
 		sent,
 		verbs,

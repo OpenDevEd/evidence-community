@@ -75,6 +75,12 @@ function inLibraryForms(zoteroItem: Record<string, unknown>) {
 	return { ...rest, creators, ...(code ? { language: code } : {}) };
 }
 
+/** A suggestion under the record's name for its field, a language as its code; an empty value when it has none. */
+function inRecordForm<Suggestion extends { field: string; value: string }>(itemType: unknown, suggestion: Suggestion): Suggestion {
+	const field = recordField(itemType, suggestion.field);
+	return { ...suggestion, field, value: field === "languageName" ? languageCode(suggestion.value) : suggestion.value };
+}
+
 /** The record's own name for a field the AI named as Zotero does: a report's institution is its publisher, a language its languageName. */
 const recordField = (itemType: unknown, field: string) => canonicalItemFieldToDatabaseField(canonicalZoteroFieldName(String(itemType), field) ?? field);
 
@@ -100,14 +106,21 @@ async function recordWithFile(db: Database, sha256: string) {
 	return key ? { key, title: await recordTitle(db, key) } : null;
 }
 
-/** Whether an earlier PDF of the same import is this very file. */
-async function repeatsEarlier(db: Database, file: FileRow, sha256: string) {
-	const [earlier] = await db
-		.select({ id: pdfImportFile.id })
-		.from(pdfImportFile)
-		.where(and(eq(pdfImportFile.importId, file.importId), eq(pdfImportFile.sha256, sha256), lt(pdfImportFile.position, file.position)))
-		.limit(1);
-	return Boolean(earlier);
+const isUniqueViolation = (error: unknown) => (error as { code?: string; cause?: { code?: string } }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505";
+
+/**
+ * Keeps the PDF's hash on its row; false when another PDF of the import
+ * holds it already, being the same file. The import allows each hash once,
+ * so of two copies read at the same moment, only one goes to the AI.
+ */
+async function ownsFile(db: Database, file: FileRow, sha256: string) {
+	try {
+		await db.update(pdfImportFile).set({ sha256 }).where(eq(pdfImportFile.id, file.id));
+		return true;
+	} catch (error) {
+		if (isUniqueViolation(error)) return false;
+		throw error;
+	}
 }
 
 /**
@@ -127,17 +140,17 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
 	if (bytes.byteLength > limit) throw new UnreadablePdfError(`This PDF is larger than the library takes (${Math.floor(limit / 1024 / 1024)} MB).`);
 	// The file is known before the AI is asked, so a PDF the library or this import already has costs no read.
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
-	await db.update(pdfImportFile).set({ sha256 }).where(eq(pdfImportFile.id, file.id));
 	const pdf = await readPdfProperties(bytes);
 	const existing = await recordWithFile(db, sha256);
-	if (existing || (await repeatsEarlier(db, file, sha256))) return sameFileReading(file, pdf, sha256, existing);
+	if (existing || !(await ownsFile(db, file, sha256))) return sameFileReading(file, pdf, sha256, existing);
 	// The editor who started the import is who OpenScholar's author search answers.
 	const readSignal = AbortSignal.any([AbortSignal.timeout(READ_TIMEOUT_MS), ...(signal ? [signal] : [])]);
 	const ai = await readImportPdf({ clerkUserId: owner!.createdBy, config, database: db, signal: readSignal }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
 	const read = await previewReading(db, file.filename, inLibraryForms(ai.zoteroItem));
 	const record = { ...read, id: String(file.position) };
-	// Suggestions use the record's field names, so applying one replaces the field the review shows; one that changes nothing is dropped.
-	const suggestions = ai.suggestions.map((suggestion) => ({ ...suggestion, field: recordField(ai.zoteroItem.itemType, suggestion.field) })).filter(({ field, value }) => record.payload?.[field] !== value);
+	// Suggestions use the record's field names and forms, so applying one replaces the field the review shows; one that
+	// changes nothing is dropped.
+	const suggestions = ai.suggestions.map((suggestion) => inRecordForm(ai.zoteroItem.itemType, suggestion)).filter(({ field, value }) => value && record.payload?.[field] !== value);
 	return { checks: ai.checks, cites: ai.cites, collections: ai.collections, pdf, record, sha256, suggestions, topics: ai.topics };
 }
 

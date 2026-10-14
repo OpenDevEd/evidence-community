@@ -21,6 +21,7 @@ CREATE TABLE "pdfImportFile" (
 	"position" integer NOT NULL,
 	"filename" text NOT NULL,
 	"objectPath" text,
+	"uploadedAt" timestamp with time zone,
 	"reading" jsonb,
 	"attempts" integer DEFAULT 0 NOT NULL,
 	"nextAttemptAt" timestamp with time zone,
@@ -36,3 +37,5 @@ CREATE TABLE "pdfImportFile" (
 CREATE UNIQUE INDEX "pdfImportFile_position" ON "pdfImportFile" USING btree ("importId", "position");
 --> statement-breakpoint
 CREATE INDEX "pdfImportFile_pending_idx" ON "pdfImportFile" USING btree ("nextAttemptAt") WHERE "nextAttemptAt" IS NOT NULL;
+--> statement-breakpoint
+CREATE UNIQUE INDEX "pdfImportFile_same_file" ON "pdfImportFile" USING btree ("importId", "sha256");

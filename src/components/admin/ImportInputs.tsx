@@ -14,10 +14,13 @@ export function megabytes(bytes: number) {
 	return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Adds dropped or chosen files once each, by name and size. */
+// The same file chosen twice has the same name, size and modification time; another file of the same name and size doesn't.
+const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+
+/** Adds dropped or chosen files once each; a PDF with the same contents as another is found when it is read. */
 export function withNew(current: readonly File[], chosen: readonly File[]) {
-	const known = new Set(current.map((file) => `${file.name}:${file.size}`));
-	return [...current, ...chosen.filter((file) => !known.has(`${file.name}:${file.size}`))];
+	const known = new Set(current.map(fileKey));
+	return [...current, ...chosen.filter((file) => !known.has(fileKey(file)))];
 }
 
 /** A drop target that is also a file chooser. */

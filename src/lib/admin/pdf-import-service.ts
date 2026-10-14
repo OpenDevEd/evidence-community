@@ -17,7 +17,8 @@ import { importObjectPath, removeImportFiles } from "./pdf-import-reading";
 
 const PDF = "application/pdf";
 
-// A PDF that hasn't arrived this long after its import started never will: its tab closed or lost the connection.
+// The editor's tab sends a few PDFs at a time. When none has arrived for this long, the rest never will: the tab closed
+// or lost the connection.
 const UPLOAD_WAIT_MS = 15 * 60_000;
 // How long one request may hold the import while it imports the records.
 const COMMIT_WAIT_MS = 10 * 60_000;
@@ -25,19 +26,26 @@ const NOT_UPLOADED = "The PDF didn't finish uploading.";
 
 type FileRow = typeof pdfImportFile.$inferSelect;
 
-function fileState(file: FileRow, startedAt: Date, now: Date): AdminPdfImportFile["state"] {
-	if (!file.objectPath) return file.lastError || now.getTime() - startedAt.getTime() > UPLOAD_WAIT_MS ? "failed" : "uploading";
+function fileState(file: FileRow, lastUpload: Date, now: Date): AdminPdfImportFile["state"] {
+	if (!file.objectPath) return file.lastError || now.getTime() - lastUpload.getTime() > UPLOAD_WAIT_MS ? "failed" : "uploading";
 	if (file.reading) return "read";
 	if (!file.nextAttemptAt) return "failed";
 	return file.leaseExpiresAt && file.leaseExpiresAt > now ? "reading" : "waiting";
 }
 
-/** The PDFs that are the same file as one earlier in the import, which can't be imported twice. */
+/** When the import last heard from the tab sending its PDFs: its start, or the last PDF that arrived. */
+const lastUpload = (startedAt: Date, files: FileRow[]) => new Date(Math.max(startedAt.getTime(), ...files.map(({ uploadedAt }) => uploadedAt?.getTime() ?? 0)));
+
+/**
+ * The PDFs that are the same file as one earlier in the import, which can't
+ * be imported twice. A PDF the worker already found repeated, without a
+ * read, doesn't count as the first.
+ */
 function repeatedFiles(files: FileRow[]) {
 	const seen = new Set<string>();
 	const repeats = new Set<string>();
 	for (const { id, reading } of files) {
-		if (!reading) continue;
+		if (!reading || reading.record.state === "repeated") continue;
 		if (seen.has(reading.sha256)) repeats.add(id);
 		seen.add(reading.sha256);
 	}
@@ -60,13 +68,14 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 	const files = await db.select().from(pdfImportFile).where(eq(pdfImportFile.importId, open.id)).orderBy(asc(pdfImportFile.position));
 	const now = new Date();
 	const repeats = repeatedFiles(files);
+	const heard = lastUpload(open.createdAt, files);
 	const view: AdminPdfImport = {
 		attach: attachOutcomes(files),
 		checks: open.checks,
 		collections: open.collections,
 		createdAt: open.createdAt.toISOString(),
 		files: files.map((file) => {
-			const state = fileState(file, open.createdAt, now);
+			const state = fileState(file, heard, now);
 			const reading = repeats.has(file.id) ? asRepeat(file.reading!) : file.reading;
 			return { filename: file.filename, id: file.id, message: state === "failed" ? (file.lastError ?? NOT_UPLOADED) : null, reading, rowId: String(file.position), state, stored: Boolean(file.objectPath) };
 		}),
@@ -116,7 +125,7 @@ export async function confirmPdfImportUpload(db: Database, storage: EvidenceFile
 	const objectPath = importObjectPath(file.importId, fileId);
 	const [stored] = await db
 		.update(pdfImportFile)
-		.set({ nextAttemptAt: new Date(), objectPath })
+		.set({ nextAttemptAt: new Date(), objectPath, uploadedAt: new Date() })
 		.where(and(eq(pdfImportFile.id, fileId), isNull(pdfImportFile.objectPath), inArray(pdfImportFile.importId, db.select({ id: pdfImport.id }).from(pdfImport).where(isNull(pdfImport.closedAt)))))
 		.returning({ id: pdfImportFile.id });
 	if (!stored) {
@@ -143,9 +152,15 @@ export async function readPdfImportFile(db: Database, storage: EvidenceFileStora
  * their PDFs, which it reads from those stored copies.
  */
 export async function closePdfImport(db: Database, storage: EvidenceFileStorage, importId: string) {
-	const [attaching] = await db.select({ id: pdfImportFile.id }).from(pdfImportFile).where(and(eq(pdfImportFile.importId, importId), eq(pdfImportFile.attachState, "waiting"))).limit(1);
-	if (attaching) throw new AdminValidationError("The drafts are still getting their PDFs. Close the import once they have them.");
-	await db.update(pdfImport).set({ closedAt: new Date() }).where(and(eq(pdfImport.id, importId), isNull(pdfImport.closedAt)));
+	await db.transaction(async (transaction) => {
+		// The import's row is locked, as making its drafts locks it, so a close and an import never pass each other.
+		const [current] = await transaction.select().from(pdfImport).where(eq(pdfImport.id, importId)).for("update");
+		if (!current || current.closedAt) return;
+		if (!current.results && current.commitStartedAt && current.commitStartedAt.getTime() > Date.now() - COMMIT_WAIT_MS) throw new AdminValidationError("The records are being imported. Close the import once they are.");
+		const [attaching] = await transaction.select({ id: pdfImportFile.id }).from(pdfImportFile).where(and(eq(pdfImportFile.importId, importId), eq(pdfImportFile.attachState, "waiting"))).limit(1);
+		if (attaching) throw new AdminValidationError("The drafts are still getting their PDFs. Close the import once they have them.");
+		await transaction.update(pdfImport).set({ closedAt: new Date() }).where(eq(pdfImport.id, importId));
+	});
 	// The worker removes them again once their upload links have stopped working, and so retries what a storage failure leaves.
 	await removeImportFiles(db, storage, importId).catch((error: unknown) => console.error("Removing an import's stored PDFs failed", importId, error));
 }
@@ -157,6 +172,8 @@ export async function closePdfImport(db: Database, storage: EvidenceFileStorage,
  */
 async function createDrafts(db: Database, input: Omit<AdminImportCommitRequest, "action">) {
 	return db.transaction(async (transaction) => {
+		const [current] = await transaction.select({ closedAt: pdfImport.closedAt }).from(pdfImport).where(eq(pdfImport.id, input.importId)).for("update");
+		if (current?.closedAt) throw new AdminValidationError("This import was closed in another tab.");
 		const { results } = await commitImportRecords(transaction, { ...input, action: "commit" });
 		await transaction.update(pdfImport).set({ results }).where(eq(pdfImport.id, input.importId));
 		for (const { id, itemKey, outcome } of results) {

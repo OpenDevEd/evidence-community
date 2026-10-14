@@ -28,11 +28,14 @@ describe("a record read from a PDF", () => {
 		]);
 	});
 
-	// The AI can mix up whose profile a search found; the profile goes only to the author it was searched for.
+	// The AI can mix up whose profile a search found; the profile goes only to the author it was searched for, even one
+	// with the same family name.
 	it("doesn't give one author the profile a search for another author found", () => {
-		const mixed = { ...read, creators: [{ ...read.creators[0]!, profileId: "profile_peng" }] };
-		const item = zoteroItemFrom(mixed, { cites: [], profiles: new Map([["profile_peng", { id: "profile_peng", name: "Yan Peng", searches: ["Yan Peng"] }]]) });
+		const mixed = { ...read, creators: [{ ...read.creators[0]!, profileId: "profile_other" }] };
+		const item = zoteroItemFrom(mixed, { cites: [], profiles: new Map([["profile_other", { id: "profile_other", name: "Li Wang", searches: ["Li Wang"] }]]) });
 		expect(item.creators).toEqual([{ creatorType: "author", firstName: "Wenxuan", institutions: [{ display_name: "Universiti Sains Malaysia" }], lastName: "Wang" }]);
+		const initials = zoteroItemFrom({ ...read, creators: [{ ...read.creators[0]!, firstName: "W." }] }, { cites: [], profiles: new Map([["profile_1", { id: "profile_1", name: "Wang Wenxuan", searches: ["Wenxuan Wang"] }]]) });
+		expect(initials.creators).toEqual([expect.objectContaining({ authorProfileId: "profile_1" })]);
 	});
 
 	it("takes the PDF's keywords as tags and links the records it cites", () => {

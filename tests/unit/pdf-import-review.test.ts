@@ -67,8 +67,11 @@ describe("the finish step", () => {
 		const current = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }], ["2", { message: "Try again", state: "failed" as const }]]), toPublish: new Set(["1", "2"]) };
 		expect(view(current)).toMatchObject({ publishable: ["2"], started: false });
 		expect([...view(current).chosen]).toEqual(["2"]);
+		// A finished run leaves nothing ticked, and a draft whose PDF came later can still go.
 		const done = { ...current, publish: new Map([["1", { state: "published" as const }], ["2", { state: "published" as const }]]) };
-		expect(view(done)).toMatchObject({ label: "2 of 2 published", started: true });
+		expect(view(done)).toMatchObject({ publishable: [], sent: 2, started: false });
+		const later = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }]]) };
+		expect(view(later)).toMatchObject({ publishable: ["2"], started: false });
 	});
 
 	it("ticks the drafts that pass every check, and leaves the rest to the editor", () => {

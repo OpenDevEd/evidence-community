@@ -146,13 +146,42 @@ async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"])
 	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
 }
 
-/** Submits a draft for review and, for an editor or owner, approves it, which publishes it. */
-async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"], approve: boolean): Promise<PublishState> {
+/** A send that submitted the draft's review but couldn't approve it. */
+class NotApprovedError extends Error {
+	constructor(
+		readonly review: { id: string; revision: number },
+		readonly reason: unknown,
+	) {
+		super("The review was submitted but not approved.");
+	}
+}
+
+/** Approves a submitted review, which publishes the draft; a failure keeps the review for the next try. */
+async function approve(review: { id: string; revision: number }) {
+	try {
+		await approveAdminReview(review.id, review.revision);
+	} catch (caught) {
+		throw new NotApprovedError(review, caught);
+	}
+	return { state: "published" as const };
+}
+
+/** A failed send, keeping the review it submitted so the next try approves that one. */
+function failedSend(caught: unknown, submitted: PublishState["review"]): PublishState {
+	if (caught instanceof NotApprovedError) return { message: publishError(caught.reason), review: caught.review, state: "failed" };
+	return { message: publishError(caught), review: submitted, state: "failed" };
+}
+
+/**
+ * Submits a draft for review and, for an editor or owner, approves it, which
+ * publishes it. A retry after the approval failed approves the review
+ * already submitted.
+ */
+async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"], canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
+	if (submitted) return approve(submitted);
 	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
 	const review = await submitAdminReview(itemKey);
-	if (!approve) return { doi, state: "submitted" };
-	await approveAdminReview(review.id, review.revision);
-	return { state: "published" };
+	return canApprove ? approve(review) : { doi, state: "submitted" };
 }
 
 /**
@@ -166,11 +195,12 @@ async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], appr
 	const mark = (id: string, state: PublishState) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
 	for (const { id } of drafts) mark(id, { state: "sending" });
 	await inTurn(drafts, SEND_CONCURRENCY, async (draft) => {
+		const submitted = batch.publish.get(draft.id)?.review;
 		try {
-			mark(draft.id, await sendDraft(draft, batch.publishRoute, approve));
+			mark(draft.id, await sendDraft(draft, batch.publishRoute, approve, submitted));
 		} catch (caught) {
 			console.error("Sending the draft on failed", draft.itemKey, caught);
-			mark(draft.id, { message: publishError(caught), state: "failed" });
+			mark(draft.id, failedSend(caught, submitted));
 		}
 	});
 	// The table shows their new state; the import's drafts stay the selection.

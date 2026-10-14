@@ -92,6 +92,7 @@ function DraftsHeader({ view }: { view: PublishView }) {
 /** Before sending, how many are chosen and how many pass; after, how many went. */
 function draftsHeading(view: PublishView) {
 	if (view.started) return { title: `${view.sent} of ${view.chosen.size} ${view.verbs.done}` };
+	if (!view.publishable.length && view.sent) return { title: `${view.sent} ${view.verbs.done}` };
 	return { aside: `${view.passing} pass every check`, title: `${view.chosen.size} of ${view.publishable.length} ${view.verbs.to}` };
 }
 

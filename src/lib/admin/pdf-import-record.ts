@@ -18,12 +18,19 @@ const nonEmpty = (values: readonly string[]) => [...new Set(values.map((value) =
 /** A profile a search returned during the read, with the names searched for that returned it. */
 export type FoundProfile = Pick<AuthorProfile, "id" | "name"> & { searches: readonly string[] };
 
-const folded = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim();
+const nameParts = (text: string) => text.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
 
-/** Whether a search for this author returned the profile, so a profile found for one author never goes to another. */
+// A part of the author's name is in the search as it is, or as an initial of one of its parts.
+const partSearched = (part: string, searched: readonly string[]) => searched.some((word) => word === part || (part.length === 1 && word.startsWith(part)));
+
+/**
+ * Whether a search for this author returned the profile: one whose words
+ * hold every part of the author's name. A profile found for Alice Smith
+ * never goes to Bob Smith.
+ */
 const searchedFor = ({ searches }: FoundProfile, { firstName, lastName }: { firstName: string; lastName: string }) => {
-	const name = folded(lastName || firstName);
-	return Boolean(name) && searches.some((search) => folded(search).includes(name));
+	const parts = nameParts(`${firstName} ${lastName}`);
+	return parts.length > 0 && searches.some((search) => parts.every((part) => partSearched(part, nameParts(search))));
 };
 
 /**

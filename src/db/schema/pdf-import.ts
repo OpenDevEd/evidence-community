@@ -29,6 +29,7 @@ export const pdfImportFile = pgTable("pdfImportFile", {
 	filename: text("filename").notNull(),
 	/** Null until the PDF is uploaded. */
 	objectPath: text("objectPath"),
+	uploadedAt: timestamp("uploadedAt", { withTimezone: true }),
 	reading: jsonb("reading").$type<PdfReading>(),
 	attempts: integer("attempts").notNull().default(0),
 	nextAttemptAt: timestamp("nextAttemptAt", { withTimezone: true }),
@@ -44,5 +45,7 @@ export const pdfImportFile = pgTable("pdfImportFile", {
 	attachmentKey: text("attachmentKey"),
 }, (table) => [
 	uniqueIndex("pdfImportFile_position").on(table.importId, table.position),
+	// One PDF of an import reads a file; another with the same contents repeats it.
+	uniqueIndex("pdfImportFile_same_file").on(table.importId, table.sha256),
 	index("pdfImportFile_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`),
 ]);
