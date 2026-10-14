@@ -22,6 +22,7 @@ const server: AdminPdfImport = {
 	id: "import-1",
 	instructions: "",
 	results: null,
+	reviews: {},
 	sent: {},
 };
 
@@ -53,15 +54,16 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 	expect(reloaded.appliedOf(reloaded.pdfImportBatch(server), row)).toEqual(new Set([0]));
 });
 
-// A draft sent on from another tab or browser shows as sent here too; this tab's own failed send stays to be tried again.
+// A draft sent on from another tab or browser shows as sent here too; this tab's own failed send stays to be tried again, with the review the server says is pending.
 it("takes in what other tabs sent, without overriding a send this tab can still retry", async () => {
 	const tab = await import("@/components/admin/admin-import");
 	const batch = tab.pdfImportBatch(server);
 	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
-	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["2", { message: "Try again", review: { id: "review-2", revision: 1 }, state: "failed" as const }]]) }));
+	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["2", { message: "Try again", state: "failed" as const }]]) }));
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
-	const restored = reloaded.pdfImportBatch({ ...server, sent: { 1: "published", 2: "submitted" } });
+	const restored = reloaded.pdfImportBatch({ ...server, reviews: { 2: { id: "review-2", revision: 1 } }, sent: { 1: "published", 2: "submitted" } });
 	expect(restored.publish.get("1")).toEqual({ state: "published" });
-	expect(restored.publish.get("2")).toMatchObject({ review: { id: "review-2" }, state: "failed" });
+	expect(restored.publish.get("2")).toEqual({ message: "Try again", state: "failed" });
+	expect(restored.reviews).toEqual({ 2: { id: "review-2", revision: 1 } });
 });

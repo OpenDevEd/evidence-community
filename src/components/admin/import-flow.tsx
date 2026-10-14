@@ -15,6 +15,7 @@ import {
 	commitAdminImport,
 	commitAdminPdfImport,
 	failAdminPdfImportUpload,
+	getAdminPdfImport,
 	PDF_IMPORT_KEY,
 	previewAdminImport,
 	reserveAdminCrossrefDoi,
@@ -148,39 +149,30 @@ async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"] 
 	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
 }
 
-/** A send that submitted the draft's review but couldn't approve it. */
-class NotApprovedError extends Error {
-	constructor(
-		readonly review: { id: string; revision: number },
-		readonly reason: unknown,
-	) {
-		super("The review was submitted but not approved.");
-	}
+type PendingReview = ImportBatch["reviews"][string];
+
+/** The reviews pending now, not as this browser last saw them: one may have been withdrawn in the record since. */
+async function pendingReviews(): Promise<ImportBatch["reviews"]> {
+	return (await getAdminPdfImport()).import?.reviews ?? {};
 }
 
-/** Approves a submitted review, which publishes the draft; a failure keeps the review for the next try. */
-async function approve(review: { id: string; revision: number }) {
-	try {
-		await approveAdminReview(review.id, review.revision);
-	} catch (caught) {
-		throw new NotApprovedError(review, caught);
-	}
+/** A draft whose review is still pending: an editor or owner approves it, and anyone else leaves it waiting. */
+const sendPending = async (pending: PendingReview, canApprove: boolean): Promise<PublishState> => (canApprove ? approve(pending) : { state: "submitted" });
+
+/** Approves a submitted review, which publishes the draft. */
+async function approve(review: PendingReview) {
+	await approveAdminReview(review.id, review.revision);
 	return { state: "published" as const };
-}
-
-/** A failed send, keeping the review it submitted so the next try approves that one. */
-function failedSend(caught: unknown, submitted: PublishState["review"]): PublishState {
-	if (caught instanceof NotApprovedError) return { message: publishError(caught.reason), review: caught.review, state: "failed" };
-	return { message: publishError(caught), review: submitted, state: "failed" };
 }
 
 /**
  * Submits a draft for review and, for an editor or owner, approves it, which
- * publishes it. A retry after the approval failed approves the review
- * already submitted.
+ * publishes it. A draft whose review is still pending, as a send that
+ * couldn't approve it leaves it, has that review approved instead; one an
+ * editor withdrew or returned since is submitted again.
  */
-async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"] | null, canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
-	if (submitted) return approve(submitted);
+async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"] | null, canApprove: boolean, pending: PendingReview | undefined): Promise<PublishState> {
+	if (pending) return sendPending(pending, canApprove);
 	// A record imported with a DOI keeps it.
 	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
 	const review = await submitAdminReview(itemKey);
@@ -197,13 +189,13 @@ async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["
 async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, onImported: ImportFlowProps["onImported"]) {
 	const mark = (id: string, state: PublishState) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
 	for (const { id } of drafts) mark(id, { state: "sending" });
+	const reviews = await pendingReviews();
 	await inTurn(drafts, SEND_CONCURRENCY, async (draft) => {
-		const submitted = batch.publish.get(draft.id)?.review;
 		try {
-			mark(draft.id, await sendDraft(draft, batch.publishRoute, approve, submitted));
+			mark(draft.id, await sendDraft(draft, batch.publishRoute, approve, reviews[draft.id]));
 		} catch (caught) {
 			console.error("Sending the draft on failed", draft.itemKey, caught);
-			mark(draft.id, failedSend(caught, submitted));
+			mark(draft.id, { message: publishError(caught), state: "failed" });
 		}
 	});
 	// The table shows their new state; the import's drafts stay the selection.

@@ -50,6 +50,7 @@ describe("the finish step", () => {
 		publish: new Map(),
 		publishRoute: "zenodo",
 		results: rows.map(({ id }) => created(id)),
+		reviews: {},
 		rows,
 		toPublish: null,
 	});
@@ -72,6 +73,13 @@ describe("the finish step", () => {
 		expect(view(done)).toMatchObject({ publishable: [], sent: 2, started: false });
 		const later = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }]]) };
 		expect(view(later)).toMatchObject({ publishable: ["2"], started: false });
+	});
+
+	// A retry approves the review a failed send left pending, which keeps the DOI choice it was submitted with.
+	it("holds the DOI route while a failed draft's review is pending, and frees it once an editor withdraws it", () => {
+		const failed = { ...batch([["1", "attached"]]), publish: new Map([["1", { message: "Zenodo publishing is not configured", state: "failed" as const }]]) };
+		expect(view({ ...failed, reviews: { 1: { id: "review-1", revision: 1 } } }).routeHeld).toBe(true);
+		expect(view(failed).routeHeld).toBe(false);
 	});
 
 	it("ticks the drafts that pass every check, and leaves the rest to the editor", () => {

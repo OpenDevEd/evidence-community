@@ -191,6 +191,8 @@ export type AdminPdfImport = {
 	id: string;
 	instructions: string;
 	results: AdminImportCommitResult[] | null;
+	/** The pending review of each imported draft submitted and not yet decided, by row: a retry approves it rather than submitting again. */
+	reviews: Record<string, { id: string; revision: number }>;
 	/** The imported drafts sent on so far, by row, from any tab: published, or submitted and waiting for an editor. */
 	sent: Record<string, "published" | "submitted">;
 };

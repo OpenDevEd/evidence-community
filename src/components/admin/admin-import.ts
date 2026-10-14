@@ -189,8 +189,6 @@ export type AttachState = "attached" | "failed";
 export type PublishState = {
 	doi?: string;
 	message?: string;
-	/** The review a send submitted before it failed to approve it, which a retry approves instead of submitting again. */
-	review?: { id: string; revision: number };
 	state: "failed" | "published" | "sending" | "submitted";
 };
 
@@ -219,6 +217,8 @@ export type ImportBatch = {
 	/** How drafts made from PDFs get their DOI, as on a record made in the library; null publishes them without one. */
 	publishRoute: PublishingChoice["route"] | null;
 	results: AdminImportCommitResult[] | null;
+	/** The pending review of each draft submitted and not yet decided, by row, as the server last said. */
+	reviews: AdminPdfImport["reviews"];
 	rows: ImportRow[];
 	/** The drafts ticked for publishing, once the editor changes the default. */
 	toPublish: ReadonlySet<string> | null;
@@ -245,14 +245,14 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: null, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: null, reviews: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
 
 /** What the server says of its import, as the review takes it. */
 function fromServer(server: AdminPdfImport) {
-	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, results: server.results, rows: rowsFromImport(server) };
+	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, results: server.results, reviews: server.reviews, rows: rowsFromImport(server) };
 }
 
 // The editor's choices on the library's PDF import, kept in this browser so a reload keeps them. One import is open at
