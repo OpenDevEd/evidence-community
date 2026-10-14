@@ -142,7 +142,7 @@ function SelectionChip({
 function SlowLoading() {
 	return (
 		<div aria-label="Loading collections" className="grid h-full place-items-center" role="status">
-			<span className="animate-fade-in [animation-delay:400ms] [animation-duration:300ms] [animation-fill-mode:both]">
+			<span className="animate-fade-in [animation-delay:400ms] [animation-duration:300ms] [animation-fill-mode:both] motion-reduce:[animation-timing-function:steps(1,end)]">
 				<HugeiconsIcon icon={Loading03Icon} aria-hidden className="animate-spin text-black/35 motion-reduce:animate-none dark:text-white/35" size={16} />
 			</span>
 		</div>
@@ -370,8 +370,9 @@ export function AdminCollectionPicker({
 		[],
 	);
 
+	// Focus moves to the search once, after the popover places its own; a load finishing later leaves it where the editor put it.
 	useEffect(() => {
-		if (!autoFocus || loading) return;
+		if (!autoFocus) return;
 		const frame = window.requestAnimationFrame(() => {
 			pickerRef.current
 				?.querySelector<HTMLInputElement>(
@@ -380,7 +381,7 @@ export function AdminCollectionPicker({
 				?.focus();
 		});
 		return () => window.cancelAnimationFrame(frame);
-	}, [autoFocus, loading]);
+	}, [autoFocus]);
 
 	const loadPage = useCallback(
 		async (
@@ -533,10 +534,20 @@ export function AdminCollectionPicker({
 		);
 	};
 
+	/** Shows a page seen before in the same render as the move to it, so the old rows never show under the new place; false when there is none. */
+	const showCachedPage = (key: string) => {
+		const cached = pages.get(key);
+		if (!cached) return false;
+		setItems(cached.items);
+		setItemsKey(key);
+		setNextCursor(cached.nextCursor);
+		return true;
+	};
+
 	const navigateToPath = (nextPath: CollectionPathEntry[]) => {
 		const nextParent = nextPath.at(-1)?.key ?? null;
 		if (nextParent === activeParent) return;
-		setLoading(!pages.has(pageKey("", sourceKey, nextParent)));
+		setLoading(!showCachedPage(pageKey(debouncedQuery, sourceKey, nextParent)));
 		setPath(nextPath);
 		scrollRef.current?.scrollTo({ top: 0 });
 	};
@@ -552,7 +563,7 @@ export function AdminCollectionPicker({
 
 	const chooseSource = (key: string) => {
 		if (key === sourceKey && activeParent === null) return;
-		const cached = pages.has(pageKey("", key, null));
+		const cached = showCachedPage(pageKey(debouncedQuery, key, null));
 		setLoading(!cached);
 		setSourceSelectionPending(!cached);
 		setSourceKey(key);
@@ -767,7 +778,7 @@ export function AdminCollectionPicker({
 								</div>
 							) : (
 								<div
-									className="relative w-full animate-fade-in [animation-duration:200ms]"
+									className="relative w-full animate-fade-in [animation-duration:200ms] motion-reduce:animate-none"
 									// The rows cross-fade when the list they show changes, not when a folder starts loading.
 									key={itemsKey ?? "first"}
 									style={{
