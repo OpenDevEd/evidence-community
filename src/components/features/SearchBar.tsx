@@ -15,6 +15,7 @@ const FOCUS_REQUEST_MAX_AGE_MS = 1000;
 
 export function SearchBar({
 	handleSearchChange,
+	onTyped,
 	search,
 	classNames,
 	endContent,
@@ -23,6 +24,8 @@ export function SearchBar({
 	trailing,
 }: {
 	handleSearchChange: (search: string) => void;
+	/** What the field holds while its search waits to run, and null once it has run or been cleared. */
+	onTyped?: (text: string | null) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
 	/** A fixed node drawn inside the field, such as an icon. */
@@ -70,8 +73,11 @@ export function SearchBar({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, , cancelSearch] = useDebounce(
-		handleSearchChange,
+	const [debouncedSearch, , cancelSearch, searchNow] = useDebounce(
+		(text: string) => {
+			onTyped?.(null);
+			handleSearchChange(text);
+		},
 		300,
 	);
 	const t = useTranslations("ui");
@@ -91,9 +97,10 @@ export function SearchBar({
 		// Drop the search that was still waiting to run: letting it through
 		// would change the page address a second time, moments later.
 		cancelSearch();
+		onTyped?.(null);
 		setDraft({ sourceSearch: search, value: "" });
 		handleSearchChange("");
-	}, [cancelSearch, handleSearchChange, search]);
+	}, [cancelSearch, handleSearchChange, onTyped, search]);
 
 	const ask = () => onAsk?.(localValue, clear);
 
@@ -102,16 +109,21 @@ export function SearchBar({
 			baseRef={baseRef}
 			autoCorrect="off"
 			onKeyDown={(event) => {
-				if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) {
+				if (event.key !== "Enter") return;
+				if (!(event.metaKey || event.ctrlKey)) {
+					// Searched at once: what the page acts on next, such as Open in OpenScholar, is what was typed.
+					searchNow();
 					return;
 				}
 				event.preventDefault();
 				ask();
 			}}
+			onBlur={searchNow}
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;
 				setDraft({ sourceSearch: search, value });
+				onTyped?.(value);
 				debouncedSearch(value);
 			}}
 			onClear={clear}

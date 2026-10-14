@@ -244,6 +244,7 @@ export function EngagedLibraryPanel({
 				>
 					<SearchBar
 						handleSearchChange={itemsContext.handleSearchChange}
+						onTyped={itemsContext.noteTypedSearch}
 						search={itemsContext.queryParams.search}
 					/>
 

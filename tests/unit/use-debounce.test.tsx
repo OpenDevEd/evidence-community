@@ -30,7 +30,7 @@ describe("waiting for typing to stop", () => {
 
 	/** Renders the hook and hands its parts back. */
 	function mount(onRun: (value: string) => void) {
-		let parts: { run: (value: string) => void; cancel: () => void };
+		let parts: { run: (value: string) => void; cancel: () => void; flush: () => void };
 
 		function Probe({
 			onReady,
@@ -38,13 +38,14 @@ describe("waiting for typing to stop", () => {
 			onReady: (ready: {
 				run: (value: string) => void;
 				cancel: () => void;
+				flush: () => void;
 			}) => void;
 		}) {
-			const [run, , cancel] = useDebounce(onRun, 300);
+			const [run, , cancel, flush] = useDebounce(onRun, 300);
 
 			useEffect(() => {
-				onReady({ run, cancel });
-			}, [cancel, onReady, run]);
+				onReady({ run, cancel, flush });
+			}, [cancel, flush, onReady, run]);
 
 			return null;
 		}
@@ -89,6 +90,21 @@ describe("waiting for typing to stop", () => {
 		});
 
 		expect(onRun).not.toHaveBeenCalled();
+	});
+
+	// A search the reader acts on before its wait is over, as Open in OpenScholar right after typing, is the one typed.
+	it("runs a waiting call at once when flushed, and only once", () => {
+		const onRun = vi.fn();
+		const { run, flush } = mount(onRun);
+
+		act(() => {
+			run("teacher");
+			flush();
+			flush();
+			vi.advanceTimersByTime(1000);
+		});
+
+		expect(onRun.mock.calls).toEqual([["teacher"]]);
 	});
 
 	it("still works after a cancelled call", () => {

@@ -276,7 +276,9 @@ function ContentActions() {
 	// A reader's page with no collection open is no source: OpenScholar reads a collection of theirs, not all of it.
 	const collectionId = items.userData ? params.collectionId : null;
 	const handoff = (): OpenScholarHandoff => {
-		const search = searchOf(params);
+		// What the search box holds is the search, though its wait hasn't run it yet: a press right after typing sends it.
+		const typed = items.readTypedSearch();
+		const search = searchOf(typed === null ? params : { ...params, search: typed });
 		if (!collectionId) return { from: "search", source: { search }, fields: [] };
 		return { from: "collection", source: search ? { search, readerCollection: collectionId } : { readerCollection: collectionId }, fields: [] };
 	};
