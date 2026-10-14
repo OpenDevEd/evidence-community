@@ -106,23 +106,24 @@ it("deletes a reader's collection as its owner only, and refuses once it changed
 		await database.insert(readerCollectionMember).values({ collectionId: id, userId: "reader-bob", role: "editor" });
 		const remove = (clerkUserId: string, body: unknown) =>
 			deleteCollection(new Request(`https://library.example.org/api/v1/openscholar/readers/${clerkUserId}/collections/${id}`, { method: "DELETE", headers, body: JSON.stringify(body) }), { params: Promise.resolve({ clerkUserId, id }) }).then(json);
-		const expected = { expect: { name: "Included", records: 0 } };
+		const asMade = { name: "Included", description: null, private: true, records: 0, members: 1 };
 
 		// An editor can't delete it, and someone it isn't shared with doesn't learn it exists.
-		expect(await remove("user_bob", expected)).toMatchObject({ status: 403, body: { error: "role" } });
-		expect(await remove("user_cy", expected)).toMatchObject({ status: 404, body: { error: "not_found" } });
+		expect(await remove("user_bob", { expect: asMade })).toMatchObject({ status: 403, body: { error: "role" } });
+		expect(await remove("user_cy", { expect: asMade })).toMatchObject({ status: 404, body: { error: "not_found" } });
 
 		// A body cut short is refused, never read as no conditions.
 		const cut = await deleteCollection(new Request(`https://library.example.org/api/v1/openscholar/readers/user_amina/collections/${id}`, { method: "DELETE", headers, body: '{"expect":{"name":"Incl' }), { params: Promise.resolve({ clerkUserId: "user_amina", id }) });
 		expect(await json(cut)).toMatchObject({ status: 400, body: { error: "invalid_request" } });
 
-		// Renamed since: refused, and it stays.
-		await database.update(readerCollection).set({ name: "Mine now" }).where(eq(readerCollection.id, id));
-		expect(await remove("user_amina", expected)).toMatchObject({ status: 409, body: { error: "changed" } });
-		expect(await remove("user_amina", { expect: { name: "Mine now", records: 1 } })).toMatchObject({ status: 409, body: { error: "changed" } });
+		// Changed since it was made, in any way its owner can change it: refused, and it stays.
+		expect(await remove("user_amina", { expect: { ...asMade, members: 0 } })).toMatchObject({ status: 409, body: { error: "changed", message: expect.stringContaining("sharing") } });
+		await database.update(readerCollection).set({ name: "Mine now", private: false }).where(eq(readerCollection.id, id));
+		expect(await remove("user_amina", { expect: asMade })).toMatchObject({ status: 409, body: { error: "changed", message: expect.stringContaining("name, privacy") } });
+		expect(await remove("user_amina", { expect: { ...asMade, name: "Mine now", private: false, records: 1 } })).toMatchObject({ status: 409, body: { error: "changed" } });
 
-		// As it was made: gone, its invitations cancelled, and a second try finds nothing.
-		expect(await remove("user_amina", { expect: { name: "Mine now", records: 0 } })).toEqual({ status: 200, body: { deleted: true } });
+		// As it is now: gone, its invitations cancelled, and a second try finds nothing.
+		expect(await remove("user_amina", { expect: { ...asMade, name: "Mine now", private: false } })).toEqual({ status: 200, body: { deleted: true } });
 		expect(await database.select().from(readerCollection).where(eq(readerCollection.id, id))).toEqual([]);
 		expect(vi.mocked(cancelCollectionInvitations)).toHaveBeenCalledWith(config.authentication.openScholar, "user_amina", id);
 		expect(await remove("user_amina", {})).toMatchObject({ status: 404 });

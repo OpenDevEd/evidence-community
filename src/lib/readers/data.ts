@@ -561,22 +561,36 @@ export async function deleteReaderCollection(database: Database, userId: string,
 	return deleted.length > 0;
 }
 
+/** A collection as it was made, which OpenScholar's undo expects it still to be: everything its owner can change. */
+export type CollectionAsMade = { name: string; description: string | null; private: boolean; records: number; members: number };
+
+/** What differs between a collection now and as it was made: none when it is unchanged. */
+function changedSince(now: CollectionAsMade, made: CollectionAsMade) {
+	const parts: Array<[keyof CollectionAsMade, string]> = [["name", "name"], ["description", "description"], ["private", "privacy"], ["members", "sharing"], ["records", "records"]];
+	return parts.filter(([key]) => now[key] !== made[key]).map(([, part]) => part);
+}
+
 /**
  * Deletes a collection the reader owns, as OpenScholar asks for them. Its records stay bookmarked. With `expect`, only
- * while it still has that name and holds that many records, read under a lock: undoing a collection OpenScholar made
- * never takes away what the reader changed since. Refused (403) for someone it is shared with, 404 for anyone else.
+ * while it is still as made, read under a lock: undoing a collection OpenScholar made never takes away anything the
+ * reader changed since. Refused (403) for someone it is shared with, 404 for anyone else.
  */
-export async function deleteOwnedCollection(database: Database, userId: string, collectionId: string, expect?: { name: string; records: number }) {
+export async function deleteOwnedCollection(database: Database, userId: string, collectionId: string, expect?: CollectionAsMade) {
 	const read = await readCollectionFor(database, collectionId, userId);
 	if ("refused" in read) return { refused: 404 as const };
 	if (read.collection.ownerId !== userId) return { refused: read.collection.access ? (403 as const) : (404 as const) };
 	return database.transaction(async (transaction) => {
-		const [collection] = await transaction.select({ name: readerCollection.name }).from(readerCollection).where(ownedCollection(userId, collectionId)).for("update");
+		const [collection] = await transaction
+			.select({ name: readerCollection.name, description: readerCollection.description, private: readerCollection.private })
+			.from(readerCollection)
+			.where(ownedCollection(userId, collectionId))
+			.for("update");
 		if (!collection) return { refused: 404 as const };
 		if (expect) {
 			const [held] = await transaction.select({ records: count() }).from(readerCollectionItem).where(eq(readerCollectionItem.collectionId, collectionId));
-			const records = held?.records ?? 0;
-			if (collection.name !== expect.name || records !== expect.records) return { changed: { name: collection.name, records } };
+			const [shared] = await transaction.select({ members: count() }).from(readerCollectionMember).where(eq(readerCollectionMember.collectionId, collectionId));
+			const changed = changedSince({ ...collection, records: held?.records ?? 0, members: shared?.members ?? 0 }, expect);
+			if (changed.length) return { changed };
 		}
 		await transaction.delete(readerCollection).where(ownedCollection(userId, collectionId));
 		return { deleted: true as const };
