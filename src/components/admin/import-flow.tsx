@@ -44,6 +44,7 @@ import {
 	reviewProgress,
 	reviewRows,
 	rowsFromRecords,
+	sendPdfUploads,
 	shownImport,
 	stageOf,
 	startImportBatch,
@@ -99,11 +100,8 @@ async function uploadPdf({ file, id, signedUrl }: PdfUpload) {
 async function startPdfImport(input: { checks: readonly string[]; collections: string[]; guidance: string; pdfs: readonly File[] }) {
 	const started = await startAdminPdfImport({ checks: [...input.checks], collections: input.collections, files: input.pdfs.map(({ name, size }) => ({ name, size })), instructions: input.guidance });
 	await mutate(PDF_IMPORT_KEY);
-	void inTurn(
-		started.files.map(({ id, upload }, index) => ({ file: input.pdfs[index]!, id, signedUrl: upload.signedUrl })),
-		UPLOAD_CONCURRENCY,
-		uploadPdf,
-	);
+	const uploads = started.files.map(({ id, upload }, index) => ({ file: input.pdfs[index]!, id, signedUrl: upload.signedUrl }));
+	void sendPdfUploads(started.id, started.files.map(({ id }) => id), () => inTurn(uploads, UPLOAD_CONCURRENCY, uploadPdf));
 }
 
 /** Looks up DOIs or reads bibliography files into a review; null when the sheet closed while it ran. */
