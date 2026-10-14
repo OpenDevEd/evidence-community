@@ -146,9 +146,9 @@ describe("writing a record into a PDF", () => {
 });
 
 describe("the PDF properties of a record", () => {
-	// The review shows these before publishing writes them, so both must agree.
+	// The review shows these before publishing writes them, so both must agree; workflow tags stay private.
 	it("hold only what publishing writes, the series included", () => {
-		const report = { date: "2026-02-30", itemType: "report", languageName: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls"], title: "A report" };
+		const report = { date: "2026-02-30", itemType: "report", languageName: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls", "internal", "_r:doi", "zotero:to-read"], title: "A report" };
 		expect(pdfPropertiesOfRecord(report, { authors: [], doi: "", keywords: ["Education"] })).toMatchObject({ date: "", keywords: ["Education", "girls"], language: "en", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report" });
 		expect(pdfPropertiesOfRecord({ itemType: "book", languageName: "en-GB", series: "Studies in Education" }, { authors: [], doi: "", keywords: [] })).toMatchObject({ language: "en-GB", seriesTitle: "Studies in Education" });
 		// dc:identifier reads "doi:" and the DOI; one stored as an address would be written as neither.

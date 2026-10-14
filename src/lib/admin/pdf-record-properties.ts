@@ -15,10 +15,11 @@ const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "
  * published, its makers in the role its type names first (authors, a
  * film's directors; everyone when no creator has that role), its topics by
  * name among the keywords, and its DOI, the
- * record's own or the Crossref DOI the library reserved for it. A Zenodo
- * DOI only exists once the file is archived, so it can't be in the file.
+ * record's own or, when it publishes through Crossref, the Crossref DOI the
+ * library reserved for it. A Zenodo DOI only exists once the file is
+ * archived, so it can't be in the file.
  */
-export async function recordPdfProperties(db: Database, config: LibraryServerConfig, itemKey: string, payload: Record<string, unknown>): Promise<PdfProperties> {
+export async function recordPdfProperties(db: Database, config: LibraryServerConfig, itemKey: string, payload: Record<string, unknown>, { crossref }: { crossref: boolean }): Promise<PdfProperties> {
 	const creators = Array.isArray(payload.creators) ? (payload.creators as Record<string, unknown>[]) : [];
 	const primary = primaryCreatorType(canonicalItemTypeToZotero(payload.itemType));
 	const makers = creators.some(({ creatorType }) => creatorType === primary) ? creators.filter(({ creatorType }) => creatorType === primary) : creators;
@@ -28,7 +29,7 @@ export async function recordPdfProperties(db: Database, config: LibraryServerCon
 	});
 	const topicIds = Array.isArray(payload.topics) ? payload.topics.filter((id): id is string => typeof id === "string") : [];
 	const topics = config.topics.enabled && topicIds.length ? await resolveTopicNodes(topicIds, { config, database: db }, { allowUnknown: true }) : [];
-	const [reserved] = textOf(payload.DOI)
+	const [reserved] = textOf(payload.DOI) || !crossref
 		? []
 		: await db
 				.select({ doi: publicationIdentifier.doi })

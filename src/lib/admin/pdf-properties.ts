@@ -31,7 +31,7 @@ const NS = {
 
 const escapeXml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 // XML can't hold most control characters, so a value that carries one would make the block unreadable.
-const xmlSafe = (text: string) => text.replace(/[^\t\n\r -퟿-�\u{10000}-\u{10FFFF}]/gu, "");
+const xmlSafe = (text: string) => text.replace(/[\0-\x08\x0B\x0C\x0E-\x1F\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu, "");
 
 function xmpOf(document: PDFDocument) {
 	const stream = document.catalog.lookup(METADATA);

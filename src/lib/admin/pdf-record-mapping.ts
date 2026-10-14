@@ -1,5 +1,6 @@
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
+import { publicTags } from "@/lib/publication/record-metadata";
 
 /** What a PDF says about itself in its document properties and XMP block. Empty when unset. */
 export type PdfProperties = {
@@ -57,12 +58,13 @@ export const languageTag = (value: string) => (!value || /^[a-z]{2,3}(?:-[a-z0-9
 
 /**
  * What a published PDF carries in its own metadata: the record as the
- * library has it, its authors, and keywords (topic names and tags) and DOI
+ * library has it, its authors, and keywords (topic names and the tags a
+ * reader may see) and DOI
  * as the caller knows them. The review's preview and publishing both use it,
  * so this module stays free of the PDF and XML libraries the writer needs.
  */
 export function pdfPropertiesOfRecord(payload: Record<string, unknown>, { authors, doi, keywords }: { authors: string[]; doi: string; keywords: string[] }): PdfProperties {
-	const tags = Array.isArray(payload.tags) ? payload.tags.map(textOf).filter(Boolean) : [];
+	const tags = publicTags(Array.isArray(payload.tags) ? payload.tags.map(textOf) : []);
 	return {
 		authors,
 		date: xmpDate(textOf(payload.date)),

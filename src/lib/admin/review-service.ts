@@ -522,6 +522,62 @@ async function removeApprovedFiles(
 	return removals;
 }
 
+/** The record as approved, with the editor's corrections, as publishing uses it; the published one when the review doesn't hold it. */
+async function approvedPayload(db: Database, review: typeof itemReview.$inferSelect, itemKey: string) {
+	const submitted = review.snapshot.records.find((record) => record.itemKey === itemKey);
+	return submitted ? effectiveReviewRecord(review, submitted).payload : loadPublishedItemPayload(db, itemKey);
+}
+
+/**
+ * Whether the record publishes through Crossref under the choice the review
+ * froze. Its Crossref DOI is reserved now so its file can carry it, and
+ * publishing activates the same one. One it can't reserve is left to
+ * publishing, which says why.
+ */
+async function reserveCrossrefDoiForFile(db: Database, config: LibraryServerConfig, review: typeof itemReview.$inferSelect, itemKey: string, payload: Record<string, unknown>, requestedBy: string) {
+	const choice = itemKey === review.itemKey ? review.snapshot.publishingChoice : null;
+	if (choice?.route !== "crossref-zenodo") return false;
+	if (!payload.DOI)
+		await reserveCrossrefDoi(db, itemKey, config, requestedBy, choice).catch((error: unknown) => {
+			if (!(error instanceof CrossrefActivationValidationError)) throw error;
+		});
+	return true;
+}
+
+/**
+ * A submitted PDF made ready to publish with the approved record written into
+ * it; null when it has no upload or is already the published one.
+ */
+async function prepareReviewFile(
+	db: Database,
+	storage: EvidenceFileStorage,
+	review: typeof itemReview.$inferSelect,
+	file: typeof itemReviewFile.$inferSelect,
+	input: { publicationTags: readonly string[]; zenodoFileChange?: "minor_correction" },
+	actor: ReviewActor,
+	config: LibraryServerConfig,
+) {
+	if (!file.file) return null;
+	const [current] = await db
+		.select()
+		.from(itemFilePublication)
+		.where(eq(itemFilePublication.itemKey, file.itemKey));
+	// Each upload has its own path, so the same path is the same PDF. The
+	// published copy's hash differs from the upload's: it carries the record.
+	if (current?.sourceObjectPath === file.objectPath) return null;
+	const parentKey = file.file.parentItemKey;
+	const payload = await approvedPayload(db, review, parentKey);
+	const crossref = await reserveCrossrefDoiForFile(db, config, review, parentKey, payload, actor.userId);
+	return prepareNativePdfPublication(db, storage, config.services.publication, {
+		itemKey: file.itemKey,
+		expectedUploadRevision: file.file.uploadRevision,
+		properties: await recordPdfProperties(db, config, parentKey, payload, { crossref }),
+		publicationTags: input.publicationTags,
+		reviewFile: reviewFileSchema.parse(file.file),
+		zenodoFileChange: input.zenodoFileChange,
+	});
+}
+
 export async function approveItemReview(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -565,39 +621,8 @@ export async function approveItemReview(
 	};
 	try {
 		for (const file of files) {
-			if (!file.file) continue;
-			const [current] = await db
-				.select()
-				.from(itemFilePublication)
-				.where(eq(itemFilePublication.itemKey, file.itemKey));
-			// Each upload has its own path, so the same path is the same PDF. The
-			// published copy's hash differs from the upload's: it carries the record.
-			if (current?.sourceObjectPath === file.objectPath) continue;
-			const parentKey = file.file.parentItemKey;
-			const submitted = review.snapshot.records.find(({ itemKey }) => itemKey === parentKey);
-			// The record as approved, with the editor's corrections, as publishing it uses.
-			const parent = submitted ? effectiveReviewRecord(review, submitted) : undefined;
-			// A Crossref DOI is reserved now so the file can carry it; publishing activates the same one.
-			// One it can't reserve is left to publishing, which says why.
-			if (parentKey === review.itemKey && review.snapshot.publishingChoice?.route === "crossref-zenodo" && !parent?.payload.DOI)
-				await reserveCrossrefDoi(db, parentKey, config, actor.userId).catch((error: unknown) => {
-					if (!(error instanceof CrossrefActivationValidationError)) throw error;
-				});
-			prepared.push(
-				await prepareNativePdfPublication(
-					db,
-					storage,
-					config.services.publication,
-					{
-						itemKey: file.itemKey,
-						expectedUploadRevision: file.file.uploadRevision,
-						properties: await recordPdfProperties(db, config, parentKey, parent?.payload ?? (await loadPublishedItemPayload(db, parentKey))),
-						publicationTags: input.publicationTags,
-						reviewFile: reviewFileSchema.parse(file.file),
-						zenodoFileChange: input.zenodoFileChange,
-					},
-				),
-			);
+			const next = await prepareReviewFile(db, storage, review, file, input, actor, config);
+			if (next) prepared.push(next);
 		}
 		committed = await db.transaction(async (transaction) => {
 			const keys = review.snapshot.records.map(

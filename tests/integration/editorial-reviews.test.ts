@@ -23,6 +23,7 @@ import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, app
 import { createNativeItemDraft, publishItemDraft as publishNativeItemDraft, saveItemDraft as saveNativeItemDraft, getItemDraft as getNativeItemDraft, openItemDraft as openNativeItemDraft, discardItemDraft, removeNativeItem, unpublishNativeItem } from "../../src/lib/admin/native-item-service";
 import { stageNativePdfUpload, completeNativePdfUpload, discardNativePdfDraft, stageNativePdfRemoval, undoNativePdfRemoval } from "../../src/lib/admin/native-file-service";
 import { readPdfProperties } from "../../src/lib/admin/pdf-properties";
+import { reserveCrossrefDoi } from "../../src/lib/publication/crossref-activation-service";
 const reviewConfig = libraryConfigSchema.parse({...maximalLibraryConfig, sources: []});
 const PUBLICATION_TAGS = ["publish-record"] as const;
 const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
@@ -400,6 +401,8 @@ it("publishes a PDF that carries the record's authors and the Crossref DOI publi
 		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: stage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
 		await setItemPublishingChoice(db, parent.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, reviewConfig);
 		const review = await submitItemReview(db, parent.itemKey, { userId: "creator", role: "creator" }, reviewConfig);
+		// Approval goes by the choice the review froze, not one changed since.
+		await setItemPublishingChoice(db, parent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, reviewConfig);
 		await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: PUBLICATION_TAGS }, { userId: "editor", role: "editor" }, reviewConfig);
 
 		const [published] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, attachment.itemKey));
@@ -408,5 +411,27 @@ it("publishes a PDF that carries the record's authors and the Crossref DOI publi
 		assert(record?.DOI, "Publishing activated no Crossref DOI");
 		// The translator isn't an author; the file's DOI is the one the record was published with.
 		assert.deepEqual(reading.writable && { authors: reading.properties.authors, doi: reading.properties.doi }, { authors: ["Ada Lovelace"], doi: record.DOI.toLowerCase() });
+	});
+}, 120_000);
+
+it("leaves a Crossref DOI reserved before the record moved to Zenodo out of its PDF", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "A Zenodo report", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
+		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Report PDF" });
+		const pdf = await createPdf("A Zenodo report");
+		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "report.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
+		storage.privateFiles.set(stage.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: stage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		await setItemPublishingChoice(db, parent.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, reviewConfig);
+		await reserveCrossrefDoi(db, parent.itemKey, reviewConfig, "editor");
+		await setItemPublishingChoice(db, parent.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, reviewConfig);
+		const review = await submitItemReview(db, parent.itemKey, { userId: "creator", role: "creator" }, reviewConfig);
+		await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: PUBLICATION_TAGS }, { userId: "editor", role: "editor" }, reviewConfig);
+
+		const [published] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, attachment.itemKey));
+		const reading = await readPdfProperties(storage.publicFiles.get(published!.objectPath)!);
+		// The reservation was never registered, and Zenodo gives the record its own DOI.
+		assert.equal(reading.writable && reading.properties.doi, "");
 	});
 }, 120_000);
