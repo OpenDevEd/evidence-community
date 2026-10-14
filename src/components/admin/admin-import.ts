@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import useSWR, { mutate } from "swr";
+import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 
 import {
 	PDF_IMPORT_MAX_CRITERIA,
@@ -23,6 +24,7 @@ import {
 	PDF_IMPORT_MAX_FILES,
 } from "@/lib/admin/item-import-contract";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
+import { normalizeAdminFieldValue } from "@/lib/admin/field-contract";
 import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
@@ -577,11 +579,20 @@ export function reviewChecks(row: { checks: readonly PdfCheckResult[]; suggestio
 	});
 }
 
-const holds = (value: unknown, suggested: string) => typeof value === "string" && value.trim() === suggested.trim();
+/** A field's value as the record stores it: saving normalises some, such as a URL, which gains its trailing slash. */
+function stored(itemType: unknown, field: string, value: string) {
+	const descriptor = typeof itemType === "string" ? describeZoteroItemTypeFields(itemType).find((described) => described.field === field) : undefined;
+	return descriptor ? normalizeAdminFieldValue(descriptor, value, { keepUnparsed: true }).value : value.trim();
+}
+
+const holds = (payload: Record<string, unknown>, field: string, suggested: string) => {
+	const value = payload[field];
+	return typeof value === "string" && stored(payload.itemType, field, value) === stored(payload.itemType, field, suggested);
+};
 
 /** A record's kept checks, a failed one counted as met while the record holds the change the AI suggested for it. */
 export function heldChecks(kept: { checks: readonly PdfCheckResult[]; suggestions: readonly { checks: number[]; field: string; value: string }[] }, payload: Record<string, unknown>): ReviewCheck[] {
-	return reviewChecks(kept, new Set(kept.suggestions.flatMap(({ field, value }, index) => (holds(payload[field], value) ? [index] : []))));
+	return reviewChecks(kept, new Set(kept.suggestions.flatMap(({ field, value }, index) => (holds(payload, field, value) ? [index] : []))));
 }
 
 /** A path without a level that repeats the one above it ("Social Sciences" as both domain and field). */

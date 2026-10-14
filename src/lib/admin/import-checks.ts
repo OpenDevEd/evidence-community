@@ -17,19 +17,27 @@ import type { AdminItemChecks } from "./types";
 export async function keepImportChecks(db: Database, upload: { attachmentKey: string; filename: string; objectPath: string; parentKey: string; reading: PdfReading }) {
 	const { checks, sha256, suggestions } = upload.reading;
 	if (!checks.length) return;
-	const values = { checks, filename: upload.filename, objectPath: upload.objectPath, parentKey: upload.parentKey, sha256, suggestions: suggestions.map(({ checks, field, value }) => ({ checks, field, value })) };
+	const values = {
+		checks,
+		filename: upload.filename,
+		objectPath: upload.objectPath,
+		parentKey: upload.parentKey,
+		readAt: new Date(upload.reading.readAt ?? Date.now()),
+		sha256,
+		suggestions: suggestions.map(({ checks, field, value }) => ({ checks, field, value })),
+	};
 	await db
 		.insert(itemImportCheck)
 		.values({ attachmentKey: upload.attachmentKey, ...values })
-		.onConflictDoUpdate({ set: { ...values, readAt: new Date() }, target: itemImportCheck.attachmentKey });
+		.onConflictDoUpdate({ set: values, target: itemImportCheck.attachmentKey });
 }
 
 /**
  * The checks a record's PDF was read against when a PDF import made it, while
- * the record's PDF is still that upload: its draft upload, or, with none, the
- * upload its published copy was made from. Nothing once the PDF is replaced
- * or being removed, and nothing on the PDF opened on its own: the checks are
- * on the record's fields, which the PDF's own don't hold.
+ * the record's PDF is still that upload: its draft upload once it is ready,
+ * or else the upload its published copy was made from. Nothing once the PDF
+ * is replaced or being removed, and nothing on the PDF opened on its own: the
+ * checks are on the record's fields, which the PDF's own don't hold.
  */
 export async function importChecksOf(db: Database, itemKey: string): Promise<AdminItemChecks | null> {
 	const [kept] = await db
@@ -41,7 +49,7 @@ export async function importChecksOf(db: Database, itemKey: string): Promise<Adm
 		.where(
 			and(
 				eq(itemImportCheck.parentKey, itemKey),
-				sql`coalesce(${itemFileDraft.objectPath}, ${itemFilePublication.sourceObjectPath}) = ${itemImportCheck.objectPath}`,
+				sql`coalesce(case when ${itemFileDraft.readyAt} is not null then ${itemFileDraft.objectPath} end, ${itemFilePublication.sourceObjectPath}) = ${itemImportCheck.objectPath}`,
 				isNull(itemFileRemoval.itemKey),
 			),
 		)

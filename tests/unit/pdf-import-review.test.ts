@@ -152,4 +152,10 @@ describe("a record's kept checks", () => {
 		expect(heldChecks(kept, { rights: "© Crown copyright 2025" }).map(checkPasses)).toEqual([true, true]);
 		expect(heldChecks(kept, { rights: "All rights reserved" }).map(checkPasses)).toEqual([true, false]);
 	});
+
+	it("matches a suggested value the way the record stores it once saved", async () => {
+		const { checkPasses, heldChecks } = await import("@/components/admin/admin-import");
+		const linked = { ...kept, suggestions: [{ checks: [1], field: "url", value: "https://example.org" }] };
+		expect(heldChecks(linked, { itemType: "report", url: "https://example.org/" }).map(checkPasses)).toEqual([true, true]);
+	});
 });

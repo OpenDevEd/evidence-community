@@ -219,7 +219,7 @@ async function readClaimed(db: Database, storage: EvidenceFileStorage, config: L
 	const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
 	try {
 		const reading = await readOne(db, storage, config, file, signal);
-		await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading }).where(mine);
+		await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading: { ...reading, readAt: new Date().toISOString() } }).where(mine);
 	} catch (error) {
 		// A worker asked to stop hands the PDF back for the next one, without counting a failed read.
 		if (signal?.aborted) {
