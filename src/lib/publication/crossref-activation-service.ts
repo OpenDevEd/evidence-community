@@ -1,6 +1,7 @@
 import { lockLatestPublicationJob } from "./queue";
 import { itemIdentity } from "@opendeved/evidence-library-core";
 import { itemPublishingChoice } from "@/db/schema/review";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
 import { loadWorkingItemPayload } from "@/lib/admin/native-item-service";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
@@ -472,12 +473,23 @@ export async function retryCrossrefPublication(
 	});
 }
 
-/** Allocate an identifier without publishing metadata or enabling provider jobs. */
+/** Throws unless the item publishes through Crossref: under `frozen` when a review froze a choice, else its current one. */
+async function assertCrossrefChoice(transaction: DatabaseTransaction, itemKey: string, frozen: PublishingChoice | undefined) {
+	const [current] = frozen ? [{ choice: frozen }] : await transaction.select().from(itemPublishingChoice).where(eq(itemPublishingChoice.itemKey, itemKey));
+	if (current?.choice.route !== "crossref-zenodo") throw new CrossrefActivationValidationError("Choose Crossref + Zenodo before reserving a DOI.");
+}
+
+/**
+ * Allocate an identifier without publishing metadata or enabling provider jobs.
+ * `choice` is the identifier choice a review froze, which approval goes by
+ * even when the item's current choice changed after it was submitted.
+ */
 export async function reserveCrossrefDoi(
 	database: Database,
 	itemKey: string,
 	config: PublicationConfig,
 	requestedBy: string,
+	choice?: PublishingChoice,
 ) {
 	const crossref = requireCrossrefConfig(config);
 	return database.transaction(async (transaction) => {
@@ -491,14 +503,7 @@ export async function reserveCrossrefDoi(
 			throw new CrossrefActivationValidationError(
 				"Only created items can reserve a DOI.",
 			);
-		const [choice] = await transaction
-			.select()
-			.from(itemPublishingChoice)
-			.where(eq(itemPublishingChoice.itemKey, itemKey));
-		if (choice?.choice.route !== "crossref-zenodo")
-			throw new CrossrefActivationValidationError(
-				"Choose Crossref + Zenodo before reserving a DOI.",
-			);
+		await assertCrossrefChoice(transaction, itemKey, choice);
 		const payload = await loadWorkingItemPayload(transaction, itemKey);
 		if (!payload.itemType || payload.parentItem)
 			throw new CrossrefActivationValidationError(

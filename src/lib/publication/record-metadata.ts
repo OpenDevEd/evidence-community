@@ -96,7 +96,8 @@ function normalizePublicationDate(value: string | null) {
 		: normalized;
 }
 
-function publicTags(tags: readonly string[]) {
+/** The tags a reader may see: no workflow tags such as "internal", "_r:doi" or any other with "_" or ":". */
+export function publicTags(tags: readonly string[]) {
 	return [
 		...new Set(
 			tags.map(normalizeText).filter((tag): tag is string => {

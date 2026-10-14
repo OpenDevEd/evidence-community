@@ -1,8 +1,13 @@
-import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
+import { describeZoteroItemTypeFields, getZoteroItemType } from "@opendeved/evidence-library-core/zotero-schema";
 
 export function canonicalItemTypeToZotero(itemType: unknown) {
 	if (typeof itemType !== "string" || itemType.length === 0) return "";
 	return itemType[0]!.toLowerCase() + itemType.slice(1);
+}
+
+/** The creator role that names a record's makers for its Zotero type: author, or editor, artist, director and the like. */
+export function primaryCreatorType(zoteroItemType: string) {
+	return getZoteroItemType(zoteroItemType)?.creatorTypes.find((creator) => creator.primary)?.creatorType ?? "author";
 }
 
 export function canonicalItemFieldToDatabaseField(field: string) {

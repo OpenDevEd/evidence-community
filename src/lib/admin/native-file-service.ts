@@ -40,6 +40,8 @@ import { removeUnreferencedPrivateFiles } from "./file-retention";
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision, isNativeOrOpenAlex } from "./native-item-service";
 import { coverContentType, processPdf } from "./pdf-processing";
+import { writePdfProperties } from "./pdf-properties";
+import type { PdfProperties } from "./pdf-record-mapping";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 const PDF_CONTENT_TYPE = "application/pdf";
@@ -814,6 +816,17 @@ async function lockFilePublicationRecords(
 	return { lockedDraft, attachment, parent };
 }
 
+/** The PDF with the record written into its own metadata; one that can't take it is published as it is. */
+async function withRecordProperties(bytes: Uint8Array, properties: PdfProperties | undefined) {
+	if (!properties) return bytes;
+	try {
+		return await writePdfProperties(bytes, properties);
+	} catch (error) {
+		console.error("Writing the record into the published PDF failed, so it is published unchanged", error);
+		return bytes;
+	}
+}
+
 export async function prepareNativePdfPublication(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -821,12 +834,15 @@ export async function prepareNativePdfPublication(
 	{
 		expectedUploadRevision,
 		itemKey,
+		properties,
 		publicationTags,
 		zenodoFileChange,
 		reviewFile,
 	}: {
 		expectedUploadRevision: number;
 		itemKey: string;
+		/** The record as it is published, written into the published copy's metadata. */
+		properties?: PdfProperties;
 		publicationTags: readonly string[];
 		zenodoFileChange?: "minor_correction";
 		reviewFile?: ReviewFile;
@@ -858,6 +874,26 @@ export async function prepareNativePdfPublication(
 					),
 				),
 		]);
+	const [stagedBytes, coverBytes] = await Promise.all([
+		storage.downloadPrivate(draft.objectPath),
+		storage.downloadPrivate(draft.coverObjectPath),
+	]);
+	if (
+		stagedBytes.byteLength !== draft.actualSizeBytes ||
+		sha256(stagedBytes) !== draft.actualSha256
+	) {
+		throw new NativeFileValidationError(
+			"The staged PDF could not be published.",
+			{
+				file: "Upload the PDF again, then retry publishing.",
+			},
+		);
+	}
+	// The published copy carries the record in its own metadata. Its hashes are
+	// recorded, so the library and Zenodo share this one file.
+	const pdfBytes = await withRecordProperties(stagedBytes, properties);
+	const publishedSha256 = sha256(pdfBytes);
+
 	if (attachmentBeforePublish) {
 		const prospectiveFile = {
 			...(previousPublication ?? {}),
@@ -866,8 +902,8 @@ export async function prepareNativePdfPublication(
 			filename: draft.filename,
 			md5: previousPublication?.md5 ?? "",
 			revision: attachmentBeforePublish.revision + 1,
-			sha256: draft.actualSha256,
-			sizeBytes: draft.actualSizeBytes,
+			sha256: publishedSha256,
+			sizeBytes: pdfBytes.byteLength,
 		};
 		const prospectiveFiles = previousPublication
 			? currentFiles.map((file) =>
@@ -887,23 +923,7 @@ export async function prepareNativePdfPublication(
 		}
 	}
 
-	const [pdfBytes, coverBytes] = await Promise.all([
-		storage.downloadPrivate(draft.objectPath),
-		storage.downloadPrivate(draft.coverObjectPath),
-	]);
-	if (
-		pdfBytes.byteLength !== draft.actualSizeBytes ||
-		sha256(pdfBytes) !== draft.actualSha256
-	) {
-		throw new NativeFileValidationError(
-			"The staged PDF could not be published.",
-			{
-				file: "Upload the PDF again, then retry publishing.",
-			},
-		);
-	}
-
-	const publicPaths = publishedPaths(itemKey, draft.actualSha256, draft.coverObjectPath);
+	const publicPaths = publishedPaths(itemKey, publishedSha256, draft.coverObjectPath);
 	const uploads = await Promise.allSettled([
 		storage.uploadPublic(publicPaths.pdf, pdfBytes, PDF_CONTENT_TYPE),
 		storage.uploadPublic(publicPaths.cover, coverBytes, coverContentType(draft.coverObjectPath)),
@@ -1001,8 +1021,8 @@ export async function prepareNativePdfPublication(
 				publicUrl,
 				filename: lockedDraft.filename,
 				contentType: PDF_CONTENT_TYPE,
-				sizeBytes: lockedDraft.actualSizeBytes!,
-				sha256: lockedDraft.actualSha256!,
+				sizeBytes: pdfBytes.byteLength,
+				sha256: publishedSha256,
 				md5,
 				coverObjectPath: publicPaths.cover,
 				coverPublicUrl,
