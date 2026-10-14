@@ -54,12 +54,12 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 	expect(reloaded.appliedOf(reloaded.pdfImportBatch(server), row)).toEqual(new Set([0]));
 });
 
-// A draft sent on from another tab or browser shows as sent here too; this tab's own failed send stays to be tried again, with the review the server says is pending.
+// A draft sent on from another tab or browser shows as sent here too; this tab's own failed send stays to be tried again, with the review the server says is pending, unless the server says it was published after all.
 it("takes in what other tabs sent, without overriding a send this tab can still retry", async () => {
 	const tab = await import("@/components/admin/admin-import");
 	const batch = tab.pdfImportBatch(server);
 	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
-	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["2", { message: "Try again", state: "failed" as const }]]) }));
+	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["1", { message: "The connection dropped", state: "failed" as const }], ["2", { message: "Try again", state: "failed" as const }]]) }));
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
 	const restored = reloaded.pdfImportBatch({ ...server, reviews: { 2: { id: "review-2", revision: 1 } }, sent: { 1: "published", 2: "submitted" } });

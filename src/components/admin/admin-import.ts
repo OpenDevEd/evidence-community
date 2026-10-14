@@ -312,11 +312,17 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 function withSent(publish: ReadonlyMap<string, PublishState>, sent: AdminPdfImport["sent"]) {
 	const next = new Map(publish);
 	for (const [id, state] of Object.entries(sent)) {
-		const mine = next.get(id);
-		if (mine?.state !== "sending" && mine?.state !== "failed") next.set(id, { ...mine, state });
+		if (takesServerState(next.get(id), state)) next.set(id, { ...next.get(id), message: undefined, state });
 	}
 	return next;
 }
+
+/**
+ * Whether the server's word on a draft replaces this browser's: not while it
+ * sends the draft, and not over a send that failed here and can be tried
+ * again, unless the server says it was published after all.
+ */
+const takesServerState = (mine: PublishState | undefined, state: "published" | "submitted") => mine?.state !== "sending" && (mine?.state !== "failed" || state === "published");
 
 /** The server's import with the choices this browser made on it, the collections the editor changed in the review among them. */
 export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
