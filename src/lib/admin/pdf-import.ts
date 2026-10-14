@@ -99,8 +99,11 @@ export type PdfAiReading = {
 };
 
 /** Every type a record can be, with its fields and what each means when its name differs, so the AI chooses from all of them. */
+// A role whose name says something else: Zotero's reviewedAuthor wrote the work a review is about, not the review.
+const ROLE_MEANINGS: Record<string, string> = { reviewedAuthor: "reviewedAuthor (the author of the work this one reviews)" };
+
 /** The roles a record type gives the people it credits, as the record holds them. */
-const creatorRoles = (type: string) => (getZoteroItemType(type)?.creatorTypes ?? []).map(({ creatorType }) => creatorType).join(", ");
+const creatorRoles = (type: string) => (getZoteroItemType(type)?.creatorTypes ?? []).map(({ creatorType }) => ROLE_MEANINGS[creatorType] ?? creatorType).join(", ");
 
 function recordTypes() {
 	return [...getZoteroItemTypes().keys()]
