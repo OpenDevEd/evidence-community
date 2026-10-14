@@ -726,7 +726,8 @@ export function AdminCollectionPicker({
 								error ? "pointer-events-none select-none opacity-40" : loading ? "opacity-50 delay-300" : "opacity-100"
 							}`}
 							data-admin-collection-picker-content
-							inert={error || stale ? true : undefined}
+							// Only rows from another list need guarding; a first load shows none, and its status stays readable.
+							inert={error || (stale && items.length > 0) ? true : undefined}
 						>
 							{showTopLevel ? (
 								<button
@@ -754,7 +755,8 @@ export function AdminCollectionPicker({
 							) : (
 								<div
 									className="relative w-full animate-fade-in [animation-duration:200ms]"
-									key={`${sourceKey}:${activeParent}`}
+									// The rows cross-fade when the list they show changes, not when a folder starts loading.
+									key={itemsKey ?? "first"}
 									style={{
 										height: virtualizer.getTotalSize(),
 									}}
