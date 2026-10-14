@@ -42,11 +42,16 @@ if (typeof window !== "undefined") {
 	});
 }
 
-const pageKey = (query: string, sourceKey: string | null, parent: string | null) => [query, sourceKey ?? "all", parent ?? "root"].join("\u0000");
+// No stand-in values, so a source named "all" can't share a page with a search across every source.
+const pageKey = (query: string, sourceKey: string | null, parent: string | null) => JSON.stringify([query, sourceKey, parent]);
+// A long session of searches would otherwise keep every page it ever loaded.
+const MAX_CACHED_PAGES = 100;
 
 function storePage(key: string, page: CollectionPage, generation: number) {
 	if (generation !== cacheGeneration) return;
+	pages.delete(key);
 	pages.set(key, page);
+	if (pages.size > MAX_CACHED_PAGES) pages.delete(pages.keys().next().value!);
 	rememberAdminCollections(page.items);
 }
 
@@ -83,16 +88,22 @@ export function adminCollectionPath(
 	return [source, ...entry.ancestors.map(({ name }) => name)].join(" › ");
 }
 
-/** A chosen collection as a chip; its full path is in its name for screen readers and on hover when cut off. */
+/**
+ * A chosen collection as a chip, its full path in its name for screen
+ * readers. One whose name another chosen collection shares shows its path, so
+ * the two can be told apart.
+ */
 function SelectionChip({
 	entry,
 	locked,
 	onRemove,
+	showPath,
 	sources,
 }: {
 	entry: AdminCollectionCatalogEntry;
 	locked: boolean;
 	onRemove: (key: string) => void;
+	showPath: boolean;
 	sources: readonly AdminSource[];
 }) {
 	const reduceMotion = useReducedMotion();
@@ -105,11 +116,11 @@ function SelectionChip({
 			exit={{ opacity: 0, scale: 0.92 }}
 			initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
 			layout={reduceMotion ? false : "position"}
-			transition={{ duration: 0.16 }}
+			transition={{ duration: reduceMotion ? 0 : 0.16 }}
 		>
 			<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={12} />
 			<span className="min-w-0 max-w-56">
-				<TruncatedText text={entry.name} />
+				<TruncatedText text={showPath ? `${path} › ${entry.name}` : entry.name} />
 			</span>
 			{locked ? (
 				<HugeiconsIcon icon={SquareLock01Icon} aria-label={entry.deleted ? "Deleted" : "Read only"} className="me-1 shrink-0 text-black/30 dark:text-white/30" size={11} />
@@ -572,12 +583,14 @@ export function AdminCollectionPicker({
 			/>
 
 			{selectionMode === "multiple" ? (
-				<ul aria-label="Chosen collections" className="flex flex-wrap gap-1.5 empty:hidden">
+				// A long choice scrolls inside its own room, so the results below stay in view.
+				<ul aria-label="Chosen collections" className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto empty:hidden">
 					<AnimatePresence initial={false}>
 						{selectedEntries.map((entry) => (
 							<SelectionChip
 								key={entry.key}
 								entry={entry}
+								showPath={selectedEntries.some((other) => other.key !== entry.key && other.name === entry.name)}
 								locked={
 									(lockDeletedSelections && entry.deleted) ||
 									Boolean(
