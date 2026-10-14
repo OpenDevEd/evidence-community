@@ -52,8 +52,10 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 			}
 			delay={HOVER_CARD_DELAY}
 			disableAnimation={Boolean(reduceMotion)}
-			offset={10}
-			placement="bottom-start"
+			// Out to the left of the record sidebar, beside the table, so it covers nothing being edited. The badge sits 20 px in
+			// from the sidebar's edge.
+			offset={32}
+			placement="left-start"
 		>
 			<button
 				aria-label={`AI checks: ${passed} of ${checks.length} pass`}
