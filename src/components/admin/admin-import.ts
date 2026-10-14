@@ -344,12 +344,21 @@ function withSent(publish: ReadonlyMap<string, PublishState>, server: Pick<Admin
  * and a draft submitted from here since, as a creator's retry is, stays submitted.
  */
 function approvalFailed(server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string, mine: PublishState | undefined) {
-	const failed = server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
-	return failed && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
+	return approvalPending(server, id) && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
 }
 
-/** The DOI route the import's drafts take: while the server sends them, the one they were sent with, else this browser's. */
-const routeWhileSending = (server: AdminPdfImport, route: ImportBatch["publishRoute"]) => (server.send && serverSending(server) ? server.send.route : route);
+/** Whether the server submitted a draft and failed to approve it, its review still pending on the import's route. */
+const approvalPending = (server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string) =>
+	server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
+
+/**
+ * The DOI route the import's drafts take: the one the server sent them with while it still sends them or a review it
+ * couldn't approve still waits on that route, else this browser's.
+ */
+const routeWhileSending = (server: AdminPdfImport, route: ImportBatch["publishRoute"]) => (server.send && serverHoldsRoute(server) ? server.send.route : route);
+
+/** Whether the server's route still holds: it still sends a draft, or one it couldn't approve waits in its review. */
+const serverHoldsRoute = (server: AdminPdfImport) => serverSending(server) || Object.keys(server.sending).some((id) => approvalPending(server, id));
 
 /**
  * Whether the server's word on a draft replaces this browser's: not while it

@@ -114,5 +114,10 @@ it("takes the server's DOI route while it sends, over a route this browser chose
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
 	expect(reloaded.pdfImportBatch(sending).publishRoute).toBe("zenodo");
+	// A draft it submitted and couldn't approve waits in a review on its route, which a retry approves.
+	const pending = { ...sending, reviews: { 1: { id: "review-1", revision: 1 } }, sending: { 1: { message: "Zenodo is down", state: "failed" as const } }, sent: { 1: "submitted" as const } };
+	expect(reloaded.pdfImportBatch(pending).publishRoute).toBe("zenodo");
+	// Withdrawn, the review no longer holds it.
+	expect(reloaded.pdfImportBatch({ ...pending, reviews: {}, sent: {} }).publishRoute).toBe("crossref-zenodo");
 	expect(reloaded.pdfImportBatch({ ...sending, sending: {} }).publishRoute).toBe("crossref-zenodo");
 });
