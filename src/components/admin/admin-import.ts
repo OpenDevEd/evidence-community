@@ -228,7 +228,8 @@ export type ImportBatch = {
 	publishRoute: PublishingChoice["route"] | null;
 	/** What importing does with the chosen records: keeps them as drafts, or sends them on (publishes them, or submits them for review) once their PDFs are attached. */
 	outcome: ImportOutcome;
-	/** Where each draft the server sends on stands, while it is still to go or once it was held or failed. */
+	/** Whether the server sends the imported drafts on, and how, and where each still to go stands. */
+	send: AdminPdfImport["send"];
 	sending: AdminPdfImport["sending"];
 	results: AdminImportCommitResult[] | null;
 	/** The pending review of each draft submitted and not yet decided, by row, as the server last said. */
@@ -259,14 +260,14 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
 
 /** What the server says of its import, as the review takes it. */
 function fromServer(server: AdminPdfImport) {
-	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, needs: server.needs, results: server.results, reviews: server.reviews, rows: rowsFromImport(server), sending: server.sending };
+	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, needs: server.needs, results: server.results, reviews: server.reviews, rows: rowsFromImport(server), send: server.send, sending: server.sending };
 }
 
 // The editor's choices on the library's PDF import, kept in this browser so a reload keeps them. One import is open at
@@ -419,8 +420,14 @@ const settling = (state: PdfImportFileState) => state === "uploading" || state =
 /** Whether the server still has drafts of this import to send on. */
 export const serverSending = (batch: Pick<ImportBatch, "sending">) => Object.values(batch.sending).some(({ state }) => state === "waiting");
 
+/**
+ * Whether the server still works on the import, which stays open until it is done: the import's stored PDFs are
+ * what the worker attaches, and it sends the drafts on where the import says so.
+ */
+export const stillWorking = (batch: ImportBatch) => attaching(batch) || serverSending(batch);
+
 // Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
-export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
+const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
 /**
  * How often to ask the server about the PDF import: every two seconds while
  * its PDFs upload, are read or are attached, and every ten while it is open,

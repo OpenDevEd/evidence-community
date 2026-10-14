@@ -187,8 +187,11 @@ export type AdminPdfImportFile = {
 /** The library's one PDF import: what it reads against, its PDFs, and once imported, what became of each. */
 export type AdminPdfImport = {
 	attach: Record<string, "attached" | "failed">;
-	/** Whether the import sends its drafts on once their PDFs are attached, and with which DOI route (null: none). */
-	send: { route: "zenodo" | "crossref-zenodo" | null } | null;
+	/**
+	 * Whether the import sends its drafts on once their PDFs are attached: published, or submitted for review as the
+	 * creator who imported them would, and with which DOI route (null: none).
+	 */
+	send: { action: "publish" | "submit"; route: "zenodo" | "crossref-zenodo" | null } | null;
 	/** Drafts it sends on that haven't gone yet, by row: waiting for their PDF and the worker, held for something publishing needs, or failed, with why. */
 	sending: Record<string, { message: string | null; state: "failed" | "held" | "waiting" }>;
 	checks: string[];

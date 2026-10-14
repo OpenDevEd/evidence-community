@@ -79,7 +79,7 @@ it("offers a draft the server submitted and failed to approve to try again, on t
 		...server,
 		id: "import-sent",
 		reviews: { 1: { id: "review-1", revision: 1 } },
-		send: { route: "zenodo" },
+		send: { action: "publish", route: "zenodo" },
 		sending: { 1: { message: "Zenodo is down", state: "failed" } },
 		sent: { 1: "submitted" },
 	});

@@ -14,7 +14,7 @@ import { ImportReviewStep, ReviewTabs } from "./ImportReviewStep";
 import { ImportSteps } from "./ImportSteps";
 import { InputNote, StageFade } from "./import-parts";
 import { DropHint, ImportAdd, SheetDrop, SourceTabs, UploadButton } from "./ImportAdd";
-import { action, attaching } from "./admin-import";
+import { action, stillWorking } from "./admin-import";
 import { useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 
 /**
@@ -188,8 +188,7 @@ function ReviewActions({ canPublish, flow }: { canPublish: boolean; flow: Import
 }
 
 function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView }) {
-	// The import's stored PDFs are what the worker attaches, so it stays open until every draft has one.
-	const busy = attaching(flow.batch!);
+	const busy = stillWorking(flow.batch!);
 	return (
 		<>
 			<Button isDisabled={busy} onPress={flow.restart} size="sm" variant="transparent">

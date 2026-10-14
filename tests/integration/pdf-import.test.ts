@@ -268,7 +268,7 @@ test("sends the imported drafts on once their PDFs are attached, and holds one i
 
 		const status = (await pdfImportStatus(db)).import!;
 		const rowOf = (name: string) => files.find((file) => file.filename === name)!.rowId;
-		expect(status.send).toEqual({ route: "zenodo" });
+		expect(status.send).toEqual({ action: "publish", route: "zenodo" });
 		expect(status.sent).toEqual({ [rowOf("dated.pdf")]: "published" });
 		expect(status.sending).toEqual({ [rowOf("undated.pdf")]: { message: expect.stringMatching(/date/iu), state: "held" } });
 		expect((await getItemPublishingChoice(db, keyOf(rowOf("undated.pdf")), fullConfig)).choice).toBeNull();

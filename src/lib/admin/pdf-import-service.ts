@@ -143,7 +143,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
-		send: open.send && { route: open.send.route },
+		send: open.send && { action: open.send.actor.role === "creator" ? "submit" : "publish", route: open.send.route },
 		sending: sendStates(files),
 		...(await draftStates(db, open.results)),
 	};
