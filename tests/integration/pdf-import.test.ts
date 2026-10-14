@@ -156,7 +156,9 @@ test("finds a PDF that is the same file as one already in the library or earlier
 		}
 		await runPdfImportCycle(db, storage, config);
 		const records = (await pdfImportStatus(db)).import!.files.map(({ reading }) => reading!.record);
-		expect(records.map(({ state }) => state)).toEqual(["existing", "ready", "repeated"]);
+		// Of the two copies read at the same moment, whichever the worker hashed first reads; the other repeats it.
+		expect(records[0]!.state).toBe("existing");
+		expect(records.slice(1).map(({ state }) => state).sort()).toEqual(["ready", "repeated"]);
 		expect(records[0]).toMatchObject({ existingKey: done.results[0]!.itemKey, title: "A report without a DOI" });
 		// The file already in the library cost no read, and of two copies read at the same moment only one went to the AI.
 		const read = readImportPdf.mock.calls.map(([, { filename }]) => filename);
