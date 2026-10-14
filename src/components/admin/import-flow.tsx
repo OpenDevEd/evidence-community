@@ -140,10 +140,13 @@ async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImporte
 
 type SentDraft = { id: string; itemKey: string; kind: "created" | "imported" | undefined };
 
-/** Gives a draft made in the library the import's DOI route, if one is switched on; on Crossref its DOI is reserved now, and returned. */
+/**
+ * Gives a draft made in the library the import's DOI route, or none when it
+ * is switched off, replacing any an earlier send saved before it failed; on
+ * Crossref its DOI is reserved now, and returned.
+ */
 async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"] | null) {
-	if (!route) return undefined;
-	await saveAdminPublishingChoice(itemKey, route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route });
+	await saveAdminPublishingChoice(itemKey, route && (route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route }));
 	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
 }
 
@@ -181,7 +184,7 @@ function failedSend(caught: unknown, submitted: PublishState["review"]): Publish
 async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"] | null, canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
 	if (submitted) return approve(submitted);
 	// A record imported with a DOI keeps it.
-	const doi = await chooseDoiRoute(itemKey, kind === "created" ? route : null);
+	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
 	const review = await submitAdminReview(itemKey);
 	return canApprove ? approve(review) : { doi, state: "submitted" };
 }
