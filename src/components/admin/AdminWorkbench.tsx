@@ -2778,7 +2778,9 @@ export default function AdminWorkbench({
 				onImported={async (itemKeys) => {
 					// Show the whole library, newest first, so the new drafts are visible.
 					setFilters(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
-					await loadItems();
+					// Sending the drafts on changes them, so an open one is read again rather than shown as it was.
+					const open = selectedKeyRef.current;
+					await Promise.all([loadItems(), open && itemKeys.includes(open) ? loadDetail(open) : null]);
 					setBulkKeys(new Set(itemKeys));
 				}}
 				onOpenRecord={(itemKey) => {
