@@ -36,6 +36,7 @@ import {
 	ItemNotFoundError,
 } from "./native-item-service";
 import { validateReviewPayload } from "./review-validation";
+import { recordPdfProperties } from "./pdf-record-properties";
 import { validateNativeItemDraft } from "./native-item-validation";
 import {
 	publishingChoiceSchema,
@@ -569,11 +570,13 @@ export async function approveItemReview(
 				.select()
 				.from(itemFilePublication)
 				.where(eq(itemFilePublication.itemKey, file.itemKey));
-			if (
-				current?.sourceObjectPath === file.objectPath &&
-				current.sha256 === file.file.sha256
-			)
-				continue;
+			// Each upload has its own path, so the same path is the same PDF. The
+			// published copy's hash differs from the upload's: it carries the record.
+			if (current?.sourceObjectPath === file.objectPath) continue;
+			const parentKey = file.file.parentItemKey;
+			const submitted = review.snapshot.records.find(({ itemKey }) => itemKey === parentKey);
+			// The record as approved, with the editor's corrections, as publishing it uses.
+			const parent = submitted ? effectiveReviewRecord(review, submitted) : undefined;
 			prepared.push(
 				await prepareNativePdfPublication(
 					db,
@@ -582,6 +585,7 @@ export async function approveItemReview(
 					{
 						itemKey: file.itemKey,
 						expectedUploadRevision: file.file.uploadRevision,
+						properties: await recordPdfProperties(db, config, parentKey, parent?.payload ?? (await loadPublishedItemPayload(db, parentKey))),
 						publicationTags: input.publicationTags,
 						reviewFile: reviewFileSchema.parse(file.file),
 						zenodoFileChange: input.zenodoFileChange,
