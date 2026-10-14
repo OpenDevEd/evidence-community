@@ -14,6 +14,7 @@ import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { itemFilePublication } from "@/db/schema/source";
 import { itemFileRemoval } from "@/db/schema/review";
+import { importChecksOf } from "./import-checks";
 import {
 	readSourceStatuses,
 	type SearchableCache,
@@ -355,7 +356,7 @@ export async function getAdminItemDetail(
 	itemKey: string,
 ): Promise<AdminItemDetail> {
 	const config = await getLibraryConfig();
-	const [published, draft, fileDraft, filePublication, writeback, identity, removal, sourceFields, importedTopics] =
+	const [published, draft, fileDraft, filePublication, writeback, identity, removal, sourceFields, importedTopics, importChecks] =
 		await Promise.all([
 			db
 				.select()
@@ -386,6 +387,7 @@ export async function getAdminItemDetail(
 			db.select().from(itemFileRemoval).where(eq(itemFileRemoval.itemKey, itemKey)).limit(1).then((rows) => rows[0]),
 			readSourceFields(db, itemKey),
 			config.topics.enabled ? db.select({topicId: sourceTopicAssignment.topicId, score: sourceTopicAssignment.score, primary: sourceTopicAssignment.primary}).from(sourceTopicAssignment).where(eq(sourceTopicAssignment.itemKey, itemKey)) : Promise.resolve([]),
+			importChecksOf(db, itemKey),
 		]);
 	if (!identity || (!published && !draft)) throw new ItemNotFoundError(itemKey);
 
@@ -473,6 +475,7 @@ export async function getAdminItemDetail(
 		...summary,
 		sourceFields: sourceFields.filter(field => config.topics.enabled || field.field !== "topics"),
 		importedTopics,
+		importChecks,
 		kind: identity.kind,
 		importMethod: identity.importMethod,
 		fileState:

@@ -20,6 +20,7 @@ import { previewEntries } from "./item-import-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-service";
 import { createNativeItemDraft } from "./native-item-service";
 import { readImportPdf } from "./pdf-import";
+import { keepImportChecks } from "./import-checks";
 import { readPdfProperties } from "./pdf-properties";
 import { languageTag } from "./pdf-record-mapping";
 
@@ -218,7 +219,7 @@ async function readClaimed(db: Database, storage: EvidenceFileStorage, config: L
 	const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
 	try {
 		const reading = await readOne(db, storage, config, file, signal);
-		await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading }).where(mine);
+		await db.update(pdfImportFile).set({ lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null, reading: { ...reading, readAt: new Date().toISOString() } }).where(mine);
 	} catch (error) {
 		// A worker asked to stop hands the PDF back for the next one, without counting a failed read.
 		if (signal?.aborted) {
@@ -268,6 +269,8 @@ async function attachOne(db: Database, storage: EvidenceFileStorage, maxPdfBytes
 	});
 	await storage.uploadPrivate(staged.fileDraft.objectPath, bytes, PDF);
 	await completeNativePdfUpload(db, storage, { expectedUploadRevision: staged.fileDraft.uploadRevision, itemKey, maxPdfBytes });
+	// The checks it was read against stay with this upload, so the record shows them while it keeps this PDF.
+	if (file.reading) await keepImportChecks(db, { attachmentKey: itemKey, filename: file.filename, objectPath: staged.fileDraft.objectPath, parentKey: file.attachTo!, reading: file.reading });
 }
 
 async function attachClaimed(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, token: string) {

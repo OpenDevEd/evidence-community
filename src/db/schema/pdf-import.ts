@@ -1,7 +1,8 @@
+import { itemIdentity } from "@opendeved/evidence-library-core";
 import { sql } from "drizzle-orm";
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 
-import type { AdminImportCommitResult, PdfReading } from "@/lib/admin/item-import-contract";
+import type { AdminImportCommitResult, PdfCheckResult, PdfReading } from "@/lib/admin/item-import-contract";
 
 /** The library's PDF import: one at a time, read in the publication worker, closed once imported or discarded. */
 export const pdfImport = pgTable("pdfImport", {
@@ -49,3 +50,22 @@ export const pdfImportFile = pgTable("pdfImportFile", {
 	uniqueIndex("pdfImportFile_same_file").on(table.importId, table.sha256),
 	index("pdfImportFile_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`),
 ]);
+
+/**
+ * The AI checks a PDF import read a record's PDF against, kept with the exact
+ * upload they were read from: the attachment, and the private object its PDF
+ * was uploaded as, which publishing keeps as the published copy's source. A
+ * PDF uploaded in its place is another object, which these checks don't cover.
+ */
+export const itemImportCheck = pgTable("itemImportCheck", {
+	attachmentKey: varchar("attachmentKey", { length: 8 }).primaryKey().references(() => itemIdentity.key, { onDelete: "cascade" }),
+	/** The record the PDF is attached to. */
+	parentKey: varchar("parentKey", { length: 8 }).notNull(),
+	objectPath: text("objectPath").notNull(),
+	sha256: varchar("sha256", { length: 64 }).notNull(),
+	filename: text("filename").notNull(),
+	checks: jsonb("checks").$type<PdfCheckResult[]>().notNull(),
+	/** The changes the AI suggested that would meet some of the checks, by their place. */
+	suggestions: jsonb("suggestions").$type<{ checks: number[]; field: string; value: string }[]>().notNull(),
+	readAt: timestamp("readAt", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("itemImportCheck_parent_idx").on(table.parentKey)]);
