@@ -256,6 +256,7 @@ const CHOICES_KEY = "evidence-library:pdf-import-choices";
 type SavedChoices = {
 	applied: [string, number[]][];
 	chosen: Record<ChoiceKind, [string, string[]][]>;
+	collections: string[];
 	excluded: string[];
 	importId: string;
 	publishRoute: PublishingChoice["route"];
@@ -269,6 +270,7 @@ function saveChoices(batch: ImportBatch) {
 	const saved: SavedChoices = {
 		applied: listsOf(batch.applied),
 		chosen: { collections: listsOf(batch.chosen.collections), topics: listsOf(batch.chosen.topics) },
+		collections: batch.collections,
 		excluded: [...batch.excluded],
 		importId: batch.importId,
 		publishRoute: batch.publishRoute,
@@ -286,15 +288,15 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	try {
 		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
 		if (saved?.importId !== importId) return {};
-		return { applied: setsOf(saved.applied), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+		return { applied: setsOf(saved.applied), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
 	} catch {
 		// No browser storage while the page is served, or an entry this version can't read.
 		return {};
 	}
 }
 
-/** The server's import with the choices this browser made on it. */
-export const pdfImportBatch = (server: AdminPdfImport): ImportBatch => ({ ...blankChoices, ...savedChoices(server.id), ...fromServer(server), collections: server.collections, importId: server.id, kind: "pdfs" });
+/** The server's import with the choices this browser made on it, the collections the editor changed in the review among them. */
+export const pdfImportBatch = (server: AdminPdfImport): ImportBatch => ({ ...blankChoices, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" });
 
 /** Takes in the server's PDF import, keeping the editor's choices on it. */
 function syncPdfImport({ import: server }: AdminPdfImportStatus) {
