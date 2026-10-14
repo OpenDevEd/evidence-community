@@ -8,6 +8,7 @@ import { twMerge } from "@/lib/tw-merge";
 import { PropsOf } from "@nextui-org/react";
 import { Input } from "@/components/nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
+import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 
 /** A focus request older than this belongs to an earlier page visit. */
@@ -38,6 +39,19 @@ function useWaitingSearch(
 		},
 		[cancel, onTyped, setDraft],
 	);
+	// The document's clicks: a link followed in this tab straight after typing leaves the page, and the waiting search
+	// must not write this page's address under that navigation. Listened to in capture, before the link navigates.
+	useEffect(() => {
+		const leave = (event: MouseEvent) => {
+			const link = (event.target as Element | null)?.closest?.("a[href]");
+			if (!link || !followsInThisTab(event) || link.getAttribute("target") === "_blank") return;
+			if (link.getAttribute("href")?.startsWith("#")) return;
+			cancel();
+			onTyped?.(null);
+		};
+		document.addEventListener("click", leave, true);
+		return () => document.removeEventListener("click", leave, true);
+	}, [cancel, onTyped]);
 	return [run, cancel, now] as const;
 }
 

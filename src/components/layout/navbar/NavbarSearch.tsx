@@ -28,6 +28,7 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { listingParams, searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
+import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { SORT_OPTIONS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
 import { countryFacetOptions } from "@/constants/misc";
@@ -167,7 +168,7 @@ function SuggestionRow({
 	href: string;
 	isCurrent: boolean;
 	isHighlighted: boolean;
-	onFollow: () => void;
+	onFollow: (event: React.MouseEvent) => void;
 	onHighlight: () => void;
 	preview: PublicationPreviewData;
 	title?: string;
@@ -358,11 +359,15 @@ export default function NavbarSearch() {
 		[router, buildTargetParams, cancelSearch],
 	);
 
-	// A suggestion is a link of its own to the address goToItem builds.
-	const followSuggestion = useCallback(() => {
-		cancelSearch();
-		setIsOpen(false);
-	}, [cancelSearch]);
+	// A suggestion is a link of its own to the address goToItem builds. Opened in another tab, this one stays, and so
+	// does its search.
+	const followSuggestion = useCallback(
+		(event: React.MouseEvent) => {
+			if (followsInThisTab(event)) cancelSearch();
+			setIsOpen(false);
+		},
+		[cancelSearch],
+	);
 
 	const handlePreviewPageChange = useCallback(
 		(page: number) => {

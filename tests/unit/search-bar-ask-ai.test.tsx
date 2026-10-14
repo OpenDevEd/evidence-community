@@ -193,6 +193,42 @@ describe("asking the assistant from the search field", () => {
 		}
 	});
 
+	// A result followed straight after typing leaves the page: the waiting search must not write this page's address
+	// under that navigation. A link opened in another tab leaves this page where it is, and its search runs.
+	it("drops a waiting search when a link is followed in this tab, and keeps it for another tab", async () => {
+		vi.useFakeTimers();
+		try {
+			const handleSearchChange = vi.fn();
+			await act(async () => {
+				root.render(
+					<>
+						<SearchBar handleSearchChange={handleSearchChange} search="" />
+						<a href="https://library.example/lib/RECORD" onClick={(event) => event.preventDefault()}>
+							record
+						</a>
+					</>,
+				);
+			});
+			const follow = (keys: MouseEventInit) =>
+				act(async () => {
+					container
+						.querySelector("a")
+						?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...keys }));
+					vi.advanceTimersByTime(1000);
+				});
+
+			await type("teacher training");
+			await follow({ metaKey: true });
+			expect(handleSearchChange).toHaveBeenLastCalledWith("teacher training");
+
+			await type("school meals");
+			await follow({});
+			expect(handleSearchChange).toHaveBeenCalledTimes(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("draws its trailing control", async () => {
 		await act(async () => {
 			root.render(
