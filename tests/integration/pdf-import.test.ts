@@ -93,6 +93,30 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 	});
 });
 
+// PDFs reach storage seconds apart, so most of an import arrives after the worker's cycle has started.
+test("reads a PDF that arrives while another is being read, without waiting for that read to end", async () => {
+	let finishFirst = () => {};
+	const reading = { checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report" } };
+	readImportPdf.mockReset().mockImplementationOnce(() => new Promise((resolve) => (finishFirst = () => resolve(reading)))).mockResolvedValue(reading);
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("first.pdf"), pdfFile("later.pdf")], instructions: "" });
+		const arrive = async (index: number) => {
+			const file = started.files[index]!;
+			await storage.uploadPrivate(file.upload.path, await createPdf(file.filename), "application/pdf");
+			await confirmPdfImportUpload(db, storage, file.id);
+		};
+		await arrive(0);
+		const cycle = runPdfImportCycle(db, storage, config);
+		await vi.waitFor(() => expect(readImportPdf).toHaveBeenCalledOnce());
+		await arrive(1);
+		await vi.waitFor(() => expect(readImportPdf).toHaveBeenCalledTimes(2), { timeout: 10_000 });
+		finishFirst();
+		await cycle;
+		expect((await pdfImportStatus(db)).import!.files.map(({ state }) => state)).toEqual(["read", "read"]);
+	});
+});
+
 test("imports the records once when two requests come at the same moment, and attaches a PDF whose first try failed with the same attachment", async () => {
 	readImportPdf.mockReset().mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report" } });
 	await withIsolatedPublicationDatabase(async (db) => {
