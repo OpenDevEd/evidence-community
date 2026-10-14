@@ -328,12 +328,32 @@ export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
 // holds it, any of them the server still waits for stopped with the page that sent them.
 const UPLOADS = "evidence-library:pdf-import-uploads";
 
+type Sending = { fileIds: string[]; importId: string };
+
+/** Notes the PDFs this browser sends, or clears the note. Storage that is full or turned off leaves a reload mid-upload to the server's wait. */
+function noteSending(sending: Sending | null) {
+	try {
+		if (sending) window.localStorage.setItem(UPLOADS, JSON.stringify(sending));
+		else window.localStorage.removeItem(UPLOADS);
+	} catch {
+		// The upload goes ahead without the note.
+	}
+}
+
+function noteOfSending(): Sending | null {
+	try {
+		return JSON.parse(window.localStorage.getItem(UPLOADS) ?? "null") as Sending | null;
+	} catch {
+		return null;
+	}
+}
+
 /** Sends an import's PDFs, holding the lock that says this browser is sending them. */
 export function sendPdfUploads(importId: string, fileIds: string[], send: () => Promise<unknown>) {
 	return navigator.locks.request(UPLOADS, async () => {
-		window.localStorage.setItem(UPLOADS, JSON.stringify({ fileIds, importId }));
+		noteSending({ fileIds, importId });
 		await send();
-		window.localStorage.removeItem(UPLOADS);
+		noteSending(null);
 	});
 }
 
@@ -344,15 +364,17 @@ export function sendPdfUploads(importId: string, fileIds: string[], send: () => 
  * the server gives up on them. Uploads from another browser wait for that.
  */
 async function failStoppedUploads(server: AdminPdfImport) {
-	const sending = JSON.parse(window.localStorage.getItem(UPLOADS) ?? "null") as { fileIds: string[]; importId: string } | null;
+	const sending = noteOfSending();
 	const stopped = sending?.importId === server.id ? server.files.filter(({ id, state }) => state === "uploading" && sending.fileIds.includes(id)) : [];
 	if (!stopped.length) return;
-	await navigator.locks.request(UPLOADS, { ifAvailable: true }, async (lock) => {
-		if (!lock) return;
+	// While a tab is still sending them the lock is held, and nothing changes.
+	const failed = await navigator.locks.request(UPLOADS, { ifAvailable: true }, async (lock) => {
+		if (!lock) return false;
 		await Promise.all(stopped.map(({ id }) => failAdminPdfImportUpload(id, "The upload stopped when the page closed or reloaded.")));
-		window.localStorage.removeItem(UPLOADS);
+		noteSending(null);
+		return true;
 	});
-	await mutate(PDF_IMPORT_KEY);
+	if (failed) await mutate(PDF_IMPORT_KEY);
 }
 
 /** Takes in the server's PDF import, keeping the editor's choices on it. */
