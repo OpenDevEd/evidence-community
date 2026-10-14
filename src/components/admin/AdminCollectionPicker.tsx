@@ -3,8 +3,8 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
@@ -135,6 +135,31 @@ function SelectionChip({
 				</button>
 			)}
 		</motion.li>
+	);
+}
+
+/**
+ * One list's rows. The rows of the place just left fade out under the new
+ * ones and can't be used meanwhile; with reduced motion they swap at once.
+ * The ref reaches the element, so the leaving rows can be lifted out of the
+ * list's flow while they fade.
+ */
+function ResultRows({ children, height, reduceMotion, ref }: { children: ReactNode; height: number; reduceMotion: boolean | null; ref?: Ref<HTMLDivElement> }) {
+	const present = useIsPresent();
+	return (
+		<motion.div
+			ref={ref}
+			animate={{ opacity: 1 }}
+			aria-hidden={present ? undefined : true}
+			className="relative w-full"
+			exit={{ opacity: 0 }}
+			inert={present ? undefined : true}
+			initial={reduceMotion ? false : { opacity: 0 }}
+			style={{ height }}
+			transition={{ duration: reduceMotion ? 0 : 0.2 }}
+		>
+			{children}
+		</motion.div>
 	);
 }
 
@@ -321,6 +346,7 @@ export function AdminCollectionPicker({
 			: availableSources.length === 1
 				? availableSources[0]!.key
 				: null;
+	const reduceMotion = useReducedMotion();
 	const [query, setQuery] = useState("");
 	const typedQuery = useDebouncedValue(query.trim(), 250);
 	// Only typing waits for a pause; a cleared search shows the folder at once.
@@ -780,14 +806,11 @@ export function AdminCollectionPicker({
 										: "No collections here"}
 								</div>
 							) : (
-								<div
-									className="relative w-full animate-fade-in [animation-duration:200ms] motion-reduce:animate-none"
-									// The rows cross-fade when the list they show changes, not when a folder starts loading.
-									key={itemsKey ?? "first"}
-									style={{
-										height: virtualizer.getTotalSize(),
-									}}
-								>
+								// The rows cross-fade when the list they show changes, not when a folder starts loading: the old rows
+								// stay on top while they fade, so no frame is left empty. The wrapper places them in the scrolled list.
+								<div className="relative">
+								<AnimatePresence mode="popLayout">
+								<ResultRows height={virtualizer.getTotalSize()} key={itemsKey ?? "first"} reduceMotion={reduceMotion}>
 									{virtualizer
 										.getVirtualItems()
 										.map((virtualRow) => {
@@ -861,6 +884,8 @@ export function AdminCollectionPicker({
 												</div>
 											);
 										})}
+								</ResultRows>
+								</AnimatePresence>
 								</div>
 							)}
 						</div>
