@@ -250,7 +250,7 @@ export default function NavbarSearch() {
 		searchDraft?.source === params.search
 			? searchDraft.value
 			: params.search;
-	const [debounceSearch, , , searchNow] = useDebounce(
+	const [debounceSearch, , cancelSearch] = useDebounce(
 		(value: string) => setParams({ search: value, page: 1 }),
 		250,
 	);
@@ -337,13 +337,17 @@ export default function NavbarSearch() {
 		};
 	}, [params.page, params.search, runtimeParams, searchInput]);
 
+	// The address these open carries what was typed. A search still waiting would
+	// write this page's address under that navigation and keep the reader here.
 	const goToLibrary = useCallback(() => {
+		cancelSearch();
 		setIsOpen(false);
 		router.push("/lib" + serializeSearchParams(buildTargetParams()));
-	}, [router, buildTargetParams]);
+	}, [router, buildTargetParams, cancelSearch]);
 
 	const goToItem = useCallback(
 		(key: string) => {
+			cancelSearch();
 			setIsOpen(false);
 			// Open the item carrying the same params, so its navbar search picks
 			// up exactly where the user was.
@@ -351,7 +355,7 @@ export default function NavbarSearch() {
 				`/lib/${key}` + serializeSearchParams(buildTargetParams()),
 			);
 		},
-		[router, buildTargetParams],
+		[router, buildTargetParams, cancelSearch],
 	);
 
 	const handlePreviewPageChange = useCallback(
@@ -381,8 +385,6 @@ export default function NavbarSearch() {
 			setHighlight((h) => Math.max(h - 1, -1));
 		} else if (event.key === "Enter") {
 			event.preventDefault();
-			// What was typed is the search from here on, whatever its wait had left.
-			searchNow();
 			if (highlight >= 0 && results[highlight]) {
 				goToItem(results[highlight].key);
 			} else {

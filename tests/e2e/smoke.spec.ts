@@ -558,6 +558,27 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 	await expect(themeSwitcher).toHaveCount(expectedThemeSwitcher ? 1 : 0);
 });
 
+// Enter pressed while the typed search still waits used to write it into the record page's address under the
+// navigation, which kept the reader on the record.
+test("opens the results for words typed in the navbar on a record page and entered at once", { tag: "@smoke" }, async ({
+	page,
+	request,
+}) => {
+	test.skip(!expectedNavbarSearch, "This library has no navbar search.");
+	const key = (await (await request.get("/api/items")).json()).items?.[0]?.key;
+	expect(key).toBeTruthy();
+	await page.setViewportSize({ width: 1600, height: 1000 });
+	await page.goto(`/en-GB/lib/${key}`);
+	await dismissConsent(page);
+
+	await page.getByPlaceholder("Search", { exact: true }).click();
+	await page.keyboard.type("evidence");
+	await page.keyboard.press("Enter");
+	await expect(page).toHaveURL(
+		(url) => url.pathname.endsWith("/lib") && url.searchParams.get("search") === "evidence",
+	);
+});
+
 /**
  * The header's actions: the banner's second navigation, after the links.
  * Found by role, not label, so it works in every language. A library that

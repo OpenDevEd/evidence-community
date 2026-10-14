@@ -111,14 +111,14 @@ export function SearchBar({
 			onKeyDown={(event) => {
 				if (event.key !== "Enter") return;
 				if (!(event.metaKey || event.ctrlKey)) {
-					// Searched at once: what the page acts on next, such as Open in OpenScholar, is what was typed.
+					// Searched at once on Enter only. Searching when the box loses focus moved the results under the button
+					// being pressed, and that click was lost. Open in OpenScholar reads what was typed itself (onTyped).
 					searchNow();
 					return;
 				}
 				event.preventDefault();
 				ask();
 			}}
-			onBlur={searchNow}
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;

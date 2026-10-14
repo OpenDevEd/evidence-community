@@ -41,6 +41,10 @@ export function useDebounce(
 		waiting.current = null;
 	}, []);
 
+	// The timer is the outside system: a call still waiting when the component goes away never runs, since it would act
+	// on whatever page came next (a search typed just before a link was followed).
+	useEffect(() => cancel, [cancel]);
+
 	const flush = useCallback(() => {
 		const args = waiting.current;
 		cancel();

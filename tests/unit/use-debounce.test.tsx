@@ -120,4 +120,20 @@ describe("waiting for typing to stop", () => {
 
 		expect(onRun.mock.calls).toEqual([["meals"]]);
 	});
+
+	// A search typed just before a link was followed would otherwise land on the page that link opened.
+	it("drops a call that is still waiting when its component goes away", () => {
+		const onRun = vi.fn();
+		const { run } = mount(onRun);
+
+		act(() => {
+			run("teacher");
+			root.render(null);
+		});
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+
+		expect(onRun).not.toHaveBeenCalled();
+	});
 });
