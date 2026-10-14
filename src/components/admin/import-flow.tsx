@@ -7,7 +7,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
-import type { ImportKind } from "./ImportSteps";
+import type { ImportKind, ImportStage } from "./ImportSteps";
 import {
 	AdminApiError,
 	approveAdminReview,
@@ -269,21 +269,23 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [filter, setFilter] = useState<ReviewFilter>("all");
 	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	// An error belongs to the step it happened on: a commit another tab got to first is moot once the import shows its drafts.
+	const [failure, setFailure] = useState<{ message: string; stage: ImportStage } | null>(null);
 
 	const stage = stageOf(batch);
+	const error = failure?.stage === stage ? failure.message : null;
 	const fields = batchFields(batch, inputs.collections, busy);
 	const appliedFor = (row: ImportRow) => appliedOf(batch, row);
 	const choicesOf = (row: ImportRow, kind: ChoiceKind) => (batch ? chosenOf(batch, row, kind) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => choicesOf(row, "topics").has(id)).map(({ name }) => name);
 
 	const run = async (work: () => Promise<void>) => {
-		setError(null);
+		setFailure(null);
 		setBusy(true);
 		try {
 			await work();
 		} catch (caught) {
-			setError(errorMessage(caught));
+			setFailure({ message: errorMessage(caught), stage });
 		} finally {
 			setBusy(false);
 		}
@@ -350,7 +352,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		setFilter,
 		setKind: (value: ImportKind) => {
 			inputs.setKind(value);
-			setError(null);
+			setFailure(null);
 		},
 		sources,
 		stage,
