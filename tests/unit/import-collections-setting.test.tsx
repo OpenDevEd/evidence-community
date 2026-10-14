@@ -18,6 +18,7 @@ const flow = {
 
 let container: HTMLDivElement;
 let root: Root;
+const scrollIntoView = vi.fn();
 
 function setPointer(fine: boolean) {
 	vi.stubGlobal("matchMedia", (query: string) => ({
@@ -40,6 +41,8 @@ async function openCollections() {
 }
 
 beforeEach(() => {
+	Element.prototype.scrollIntoView = scrollIntoView;
+	scrollIntoView.mockClear();
 	vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
 	vi.stubGlobal("fetch", vi.fn(async () => Response.json({ hasMore: false, items: [], nextCursor: null })));
 	container = document.createElement("div");
@@ -51,13 +54,16 @@ afterEach(async () => {
 	await act(async () => root.unmount());
 	container.remove();
 	vi.unstubAllGlobals();
+	Reflect.deleteProperty(Element.prototype, "scrollIntoView");
 });
 
-it("moves focus to the collection search when the editor opens the setting on a fine pointer", async () => {
+it("moves focus to the collection search and into view when the editor opens the setting on a fine pointer", async () => {
 	setPointer(true);
 	const search = await openCollections();
 	expect(search).not.toBeNull();
 	expect(document.activeElement).toBe(search);
+	// Once the section has its height, the focused search is brought into view if the opening left it below the pane.
+	await vi.waitFor(() => expect(scrollIntoView.mock.contexts).toContain(search));
 });
 
 it("leaves focus alone on a touch screen, where focus would open the keyboard", async () => {

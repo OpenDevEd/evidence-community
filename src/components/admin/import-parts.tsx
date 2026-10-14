@@ -2,7 +2,7 @@
 
 import { ArrowDown01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, use, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, use, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -137,13 +137,48 @@ export function SettingsGroup({ children }: { children: ReactNode }) {
 
 const rowClass = "flex h-12 w-full items-center gap-3 px-4 text-start";
 
+/**
+ * Focus that moves into a section the editor opens (the collection search
+ * does) is brought into view once the section has its height and the focus
+ * has arrived, whichever comes last. Scrolling sooner would scroll the
+ * section itself while it is still clipped.
+ */
+function useOpeningFocusReveal() {
+	// "opening" until the section has its height, remembering what took focus meanwhile, then "open" until focus first arrives.
+	const state = useRef<{ focused: Element | null; phase: "idle" | "opening" | "open" }>({ focused: null, phase: "idle" });
+	const reveal = (element: Element) => {
+		state.current = { focused: null, phase: "idle" };
+		element.scrollIntoView({ block: "nearest" });
+	};
+	return {
+		onFocus: (event: FocusEvent) => {
+			if (state.current.phase === "opening") state.current.focused = event.target;
+			else if (state.current.phase === "open") reveal(event.target);
+		},
+		opened: () => {
+			const { focused, phase } = state.current;
+			if (phase !== "opening") return;
+			if (focused && focused === document.activeElement) reveal(focused);
+			else state.current = { focused: null, phase: "open" };
+		},
+		opening: () => {
+			state.current = { focused: null, phase: "opening" };
+		},
+	};
+}
+
 /** One row of a group: what it holds now, and what it shows when it opens in place. */
 export function Setting({ children, defaultOpen = false, icon, summary, title }: { children: ReactNode; defaultOpen?: boolean; icon: typeof ArrowLeft01Icon; summary: ReactNode; title: string }) {
 	const reduceMotion = useReducedMotion();
 	const [open, setOpen] = useState(defaultOpen);
+	const focusReveal = useOpeningFocusReveal();
+	const toggle = () => {
+		if (!open) focusReveal.opening();
+		setOpen(!open);
+	};
 	return (
 		<div>
-			<button aria-expanded={open} className={`${rowClass} outline-none transition-colors duration-150 hover:bg-black/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/[0.03]`} onClick={() => setOpen(!open)} type="button">
+			<button aria-expanded={open} className={`${rowClass} outline-none transition-colors duration-150 hover:bg-black/[0.025] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/[0.03]`} onClick={toggle} type="button">
 				<HugeiconsIcon aria-hidden className="shrink-0 text-black/45 dark:text-white/45" icon={icon} size={17} />
 				<span className="shrink-0 text-sm font-medium text-black/85 dark:text-white/85">{title}</span>
 				<span className="flex min-w-0 flex-1 justify-end truncate text-xs text-black/45 dark:text-white/45">{summary}</span>
@@ -151,8 +186,8 @@ export function Setting({ children, defaultOpen = false, icon, summary, title }:
 			</button>
 			<AnimatePresence initial={false}>
 				{open ? (
-					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={sheetTransition(reduceMotion, 0.22)}>
-						<div className="px-4 pb-4 pt-1">{children}</div>
+					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={sheetTransition(reduceMotion, 0.22)} onAnimationComplete={focusReveal.opened}>
+						<div className="px-4 pb-4 pt-1" onFocus={focusReveal.onFocus}>{children}</div>
 					</motion.div>
 				) : null}
 			</AnimatePresence>
