@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
@@ -130,6 +130,14 @@ export function useFilters() {
 		(text: string) => setParams({ search: text, page: 1 }),
 		[setParams],
 	);
+
+	// What the results' search box holds and hasn't searched for yet (its wait, SearchBar), read when an action such
+	// as Open in OpenScholar has to act on what the reader typed.
+	const typedSearch = useRef<string | null>(null);
+	const noteTypedSearch = useCallback((text: string | null) => {
+		typedSearch.current = text;
+	}, []);
+	const readTypedSearch = useCallback(() => typedSearch.current, []);
 
 	const handleRangeChange = useCallback(
 		(start: string | null, end: string | null) => {
@@ -310,6 +318,8 @@ export function useFilters() {
 		handleSortChange,
 		handleScopeChange,
 		handleSearchChange,
+		noteTypedSearch,
+		readTypedSearch,
 		handleRangeChange,
 		handleCollectionSelect,
 		handleAuthorSelect,

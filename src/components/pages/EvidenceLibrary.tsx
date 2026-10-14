@@ -64,6 +64,7 @@ function LibraryFilters({
 		>
 			<SearchBar
 				handleSearchChange={itemsContext.handleSearchChange}
+				onTyped={itemsContext.noteTypedSearch}
 				search={itemsContext.queryParams.search}
 				focusOnRequest
 				// Asking uses the text as a question, so it must not stay

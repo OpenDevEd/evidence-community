@@ -130,6 +130,33 @@ describe("asking the assistant from the search field", () => {
 		expect(field().value).toBe("");
 	});
 
+	// Open in OpenScholar pressed while the search still waits sends what was typed (ResourcesView reads it).
+	it("says what it holds while its search waits, and searches at once on Enter", async () => {
+		const handleSearchChange = vi.fn();
+		const onTyped = vi.fn();
+		await act(async () => {
+			root.render(
+				<SearchBar
+					handleSearchChange={handleSearchChange}
+					onTyped={onTyped}
+					search=""
+				/>,
+			);
+		});
+
+		await type("teacher training");
+		expect(onTyped).toHaveBeenLastCalledWith("teacher training");
+		expect(handleSearchChange).not.toHaveBeenCalled();
+
+		await act(async () => {
+			field().dispatchEvent(
+				new KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+			);
+		});
+		expect(handleSearchChange).toHaveBeenCalledWith("teacher training");
+		expect(onTyped).toHaveBeenLastCalledWith(null);
+	});
+
 	it("draws its trailing control", async () => {
 		await act(async () => {
 			root.render(
