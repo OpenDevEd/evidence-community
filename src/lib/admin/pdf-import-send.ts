@@ -28,20 +28,20 @@ export async function sendingOf(db: Database, importId: string, position: number
 }
 
 /**
- * The draft's review still pending, and whether it is one this send would make: with the imported PDF and on the
- * import's route. One submitted in the editor before the PDF attached lacks the PDF, and approving it would publish
- * the record without it.
+ * The draft's review still pending, and whether it is one this send would make: by the person who imported it, with
+ * the imported PDF and on the import's route. One submitted in the editor before the PDF attached lacks the PDF, and
+ * approving it would publish the record without it; one someone else submitted waits for its own review.
  */
-async function pendingReview(db: Database, itemKey: string, attachmentKey: string | null, route: Sending["route"]) {
+async function pendingReview(db: Database, itemKey: string, attachmentKey: string | null, send: Sending, route: Sending["route"]) {
 	const [review] = await db
-		.select({ id: itemReview.id, revision: itemReview.revision, snapshot: itemReview.snapshot })
+		.select({ id: itemReview.id, revision: itemReview.revision, snapshot: itemReview.snapshot, submittedBy: itemReview.submittedBy })
 		.from(itemReview)
 		.where(and(eq(itemReview.itemKey, itemKey), eq(itemReview.state, "pending")));
 	if (!review) return null;
 	const [pdf] = attachmentKey
 		? await db.select({ objectPath: itemReviewFile.objectPath }).from(itemReviewFile).where(and(eq(itemReviewFile.reviewId, review.id), eq(itemReviewFile.itemKey, attachmentKey)))
 		: [];
-	return { ...review, matches: Boolean(pdf?.objectPath) && (review.snapshot.publishingChoice?.route ?? null) === route };
+	return { ...review, matches: review.submittedBy === send.actor.userId && Boolean(pdf?.objectPath) && (review.snapshot.publishingChoice?.route ?? null) === route };
 }
 
 /** Gives a draft made in the library the import's DOI route, reserving its Crossref DOI on that route. */
@@ -70,8 +70,8 @@ export async function sendImportedDraft(
 	const route = kind === "created" ? send.route : null;
 	const needs = publishingNeeds(applyItemDraftPatch({}, current.patch as Record<string, unknown>), routeChoice(route));
 	if (Object.keys(needs).length) return { error: needsText(needs), state: "held" };
-	const pending = await pendingReview(db, itemKey, attachmentKey, route);
-	if (pending && !pending.matches) return { error: "It was submitted for review before its PDF attached, so it waits for that review.", state: "held" };
+	const pending = await pendingReview(db, itemKey, attachmentKey, send, route);
+	if (pending && !pending.matches) return { error: "It was submitted for review another way, so it waits for that review.", state: "held" };
 	if (kind === "created" && !pending) await chooseRoute(db, itemKey, route, send, config);
 	const review = pending ?? (await submitItemReview(db, itemKey, send.actor, config));
 	if (send.actor.role !== "creator") await approveItemReview(db, storage, { expectedRevision: review.revision, publicationTags: config.content.tags.publish, reviewId: review.id }, send.actor, config);

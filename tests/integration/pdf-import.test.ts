@@ -3,7 +3,8 @@ import { expect, test, vi } from "vitest";
 
 import { libraryConfigSchema, type LibraryServerConfig } from "../../src/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
-import { getItemPublishingChoice, submitItemReview } from "../../src/lib/admin/review-service";
+import { routeChoice } from "../../src/lib/admin/review-contract";
+import { getItemPublishingChoice, setItemPublishingChoice, submitItemReview } from "../../src/lib/admin/review-service";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
 import { itemReview } from "../../src/db/schema/review";
@@ -288,10 +289,29 @@ test("doesn't approve a review submitted before the draft's PDF attached, which 
 
 		const status = (await pdfImportStatus(db)).import!;
 		expect(status.attach).toEqual({ [files[0]!.rowId]: "attached" });
-		expect(status.sending).toEqual({ [files[0]!.rowId]: { message: expect.stringMatching(/before its PDF attached/iu), state: "held" } });
+		expect(status.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
 		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
 		expect(await db.select({ state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending" }]);
 		await closePdfImport(db, storage, importId);
+	});
+});
+
+test("doesn't approve a review someone else submitted after the PDF attached under the importing editor's name", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { files, importId, keyOf } = await importToSend(db, storage, ["dated.pdf"]);
+		const itemKey = keyOf(files[0]!.rowId);
+		// The PDF attaches; before the send goes, a creator submits the draft with the same route.
+		await db.update(pdfImportFile).set({ sendState: null }).where(eq(pdfImportFile.importId, importId));
+		await runPdfImportCycle(db, storage, fullConfig);
+		await setItemPublishingChoice(db, itemKey, routeChoice(SEND.route), fullConfig);
+		await submitItemReview(db, itemKey, { role: "creator", userId: "user_creator" }, fullConfig);
+		await db.update(pdfImportFile).set({ nextAttemptAt: new Date(), sendState: "waiting" }).where(eq(pdfImportFile.importId, importId));
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		expect((await pdfImportStatus(db)).import!.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
+		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
+		expect(await db.select({ state: itemReview.state, submittedBy: itemReview.submittedBy }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending", submittedBy: "user_creator" }]);
 	});
 });
 

@@ -327,18 +327,27 @@ function savedChoices(importId: string): Partial<ImportBatch> {
  * on and can try again, keeps its own state. One the server submitted and
  * then failed to approve is failed, with why, so trying again approves it.
  */
-function withSent(publish: ReadonlyMap<string, PublishState>, server: Pick<AdminPdfImport, "sending" | "sent">) {
+function withSent(publish: ReadonlyMap<string, PublishState>, server: Pick<AdminPdfImport, "send" | "sending" | "sent">) {
 	const next = new Map(publish);
 	for (const [id, state] of Object.entries(server.sent)) {
 		const mine = next.get(id);
-		if (takesServerState(mine, state)) next.set(id, { ...mine, ...(approvalFailed(server, id, state) ?? { message: undefined, state }) });
+		// While the server still sends a draft, the review it submitted is a step on the way, not where the draft ends.
+		if (server.sending[id]?.state !== "waiting" && takesServerState(mine, state)) next.set(id, { ...mine, ...(approvalFailed(server, id, mine) ?? { message: undefined, state }) });
 	}
 	return next;
 }
 
-/** A draft the server submitted and then couldn't approve, as failed with why. */
-const approvalFailed = (server: Pick<AdminPdfImport, "sending">, id: string, state: "published" | "submitted") =>
-	state === "submitted" && server.sending[id]?.state === "failed" ? { message: server.sending[id].message ?? undefined, state: "failed" as const } : null;
+/**
+ * A draft the server submitted and then couldn't approve, as failed with why. Only an import that publishes approves,
+ * and a draft submitted from here since, as a creator's retry is, stays submitted.
+ */
+function approvalFailed(server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string, mine: PublishState | undefined) {
+	const failed = server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
+	return failed && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
+}
+
+/** The DOI route the import's drafts take: while the server sends them, the one they were sent with, else this browser's. */
+const routeWhileSending = (server: AdminPdfImport, route: ImportBatch["publishRoute"]) => (server.send && serverSending(server) ? server.send.route : route);
 
 /**
  * Whether the server's word on a draft replaces this browser's: not while it
@@ -351,7 +360,7 @@ const takesServerState = (mine: PublishState | undefined, state: "published" | "
 export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
 	// The DOI route starts as the one the server sends the drafts on, where this browser chose none.
 	const batch: ImportBatch = { ...blankChoices, publishRoute: server.send?.route ?? null, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
-	return { ...batch, publish: withSent(batch.publish, server) };
+	return { ...batch, publish: withSent(batch.publish, server), publishRoute: routeWhileSending(server, batch.publishRoute) };
 }
 
 // The PDFs this browser sends for the open import. The tab sending them holds a lock of the same name, so once no tab
@@ -413,7 +422,7 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	const answer = JSON.stringify(server);
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
-	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server) } : pdfImportBatch(server)) : null);
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server), publishRoute: routeWhileSending(server, pdfs.publishRoute) } : pdfImportBatch(server)) : null);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";

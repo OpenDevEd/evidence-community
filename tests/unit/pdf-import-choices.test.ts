@@ -86,3 +86,33 @@ it("offers a draft the server submitted and failed to approve to try again, on t
 	expect(batch.publish.get("1")).toEqual({ message: "Zenodo is down", state: "failed" });
 	expect(batch.publishRoute).toBe("zenodo");
 });
+
+// A creator's import only submits, so its failed send that the creator then submitted from here is submitted, not an
+// approval to try again; and a draft the server is still sending is on its way, whatever its review says meanwhile.
+it("keeps a creator's retry submitted, and a draft the server still sends on its way", async () => {
+	const tab = await import("@/components/admin/admin-import");
+	const batch = tab.pdfImportBatch({
+		...server,
+		id: "import-creator",
+		reviews: { 1: { id: "review-1", revision: 1 }, 2: { id: "review-2", revision: 1 } },
+		send: { action: "submit", route: null },
+		sending: { 1: { message: "Zenodo is down", state: "failed" }, 2: { message: null, state: "waiting" } },
+		sent: { 1: "submitted", 2: "submitted" },
+	});
+	expect(batch.publish.get("1")).toEqual({ state: "submitted" });
+	expect(batch.publish.has("2")).toBe(false);
+});
+
+// Another tab chose a route and this one committed with another: while the server sends, its route is the one shown
+// and used.
+it("takes the server's DOI route while it sends, over a route this browser chose before", async () => {
+	const tab = await import("@/components/admin/admin-import");
+	const sending = { ...server, id: "import-route", send: { action: "publish" as const, route: "zenodo" as const }, sending: { 1: { message: null, state: "waiting" as const } } };
+	const batch = tab.pdfImportBatch({ ...sending, send: null, sending: {} });
+	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
+	tab.changeImportBatch(batch, (current) => ({ ...current, publishRoute: "crossref-zenodo" }));
+	vi.resetModules();
+	const reloaded = await import("@/components/admin/admin-import");
+	expect(reloaded.pdfImportBatch(sending).publishRoute).toBe("zenodo");
+	expect(reloaded.pdfImportBatch({ ...sending, sending: {} }).publishRoute).toBe("crossref-zenodo");
+});
