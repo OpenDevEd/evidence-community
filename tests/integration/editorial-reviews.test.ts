@@ -22,6 +22,7 @@ import { ZenodoIdentifierPolicyLockedError } from "../../src/lib/publication/err
 import { getItemPublishingChoice, correctItemReview, resolveReviewConflicts, approveItemReview, setItemPublishingChoice, submitItemReview, resolveItemReview } from "../../src/lib/admin/review-service";
 import { createNativeItemDraft, publishItemDraft as publishNativeItemDraft, saveItemDraft as saveNativeItemDraft, getItemDraft as getNativeItemDraft, openItemDraft as openNativeItemDraft, discardItemDraft, removeNativeItem, unpublishNativeItem } from "../../src/lib/admin/native-item-service";
 import { stageNativePdfUpload, completeNativePdfUpload, discardNativePdfDraft, stageNativePdfRemoval, undoNativePdfRemoval } from "../../src/lib/admin/native-file-service";
+import { readPdfProperties } from "../../src/lib/admin/pdf-properties";
 const reviewConfig = libraryConfigSchema.parse({...maximalLibraryConfig, sources: []});
 const PUBLICATION_TAGS = ["publish-record"] as const;
 const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
@@ -386,4 +387,26 @@ it("migrates queued language fields without losing other pending fields or job s
   assert.deepEqual((await client.query('SELECT * FROM "itemSourceLink" ORDER BY id')).rows, fields);
   assert.deepEqual((await client.query('SELECT * FROM "sourceWritebackJob" ORDER BY id')).rows, fields.map(row => ({ ...row, attempts: 2 })));
  });
+}, 120_000);
+
+it("publishes a PDF that carries the record's authors and the Crossref DOI publishing activates", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Girls' learning in Sierra Leone", date: "2026-09-10", institution: "Learning Lab", language: "en", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }, { creatorType: "translator", firstName: "Charles", lastName: "Babbage" }] });
+		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Report PDF" });
+		const pdf = await createPdf("Girls' learning in Sierra Leone");
+		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "report.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
+		storage.privateFiles.set(stage.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: stage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		await setItemPublishingChoice(db, parent.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, reviewConfig);
+		const review = await submitItemReview(db, parent.itemKey, { userId: "creator", role: "creator" }, reviewConfig);
+		await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: PUBLICATION_TAGS }, { userId: "editor", role: "editor" }, reviewConfig);
+
+		const [published] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, attachment.itemKey));
+		const [record] = await db.select({ DOI: item.DOI }).from(item).where(eq(item.key, parent.itemKey));
+		const reading = await readPdfProperties(storage.publicFiles.get(published!.objectPath)!);
+		assert(record?.DOI, "Publishing activated no Crossref DOI");
+		// The translator isn't an author; the file's DOI is the one the record was published with.
+		assert.deepEqual(reading.writable && { authors: reading.properties.authors, doi: reading.properties.doi }, { authors: ["Ada Lovelace"], doi: record.DOI.toLowerCase() });
+	});
 }, 120_000);

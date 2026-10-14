@@ -1,7 +1,8 @@
-import { PDFDocument, PDFName } from "pdf-lib";
+import { PDFDocument, PDFName, PDFString } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 
-import { pdfPropertiesOfRecord, readPdfProperties, writePdfProperties, type PdfProperties } from "@/lib/admin/pdf-properties";
+import { readPdfProperties, writePdfProperties } from "@/lib/admin/pdf-properties";
+import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-record-mapping";
 
 const EMPTY: PdfProperties = { authors: [], date: "", doi: "", isbn: "", issn: "", issue: "", keywords: [], language: "", pages: "", publicationTitle: "", publisher: "", rights: "", seriesNumber: "", seriesTitle: "", subject: "", title: "", volume: "" };
 
@@ -78,6 +79,32 @@ describe("writing a record into a PDF", () => {
 		expect(new TextDecoder("latin1").decode(written)).not.toMatch(/\/Type\s*\/XRef/);
 	});
 
+	// A file whose text happens to name a cross-reference stream still has a plain table.
+	it("keeps the file's own kind of cross-reference, read from its structure and not its text", async () => {
+		const plain = await PDFDocument.create();
+		plain.addPage();
+		plain.catalog.set(PDFName.of("Note"), PDFString.of("/Type /ObjStm /XRefStm"));
+		expect(textOf(await writePdfProperties(await plain.save({ useObjectStreams: false }), { ...EMPTY, title: "A report" }))).not.toMatch(/\/Type\s*\/XRef\b/);
+		const packed = await PDFDocument.create();
+		packed.addPage();
+		expect(textOf(await writePdfProperties(await packed.save({ useObjectStreams: true }), { ...EMPTY, title: "A report" }))).toMatch(/\/Type\s*\/XRef\b/);
+	});
+
+	// Prefixes are only names: a property is publishing's by its namespace.
+	it("keeps a file's properties that share a prefix with publishing's but mean something else", async () => {
+		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:dc="http://example.org/catalogue/" xmlns:prism="http://prismstandard.org/namespaces/basic/2.0/"><dc:title>Shelf mark 12</dc:title><prism:volume>Old volume</prism:volume></r:Description></r:RDF>');
+		const text = textOf(await writePdfProperties(await pdfWithXmp(own), ARTICLE));
+		expect(text).toContain("Shelf mark 12");
+		expect(text).toContain("Old volume");
+		expect(text).not.toContain("Draft title");
+	});
+
+	// Most control characters can't appear in XML at all; one in a title would leave the block unreadable.
+	it("drops characters XML can't hold, so the block still reads", async () => {
+		const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), { ...ARTICLE, authors: ["Amara\u0007 Kamara"], title: "Girls'\u0001 learning\uFFFE in Sierra Leone" }));
+		expect(reading).toMatchObject({ properties: { authors: ["Amara Kamara"], doi: ARTICLE.doi, title: "Girls' learning in Sierra Leone" }, standards: { pdfa: "2B" } });
+	});
+
 	it("writes the date, publisher, language, journal and series details, and reads them back", async () => {
 		const reading = await readPdfProperties(await writePdfProperties(await archivalPdf(), ARTICLE));
 		expect(reading).toMatchObject({ properties: ARTICLE, writable: true });
@@ -101,8 +128,9 @@ describe("writing a record into a PDF", () => {
 		expect(text).toContain("<pdfaSchema:prefix>prism</pdfaSchema:prefix>");
 	});
 
+	// Another schema's property of the same name isn't a PRISM declaration.
 	it("writes only the PRISM properties a PDF/A file declares when it declares PRISM itself", async () => {
-		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"><pdfaExtension:schemas><r:Bag><r:li r:parseType="Resource"><pdfaSchema:namespaceURI>http://prismstandard.org/namespaces/basic/3.0/</pdfaSchema:namespaceURI><pdfaSchema:prefix>prism</pdfaSchema:prefix><pdfaSchema:property><r:Seq><r:li r:parseType="Resource"><pdfaProperty:name>volume</pdfaProperty:name></r:li></r:Seq></pdfaSchema:property></r:li></r:Bag></pdfaExtension:schemas></r:Description></r:RDF>');
+		const own = XMP.replace("</r:RDF>", '<r:Description r:about="" xmlns:pdfaExtension="http://www.aiim.org/pdfa/ns/extension/" xmlns:pdfaSchema="http://www.aiim.org/pdfa/ns/schema#" xmlns:pdfaProperty="http://www.aiim.org/pdfa/ns/property#"><pdfaExtension:schemas><r:Bag><r:li r:parseType="Resource"><pdfaSchema:namespaceURI>http://example.org/own/</pdfaSchema:namespaceURI><pdfaSchema:property><r:Seq><r:li r:parseType="Resource"><pdfaProperty:name>issn</pdfaProperty:name></r:li></r:Seq></pdfaSchema:property></r:li><r:li r:parseType="Resource"><pdfaSchema:namespaceURI>http://prismstandard.org/namespaces/basic/3.0/</pdfaSchema:namespaceURI><pdfaSchema:prefix>prism</pdfaSchema:prefix><pdfaSchema:property><r:Seq><r:li r:parseType="Resource"><pdfaProperty:name>volume</pdfaProperty:name></r:li></r:Seq></pdfaSchema:property></r:li></r:Bag></pdfaExtension:schemas></r:Description></r:RDF>');
 		const reading = await readPdfProperties(await writePdfProperties(await pdfWithXmp(own), ARTICLE));
 		expect(reading).toMatchObject({ properties: { ...ARTICLE, isbn: "", issn: "", issue: "", pages: "", publicationTitle: "", seriesNumber: "", seriesTitle: "" } });
 	});
@@ -123,6 +151,8 @@ describe("the PDF properties of a record", () => {
 		const report = { date: "2026-02-30", itemType: "report", languageName: "English", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report", tags: ["girls"], title: "A report" };
 		expect(pdfPropertiesOfRecord(report, { authors: [], doi: "", keywords: ["Education"] })).toMatchObject({ date: "", keywords: ["Education", "girls"], language: "en", publisher: "FCDO", seriesNumber: "12", seriesTitle: "K4D Helpdesk Report" });
 		expect(pdfPropertiesOfRecord({ itemType: "book", languageName: "en-GB", series: "Studies in Education" }, { authors: [], doi: "", keywords: [] })).toMatchObject({ language: "en-GB", seriesTitle: "Studies in Education" });
+		// dc:identifier reads "doi:" and the DOI; one stored as an address would be written as neither.
+		expect(pdfPropertiesOfRecord({ DOI: "https://doi.org/10.5072/ABC" }, { authors: [], doi: "", keywords: [] }).doi).toBe("10.5072/abc");
 	});
 
 	// Records hold a language as free text, often its name; XMP takes only a tag.

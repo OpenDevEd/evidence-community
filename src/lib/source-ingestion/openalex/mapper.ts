@@ -1,7 +1,4 @@
-import {
-	describeZoteroItemTypeFields,
-	getZoteroItemType,
-} from "@opendeved/evidence-library-core/zotero-schema";
+import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import {
 	MAX_CREATOR_INSTITUTIONS,
@@ -11,7 +8,7 @@ import {
 } from "@/lib/admin/native-item-validation";
 import { countryFocusNames } from "@/lib/country-focus";
 import { normalizeDoi } from "@/lib/doi";
-import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
+import { canonicalItemTypeToZotero, primaryCreatorType } from "@/lib/item-field-codec";
 import { jsonObjectSchema, type SourceItemUpsert } from "../batch-schema";
 import { openAlexWorkSchema, type OpenAlexWork } from "./work";
 
@@ -142,14 +139,6 @@ function itemTypeFor(work: OpenAlexWork) {
 		work.type_crossref === "proceedings-article"
 		? "ConferencePaper"
 		: (itemTypes.get(work.type ?? "") ?? "Document");
-}
-
-function primaryCreatorType(zoteroType: string) {
-	return (
-		getZoteroItemType(zoteroType)!.creatorTypes.find(
-			(creator) => creator.primary,
-		)?.creatorType ?? "author"
-	);
 }
 
 function landingUrl(work: OpenAlexWork, doi: string | null) {

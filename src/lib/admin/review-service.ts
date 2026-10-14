@@ -1,10 +1,10 @@
 import { captureItemReviewSnapshot } from "./review-snapshot";
 import { readPublicationRepositorySnapshot } from "@/lib/publication/repository";
 import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
-import { ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
+import { CrossrefActivationValidationError, ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
 import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { activateCrossrefPublicationInTransaction } from "@/lib/publication/crossref-activation-service";
+import { activateCrossrefPublicationInTransaction, reserveCrossrefDoi } from "@/lib/publication/crossref-activation-service";
 import { activateZenodoPublicationInTransaction } from "@/lib/publication/zenodo-activation-service";
 import {
 	prepareNativePdfPublication,
@@ -577,6 +577,12 @@ export async function approveItemReview(
 			const submitted = review.snapshot.records.find(({ itemKey }) => itemKey === parentKey);
 			// The record as approved, with the editor's corrections, as publishing it uses.
 			const parent = submitted ? effectiveReviewRecord(review, submitted) : undefined;
+			// A Crossref DOI is reserved now so the file can carry it; publishing activates the same one.
+			// One it can't reserve is left to publishing, which says why.
+			if (parentKey === review.itemKey && review.snapshot.publishingChoice?.route === "crossref-zenodo" && !parent?.payload.DOI)
+				await reserveCrossrefDoi(db, parentKey, config, actor.userId).catch((error: unknown) => {
+					if (!(error instanceof CrossrefActivationValidationError)) throw error;
+				});
 			prepared.push(
 				await prepareNativePdfPublication(
 					db,
