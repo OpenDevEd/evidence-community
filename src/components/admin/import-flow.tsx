@@ -226,12 +226,13 @@ async function sendOne(draft: SentDraft, route: ImportBatch["publishRoute"], can
  * Editors and owners approve it at once, which publishes it, and the
  * publication worker activates the DOI; anyone else leaves it for an editor.
  */
-async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, onImported: ImportFlowProps["onImported"]) {
+async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, { onBeforeSend, onImported }: Pick<ImportFlowProps, "onBeforeSend" | "onImported">) {
 	const mark: Mark = (id, state, review) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state), reviews: review ? { ...current.reviews, [id]: review } : current.reviews }));
-	// Without the import's status nothing is sent, and the drafts can be tried again.
+	// Without the import's status, or with an edit to one of them that couldn't be saved, nothing is sent, and the drafts can be tried again.
 	const failAll = (caught: unknown) => drafts.forEach(({ id }) => mark(id, { message: publishError(caught), state: "failed" }));
 	for (const { id } of drafts) mark(id, { state: "sending" });
 	try {
+		await onBeforeSend(drafts.map(({ itemKey }) => itemKey));
 		const now = await sentNow(batch.importId);
 		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, batch.publishRoute, approve, now, mark));
 	} catch (caught) {
@@ -252,6 +253,8 @@ async function endBatch(batch: ImportBatch | null) {
 }
 
 export type ImportFlowProps = {
+	/** Saves what the editor changed in these drafts and hasn't saved yet, so a send takes it; it throws when it can't. */
+	onBeforeSend: (itemKeys: readonly string[]) => Promise<void>;
 	onClose: () => void;
 	onImported: (itemKeys: string[]) => Promise<void> | void;
 	onOpenRecord: (itemKey: string) => void;
@@ -294,7 +297,7 @@ function batchChanges(batch: ImportBatch | null) {
  * source and what was added, the batch being reviewed, and the steps from
  * reading to importing and publishing. Every design draws from this one.
  */
-export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
+export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
 	// An editor can step out of the PDF import's review to import DOIs or files; it carries on meanwhile, and only one is open.
 	const [besidePdfs, setBesidePdfs] = useState(false);
@@ -378,7 +381,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		propertiesOf: (row: ImportRow) => publishedProperties(row, appliedFor(row), topicNames(row)),
 		restart: () => void restart(),
 		/** Publishes the drafts when `approve` (editors and owners), else submits them for review. */
-		send: (drafts: readonly SentDraft[], approve: boolean) => void (batch && sendDrafts(batch, drafts, approve, onImported)),
+		send: (drafts: readonly SentDraft[], approve: boolean) => void (batch && sendDrafts(batch, drafts, approve, { onBeforeSend, onImported })),
 		setActiveId,
 		/** Steps out of the open PDF import's review to the Add step, leaving the import as it is. */
 		addBeside: () => setBesidePdfs(true),

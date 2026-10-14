@@ -391,8 +391,11 @@ type BatchFeedback = {
 	successDescription?: string;
 };
 
-/** Whether an SWR key is one of these records' own, such as its review, DOI choice or Crossref reservation. */
-const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.isArray(key) && keys.has(String(key[1]));
+// A submitted version's PDF is read under its own key, which the record's keys don't reach.
+const REVIEW_LIVE_ITEM = "admin-review-live-item";
+
+/** Whether an SWR key is one of these records' own, such as its review, DOI choice or Crossref reservation, or a submitted version's PDF. */
+const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.isArray(key) && (keys.has(String(key[1])) || key[0] === REVIEW_LIVE_ITEM);
 
 /** Whether the open record is one of these, or the PDF attached to one. */
 const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
@@ -2793,6 +2796,11 @@ export default function AdminWorkbench({
 
 			<AdminImportDialog
 				isOpen={importOpen}
+				onBeforeSend={async (itemKeys) => {
+					// The finish step sends what the server holds, so edits still waiting to be saved are saved first.
+					const { failures } = await flushBatchDrafts(itemKeys);
+					if (failures.length) throw new Error(failures[0]!.message);
+				}}
 				onClose={() => setImportOpen(false)}
 				onImported={async (itemKeys) => {
 					// Show the whole library, newest first, so the new drafts are visible.
