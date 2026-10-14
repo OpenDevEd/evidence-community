@@ -1570,6 +1570,23 @@ test("keeps collection results stable and inactive while browsing", async ({
 		scrollOverflowY: "auto",
 	});
 
+	// Every frame paints rows while the folder's page replaces the old one: the old rows fade under the new ones
+	// rather than leave a frame empty.
+	await content.evaluate((element) => {
+		const sampled = window as unknown as { emptyFrames: number; sampling: boolean };
+		sampled.emptyFrames = 0;
+		sampled.sampling = true;
+		const painted = (row: Element) => {
+			let opacity = 1;
+			for (let node: Element | null = row; node && node !== element.parentElement; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity);
+			return opacity > 0.05;
+		};
+		const sample = () => {
+			if (![...element.querySelectorAll("div.absolute.left-0.top-0")].some(painted)) sampled.emptyFrames += 1;
+			if (sampled.sampling) requestAnimationFrame(sample);
+		};
+		requestAnimationFrame(sample);
+	});
 	releaseChildPage();
 	await expect(
 		dialog.getByRole("button", {
@@ -1578,6 +1595,14 @@ test("keeps collection results stable and inactive while browsing", async ({
 	).toBeVisible();
 	await expect(results).toHaveAttribute("aria-busy", "false");
 	await expect(content).not.toHaveAttribute("inert");
+	await page.waitForTimeout(400);
+	expect(
+		await page.evaluate(() => {
+			const sampled = window as unknown as { emptyFrames: number; sampling: boolean };
+			sampled.sampling = false;
+			return sampled.emptyFrames;
+		}),
+	).toBe(0);
 	const currentBreadcrumb = dialog
 		.locator('[aria-current="page"]')
 		.filter({ hasText: parent.name });

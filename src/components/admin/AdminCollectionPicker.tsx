@@ -321,6 +321,7 @@ export function AdminCollectionPicker({
 			: availableSources.length === 1
 				? availableSources[0]!.key
 				: null;
+	const reduceMotion = useReducedMotion();
 	const [query, setQuery] = useState("");
 	const typedQuery = useDebouncedValue(query.trim(), 250);
 	// Only typing waits for a pause; a cleared search shows the folder at once.
@@ -780,13 +781,20 @@ export function AdminCollectionPicker({
 										: "No collections here"}
 								</div>
 							) : (
-								<div
-									className="relative w-full animate-fade-in [animation-duration:200ms] motion-reduce:animate-none"
-									// The rows cross-fade when the list they show changes, not when a folder starts loading.
+								// The rows cross-fade when the list they show changes, not when a folder starts loading: the old rows
+								// stay on top while they fade, so no frame is left empty. The wrapper places them in the scrolled list.
+								<div className="relative">
+								<AnimatePresence mode="popLayout">
+								<motion.div
+									animate={{ opacity: 1 }}
+									className="relative w-full"
+									exit={{ opacity: 0 }}
+									initial={{ opacity: 0 }}
 									key={itemsKey ?? "first"}
 									style={{
 										height: virtualizer.getTotalSize(),
 									}}
+									transition={{ duration: reduceMotion ? 0 : 0.2 }}
 								>
 									{virtualizer
 										.getVirtualItems()
@@ -861,6 +869,8 @@ export function AdminCollectionPicker({
 												</div>
 											);
 										})}
+								</motion.div>
+								</AnimatePresence>
 								</div>
 							)}
 						</div>
