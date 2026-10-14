@@ -172,8 +172,13 @@ export function Setting({ children, defaultOpen = false, icon, summary, title }:
 	const reduceMotion = useReducedMotion();
 	const [open, setOpen] = useState(defaultOpen);
 	const focusReveal = useOpeningFocusReveal();
+	// Each opening is its own section, so one reopened while it is still closing mounts afresh and its search takes focus again.
+	const [openings, setOpenings] = useState(0);
 	const toggle = () => {
-		if (!open) focusReveal.opening();
+		if (!open) {
+			focusReveal.opening();
+			setOpenings((count) => count + 1);
+		}
 		setOpen(!open);
 	};
 	return (
@@ -184,9 +189,9 @@ export function Setting({ children, defaultOpen = false, icon, summary, title }:
 				<span className="flex min-w-0 flex-1 justify-end truncate text-xs text-black/45 dark:text-white/45">{summary}</span>
 				<HugeiconsIcon aria-hidden className={`shrink-0 text-black/35 transition-transform duration-200 dark:text-white/35 ${open ? "rotate-180" : ""}`} icon={ArrowDown01Icon} size={15} />
 			</button>
-			<AnimatePresence initial={false}>
+			<AnimatePresence initial={false} mode="wait">
 				{open ? (
-					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} transition={sheetTransition(reduceMotion, 0.22)} onAnimationComplete={focusReveal.opened}>
+					<motion.div animate={{ height: "auto", opacity: 1 }} className="overflow-hidden" exit={{ height: 0, opacity: 0 }} initial={{ height: 0, opacity: 0 }} key={openings} transition={sheetTransition(reduceMotion, 0.22)} onAnimationComplete={focusReveal.opened}>
 						<div className="px-4 pb-4 pt-1" onFocus={focusReveal.onFocus}>{children}</div>
 					</motion.div>
 				) : null}
