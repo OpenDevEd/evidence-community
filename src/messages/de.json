@@ -200,7 +200,7 @@
     "close": "Schließen",
     "cancel": "Abbrechen",
     "screeningLimitTitle": "Nur die ersten {count} Publikationen prüfen?",
-    "screeningLimitDescription": "Diese Antwort zitiert {total} Publikationen. Smart Screening kann jeweils {count} verarbeiten, daher werden {omitted} ausgelassen.",
+    "screeningLimitDescription": "Diese Unterhaltung zitiert {total} Publikationen. Smart Screening kann jeweils {count} verarbeiten, daher werden {omitted} ausgelassen.",
     "screeningLimitConfirm": "Erste {count} prüfen",
     "newLine": "Neue Zeile",
     "etAl": "et al.",

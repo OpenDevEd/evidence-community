@@ -200,7 +200,7 @@
     "close": "Close",
     "cancel": "Cancel",
     "screeningLimitTitle": "Screen only the first {count} publications?",
-    "screeningLimitDescription": "This answer cites {total} publications. Smart Screening can process {count} at a time, so {omitted} will be left out.",
+    "screeningLimitDescription": "This conversation cites {total} publications. Smart Screening can process {count} at a time, so {omitted} will be left out.",
     "screeningLimitConfirm": "Screen first {count}",
     "newLine": "New line",
     "etAl": "et al.",

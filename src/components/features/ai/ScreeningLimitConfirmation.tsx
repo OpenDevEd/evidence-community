@@ -16,7 +16,7 @@ export function ScreeningLimitConfirmation({
 }) {
 	const t = useTranslations("ui");
 	const fields = useSmartScreeningFields();
-	// Every record the answer links, which OpenScholar screens past this limit.
+	// Every record the conversation links, which OpenScholar screens past this limit.
 	const handed = selection ? recordsOf(selection.allKeys) : [];
 
 	return (

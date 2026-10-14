@@ -200,7 +200,7 @@
     "close": "Fermer",
     "cancel": "Annuler",
     "screeningLimitTitle": "Analyser uniquement les {count} premières publications ?",
-    "screeningLimitDescription": "Cette réponse cite {total} publications. Le tri intelligent peut en traiter {count} à la fois ; {omitted} seront donc ignorées.",
+    "screeningLimitDescription": "Cette conversation cite {total} publications. Le tri intelligent peut en traiter {count} à la fois ; {omitted} seront donc ignorées.",
     "screeningLimitConfirm": "Analyser les {count} premières",
     "newLine": "Nouvelle ligne",
     "etAl": "et al.",

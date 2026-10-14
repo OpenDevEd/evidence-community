@@ -201,7 +201,7 @@
     "close": "Funga",
     "cancel": "Ghairi",
     "screeningLimitTitle": "Chunguza machapisho {count} ya kwanza pekee?",
-    "screeningLimitDescription": "Jibu hili linataja machapisho {total}. Uchunguzi Mahiri unaweza kuchakata {count} kwa wakati mmoja, kwa hivyo {omitted} yataachwa.",
+    "screeningLimitDescription": "Mazungumzo haya yanataja machapisho {total}. Uchunguzi Mahiri unaweza kuchakata {count} kwa wakati mmoja, kwa hivyo {omitted} yataachwa.",
     "screeningLimitConfirm": "Chunguza {count} ya kwanza",
     "newLine": "Mstari mpya",
     "etAl": "na wengine",

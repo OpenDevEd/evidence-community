@@ -200,7 +200,7 @@
     "close": "关闭",
     "cancel": "取消",
     "screeningLimitTitle": "仅筛选前 {count} 篇出版物？",
-    "screeningLimitDescription": "此回答引用了 {total} 篇出版物。智能筛选一次最多处理 {count} 篇，因此将略过 {omitted} 篇。",
+    "screeningLimitDescription": "此对话引用了 {total} 篇出版物。智能筛选一次最多处理 {count} 篇，因此将略过 {omitted} 篇。",
     "screeningLimitConfirm": "筛选前 {count} 篇",
     "newLine": "换行",
     "etAl": "等",

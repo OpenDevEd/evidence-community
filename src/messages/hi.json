@@ -200,7 +200,7 @@
     "close": "बंद करें",
     "cancel": "रद्द करें",
     "screeningLimitTitle": "केवल पहली {count} प्रकाशनों की स्क्रीनिंग करें?",
-    "screeningLimitDescription": "इस उत्तर में {total} प्रकाशनों का उल्लेख है। स्मार्ट स्क्रीनिंग एक बार में {count} को संसाधित कर सकती है, इसलिए {omitted} छूट जाएँगे।",
+    "screeningLimitDescription": "इस बातचीत में {total} प्रकाशनों का उल्लेख है। स्मार्ट स्क्रीनिंग एक बार में {count} को संसाधित कर सकती है, इसलिए {omitted} छूट जाएँगे।",
     "screeningLimitConfirm": "पहली {count} की स्क्रीनिंग करें",
     "newLine": "नई पंक्ति",
     "etAl": "और अन्य",
