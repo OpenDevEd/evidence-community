@@ -97,6 +97,16 @@ describe("computeAdminDraftDiff", () => {
 			expect(payload.countryFocus).toEqual(countries);
 		},
 	);
+	it("shows a published record's topics in the editor and duplicate payload", () => {
+		const payload = editablePayloadFromDetail(
+			detail({
+				draft: null,
+				published: { itemType: "book", topics: ["T14414"] },
+			}),
+			[definition],
+		);
+		expect(payload.topics).toEqual(["T14414"]);
+	});
 	it("compares the item-specific language field and treats empty values equally", () => {
 		const result = computeAdminDraftDiff(
 			detail(),
