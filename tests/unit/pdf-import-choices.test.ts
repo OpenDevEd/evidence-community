@@ -65,10 +65,10 @@ it("takes in what other tabs sent, without overriding a send this tab can still 
 	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["1", { message: "The connection dropped", state: "failed" as const }], ["2", { message: "Try again", state: "failed" as const }]]) }));
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
-	const restored = reloaded.pdfImportBatch({ ...server, reviews: { 2: { id: "review-2", revision: 1 } }, sent: { 1: "published", 2: "submitted" } });
+	const restored = reloaded.pdfImportBatch({ ...server, reviews: { 2: { id: "review-2", revision: 1, route: null } }, sent: { 1: "published", 2: "submitted" } });
 	expect(restored.publish.get("1")).toEqual({ state: "published" });
 	expect(restored.publish.get("2")).toEqual({ message: "Try again", state: "failed" });
-	expect(restored.reviews).toEqual({ 2: { id: "review-2", revision: 1 } });
+	expect(restored.reviews).toEqual({ 2: { id: "review-2", revision: 1, route: null } });
 });
 
 // The server sends an import's drafts on as their PDFs attach. One it submitted and failed to approve can be tried
@@ -78,7 +78,7 @@ it("offers a draft the server submitted and failed to approve to try again, on t
 	const batch = tab.pdfImportBatch({
 		...server,
 		id: "import-sent",
-		reviews: { 1: { id: "review-1", revision: 1 } },
+		reviews: { 1: { id: "review-1", revision: 1, route: "zenodo" } },
 		send: { action: "publish", route: "zenodo" },
 		sending: { 1: { message: "Zenodo is down", state: "failed" } },
 		sent: { 1: "submitted" },
@@ -94,7 +94,7 @@ it("keeps a creator's retry submitted, and a draft the server still sends on its
 	const batch = tab.pdfImportBatch({
 		...server,
 		id: "import-creator",
-		reviews: { 1: { id: "review-1", revision: 1 }, 2: { id: "review-2", revision: 1 } },
+		reviews: { 1: { id: "review-1", revision: 1, route: null }, 2: { id: "review-2", revision: 1, route: null } },
 		send: { action: "submit", route: null },
 		sending: { 1: { message: "Zenodo is down", state: "failed" }, 2: { message: null, state: "waiting" } },
 		sent: { 1: "submitted", 2: "submitted" },
@@ -103,21 +103,19 @@ it("keeps a creator's retry submitted, and a draft the server still sends on its
 	expect(batch.publish.has("2")).toBe(false);
 });
 
-// Another tab chose a route and this one committed with another: while the server sends, its route is the one shown
-// and used.
-it("takes the server's DOI route while it sends, over a route this browser chose before", async () => {
+// What holds the DOI route decides it over a route this browser chose before: the server's while it sends, then the
+// route of the review its failed approval left pending. Once that review is withdrawn, the browser's own applies again.
+it("takes the DOI route from what holds it, and gives the browser's back once nothing does", async () => {
 	const tab = await import("@/components/admin/admin-import");
-	const sending = { ...server, id: "import-route", send: { action: "publish" as const, route: "zenodo" as const }, sending: { 1: { message: null, state: "waiting" as const } } };
+	const results = [{ id: "1", itemKey: "DRAFT001", kind: "created" as const, outcome: "created" as const }];
+	const sending = { ...server, id: "import-route", results, send: { action: "publish" as const, route: "zenodo" as const }, sending: { 1: { message: null, state: "waiting" as const } } };
 	const batch = tab.pdfImportBatch({ ...sending, send: null, sending: {} });
 	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
 	tab.changeImportBatch(batch, (current) => ({ ...current, publishRoute: "crossref-zenodo" }));
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
-	expect(reloaded.pdfImportBatch(sending).publishRoute).toBe("zenodo");
-	// A draft it submitted and couldn't approve waits in a review on its route, which a retry approves.
-	const pending = { ...sending, reviews: { 1: { id: "review-1", revision: 1 } }, sending: { 1: { message: "Zenodo is down", state: "failed" as const } }, sent: { 1: "submitted" as const } };
-	expect(reloaded.pdfImportBatch(pending).publishRoute).toBe("zenodo");
-	// Withdrawn, the review no longer holds it.
-	expect(reloaded.pdfImportBatch({ ...pending, reviews: {}, sent: {} }).publishRoute).toBe("crossref-zenodo");
-	expect(reloaded.pdfImportBatch({ ...sending, sending: {} }).publishRoute).toBe("crossref-zenodo");
+	expect(reloaded.routeOf(reloaded.pdfImportBatch(sending))).toBe("zenodo");
+	const pending = { ...sending, reviews: { 1: { id: "review-1", revision: 1, route: "zenodo" as const } }, sending: { 1: { message: "Zenodo is down", state: "failed" as const } }, sent: { 1: "submitted" as const } };
+	expect(reloaded.routeOf(reloaded.pdfImportBatch(pending))).toBe("zenodo");
+	expect(reloaded.routeOf(reloaded.pdfImportBatch({ ...pending, reviews: {}, sent: {} }))).toBe("crossref-zenodo");
 });

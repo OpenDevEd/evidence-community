@@ -7,7 +7,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
-import { appliedOf, checkPasses, draftNeeds, needsText, reviewChecks, rowPasses, serverSending, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { appliedOf, checkPasses, draftNeeds, heldRoute, needsText, reviewChecks, routeOf, rowPasses, serverSending, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 import { useAdminPublication } from "./useAdminPublication";
 
 /** A new draft, with what it still needs to publish on the route it takes. */
@@ -127,7 +127,7 @@ function sending(batch: ImportBatch) {
 	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
 	const started = states.some(({ state }) => state === "sending");
 	// The server sending the drafts on holds the route too, until it has.
-	return { routeHeld: started || serverSending(batch) || [...batch.publish].some(([id, { state }]) => state === "failed" && batch.reviews[id]), sentIds, started };
+	return { routeHeld: started || heldRoute(batch) !== undefined, sentIds, started };
 }
 
 /**
@@ -139,7 +139,7 @@ function sending(batch: ImportBatch) {
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, batch.publishRoute, id, kind), row: rowById.get(id)! }] : []));
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, routeOf(batch), id, kind), row: rowById.get(id)! }] : []));
 	// While the server sends the drafts on, it does as the person who imported them could, whoever looks now.
 	const verbs = sendVerbs(batch.send && serverSending(batch) ? batch.send.action === "publish" : canPublish);
 	const { routeHeld, sentIds, started } = sending(batch);

@@ -204,7 +204,7 @@ export type AdminPdfImport = {
 	instructions: string;
 	results: AdminImportCommitResult[] | null;
 	/** The pending review of each imported draft submitted and not yet decided, by row: a retry approves it rather than submitting again. */
-	reviews: Record<string, { id: string; revision: number }>;
+	reviews: Record<string, { id: string; revision: number; route: "zenodo" | "crossref-zenodo" | null }>;
 	/** The imported drafts sent on so far, by row, from any tab: published, or submitted and waiting for an editor. */
 	sent: Record<string, "published" | "submitted">;
 	/** What each imported draft not yet sent still needs to publish, by row, then by DOI route or "none", as the draft is now. Rows and routes that need nothing are left out. */

@@ -15,7 +15,7 @@ import { Switch } from "@/components/nextui/Switch";
 import { InspectorChoices } from "./InspectorChoices";
 import { DOI_PROVIDER_HELP, doiProviderOptions } from "./PublishingChoicePanel";
 import { countSummary, ListHeader, Setting, SettingsGroup, SummaryRow } from "./import-parts";
-import { coverOf, type ImportBatch } from "./admin-import";
+import { coverOf, routeOf, type ImportBatch } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 
 const ROWS_PER_PAGE = 8;
@@ -73,7 +73,7 @@ function PdfsAttached({ view }: { view: PublishView }) {
 /** The DOI route for drafts made in the library; drafts that came with a DOI keep theirs. */
 function DoiRoute({ flow, view }: { flow: ImportFlowState; view: PublishView }) {
 	if (!view.created) return null;
-	const route = flow.batch!.publishRoute;
+	const route = routeOf(flow.batch!);
 	return (
 		<Setting icon={Link01Icon} summary={route ? ROUTE_LABELS[route] : "None"} title="DOI provider">
 			<DoiChoice flow={flow} route={route} started={view.routeHeld} />

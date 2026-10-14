@@ -48,6 +48,7 @@ import {
 	reviewChecks,
 	reviewProgress,
 	reviewRows,
+	routeOf,
 	rowsFromRecords,
 	sendPdfUploads,
 	shownImport,
@@ -205,7 +206,8 @@ async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["
 	if (pending) return sendPending(pending, canApprove);
 	// A record imported with a DOI keeps it.
 	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
-	const review = await submitAdminReview(itemKey);
+	// The review keeps the route it was submitted on, which holds the import's route while it waits.
+	const review = { ...(await submitAdminReview(itemKey)), route: kind === "created" ? route : null };
 	return canApprove ? approve(review) : { doi, state: "submitted" };
 }
 
@@ -252,7 +254,7 @@ async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], appr
 	try {
 		await onBeforeSend(drafts.map(({ itemKey }) => itemKey));
 		const now = await sentNow(batch.importId);
-		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, batch.publishRoute, approve, now, mark));
+		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, routeOf(batch), approve, now, mark));
 	} catch (caught) {
 		failAll(caught);
 	}

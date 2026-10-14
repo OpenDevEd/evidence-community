@@ -330,7 +330,10 @@ test("doesn't approve a review someone else submitted after the PDF attached und
 		await db.update(pdfImportFile).set({ nextAttemptAt: new Date(), sendState: "waiting" }).where(eq(pdfImportFile.importId, importId));
 		await runPdfImportCycle(db, storage, fullConfig);
 
-		expect((await pdfImportStatus(db)).import!.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
+		const status = (await pdfImportStatus(db)).import!;
+		expect(status.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
+		// The status gives the route that review was submitted on.
+		expect(status.reviews).toEqual({ [files[0]!.rowId]: expect.objectContaining({ route: "zenodo" }) });
 		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
 		expect(await db.select({ state: itemReview.state, submittedBy: itemReview.submittedBy }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending", submittedBy: "user_creator" }]);
 	});

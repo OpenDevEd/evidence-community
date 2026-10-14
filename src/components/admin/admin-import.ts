@@ -344,21 +344,9 @@ function withSent(publish: ReadonlyMap<string, PublishState>, server: Pick<Admin
  * and a draft submitted from here since, as a creator's retry is, stays submitted.
  */
 function approvalFailed(server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string, mine: PublishState | undefined) {
-	return approvalPending(server, id) && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
+	const failed = server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
+	return failed && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
 }
-
-/** Whether the server submitted a draft and failed to approve it, its review still pending on the import's route. */
-const approvalPending = (server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string) =>
-	server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
-
-/**
- * The DOI route the import's drafts take: the one the server sent them with while it still sends them or a review it
- * couldn't approve still waits on that route, else this browser's.
- */
-const routeWhileSending = (server: AdminPdfImport, route: ImportBatch["publishRoute"]) => (server.send && serverHoldsRoute(server) ? server.send.route : route);
-
-/** Whether the server's route still holds: it still sends a draft, or one it couldn't approve waits in its review. */
-const serverHoldsRoute = (server: AdminPdfImport) => serverSending(server) || Object.keys(server.sending).some((id) => approvalPending(server, id));
 
 /**
  * Whether the server's word on a draft replaces this browser's: not while it
@@ -371,7 +359,7 @@ const takesServerState = (mine: PublishState | undefined, state: "published" | "
 export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
 	// The DOI route starts as the one the server sends the drafts on, where this browser chose none.
 	const batch: ImportBatch = { ...blankChoices, publishRoute: server.send?.route ?? null, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
-	return { ...batch, publish: withSent(batch.publish, server), publishRoute: routeWhileSending(server, batch.publishRoute) };
+	return { ...batch, publish: withSent(batch.publish, server) };
 }
 
 // The PDFs this browser sends for the open import. The tab sending them holds a lock of the same name, so once no tab
@@ -433,12 +421,30 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	const answer = JSON.stringify(server);
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
-	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server), publishRoute: routeWhileSending(server, pdfs.publishRoute) } : pdfImportBatch(server)) : null);
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server) } : pdfImportBatch(server)) : null);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
 /** Whether the server still has drafts of this import to send on. */
 export const serverSending = (batch: Pick<ImportBatch, "sending">) => Object.values(batch.sending).some(({ state }) => state === "waiting");
+
+/**
+ * The DOI route something under way holds the import's drafts to, or undefined while nothing does: the server's
+ * while it sends them, or the route of the review a failed send left pending on a draft made in the library, which
+ * trying again approves. A draft imported with its DOI keeps it, so its review holds nothing.
+ */
+export function heldRoute(batch: Pick<ImportBatch, "publish" | "results" | "reviews" | "send" | "sending">): ImportBatch["publishRoute"] | undefined {
+	if (batch.send && serverSending(batch)) return batch.send.route;
+	const created = new Set(batch.results?.flatMap(({ id, kind }) => (kind === "created" ? [id] : [])));
+	const failed = [...batch.publish].find(([id, { state }]) => state === "failed" && created.has(id) && batch.reviews[id]);
+	return failed ? batch.reviews[failed[0]]!.route : undefined;
+}
+
+/** The DOI route the import's drafts take: the one held while something is under way, else the one chosen here. */
+export function routeOf(batch: Parameters<typeof heldRoute>[0] & Pick<ImportBatch, "publishRoute">) {
+	const held = heldRoute(batch);
+	return held === undefined ? batch.publishRoute : held;
+}
 
 /**
  * Whether the server still works on the import, which stays open until it is done: the import's stored PDFs are
