@@ -304,15 +304,32 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	}
 }
 
+/**
+ * Sends made in another tab or browser, as the server knows them, beside
+ * this tab's own. A send this tab has under way, or failed on and can try
+ * again, keeps its own state.
+ */
+function withSent(publish: ReadonlyMap<string, PublishState>, sent: AdminPdfImport["sent"]) {
+	const next = new Map(publish);
+	for (const [id, state] of Object.entries(sent)) {
+		const mine = next.get(id);
+		if (mine?.state !== "sending" && mine?.state !== "failed") next.set(id, { ...mine, state });
+	}
+	return next;
+}
+
 /** The server's import with the choices this browser made on it, the collections the editor changed in the review among them. */
-export const pdfImportBatch = (server: AdminPdfImport): ImportBatch => ({ ...blankChoices, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" });
+export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
+	const batch: ImportBatch = { ...blankChoices, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
+	return { ...batch, publish: withSent(batch.publish, server.sent) };
+}
 
 /** Takes in the server's PDF import, keeping the editor's choices on it. */
 function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	const answer = JSON.stringify(server);
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
-	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server) } : pdfImportBatch(server)) : null);
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server.sent) } : pdfImportBatch(server)) : null);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";

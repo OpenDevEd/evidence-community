@@ -191,6 +191,8 @@ export type AdminPdfImport = {
 	id: string;
 	instructions: string;
 	results: AdminImportCommitResult[] | null;
+	/** The imported drafts sent on so far, by row, from any tab: published, or submitted and waiting for an editor. */
+	sent: Record<string, "published" | "submitted">;
 };
 
 /** Where the admin keeps the import's status, also filled by the page as it is served. */

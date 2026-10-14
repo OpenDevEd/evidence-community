@@ -6,6 +6,8 @@ import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-
 
 import type { Database } from "@/db";
 import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
+import { itemReview } from "@/db/schema/review";
+import { item } from "@/db/schema/tables/item";
 
 import { AdminValidationError } from "./errors";
 import type { EvidenceFileStorage } from "./file-storage";
@@ -59,6 +61,18 @@ const asRepeat = (reading: PdfReading): PdfReading => (reading.record.state === 
 const attachOutcomes = (files: FileRow[]) =>
 	Object.fromEntries(files.flatMap(({ attachState, position }) => (attachState === "attached" || attachState === "failed" ? [[String(position), attachState]] : [])));
 
+/** The imported drafts already sent on, by row: published ones are records now, submitted ones wait in a review. */
+async function sentDrafts(db: Database, results: AdminImportCommitResult[] | null): Promise<AdminPdfImport["sent"]> {
+	const rowByKey = new Map((results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey ? [[itemKey, id] as const] : [])));
+	if (!rowByKey.size) return {};
+	const keys = [...rowByKey.keys()];
+	const [published, waiting] = await Promise.all([
+		db.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
+		db.select({ key: itemReview.itemKey }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
+	]);
+	return Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]);
+}
+
 /** The library's open import with where each PDF has got to, and the checks and instructions a new one starts from. */
 export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatus> {
 	const [open] = await db.select().from(pdfImport).where(isNull(pdfImport.closedAt)).limit(1);
@@ -82,6 +96,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
+		sent: await sentDrafts(db, open.results),
 	};
 	return { import: view, last: lastUsed };
 }

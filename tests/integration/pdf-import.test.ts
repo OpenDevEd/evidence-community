@@ -4,6 +4,7 @@ import { expect, test, vi } from "vitest";
 import type { LibraryServerConfig } from "../../src/config/library-config/schema";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
+import { item } from "../../src/db/schema/tables/item";
 import { runPdfImportCycle } from "../../src/lib/admin/pdf-import-reading";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, readPdfImportFile, startPdfImport } from "../../src/lib/admin/pdf-import-service";
 import { createPdf, MemoryFileStorage } from "../helpers/file-storage";
@@ -80,6 +81,10 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		expect((await pdfImportStatus(db)).import!.attach).toEqual({ [read!.rowId]: "attached" });
 		const attachments = (await db.select({ patch: itemDraft.patch }).from(itemDraft)).filter(({ patch }) => (patch as { parentItem?: string }).parentItem === draftKey);
 		expect(attachments).toHaveLength(1);
+
+		// Published from another tab: every tab's status says so.
+		await db.insert(item).values({ itemType: "Report", key: draftKey, sourceConnectionKey: "native", sourceRecordKey: draftKey, title: "Girls' learning in Sierra Leone" });
+		expect((await pdfImportStatus(db)).import!.sent).toEqual({ [read!.rowId]: "published" });
 
 		await closePdfImport(db, storage, started.id);
 		expect([...storage.privateFiles.keys()].filter((path) => path.startsWith(`imports/${started.id}/`))).toEqual([]);

@@ -22,6 +22,7 @@ const server: AdminPdfImport = {
 	id: "import-1",
 	instructions: "",
 	results: null,
+	sent: {},
 };
 
 afterEach(() => window.localStorage.clear());
@@ -50,4 +51,17 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 
 	tab.endImportBatch("import-1");
 	expect(reloaded.appliedOf(reloaded.pdfImportBatch(server), row)).toEqual(new Set([0]));
+});
+
+// A draft sent on from another tab or browser shows as sent here too; this tab's own failed send stays to be tried again.
+it("takes in what other tabs sent, without overriding a send this tab can still retry", async () => {
+	const tab = await import("@/components/admin/admin-import");
+	const batch = tab.pdfImportBatch(server);
+	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
+	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["2", { message: "Try again", review: { id: "review-2", revision: 1 }, state: "failed" as const }]]) }));
+	vi.resetModules();
+	const reloaded = await import("@/components/admin/admin-import");
+	const restored = reloaded.pdfImportBatch({ ...server, sent: { 1: "published", 2: "submitted" } });
+	expect(restored.publish.get("1")).toEqual({ state: "published" });
+	expect(restored.publish.get("2")).toMatchObject({ review: { id: "review-2" }, state: "failed" });
 });
