@@ -136,6 +136,8 @@ export async function getAdminReviewSnapshot(
 						(field) => topicsEnabled || field.field !== "topics",
 					),
 					importedTopics: [],
+					// A submitted version is a snapshot; the working record shows its checks.
+					importChecks: null,
 					kind: identity.kind,
 					importMethod: identity.importMethod,
 					revision:

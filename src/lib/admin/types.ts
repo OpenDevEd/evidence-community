@@ -120,7 +120,17 @@ export type AdminItemLinks = {
 	targets: AdminLinkTarget[];
 };
 
+/** The AI checks a PDF import read a record's PDF against, with the suggested changes that meet some of them. */
+export type AdminItemChecks = {
+	checks: import("./item-import-contract").PdfCheckResult[];
+	filename: string;
+	readAt: string;
+	suggestions: { checks: number[]; field: string; value: string }[];
+};
+
 export type AdminItemDetail = AdminItemSummary & {
+	/** The checks its PDF was read against, while it is still the PDF a PDF import gave it. */
+	importChecks: AdminItemChecks | null;
 	sourceFields: SourceFieldConflict[];
 	importedTopics: {topicId: string; score: number; primary: boolean}[];
 	kind: "created" | "imported";

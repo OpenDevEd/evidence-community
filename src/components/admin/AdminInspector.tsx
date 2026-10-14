@@ -4,6 +4,7 @@ import { hasTag } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
+import { ImportChecksBadge } from "./ImportChecksBadge";
 import { AdminPdfCover } from "./AdminPdfCover";
 import { isUnrestoredRecord, type PdfUploadStep } from "./admin-pdf";
 
@@ -1776,6 +1777,8 @@ export function AdminInspector({
 				onMenuOpenChange={setMenuOpen}
 				detail={detail}
 				cover={
+					// The badge sits on the cover's corner, so the cover and the badge share one box.
+					<div className="relative shrink-0">
 					<AdminPdfCover
 						detail={detail}
 						submitted={readOnlyVersion}
@@ -1794,6 +1797,8 @@ export function AdminInspector({
 						}
 						onUpload={onAddPdf}
 					/>
+					<ImportChecksBadge checks={detail.importChecks} payload={payload} />
+					</div>
 				}
 				status={
 					versionStatus ?? <RecordStateChip state={detail.state} />

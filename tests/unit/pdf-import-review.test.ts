@@ -107,3 +107,19 @@ describe("what publishing does to a PDF's properties", () => {
 		expect(propertiesAside(empty, { reason: "password", writable: false })).toBeUndefined();
 	});
 });
+
+// A record keeps the checks its PDF was read against; a failed one that a suggested change meets counts as met only while the record holds that change.
+describe("a record's kept checks", () => {
+	const kept = {
+		checks: [
+			{ criterion: "Credits FCDO", page: 2, quote: "Funded by UK aid", recommendation: null, result: "met" as const },
+			{ criterion: "Crown copyright", page: null, quote: null, recommendation: "Add the line", result: "not_met" as const },
+		],
+		suggestions: [{ checks: [1], field: "rights", value: "© Crown copyright 2025" }],
+	};
+	it("counts a check met by a change the record holds, and not once it lost it", async () => {
+		const { checkPasses, heldChecks } = await import("@/components/admin/admin-import");
+		expect(heldChecks(kept, { rights: "© Crown copyright 2025" }).map(checkPasses)).toEqual([true, true]);
+		expect(heldChecks(kept, { rights: "All rights reserved" }).map(checkPasses)).toEqual([true, false]);
+	});
+});

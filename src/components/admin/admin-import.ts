@@ -542,11 +542,18 @@ export function publishedProperties(row: ImportRow, applied: ReadonlySet<number>
 export type ReviewCheck = PdfCheckResult & { fixable: boolean; fixed: boolean };
 
 /** The library's checks as the AI answered them, each marked when a suggestion would meet it. */
-export function reviewChecks(row: ImportRow, applied: ReadonlySet<number>): ReviewCheck[] {
+export function reviewChecks(row: { checks: readonly PdfCheckResult[]; suggestions: readonly { checks: number[] }[] }, applied: ReadonlySet<number>): ReviewCheck[] {
 	return row.checks.map((check, index) => {
 		const meeting = row.suggestions.flatMap((suggestion, place) => (suggestion.checks.includes(index) ? [place] : []));
 		return { ...check, fixable: meeting.length > 0, fixed: meeting.some((place) => applied.has(place)) };
 	});
+}
+
+const holds = (value: unknown, suggested: string) => typeof value === "string" && value.trim() === suggested.trim();
+
+/** A record's kept checks, a failed one counted as met while the record holds the change the AI suggested for it. */
+export function heldChecks(kept: { checks: readonly PdfCheckResult[]; suggestions: readonly { checks: number[]; field: string; value: string }[] }, payload: Record<string, unknown>): ReviewCheck[] {
+	return reviewChecks(kept, new Set(kept.suggestions.flatMap(({ field, value }, index) => (holds(payload[field], value) ? [index] : []))));
 }
 
 /** A path without a level that repeats the one above it ("Social Sciences" as both domain and field). */
