@@ -391,6 +391,15 @@ type BatchFeedback = {
 	successDescription?: string;
 };
 
+// A submitted version's PDF is read under its own key, which the record's keys don't reach.
+const REVIEW_LIVE_ITEM = "admin-review-live-item";
+
+/** Whether an SWR key is one of these records' own, such as its review, DOI choice or Crossref reservation, or a submitted version's PDF. */
+const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.isArray(key) && (keys.has(String(key[1])) || key[0] === REVIEW_LIVE_ITEM);
+
+/** Whether the open record is one of these, or the PDF attached to one. */
+const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
+
 export default function AdminWorkbench({
 	configurationHref,
 	definitions,
@@ -865,6 +874,19 @@ export default function AdminWorkbench({
 			}
 		},
 		[abandonPendingDraft, applyDetail],
+	);
+
+	// The import's finish step sends drafts on, which changes them: what the inspector shows of them is read again, each
+	// one's review and identifiers, and the open record when it is one of them or its PDF. Edits not saved yet keep the
+	// open record as it is, so they aren't lost.
+	const refreshSent = useCallback(
+		async (itemKeys: readonly string[]) => {
+			const sent = new Set(itemKeys);
+			await mutate(isRecordCacheOf(sent));
+			const open = selectedKeyRef.current;
+			if (open && showsSent(sent, open, detailRef.current) && !pendingPayloadByKey.current.has(open)) await loadDetail(open);
+		},
+		[loadDetail],
 	);
 
 	useEffect(() => {
@@ -2774,11 +2796,16 @@ export default function AdminWorkbench({
 
 			<AdminImportDialog
 				isOpen={importOpen}
+				onBeforeSend={async (itemKeys) => {
+					// The finish step sends what the server holds, so edits still waiting to be saved are saved first.
+					const { failures } = await flushBatchDrafts(itemKeys);
+					if (failures.length) throw new Error(failures[0]!.message);
+				}}
 				onClose={() => setImportOpen(false)}
 				onImported={async (itemKeys) => {
 					// Show the whole library, newest first, so the new drafts are visible.
 					setFilters(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
-					await loadItems();
+					await Promise.all([loadItems(), refreshSent(itemKeys)]);
 					setBulkKeys(new Set(itemKeys));
 				}}
 				onOpenRecord={(itemKey) => {
