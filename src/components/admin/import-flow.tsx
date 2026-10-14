@@ -4,6 +4,7 @@ import { useState } from "react";
 import { mutate } from "swr";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import type { AdminPdfImport } from "@/lib/admin/item-import-contract";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
@@ -32,6 +33,7 @@ import {
 	chosenOf,
 	createdKeys,
 	doiPreviewRequest,
+	draftNeeds,
 	dropLookup,
 	endImportBatch,
 	errorMessage,
@@ -151,17 +153,18 @@ async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"] 
 }
 
 type PendingReview = ImportBatch["reviews"][string];
-type SentNow = Pick<ImportBatch, "reviews"> & { sent: Record<string, "published" | "submitted"> };
+type SentNow = Pick<AdminPdfImport, "needs" | "reviews" | "sent">;
 
 /**
- * The import's pending reviews and sent drafts now, not as this browser last
- * saw them: an editor may have withdrawn a review in the record since, or an
- * approval gone through whose answer was lost. Nothing when the library's
+ * The import's pending reviews, sent drafts and what the rest need now, not as
+ * this browser last saw them: an editor may have withdrawn a review in the record
+ * since, an approval gone through whose answer was lost, or an edit just saved
+ * removed a field publishing needs. Nothing when the library's
  * open import is another one, whose rows are not this import's.
  */
 async function sentNow(importId: string): Promise<SentNow> {
 	const current = (await getAdminPdfImport()).import;
-	return current?.id === importId ? current : { reviews: {}, sent: {} };
+	return current?.id === importId ? current : { needs: {}, reviews: {}, sent: {} };
 }
 
 /** A send that submitted a draft's review but couldn't approve it, with that review. */
@@ -210,10 +213,19 @@ function failure(caught: unknown): [PublishState, PendingReview | undefined] {
 	return [{ message: publishError(caught), state: "failed" }, undefined];
 }
 
-/** Sends one draft on, unless the server says it is published already. */
+/**
+ * Sends one draft on, unless the server says it is published already, or that
+ * it lacks something its route needs, which it then says rather than failing.
+ */
+async function sendNow(draft: SentDraft, route: ImportBatch["publishRoute"], canApprove: boolean, now: SentNow): Promise<PublishState> {
+	const needs = draftNeeds(now.needs, route, draft.id, draft.kind);
+	if (Object.keys(needs).length) return { message: needsText(needs), state: "failed" };
+	return now.sent[draft.id] === "published" ? { state: "published" } : sendDraft(draft, route, canApprove, now.reviews[draft.id]);
+}
+
 async function sendOne(draft: SentDraft, route: ImportBatch["publishRoute"], canApprove: boolean, now: SentNow, mark: Mark) {
 	try {
-		mark(draft.id, now.sent[draft.id] === "published" ? { state: "published" } : await sendDraft(draft, route, canApprove, now.reviews[draft.id]));
+		mark(draft.id, await sendNow(draft, route, canApprove, now));
 	} catch (caught) {
 		console.error("Sending the draft on failed", draft.itemKey, caught);
 		mark(draft.id, ...failure(caught));

@@ -32,10 +32,12 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 
 /** Where a new draft stands: on its way, published with its DOI, waiting for an editor, what it needs before it can go, or how its checks went. */
 export function DraftState({ attach, draft, publish, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; verbs: SendVerbs }) {
-	if (publish) return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
+	if (publish && publish.state !== "failed") return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
 	if (attach === "failed") return <AlertNote text="The PDF didn't attach, so it stays a draft" />;
-	// Completed in the record editor; the import's status says once it is.
+	// Completed in the record editor; the import's status says once it is. What it needs now outranks why an earlier
+	// send failed, which may have been on another route.
 	if (Object.keys(draft.needs).length) return <AlertNote text={needsText(draft.needs)} tone="text-amber-700 dark:text-amber-400" />;
+	if (publish) return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
 	return <ChecksState draft={draft} />;
 }
 
@@ -120,7 +122,7 @@ function sending(batch: ImportBatch) {
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch, id, kind), row: rowById.get(id)! }] : []));
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, batch.publishRoute, id, kind), row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
 	const { routeHeld, sentIds, started } = sending(batch);
 	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again. One that

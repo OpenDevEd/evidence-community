@@ -114,6 +114,8 @@ describe("what publishing needs from a reading", () => {
 		expect(readingNeeds(reading({ date: "2023" }), new Set())).toEqual({});
 		expect(readingNeeds(reading({}, { suggestions: [{ apply: true, checks: [], field: "date", reason: "The cover says 2023.", value: "2023" }] }), new Set([0]))).toEqual({});
 		expect(readingNeeds(reading({ DOI: "10.5072/report" }), new Set())).toEqual({});
+		// Text that isn't a DOI gives the record no DOI of its own, so it takes the library's, as importing decides.
+		expect(Object.keys(readingNeeds(reading({ DOI: "See the cover" }), new Set()))).toEqual(["date"]);
 	});
 });
 

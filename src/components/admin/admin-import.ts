@@ -27,6 +27,7 @@ import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
 import { publishingNeeds } from "@/lib/admin/review-validation";
+import { normalizeDoi } from "@/lib/doi";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import { AdminApiError, failAdminPdfImportUpload, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
@@ -545,16 +546,19 @@ export function recordPayload(row: ImportRow, applied: ReadonlySet<number>): Rec
 export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>): AdminFieldErrors {
 	if (row.record?.state !== "ready") return {};
 	const payload = recordPayload(row, applied);
-	return publishingNeeds(payload, row.source && !payload.DOI ? routeChoice("zenodo") : null);
+	return publishingNeeds(payload, row.source && !keepsDoi(payload) ? routeChoice("zenodo") : null);
 }
+
+/** Whether a record keeps a DOI of its own, decided as importing decides it: only a DOI that reads as one counts. */
+const keepsDoi = (payload: Record<string, unknown>) => typeof payload.DOI === "string" && Boolean(normalizeDoi(payload.DOI));
 
 /** What publishing needs, a sentence each, in the words of the record editor's Review requirements, which name the field. */
 export const needsText = (needs: AdminFieldErrors) => `${Object.values(needs).map((text) => text.replace(/\.$/u, "")).join(". ")}.`;
 
 /** What an imported draft still needs to publish on the route it takes: the import's for a draft made here, none for one that kept its DOI. */
-export function draftNeeds(batch: ImportBatch, id: string, kind: "created" | "imported" | undefined): AdminFieldErrors {
-	const route = kind === "created" ? (batch.publishRoute ?? "none") : "none";
-	return batch.needs[id]?.[route] ?? {};
+export function draftNeeds(needs: AdminPdfImport["needs"], publishRoute: ImportBatch["publishRoute"], id: string, kind: "created" | "imported" | undefined): AdminFieldErrors {
+	const route = kind === "created" ? (publishRoute ?? "none") : "none";
+	return needs[id]?.[route] ?? {};
 }
 
 /** What publishing writes into the PDF: the record as the editor leaves it. */
