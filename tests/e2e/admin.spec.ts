@@ -6237,7 +6237,7 @@ test.describe("PDF import", () => {
 			}
 			const body = route.request().postDataJSON();
 			if (body.action === "start") {
-				pdfImport = { attach: {}, checks: body.checks, collections: body.collections, createdAt: new Date().toISOString(), files: [file("uploading", false)], id: "import-1", instructions: body.instructions, results: null, sent: {} };
+				pdfImport = { attach: {}, checks: body.checks, collections: body.collections, createdAt: new Date().toISOString(), files: [file("uploading", false)], id: "import-1", instructions: body.instructions, needs: {}, results: null, reviews: {}, sent: {} };
 				return route.fulfill({ json: { files: [{ filename: "report.pdf", id: "file-1", upload: { signedUrl: "http://127.0.0.1:9/storage/report.pdf" } }], id: "import-1" } });
 			}
 			if (body.action === "uploaded") {
@@ -6247,7 +6247,8 @@ test.describe("PDF import", () => {
 			if (body.action === "commit") {
 				committed = body;
 				const results = [{ id: "1", itemKey: "PDFIMP01", kind: "created", outcome: "created" }];
-				pdfImport = { ...pdfImport, attach: {}, results };
+				// The report has no date: a DOI would need one, and the finish step publishes without a DOI unless it is switched on.
+				pdfImport = { ...pdfImport, attach: {}, needs: { 1: { zenodo: { date: "Enter a valid publication date." } } }, results };
 				return route.fulfill({ json: { attach: {}, results } });
 			}
 			pdfImport = null;

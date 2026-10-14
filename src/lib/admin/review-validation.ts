@@ -5,7 +5,7 @@ import {
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { publicationRecordMetadata } from "@/lib/publication/record-metadata";
 import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
-import { AdminValidationError } from "./errors";
+import { AdminValidationError, type AdminFieldErrors } from "./errors";
 import { inspectNativeItemDraft } from "./native-item-validation";
 import type { PublishingChoice } from "./review-contract";
 
@@ -59,6 +59,21 @@ export function validateReviewPayload(
 			fields,
 		);
 	return validated;
+}
+
+/** What the record still needs before it can publish with this choice, by field, in the words the record editor's Review requirements show; empty when nothing. */
+export function publishingNeeds(
+	payload: unknown,
+	choice: PublishingChoice | null,
+): AdminFieldErrors {
+	try {
+		validateReviewPayload(payload, choice);
+		return {};
+	} catch (error) {
+		return error instanceof AdminValidationError
+			? error.fields
+			: { _form: "Check the item details." };
+	}
 }
 
 function reviewMetadata(

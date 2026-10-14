@@ -74,6 +74,10 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		const draftKey = first.results[0]!.itemKey!;
 		const [draft] = await db.select({ patch: itemDraft.patch }).from(itemDraft).where(eq(itemDraft.itemKey, draftKey));
 		expect(draft!.patch).toMatchObject({ languageName: "en", title: "Girls' learning in Sierra Leone" });
+		// The PDF has no date: a DOI needs one, publishing without a DOI doesn't, so the finish step holds the draft only on a DOI route.
+		const needs = (await pdfImportStatus(db)).import!.needs[read!.rowId];
+		expect(needs).toMatchObject({ zenodo: { date: expect.any(String) } });
+		expect(needs).not.toHaveProperty("none");
 
 		// The worker attaches from the import's stored PDF, so the import stays open until it has.
 		await expect(closePdfImport(db, storage, started.id)).rejects.toThrow("still getting their PDFs");
@@ -84,7 +88,10 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 
 		// Published from another tab: every tab's status says so.
 		await db.insert(item).values({ itemType: "Report", key: draftKey, sourceConnectionKey: "native", sourceRecordKey: draftKey, title: "Girls' learning in Sierra Leone" });
-		expect((await pdfImportStatus(db)).import!.sent).toEqual({ [read!.rowId]: "published" });
+		const published = (await pdfImportStatus(db)).import!;
+		expect(published.sent).toEqual({ [read!.rowId]: "published" });
+		// A draft sent on is no longer held back for what it needs.
+		expect(published.needs).toEqual({});
 
 		await closePdfImport(db, storage, started.id);
 		expect([...storage.privateFiles.keys()].filter((path) => path.startsWith(`imports/${started.id}/`))).toEqual([]);

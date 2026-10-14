@@ -21,6 +21,7 @@ const server: AdminPdfImport = {
 	files: [{ filename: "report.pdf", id: "file-1", message: null, reading, rowId: "1", state: "read", stored: true }],
 	id: "import-1",
 	instructions: "",
+	needs: {},
 	results: null,
 	reviews: {},
 	sent: {},

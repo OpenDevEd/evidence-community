@@ -5,6 +5,7 @@ import { normalizeDoi } from "@/lib/doi";
 
 import type { AdminFieldErrors } from "./errors";
 import type { PdfPropertiesReading } from "./pdf-properties";
+import type { PublishingChoice } from "./review-contract";
 
 export const ADMIN_IMPORT_MAX_RECORDS = 500;
 export const ADMIN_IMPORT_MAX_FILES = 20;
@@ -195,7 +196,12 @@ export type AdminPdfImport = {
 	reviews: Record<string, { id: string; revision: number }>;
 	/** The imported drafts sent on so far, by row, from any tab: published, or submitted and waiting for an editor. */
 	sent: Record<string, "published" | "submitted">;
+	/** What each imported draft not yet sent still needs to publish, by row, then by DOI route or "none", as the draft is now. Rows and routes that need nothing are left out. */
+	needs: Record<string, PublishNeeds>;
 };
+
+/** A draft's publishing needs on each route, in the record editor's words. */
+export type PublishNeeds = Partial<Record<PublishingChoice["route"] | "none", AdminFieldErrors>>;
 
 /** Where the admin keeps the import's status, also filled by the page as it is served. */
 export const PDF_IMPORT_KEY = "admin-pdf-import";
