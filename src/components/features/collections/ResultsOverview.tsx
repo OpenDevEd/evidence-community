@@ -289,12 +289,35 @@ function StudyTypeMethodRows() {
 	);
 }
 
+/** A media query a component follows as the screen changes. */
+function mediaQuery(query: string) {
+	return {
+		subscribe(onChange: () => void) {
+			const list = window.matchMedia(query);
+			list.addEventListener("change", onChange);
+			return () => list.removeEventListener("change", onChange);
+		},
+		matches: () => window.matchMedia(query).matches,
+	};
+}
+
+/** Whether the screen matches a media query; false on the server. */
+function useMedia(query: ReturnType<typeof mediaQuery>) {
+	return useSyncExternalStore(query.subscribe, query.matches, () => false);
+}
+
+const WIDE = mediaQuery("(min-width: 1024px)");
+
+/** Where the Study types heading's hover opens: from sm, with a pointer that hovers. Everywhere else the accordion does. */
+const HOVERS = mediaQuery("(min-width: 640px) and (hover: hover)");
+
 /** The heading as plain text where its hover can't open, on a phone or a screen with no hover: the accordion at the card's foot says the same there. */
 const NO_HOVER = "max-sm:no-underline max-sm:cursor-auto [@media(hover:none)]:no-underline [@media(hover:none)]:cursor-auto";
 
 /** The Study types heading, which explains on hover how types are read. */
 function StudyTypesHeading() {
 	const t = useTranslations("studyTypes");
+	const hovers = useMedia(HOVERS);
 	const content = (
 		<div className="flex flex-col gap-3">
 			<div>
@@ -304,7 +327,7 @@ function StudyTypesHeading() {
 			<StudyTypeMethodRows />
 		</div>
 	);
-	return <Hint content={content} placement="bottom-start" contentClassName={HINT_CARD} className={NO_HOVER}>{t("title")}</Hint>;
+	return <Hint content={content} placement="bottom-start" contentClassName={HINT_CARD} className={NO_HOVER} isDisabled={!hovers}>{t("title")}</Hint>;
 }
 
 /** How study types are read as an accordion at the card's foot, only where the heading's hover can't open. */
@@ -774,20 +797,12 @@ function MostCited({ shown }: { shown: boolean }) {
 	);
 }
 
-const WIDE = "(min-width: 1024px)";
-
-function subscribeToWidth(onChange: () => void) {
-	const query = window.matchMedia(WIDE);
-	query.addEventListener("change", onChange);
-	return () => query.removeEventListener("change", onChange);
-}
-
 /**
  * Whether this sidebar is on screen: the page's own shows from the lg breakpoint, where CSS stops hiding it, and
  * Explore's whenever it is open. Below lg the page's copy stays mounted but hidden, so it must not ask for its own figures.
  */
 function useShown(inExplore: boolean) {
-	const wide = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(WIDE).matches, () => false);
+	const wide = useMedia(WIDE);
 	return inExplore || wide;
 }
 

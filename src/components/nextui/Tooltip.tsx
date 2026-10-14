@@ -140,6 +140,7 @@ export function Hint({
 	className,
 	contentClassName,
 	placement,
+	isDisabled,
 }: {
 	content: ReactNode;
 	children: ReactNode;
@@ -148,11 +149,13 @@ export function Hint({
 	/** Classes for the tooltip. */
 	contentClassName?: string;
 	placement?: Placement;
+	/** Plain text that opens nothing and takes no focus, where the same words show another way. */
+	isDisabled?: boolean;
 }) {
 	return (
-		<Tooltip content={content} placement={placement} className={contentClassName}>
+		<Tooltip content={content} placement={placement} className={contentClassName} isDisabled={isDisabled}>
 			<span
-				tabIndex={0}
+				tabIndex={isDisabled ? undefined : 0}
 				className={twMerge(
 					`inline-flex cursor-help items-center gap-1.5 rounded-md ${HINT_UNDERLINE} outline-none focus-visible:ring-2 focus-visible:ring-accent`,
 					className,
