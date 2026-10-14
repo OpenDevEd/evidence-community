@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { PDFDocument } from "pdf-lib";
 
 import type {
 	AdminCollectionCatalogEntry,
@@ -777,7 +778,7 @@ test.describe("overlay lifecycle", () => {
 			await page.setViewportSize({ width: cycle % 2 ? 1280 : 820, height: 900 });
 			await dialog.getByRole("tab", { name: "DOIs", exact: true }).click();
 			await expect(dialog.getByRole("textbox", { name: "DOIs", exact: true })).toBeVisible();
-			await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+			await dialog.getByRole("button", { name: "Close", exact: true }).click();
 			await expect(page.getByRole("dialog", { includeHidden: true })).toHaveCount(0);
 			const search = page.getByRole("textbox", { name: "Search records" });
 			await search.click();
@@ -6170,4 +6171,97 @@ test("opens a source's status from the address and undoes a dismissed issue", as
 
 	await dialog.getByRole("button", { name: "Close" }).click();
 	await expect(page).not.toHaveURL(/[?&]source=/u);
+});
+
+test.describe("PDF import", () => {
+	// The library's AI reads on the server's worker; here the import's API answers as it would once a PDF is read.
+	test("reads a PDF into a draft with its suggested change and collection, and keeps DOIs reachable meanwhile", { tag: "@smoke" }, async ({ page }) => {
+		await mockPublishedBook(page);
+		const emptyProperties = { authors: [], date: "", doi: "", isbn: "", issn: "", issue: "", keywords: [], language: "", pages: "", publicationTitle: "", publisher: "", rights: "", seriesNumber: "", seriesTitle: "", subject: "", title: "", volume: "" };
+		const title = "Girls' learning in Sierra Leone";
+		const reading = {
+			checks: [{ criterion: "The document credits FCDO as its funder.", page: 2, quote: "Funded by UK aid", recommendation: null, result: "met" }],
+			cites: [],
+			collections: [{ id: "THEMEGEN", name: "Gender Equality", path: ["Themes"], reason: "It is about girls' education." }],
+			pdf: { properties: emptyProperties, standards: { pdfa: "", pdfua: "", tagged: true }, writable: true },
+			record: {
+				creators: ["Ada Lovelace"],
+				id: "1",
+				itemType: "Report",
+				method: "pdf",
+				payload: { collections: [], creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "Report", languageName: "English", title },
+				source: "report.pdf",
+				state: "ready",
+				title,
+				year: 2026,
+			},
+			suggestions: [{ apply: true, checks: [], field: "languageName", reason: "The library writes language codes.", value: "en" }],
+			topics: [],
+		};
+		let pdfImport: Record<string, unknown> | null = null;
+		let committed: { records: { payload: Record<string, unknown> }[] } | null = null;
+		const file = (state: string, stored: boolean) => ({ filename: "report.pdf", id: "file-1", message: null, reading: state === "read" ? reading : null, rowId: "1", state, stored });
+		await page.route("**/api/admin/items/import/pdf", async (route) => {
+			if (route.request().method() === "GET") {
+				const answer = { import: pdfImport, last: { checks: [], instructions: "" } };
+				// The worker reads it a moment after it is stored, and its PDF attaches a moment after the draft is made:
+				// the sheet has to come back and ask.
+				if ((pdfImport?.files as { state: string }[] | undefined)?.[0]?.state === "waiting") pdfImport = { ...pdfImport, files: [file("read", true)] };
+				else if (pdfImport?.results) pdfImport = { ...pdfImport, attach: { 1: "attached" } };
+				return route.fulfill({ json: answer });
+			}
+			const body = route.request().postDataJSON();
+			if (body.action === "start") {
+				pdfImport = { attach: {}, checks: body.checks, collections: body.collections, createdAt: new Date().toISOString(), files: [file("uploading", false)], id: "import-1", instructions: body.instructions, results: null };
+				return route.fulfill({ json: { files: [{ filename: "report.pdf", id: "file-1", upload: { signedUrl: "http://127.0.0.1:9/storage/report.pdf" } }], id: "import-1" } });
+			}
+			if (body.action === "uploaded") {
+				pdfImport = { ...pdfImport, files: [file("waiting", true)] };
+				return route.fulfill({ json: { stored: "file-1" } });
+			}
+			if (body.action === "commit") {
+				committed = body;
+				const results = [{ id: "1", itemKey: "PDFIMP01", kind: "created", outcome: "created" }];
+				pdfImport = { ...pdfImport, attach: {}, results };
+				return route.fulfill({ json: { attach: {}, results } });
+			}
+			pdfImport = null;
+			return route.fulfill({ json: { closed: "import-1" } });
+		});
+		await page.route("http://127.0.0.1:9/storage/**", (route) => route.fulfill({ json: { Key: "report.pdf" } }));
+		const pdf = await PDFDocument.create();
+		pdf.addPage();
+		const bytes = Buffer.from(await pdf.save());
+		await page.route("**/api/admin/items/import/pdf/file-1", (route) => route.fulfill({ body: bytes, contentType: "application/pdf" }));
+
+		await page.goto("/admin");
+		await page.getByRole("button", { name: "Import Item", exact: true }).click();
+		const sheet = page.getByRole("dialog");
+		await sheet.locator('footer input[type="file"]').setInputFiles({ buffer: bytes, mimeType: "application/pdf", name: "report.pdf" });
+		await sheet.getByRole("button", { name: /^Read\s1\sPDF$/u }).click();
+		await expect(sheet.getByText(title)).toBeVisible();
+
+		// While it waits for review, DOIs and bibliography files can still be imported.
+		await sheet.getByRole("button", { name: "Back", exact: true }).click();
+		await expect(sheet.getByText("1 PDF in the open import")).toBeVisible();
+		await sheet.getByRole("tab", { name: "DOIs" }).click();
+		await expect(sheet.getByRole("textbox", { name: "DOIs", exact: true })).toBeVisible();
+		await sheet.getByRole("tab", { name: "PDFs" }).click();
+		await sheet.getByRole("button", { name: /^Review\s1\sPDF$/u }).click();
+
+		await sheet.locator("#import-review-panel li button").first().click();
+		await expect(sheet.getByRole("button", { name: /Suggested changes/u })).toContainText("1 of 1 applied");
+		await expect(sheet.getByRole("button", { name: /Collections/u }).last()).toContainText("1 of 1 chosen");
+		// The preview writes the record into the PDF in the browser, as publishing will on the server; it opens only once that worked.
+		const preview = page.waitForEvent("popup");
+		await sheet.getByRole("button", { name: "Open with new properties" }).click();
+		await (await preview).close();
+		await sheet.getByRole("button", { name: /^Import\s1\srecord$/u }).click();
+		await expect(sheet.getByText("Drafts created")).toBeVisible();
+		// A draft goes on with its PDF, so it can be chosen to publish only once the PDF is attached.
+		const choose = sheet.getByRole("checkbox", { name: `Publish ${title}` });
+		await expect(choose).toBeDisabled();
+		await expect(choose).toBeEnabled();
+		expect(committed!.records[0]!.payload).toMatchObject({ collections: ["THEMEGEN"], languageName: "en", title });
+	});
 });

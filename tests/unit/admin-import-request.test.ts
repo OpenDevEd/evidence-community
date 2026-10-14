@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	appliedOf,
+	checkPasses,
+	createdKeys,
 	doiPreviewRequest,
 	filePreviewRequest,
-	importRowStatus,
+	recordPayload,
+	reviewChecks,
+	rowsFromRecords,
 	selectedImportRecords,
-	summarizeImportResults,
-	toggleImportSelection,
+	type ImportRow,
 } from "@/components/admin/admin-import";
 import type { AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
 
@@ -47,6 +51,31 @@ describe("import input checks", () => {
 	});
 });
 
+describe("the changes the AI suggests", () => {
+	const row: ImportRow = {
+		...rowsFromRecords([record({ id: "1", payload: { rights: "© EdTech Hub 2024. CC BY 4.0", title: "Girls' learning" } })])[0]!,
+		checks: (["met", "not_met", "not_met"] as const).map((result) => ({ criterion: result, page: null, quote: null, recommendation: null, result })),
+		suggestions: [
+			{ apply: false, checks: [1], field: "rights", reason: "The check asks for Crown copyright", value: "© Crown copyright 2024" },
+			{ apply: true, checks: [], field: "title", reason: "The instructions ask for British English", value: "Girls' learning in Sierra Leone" },
+		],
+	};
+
+	it("starts with the ones the library's instructions call for", () => {
+		expect([...appliedOf(null, row)]).toEqual([1]);
+	});
+
+	it("keeps what the PDF states until the editor applies a change", () => {
+		expect(recordPayload(row, new Set([1]))).toMatchObject({ rights: "© EdTech Hub 2024. CC BY 4.0", title: "Girls' learning in Sierra Leone" });
+		expect(reviewChecks(row, new Set([1])).map(checkPasses)).toEqual([true, false, false]);
+	});
+
+	it("uses an applied change, and passes only the checks it names", () => {
+		expect(recordPayload(row, new Set([0]))).toMatchObject({ rights: "© Crown copyright 2024", title: "Girls' learning" });
+		expect(reviewChecks(row, new Set([0])).map(checkPasses)).toEqual([true, true, false]);
+	});
+});
+
 describe("import preview selection", () => {
 	it("only sends selected records that have a validated payload", () => {
 		const records = [
@@ -54,32 +83,18 @@ describe("import preview selection", () => {
 			record({ id: "2", payload: null, state: "attention" }),
 			record({ id: "3", method: "doi", payload: { itemType: "Book" } }),
 		];
-		const selected = toggleImportSelection(new Set(["1", "2"]), "3", true);
-		expect(selectedImportRecords(records, toggleImportSelection(selected, "1", false))).toEqual([
+		expect(selectedImportRecords(records, new Set(["2", "3"]))).toEqual([
 			{ id: "3", method: "doi", payload: { itemType: "Book" } },
 		]);
 	});
 
-	it("shows the preview state until a commit result replaces it", () => {
-		const existing = record({ id: "1", existingKey: "ABCD2345", state: "existing" });
-		expect(importRowStatus(existing, undefined)).toMatchObject({ label: "Already in library" });
-		expect(importRowStatus(existing, { id: "1", itemKey: "WXYZ6789", outcome: "created" })).toMatchObject({
-			label: "Draft created",
-			tone: "ready",
-		});
-		expect(importRowStatus(existing, { id: "1", message: "Check the title.", outcome: "failed" })).toMatchObject({
-			label: "Check the title.",
-			tone: "attention",
-		});
-	});
-
-	it("summarizes created keys and failures for the toast", () => {
+	it("selects only the drafts an import created", () => {
 		expect(
-			summarizeImportResults([
+			createdKeys([
 				{ id: "1", itemKey: "AAAA2345", outcome: "created" },
 				{ id: "2", outcome: "skipped" },
 				{ id: "3", outcome: "failed" },
 			]),
-		).toEqual({ createdKeys: ["AAAA2345"], failed: 1, message: "1 draft created, 1 failed" });
+		).toEqual(["AAAA2345"]);
 	});
 });

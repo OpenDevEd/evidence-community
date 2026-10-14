@@ -1,0 +1,447 @@
+"use client";
+
+import {
+	AlertCircleIcon,
+	Building03Icon,
+	Calendar03Icon,
+	CancelCircleIcon,
+	CheckmarkCircle02Icon,
+	Copy01Icon,
+	Globe02Icon,
+	HelpCircleIcon,
+	Idea01Icon,
+	Link01Icon,
+	Loading03Icon,
+	MinusSignIcon,
+	PencilEdit02Icon,
+	PlusSignIcon,
+	Tick02Icon,
+	Undo02Icon,
+	UserCheck01Icon,
+} from "@hugeicons/core-free-icons";
+import { useState, type ReactNode } from "react";
+
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Button } from "@/components/nextui/Button";
+import { Checkbox } from "@/components/nextui/Checkbox";
+import type { AdminImportCommitResult, PdfCheckResult, PdfSuggestion, TopicSuggestion } from "@/lib/admin/item-import-contract";
+import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
+import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
+
+import { humanizeAdminField } from "./admin-schema";
+import { checkPasses, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
+
+const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
+	met: { bar: "bg-emerald-500", icon: CheckmarkCircle02Icon, label: "Met", tone: "text-emerald-600 dark:text-emerald-400" },
+	not_met: { bar: "bg-danger", icon: CancelCircleIcon, label: "Not met", tone: "text-danger" },
+	unclear: { bar: "bg-amber-500", icon: HelpCircleIcon, label: "Unclear", tone: "text-amber-600 dark:text-amber-400" },
+};
+
+type Tone = "attention" | "neutral" | "progress" | "ready";
+const toneClass: Record<Tone, string> = {
+	attention: "text-amber-700 dark:text-amber-400",
+	neutral: "text-black/50 dark:text-white/50",
+	progress: "text-black/50 dark:text-white/50",
+	ready: "text-emerald-700 dark:text-emerald-400",
+};
+
+type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
+
+/** What a row's status says, from its reading, its preview, its import and its PDF. */
+export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
+	if (row.state === "uploading") return { icon: null, label: "Uploading", tone: "progress" };
+	if (row.state === "waiting") return { icon: null, label: "Queued", tone: "progress" };
+	if (row.state === "reading") return { icon: null, label: "Reading", tone: "progress" };
+	if (row.state === "failed" || !row.record) return { icon: AlertCircleIcon, label: "Could not read", tone: "attention" };
+	if (result?.outcome === "failed") return { icon: AlertCircleIcon, label: "Not imported", tone: "attention" };
+	if (attach === "failed") return { icon: AlertCircleIcon, label: "PDF not attached", tone: "attention" };
+	if (result?.outcome === "created") return { icon: Tick02Icon, label: "Draft created", tone: "ready" };
+	const states = {
+		attention: { icon: AlertCircleIcon, label: "Needs attention", tone: "attention" },
+		existing: { icon: Copy01Icon, label: "In the library", tone: "neutral" },
+		ready: { icon: Tick02Icon, label: "Ready", tone: "ready" },
+		repeated: { icon: Copy01Icon, label: "Repeated", tone: "neutral" },
+		unresolved: { icon: AlertCircleIcon, label: "Not found", tone: "attention" },
+	} as const;
+	return states[row.record.state];
+}
+
+export function StatusText({ status }: { status: Status }) {
+	return (
+		<span className={`flex min-w-0 items-center gap-1.5 text-xs ${toneClass[status.tone]}`}>
+			{status.tone === "progress" ? <HugeiconsIcon aria-hidden className="shrink-0 animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} /> : status.icon ? <HugeiconsIcon aria-hidden className="shrink-0" icon={status.icon} size={13} /> : null}
+			<span className="truncate">{status.label}</span>
+		</span>
+	);
+}
+
+/** A check's look: the AI's answer, or a pass labelled fixed once the editor fixed it. */
+const fixedLook = { ...resultLook.met, label: "Fixed" };
+const lookOf = (check: ReviewCheck) => (check.fixed ? fixedLook : resultLook[check.result]);
+
+/** One small bar per check, coloured by its result; grey until the PDF is read. */
+export function CheckMeter({ checks, count }: { checks: ReviewCheck[]; count: number }) {
+	if (!count) return null;
+	const passed = checks.filter(checkPasses).length;
+	return (
+		<span aria-label={checks.length ? `${passed} of ${count} checks pass` : `${count} checks`} className="flex shrink-0 items-center gap-1.5" role="img">
+			<span className="flex gap-[3px]">
+				{Array.from({ length: count }, (_, index) => (
+					<span className={`h-2.5 w-1 rounded-full transition-colors duration-500 ${checks[index] ? lookOf(checks[index]).bar : "bg-black/10 dark:bg-white/10"}`} key={index} />
+				))}
+			</span>
+			<span className={`w-6 text-xs tabular-nums text-black/45 transition-opacity duration-300 dark:text-white/45 ${checks.length ? "" : "opacity-0"}`}>
+				{passed}/{count}
+			</span>
+		</span>
+	);
+}
+
+export function creatorsLine(creators: readonly string[]) {
+	if (creators.length <= 2) return creators.join(" and ");
+	return `${creators[0]} and ${creators.length - 1} more`;
+}
+
+/** The answer to each check, and for a failed one that a suggested change meets, whether it is applied. */
+export function Checks({ checks }: { checks: ReviewCheck[] }) {
+	return (
+		<ul className="flex flex-col gap-4">
+			{checks.map((check) => {
+				const look = lookOf(check);
+				return (
+					<li className="flex gap-2.5" key={check.criterion}>
+						<HugeiconsIcon aria-label={look.label} className={`mt-0.5 shrink-0 ${look.tone}`} icon={look.icon} size={16} />
+						<div className="min-w-0 flex-1 text-sm">
+							<p className="text-black/85 dark:text-white/85">{check.criterion}</p>
+							{check.quote ? (
+								<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">
+									<q>{check.quote}</q>
+									{check.page ? <span className="ms-1.5 whitespace-nowrap tabular-nums text-black/40 dark:text-white/40">p. {check.page}</span> : null}
+								</p>
+							) : null}
+							{check.recommendation ? (
+								<p className="mt-1 flex gap-1.5 text-xs leading-5 text-amber-800 dark:text-amber-300">
+									<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={Idea01Icon} size={12} />
+									{check.recommendation}
+								</p>
+							) : null}
+							{check.fixable ? (
+								<p className="mt-1 flex gap-1.5 text-xs leading-5 text-black/55 dark:text-white/55">
+									<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={PencilEdit02Icon} size={12} />
+									{check.fixed ? "Met by an applied change" : "A suggested change meets this"}
+								</p>
+							) : null}
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+/**
+ * The changes the AI suggests to the record's fields, each beside what the
+ * PDF states, with its reason and the checks it meets. The editor applies
+ * or undoes each one; the ones the library's instructions ask for start
+ * applied.
+ */
+export function SuggestionList({ applied, checks, locked, onToggle, payload, suggestions }: { applied: ReadonlySet<number>; checks: readonly string[]; locked: boolean; onToggle: (index: number) => void; payload: Record<string, unknown>; suggestions: PdfSuggestion[] }) {
+	return (
+		<ul className="flex flex-col gap-5">
+			{suggestions.map((suggestion, index) => (
+				<SuggestionItem checks={checks} key={`${suggestion.field}-${index}`} locked={locked} on={applied.has(index)} onToggle={() => onToggle(index)} stated={payload[suggestion.field]} suggestion={suggestion} />
+			))}
+		</ul>
+	);
+}
+
+function SuggestionItem({ checks, locked, on, onToggle, stated, suggestion }: { checks: readonly string[]; locked: boolean; on: boolean; onToggle: () => void; stated: unknown; suggestion: PdfSuggestion }) {
+	const meets = suggestion.checks.map((check) => checks[check]).filter(Boolean);
+	return (
+		<li className="flex items-start gap-2.5">
+			<HugeiconsIcon aria-hidden className={`mt-0.5 shrink-0 ${on ? "text-emerald-600 dark:text-emerald-400" : "text-black/40 dark:text-white/40"}`} icon={on ? CheckmarkCircle02Icon : PencilEdit02Icon} size={16} />
+			<div className="min-w-0 flex-1 text-sm">
+				<p className="text-black/85 dark:text-white/85">
+					{humanizeAdminField(suggestion.field)}
+					<span className="ms-2 text-xs text-black/45 dark:text-white/45">{on ? "Applied" : "Suggested"}</span>
+				</p>
+				<p className="mt-1 line-clamp-4 text-xs leading-5 text-black/70 dark:text-white/70">{suggestion.value}</p>
+				<StatedValue stated={stated} />
+				<p className="mt-1 flex gap-1.5 text-xs leading-5 text-black/55 dark:text-white/55">
+					<HugeiconsIcon aria-hidden className="mt-[3px] shrink-0" icon={Idea01Icon} size={12} />
+					{suggestion.reason}
+				</p>
+				{meets.length ? <p className="mt-1 text-xs leading-5 text-black/45 dark:text-white/45">Meets {meets.map((check) => `“${check}”`).join(", ")}</p> : null}
+			</div>
+			<ToggleButton locked={locked} on={on} onToggle={onToggle} />
+		</li>
+	);
+}
+
+/** What the PDF states for the field the suggestion changes. */
+function StatedValue({ stated }: { stated: unknown }) {
+	return (
+		<p className="mt-1 line-clamp-2 text-xs leading-5 text-black/45 dark:text-white/45">
+			{typeof stated === "string" && stated ? (
+				<>
+					The PDF says <del className="decoration-black/25 dark:decoration-white/25">{stated}</del>
+				</>
+			) : (
+				"The PDF leaves it empty"
+			)}
+		</p>
+	);
+}
+
+function ToggleButton({ locked, on, onToggle }: { locked: boolean; on: boolean; onToggle: () => void }) {
+	return (
+		<Button className="h-8 min-h-8 min-w-[4.5rem] shrink-0" isDisabled={locked} onPress={onToggle} size="xs" startContent={<HugeiconsIcon aria-hidden icon={on ? Undo02Icon : Tick02Icon} size={13} />} variant={on ? "transparent" : "muted"}>
+			{on ? "Undo" : "Apply"}
+		</Button>
+	);
+}
+
+type PayloadCreator = { authorProfileId?: string; firstName?: string; institutions?: { display_name: string }[]; lastName?: string; name?: string };
+
+/** The record's authors with the affiliations the PDF prints, each marked when it links to one of the library's author profiles. */
+export function AuthorList({ creators }: { creators: readonly PayloadCreator[] }) {
+	return (
+		<ul className="flex flex-col gap-3">
+			{creators.map((creator, index) => {
+				const name = [creator.firstName, creator.lastName].filter(Boolean).join(" ") || creator.name || "Unnamed";
+				return (
+					<li className="flex gap-2.5" key={`${name}-${index}`}>
+						<HugeiconsIcon aria-hidden className={`mt-0.5 shrink-0 ${creator.authorProfileId ? "text-emerald-600 dark:text-emerald-400" : "text-black/30 dark:text-white/30"}`} icon={UserCheck01Icon} size={15} />
+						<div className="min-w-0 flex-1 text-sm">
+							<p className="text-black/85 dark:text-white/85">
+								{name}
+								{creator.authorProfileId ? <span className="ms-2 text-xs text-emerald-700 dark:text-emerald-400">Linked to a profile</span> : null}
+							</p>
+							{creator.institutions?.length ? <p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{creator.institutions.map(({ display_name }) => display_name).join("; ")}</p> : null}
+						</div>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+/** The keywords the PDF lists, as the record's tags. */
+export function TagList({ tags }: { tags: readonly string[] }) {
+	return (
+		<ul className="flex flex-wrap gap-1.5">
+			{tags.map((tag) => (
+				<li className="rounded-md bg-black/[0.05] px-2 py-1 text-xs text-black/70 dark:bg-white/[0.07] dark:text-white/70" key={tag}>
+					{tag}
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** The library's records the work cites, which the new record links to. */
+export function CitedList({ cites }: { cites: readonly { key: string; title: string }[] }) {
+	return (
+		<ul className="flex flex-col gap-2">
+			{cites.map(({ key, title }) => (
+				<li className="text-sm leading-5 text-black/80 dark:text-white/80" key={key}>
+					{title}
+				</li>
+			))}
+		</ul>
+	);
+}
+
+/** The topics or collections the AI chose, each with where it sits and why, to keep or drop. */
+export function ChoiceList({ chosen, choices, locked, onToggle }: { chosen: ReadonlySet<string>; choices: TopicSuggestion[]; locked: boolean; onToggle: (id: string) => void }) {
+	return (
+		<ul className="flex flex-col gap-3">
+			{choices.map((choice) => (
+				<li className="flex gap-2.5" key={choice.id}>
+					<Checkbox aria-label={`Add ${choice.name}`} className="mt-0.5 self-start" isDisabled={locked} isSelected={chosen.has(choice.id)} onValueChange={() => onToggle(choice.id)} size="sm" />
+					<div className="min-w-0 flex-1">
+						<p className="text-sm text-black/85 dark:text-white/85">{choice.name}</p>
+						{/* A top-level collection sits under nothing. */}
+						{choice.path.length ? <p className="text-xs text-black/40 dark:text-white/40">{topicPath(choice.path).join(" › ")}</p> : null}
+						<p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{choice.reason}</p>
+					</div>
+				</li>
+			))}
+		</ul>
+	);
+}
+
+export function MetadataLine({ payload }: { payload: Record<string, unknown> }) {
+	const text = (field: string) => (typeof payload[field] === "string" && payload[field] ? (payload[field] as string) : null);
+	const doi = text("DOI");
+	const items = [
+		{ icon: Building03Icon, label: "Published by", value: text("publicationTitle") ?? text("publisher") },
+		{ icon: Calendar03Icon, label: "Date", value: text("date") },
+		{ icon: Globe02Icon, label: "Language", value: text("languageName") },
+	].filter((item) => item.value);
+	if (!items.length && !doi) return null;
+	return (
+		<ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-black/60 dark:text-white/60">
+			{items.map((item) => (
+				<li className="flex min-w-0 items-center gap-1.5" key={item.label}>
+					<HugeiconsIcon aria-label={item.label} className="shrink-0 text-black/35 dark:text-white/35" icon={item.icon} size={13} />
+					<span className="truncate">{item.value}</span>
+				</li>
+			))}
+			{doi ? (
+				<li className="flex min-w-0 items-center gap-1.5">
+					<HugeiconsIcon aria-label="DOI" className="shrink-0 text-black/35 dark:text-white/35" icon={Link01Icon} size={13} />
+					<a className="truncate text-accent hover:underline" href={`https://doi.org/${doi}`} rel="noreferrer" target="_blank">
+						{doi}
+					</a>
+				</li>
+			) : null}
+		</ul>
+	);
+}
+
+export function Abstract({ text }: { text: string }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div>
+			<p className={`text-sm leading-6 text-black/70 dark:text-white/70 ${open ? "" : "line-clamp-4"}`}>{text}</p>
+			{text.length > 320 ? (
+				<button className="mt-1 text-xs font-medium text-accent hover:underline" onClick={() => setOpen(!open)} type="button">
+					{open ? "Show less" : "Show all"}
+				</button>
+			) : null}
+		</div>
+	);
+}
+
+export function ReadingPlaceholder() {
+	return (
+		<div aria-hidden className="flex flex-col gap-2.5">
+			{["w-11/12", "w-full", "w-4/5", "w-2/3"].map((width) => (
+				<span className={`h-2.5 animate-pulse rounded-full bg-black/[0.06] dark:bg-white/[0.07] ${width}`} key={width} />
+			))}
+		</div>
+	);
+}
+
+const PROPERTY_ROWS: { field: keyof PdfProperties; label: string }[] = [
+	{ field: "title", label: "Title" },
+	{ field: "authors", label: "Authors" },
+	{ field: "subject", label: "Subject" },
+	{ field: "keywords", label: "Keywords" },
+	{ field: "rights", label: "Rights" },
+	{ field: "doi", label: "DOI" },
+	{ field: "date", label: "Date" },
+	{ field: "publisher", label: "Publisher" },
+	{ field: "language", label: "Language" },
+	{ field: "publicationTitle", label: "Published in" },
+	{ field: "volume", label: "Volume" },
+	{ field: "issue", label: "Issue" },
+	{ field: "pages", label: "Pages" },
+	{ field: "seriesTitle", label: "Series" },
+	{ field: "seriesNumber", label: "Series number" },
+	{ field: "issn", label: "ISSN" },
+	{ field: "isbn", label: "ISBN" },
+];
+
+const propertyText = (properties: PdfProperties, field: keyof PdfProperties) => {
+	const value = properties[field];
+	return Array.isArray(value) ? value.join(field === "authors" ? "; " : ", ") : value;
+};
+
+type PropertyChange = "added" | "changed" | "removed";
+
+const changeLook: Record<PropertyChange, { icon: typeof Tick02Icon; label: string; tone: string }> = {
+	added: { icon: PlusSignIcon, label: "Added", tone: "text-emerald-700 dark:text-emerald-400" },
+	changed: { icon: PencilEdit02Icon, label: "Changed", tone: "text-amber-700 dark:text-amber-400" },
+	removed: { icon: MinusSignIcon, label: "Removed", tone: "text-black/50 dark:text-white/50" },
+};
+
+/** What publishing does to one property. A missing DOI isn't removed: Zenodo allocates one at publishing. */
+function changeOf(field: keyof PdfProperties, after: PdfProperties, now: PdfProperties): PropertyChange | null {
+	const value = propertyText(after, field) || (field === "doi" ? "pending" : "");
+	const before = propertyText(now, field);
+	if (value === before) return null;
+	return !before ? "added" : value ? "changed" : "removed";
+}
+
+/**
+ * What publishing writes into the PDF, beside what it carries now, each
+ * property marked added, changed or removed. Every published PDF gets the
+ * record's properties, with the changes the editor applied.
+ */
+export function PdfPropertiesList({ after, now }: { after: PdfProperties; now: PdfPropertiesReading }) {
+	if (!now.writable) {
+		return (
+			<p className="text-xs leading-5 text-black/55 dark:text-white/55">
+				{now.reason === "password" ? "This PDF has a password" : "This PDF can't be opened for editing"}, so publishing leaves its properties as they are.
+			</p>
+		);
+	}
+	return (
+		<dl className="grid grid-cols-[4.5rem_minmax(0,1fr)_5rem] gap-x-4 gap-y-2.5">
+			{PROPERTY_ROWS.filter(({ field }) => field === "doi" || propertyText(after, field) || propertyText(now.properties, field)).map(({ field, label }) => (
+				<PropertyRow after={after} field={field} key={field} label={label} now={now.properties} />
+			))}
+		</dl>
+	);
+}
+
+/** One property: what publishing writes, what the PDF had when publishing changes it, and the mark for the change. */
+function PropertyRow({ after, field, label, now }: { after: PdfProperties; field: keyof PdfProperties; label: string; now: PdfProperties }) {
+	const value = propertyText(after, field);
+	const change = changeOf(field, after, now);
+	return (
+		<div className="contents">
+			<dt className="pt-px text-xs leading-5 text-black/45 dark:text-white/45">{label}</dt>
+			<dd className="min-w-0 text-xs leading-5">
+				<p className={`line-clamp-2 ${value ? "text-black/80 dark:text-white/80" : "text-black/40 dark:text-white/40"}`}>
+					<WrittenValue change={change} shown={value || emptyProperty(field)} />
+				</p>
+				{change === "changed" || change === "removed" ? (
+					<p className="line-clamp-1 text-black/40 dark:text-white/40">
+						<del className="decoration-black/25 dark:decoration-white/25">{propertyText(now, field)}</del>
+					</p>
+				) : null}
+			</dd>
+			<ChangeMark change={change} />
+		</div>
+	);
+}
+
+// A DOI publishing doesn't have yet comes from Zenodo; any other empty property stays empty.
+const emptyProperty = (field: keyof PdfProperties) => (field === "doi" ? "From Zenodo when published" : "Left empty");
+
+function WrittenValue({ change, shown }: { change: PropertyChange | null; shown: string }) {
+	return change === "added" || change === "changed" ? <ins className="no-underline">{shown}</ins> : shown;
+}
+
+function ChangeMark({ change }: { change: PropertyChange | null }) {
+	const look = change ? changeLook[change] : null;
+	return (
+		<dd className={`flex h-5 items-center justify-end gap-1 text-xs ${look?.tone ?? ""}`}>
+			{look ? (
+				<>
+					<HugeiconsIcon aria-hidden className="shrink-0" icon={look.icon} size={12} />
+					{look.label}
+				</>
+			) : null}
+		</dd>
+	);
+}
+
+/** The section's note: what publishing does to the file's properties, in the marks the rows carry. */
+export function propertiesAside(after: PdfProperties, now: PdfPropertiesReading) {
+	if (!now.writable) return undefined;
+	const changes = PROPERTY_ROWS.map(({ field }) => changeOf(field, after, now.properties));
+	const count = (change: PropertyChange) => changes.filter((value) => value === change).length;
+	const verbs = { added: "adds", changed: "changes", removed: "removes" } as const;
+	const parts = (["added", "changed", "removed"] as const).filter((change) => count(change)).map((change) => `${verbs[change]} ${count(change)}`);
+	return parts.length ? `Publishing ${parts.join(", ")}` : "Already in the file";
+}
+
+export async function openWithProperties(url: string, properties: PdfProperties) {
+	const { writePdfProperties } = await import("@/lib/admin/pdf-properties");
+	const bytes = await writePdfProperties(new Uint8Array(await (await fetch(url)).arrayBuffer()), properties);
+	window.open(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })), "_blank", "noopener");
+}

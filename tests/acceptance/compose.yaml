@@ -120,6 +120,8 @@ services:
       OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL:?Amber OpenScholar machine credential is required}"
       OPENSCHOLAR_INDIGO_LIBRARY_ID: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_LIBRARY_ID:?Indigo OpenScholar library ID is required}"
       OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL:?Indigo OpenScholar machine credential is required}"
+      # Optional: the topic catalogue asks OpenAlex, whose keyless allowance runs out.
+      OPENALEX_API_KEY: "${OPENALEX_API_KEY:-}"
       PORT: "4000"
     ports:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT:-4010}:4000"

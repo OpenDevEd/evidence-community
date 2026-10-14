@@ -24,8 +24,10 @@ import * as sourceTables from "./schema/source";
 import * as publicationTables from "./schema/publication";
 
 import * as reviewTables from "./schema/review";
+import * as pdfImportTables from "./schema/pdf-import";
 
 export const schema = {
+	...pdfImportTables,
 	...topicTables,
 	...notificationTables,
 	...authorAssociationTables,

@@ -12,11 +12,11 @@ import type { useAdminPublication } from "./useAdminPublication";
 
 type PublicationHook = ReturnType<typeof useAdminPublication>;
 
-function headerPresentation(
-	attention: boolean,
-	changing: boolean,
-	hasDoi: boolean,
-) {
+/** How a record's DOI stands, as the inspector header and the import's finish list show it. */
+export function publicationPresentation(publication: NonNullable<PublicationHook["publication"]>) {
+	const attention = publication.identifiers.attention;
+	const changing = [publication.providers.crossref, publication.providers.zenodo].some((provider) => provider.status.shouldPoll);
+	const hasDoi = Boolean(publication.identifiers.doi);
 	if (attention) {
 		return {
 			Icon: AlertCircleIcon,
@@ -58,18 +58,7 @@ export function AdminPublicationHeaderStatus({
 }) {
 	const publication = state.publication;
 	if (!publication) return null;
-	const presentation = headerPresentation(
-		Boolean(publication?.identifiers.attention),
-		Boolean(
-					publication &&
-					[
-						publication.providers.crossref,
-						publication.providers.zenodo,
-					].some((provider) => provider.status.shouldPoll),
-				),
-		Boolean(publication?.identifiers.doi),
-	);
-	const { Icon, color, label, spin } = presentation;
+	const { Icon, color, label, spin } = publicationPresentation(publication);
 	return (
 		<Button
 			size="xs"

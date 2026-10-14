@@ -4,6 +4,7 @@ import { z } from "zod";
 import { normalizeDoi } from "@/lib/doi";
 
 import type { AdminFieldErrors } from "./errors";
+import type { PdfPropertiesReading } from "./pdf-properties";
 
 export const ADMIN_IMPORT_MAX_RECORDS = 500;
 export const ADMIN_IMPORT_MAX_FILES = 20;
@@ -53,7 +54,7 @@ const adminImportCommitRequestSchema = z.object({
 		.array(
 			z.object({
 				id: z.string().min(1).max(32),
-				method: z.enum(["doi", "file"]),
+				method: z.enum(["doi", "file", "pdf"]),
 				payload: z.record(z.string(), z.unknown()),
 			}),
 		)
@@ -87,14 +88,6 @@ export type AdminImportRecordState =
 	| "attention"
 	| "unresolved";
 
-export const ADMIN_IMPORT_STATE_LABELS: Record<AdminImportRecordState, string> = {
-	attention: "Needs attention",
-	existing: "Already in library",
-	ready: "Ready",
-	repeated: "Repeated in import",
-	unresolved: "Could not resolve",
-};
-
 export type AdminImportPreviewRecord = {
 	creators: string[];
 	/** The key of the record already in the library, for `existing`. */
@@ -102,7 +95,7 @@ export type AdminImportPreviewRecord = {
 	fields?: AdminFieldErrors;
 	id: string;
 	itemType: string | null;
-	method: "doi" | "file";
+	method: "doi" | "file" | "pdf";
 	message?: string;
 	/** Validated draft payload, present only when the record is `ready`. */
 	payload: Record<string, unknown> | null;
@@ -117,11 +110,106 @@ export type AdminImportPreviewResponse = {
 	records: AdminImportPreviewRecord[];
 };
 
+export const PDF_IMPORT_MAX_FILE_BYTES = 50 * 1024 * 1024;
+export const PDF_IMPORT_MAX_FILES = 100;
+export const PDF_IMPORT_MAX_CRITERIA = 20;
+export const PDF_IMPORT_MAX_CRITERION_LENGTH = 300;
+/** The library's instructions for the AI, free text it follows when it reads each PDF. */
+export const PDF_IMPORT_MAX_GUIDANCE_LENGTH = 4000;
+
+export type PdfCheckResult = {
+	criterion: string;
+	page: number | null;
+	quote: string | null;
+	recommendation: string | null;
+	result: "met" | "not_met" | "unclear";
+};
+
+/** A topic from the library's catalogue that the AI found fits the PDF. */
+export type TopicSuggestion = {
+	id: string;
+	name: string;
+	path: string[];
+	reason: string;
+};
+
+/**
+ * A value the AI suggests a record field should have instead of what the
+ * PDF states: to follow the library's instructions, to meet a check, or to
+ * fill something the PDF leaves out. `checks` are the checks it makes pass,
+ * by their place in the list; `apply` says it starts applied, as the
+ * library's instructions call for it.
+ */
+export type PdfSuggestion = {
+	apply: boolean;
+	checks: number[];
+	field: string;
+	reason: string;
+	value: string;
+};
+
+/** A library collection the AI files a record in, with where it sits and why, the same shape as a topic. */
+export type CollectionSuggestion = TopicSuggestion;
+
+/** What the AI made of one PDF. */
+export type PdfReading = {
+	/** The PDF's SHA-256, so an identical file is found in the library or earlier in the import. */
+	sha256: string;
+	checks: PdfCheckResult[];
+	/** The library's records the work cites, which the record links to. */
+	cites: { key: string; title: string }[];
+	collections: CollectionSuggestion[];
+	/** The properties the PDF carries now, before publishing writes the record into it. */
+	pdf: PdfPropertiesReading;
+	record: AdminImportPreviewRecord;
+	suggestions: PdfSuggestion[];
+	topics: TopicSuggestion[];
+};
+
+export type PdfImportFileState = "uploading" | "waiting" | "reading" | "read" | "failed";
+
+/** One PDF of the library's import, as the worker has got with it. */
+export type AdminPdfImportFile = {
+	filename: string;
+	id: string;
+	message: string | null;
+	/** Its row and record id in the review, from its place in the import. */
+	rowId: string;
+	/** The PDF is in storage, so the review can show and open it. */
+	stored: boolean;
+	reading: PdfReading | null;
+	state: PdfImportFileState;
+};
+
+/** The library's one PDF import: what it reads against, its PDFs, and once imported, what became of each. */
+export type AdminPdfImport = {
+	attach: Record<string, "attached" | "failed">;
+	checks: string[];
+	collections: string[];
+	createdAt: string;
+	files: AdminPdfImportFile[];
+	id: string;
+	instructions: string;
+	results: AdminImportCommitResult[] | null;
+};
+
+/** Where the admin keeps the import's status, also filled by the page as it is served. */
+export const PDF_IMPORT_KEY = "admin-pdf-import";
+
+export type AdminPdfImportStatus = {
+	import: AdminPdfImport | null;
+	/** The checks and instructions of the import before, which a new one starts from. */
+	last: { checks: string[]; instructions: string };
+};
+
+
 export type AdminImportCommitResult = {
 	existingKey?: string;
 	fields?: AdminFieldErrors;
 	id: string;
 	itemKey?: string;
+	/** For a created draft: made here, so it publishes with the library's DOI, or imported with its own. */
+	kind?: "created" | "imported";
 	message?: string;
 	outcome: "created" | "failed" | "skipped";
 };
