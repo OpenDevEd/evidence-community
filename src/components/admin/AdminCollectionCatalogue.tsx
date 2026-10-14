@@ -24,6 +24,7 @@ import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { useAdminSession } from "./AdminSessionProvider";
 import { SourceProviderIcon } from "./SourceProviderIcon";
 import { editableCollectionSourceKeys, itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
+import { useDebouncedValue } from "@/hooks/useDebounce";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -55,15 +56,6 @@ import {
 
 const MAX_VISUAL_DEPTH = 8;
 const ROW_HEIGHT = 36;
-
-function useDebouncedValue(value: string, delay: number) {
-	const [debounced, setDebounced] = useState(value);
-	useEffect(() => {
-		const timeout = window.setTimeout(() => setDebounced(value), delay);
-		return () => window.clearTimeout(timeout);
-	}, [delay, value]);
-	return debounced;
-}
 
 function useResolvedCataloguePath(key: string | null, generation: number) {
 	const { entries, retry: retryEntry } = useResolvedAdminCollections(
