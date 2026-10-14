@@ -3,8 +3,8 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
@@ -135,6 +135,28 @@ function SelectionChip({
 				</button>
 			)}
 		</motion.li>
+	);
+}
+
+/**
+ * One list's rows. The rows of the place just left fade out under the new
+ * ones and can't be used meanwhile; with reduced motion they swap at once.
+ */
+function ResultRows({ children, height, reduceMotion }: { children: ReactNode; height: number; reduceMotion: boolean | null }) {
+	const present = useIsPresent();
+	return (
+		<motion.div
+			animate={{ opacity: 1 }}
+			aria-hidden={present ? undefined : true}
+			className="relative w-full"
+			exit={{ opacity: 0 }}
+			inert={present ? undefined : true}
+			initial={reduceMotion ? false : { opacity: 0 }}
+			style={{ height }}
+			transition={{ duration: reduceMotion ? 0 : 0.2 }}
+		>
+			{children}
+		</motion.div>
 	);
 }
 
@@ -785,17 +807,7 @@ export function AdminCollectionPicker({
 								// stay on top while they fade, so no frame is left empty. The wrapper places them in the scrolled list.
 								<div className="relative">
 								<AnimatePresence mode="popLayout">
-								<motion.div
-									animate={{ opacity: 1 }}
-									className="relative w-full"
-									exit={{ opacity: 0 }}
-									initial={{ opacity: 0 }}
-									key={itemsKey ?? "first"}
-									style={{
-										height: virtualizer.getTotalSize(),
-									}}
-									transition={{ duration: reduceMotion ? 0 : 0.2 }}
-								>
+								<ResultRows height={virtualizer.getTotalSize()} key={itemsKey ?? "first"} reduceMotion={reduceMotion}>
 									{virtualizer
 										.getVirtualItems()
 										.map((virtualRow) => {
@@ -869,7 +881,7 @@ export function AdminCollectionPicker({
 												</div>
 											);
 										})}
-								</motion.div>
+								</ResultRows>
 								</AnimatePresence>
 								</div>
 							)}

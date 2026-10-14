@@ -1582,7 +1582,7 @@ test("keeps collection results stable and inactive while browsing", async ({
 			return opacity > 0.05;
 		};
 		const sample = () => {
-			if (![...element.querySelectorAll("div.absolute.left-0.top-0")].some(painted)) sampled.emptyFrames += 1;
+			if (![...element.querySelectorAll("[data-admin-collection-result-row]")].some(painted)) sampled.emptyFrames += 1;
 			if (sampled.sampling) requestAnimationFrame(sample);
 		};
 		requestAnimationFrame(sample);
