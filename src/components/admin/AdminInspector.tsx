@@ -72,7 +72,7 @@ import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { Autocomplete } from "@/components/nextui/Autocomplete";
-import { filledInputSlots } from "@/components/nextui/field-styles";
+import { filledInputSlots, inspectorInputClassNames } from "@/components/nextui/field-styles";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
@@ -137,11 +137,6 @@ const writebackUnavailableMessage = {
 	"source-paused": "This record's source is paused.",
 	"source-removed": "This record's source has been removed.",
 	"unsupported-provider": "This source type does not support writeback.",
-} as const;
-
-const inspectorInputClassNames = {
-	input: "text-sm",
-	inputWrapper: `h-10 min-h-10 rounded-xl ${filledInputSlots.inputWrapper}`,
 } as const;
 
 const inspectorTextareaClassNames = {
