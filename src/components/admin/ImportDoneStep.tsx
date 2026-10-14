@@ -76,7 +76,7 @@ function DoiRoute({ flow, view }: { flow: ImportFlowState; view: PublishView }) 
 	const route = flow.batch!.publishRoute;
 	return (
 		<Setting icon={Link01Icon} summary={route ? ROUTE_LABELS[route] : "None"} title="DOI provider">
-			<DoiChoice flow={flow} route={route} started={view.started} />
+			<DoiChoice flow={flow} route={route} started={view.routeHeld} />
 		</Setting>
 	);
 }
