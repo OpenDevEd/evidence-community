@@ -10,10 +10,12 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { DraftState, publishView } from "./ImportDone";
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
+import { Switch } from "@/components/nextui/Switch";
+
 import { InspectorChoices } from "./InspectorChoices";
 import { DOI_PROVIDER_HELP, doiProviderOptions } from "./PublishingChoicePanel";
 import { countSummary, ListHeader, Setting, SettingsGroup, SummaryRow } from "./import-parts";
-import { coverOf } from "./admin-import";
+import { coverOf, type ImportBatch } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 
 const ROWS_PER_PAGE = 8;
@@ -72,14 +74,24 @@ function PdfsAttached({ view }: { view: PublishView }) {
 function DoiRoute({ flow, view }: { flow: ImportFlowState; view: PublishView }) {
 	if (!view.created) return null;
 	const route = flow.batch!.publishRoute;
-	const started = view.started;
 	return (
-		<Setting icon={Link01Icon} summary={ROUTE_LABELS[route]} title="DOI provider">
-			<div className="flex flex-col gap-2">
-				<InspectorChoices disabled={started} label="DOI provider" onChange={flow.setPublishRoute} options={doiProviderOptions(null, "reuse-crossref")} value={route} variant="inset" />
-				<p className="text-xs leading-5 text-black/50 dark:text-white/50">{DOI_PROVIDER_HELP[route]} Drafts that came with a DOI keep it.</p>
-			</div>
+		<Setting icon={Link01Icon} summary={route ? ROUTE_LABELS[route] : "None"} title="DOI provider">
+			<DoiChoice flow={flow} route={route} started={view.started} />
 		</Setting>
+	);
+}
+
+/** Whether the drafts get a DOI, switched on as on a record of its own, and from which provider. */
+function DoiChoice({ flow, route, started }: { flow: ImportFlowState; route: ImportBatch["publishRoute"]; started: boolean }) {
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-between gap-3">
+				<span className="text-xs font-medium text-black/80 dark:text-white/85">Register a DOI</span>
+				<Switch aria-label="Register a DOI" color="accent" isDisabled={started} isSelected={Boolean(route)} onValueChange={(selected) => flow.setPublishRoute(selected ? "zenodo" : null)} />
+			</div>
+			{route ? <InspectorChoices disabled={started} label="DOI provider" onChange={flow.setPublishRoute} options={doiProviderOptions(null, "reuse-crossref")} value={route} variant="inset" /> : null}
+			<p className="text-xs leading-5 text-black/50 dark:text-white/50">{route ? DOI_PROVIDER_HELP[route] : "Publish without a DOI or Zenodo archive."} Drafts that came with a DOI keep it.</p>
+		</div>
 	);
 }
 

@@ -216,8 +216,8 @@ export type ImportBatch = {
 	importId: string;
 	kind: ImportKind;
 	publish: ReadonlyMap<string, PublishState>;
-	/** How drafts made from PDFs get their DOI, as on a record made in the library. */
-	publishRoute: PublishingChoice["route"];
+	/** How drafts made from PDFs get their DOI, as on a record made in the library; null publishes them without one. */
+	publishRoute: PublishingChoice["route"] | null;
 	results: AdminImportCommitResult[] | null;
 	rows: ImportRow[];
 	/** The drafts ticked for publishing, once the editor changes the default. */
@@ -245,7 +245,7 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: "zenodo" as const, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: null, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
@@ -267,7 +267,7 @@ type SavedChoices = {
 	collections: string[];
 	excluded: string[];
 	importId: string;
-	publishRoute: PublishingChoice["route"];
+	publishRoute: PublishingChoice["route"] | null;
 	toPublish: string[] | null;
 };
 
