@@ -66,10 +66,14 @@ async function sentDrafts(db: Database, results: AdminImportCommitResult[] | nul
 	const rowByKey = new Map((results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey ? [[itemKey, id] as const] : [])));
 	if (!rowByKey.size) return { reviews: {}, sent: {} };
 	const keys = [...rowByKey.keys()];
-	const [published, waiting] = await Promise.all([
-		db.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
-		db.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
-	]);
+	// One snapshot for both, so an approval committing between them can't hide a draft from both.
+	const [published, waiting] = await db.transaction(
+		async (snapshot) => [
+			await snapshot.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
+			await snapshot.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
+		] as const,
+		{ accessMode: "read only", isolationLevel: "repeatable read" },
+	);
 	return {
 		reviews: Object.fromEntries(waiting.map(({ id, key, revision }) => [rowByKey.get(key)!, { id, revision }])),
 		sent: Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]),
