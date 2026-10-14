@@ -80,10 +80,18 @@ describe("the finish step", () => {
 	});
 
 	// A retry approves the review a failed send left pending, which keeps the DOI choice it was submitted with.
-	it("holds the DOI route while a failed draft's review is pending, and frees it once an editor withdraws it", () => {
-		const failed = { ...batch([["1", "attached"]]), publish: new Map([["1", { message: "Zenodo publishing is not configured", state: "failed" as const }]]) };
-		expect(view({ ...failed, reviews: { 1: { id: "review-1", revision: 1 } } }).routeHeld).toBe(true);
+	it("holds the DOI route to a failed draft's pending review, and frees it once an editor withdraws it", async () => {
+		const { routeOf } = await import("@/components/admin/admin-import");
+		const failed = { ...batch([["1", "attached"]]), publish: new Map([["1", { message: "Zenodo publishing is not configured", state: "failed" as const }]]), publishRoute: "crossref-zenodo" as const };
+		const pending = { ...failed, reviews: { 1: { id: "review-1", revision: 1, route: "zenodo" as const } } };
+		expect(view(pending).routeHeld).toBe(true);
+		expect(routeOf(pending)).toBe("zenodo");
 		expect(view(failed).routeHeld).toBe(false);
+		expect(routeOf(failed)).toBe("crossref-zenodo");
+		// A draft imported with its DOI keeps it, so its review holds no route.
+		const imported = { ...pending, results: [{ ...created("1"), kind: "imported" as const }] };
+		expect(view(imported).routeHeld).toBe(false);
+		expect(routeOf(imported)).toBe("crossref-zenodo");
 	});
 
 	// The server sends an import's drafts on as their PDFs attach; the finish step offers only what it couldn't send.

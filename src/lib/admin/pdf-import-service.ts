@@ -3,7 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 
 import { itemDraft } from "@opendeved/evidence-library-core";
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db";
 import { pdfImport, pdfImportFile, type ImportSend } from "@/db/schema/pdf-import";
@@ -93,6 +93,9 @@ function unsentNeeds(drafts: AdminImportCommitResult[], patches: { key: string; 
 	return Object.fromEntries(needs.filter(([, routes]) => Object.keys(routes).length));
 }
 
+/** The DOI route a review was submitted on, from its snapshot. */
+const REVIEW_ROUTE = sql<AdminPdfImport["reviews"][string]["route"]>`${itemReview.snapshot}->'publishingChoice'->>'route'`;
+
 /**
  * Where the imported drafts stand, by row: those already sent on (published
  * ones are records now, submitted ones wait in a review, which is given too),
@@ -107,7 +110,7 @@ async function draftStates(db: Database, results: AdminImportCommitResult[] | nu
 	const [published, waiting, patches] = await db.transaction(
 		async (snapshot) => [
 			await snapshot.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
-			await snapshot.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
+			await snapshot.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision, route: REVIEW_ROUTE }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
 			await snapshot.select({ key: itemDraft.itemKey, patch: itemDraft.patch }).from(itemDraft).where(inArray(itemDraft.itemKey, keys)),
 		] as const,
 		{ accessMode: "read only", isolationLevel: "repeatable read" },
@@ -115,7 +118,7 @@ async function draftStates(db: Database, results: AdminImportCommitResult[] | nu
 	const sent: AdminPdfImport["sent"] = Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]);
 	return {
 		needs: unsentNeeds(drafts, patches, sent),
-		reviews: Object.fromEntries(waiting.map(({ id, key, revision }) => [rowByKey.get(key)!, { id, revision }])),
+		reviews: Object.fromEntries(waiting.map(({ id, key, revision, route }) => [rowByKey.get(key)!, { id, revision, route }])),
 		sent,
 	};
 }
