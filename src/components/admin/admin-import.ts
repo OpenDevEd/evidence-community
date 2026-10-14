@@ -255,8 +255,20 @@ export function usePdfImportStatus() {
 	});
 }
 
-/** This tab's DOI or bibliography import, which a lookup that ends late must not replace. */
-export const otherImportBatch = () => other;
+// The DOI or file lookup the open sheet waits for. Closing the sheet drops it, so an answer that comes later never
+// takes over whatever the sheet shows when it opens again.
+let lookup: symbol | null = null;
+
+export function startLookup() {
+	lookup = Symbol("lookup");
+	return lookup;
+}
+
+export function dropLookup() {
+	lookup = null;
+}
+
+export const lookupStands = (token: symbol) => lookup === token;
 
 export function endImportBatch(importId: string) {
 	if (pdfs?.importId === importId) setSlot("pdfs", null);

@@ -41,7 +41,9 @@ import {
 	rowsFromRecords,
 	selectedIds,
 	selectedImportRecords,
-	otherImportBatch,
+	dropLookup,
+	lookupStands,
+	startLookup,
 	startImportBatch,
 	useImportBatches,
 	usePdfImportStatus,
@@ -180,9 +182,11 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 				return;
 			}
 			const importId = crypto.randomUUID();
+			const token = startLookup();
 			const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files));
-			// The dialog may have closed and started another import while this lookup ran.
-			if (otherImportBatch()) return;
+			// The sheet may have closed while this lookup ran.
+			if (!lookupStands(token)) return;
+			dropLookup();
 			const previewRows = rowsFromRecords(response.records);
 			setActiveId(previewRows[0]?.id ?? null);
 			startImportBatch({ checks: [], collections, importId, kind, rows: previewRows });
@@ -287,6 +291,8 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 	const restart = () =>
 		run(async () => {
 			await end();
+			// Leaving a DOI or file import goes back to the Add step, even with a PDF import open.
+			if (batch?.kind !== "pdfs") setBesidePdfs(true);
 			if (stage === "done") {
 				setPdfs([]);
 				setFiles([]);
@@ -294,10 +300,15 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 			}
 		});
 
+	const close = () => {
+		dropLookup();
+		onClose();
+	};
+
 	const finish = () =>
 		run(async () => {
 			await end();
-			onClose();
+			close();
 		});
 
 	const importId = batch?.importId ?? "";
@@ -322,7 +333,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		footerProblem: stage === "input" && (kind === "pdfs" ? pdfs.length : kind === "files" ? files.length : doiText.trim() && !parseDoiList(doiText).invalid.length) ? problem : null,
 		kind,
 		locked,
-		onClose,
+		onClose: close,
 		onOpenRecord,
 		pdfs,
 		primaryLabel: { dois: action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs"), files: action("Read", files.length, "file", "files"), pdfs: openPdfs ? action("Review", openPdfs.rows.length, "PDF", "PDFs") : action("Read", pdfs.length, "PDF", "PDFs") }[kind],

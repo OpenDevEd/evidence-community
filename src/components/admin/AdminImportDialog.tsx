@@ -43,7 +43,7 @@ function ImportHost({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean })
 			hideCloseButton
 			isOpen={isOpen}
 			onOpenChange={(open) => {
-				if (!open) props.onClose();
+				if (!open) flow.onClose();
 			}}
 			placement="right"
 			size="2xl"
