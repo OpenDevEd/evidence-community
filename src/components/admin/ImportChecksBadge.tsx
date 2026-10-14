@@ -6,6 +6,7 @@ import { CheckListIcon, Pdf01Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, useReducedMotion } from "framer-motion";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import useBreakpoint from "@/hooks/useBreakpoint";
 import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import type { AdminItemChecks } from "@/lib/admin/types";
 
@@ -21,9 +22,11 @@ function toneOf(passed: number, count: number) {
 const readOn = (at: string) => new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 const CARD = "w-[380px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-black/10 bg-card_light p-0 shadow-xl dark:border-white/10 dark:bg-card";
-// Out to the left of the record sidebar, beside the table, so it covers nothing being edited. The badge sits 20 px in
-// from the sidebar's edge.
-const PLACE = { offset: 32, placement: "left-start" } as const;
+// Where the table and the record sit side by side, out to the left of the record sidebar, beside the table, so it covers
+// nothing being edited; the badge sits 20 px in from the sidebar's edge. With one pane at a time there is no room
+// beside it, and below the badge the card is kept inside the window.
+const BESIDE = { offset: 32, placement: "left-start" } as const;
+const BELOW = { offset: 8, placement: "bottom-start" } as const;
 
 /**
  * The AI checks a record's PDF was read against when a PDF import made it, as
@@ -37,6 +40,8 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 	const [pinned, setPinned] = useState(false);
 	const trigger = useRef<HTMLButtonElement>(null!);
 	const cardId = useId();
+	// The workbench puts its panes side by side from xl.
+	const place = useBreakpoint("xl") ? BESIDE : BELOW;
 	if (!stored?.checks.length) return null;
 	const checks = heldChecks(stored, payload);
 	const passed = checks.filter(checkPasses).length;
@@ -55,7 +60,7 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 				onOpenChange={setHovered}
 				// A keyboard opens the card with a press, as a touch screen does; on focus it would come back after Escape.
 				openOnFocus={false}
-				{...PLACE}
+				{...place}
 			>
 				<button
 					ref={trigger}
@@ -89,7 +94,7 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 						onOpenChange={setPinned}
 						shouldBlockScroll={false}
 						triggerRef={trigger}
-						{...PLACE}
+						{...place}
 					>
 						{content}
 					</FreeSoloPopover>
