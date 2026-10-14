@@ -67,6 +67,8 @@ const adminImportCommitRequestSchema = z.object({
 		.refine((records) => new Set(records.map(({ id }) => id)).size === records.length, {
 			message: "Each record must be unique.",
 		}),
+	/** A PDF import's drafts go on once their PDFs are attached, with this DOI route (null: no DOI); left out, they stay drafts. */
+	send: z.object({ route: z.enum(["zenodo", "crossref-zenodo"]).nullable() }).nullable().optional(),
 });
 
 export const adminImportRequestSchema = z.discriminatedUnion("action", [
@@ -185,6 +187,10 @@ export type AdminPdfImportFile = {
 /** The library's one PDF import: what it reads against, its PDFs, and once imported, what became of each. */
 export type AdminPdfImport = {
 	attach: Record<string, "attached" | "failed">;
+	/** Whether the import sends its drafts on once their PDFs are attached, and with which DOI route (null: none). */
+	send: { route: "zenodo" | "crossref-zenodo" | null } | null;
+	/** Drafts it sends on that haven't gone yet, by row: waiting for their PDF and the worker, held for something publishing needs, or failed, with why. */
+	sending: Record<string, { message: string | null; state: "failed" | "held" | "waiting" }>;
 	checks: string[];
 	collections: string[];
 	createdAt: string;

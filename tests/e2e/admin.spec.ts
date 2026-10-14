@@ -6237,7 +6237,7 @@ test.describe("PDF import", () => {
 			}
 			const body = route.request().postDataJSON();
 			if (body.action === "start") {
-				pdfImport = { attach: {}, checks: body.checks, collections: body.collections, createdAt: new Date().toISOString(), files: [file("uploading", false)], id: "import-1", instructions: body.instructions, needs: {}, results: null, reviews: {}, sent: {} };
+				pdfImport = { attach: {}, checks: body.checks, collections: body.collections, createdAt: new Date().toISOString(), files: [file("uploading", false)], id: "import-1", instructions: body.instructions, needs: {}, results: null, reviews: {}, send: null, sending: {}, sent: {} };
 				return route.fulfill({ json: { files: [{ filename: "report.pdf", id: "file-1", upload: { signedUrl: "http://127.0.0.1:9/storage/report.pdf" } }], id: "import-1" } });
 			}
 			if (body.action === "uploaded") {

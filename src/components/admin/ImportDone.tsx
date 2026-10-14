@@ -7,7 +7,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
-import { appliedOf, checkPasses, draftNeeds, needsText, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { appliedOf, checkPasses, draftNeeds, needsText, reviewChecks, routeOf, rowPasses, serverSending, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 import { useAdminPublication } from "./useAdminPublication";
 
 /** A new draft, with what it still needs to publish on the route it takes. */
@@ -31,15 +31,32 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 }
 
 /** Where a new draft stands: on its way, published with its DOI, waiting for an editor, what it needs before it can go, or how its checks went. */
-export function DraftState({ attach, draft, publish, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; verbs: SendVerbs }) {
+type ServerSend = ImportBatch["sending"][string];
+
+export function DraftState({ attach, draft, publish, server, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; server?: ServerSend; verbs: SendVerbs }) {
 	if (publish && publish.state !== "failed") return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
 	if (attach === "failed") return <AlertNote text="The PDF didn't attach, so it stays a draft" />;
+	// The server sending it on, unless this tab has sent it again since.
+	if (server && !publish) return <ServerSendState attached={attach === "attached"} itemKey={draft.itemKey} server={server} verbs={verbs} />;
 	// Completed in the record editor; the import's status says once it is. What it needs now outranks why an earlier
 	// send failed, which may have been on another route.
 	if (Object.keys(draft.needs).length) return <AlertNote text={needsText(draft.needs)} tone="text-amber-700 dark:text-amber-400" />;
 	if (publish) return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
 	return <ChecksState draft={draft} />;
 }
+
+/**
+ * A draft the server sends on as its PDF is attached: waiting for the PDF,
+ * on its way, held for something its route needs, or failed, with why. Sent
+ * ones show as published or submitted from the import's status.
+ */
+function ServerSendState({ attached, itemKey, server, verbs }: { attached: boolean; itemKey: string; server: ServerSend; verbs: SendVerbs }) {
+	if (server.state !== "waiting") return <AlertNote text={server.message ?? "It couldn't be sent on"} tone={server.state === "held" ? HELD_TONE : undefined} />;
+	if (attached) return <SentState itemKey={itemKey} publish={{ state: "sending" }} verbs={verbs} />;
+	return <span className={`${note} text-black/45 dark:text-white/45`}>Waiting for its PDF</span>;
+}
+
+const HELD_TONE = "text-amber-700 dark:text-amber-400";
 
 /** A draft sent on from the finish step: on its way, published, waiting for an editor, or failed. */
 function SentState({ itemKey, publish, verbs }: { itemKey: string; publish: PublishState; verbs: SendVerbs }) {
@@ -110,7 +127,8 @@ function sending(batch: ImportBatch) {
 	const states = [...batch.publish.values()];
 	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
 	const started = states.some(({ state }) => state === "sending");
-	return { routeHeld: started || [...batch.publish].some(([id, { state }]) => state === "failed" && batch.reviews[id]), sentIds, started };
+	// The server sending the drafts on holds the route too, until it has.
+	return { routeHeld: started || serverSending(batch) || [...batch.publish].some(([id, { state }]) => state === "failed" && batch.reviews[id]), sentIds, started };
 }
 
 /**
@@ -122,12 +140,12 @@ function sending(batch: ImportBatch) {
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, batch.publishRoute, id, kind), row: rowById.get(id)! }] : []));
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, routeOf(batch), id, kind), row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
 	const { routeHeld, sentIds, started } = sending(batch);
 	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again. One that
 	// still needs a field the route asks for waits until the editor completes it in the record.
-	const publishable = drafts.filter(({ needs, row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id) && !Object.keys(needs).length);
+	const publishable = drafts.filter(({ needs, row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id) && !Object.keys(needs).length && batch.sending[row.id]?.state !== "waiting");
 	const publishableIds = publishable.map(({ row }) => row.id);
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
@@ -159,6 +177,8 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		sentIds,
 		/** Whether the DOI route can still change for the drafts to come. */
 		routeHeld,
+		/** Whether the server still has drafts to send on; it sends them itself, so they aren't offered here. */
+		serverSending: serverSending(batch),
 		publishable: publishableIds,
 		sent,
 		verbs,

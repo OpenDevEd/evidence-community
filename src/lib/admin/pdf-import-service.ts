@@ -6,7 +6,7 @@ import { itemDraft } from "@opendeved/evidence-library-core";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import type { Database } from "@/db";
-import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
+import { pdfImport, pdfImportFile, type ImportSend } from "@/db/schema/pdf-import";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 
@@ -60,6 +60,10 @@ function repeatedFiles(files: FileRow[]) {
 
 // A ready record of a repeated PDF repeats the earlier one; one already found in the library stays found.
 const asRepeat = (reading: PdfReading): PdfReading => (reading.record.state === "ready" ? { ...reading, record: { ...reading.record, state: "repeated" } } : reading);
+
+/** Where sending each imported draft on stands, by row, for an import that sends them: waiting, held or failed with why. Sent ones are in `sent`. */
+const sendStates = (files: FileRow[]): AdminPdfImport["sending"] =>
+	Object.fromEntries(files.flatMap(({ position, sendError, sendState }) => (sendState && sendState !== "sent" ? [[String(position), { message: sendError, state: sendState }]] : [])));
 
 /** What attaching did for each imported draft, by its row: attached, or failed for good. */
 const attachOutcomes = (files: FileRow[]) =>
@@ -139,6 +143,8 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
+		send: open.send && { route: open.send.route },
+		sending: sendStates(files),
 		...(await draftStates(db, open.results)),
 	};
 	return { import: view, last: lastUsed };
@@ -221,6 +227,9 @@ export async function closePdfImport(db: Database, storage: EvidenceFileStorage,
 		if (!current.results && current.commitStartedAt && current.commitStartedAt.getTime() > Date.now() - COMMIT_WAIT_MS) throw new AdminValidationError("The records are being imported. Close the import once they are.");
 		const [attaching] = await transaction.select({ id: pdfImportFile.id }).from(pdfImportFile).where(and(eq(pdfImportFile.importId, importId), eq(pdfImportFile.attachState, "waiting"))).limit(1);
 		if (attaching) throw new AdminValidationError("The drafts are still getting their PDFs. Close the import once they have them.");
+		// The worker sends them on from the import, so it stays open until it has.
+		const [sending] = await transaction.select({ id: pdfImportFile.id }).from(pdfImportFile).where(and(eq(pdfImportFile.importId, importId), eq(pdfImportFile.attachState, "attached"), eq(pdfImportFile.sendState, "waiting"))).limit(1);
+		if (sending) throw new AdminValidationError("The drafts are still being sent on. Close the import once they have been.");
 		await transaction.update(pdfImport).set({ closedAt: new Date() }).where(eq(pdfImport.id, importId));
 	});
 	// The worker removes them again once their upload links have stopped working, and so retries what a storage failure leaves.
@@ -232,17 +241,20 @@ export async function closePdfImport(db: Database, storage: EvidenceFileStorage,
  * draft's PDF for the worker, in one transaction, so a retry never makes
  * them twice and no draft is left waiting for a PDF nobody queued.
  */
-async function createDrafts(db: Database, input: Omit<AdminImportCommitRequest, "action">) {
+type CommitInput = Omit<AdminImportCommitRequest, "action" | "send"> & { send?: ImportSend };
+
+async function createDrafts(db: Database, input: CommitInput) {
 	return db.transaction(async (transaction) => {
 		const [current] = await transaction.select({ closedAt: pdfImport.closedAt }).from(pdfImport).where(eq(pdfImport.id, input.importId)).for("update");
 		if (current?.closedAt) throw new AdminValidationError("This import was closed in another tab.");
-		const { results } = await commitImportRecords(transaction, { ...input, action: "commit" });
-		await transaction.update(pdfImport).set({ results }).where(eq(pdfImport.id, input.importId));
+		const { results } = await commitImportRecords(transaction, { ...input, action: "commit", send: null });
+		await transaction.update(pdfImport).set({ results, send: input.send ?? null }).where(eq(pdfImport.id, input.importId));
 		for (const { id, itemKey, outcome } of results) {
 			if (outcome !== "created" || !itemKey) continue;
+			// A draft sent on goes once its PDF is attached, so it waits with it.
 			await transaction
 				.update(pdfImportFile)
-				.set({ attachState: "waiting", attachTo: itemKey, attempts: 0, nextAttemptAt: new Date() })
+				.set({ attachState: "waiting", attachTo: itemKey, attempts: 0, nextAttemptAt: new Date(), sendState: input.send ? "waiting" : null })
 				.where(and(eq(pdfImportFile.importId, input.importId), eq(pdfImportFile.position, Number(id)), isNotNull(pdfImportFile.objectPath)));
 		}
 		return results;
@@ -255,7 +267,7 @@ async function createDrafts(db: Database, input: Omit<AdminImportCommitRequest, 
  * retry can't import the records twice; one that comes after them gets the
  * records already made.
  */
-export async function commitPdfImport(db: Database, input: Omit<AdminImportCommitRequest, "action">) {
+export async function commitPdfImport(db: Database, input: CommitInput) {
 	const [claimed] = await db
 		.update(pdfImport)
 		.set({ commitStartedAt: new Date() })

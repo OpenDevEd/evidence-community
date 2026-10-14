@@ -2,6 +2,11 @@ import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import type { AdminImportCommitResult, PdfReading } from "@/lib/admin/item-import-contract";
+import type { ReviewActor } from "@/lib/admin/review-service";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
+
+/** Sending an import's drafts on as the editor who imported them, with the DOI route they chose (null: no DOI). */
+export type ImportSend = { actor: ReviewActor; route: PublishingChoice["route"] | null } | null;
 
 /** The library's PDF import: one at a time, read in the publication worker, closed once imported or discarded. */
 export const pdfImport = pgTable("pdfImport", {
@@ -14,6 +19,8 @@ export const pdfImport = pgTable("pdfImport", {
 	/** Set while one request imports the records, so a second can't import them again. */
 	commitStartedAt: timestamp("commitStartedAt", { withTimezone: true }),
 	results: jsonb("results").$type<AdminImportCommitResult[]>(),
+	/** Whether the drafts go on once their PDFs are attached, as whom and with which DOI route; null keeps them as drafts. */
+	send: jsonb("send").$type<ImportSend>(),
 	closedAt: timestamp("closedAt", { withTimezone: true }),
 	/** Set once a closed import's stored PDFs are gone, confirmed uploads or not. */
 	filesRemovedAt: timestamp("filesRemovedAt", { withTimezone: true }),
@@ -40,6 +47,9 @@ export const pdfImportFile = pgTable("pdfImportFile", {
 	sha256: text("sha256"),
 	/** The draft importing made from this PDF, which the worker gives the PDF. */
 	attachTo: text("attachTo"),
+	/** Sending the imported draft on: waiting for its PDF and the worker, sent, held for something publishing needs, or failed. */
+	sendState: text("sendState", { enum: ["waiting", "sent", "held", "failed"] }),
+	sendError: text("sendError"),
 	attachState: text("attachState").$type<"waiting" | "attached" | "failed">(),
 	/** The attachment draft the worker made for this PDF, kept so an interrupted attachment carries on with it. */
 	attachmentKey: text("attachmentKey"),

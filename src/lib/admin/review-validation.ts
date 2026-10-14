@@ -61,6 +61,9 @@ export function validateReviewPayload(
 	return validated;
 }
 
+/** What publishing needs, a sentence each, in the words of the record editor's Review requirements, which name the field. */
+export const needsText = (needs: AdminFieldErrors) => `${Object.values(needs).map((text) => text.replace(/\.$/u, "")).join(". ")}.`;
+
 /** What the record still needs before it can publish with this choice, by field, in the words the record editor's Review requirements show; empty when nothing. */
 export function publishingNeeds(
 	payload: unknown,

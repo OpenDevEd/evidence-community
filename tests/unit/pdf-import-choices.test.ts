@@ -23,6 +23,8 @@ const server: AdminPdfImport = {
 	instructions: "",
 	needs: {},
 	results: null,
+	send: null,
+	sending: {},
 	reviews: {},
 	sent: {},
 };

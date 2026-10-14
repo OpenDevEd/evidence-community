@@ -48,11 +48,14 @@ describe("the finish step", () => {
 		importId: "import-1",
 		kind: "pdfs",
 		needs: {},
+		outcome: "drafts",
 		publish: new Map(),
 		publishRoute: "zenodo",
 		results: rows.map(({ id }) => created(id)),
 		reviews: {},
 		rows,
+		send: null,
+		sending: {},
 		toPublish: null,
 	});
 	const view = (current: ImportBatch) => publishView(current, () => {}, true);
@@ -81,6 +84,15 @@ describe("the finish step", () => {
 		const failed = { ...batch([["1", "attached"]]), publish: new Map([["1", { message: "Zenodo publishing is not configured", state: "failed" as const }]]) };
 		expect(view({ ...failed, reviews: { 1: { id: "review-1", revision: 1 } } }).routeHeld).toBe(true);
 		expect(view(failed).routeHeld).toBe(false);
+	});
+
+	// The server sends an import's drafts on as their PDFs attach; the finish step offers only what it couldn't send.
+	it("holds back drafts the server is still sending on, and offers one whose send failed again", () => {
+		const current = { ...batch([["1", "attached"], ["2", "attached"]]), send: { route: null }, sending: { 1: { message: null, state: "waiting" as const }, 2: { message: "Zenodo couldn't be reached", state: "failed" as const } } };
+		expect(view(current)).toMatchObject({ publishable: ["2"], routeHeld: true, serverSending: true });
+		// Once sent, the store takes the server's word that it is published.
+		const sent = { ...current, publish: new Map([["1", { state: "published" as const }]]), sending: { 2: current.sending[2] } };
+		expect(view(sent)).toMatchObject({ publishable: ["2"], routeHeld: false, serverSending: false });
 	});
 
 	it("ticks the drafts that pass every check, and leaves the rest to the editor", () => {

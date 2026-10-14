@@ -12,6 +12,7 @@ import {
 	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
 	adminImportRequestSchema,
 } from "@/lib/admin/item-import-contract";
+import type { ReviewActor } from "@/lib/admin/review-service";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, startPdfImport } from "@/lib/admin/pdf-import-service";
 
 const startSchema = z.object({
@@ -36,8 +37,8 @@ export function GET(request: NextRequest) {
 type Runtime = Awaited<ReturnType<typeof getNativeFileRuntime>>;
 
 // What each action of the import does, by name; any other body is the commit.
-const actions: Record<string, (runtime: Runtime, body: unknown, clerkUserId: string) => Promise<Record<string, unknown>>> = {
-	start: (runtime, body, clerkUserId) => startPdfImport(runtime.db, runtime.storage, runtime.config.services.storage.maxPdfBytes, { ...startSchema.parse(body), createdBy: clerkUserId }),
+const actions: Record<string, (runtime: Runtime, body: unknown, actor: ReviewActor) => Promise<Record<string, unknown>>> = {
+	start: (runtime, body, { userId }) => startPdfImport(runtime.db, runtime.storage, runtime.config.services.storage.maxPdfBytes, { ...startSchema.parse(body), createdBy: userId }),
 	uploaded: async (runtime, body) => {
 		const { fileId } = uploadedSchema.parse(body);
 		await confirmPdfImportUpload(runtime.db, runtime.storage, fileId);
@@ -55,10 +56,11 @@ const actions: Record<string, (runtime: Runtime, body: unknown, clerkUserId: str
 	},
 };
 
-async function commit(runtime: Runtime, body: unknown) {
+/** Imports the chosen records; drafts sent on go as the person importing them, published by an editor or owner, submitted by anyone else. */
+async function commit(runtime: Runtime, body: unknown, actor: ReviewActor) {
 	const request = adminImportRequestSchema.parse({ ...(body as object), action: "commit" });
 	if (request.action !== "commit") throw new AdminValidationError("Choose the records to import.");
-	return commitPdfImport(runtime.db, request);
+	return commitPdfImport(runtime.db, { ...request, send: request.send ? { actor, route: request.send.route } : null });
 }
 
 /**
@@ -71,6 +73,6 @@ export function POST(request: NextRequest) {
 		const runtime = await getNativeFileRuntime();
 		const body = (await readAdminJson(request)) as { action?: unknown };
 		const act = (typeof body.action === "string" && Object.hasOwn(actions, body.action) ? actions[body.action] : undefined) ?? commit;
-		return act(runtime, body, session.clerkUserId);
+		return act(runtime, body, { role: session.role, userId: session.clerkUserId });
 	});
 }

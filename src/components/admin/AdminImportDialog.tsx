@@ -72,7 +72,7 @@ function ImportSheet({ flow }: { flow: ImportFlowState }) {
 				</StageFade>
 				{/* On a phone the actions wrap under the collections rather than clip them. */}
 				<footer className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-t border-black/[0.06] px-5 py-3 dark:border-white/[0.06]">
-					<FooterNote flow={flow} />
+					<FooterNote canPublish={canPublish} flow={flow} />
 					<span className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
 						<StageActions canPublish={canPublish} flow={flow} view={view} />
 					</span>
@@ -117,18 +117,42 @@ function StageBody({ flow, view }: { flow: ImportFlowState; view: PublishView | 
 const hasProblem = (flow: ImportFlowState) => Boolean(flow.error || flow.footerProblem);
 
 /** A problem with the input, what happens next in the review, or how to add files. */
-function FooterNote({ flow }: { flow: ImportFlowState }) {
+function FooterNote({ canPublish, flow }: { canPublish: boolean; flow: ImportFlowState }) {
 	if (hasProblem(flow)) return <InputNote flow={flow} />;
-	if (flow.stage === "review") return <p className="min-w-0 flex-1 basis-full text-xs leading-5 text-black/50 sm:basis-0 dark:text-white/50">{reviewNote(flow)}</p>;
+	if (flow.stage === "review") return <p className="min-w-0 flex-1 basis-full text-xs leading-5 text-black/50 sm:basis-0 dark:text-white/50">{reviewNote(flow, canPublish)}</p>;
 	return flow.stage === "done" ? null : <DropHint flow={flow} />;
 }
 
-const reviewNote = (flow: ImportFlowState) => (flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts");
+// What importing will do with the chosen records, said by the note and the button.
+const sendingOn = (flow: ImportFlowState) => flow.batch?.kind === "pdfs" && flow.batch.outcome === "send";
+
+/** The chosen records that can go on as they are: the rest lack something publishing needs, named on their rows. */
+const sendableCount = (flow: ImportFlowState) => flow.rows.filter((row) => flow.selected.has(row.id) && !Object.keys(flow.needsOf(row)).length).length;
+
+function reviewNote(flow: ImportFlowState, canPublish: boolean) {
+	if (flow.reading) return "Reading carries on if you close this";
+	return sendingOn(flow) ? sendNote(flow, canPublish) : "The chosen records become drafts";
+}
+
+/** What sending on does with the chosen records: those lacking something publishing needs stay drafts. */
+function sendNote(flow: ImportFlowState, canPublish: boolean) {
+	const held = flow.selected.size - sendableCount(flow);
+	if (held) return `${held} ${held === 1 ? "stays a draft" : "stay drafts"} to complete in the editor`;
+	return canPublish ? "Published as their PDFs attach" : "Sent for review as their PDFs attach";
+}
+
+function importLabel(flow: ImportFlowState, canPublish: boolean) {
+	const sendable = sendableCount(flow);
+	if (!sendingOn(flow) || !sendable) return action("Import", flow.selected.size, "record", "records");
+	return sendLabel(flow.selected.size, sendable, canPublish ? "publish" : "submit");
+}
+
+const sendLabel = (chosen: number, sendable: number, verb: string) => (sendable === chosen ? `Import and ${verb} ${sendable}` : `Import ${chosen} and ${verb} ${sendable}`);
 
 function StageActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView | null }) {
 	if (flow.stage === "input") return <InputActions flow={flow} />;
 	if (view) return <DoneActions canPublish={canPublish} flow={flow} view={view} />;
-	return flow.stage === "review" ? <ReviewActions flow={flow} /> : null;
+	return flow.stage === "review" ? <ReviewActions canPublish={canPublish} flow={flow} /> : null;
 }
 
 function InputActions({ flow }: { flow: ImportFlowState }) {
@@ -145,7 +169,7 @@ function InputActions({ flow }: { flow: ImportFlowState }) {
 // A PDF import waits on the server, so leaving its review goes back beside it and discarding ends it.
 const pdfImport = (flow: ImportFlowState) => flow.batch?.kind === "pdfs";
 
-function ReviewActions({ flow }: { flow: ImportFlowState }) {
+function ReviewActions({ canPublish, flow }: { canPublish: boolean; flow: ImportFlowState }) {
 	return (
 		<>
 			{pdfImport(flow) ? (
@@ -157,7 +181,7 @@ function ReviewActions({ flow }: { flow: ImportFlowState }) {
 				{pdfImport(flow) ? "Discard" : "Back"}
 			</Button>
 			<Button className="min-w-32" color="accent" isDisabled={flow.reading || flow.selected.size === 0} isLoading={flow.locked} onPress={flow.commit} size="sm" variant="solid">
-				{action("Import", flow.selected.size, "record", "records")}
+				{importLabel(flow, canPublish)}
 			</Button>
 		</>
 	);
@@ -171,7 +195,8 @@ function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: Im
 			<Button isDisabled={busy} onPress={flow.restart} size="sm" variant="transparent">
 				Import more
 			</Button>
-			{view.offered ? (
+			{/* While the server sends the drafts on itself, there is nothing to send here. */}
+			{view.offered && !view.serverSending ? (
 				<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
 					{view.label}
 				</Button>

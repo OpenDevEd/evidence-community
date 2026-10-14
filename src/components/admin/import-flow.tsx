@@ -48,6 +48,7 @@ import {
 	reviewChecks,
 	reviewProgress,
 	reviewRows,
+	routeOf,
 	rowsFromRecords,
 	sendPdfUploads,
 	shownImport,
@@ -62,6 +63,7 @@ import {
 	withSuggestionToggled,
 	type ChoiceKind,
 	type ImportBatch,
+	type ImportOutcome,
 	type ImportRow,
 	type PublishState,
 	type ReviewFilter,
@@ -126,8 +128,11 @@ async function startLookupImport(inputs: { collections: string[]; doiText: strin
 }
 
 /** Imports the chosen records as drafts. A PDF import is kept on the server, which gives each new draft its PDF. */
+/** Sent on, the server publishes or submits each draft of a PDF import as its PDF is attached, so closing the tab doesn't stop it. */
+const sendOf = (batch: ImportBatch) => (batch.kind === "pdfs" && batch.outcome === "send" ? { route: batch.publishRoute } : null);
+
 async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"]) {
-	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled) };
+	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled), send: sendOf(batch) };
 	changeImportBatch(batch, (current) => ({ ...current, committing: true }));
 	try {
 		const { results } = batch.kind === "pdfs" ? await commitAdminPdfImport(input) : await commitAdminImport(input);
@@ -248,7 +253,7 @@ async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], appr
 	try {
 		await onBeforeSend(drafts.map(({ itemKey }) => itemKey));
 		const now = await sentNow(batch.importId);
-		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, batch.publishRoute, approve, now, mark));
+		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, routeOf(batch), approve, now, mark));
 	} catch (caught) {
 		failAll(caught);
 	}
@@ -301,6 +306,7 @@ function batchChanges(batch: ImportBatch | null) {
 		setSelected: (next: ReadonlySet<string>) => change((current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
 		choosePublish: (ids: ReadonlySet<string>) => change((current) => ({ ...current, toPublish: ids })),
 		setPublishRoute: (route: PublishingChoice["route"] | null) => change((current) => ({ ...current, publishRoute: route })),
+		setOutcome: (outcome: ImportOutcome) => change((current) => ({ ...current, outcome })),
 		toggleSuggestion: (rowId: string, index: number) => change((current) => withSuggestionToggled(current, rowId, index)),
 		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) => change((current) => withChoiceToggled(current, rowId, kind, id)),
 	};
@@ -385,7 +391,7 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		checksOf: (row: ImportRow) => reviewChecks(row, appliedFor(row)),
 		choicesOf,
 		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
-		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row)),
+		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), batch?.outcome === "send" ? batch.publishRoute : "later"),
 		commit: () => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported) : undefined)),
 		error,
 		filter,
