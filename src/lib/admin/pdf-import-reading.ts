@@ -287,31 +287,44 @@ async function attachClaimed(db: Database, storage: EvidenceFileStorage, config:
 	}
 }
 
-/** What a cycle's readers and attachers share: the worker's stop, and how many of them are at work. */
-type Cycle = { busy: number; signal: AbortSignal | undefined };
+/** What a cycle's readers and attachers share: the worker's stop, their claims under way, and how many PDFs they are working on. */
+type Cycle = { claims: Set<Promise<unknown>>; signal: AbortSignal | undefined; working: number };
 
 /** Runs `work` on each PDF claimed for it until there is nothing left to claim; true when it did any. */
 async function drain(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle, work: (file: FileRow, token: string) => Promise<void>) {
 	let worked = false;
 	for (let next = await claimInCycle(db, waiting, cycle); next; next = await claimInCycle(db, waiting, cycle)) {
 		worked = true;
-		cycle.busy++;
-		await work(next.file, next.token).finally(() => cycle.busy--);
+		await work(next.file, next.token).finally(() => cycle.working--);
 	}
 	return worked;
+}
+
+/** Claims the next PDF waiting, as one of the cycle's claims under way; a claimed PDF counts as work until its work ends. */
+function claimInto(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle) {
+	const claimed = claimNext(db, waiting).then((next) => {
+		if (next) cycle.working++;
+		return next;
+	});
+	cycle.claims.add(claimed);
+	return claimed.finally(() => cycle.claims.delete(claimed));
 }
 
 /**
  * The next PDF waiting for this work. When none waits but another in the
  * cycle is at work, it looks again every few seconds: an import's PDFs reach
  * storage seconds apart, and one that arrives mid-cycle gets a free reader
- * instead of waiting for a busy one. Null once nothing is left, or when the
- * worker is asked to stop, so a stopping worker leaves the next PDF unclaimed.
+ * instead of waiting for a busy one. Before deciding nothing is at work it
+ * lets the other claims under way settle, since one may bring a PDF. Null
+ * once nothing is left, or when the worker is asked to stop, so a stopping
+ * worker leaves the next PDF unclaimed.
  */
 async function claimInCycle(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle) {
 	while (!cycle.signal?.aborted) {
-		const next = await claimNext(db, waiting);
-		if (next || !cycle.busy) return next;
+		const next = await claimInto(db, waiting, cycle);
+		if (next) return next;
+		await Promise.allSettled(cycle.claims);
+		if (!cycle.working) return null;
 		await delay(LOOK_AGAIN_MS, undefined, { signal: cycle.signal }).catch(() => undefined);
 	}
 	return null;
@@ -326,7 +339,7 @@ async function claimInCycle(db: Database, waiting: ReturnType<typeof sql>, cycle
  */
 export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, signal?: AbortSignal) {
 	await removeLateImportFiles(db, storage).catch((error: unknown) => console.error("Removing closed imports' PDFs failed", error));
-	const cycle: Cycle = { busy: 0, signal };
+	const cycle: Cycle = { claims: new Set(), signal, working: 0 };
 	const done = await Promise.all([
 		...Array.from({ length: READ_AT_ONCE }, () => drain(db, TO_READ, cycle, (file, token) => readClaimed(db, storage, config, file, token, signal))),
 		...Array.from({ length: ATTACH_AT_ONCE }, () => drain(db, TO_ATTACH, cycle, (file, token) => attachClaimed(db, storage, config, file, token))),
