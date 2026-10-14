@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { connection, NextResponse } from "next/server";
 import { z } from "zod";
+import { fromError } from "zod-validation-error";
 
 import { LIBRARY_EXPORT_RECORD_CAP } from "@/config/library-config/exports";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -54,6 +55,8 @@ export const refusals = {
 	indexChanged: refusal("index_changed", "The library's search changed while it was read. Ask again.", 409),
 	notReader: refusal("not_reader", "This person has never signed in to this library.", 404),
 	role: refusal("role", "Only the collection's owner and its editors can change it.", 403),
+	owner: refusal("role", "Only the collection's owner can delete it.", 403),
+	changed: (message: string) => refusal("changed", message, 409),
 } as const;
 
 /**
@@ -104,6 +107,29 @@ export async function readerFor(config: LibraryServerConfig, database: Database,
 	if (!clerkUserId) return null;
 	if (!config.features.readerAccounts) return null;
 	return await readerIdOfClerkUser(database, clerkUserId);
+}
+
+/**
+ * A change OpenScholar asks for on one of a person's collections here: the request's body read with `schema`, and who
+ * the person is here. A refusal when the library keeps no reader accounts, the body doesn't fit or the person never
+ * signed in.
+ */
+export async function readerCollectionChange<Body>(request: Request, params: Promise<{ clerkUserId: string; id: string }>, config: LibraryServerConfig, database: Database, schema: z.ZodType<Body>) {
+	if (!config.features.readerAccounts) return { refused: refusals.readerAccountsOff };
+	// No body reads as {}; a body that isn't JSON is refused, never read as no conditions.
+	const text = await request.text();
+	let sent: unknown = {};
+	try {
+		if (text) sent = JSON.parse(text);
+	} catch {
+		return { refused: refusals.invalid("The request body isn't JSON.") };
+	}
+	const body = schema.safeParse(sent);
+	if (!body.success) return { refused: refusals.invalid(fromError(body.error).toString()) };
+	const { clerkUserId, id } = await params;
+	const readerId = await readerFor(config, database, clerkUserId);
+	if (!readerId) return { refused: refusals.notReader };
+	return { body: body.data, clerkUserId, id, readerId };
 }
 
 const sourceSchema = z.union([

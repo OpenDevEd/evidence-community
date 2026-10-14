@@ -7,19 +7,22 @@ import { generateCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { libraryConfigSchema } from "@/config/library-config/schema";
-import { readerAccount, readerCollectionMember, readerUser } from "@/db/schema/tables/reader";
+import { readerAccount, readerCollection, readerCollectionMember, readerUser } from "@/db/schema/tables/reader";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), connection: async () => {}, after: vi.fn() }));
 vi.mock("@/db", () => ({ getDatabase: vi.fn(), getDatabaseForConfig: vi.fn() }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
+vi.mock("@/lib/readers/collection-invitations", () => ({ cancelCollectionInvitations: vi.fn(async () => {}) }));
 
 import { getDatabaseForConfig } from "@/db";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { cancelCollectionInvitations } from "@/lib/readers/collection-invitations";
 import { POST as create } from "@/app/api/v1/openscholar/readers/[clerkUserId]/collections/route";
 import { DELETE as remove, POST as add } from "@/app/api/v1/openscholar/readers/[clerkUserId]/collections/[id]/records/route";
 import { POST as match } from "@/app/api/v1/openscholar/records/match/route";
+import { DELETE as deleteCollection } from "@/app/api/v1/openscholar/readers/[clerkUserId]/collections/[id]/route";
 
 it("makes a reader's collection once, changes its records as its owner or editor only, and matches papers to records", async () => {
 	await withIsolatedPublicationDatabase(async (database, sql) => {
@@ -77,5 +80,52 @@ it("makes a reader's collection once, changes its records as its owner or editor
 		// first by key when two share a DOI; a hidden record holds none.
 		const matched = await json(await match(request("POST", "/api/v1/openscholar/records/match", { reader: "user_amina", papers: [{ openalexId: "https://openalex.org/W7" }, { doi: "10.1000/abc" }, { openalexId: "W8" }, { doi: "10.9/none" }, {}, { openalexId: "W70" }, { doi: "10.2000/TWIN" }, { doi: "https://doi.org/10.3000/bracket" }] })));
 		expect(matched.body).toEqual({ matches: [{ at: 0, key: work }, { at: 1, key: native }, { at: 5, key: work }, { at: 6, key: twins.toSorted()[0] }, { at: 7, key: bracketed }] });
+	});
+});
+
+// OpenScholar's assistant undoes a collection it made by deleting it with what it made: a name and no records.
+it("deletes a reader's collection as its owner only, and refuses once it changed since", async () => {
+	await withIsolatedPublicationDatabase(async (database) => {
+		const config = libraryConfigSchema.parse(maximalLibraryConfig);
+		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
+		vi.mocked(getLibraryConfig).mockResolvedValue(config);
+		const headers = { Authorization: `Bearer ${config.authentication.openScholar.machineCredential}`, "OpenScholar-Contract": "1", "Content-Type": "application/json" };
+		const json = async (response: Response) => ({ status: response.status, body: await response.json() });
+		await database.insert(readerUser).values([
+			{ id: "reader-amina", name: "Amina", email: "amina@readers.openscholar.invalid" },
+			{ id: "reader-bob", name: "Bob", email: "bob@readers.openscholar.invalid" },
+			{ id: "reader-cy", name: "Cy", email: "cy@readers.openscholar.invalid" },
+		]);
+		await database.insert(readerAccount).values([
+			{ id: "account-amina", userId: "reader-amina", providerId: "openscholar", accountId: "user_amina" },
+			{ id: "account-bob", userId: "reader-bob", providerId: "openscholar", accountId: "user_bob" },
+			{ id: "account-cy", userId: "reader-cy", providerId: "openscholar", accountId: "user_cy" },
+		]);
+		const made = await json(await create(new Request("https://library.example.org/api/v1/openscholar/readers/user_amina/collections", { method: "POST", headers, body: JSON.stringify({ name: "Included", private: true, requestId: "step-1" }) }), { params: Promise.resolve({ clerkUserId: "user_amina" }) }));
+		const id: string = made.body.collection.id;
+		await database.insert(readerCollectionMember).values({ collectionId: id, userId: "reader-bob", role: "editor" });
+		const remove = (clerkUserId: string, body: unknown) =>
+			deleteCollection(new Request(`https://library.example.org/api/v1/openscholar/readers/${clerkUserId}/collections/${id}`, { method: "DELETE", headers, body: JSON.stringify(body) }), { params: Promise.resolve({ clerkUserId, id }) }).then(json);
+		const asMade = { name: "Included", description: null, private: true, records: 0, members: 1 };
+
+		// An editor can't delete it, and someone it isn't shared with doesn't learn it exists.
+		expect(await remove("user_bob", { expect: asMade })).toMatchObject({ status: 403, body: { error: "role" } });
+		expect(await remove("user_cy", { expect: asMade })).toMatchObject({ status: 404, body: { error: "not_found" } });
+
+		// A body cut short is refused, never read as no conditions.
+		const cut = await deleteCollection(new Request(`https://library.example.org/api/v1/openscholar/readers/user_amina/collections/${id}`, { method: "DELETE", headers, body: '{"expect":{"name":"Incl' }), { params: Promise.resolve({ clerkUserId: "user_amina", id }) });
+		expect(await json(cut)).toMatchObject({ status: 400, body: { error: "invalid_request" } });
+
+		// Changed since it was made, in any way its owner can change it: refused, and it stays.
+		expect(await remove("user_amina", { expect: { ...asMade, members: 0 } })).toMatchObject({ status: 409, body: { error: "changed", message: expect.stringContaining("sharing") } });
+		await database.update(readerCollection).set({ name: "Mine now", private: false }).where(eq(readerCollection.id, id));
+		expect(await remove("user_amina", { expect: asMade })).toMatchObject({ status: 409, body: { error: "changed", message: expect.stringContaining("name, privacy") } });
+		expect(await remove("user_amina", { expect: { ...asMade, name: "Mine now", private: false, records: 1 } })).toMatchObject({ status: 409, body: { error: "changed" } });
+
+		// As it is now: gone, its invitations cancelled, and a second try finds nothing.
+		expect(await remove("user_amina", { expect: { ...asMade, name: "Mine now", private: false } })).toEqual({ status: 200, body: { deleted: true } });
+		expect(await database.select().from(readerCollection).where(eq(readerCollection.id, id))).toEqual([]);
+		expect(vi.mocked(cancelCollectionInvitations)).toHaveBeenCalledWith(config.authentication.openScholar, "user_amina", id);
+		expect(await remove("user_amina", {})).toMatchObject({ status: 404 });
 	});
 });
