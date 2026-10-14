@@ -562,6 +562,28 @@ export async function deleteReaderCollection(database: Database, userId: string,
 }
 
 /**
+ * Deletes a collection the reader owns, as OpenScholar asks for them. Its records stay bookmarked. With `expect`, only
+ * while it still has that name and holds that many records, read under a lock: undoing a collection OpenScholar made
+ * never takes away what the reader changed since. Refused (403) for someone it is shared with, 404 for anyone else.
+ */
+export async function deleteOwnedCollection(database: Database, userId: string, collectionId: string, expect?: { name: string; records: number }) {
+	const read = await readCollectionFor(database, collectionId, userId);
+	if ("refused" in read) return { refused: 404 as const };
+	if (read.collection.ownerId !== userId) return { refused: read.collection.access ? (403 as const) : (404 as const) };
+	return database.transaction(async (transaction) => {
+		const [collection] = await transaction.select({ name: readerCollection.name }).from(readerCollection).where(ownedCollection(userId, collectionId)).for("update");
+		if (!collection) return { refused: 404 as const };
+		if (expect) {
+			const [held] = await transaction.select({ records: count() }).from(readerCollectionItem).where(eq(readerCollectionItem.collectionId, collectionId));
+			const records = held?.records ?? 0;
+			if (collection.name !== expect.name || records !== expect.records) return { changed: { name: collection.name, records } };
+		}
+		await transaction.delete(readerCollection).where(ownedCollection(userId, collectionId));
+		return { deleted: true as const };
+	});
+}
+
+/**
  * Puts a record into a collection the reader owns or edits, or takes it out,
  * whoever added it. Null when the reader can't change such a collection.
  */

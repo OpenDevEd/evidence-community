@@ -1,7 +1,6 @@
 import { z } from "zod";
-import { fromError } from "zod-validation-error";
 
-import { answerOpenScholar, publicKeys, readerFor, refusals } from "@/lib/openscholar/library-reads";
+import { answerOpenScholar, publicKeys, readerCollectionChange, refusals } from "@/lib/openscholar/library-reads";
 import { changeCollectionItems } from "@/lib/readers/data";
 
 /** Most records one change takes. */
@@ -16,14 +15,11 @@ type Props = { params: Promise<{ clerkUserId: string; id: string }> };
  */
 function change(request: Request, props: Props, kind: "add" | "remove") {
 	return answerOpenScholar(request, `readers/collections/records:${kind}`, async ({ config, database }) => {
-		if (!config.features.readerAccounts) return refusals.readerAccountsOff;
-		const body = bodySchema.safeParse(await request.json().catch(() => null));
-		if (!body.success) return refusals.invalid(fromError(body.error).toString());
-		const { clerkUserId, id } = await props.params;
-		const readerId = await readerFor(config, database, clerkUserId);
-		if (!readerId) return refusals.notReader;
+		const asked = await readerCollectionChange(request, props.params, config, database, bodySchema);
+		if (asked.refused) return asked.refused;
+		const { body, id, readerId } = asked;
 		// Only records the library shows go in, read as the change is made; any may come out.
-		const keys = [...new Set(body.data.keys)];
+		const keys = [...new Set(body.keys)];
 		const changed = await changeCollectionItems(database, readerId, id, keys, kind, (transaction, wanted) => publicKeys(config, transaction, wanted, { lock: true }));
 		if ("refused" in changed) return changed.refused === 403 ? refusals.role : refusals.notFound;
 		return { body: { count: changed.count, changed: changed.changed, missing: keys.filter((key) => !changed.taken.includes(key)) } };
