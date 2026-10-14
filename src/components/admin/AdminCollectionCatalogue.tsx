@@ -41,7 +41,9 @@ import { adminCollectionPath } from "./AdminCollectionPicker";
 import {
 	adminCollectionBranchKey,
 	adminCollectionCatalogueReducer,
+	adminCollectionSearchWaiting,
 	flattenAdminCollectionCatalogue,
+	flattenAdminCollectionSearch,
 	type AdminCollectionCatalogueRow,
 	type AdminCollectionCatalogueState,
 	useAdminCollectionCatalogue,
@@ -569,6 +571,22 @@ function sourceHasCollections(
 	return source.collectionCount > 0;
 }
 
+type ShownCatalogue = {
+	rows: AdminCollectionCatalogueRow[];
+	searchMode: boolean;
+	view: "active" | "deleted";
+};
+
+/**
+ * The list on screen. While a search's first page loads, the list it replaces (the tree or the last results) stays
+ * in place, dimmed and inert, until the new rows arrive.
+ */
+function useShownCatalogue(next: ShownCatalogue, waiting: boolean) {
+	const [shown, setShown] = useState(next);
+	if (!waiting && shown !== next) setShown(next);
+	return { ...(waiting ? shown : next), stale: waiting };
+}
+
 export function AdminCollectionCatalogue({
 	busy,
 	onCreate,
@@ -784,24 +802,22 @@ export function AdminCollectionCatalogue({
 		);
 	}, [pendingFocusPath, reveal]);
 
-	const searchMode = view === "deleted" || debouncedQuery.length > 0;
-	useEffect(() => {
-		if (!searchMode) return;
-		void loadSearch({
+	const searchRequested = view === "deleted" || debouncedQuery.length > 0;
+	const searchInput = useMemo(
+		() => ({
 			query: debouncedQuery,
 			sourceConnectionKey: null,
-			state: view === "deleted" ? "deleted" : "active",
-		});
-	}, [
-		catalogueState.generation,
-		debouncedQuery,
-		loadSearch,
-		searchMode,
-		view,
-	]);
+			state: view === "deleted" ? ("deleted" as const) : ("active" as const),
+		}),
+		[debouncedQuery, view],
+	);
+	useEffect(() => {
+		if (!searchRequested) return;
+		void loadSearch(searchInput);
+	}, [catalogueState.generation, loadSearch, searchInput, searchRequested]);
 
 	useEffect(() => {
-		if (searchMode) return;
+		if (searchRequested) return;
 		const expandedRootBranches = [...expandedSources].map((sourceKey) => ({
 			branch: catalogueState.branches.get(
 				adminCollectionBranchKey(sourceKey, null),
@@ -820,7 +836,7 @@ export function AdminCollectionCatalogue({
 			.slice(0, capacity)) {
 			void loadChildren(sourceKey, null);
 		}
-	}, [catalogueState.branches, expandedSources, loadChildren, searchMode]);
+	}, [catalogueState.branches, expandedSources, loadChildren, searchRequested]);
 
 	const catalogueTreeState = useMemo(
 		() =>
@@ -843,7 +859,7 @@ export function AdminCollectionCatalogue({
 		[catalogueTreeState, expandedCollections, expandedSources, sources],
 	);
 	useEffect(() => {
-		if (searchMode) return;
+		if (searchRequested) return;
 		const expandedChildBranches = treeRows.flatMap((row) => {
 			if (
 				row.kind !== "collection" ||
@@ -882,77 +898,33 @@ export function AdminCollectionCatalogue({
 		catalogueState.branches,
 		expandedCollections,
 		loadChildren,
-		searchMode,
+		searchRequested,
 		treeRows,
 	]);
 
-	const rows = useMemo<AdminCollectionCatalogueRow[]>(() => {
-		if (!searchMode) return treeRows;
-		const searchSetSize = catalogueState.search.nextCursor
-			? -1
-			: catalogueState.search.items.length;
-		const resultRows: AdminCollectionCatalogueRow[] =
-			catalogueState.search.items.map((entry, index) => ({
-				depth: 0,
-				entry,
-				kind: "collection",
-				positionInSet: index + 1,
-				revealed: false,
-				setSize: searchSetSize,
-			}));
-		const statusPosition = resultRows.length + 1;
-		if (
-			catalogueState.search.status === "loading" ||
-			catalogueState.search.loadingMore
-		) {
-			resultRows.push({
-				branchKey: "search",
-				depth: 0,
-				kind: "loading",
-				parentCollection: null,
-				positionInSet: statusPosition,
-				setSize: -1,
-				sourceConnectionKey: "all",
-			});
-		} else if (
-			catalogueState.search.status === "error" ||
-			catalogueState.search.loadMoreError
-		) {
-			resultRows.push({
-				branchKey: "search",
-				depth: 0,
-				kind: "error",
-				parentCollection: null,
-				positionInSet: statusPosition,
-				retryMode: catalogueState.search.loadMoreError
-					? "more"
-					: "refresh",
-				setSize: -1,
-				sourceConnectionKey: "all",
-			});
-		} else if (catalogueState.search.nextCursor) {
-			resultRows.push({
-				branchKey: "search",
-				depth: 0,
-				kind: "loadMore",
-				parentCollection: null,
-				positionInSet: statusPosition,
-				setSize: -1,
-				sourceConnectionKey: "all",
-			});
-		} else if (resultRows.length === 0) {
-			resultRows.push({
-				branchKey: "search",
-				depth: 0,
-				kind: "empty",
-				parentCollection: null,
-				positionInSet: 1,
-				setSize: 1,
-				sourceConnectionKey: "all",
-			});
-		}
-		return resultRows;
-	}, [catalogueState.search, searchMode, treeRows, view]);
+	const searchRows = useMemo(
+		() => flattenAdminCollectionSearch(catalogueState.search),
+		[catalogueState.search],
+	);
+	const nextCatalogue = useMemo(
+		() => ({
+			rows: searchRequested ? searchRows : treeRows,
+			searchMode: searchRequested,
+			view,
+		}),
+		[searchRequested, searchRows, treeRows, view],
+	);
+	const {
+		rows,
+		searchMode,
+		stale,
+		// The view the rows on screen were read for, which can trail the toggle while the next list loads.
+		view: listView,
+	} = useShownCatalogue(
+		nextCatalogue,
+		searchRequested &&
+			adminCollectionSearchWaiting(catalogueState.search, searchInput),
+	);
 	const rowId = useCallback((row: AdminCollectionCatalogueRow) => {
 		if (row.kind === "source") return `source:${row.source.key}`;
 		if (row.kind === "collection") return `collection:${row.entry.key}`;
@@ -1127,7 +1099,8 @@ export function AdminCollectionCatalogue({
 		(pendingFocusBranch?.status === "ready" &&
 			!pendingFocusBranch.loadingMore);
 	useEffect(() => {
-		if (!pendingFocusKey || busy) return;
+		// Rows kept from the list before are inert: focus waits for the new ones.
+		if (!pendingFocusKey || busy || stale) return;
 		const rowIndex = rows.findIndex(
 			(row) =>
 				row.kind === "collection" &&
@@ -1186,6 +1159,7 @@ export function AdminCollectionCatalogue({
 		pendingFocusKey,
 		rows,
 		searchMode,
+		stale,
 		virtualizer,
 	]);
 
@@ -1229,14 +1203,7 @@ export function AdminCollectionCatalogue({
 			waiting: true,
 		};
 		if (searchMode) {
-			void loadSearch(
-				{
-					query: debouncedQuery,
-					sourceConnectionKey: null,
-					state: view === "deleted" ? "deleted" : "active",
-				},
-				requestOptions,
-			);
+			void loadSearch(searchInput, requestOptions);
 			return;
 		}
 		void loadChildren(
@@ -1256,6 +1223,7 @@ export function AdminCollectionCatalogue({
 				row.branchKey === pending.branchKey,
 		);
 		if (
+			stale ||
 			status?.kind === "loading" ||
 			(pending.branchKey !== "search" &&
 				branchLoading(
@@ -1305,7 +1273,7 @@ export function AdminCollectionCatalogue({
 		document
 			.querySelector<HTMLElement>('[aria-label="Search collections"]')
 			?.focus({ preventScroll: true });
-	}, [branchOwner, catalogueState, focusRow, focusableRows, rows]);
+	}, [branchOwner, catalogueState, focusRow, focusableRows, rows, stale]);
 
 	return (
 		<section
@@ -1367,12 +1335,14 @@ export function AdminCollectionCatalogue({
 				ref={catalogueListRef}
 				className="min-h-0 flex-1 px-2"
 				role="tree"
+				aria-busy={stale}
 				aria-label={
-					view === "deleted" ? "Deleted collections" : "Collections"
+					listView === "deleted" ? "Deleted collections" : "Collections"
 				}
 			>
 				<div
-					className="relative w-full"
+					className={`relative w-full transition-opacity duration-200 motion-reduce:transition-none ${stale ? "opacity-50 delay-300" : ""}`}
+					inert={stale || undefined}
 					style={{ height: virtualizer.getTotalSize() }}
 				>
 					{virtualizer.getVirtualItems().map((virtualRow) => {
@@ -1542,12 +1512,12 @@ export function AdminCollectionCatalogue({
 											selectedCollection === row.entry.key
 										}
 										setSize={row.setSize}
-										view={view}
+										view={listView}
 									/>
 								) : row.kind === "empty" ? (
 									row.branchKey === "search" ? (
 										<div className="flex h-full items-center px-3 text-[11px] text-black/35 dark:text-white/35">
-											{view === "deleted"
+											{listView === "deleted"
 												? "No deleted collections"
 												: "No matching collections"}
 										</div>
