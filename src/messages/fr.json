@@ -1049,7 +1049,32 @@
     "editor": "Défini par un éditeur de cette bibliothèque.",
     "metadata": "Déterminé à partir de la notice elle-même.",
     "ai": "Lu par une <ai>IA</ai> à partir {input, select, abstract {du titre et du résumé} title {du titre seul, la notice n'ayant pas de résumé} other {du début de son PDF, une lecture précédente étant restée incertaine}}, sûr à {percent} %{uncertain, select, yes {, donc marqué incertain} other {}}.",
-    "method": "Le type de chaque notice est lu à son entrée dans la bibliothèque. Un modèle d'IA lit son titre et son résumé et choisit le type qui convient le mieux ; une notice sans résumé est jugée sur son titre. Quand deux types conviennent, une revue systématique qui regroupe statistiquement ses résultats compte comme une méta-analyse, et une étude qui ajoute des chiffres à des entretiens ou à des études de cas compte comme qualitative. Les jeux de données, logiciels, corrections et protocoles enregistrés sont typés à partir de la notice elle-même, sans IA. Le modèle ne peut choisir méta-analyse ou essai randomisé que si le titre, le résumé ou le PDF le dit. Un type dont le modèle est sûr à moins de 60 % est marqué incertain, puis relu à partir du PDF dès que la notice en a un. Un éditeur peut corriger n'importe quel type. Choisir plusieurs types affiche les notices de chacun d'eux.",
+    "method": {
+      "title": "Comment les types sont lus",
+      "when": "Le type de chaque notice est lu à son entrée dans la bibliothèque.",
+      "ai": {
+        "lead": "L'IA choisit le type qui convient le mieux.",
+        "text": "Elle lit le titre et le résumé, ou seulement le titre quand la notice n'a pas de résumé."
+      },
+      "tie": {
+        "lead": "Quand deux types conviennent.",
+        "text": "Une revue systématique qui regroupe statistiquement ses résultats compte comme une <em>méta-analyse</em>, et une étude qui ajoute des chiffres à des entretiens ou à des études de cas compte comme <em>qualitative</em>."
+      },
+      "named": {
+        "lead": "Méta-analyse et essai randomisé doivent être nommés.",
+        "text": "L'IA ne peut les choisir que si le titre, le résumé ou le PDF le dit."
+      },
+      "unsure": {
+        "lead": "Sous 60 % de certitude, un type est marqué incertain.",
+        "text": "Il est relu à partir du PDF dès que la notice en a un."
+      },
+      "record": {
+        "lead": "Certaines notices sont typées sans IA.",
+        "text": "Les jeux de données, logiciels, corrections et protocoles enregistrés sont typés à partir de la notice elle-même."
+      },
+      "editor": "Un éditeur peut corriger n'importe quel type.",
+      "several": "Choisir plusieurs types affiche les notices de chacun d'eux."
+    },
     "levels": {
       "synthesis": "Revues et synthèses",
       "primary": "Études primaires",

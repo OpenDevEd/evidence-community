@@ -124,13 +124,16 @@ export function Tooltip({
 	);
 }
 
+/** The dashed underline that marks text with more to say on hover, wherever it is. */
+export const HINT_UNDERLINE = "underline decoration-black/25 decoration-dashed underline-offset-4 dark:decoration-white/30";
+
+/** The tooltip of a hint that explains with a few rows rather than a line: as wide as its rows need, within the screen. */
+export const HINT_CARD = "w-96 max-w-[calc(100vw-24px)] p-4";
+
 /**
  * Text that says more about itself on hover or keyboard focus, such as a date or a count. Its dashed underline marks it
  * the same way wherever it is.
  */
-/** The dashed underline that marks text with more to say on hover, wherever it is. */
-export const HINT_UNDERLINE = "underline decoration-black/25 decoration-dashed underline-offset-4 dark:decoration-white/30";
-
 export function Hint({
 	content,
 	children,

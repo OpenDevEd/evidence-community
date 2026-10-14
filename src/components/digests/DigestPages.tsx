@@ -21,7 +21,7 @@ import { UNSETTLED_TONE, studyTone } from "@/components/features/items/study-ton
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
-import { HINT_UNDERLINE, Hint, Tooltip } from "@/components/nextui/Tooltip";
+import { HINT_CARD, HINT_UNDERLINE, Hint, Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import styles from "./DigestPages.module.css";
 import Resource from "@/components/features/items/Resource";
@@ -32,6 +32,7 @@ import { CitedPublications, type CitedPublicationsByKey } from "@/components/fea
 
 
 import { SectionTitle } from "@/components/typography/SectionTitle";
+import { Facts, type Fact } from "@/components/typography/Facts";
 import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
 import { Subscription, type Preferences } from "./Subscription";
@@ -77,18 +78,10 @@ function EditionMeta({ edition }: { edition: DigestEdition }) {
   </div>;
 }
 /** The header's hints open below their text, as wide as their cards need. */
-const headerHint = {placement: "bottom-start", contentClassName: "w-96 max-w-[calc(100vw-24px)] p-4"} as const;
+const headerHint = {placement: "bottom-start", contentClassName: HINT_CARD} as const;
 /** A fact the eye should land on inside muted text: full contrast and heavier. */
 function Em({ children }: { children: ReactNode }) {
   return <strong className="font-semibold text-black dark:text-white">{children}</strong>;
-}
-type Fact = { icon: typeof Calendar03Icon; lead: ReactNode; text?: ReactNode };
-/** Facts as rows: an icon, the fact as a short bold sentence, and what it means after it, muted. A card reads by its first words. */
-function Facts({ rows }: { rows: (Fact | false)[] }) {
-  return <ul className="flex flex-col gap-2.5">{rows.filter((row): row is Fact => Boolean(row)).map((row, index) => <li key={index} className="grid grid-cols-[1rem_minmax(0,1fr)] gap-x-2.5 text-sm leading-6">
-    <span className="mt-1 text-accent"><Icon value={row.icon} size={16} /></span>
-    <span><span className="font-semibold text-black dark:text-white">{row.lead}</span>{row.text && <span className="text-black/65 dark:text-white/65"> {row.text}</span>}</span>
-  </li>)}</ul>;
 }
 type Step = { title: ReactNode; text: ReactNode; extra?: ReactNode };
 /** Steps in order: each numbered in the accent, its title in bold and its text muted under it. */

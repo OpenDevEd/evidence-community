@@ -1049,7 +1049,32 @@
     "editor": "Set by an editor of this library.",
     "metadata": "Typed from the record itself.",
     "ai": "Read by <ai>AI</ai> from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
-    "method": "Each record's type is read when it enters the library. An AI model reads its title and abstract and picks the one type that fits best; a record with no abstract is judged on its title. Where two could fit, a systematic review that pools its results counts as a meta-analysis, and a study that adds numbers to interviews or case studies counts as qualitative. Datasets, software, corrections and registered protocols are typed from the record itself, without AI. The model is offered meta-analysis or randomised trial only when the title, abstract or PDF says so. A type the model is less than 60% sure of is marked uncertain, and read again from the PDF once the record has one. An editor can correct any type. Choosing several types shows records of any of them.",
+    "method": {
+      "title": "How types are read",
+      "when": "Each record's type is read when it enters the library.",
+      "ai": {
+        "lead": "AI picks the one type that fits best.",
+        "text": "It reads the title and abstract, or only the title when a record has no abstract."
+      },
+      "tie": {
+        "lead": "When two types could fit.",
+        "text": "A systematic review that pools its results counts as a <em>meta-analysis</em>, and a study that adds numbers to interviews or case studies as <em>qualitative</em>."
+      },
+      "named": {
+        "lead": "Meta-analysis and randomised trial must be named.",
+        "text": "The AI is offered them only when the title, abstract or PDF says so."
+      },
+      "unsure": {
+        "lead": "Under 60% sure, a type is marked uncertain.",
+        "text": "It is read again from the PDF once the record has one."
+      },
+      "record": {
+        "lead": "Some records are typed without AI.",
+        "text": "Datasets, software, corrections and registered protocols are typed from the record itself."
+      },
+      "editor": "An editor can correct any type.",
+      "several": "Choosing several types shows records of any of them."
+    },
     "levels": {
       "synthesis": "Reviews and syntheses",
       "primary": "Primary studies",

@@ -1049,7 +1049,32 @@
     "editor": "Von einer Redakteurin oder einem Redakteur dieser Bibliothek festgelegt.",
     "metadata": "Aus dem Eintrag selbst bestimmt.",
     "ai": "Von <ai>KI</ai> anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
-    "method": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird. Ein KI-Modell liest Titel und Abstract und wählt den passendsten dieser Typen; ein Eintrag ohne Abstract wird nach seinem Titel beurteilt. Passen zwei, gilt ein systematisches Review, das seine Ergebnisse statistisch zusammenführt, als Metaanalyse, und eine Studie, die Interviews oder Fallstudien um Zahlen ergänzt, als qualitativ. Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden ohne KI aus dem Eintrag selbst bestimmt. Metaanalyse und randomisierte Studie stehen dem Modell nur zur Wahl, wenn Titel, Abstract oder PDF es sagen. Ein Typ, bei dem das Modell zu weniger als 60 % sicher ist, wird als unsicher markiert und anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat. Die Redaktion kann jeden Typ korrigieren. Wer mehrere Typen wählt, sieht Einträge jedes dieser Typen.",
+    "method": {
+      "title": "Wie Typen bestimmt werden",
+      "when": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Bibliothek aufgenommen wird.",
+      "ai": {
+        "lead": "Die KI wählt den passendsten Typ.",
+        "text": "Sie liest Titel und Abstract, oder nur den Titel, wenn der Eintrag kein Abstract hat."
+      },
+      "tie": {
+        "lead": "Wenn zwei Typen passen.",
+        "text": "Ein systematisches Review, das seine Ergebnisse statistisch zusammenführt, gilt als <em>Metaanalyse</em>, und eine Studie, die Interviews oder Fallstudien um Zahlen ergänzt, als <em>qualitativ</em>."
+      },
+      "named": {
+        "lead": "Metaanalyse und randomisierte Studie müssen genannt sein.",
+        "text": "Sie stehen der KI nur zur Wahl, wenn Titel, Abstract oder PDF es sagen."
+      },
+      "unsure": {
+        "lead": "Unter 60 % Sicherheit wird ein Typ als unsicher markiert.",
+        "text": "Er wird anhand des PDFs erneut bestimmt, sobald der Eintrag eines hat."
+      },
+      "record": {
+        "lead": "Manche Einträge werden ohne KI bestimmt.",
+        "text": "Forschungsdaten, Software, Korrekturen und registrierte Protokolle werden aus dem Eintrag selbst bestimmt."
+      },
+      "editor": "Die Redaktion kann jeden Typ korrigieren.",
+      "several": "Wer mehrere Typen wählt, sieht Einträge jedes dieser Typen."
+    },
     "levels": {
       "synthesis": "Reviews und Synthesen",
       "primary": "Primärstudien",
