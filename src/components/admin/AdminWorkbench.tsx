@@ -418,7 +418,7 @@ export default function AdminWorkbench({
 	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
 	const { canPublish } = useAdminSession();
-	const { navigation, theme } = useLibraryConfig();
+	const { navigation, theme, topics } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
 	const [library, setLibrary] = useState(initialLibrary);
 	// In the address, so OpenScholar can link straight to a source's status.
@@ -1404,6 +1404,8 @@ export default function AdminWorkbench({
 			const payload = editablePayloadFromDetail(detail, definitions);
 			delete payload.parentItem;
 			payload.collections = [];
+			// With topics off, the server refuses topics on a new record, so the copy leaves them out.
+			if (!topics.enabled) delete payload.topics;
 			const created = await createAdminDraft(payload);
 			await loadItems();
 			setSelectedKey(created.itemKey);
