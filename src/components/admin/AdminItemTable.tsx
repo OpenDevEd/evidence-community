@@ -19,7 +19,6 @@ import {
 } from "@nextui-org/react";
 import { Spinner } from "@/components/nextui/Spinner";
 import {
-	flexRender,
 	getCoreRowModel,
 	useReactTable,
 	type ColumnDef,
@@ -526,6 +525,16 @@ function TableViewControls({
 			</Popover>
 		</div>
 	);
+}
+
+/**
+ * A column's cell or header, called instead of rendered as a component.
+ * TanStack's flexRender renders each column function as its own component
+ * type, so every new columns array, which each render of the admin page
+ * made, unmounted and rebuilt every cell in view.
+ */
+function columnPart<Context>(part: unknown, context: Context): ReactNode {
+	return typeof part === "function" ? (part as (context: Context) => ReactNode)(context) : (part as ReactNode);
 }
 
 export function AdminItemTable({
@@ -1349,7 +1358,7 @@ export function AdminItemTable({
 										>
 											{header.isPlaceholder ? null : id ===
 											  "select" ? (
-												flexRender(
+												columnPart(
 													header.column.columnDef
 														.header,
 													header.getContext(),
@@ -1526,7 +1535,7 @@ export function AdminItemTable({
 													} as React.CSSProperties
 												}
 											>
-												{flexRender(
+												{columnPart(
 													cell.column.columnDef.cell,
 													cell.getContext(),
 												)}
