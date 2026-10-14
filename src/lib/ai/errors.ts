@@ -1,5 +1,4 @@
 import { DrizzleQueryError } from "drizzle-orm";
-import { NextResponse } from "next/server";
 import {
 	AI_CONTEXT_TOO_LARGE_MESSAGE,
 	extractAIErrorMessage,
@@ -125,7 +124,8 @@ export function aiErrorResponse(
 ) {
 	console.error("[AI request failed]", error);
 	const normalized = normalizeAIError(error, options);
-	return NextResponse.json(
+	// A plain Response, so the publication worker, which reads PDFs with the library's model, needs nothing from Next.
+	return Response.json(
 		{
 			error: {
 				code: normalized.code,

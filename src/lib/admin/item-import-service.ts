@@ -2,8 +2,9 @@ import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { eq, inArray, or, sql } from "drizzle-orm";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { reserveItemIdentity } from "@/db/record-identity";
+import { publicationIdentifier } from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
@@ -126,9 +127,10 @@ export type ExistingRecordIndex = Record<
 
 /**
  * Finds library records (published or draft) that share an exact DOI, PMID
- * or ISBN with the import. Title matching is deliberately not attempted.
+ * or ISBN with the import, a DOI the library issued through Crossref or
+ * Zenodo included. Title matching is deliberately not attempted.
  */
-async function findExistingRecords(
+export async function findExistingRecords(
 	db: Executor,
 	identifiers: readonly ImportIdentifiers[],
 ): Promise<ExistingRecordIndex> {
@@ -160,11 +162,18 @@ async function findExistingRecords(
 			].flat(),
 		);
 
-	const [published, drafts] = await Promise.all([
+	const [published, issued, drafts] = await Promise.all([
 		db
 			.select({ key: item.key, DOI: item.DOI, ISBN: item.ISBN, PMID: item.PMID })
 			.from(item)
 			.where(conditions(sql`${item.DOI}`, sql`${item.PMID}`, sql`${item.ISBN}`)),
+		// Issued DOIs are stored normalized, and a record may carry its own only here.
+		dois.length
+			? db
+					.select({ key: publicationIdentifier.itemKey, DOI: publicationIdentifier.doi })
+					.from(publicationIdentifier)
+					.where(inArray(publicationIdentifier.doi, dois))
+			: [],
 		db
 			.select({
 				key: itemDraft.itemKey,
@@ -188,7 +197,7 @@ async function findExistingRecords(
 		pmid: index.pmid as Map<string, string>,
 	};
 	// Published rows first so a draft of a published record never shadows it.
-	for (const row of [...published, ...drafts]) {
+	for (const row of [...published, ...issued, ...drafts]) {
 		const found = importIdentifiers(row);
 		for (const kind of ["doi", "pmid", "isbn"] as const) {
 			const value = found[kind];
@@ -264,7 +273,7 @@ function summary(payload: Record<string, unknown>) {
 	};
 }
 
-type TranslatedEntry =
+export type TranslatedEntry =
 	| { source: string; zoteroItem: Record<string, unknown> }
 	| { message: string; source: string };
 
@@ -310,12 +319,20 @@ export async function previewImportRecords(
 		translateDois(input.dois, translationUrl),
 		translateFiles(input.files, translationUrl),
 	]);
-	// Attachments, notes and annotations belong to a parent record and are
-	// out of scope for imports.
-	const entries = [
+	return previewEntries(db, [
 		...doiEntries.flat().map((entry) => ({ ...entry, method: "doi" as const })),
 		...fileEntries.flat().map((entry) => ({ ...entry, method: "file" as const })),
-	].filter(
+	]);
+}
+
+/** Validates translated entries and marks the ones the library already has. */
+export async function previewEntries(
+	db: Executor,
+	translated: readonly (TranslatedEntry & { method: "doi" | "file" | "pdf" })[],
+): Promise<AdminImportPreviewResponse> {
+	// Attachments, notes and annotations belong to a parent record and are
+	// out of scope for imports.
+	const entries = translated.filter(
 		(entry) =>
 			!("zoteroItem" in entry) ||
 			isTopLevelAdminItemType(String(entry.zoteroItem.itemType)),
@@ -367,20 +384,24 @@ export async function previewImportRecords(
 }
 
 export async function commitImportRecords(
-	db: Database,
+	db: Database | DatabaseTransaction,
 	input: AdminImportCommitRequest,
 ): Promise<AdminImportCommitResponse> {
 	type PreparedRecord = DuplicateCandidate & {
 		fields?: AdminFieldErrors;
 		id: string;
-		method: "doi" | "file";
+		method: "doi" | "file" | "pdf";
 		message?: string;
 		payload: Record<string, unknown> | null;
 	};
+	// The import's collections, and those a record was given on its own, such as the ones the AI chose for a PDF. A value
+	// that isn't a list goes to validation as it is, which refuses it.
+	const collectionsOf = (payload: Record<string, unknown>) =>
+		payload.collections === undefined ? input.collections : Array.isArray(payload.collections) ? [...new Set([...input.collections, ...payload.collections])] : payload.collections;
 	const prepared = input.records.map((record): PreparedRecord => {
 		try {
 			const validated = validateNativeItemDraft(
-				{ ...record.payload, collections: input.collections },
+				{ ...record.payload, collections: collectionsOf(record.payload) },
 				{ allowIncompleteCreators: true },
 			);
 			if (!isTopLevelAdminItemType(validated.item.itemType)) {
@@ -420,7 +441,7 @@ export async function commitImportRecords(
 			transaction,
 			null,
 			NATIVE_SOURCE_CONNECTION_KEY,
-			input.collections,
+			[...new Set(prepared.flatMap(({ payload }) => (Array.isArray(payload?.collections) ? (payload.collections as string[]) : [])))],
 		);
 		const existing = await findExistingRecords(
 			transaction,
@@ -436,14 +457,19 @@ export async function commitImportRecords(
 		// any identifier can only repeat when the first commit succeeded but
 		// its response was lost; a schema-level import id would close that.
 		const keys = new Map<string, string>();
+		const kinds = new Map<string, "created" | "imported">();
 		for (const record of ready) {
 			const key = await reserveItemIdentity(transaction, {
 				sourceConnectionKey: NATIVE_SOURCE_CONNECTION_KEY,
 			});
+			// A PDF with no DOI is the library's own work, so it publishes
+			// with a DOI the library registers, like a record made here.
+			const kind = record.method === "pdf" && !record.identifiers?.doi ? "created" : "imported";
 			await transaction.update(itemIdentity)
-				.set({ kind: "imported", importMethod: record.method })
+				.set(kind === "created" ? { kind, importMethod: null } : { kind, importMethod: record.method === "pdf" ? "file" : record.method })
 				.where(eq(itemIdentity.key, key));
 			keys.set(record.id, key);
+			kinds.set(record.id, kind);
 		}
 		if (ready.length) {
 			await transaction.insert(itemDraft).values(
@@ -460,6 +486,7 @@ export async function commitImportRecords(
 					return {
 						id: record.id,
 						itemKey: keys.get(record.id)!,
+						kind: kinds.get(record.id),
 						outcome: "created",
 					};
 				}

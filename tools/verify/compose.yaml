@@ -4,3 +4,10 @@ services:
   redis:
     ports:
       - "${VERIFY_REDIS_PORT:?redis port is required}:6379"
+  # The fake keeps uploaded files and author profiles on disk; this volume keeps
+  # them when the fake alone is recreated. `verify -- down` removes it with the stack.
+  runtime-provider-fake:
+    volumes:
+      - runtime-provider-fake-storage:/tmp/runtime-provider-fake-storage
+volumes:
+  runtime-provider-fake-storage:

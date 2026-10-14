@@ -1,0 +1,361 @@
+"use client";
+
+import { useState } from "react";
+import { mutate } from "swr";
+
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
+import type { AdminSource } from "@/lib/admin/types";
+
+import type { ImportKind } from "./ImportSteps";
+import {
+	AdminApiError,
+	approveAdminReview,
+	closeAdminPdfImport,
+	commitAdminImport,
+	commitAdminPdfImport,
+	failAdminPdfImportUpload,
+	PDF_IMPORT_KEY,
+	previewAdminImport,
+	reserveAdminCrossrefDoi,
+	saveAdminPublishingChoice,
+	startAdminPdfImport,
+	submitAdminReview,
+	uploadAdminPdfImportFile,
+} from "./admin-api";
+import {
+	addStep,
+	appliedOf,
+	batchFields,
+	changeImportBatch,
+	chosenOf,
+	createdKeys,
+	doiPreviewRequest,
+	dropLookup,
+	endImportBatch,
+	errorMessage,
+	filePreviewRequest,
+	lookupStands,
+	primaryLabel,
+	publishedProperties,
+	readyIds,
+	recordsToCommit,
+	reviewChecks,
+	reviewProgress,
+	reviewRows,
+	rowsFromRecords,
+	shownImport,
+	stageOf,
+	startImportBatch,
+	startingChecks,
+	startingInstructions,
+	startLookup,
+	useImportBatches,
+	usePdfImportStatus,
+	withChoiceToggled,
+	withSuggestionToggled,
+	type ChoiceKind,
+	type ImportBatch,
+	type ImportRow,
+	type PublishState,
+	type ReviewFilter,
+} from "./admin-import";
+
+/** What a draft lacks to be submitted, such as a publisher for Crossref, rather than the request's summary. */
+function publishError(error: unknown) {
+	const missing = error instanceof AdminApiError ? Object.values(error.fields).map((text) => text.replace(/\.$/u, "")) : [];
+	return missing.length ? `${missing.join(". ")}.` : errorMessage(error);
+}
+
+// Each draft is submitted and may be approved and reindexed, so a few at a time.
+const SEND_CONCURRENCY = 2;
+
+// PDFs sent to the server at once while an import starts.
+const UPLOAD_CONCURRENCY = 3;
+
+/** Runs `work` on every item, a few at a time. */
+async function inTurn<Item>(items: readonly Item[], concurrency: number, work: (item: Item) => Promise<void>) {
+	let next = 0;
+	await Promise.all(
+		Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+			while (next < items.length) await work(items[next++]!);
+		}),
+	);
+}
+
+type PdfUpload = { file: File; id: string; signedUrl: string };
+
+/** Sends one PDF to storage; the worker reads it once it arrives. One that can't be sent goes ahead without it, its row saying why. */
+async function uploadPdf({ file, id, signedUrl }: PdfUpload) {
+	try {
+		await uploadAdminPdfImportFile(id, signedUrl, file);
+	} catch (caught) {
+		await failAdminPdfImportUpload(id, errorMessage(caught)).catch(() => undefined);
+	}
+	void mutate(PDF_IMPORT_KEY);
+}
+
+/** Opens the library's PDF import. The import and its rows exist on the server first, so the review shows every PDF while they upload. */
+async function startPdfImport(input: { checks: readonly string[]; collections: string[]; guidance: string; pdfs: readonly File[] }) {
+	const started = await startAdminPdfImport({ checks: [...input.checks], collections: input.collections, files: input.pdfs.map(({ name, size }) => ({ name, size })), instructions: input.guidance });
+	await mutate(PDF_IMPORT_KEY);
+	void inTurn(
+		started.files.map(({ id, upload }, index) => ({ file: input.pdfs[index]!, id, signedUrl: upload.signedUrl })),
+		UPLOAD_CONCURRENCY,
+		uploadPdf,
+	);
+}
+
+/** Looks up DOIs or reads bibliography files into a review; null when the sheet closed while it ran. */
+async function lookUp(kind: Exclude<ImportKind, "pdfs">, doiText: string, files: readonly File[]) {
+	const token = startLookup();
+	const response = await previewAdminImport(kind === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest([...files]));
+	if (!lookupStands(token)) return null;
+	dropLookup();
+	return rowsFromRecords(response.records);
+}
+
+/** Opens a DOI or bibliography import in this tab with what the lookup found, its first record open. */
+async function startLookupImport(inputs: { collections: string[]; doiText: string; files: readonly File[]; kind: Exclude<ImportKind, "pdfs"> }, openRow: (id: string | null) => void) {
+	const rows = await lookUp(inputs.kind, inputs.doiText, inputs.files);
+	if (!rows) return;
+	openRow(rows[0]?.id ?? null);
+	startImportBatch({ checks: [], collections: inputs.collections, importId: crypto.randomUUID(), kind: inputs.kind, rows });
+}
+
+/** Imports the chosen records as drafts. A PDF import is kept on the server, which gives each new draft its PDF. */
+async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"]) {
+	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled) };
+	changeImportBatch(batch, (current) => ({ ...current, committing: true }));
+	try {
+		const { results } = batch.kind === "pdfs" ? await commitAdminPdfImport(input) : await commitAdminImport(input);
+		if (batch.kind === "pdfs") await mutate(PDF_IMPORT_KEY);
+		else changeImportBatch(batch, (current) => ({ ...current, results }));
+		// The finish step says what the import did, so no toast covers its buttons.
+		await onImported(createdKeys(results));
+	} finally {
+		changeImportBatch(batch, (current) => ({ ...current, committing: false }));
+	}
+}
+
+type SentDraft = { id: string; itemKey: string; kind: "created" | "imported" | undefined };
+
+/** Gives a draft made in the library the import's DOI route; on Crossref its DOI is reserved now, and returned. */
+async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"]) {
+	await saveAdminPublishingChoice(itemKey, route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route });
+	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
+}
+
+/** A send that submitted the draft's review but couldn't approve it. */
+class NotApprovedError extends Error {
+	constructor(
+		readonly review: { id: string; revision: number },
+		readonly reason: unknown,
+	) {
+		super("The review was submitted but not approved.");
+	}
+}
+
+/** Approves a submitted review, which publishes the draft; a failure keeps the review for the next try. */
+async function approve(review: { id: string; revision: number }) {
+	try {
+		await approveAdminReview(review.id, review.revision);
+	} catch (caught) {
+		throw new NotApprovedError(review, caught);
+	}
+	return { state: "published" as const };
+}
+
+/** A failed send, keeping the review it submitted so the next try approves that one. */
+function failedSend(caught: unknown, submitted: PublishState["review"]): PublishState {
+	if (caught instanceof NotApprovedError) return { message: publishError(caught.reason), review: caught.review, state: "failed" };
+	return { message: publishError(caught), review: submitted, state: "failed" };
+}
+
+/**
+ * Submits a draft for review and, for an editor or owner, approves it, which
+ * publishes it. A retry after the approval failed approves the review
+ * already submitted.
+ */
+async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"], canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
+	if (submitted) return approve(submitted);
+	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
+	const review = await submitAdminReview(itemKey);
+	return canApprove ? approve(review) : { doi, state: "submitted" };
+}
+
+/**
+ * Sends drafts on the way the record inspector does. A draft made from a
+ * PDF takes the import's DOI route, and on Crossref its DOI is reserved;
+ * then the draft is submitted for review. Editors and owners approve it
+ * at once, which publishes it, and the publication worker activates the
+ * DOI; anyone else leaves it for an editor.
+ */
+async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, onImported: ImportFlowProps["onImported"]) {
+	const mark = (id: string, state: PublishState) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
+	for (const { id } of drafts) mark(id, { state: "sending" });
+	await inTurn(drafts, SEND_CONCURRENCY, async (draft) => {
+		const submitted = batch.publish.get(draft.id)?.review;
+		try {
+			mark(draft.id, await sendDraft(draft, batch.publishRoute, approve, submitted));
+		} catch (caught) {
+			console.error("Sending the draft on failed", draft.itemKey, caught);
+			mark(draft.id, failedSend(caught, submitted));
+		}
+	});
+	// The table shows their new state; the import's drafts stay the selection.
+	await onImported(createdKeys(batch.results ?? []));
+}
+
+/** Ends the import here and, for a PDF import, on the server, which removes its stored PDFs. */
+async function endBatch(batch: ImportBatch | null) {
+	if (!batch) return;
+	if (batch.kind === "pdfs") {
+		await closeAdminPdfImport(batch.importId);
+		await mutate(PDF_IMPORT_KEY);
+	}
+	endImportBatch(batch.importId);
+}
+
+export type ImportFlowProps = {
+	onClose: () => void;
+	onImported: (itemKeys: string[]) => Promise<void> | void;
+	onOpenRecord: (itemKey: string) => void;
+	sources: readonly AdminSource[];
+};
+
+/** What the Add step holds: the source, what was added, and the checks and instructions for PDFs. */
+function useAddInputs(batchKind: ImportKind | undefined) {
+	const last = usePdfImportStatus().data?.last;
+	const [kind, setKind] = useState<ImportKind>(batchKind ?? "pdfs");
+	const [doiText, setDoiText] = useState("");
+	const [files, setFiles] = useState<File[]>([]);
+	const [pdfs, setPdfs] = useState<File[]>([]);
+	// The library's last import's checks and instructions until the editor changes them here.
+	const [editedChecks, setChecks] = useState<string[] | null>(null);
+	// A list, so a row emptied while it is being edited stays until it loses focus.
+	const [editedInstructions, setInstructions] = useState<string[] | null>(null);
+	// Chosen before reading starts; the batch carries them from then on.
+	const [collections, setCollections] = useState<string[]>([]);
+	const instructions = startingInstructions(editedInstructions, last);
+	const guidance = instructions.map((line) => line.trim()).filter(Boolean).join("\n");
+	return { checks: startingChecks(editedChecks, last), collections, doiText, files, guidance, instructions, kind, pdfs, setChecks, setCollections, setDoiText, setFiles, setInstructions, setKind, setPdfs };
+}
+
+/** Changes to the import being reviewed: what is ticked, applied and chosen, and how its drafts are sent on. */
+function batchChanges(batch: ImportBatch | null) {
+	const change = (update: (current: ImportBatch) => ImportBatch) => batch && changeImportBatch(batch, update);
+	return {
+		/** Ready records not in `next` stay out of the import. */
+		setSelected: (next: ReadonlySet<string>) => change((current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
+		choosePublish: (ids: ReadonlySet<string>) => change((current) => ({ ...current, toPublish: ids })),
+		setPublishRoute: (route: PublishingChoice["route"]) => change((current) => ({ ...current, publishRoute: route })),
+		toggleSuggestion: (rowId: string, index: number) => change((current) => withSuggestionToggled(current, rowId, index)),
+		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) => change((current) => withChoiceToggled(current, rowId, kind, id)),
+	};
+}
+
+/**
+ * Everything the Import dialog knows and does, whatever it looks like: the
+ * source and what was added, the batch being reviewed, and the steps from
+ * reading to importing and publishing. Every design draws from this one.
+ */
+export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
+	const topicsEnabled = useLibraryConfig().topics.enabled;
+	// An editor can step out of the PDF import's review to import DOIs or files; it carries on meanwhile, and only one is open.
+	const [besidePdfs, setBesidePdfs] = useState(false);
+	const { batch, openPdfs } = shownImport(useImportBatches(), besidePdfs);
+	const inputs = useAddInputs(batch?.kind);
+	const [activeId, setActiveId] = useState<string | null>(null);
+	const [filter, setFilter] = useState<ReviewFilter>("all");
+	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	const stage = stageOf(batch);
+	const fields = batchFields(batch, inputs.collections, busy);
+	const appliedFor = (row: ImportRow) => appliedOf(batch, row);
+	const choicesOf = (row: ImportRow, kind: ChoiceKind) => (batch ? chosenOf(batch, row, kind) : new Set<string>());
+	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => choicesOf(row, "topics").has(id)).map(({ name }) => name);
+
+	const run = async (work: () => Promise<void>) => {
+		setError(null);
+		setBusy(true);
+		try {
+			await work();
+		} catch (caught) {
+			setError(errorMessage(caught));
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const start = () =>
+		run(async () => {
+			setFilter("all");
+			// With a PDF import open, the PDFs tab leads back to it rather than reading more.
+			if (inputs.kind === "pdfs") return openPdfs ? setBesidePdfs(false) : startPdfImport(inputs);
+			await startLookupImport({ ...inputs, kind: inputs.kind }, setActiveId);
+		});
+
+	const restart = () =>
+		run(async () => {
+			await endBatch(batch);
+			// Leaving a DOI or file import goes back to the Add step, even with a PDF import open.
+			if (batch?.kind !== "pdfs") setBesidePdfs(true);
+			if (stage !== "done") return;
+			inputs.setPdfs([]);
+			inputs.setFiles([]);
+			inputs.setDoiText("");
+		});
+
+	const close = () => {
+		dropLookup();
+		onClose();
+	};
+
+	const finish = () =>
+		run(async () => {
+			await endBatch(batch);
+			close();
+		});
+
+	return {
+		...reviewRows(batch, filter, activeId),
+		...reviewProgress(batch),
+		...addStep(inputs.kind, openPdfs, inputs, stage),
+		...batchChanges(batch),
+		...inputs,
+		...fields,
+		appliedFor,
+		batch,
+		busy,
+		checksOf: (row: ImportRow) => reviewChecks(row, appliedFor(row)),
+		choicesOf,
+		commit: () => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported) : undefined)),
+		error,
+		filter,
+		finish: () => void finish(),
+		onClose: close,
+		onOpenRecord,
+		openPdfs,
+		primaryLabel: primaryLabel(inputs.kind, inputs, openPdfs),
+		propertiesOf: (row: ImportRow) => publishedProperties(row, appliedFor(row), topicNames(row)),
+		restart: () => void restart(),
+		/** Publishes the drafts when `approve` (editors and owners), else submits them for review. */
+		send: (drafts: readonly SentDraft[], approve: boolean) => void (batch && sendDrafts(batch, drafts, approve, onImported)),
+		setActiveId,
+		/** Steps out of the open PDF import's review to the Add step, leaving the import as it is. */
+		addBeside: () => setBesidePdfs(true),
+		setCollections: (keys: string[]) => (batch ? changeImportBatch(batch, (current) => ({ ...current, collections: keys })) : inputs.setCollections(keys)),
+		setFilter,
+		setKind: (value: ImportKind) => {
+			inputs.setKind(value);
+			setError(null);
+		},
+		sources,
+		stage,
+		start: () => void start(),
+	};
+}
+
+export type ImportFlowState = ReturnType<typeof useImportFlow>;

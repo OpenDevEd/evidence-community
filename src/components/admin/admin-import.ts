@@ -1,15 +1,34 @@
+import { useSyncExternalStore } from "react";
+import useSWR from "swr";
+
 import {
+	PDF_IMPORT_MAX_CRITERIA,
+	PDF_IMPORT_MAX_CRITERION_LENGTH,
+	PDF_IMPORT_MAX_FILE_BYTES,
+	PDF_IMPORT_MAX_GUIDANCE_LENGTH,
+	type CollectionSuggestion,
+	type PdfCheckResult,
+	type TopicSuggestion,
 	ADMIN_IMPORT_MAX_FILE_BYTES,
 	ADMIN_IMPORT_MAX_FILES,
 	ADMIN_IMPORT_MAX_RECORDS,
-	ADMIN_IMPORT_STATE_LABELS,
 	parseDoiList,
 	type AdminImportCommitResult,
 	type AdminImportPreviewRecord,
 	type AdminImportPreviewRequest,
+	type AdminPdfImport,
+	type AdminPdfImportStatus,
+	type PdfImportFileState,
+	type PdfSuggestion,
+	PDF_IMPORT_MAX_FILES,
 } from "@/lib/admin/item-import-contract";
+import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
+import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-record-mapping";
+import type { PublishingChoice } from "@/lib/admin/review-contract";
 
-import { humanizeAdminField } from "./admin-schema";
+import type { ImportKind, ImportStage } from "./ImportSteps";
+import { AdminApiError, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
+
 
 /** A problem with what the user typed or chose, shown before any request. */
 class ImportInputError extends Error {
@@ -38,7 +57,7 @@ export function doiPreviewRequest(text: string): ImportPreviewInput {
 	return { dois, files: [] };
 }
 
-export function validateImportFiles(files: readonly File[]): void {
+function validateImportFiles(files: readonly File[]): void {
 	if (!files.length) throw new ImportInputError("Choose at least one file.");
 	if (files.length > ADMIN_IMPORT_MAX_FILES) {
 		throw new ImportInputError(
@@ -65,21 +84,6 @@ export async function filePreviewRequest(
 	};
 }
 
-export function readyImportIds(records: readonly AdminImportPreviewRecord[]) {
-	return records.filter(({ state }) => state === "ready").map(({ id }) => id);
-}
-
-export function toggleImportSelection(
-	current: ReadonlySet<string>,
-	id: string,
-	selected: boolean,
-) {
-	const next = new Set(current);
-	if (selected) next.add(id);
-	else next.delete(id);
-	return next;
-}
-
 export function selectedImportRecords(
 	records: readonly AdminImportPreviewRecord[],
 	selected: ReadonlySet<string>,
@@ -89,57 +93,534 @@ export function selectedImportRecords(
 	);
 }
 
-export function importRowCells(record: AdminImportPreviewRecord) {
-	return {
-		creators: record.creators.join("; "),
-		itemType: record.itemType ? humanizeAdminField(record.itemType) : "",
-		/** Accessible name for the row checkbox. */
-		label: `Import ${record.title ?? record.source}`,
-		selectable: record.state === "ready",
-		title: record.title,
-		year: record.year === null ? "" : String(record.year),
-	};
+/** The drafts an import created, which the table selects. */
+export function createdKeys(results: readonly AdminImportCommitResult[]) {
+	return results.flatMap(({ itemKey, outcome }) => (outcome === "created" && itemKey ? [itemKey] : []));
 }
 
-export function importStage(
-	preview: unknown,
-	results: unknown,
-): "done" | "input" | "preview" {
-	if (results) return "done";
-	return preview ? "preview" : "input";
-}
+/** One record in the review, from a DOI, a bibliography file or a PDF the AI reads. */
+export type ImportRow = {
+	checks: PdfCheckResult[];
+	/** The library's records the PDF cites, which its record links to. */
+	cites: { key: string; title: string }[];
+	/** The row's id, also the id its record is committed under. */
+	id: string;
+	message?: string;
+	/** The properties the PDF carries now. */
+	pdf: PdfPropertiesReading | null;
+	record: AdminImportPreviewRecord | null;
+	/** The PDF this row reads, and where it opens once stored; null for DOIs and bibliography files. */
+	source: { filename: string; url: string | null } | null;
+	state: PdfImportFileState;
+	/** Changes the AI suggests to the record's fields. */
+	suggestions: PdfSuggestion[];
+	topics: TopicSuggestion[];
+	/** The library's collections the AI files the record in. */
+	collections: CollectionSuggestion[];
+};
 
-export function importRowStatus(
-	record: AdminImportPreviewRecord,
-	result: AdminImportCommitResult | undefined,
-) {
-	if (!result) {
-		return {
-			detail: record.message ?? null,
-			label: ADMIN_IMPORT_STATE_LABELS[record.state],
-			tone: record.state,
-		};
+
+function validatePdfFiles(files: readonly File[]): void {
+	if (!files.length) throw new ImportInputError("Choose at least one PDF.");
+	if (files.length > PDF_IMPORT_MAX_FILES) {
+		throw new ImportInputError(`Choose no more than ${PDF_IMPORT_MAX_FILES} PDFs at once.`);
 	}
+	const notPdf = files.find(({ name, type }) => type !== "application/pdf" && !name.toLowerCase().endsWith(".pdf"));
+	if (notPdf) throw new ImportInputError(`${notPdf.name} is not a PDF.`);
+	const oversized = files.find(({ size }) => size > PDF_IMPORT_MAX_FILE_BYTES);
+	if (oversized) throw new ImportInputError(`${oversized.name} is larger than 50 MB.`);
+	const empty = files.find(({ size }) => size === 0);
+	if (empty) throw new ImportInputError(`${empty.name} is empty.`);
+}
+
+function validateChecks(checks: readonly string[]) {
+	if (checks.length > PDF_IMPORT_MAX_CRITERIA) {
+		throw new ImportInputError(`Use no more than ${PDF_IMPORT_MAX_CRITERIA} checks.`);
+	}
+	const long = checks.find((check) => check.length > PDF_IMPORT_MAX_CRITERION_LENGTH);
+	if (long) throw new ImportInputError(`Keep each check under ${PDF_IMPORT_MAX_CRITERION_LENGTH} characters.`);
+}
+
+function validateGuidance(guidance: string) {
+	if (guidance.trim().length > PDF_IMPORT_MAX_GUIDANCE_LENGTH) throw new ImportInputError(`Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`);
+}
+
+const emptyRow = { checks: [], cites: [], collections: [], pdf: null, source: null, suggestions: [], topics: [] };
+
+export function rowsFromRecords(records: readonly AdminImportPreviewRecord[]): ImportRow[] {
+	return records.map((record) => ({ ...emptyRow, id: record.id, record, state: "read" }));
+}
+
+/** The import's PDFs as review rows, with whatever the worker has read of each. */
+function rowsFromImport(server: AdminPdfImport): ImportRow[] {
+	return server.files.map((file) => ({
+		...emptyRow,
+		record: null,
+		...file.reading,
+		id: file.rowId,
+		message: file.message ?? undefined,
+		// No address until the PDF is stored, so a cover isn't drawn from a missing file.
+		source: { filename: file.filename, url: file.stored ? pdfImportFileUrl(file.id) : null },
+		state: file.state,
+	}));
+}
+
+/** What a row is called: its record's title, else the PDF or file it came from. */
+export const rowTitle = (row: ImportRow) => row.record?.title ?? row.source?.filename ?? row.record?.source ?? "";
+
+/** A row's cover: its stored PDF's first page, else its type's icon, with the light passing down it while it's read. */
+export const coverOf = (row: ImportRow) => ({ itemType: row.record?.itemType, pdf: row.source?.url ?? null, reading: row.state === "reading" });
+
+/** Whether a row's record can be ticked to import. */
+export const importable = (row: ImportRow) => row.record?.state === "ready";
+
+/** The record as read, before the editor's changes. */
+export const recordPayloadOf = (row: ImportRow) => row.record?.payload ?? {};
+
+/** The library's record a row repeats, when the review found one. */
+export const existingKeyOf = (row: ImportRow) => row.record?.existingKey;
+
+/** Whether publishing can write the record into this row's PDF, which it can when the PDF opens without a password. */
+export const writesProperties = (row: ImportRow) => Boolean(row.record && row.pdf?.writable);
+
+/** Whether importing gave a draft its PDF; the server does it while the drafts are made. */
+export type AttachState = "attached" | "failed";
+/** A draft sent on from the finish step: published by an editor or owner, or submitted for one, with its reserved Crossref DOI. */
+export type PublishState = {
+	doi?: string;
+	message?: string;
+	/** The review a send submitted before it failed to approve it, which a retry approves instead of submitting again. */
+	review?: { id: string; revision: number };
+	state: "failed" | "published" | "sending" | "submitted";
+};
+
+/**
+ * The import being reviewed. It lives outside the dialog, so closing the
+ * dialog keeps it. A DOI or bibliography import lives only here. A PDF
+ * import lives on the server, read by the publication worker: its rows,
+ * results and attachments come from there, and only the editor's choices
+ * live here, so a reload keeps every reading but resets the ticks.
+ */
+export type ImportBatch = {
+	/** Each record's applied suggestions, by their place, once the editor changes the AI's choice. */
+	applied: ReadonlyMap<string, ReadonlySet<number>>;
+	attach: ReadonlyMap<string, AttachState>;
+	/** The checks the PDFs were read against. */
+	checks: readonly string[];
+	/** Collections the new drafts go into. */
+	collections: string[];
+	/** The import call is under way, so a reopened dialog can't send it twice. */
+	committing: boolean;
+	/** Ready records the editor unticked. */
+	excluded: ReadonlySet<string>;
+	importId: string;
+	kind: ImportKind;
+	publish: ReadonlyMap<string, PublishState>;
+	/** How drafts made from PDFs get their DOI, as on a record made in the library. */
+	publishRoute: PublishingChoice["route"];
+	results: AdminImportCommitResult[] | null;
+	rows: ImportRow[];
+	/** The drafts ticked for publishing, once the editor changes the default. */
+	toPublish: ReadonlySet<string> | null;
+	/** Each record's topics and collections, once the editor changes the AI's choice. */
+	chosen: Record<ChoiceKind, ReadonlyMap<string, ReadonlySet<string>>>;
+};
+
+/** What the AI chooses from a library's own lists for a record. */
+export type ChoiceKind = "collections" | "topics";
+
+// The library's PDF import, kept on the server, and a DOI or bibliography import, kept in this tab, each with the
+// editor's choices on it. They are kept apart, so importing DOIs while a PDF import waits keeps what was chosen in it.
+let pdfs: ImportBatch | null = null;
+let other: ImportBatch | null = null;
+const listeners = new Set<() => void>();
+
+function setSlot(slot: "other" | "pdfs", next: ImportBatch | null) {
+	if (slot === "pdfs") pdfs = next;
+	else other = next;
+	for (const listener of listeners) listener();
+}
+
+export function startImportBatch(start: Pick<ImportBatch, "checks" | "collections" | "importId" | "kind" | "rows">) {
+	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
+}
+
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), publish: new Map(), publishRoute: "zenodo" as const, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+
+// The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
+let synced = "";
+
+/** What the server says of its import, as the review takes it. */
+function fromServer(server: AdminPdfImport) {
+	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, results: server.results, rows: rowsFromImport(server) };
+}
+
+// The editor's choices on the library's PDF import, kept in this browser so a reload keeps them. One import is open at
+// a time, so one entry holds them.
+const CHOICES_KEY = "evidence-library:pdf-import-choices";
+
+type SavedChoices = {
+	applied: [string, number[]][];
+	/** How sending each draft on went; one still sending when the page went is left out, as it stopped there. */
+	publish: [string, PublishState][];
+	chosen: Record<ChoiceKind, [string, string[]][]>;
+	collections: string[];
+	excluded: string[];
+	importId: string;
+	publishRoute: PublishingChoice["route"];
+	toPublish: string[] | null;
+};
+
+const listsOf = <Value,>(sets: ReadonlyMap<string, ReadonlySet<Value>>) => [...sets].map(([id, values]): [string, Value[]] => [id, [...values]]);
+const setsOf = <Value,>(lists: [string, Value[]][]) => new Map(lists.map(([id, values]) => [id, new Set(values)]));
+
+function saveChoices(batch: ImportBatch) {
+	const saved: SavedChoices = {
+		applied: listsOf(batch.applied),
+		publish: [...batch.publish].filter(([, { state }]) => state !== "sending"),
+		chosen: { collections: listsOf(batch.chosen.collections), topics: listsOf(batch.chosen.topics) },
+		collections: batch.collections,
+		excluded: [...batch.excluded],
+		importId: batch.importId,
+		publishRoute: batch.publishRoute,
+		toPublish: batch.toPublish && [...batch.toPublish],
+	};
+	try {
+		window.localStorage.setItem(CHOICES_KEY, JSON.stringify(saved));
+	} catch {
+		// Storage that is full or turned off keeps the choices for this page only.
+	}
+}
+
+/** The choices this browser kept for the import, or none. */
+function savedChoices(importId: string): Partial<ImportBatch> {
+	try {
+		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
+		if (saved?.importId !== importId) return {};
+		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+	} catch {
+		// No browser storage while the page is served, or an entry this version can't read.
+		return {};
+	}
+}
+
+/**
+ * Sends made in another tab or browser, as the server knows them, beside
+ * this tab's own. A send this tab has under way, or failed on and can try
+ * again, keeps its own state.
+ */
+function withSent(publish: ReadonlyMap<string, PublishState>, sent: AdminPdfImport["sent"]) {
+	const next = new Map(publish);
+	for (const [id, state] of Object.entries(sent)) {
+		const mine = next.get(id);
+		if (mine?.state !== "sending" && mine?.state !== "failed") next.set(id, { ...mine, state });
+	}
+	return next;
+}
+
+/** The server's import with the choices this browser made on it, the collections the editor changed in the review among them. */
+export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
+	const batch: ImportBatch = { ...blankChoices, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
+	return { ...batch, publish: withSent(batch.publish, server.sent) };
+}
+
+/** Takes in the server's PDF import, keeping the editor's choices on it. */
+function syncPdfImport({ import: server }: AdminPdfImportStatus) {
+	const answer = JSON.stringify(server);
+	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
+	synced = answer;
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server.sent) } : pdfImportBatch(server)) : null);
+}
+
+const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
+// Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
+export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
+/**
+ * How often to ask the server about the PDF import: every two seconds while
+ * its PDFs upload, are read or are attached, and every ten while it is open,
+ * so another tab's import or close shows here too.
+ */
+const pollEvery = () => {
+	if (!pdfs) return 0;
+	return pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) ? 2_000 : 10_000;
+};
+
+/** The library's PDF import from the server, checked while it is open. */
+export function usePdfImportStatus() {
+	// SWR restarts its timer whenever this option changes, so it is a number that changes only when reading starts or
+	// stops. A function would be a new one on every render, and the sheet renders more often than it polls.
+	const refreshInterval = useSyncExternalStore(subscribe, pollEvery, () => 0);
+	return useSWR(PDF_IMPORT_KEY, getAdminPdfImport, { onSuccess: syncPdfImport, refreshInterval });
+}
+
+// The DOI or file lookup the open sheet waits for. Closing the sheet drops it, so an answer that comes later never
+// takes over whatever the sheet shows when it opens again.
+let lookup: symbol | null = null;
+
+export function startLookup() {
+	lookup = Symbol("lookup");
+	return lookup;
+}
+
+export function dropLookup() {
+	lookup = null;
+}
+
+export const lookupStands = (token: symbol) => lookup === token;
+
+// Imports ended in this tab, which a change arriving late must not bring back.
+const ended = new Set<string>();
+
+export function endImportBatch(importId: string) {
+	ended.add(importId);
+	if (pdfs?.importId === importId) {
+		setSlot("pdfs", null);
+		window.localStorage.removeItem(CHOICES_KEY);
+	}
+	if (other?.importId === importId) setSlot("other", null);
+}
+
+/**
+ * Changes an import, unless it ended or another replaced it since the change
+ * began. Until the server's first answer is taken in, the library's PDF
+ * import is the one given, as the page was served with it.
+ */
+export function changeImportBatch(batch: ImportBatch, change: (current: ImportBatch) => ImportBatch) {
+	const library = pdfs ?? (batch.kind === "pdfs" && !ended.has(batch.importId) ? batch : null);
+	if (library?.importId === batch.importId) {
+		setSlot("pdfs", change(library));
+		saveChoices(pdfs!);
+	} else if (other?.importId === batch.importId) setSlot("other", change(other));
+}
+
+function subscribe(listener: () => void) {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+}
+
+/** The open imports: the library's PDF import and this tab's DOI or bibliography import. */
+export function useImportBatches() {
+	const storedPdfs = useSyncExternalStore(subscribe, () => pdfs, () => null);
+	const storedOther = useSyncExternalStore(subscribe, () => other, () => null);
+	const served = usePdfImportStatus().data?.import;
+	// Until the first answer is taken in, the PDF import as the page was served, so nothing changes size once it loads.
+	return { other: storedOther, pdfs: storedPdfs ?? (served ? pdfImportBatch(served) : null) };
+}
+
+/** The import the toolbar shows: a DOI or bibliography import in hand, else the PDF import. */
+export function useImportBatch() {
+	const { other: inHand, pdfs: library } = useImportBatches();
+	return inHand ?? library;
+}
+
+/** The toolbar's Import button: how far the reading is while the dialog is closed, and that a review waits after. A batch holds the button at one width so the count doesn't move the toolbar. */
+export function importButtonLabel(current: ImportBatch | null) {
+	if (!current) return { batch: false, reading: false, text: "Import Item" };
+	if (current.results) return { batch: true, reading: false, text: "Finish import" };
+	const { done, total } = reviewCounts(current);
+	return { batch: true, reading: done < total, text: done < total ? `Reading ${done} of ${total}` : "Review import" };
+}
+
+export type ReviewFilter = "all" | "attention" | "existing" | "improve" | "ready";
+
+/** The suggestions a record has applied: the AI's choice until the editor changes it. */
+export function appliedOf(current: ImportBatch | null, row: ImportRow): ReadonlySet<number> {
+	return current?.applied.get(row.id) ?? new Set(row.suggestions.flatMap(({ apply }, index) => (apply ? [index] : [])));
+}
+
+/** A check passes when it was found met or the editor applied a suggestion that meets it. */
+export const checkPasses = (check: ReviewCheck) => check.result === "met" || check.fixed;
+export const rowPasses = (row: ImportRow, applied: ReadonlySet<number>) => reviewChecks(row, applied).every(checkPasses);
+
+const needsAttention = (row: ImportRow) =>
+	row.state === "failed" || row.record?.state === "attention" || row.record?.state === "unresolved";
+
+function reviewMatches(current: ImportBatch | null, row: ImportRow, filter: ReviewFilter) {
+	if (filter === "ready") return row.record?.state === "ready";
+	if (filter === "existing") return row.record?.state === "existing" || row.record?.state === "repeated";
+	if (filter === "attention") return needsAttention(row);
+	if (filter === "improve") return !rowPasses(row, appliedOf(current, row));
+	return true;
+}
+
+export function reviewCounts(current: ImportBatch | null) {
+	const rows = current?.rows ?? [];
+	const count = (filter: ReviewFilter) => rows.filter((row) => reviewMatches(current, row, filter)).length;
 	return {
-		detail: null,
-		label: result.outcome === "created" ? "Draft created" : result.message ?? "Failed",
-		tone: result.outcome === "created" ? ("ready" as const) : ("attention" as const),
+		attention: count("attention"),
+		done: rows.filter(({ state }) => state === "read" || state === "failed").length,
+		existing: count("existing"),
+		improve: count("improve"),
+		ready: count("ready"),
+		total: rows.length,
 	};
 }
 
-export function summarizeImportResults(
-	results: readonly AdminImportCommitResult[],
-) {
-	const createdKeys = results.flatMap(({ itemKey, outcome }) =>
-		outcome === "created" && itemKey ? [itemKey] : [],
-	);
-	const failed = results.filter(({ outcome }) => outcome === "failed").length;
-	const drafts = createdKeys.length === 1 ? "draft" : "drafts";
+export const readyIds = (rows: readonly ImportRow[]) => rows.flatMap(({ id, record }) => (record?.state === "ready" ? [id] : []));
+
+function selectedIds(current: ImportBatch) {
+	return new Set(readyIds(current.rows).filter((id) => !current.excluded.has(id)));
+}
+
+/** The topics and collections the AI chose start chosen; the editor drops the ones that don't fit. */
+export function chosenOf(current: ImportBatch, row: ImportRow, kind: ChoiceKind): ReadonlySet<string> {
+	return current.chosen[kind].get(row.id) ?? new Set(row[kind].map(({ id }) => id));
+}
+
+/** The record as the editor leaves it: what the PDF states, with the applied suggestions. */
+export function recordPayload(row: ImportRow, applied: ReadonlySet<number>): Record<string, unknown> {
+	const changes = row.suggestions.filter((_, index) => applied.has(index)).map(({ field, value }) => [field, value]);
+	return { ...row.record?.payload, ...Object.fromEntries(changes) };
+}
+
+/** What publishing writes into the PDF: the record as the editor leaves it. */
+export function publishedProperties(row: ImportRow, applied: ReadonlySet<number>, topicNames: readonly string[]): PdfProperties {
+	return pdfPropertiesOfRecord(recordPayload(row, applied), { authors: row.record?.creators ?? [], doi: "", keywords: [...topicNames] });
+}
+
+/** A check's answer, and whether an applied suggestion meets it. */
+export type ReviewCheck = PdfCheckResult & { fixable: boolean; fixed: boolean };
+
+/** The library's checks as the AI answered them, each marked when a suggestion would meet it. */
+export function reviewChecks(row: ImportRow, applied: ReadonlySet<number>): ReviewCheck[] {
+	return row.checks.map((check, index) => {
+		const meeting = row.suggestions.flatMap((suggestion, place) => (suggestion.checks.includes(index) ? [place] : []));
+		return { ...check, fixable: meeting.length > 0, fixed: meeting.some((place) => applied.has(place)) };
+	});
+}
+
+/** A path without a level that repeats the one above it ("Social Sciences" as both domain and field). */
+export function topicPath(path: readonly string[]) {
+	return path.filter((name, index) => name !== path[index - 1]);
+}
+
+export function errorMessage(error: unknown) {
+	if (error instanceof AdminApiError) {
+		const fieldMessages = Object.values(error.fields);
+		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
+	}
+	return error instanceof Error ? error.message : "Something went wrong. Try again.";
+}
+
+const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+/** "Read 5 PDFs", or "Read PDFs" before there are any. */
+export const action = (verb: string, count: number, one: string, many: string) => (count ? `${verb} ${plural(count, one, many)}` : `${verb} ${many}`);
+
+/**
+ * The import the sheet shows: a DOI or bibliography import in hand, else the
+ * PDF import, unless the editor stepped out of its review to add another.
+ * `openPdfs` is the PDF import while it waits to be imported.
+ */
+export function shownImport({ other, pdfs: library }: { other: ImportBatch | null; pdfs: ImportBatch | null }, besidePdfs: boolean) {
+	const openPdfs = library && !library.results ? library : null;
+	return { batch: other ?? (besidePdfs && openPdfs ? null : library), openPdfs };
+}
+
+/** Where the sheet is: adding, reviewing an import, or finished with it. */
+export function stageOf(batch: ImportBatch | null): ImportStage {
+	if (batch?.results) return "done";
+	return batch ? "review" : "input";
+}
+
+/** The review's rows: all of them, those the filter shows, and the one open. */
+export function reviewRows(batch: ImportBatch | null, filter: ReviewFilter, activeId: string | null) {
+	const rows = batch?.rows ?? [];
+	const shown = rows.filter((row) => reviewMatches(batch, row, filter));
+	return { activeRow: rows.find(({ id }) => id === activeId) ?? shown[0] ?? null, rows, shown };
+}
+
+/** How the review stands: the counts, whether PDFs are still read, each record's result and the ticked ones. */
+export function reviewProgress(batch: ImportBatch | null) {
+	const counts = reviewCounts(batch);
 	return {
-		createdKeys,
-		failed,
-		message: failed
-			? `${createdKeys.length} ${drafts} created, ${failed} failed`
-			: `${createdKeys.length} ${drafts} created`,
+		checkCount: batch?.checks.length ?? 0,
+		counts,
+		reading: batch?.kind === "pdfs" && counts.done < counts.total,
+		resultById: new Map((batch?.results ?? []).map((result) => [result.id, result])),
+		selected: batch ? selectedIds(batch) : new Set<string>(),
 	};
+}
+
+/** What the Add step has in it. */
+export type AddInputs = { checks: readonly string[]; doiText: string; files: readonly File[]; guidance: string; pdfs: readonly File[] };
+
+/** The checks a new import starts from: the editor's, else those of the library's last import. */
+export const startingChecks = (edited: string[] | null, last: { checks: string[] } | undefined) => edited ?? last?.checks ?? [];
+
+/** The instructions a new import starts from, a line each: the editor's, else those of the library's last import. */
+export const startingInstructions = (edited: string[] | null, last: { instructions: string } | undefined) => edited ?? (last?.instructions ?? "").split("\n").filter((line) => line.trim());
+
+/** What stops the Add step's input going ahead, or null when nothing does. */
+function inputError(kind: ImportKind, { checks, doiText, files, guidance, pdfs }: AddInputs) {
+	try {
+		if (kind === "dois") doiPreviewRequest(doiText);
+		else if (kind === "files") validateImportFiles(files);
+		else {
+			validatePdfFiles(pdfs);
+			validateChecks(checks);
+			validateGuidance(guidance);
+		}
+		return null;
+	} catch (error) {
+		return errorMessage(error);
+	}
+}
+
+// Whether the Add step has something in it. The DOI box lists entries that are not DOIs itself.
+function inputGiven(kind: ImportKind, { doiText, files, pdfs }: AddInputs) {
+	if (kind === "pdfs") return pdfs.length > 0;
+	if (kind === "files") return files.length > 0;
+	return Boolean(doiText.trim()) && !parseDoiList(doiText).invalid.length;
+}
+
+/**
+ * The Add step's state: whether the PDFs tab leads back to an open PDF
+ * import rather than reading more, which files it takes by drop or upload,
+ * what stops it, and what the footer explains, such as too many DOIs.
+ */
+export function addStep(kind: ImportKind, openPdfs: ImportBatch | null, inputs: AddInputs, stage: ImportStage) {
+	const pdfsWaiting = kind === "pdfs" && openPdfs !== null;
+	const problem = pdfsWaiting ? null : inputError(kind, inputs);
+	return { fileKind: kind === "dois" || pdfsWaiting ? null : kind, footerProblem: stage === "input" && inputGiven(kind, inputs) ? problem : null, pdfsWaiting, problem };
+}
+
+/** The Add step's main button: what it does to how many. */
+export function primaryLabel(kind: ImportKind, { doiText, files, pdfs }: AddInputs, openPdfs: ImportBatch | null) {
+	if (kind === "dois") return action("Look up", parseDoiList(doiText).dois.length, "DOI", "DOIs");
+	if (kind === "files") return action("Read", files.length, "file", "files");
+	return openPdfs ? action("Review", openPdfs.rows.length, "PDF", "PDFs") : action("Read", pdfs.length, "PDF", "PDFs");
+}
+
+/** The chosen records as they're imported: with the editor's changes and choices, and topics only where the library uses them. */
+export function recordsToCommit(batch: ImportBatch, topicsEnabled: boolean) {
+	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
+	return selectedImportRecords(batch.rows.flatMap(({ record }) => (record ? [record] : [])), selectedIds(batch)).map((record) => {
+		const row = rowById.get(record.id)!;
+		const topics = [...chosenOf(batch, row, "topics")];
+		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
+	});
+}
+
+function toggled<Value>(values: ReadonlySet<Value>, value: Value) {
+	const next = new Set(values);
+	if (next.has(value)) next.delete(value);
+	else next.add(value);
+	return next;
+}
+
+/** The import with one suggestion applied or undone. */
+export function withSuggestionToggled(current: ImportBatch, rowId: string, index: number): ImportBatch {
+	const row = current.rows.find(({ id }) => id === rowId);
+	return row ? { ...current, applied: new Map(current.applied).set(rowId, toggled(appliedOf(current, row), index)) } : current;
+}
+
+/** The import with one of the AI's topics or collections kept or dropped. */
+export function withChoiceToggled(current: ImportBatch, rowId: string, kind: ChoiceKind, id: string): ImportBatch {
+	const row = current.rows.find(({ id: candidate }) => candidate === rowId);
+	return row ? { ...current, chosen: { ...current.chosen, [kind]: new Map(current.chosen[kind]).set(rowId, toggled(chosenOf(current, row, kind), id)) } } : current;
+}
+
+/** What the open import sets for the sheet: its id, its collections, whether it is being imported, and its ready records. */
+export function batchFields(batch: ImportBatch | null, collections: string[], busy: boolean) {
+	return { collections: batch?.collections ?? collections, importId: batch?.importId ?? "", locked: busy || batch?.committing === true, readyIds: readyIds(batch?.rows ?? []) };
 }

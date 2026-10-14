@@ -44,6 +44,8 @@ export default defineConfig({
             "tests/integration/source-issues.test.ts",
             "tests/integration/search-outbox-lock-order.test.ts",
             "tests/integration/reread-pdf-text.test.ts",
+			"tests/integration/pdf-import.test.ts",
+			"tests/integration/pdf-import-read.test.ts",
             "tests/integration/source-restart.test.ts",
 		],
 		maxWorkers: 1,

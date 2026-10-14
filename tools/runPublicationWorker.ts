@@ -2,6 +2,7 @@ import { runTopicAssociationCycle } from "../src/lib/topics/association-delivery
 import { runReadingCycle } from "../src/lib/readings/worker";
 import { runNotificationCycle } from "../src/lib/notifications/worker";
 import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
+import { runPdfImportCycle } from "../src/lib/admin/pdf-import-reading";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
@@ -166,6 +167,8 @@ async function main() {
 	}, 5_000);
 	let fatalError: unknown = null;
 	let consecutiveCycleFailures = 0;
+	// Each PDF takes seconds to read, so the import reads beside the other cycles instead of holding them up.
+	let pdfImportReading: Promise<unknown> | null = null;
 
 	try {
 		await report({ ...initialProgress, stage: "idle" }, true);
@@ -174,6 +177,11 @@ async function main() {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				await runTopicAssociationCycle(resource.database, config, abortController.signal);
 				await runReadingCycle(resource.database, config, abortController.signal);
+				pdfImportReading ??= runPdfImportCycle(resource.database, storage, config, abortController.signal)
+					.catch((error: unknown) => console.error(`PDF import cycle failed: ${errorMessage(error)}`))
+					.finally(() => {
+						pdfImportReading = null;
+					});
 				const notificationError = await runNotificationCycle(resource.database, config, abortController.signal);
 				const cycle = await runPublicationWorkerCycle(
 					resource.database,
@@ -272,6 +280,8 @@ async function main() {
 		throw error;
 	} finally {
 		clearInterval(heartbeatTimer);
+		// A read in progress saves or releases its PDFs before the database closes.
+		await pdfImportReading;
 		try {
 			await reporter.flush();
 			if (!ownershipLost) {

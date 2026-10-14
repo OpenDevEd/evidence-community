@@ -277,6 +277,11 @@ const config: Config = {
 					"0%": { gridTemplateRows: "0fr", opacity: "0" },
 					"100%": { gridTemplateRows: "1fr", opacity: "1" },
 				},
+				// A light that passes down a PDF's cover while the AI reads it.
+				"pdf-scan": {
+					"0%": { transform: "translateY(-100%)" },
+					"100%": { transform: "translateY(250%)" },
+				},
 				"rise-in": {
 					"0%": {
 						opacity: "0",
@@ -302,6 +307,7 @@ const config: Config = {
 				marquee: "marquee 40s linear infinite",
 				"marquee-up": "marquee-up 60s linear infinite",
 				"horizon-grid": "horizon-grid 2.4s linear infinite",
+				"pdf-scan": "pdf-scan 1.8s cubic-bezier(0.45, 0, 0.55, 1) infinite",
 			},
 		},
 	},

@@ -1,564 +1,184 @@
 "use client";
 
-import { TruncatedText } from "@/components/nextui/TruncatedText";
-
-import {
-	ModalBody,
-	ModalContent,
-	ModalFooter,
-	ModalHeader,
-} from "@nextui-org/react";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { Drawer, DrawerContent } from "@nextui-org/react";
 import { useState } from "react";
-import { toast } from "sonner";
 
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
-import DialogModal from "@/components/nextui/DialogModal";
-import { Tab, Tabs } from "@/components/nextui/Tabs";
-import { Textarea } from "@/components/nextui/Textarea";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
-import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
-import {
-	ADMIN_IMPORT_FILE_EXTENSIONS,
-	ADMIN_IMPORT_FILE_FORMATS,
-	ADMIN_IMPORT_MAX_FILES,
-	ADMIN_IMPORT_MAX_RECORDS,
-	type AdminImportCommitResult,
-	type AdminImportPreviewRecord,
-} from "@/lib/admin/item-import-contract";
-import type { AdminSource } from "@/lib/admin/types";
 
-import { AdminCollectionPicker } from "./AdminCollectionPicker";
-import { AdminApiError, commitAdminImport, previewAdminImport } from "./admin-api";
-import {
-	doiPreviewRequest,
-	filePreviewRequest,
-	importRowCells,
-	importRowStatus,
-	importStage,
-	readyImportIds,
-	selectedImportRecords,
-	summarizeImportResults,
-	toggleImportSelection,
-	validateImportFiles,
-} from "./admin-import";
+import { useAdminSession } from "./AdminSessionProvider";
+import { publishView } from "./ImportDone";
+import { ImportDoneStep } from "./ImportDoneStep";
+import { ImportReviewStep, ReviewTabs } from "./ImportReviewStep";
+import { ImportSteps } from "./ImportSteps";
+import { InputNote, StageFade } from "./import-parts";
+import { DropHint, ImportAdd, SheetDrop, SourceTabs, UploadButton } from "./ImportAdd";
+import { action, attaching } from "./admin-import";
+import { useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
 
-type ImportTab = "dois" | "files";
-type ImportStage = "done" | "input" | "preview";
-type ImportPreview = { importId: string; records: AdminImportPreviewRecord[] };
-
-const stateTone: Record<AdminImportPreviewRecord["state"], string> = {
-	attention: "text-amber-700 dark:text-amber-400",
-	existing: "text-black/55 dark:text-white/55",
-	ready: "text-emerald-700 dark:text-emerald-400",
-	repeated: "text-black/55 dark:text-white/55",
-	unresolved: "text-danger",
-};
-
-function errorMessage(error: unknown) {
-	if (error instanceof AdminApiError) {
-		const fieldMessages = Object.values(error.fields);
-		return fieldMessages.length ? `${error.message} ${fieldMessages.join(" ")}` : error.message;
+/**
+ * Import records from PDFs, a pasted DOI list or bibliography files, in a
+ * sheet that slides in over the record table, which stays in view. PDFs are
+ * read by AI, which fills their metadata, judges their OpenAlex topics and
+ * answers the library's checks, following the library's guidance. Every
+ * source ends in the same review, and the chosen records become unpublished
+ * drafts in one call.
+ */
+export function AdminImportDialog({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	// Each opening starts fresh; closing keeps the contents while the sheet slides out.
+	const [opening, setOpening] = useState(0);
+	const [wasOpen, setWasOpen] = useState(isOpen);
+	if (isOpen !== wasOpen) {
+		setWasOpen(isOpen);
+		if (isOpen) setOpening((value) => value + 1);
 	}
-	return error instanceof Error ? error.message : "Something went wrong. Try again.";
+	return <ImportHost isOpen={isOpen} key={opening} {...props} />;
 }
 
-function importInputError(tab: ImportTab, doiText: string, files: readonly File[]): string | null {
-	try {
-		if (tab === "dois") doiPreviewRequest(doiText);
-		else validateImportFiles(files);
-		return null;
-	} catch (error) {
-		return errorMessage(error);
-	}
+function ImportHost({ isOpen, ...props }: ImportFlowProps & { isOpen: boolean }) {
+	const flow = useImportFlow(props);
+	return (
+		<Drawer
+			classNames={{ base: "max-w-[36rem] border-s border-black/10 bg-background_light dark:border-white/10 dark:bg-background" }}
+			hideCloseButton
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) flow.onClose();
+			}}
+			placement="right"
+			size="2xl"
+		>
+			<DrawerContent>{isOpen ? <ImportSheet flow={flow} /> : null}</DrawerContent>
+		</Drawer>
+	);
 }
 
 /**
- * Import records from a pasted DOI list or bibliography files. Both paths
- * return one preview; the chosen rows become native drafts in one call.
+ * The sheet: the header on the sheet's background, then one lighter panel
+ * for every step. On the Add step the source tabs sit on top of the panel,
+ * the chosen one joined to it, as in the record inspector.
  */
-export function AdminImportDialog({
-	isOpen,
-	onClose,
-	onImported,
-	sources,
-}: {
-	isOpen: boolean;
-	onClose: () => void;
-	onImported: (itemKeys: string[]) => Promise<void> | void;
-	sources: readonly AdminSource[];
-}) {
+function ImportSheet({ flow }: { flow: ImportFlowState }) {
+	const { canPublish } = useAdminSession();
+	const view = flow.stage === "done" && flow.batch ? publishView(flow.batch, flow.choosePublish, canPublish) : null;
 	return (
-		<DialogModal
-			isOpen={isOpen}
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-			scrollBehavior="inside"
-			size="3xl"
-		>
-			<ModalContent>
-				{isOpen ? (
-					<ImportForm onClose={onClose} onImported={onImported} sources={sources} />
-				) : null}
-			</ModalContent>
-		</DialogModal>
+		<SheetDrop flow={flow}>
+			<SheetHeader flow={flow} />
+			<StageTabs flow={flow} />
+			<div className={`flex min-h-0 flex-1 flex-col bg-card_light dark:bg-card ${flow.stage === "done" ? "border-t border-black/[0.06] dark:border-white/[0.06]" : ""}`}>
+				<StageFade stage={flow.stage}>
+					<StageBody flow={flow} view={view} />
+				</StageFade>
+				{/* On a phone the actions wrap under the collections rather than clip them. */}
+				<footer className="flex min-h-16 shrink-0 flex-wrap items-center gap-2 border-t border-black/[0.06] px-5 py-3 dark:border-white/[0.06]">
+					<FooterNote flow={flow} />
+					<span className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+						<StageActions canPublish={canPublish} flow={flow} view={view} />
+					</span>
+				</footer>
+			</div>
+		</SheetDrop>
 	);
 }
 
-function ImportForm({
-	onClose,
-	onImported,
-	sources,
-}: {
-	onClose: () => void;
-	onImported: (itemKeys: string[]) => Promise<void> | void;
-	sources: readonly AdminSource[];
-}) {
-	const [tab, setTab] = useState<ImportTab>("dois");
-	const [doiText, setDoiText] = useState("");
-	const [files, setFiles] = useState<File[]>([]);
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState<string | null>(null);
-	const [preview, setPreview] = useState<ImportPreview | null>(null);
-	const [selected, setSelected] = useState<Set<string>>(new Set());
-	const [collections, setCollections] = useState<string[]>([]);
-	const [results, setResults] = useState<AdminImportCommitResult[] | null>(null);
-	const stage: ImportStage = importStage(preview, results);
-	const inputError = importInputError(tab, doiText, files);
+type PublishView = ReturnType<typeof publishView>;
 
-	const run = async (work: () => Promise<void>) => {
-		setError(null);
-		setBusy(true);
-		try {
-			await work();
-		} catch (caught) {
-			setError(errorMessage(caught));
-		} finally {
-			setBusy(false);
-		}
-	};
+function SheetHeader({ flow }: { flow: ImportFlowState }) {
+	return (
+		<header className="flex h-14 shrink-0 items-center gap-3 px-5">
+			<h2 className="whitespace-nowrap text-base font-semibold text-black/90 dark:text-white/90">Import records</h2>
+			<span className="flex-1" />
+			{/* The steps make way for Close on a phone. */}
+			<span className="hidden sm:block">
+				<ImportSteps stage={flow.stage} />
+			</span>
+			<Button aria-label="Close" className="-me-1.5 size-8 !min-w-8 shrink-0" isIconOnly onPress={flow.onClose} size="xs" variant="transparent">
+				<HugeiconsIcon aria-hidden icon={Cancel01Icon} size={16} />
+			</Button>
+		</header>
+	);
+}
 
-	const runPreview = () =>
-		run(async () => {
-			const request = tab === "dois" ? doiPreviewRequest(doiText) : await filePreviewRequest(files);
-			const response = await previewAdminImport(request);
-			setPreview({ importId: crypto.randomUUID(), records: response.records });
-			setSelected(new Set(readyImportIds(response.records)));
-		});
+// The review shows once there is an import to review.
+const reviewing = (flow: ImportFlowState) => flow.stage === "review" && Boolean(flow.batch);
 
-	const runCommit = () =>
-		run(async () => {
-			if (!preview) return;
-			const response = await commitAdminImport({
-				collections,
-				importId: preview.importId,
-				records: selectedImportRecords(preview.records, selected),
-			});
-			setResults(response.results);
-			const summary = summarizeImportResults(response.results);
-			await onImported(summary.createdKeys);
-			(summary.failed ? toast.warning : toast.success)(summary.message);
-		});
+function StageTabs({ flow }: { flow: ImportFlowState }) {
+	if (flow.stage === "input") return <SourceTabs flow={flow} />;
+	return reviewing(flow) ? <ReviewTabs flow={flow} /> : null;
+}
 
+function StageBody({ flow, view }: { flow: ImportFlowState; view: PublishView | null }) {
+	if (flow.stage === "input") return <ImportAdd flow={flow} />;
+	if (view) return <ImportDoneStep flow={flow} />;
+	return reviewing(flow) ? <ImportReviewStep flow={flow} /> : null;
+}
+
+const hasProblem = (flow: ImportFlowState) => Boolean(flow.error || flow.footerProblem);
+
+/** A problem with the input, what happens next in the review, or how to add files. */
+function FooterNote({ flow }: { flow: ImportFlowState }) {
+	if (hasProblem(flow)) return <InputNote flow={flow} />;
+	if (flow.stage === "review") return <p className="min-w-0 flex-1 basis-full text-xs leading-5 text-black/50 sm:basis-0 dark:text-white/50">{reviewNote(flow)}</p>;
+	return flow.stage === "done" ? null : <DropHint flow={flow} />;
+}
+
+const reviewNote = (flow: ImportFlowState) => (flow.reading ? "Reading carries on if you close this" : "The chosen records become drafts");
+
+function StageActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView | null }) {
+	if (flow.stage === "input") return <InputActions flow={flow} />;
+	if (view) return <DoneActions canPublish={canPublish} flow={flow} view={view} />;
+	return flow.stage === "review" ? <ReviewActions flow={flow} /> : null;
+}
+
+function InputActions({ flow }: { flow: ImportFlowState }) {
 	return (
 		<>
-			<ModalHeader className="flex flex-col gap-1">
-				Import records
-				<span className="text-xs font-normal text-black/55 dark:text-white/55">
-					Creates unpublished drafts. Up to {ADMIN_IMPORT_MAX_RECORDS} records at once.
-				</span>
-			</ModalHeader>
-			<ModalBody className="gap-3">
-				{preview ? (
-					<ImportPreviewPanel
-						busy={busy}
-						collections={collections}
-						onCollectionsChange={setCollections}
-						onSelectedChange={setSelected}
-						preview={preview}
-						results={results}
-						selected={selected}
-						sources={sources}
-					/>
-				) : (
-					<ImportInputPanel
-						busy={busy}
-						doiText={doiText}
-						files={files}
-						inputError={inputError}
-						onDoiTextChange={(value) => {
-							setDoiText(value);
-							setError(null);
-						}}
-						onFilesChange={(value) => {
-							setFiles(value);
-							setError(null);
-						}}
-						onTabChange={(value) => {
-							setTab(value);
-							setError(null);
-						}}
-						tab={tab}
-					/>
-				)}
-				{error ? (
-					<p className="text-sm text-danger" role="alert">
-						{error}
-					</p>
-				) : null}
-			</ModalBody>
-			<ImportFooter
-				busy={busy}
-				canPreview={inputError === null}
-				onBack={() => {
-					setPreview(null);
-					setError(null);
-				}}
-				onClose={onClose}
-				onCommit={() => void runCommit()}
-				onPreview={() => void runPreview()}
-				selectedCount={selected.size}
-				stage={stage}
-			/>
+			<UploadButton flow={flow} />
+			<Button className="min-w-28" color="accent" isDisabled={flow.problem !== null} isLoading={flow.busy} onPress={flow.start} size="sm" variant="solid">
+				{flow.primaryLabel}
+			</Button>
 		</>
 	);
 }
 
-function ImportInputPanel({
-	busy,
-	doiText,
-	files,
-	inputError,
-	onDoiTextChange,
-	onFilesChange,
-	onTabChange,
-	tab,
-}: {
-	busy: boolean;
-	doiText: string;
-	files: File[];
-	inputError: string | null;
-	onDoiTextChange: (value: string) => void;
-	onFilesChange: (files: File[]) => void;
-	onTabChange: (tab: ImportTab) => void;
-	tab: ImportTab;
-}) {
-	return (
-		<Tabs
-			aria-label="Import source"
-			isDisabled={busy}
-			onSelectionChange={(key) => onTabChange(key as ImportTab)}
-			selectedKey={tab}
-		>
-			<Tab key="dois" title="DOIs">
-				<Textarea
-					aria-label="DOIs"
-					isDisabled={busy}
-					isInvalid={Boolean(doiText.trim() && inputError)}
-					errorMessage={inputError}
-					minRows={6}
-					onValueChange={onDoiTextChange}
-					placeholder={"10.1000/xyz123\nhttps://doi.org/10.1000/abc456"}
-					value={doiText}
-				/>
-				<p className="mt-1 text-xs text-black/55 dark:text-white/55">
-					One DOI per line or separated by commas. Plain DOIs and doi.org links both work.
-				</p>
-			</Tab>
-			<Tab key="files" title="Bibliography files">
-				<BibliographyFileInput busy={busy} files={files} inputError={inputError} onFilesChange={onFilesChange} />
-			</Tab>
-		</Tabs>
-	);
-}
+// A PDF import waits on the server, so leaving its review goes back beside it and discarding ends it.
+const pdfImport = (flow: ImportFlowState) => flow.batch?.kind === "pdfs";
 
-function BibliographyFileInput({ busy, files, inputError, onFilesChange }: {
-	busy: boolean;
-	files: File[];
-	inputError: string | null;
-	onFilesChange: (files: File[]) => void;
-}) {
-	const fileError = files.length > 0 ? inputError : null;
+function ReviewActions({ flow }: { flow: ImportFlowState }) {
 	return (
 		<>
-			<input
-				accept={ADMIN_IMPORT_FILE_EXTENSIONS}
-				aria-label="Bibliography files"
-				className="block w-full text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-black/[0.05] file:px-3 file:py-2 file:text-sm file:font-medium dark:file:bg-white/[0.08]"
-				disabled={busy}
-				aria-describedby={fileError ? "import-file-error" : undefined}
-				aria-invalid={Boolean(fileError)}
-				multiple
-				onChange={(event) => onFilesChange(Array.from(event.currentTarget.files ?? []))}
-				type="file"
-			/>
-			<p className="mt-2 text-xs text-black/55 dark:text-white/55">
-				Supported formats: {ADMIN_IMPORT_FILE_FORMATS.join(", ")}. Up to {ADMIN_IMPORT_MAX_FILES} files, 5 MB each.
-			</p>
-			<ul className="mt-2 text-xs text-black/70 dark:text-white/70">
-				{files.map((file) => (
-					<li key={file.name}>{file.name}</li>
-				))}
-			</ul>
-			{fileError ? (
-				<p className="mt-2 text-sm text-danger" id="import-file-error" role="alert">
-					{fileError}
-				</p>
-			) : null}
-		</>
-	);
-}
-
-function ImportPreviewPanel({
-	busy,
-	collections,
-	onCollectionsChange,
-	onSelectedChange,
-	preview,
-	results,
-	selected,
-	sources,
-}: {
-	busy: boolean;
-	collections: string[];
-	onCollectionsChange: (keys: string[]) => void;
-	onSelectedChange: (selected: Set<string>) => void;
-	preview: ImportPreview;
-	results: AdminImportCommitResult[] | null;
-	selected: Set<string>;
-	sources: readonly AdminSource[];
-}) {
-	const locked = busy || results !== null;
-	return (
-		<>
-			<PreviewTable
-				locked={locked}
-				onSelectedChange={onSelectedChange}
-				records={preview.records}
-				results={results}
-				selected={selected}
-			/>
-			{results === null ? (
-				<div>
-					<p className="mb-1 text-xs font-medium text-black/70 dark:text-white/70">
-						Add the imported drafts to collections (optional)
-					</p>
-					<AdminCollectionPicker
-						allowedSourceKeys={editableItemCollectionSourceKeysForItems(
-							[NATIVE_SOURCE_CONNECTION_KEY],
-							sources,
-						)}
-						onSelectionChange={onCollectionsChange}
-						selectedKeys={collections}
-						selectionMode="multiple"
-						sources={sources}
-					/>
-				</div>
-			) : null}
-		</>
-	);
-}
-
-function PreviewTable({
-	locked,
-	onSelectedChange,
-	records,
-	results,
-	selected,
-}: {
-	locked: boolean;
-	onSelectedChange: (selected: Set<string>) => void;
-	records: AdminImportPreviewRecord[];
-	results: AdminImportCommitResult[] | null;
-	selected: Set<string>;
-}) {
-	const readyIds = readyImportIds(records);
-	const resultById = new Map((results ?? []).map((result) => [result.id, result]));
-	return (
-		<div className="max-h-80 overflow-auto rounded-xl border border-black/10 dark:border-white/10">
-			<table className="w-full text-left text-xs">
-				<thead className="sticky top-0 bg-background_light dark:bg-card">
-					<tr className="text-black/55 dark:text-white/55">
-						<th className="p-2">
-							<SelectAllCheckbox
-								locked={locked}
-								onSelectedChange={onSelectedChange}
-								readyIds={readyIds}
-								selected={selected}
-							/>
-						</th>
-						<th className="p-2 font-medium">Title</th>
-						<th className="p-2 font-medium">Creators</th>
-						<th className="p-2 font-medium">Year</th>
-						<th className="p-2 font-medium">Type</th>
-						<th className="p-2 font-medium">Source</th>
-						<th className="p-2 font-medium">Status</th>
-					</tr>
-				</thead>
-				<tbody>
-					{records.map((record) => (
-						<PreviewRow
-							key={record.id}
-							locked={locked}
-							onToggle={(checked) =>
-								onSelectedChange(toggleImportSelection(selected, record.id, checked))
-							}
-							record={record}
-							result={resultById.get(record.id)}
-							selected={selected.has(record.id)}
-						/>
-					))}
-				</tbody>
-			</table>
-		</div>
-	);
-}
-
-function SelectAllCheckbox({
-	locked,
-	onSelectedChange,
-	readyIds,
-	selected,
-}: {
-	locked: boolean;
-	onSelectedChange: (selected: Set<string>) => void;
-	readyIds: string[];
-	selected: Set<string>;
-}) {
-	const none = readyIds.length === 0;
-	const all = !none && selected.size === readyIds.length;
-	return (
-		<Checkbox
-			aria-label="Select all ready records"
-			isDisabled={locked || none}
-			isIndeterminate={selected.size > 0 && !all}
-			isSelected={all}
-			onValueChange={(checked) => onSelectedChange(new Set(checked ? readyIds : []))}
-			size="sm"
-		/>
-	);
-}
-
-function PreviewRow({
-	locked,
-	onToggle,
-	record,
-	result,
-	selected,
-}: {
-	locked: boolean;
-	onToggle: (checked: boolean) => void;
-	record: AdminImportPreviewRecord;
-	result: AdminImportCommitResult | undefined;
-	selected: boolean;
-}) {
-	const cells = importRowCells(record);
-	const status = importRowStatus(record, result);
-	return (
-		<tr className="border-t border-black/[0.06] align-top dark:border-white/[0.06]">
-			<td className="p-2">
-				<Checkbox
-					aria-label={cells.label}
-					isDisabled={locked || !cells.selectable}
-					isSelected={selected}
-					onValueChange={onToggle}
-					size="sm"
-				/>
-			</td>
-			<td className="p-2 text-black/85 dark:text-white/85">
-				{cells.title ?? <span className="italic opacity-60">No title</span>}
-			</td>
-			<td className="p-2">{cells.creators}</td>
-			<td className="p-2 tabular-nums">{cells.year}</td>
-			<td className="p-2">{cells.itemType}</td>
-			<td className="max-w-40 p-2">
-				<TruncatedText text={record.source} focusable />
-			</td>
-			<td className={`p-2 ${stateTone[status.tone]}`}>
-				{status.label}
-				{status.detail ? (
-					<span className="block text-black/55 dark:text-white/55">{status.detail}</span>
-				) : null}
-			</td>
-		</tr>
-	);
-}
-
-function ImportFooter({
-	busy,
-	canPreview,
-	onBack,
-	onClose,
-	onCommit,
-	onPreview,
-	selectedCount,
-	stage,
-}: {
-	busy: boolean;
-	canPreview: boolean;
-	onBack: () => void;
-	onClose: () => void;
-	onCommit: () => void;
-	onPreview: () => void;
-	selectedCount: number;
-	stage: ImportStage;
-}) {
-	return (
-		<ModalFooter>
-			{stage === "preview" ? (
-				<Button isDisabled={busy} onPress={onBack} size="xs" variant="transparent">
+			{pdfImport(flow) ? (
+				<Button isDisabled={flow.locked} onPress={flow.addBeside} size="sm" variant="transparent">
 					Back
 				</Button>
 			) : null}
-			<Button isDisabled={busy} onPress={onClose} size="xs" variant="transparent">
-				{stage === "done" ? "Close" : "Cancel"}
+			<Button isDisabled={flow.locked} onPress={flow.restart} size="sm" variant="transparent">
+				{pdfImport(flow) ? "Discard" : "Back"}
 			</Button>
-			<PrimaryAction
-				busy={busy}
-				canPreview={canPreview}
-				onCommit={onCommit}
-				onPreview={onPreview}
-				selectedCount={selectedCount}
-				stage={stage}
-			/>
-		</ModalFooter>
+			<Button className="min-w-32" color="accent" isDisabled={flow.reading || flow.selected.size === 0} isLoading={flow.locked} onPress={flow.commit} size="sm" variant="solid">
+				{action("Import", flow.selected.size, "record", "records")}
+			</Button>
+		</>
 	);
 }
 
-function PrimaryAction({
-	busy,
-	canPreview,
-	onCommit,
-	onPreview,
-	selectedCount,
-	stage,
-}: {
-	busy: boolean;
-	canPreview: boolean;
-	onCommit: () => void;
-	onPreview: () => void;
-	selectedCount: number;
-	stage: ImportStage;
-}) {
-	if (stage === "done") return null;
-	if (stage === "input") {
-		return (
-			<Button color="accent" isDisabled={!canPreview} isLoading={busy} onPress={onPreview} size="xs" variant="solid">
-				Preview
-			</Button>
-		);
-	}
+function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView }) {
+	// The import's stored PDFs are what the worker attaches, so it stays open until every draft has one.
+	const busy = attaching(flow.batch!);
 	return (
-		<Button
-			color="accent"
-			isDisabled={selectedCount === 0}
-			isLoading={busy}
-			onPress={onCommit}
-			size="xs"
-			variant="solid"
-		>
-			Import {selectedCount} {selectedCount === 1 ? "record" : "records"}
-		</Button>
+		<>
+			<Button isDisabled={busy} onPress={flow.restart} size="sm" variant="transparent">
+				Import more
+			</Button>
+			{view.offered ? (
+				<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
+					{view.label}
+				</Button>
+			) : null}
+			<Button className="min-w-20" isDisabled={busy} onPress={flow.finish} size="sm" variant="muted">
+				Done
+			</Button>
+		</>
 	);
 }

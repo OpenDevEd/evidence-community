@@ -1,13 +1,24 @@
 // fallow-ignore-file unused-file
 // Docker Compose starts this fixture directly; it is not imported by TypeScript.
 import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
+import { join } from "node:path";
 
 const port = Number(process.env.PORT ?? 4000);
 const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
+// Files uploaded, by bucket and path, kept on the container's disk so a restart of this process keeps them;
+// anything else reads as the acceptance PDF.
+const STORAGE_DIR = "/tmp/runtime-provider-fake-storage";
+mkdirSync(STORAGE_DIR, { recursive: true });
+const storedFile = (objectPath) => join(STORAGE_DIR, encodeURIComponent(objectPath));
+const storedObjects = {
+	get: (objectPath) => (existsSync(storedFile(objectPath)) ? readFileSync(storedFile(objectPath)) : undefined),
+	set: (objectPath, bytes) => writeFileSync(storedFile(objectPath), bytes),
+};
 const adminUsers = { editor: "user_acceptance_admin", creator: "user_acceptance_creator", owner: "user_acceptance_owner" };
 function requiredEnvironment(name) {
 	const value = process.env[name];
@@ -222,8 +233,70 @@ async function collectionInvitation(request, response, action) {
 	return json(response, 404, { error: "unknown_action" });
 }
 
+// OpenScholar's author profiles, created, looked up by id and searched by name; kept beside the stored files.
+const PROFILES_FILE = join(STORAGE_DIR, "..author-profiles.json");
+const authorProfiles = new Map(existsSync(PROFILES_FILE) ? JSON.parse(readFileSync(PROFILES_FILE, "utf8")) : []);
+
 // fallow-ignore-next-line complexity
-const server = createServer(async (request, response) => {
+function authorProfileRequest(body) {
+	if (body.operation === "create") {
+		const profile = { affiliation: body.affiliation ?? "", bio: "", headline: "", id: `profile_${authorProfiles.size + 1}`, linkedin: "", name: String(body.name ?? "").trim(), openalex: "", orcid: "", photo: null, revision: 1, website: "" };
+		authorProfiles.set(profile.id, profile);
+		writeFileSync(PROFILES_FILE, JSON.stringify([...authorProfiles]));
+		return { profiles: [profile] };
+	}
+	if (body.operation === "resolve") return { profiles: (body.profileIds ?? []).flatMap((id) => (authorProfiles.has(id) ? [authorProfiles.get(id)] : [])) };
+	const words = String(body.search ?? "").toLowerCase().split(/\s+/u).filter(Boolean);
+	const found = [...authorProfiles.values()].filter(({ name }) => words.every((word) => name.toLowerCase().includes(word)));
+	return { continueCursor: null, isDone: true, profiles: found.slice(0, body.paginationOpts?.numItems ?? 12) };
+}
+
+const openAlexId = (value) => value.replace("https://openalex.org/", "");
+
+/** An OpenAlex topic, subfield, field or domain as a node of OpenScholar's topic catalogue. */
+// fallow-ignore-next-line complexity
+function topicNode(node) {
+	const id = openAlexId(node.id);
+	const above = [node.domain, node.field, node.subfield].filter(Boolean);
+	const level = id.startsWith("domains/") ? "domain" : id.startsWith("fields/") ? "field" : id.startsWith("subfields/") ? "subfield" : "topic";
+	return { childCount: 0, id, level, name: node.display_name, parent: above.length ? openAlexId(above[above.length - 1].id) : null, path: above.map(({ display_name }) => display_name) };
+}
+
+/**
+ * OpenScholar's topic catalogue, answered from OpenAlex, where OpenScholar's
+ * comes from: a search or an id lookup returns topics, and the top level
+ * returns none, which is all the runtime asks of it here.
+ */
+async function topicCatalog(body) {
+	return { contractVersion: 1, nextCursor: null, nodes: (await topicLookup(body)).map(topicNode), publicBaseUrl: "https://openalex.org", revision: "openalex" };
+}
+
+const OPENALEX_ACCESS = process.env.OPENALEX_API_KEY ? `api_key=${process.env.OPENALEX_API_KEY}` : "mailto=doi-acceptance@example.org";
+const openAlexUrl = (path) => `https://api.openalex.org${path}${path.includes("?") ? "&" : "?"}${OPENALEX_ACCESS}`;
+
+// OpenAlex limits how fast it may be searched; a refused or slow answer is no topics, not a failure.
+async function openAlexJson(path) {
+	const response = await fetch(openAlexUrl(path), { signal: AbortSignal.timeout(10_000) }).catch(() => null);
+	return response?.ok ? response.json() : null;
+}
+
+/** The OpenAlex topics a search or an id lookup asks for. */
+function topicLookup(body) {
+	return body.query ? searchTopics(body.query, body.limit) : topicsById(body.ids);
+}
+
+async function searchTopics(query, limit = 25) {
+	const found = await openAlexJson(`/topics?search=${encodeURIComponent(query)}&per-page=${Math.min(limit, 50)}`);
+	return found?.results ?? [];
+}
+
+async function topicsById(ids = []) {
+	const known = ids.filter((id) => /^(?:T\d+|(?:domains|fields|subfields)\/\d+)$/u.test(id));
+	return (await Promise.all(known.map((id) => openAlexJson(id.startsWith("T") ? `/topics/${id}` : `/${id}`)))).filter(Boolean);
+}
+
+// fallow-ignore-next-line complexity
+async function handle(request, response) {
 	const url = new URL(
 		request.url ?? "/",
 		`http://${request.headers.host ?? "fixture"}`,
@@ -231,6 +304,15 @@ const server = createServer(async (request, response) => {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/api/v1/evidence-libraries/author-profiles" && method === "POST") {
+		const body = JSON.parse((await readBody(request)).toString("utf8"));
+		// As OpenScholar does, a search or a new profile says which of the library's people asks for it.
+		if (body.operation !== "resolve" && !body.clerkUserId) return json(response, 400, { error: "clerkUserId is required" });
+		return json(response, 200, authorProfileRequest(body));
+	}
+	if (url.pathname === "/api/v1/evidence-libraries/topics/catalog" && method === "POST") {
+		return json(response, 200, await topicCatalog(JSON.parse((await readBody(request)).toString("utf8"))));
+	}
 	if (url.pathname === "/export" && method === "POST") {
 		const items = JSON.parse((await readBody(request)).toString("utf8"));
 		return json(response, 200, items.map((item, index) => ({
@@ -316,10 +398,34 @@ const server = createServer(async (request, response) => {
 		if (invitation) invitation.expiresAt = Date.now() - 1;
 		return json(response, invitation ? 200 : 404, {});
 	}
+	// Signed uploads as the admin's PDF upload makes them: the server signs a
+	// path, then the browser sends the file to it from another origin.
+	const signed = url.pathname.match(/^\/storage\/v1\/object\/upload\/sign\/(.+)$/u);
+	if (signed) {
+		const cors = { "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "PUT", "Access-Control-Allow-Origin": "*" };
+		if (method === "OPTIONS") {
+			response.writeHead(204, cors);
+			return response.end();
+		}
+		if (method === "POST") return json(response, 200, { url: `/object/upload/sign/${signed[1]}?token=fixture` });
+		if (method === "PUT") {
+			const form = await new Request(url, { body: await readBody(request), headers: { "content-type": request.headers["content-type"] ?? "" }, method }).formData().catch(() => null);
+			const file = form && [...form.values()].find((value) => typeof value !== "string");
+			if (!file) return json(response, 400, { error: "Send the file as multipart form data" });
+			storedObjects.set(signed[1], Buffer.from(await file.arrayBuffer()));
+			response.writeHead(200, { ...cors, "Content-Type": "application/json" });
+			return response.end(JSON.stringify({ Key: signed[1] }));
+		}
+	}
 
 	if (url.pathname.startsWith("/storage/v1/object/")) {
+		const objectPath = url.pathname.slice("/storage/v1/object/".length).replace(/^(?:authenticated|public)\//u, "");
 		if (method === "GET") {
-			return text(response, 200, storageBytes, "application/pdf");
+			return text(response, 200, storedObjects.get(objectPath) ?? storageBytes, "application/pdf");
+		}
+		if (method === "POST" || method === "PUT") {
+			storedObjects.set(objectPath, await readBody(request));
+			return json(response, 200, { Key: objectPath });
 		}
 		if (method === "DELETE") return json(response, 200, []);
 	}
@@ -540,6 +646,15 @@ const server = createServer(async (request, response) => {
 
 	return json(response, 404, {
 		message: `Unhandled ${method} ${url.pathname}`,
+	});
+}
+
+// One request that throws answers 500; it must not stop the process, which also holds the uploaded files.
+const server = createServer((request, response) => {
+	handle(request, response).catch((error) => {
+		console.error("Fake request failed", request.method, request.url, error);
+		if (!response.headersSent) json(response, 500, { error: "fixture_failure", message: String(error?.message ?? error) });
+		else response.end();
 	});
 });
 
