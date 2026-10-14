@@ -7,7 +7,7 @@ import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
 import { Accordion, AccordionItem } from "@nextui-org/react";
 import { useReducedMotion } from "framer-motion";
-import { ACCORDION_CONTENT_MOTION } from "@/components/nextui/accordion-motion";
+import { ACCORDION_CONTENT_MOTION, QUESTION_ITEM } from "@/components/nextui/accordion-motion";
 import { AiMagicIcon, Calendar03Icon, BookOpen01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, FileRemoveIcon, FilterHorizontalIcon, Globe02Icon, InformationCircleIcon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary, EditionTypes } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
@@ -576,14 +576,6 @@ const SCORE = [
   ["−1", "A dataset or software"],
 ] as const;
 /** Each question of "How this edition was made" says its answer in a line, so the card reads at a glance while closed. */
-const FAQ_ITEM = {
-  base: "px-0",
-  trigger: "gap-4 py-4 data-[focus-visible=true]:outline-accent",
-  title: "font-semibold leading-6",
-  subtitle: `mt-0.5 text-sm leading-6 ${muted}`,
-  indicator: "text-black/40 dark:text-white/40",
-  content: "pb-5 pt-0 text-sm leading-6 text-black/70 dark:text-white/70",
-};
 
 /** What the AI read: every publication of the period, or the ones a size limit kept, less any taken down since. */
 function readRows(edition: DigestEdition, n: (count: number) => string) {
@@ -622,7 +614,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
   ];
   return <div className="mb-10 rounded-2xl bg-card_light px-6 pt-5 pb-1 dark:bg-card">
     <h3 className="font-heading text-lg font-medium">How this edition was made</h3>
-    <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={FAQ_ITEM} disableAnimation={Boolean(reducedMotion)}>
+    <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
       <AccordionItem key="read" aria-label="What did the AI read?" title="What did the AI read?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
         subtitle={<>The titles and abstracts of <Em>{cut ? n(edition.read) : "all"}</Em> of the period&rsquo;s <Em>{n(edition.publicationCount)}</Em> publications. The text cites <Em>{n(edition.cited)}</Em>{edition.cited > 0 && <>, <Em>{n(edition.citedOpen)}</Em> of them open access</>}.</>}>
         <Facts rows={readRows(edition, n)} />
