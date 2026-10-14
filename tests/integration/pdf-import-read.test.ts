@@ -1,8 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { tool } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
-import { z } from "zod";
 
 import { libraryConfigSchema } from "../../src/config/library-config/schema";
 import { reserveItemIdentity } from "../../src/db/record-identity";
@@ -17,7 +15,6 @@ import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication
 // The model is the outside service: a script stands in for it, and the read's tools run for real.
 const model = vi.hoisted(() => ({ current: null as unknown }));
 vi.mock("../../src/lib/ai/model-resolution", () => ({ resolveAIModel: () => ({ model: model.current, modelId: "mock-model", provider: "openrouter" }) }));
-vi.mock("../../src/lib/ai/tools", () => ({ createResearchTools: () => ({ searchLibrary: tool({ description: "Search the library", inputSchema: z.object({ queries: z.array(z.string()) }), execute: async () => [] }) }) }));
 
 const base = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
 const config = { ...base, ai: { ...base.ai, providers: [{ ...base.ai.providers[0]!, defaultModel: "mock-model", enabled: true }] }, topics: { ...base.topics, enabled: false } };
