@@ -391,6 +391,12 @@ type BatchFeedback = {
 	successDescription?: string;
 };
 
+/** Whether an SWR key is one of these records' own, such as its review, DOI choice or Crossref reservation. */
+const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.isArray(key) && keys.has(String(key[1]));
+
+/** Whether the open record is one of these, or the PDF attached to one. */
+const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
+
 export default function AdminWorkbench({
 	configurationHref,
 	definitions,
@@ -865,6 +871,19 @@ export default function AdminWorkbench({
 			}
 		},
 		[abandonPendingDraft, applyDetail],
+	);
+
+	// The import's finish step sends drafts on, which changes them: what the inspector shows of them is read again, each
+	// one's review and identifiers, and the open record when it is one of them or its PDF. Edits not saved yet keep the
+	// open record as it is, so they aren't lost.
+	const refreshSent = useCallback(
+		async (itemKeys: readonly string[]) => {
+			const sent = new Set(itemKeys);
+			await mutate(isRecordCacheOf(sent));
+			const open = selectedKeyRef.current;
+			if (open && showsSent(sent, open, detailRef.current) && !pendingPayloadByKey.current.has(open)) await loadDetail(open);
+		},
+		[loadDetail],
 	);
 
 	useEffect(() => {
@@ -2778,9 +2797,7 @@ export default function AdminWorkbench({
 				onImported={async (itemKeys) => {
 					// Show the whole library, newest first, so the new drafts are visible.
 					setFilters(DEFAULT_ADMIN_ITEM_VIEW_FILTERS);
-					// Sending the drafts on changes them, so an open one is read again rather than shown as it was.
-					const open = selectedKeyRef.current;
-					await Promise.all([loadItems(), open && itemKeys.includes(open) ? loadDetail(open) : null]);
+					await Promise.all([loadItems(), refreshSent(itemKeys)]);
 					setBulkKeys(new Set(itemKeys));
 				}}
 				onOpenRecord={(itemKey) => {
