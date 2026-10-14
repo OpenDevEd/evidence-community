@@ -158,7 +158,7 @@ function SuggestionRow({
 	href,
 	isCurrent,
 	isHighlighted,
-	onOpenChange,
+	onFollow,
 	onHighlight,
 	preview,
 	title,
@@ -167,7 +167,7 @@ function SuggestionRow({
 	href: string;
 	isCurrent: boolean;
 	isHighlighted: boolean;
-	onOpenChange: (open: boolean) => void;
+	onFollow: () => void;
 	onHighlight: () => void;
 	preview: PublicationPreviewData;
 	title?: string;
@@ -176,7 +176,7 @@ function SuggestionRow({
 	return (
 		<Link
 			href={href}
-			onClick={() => onOpenChange(false)}
+			onClick={onFollow}
 			onMouseEnter={onHighlight}
 			role="option"
 			aria-selected={isHighlighted}
@@ -358,6 +358,12 @@ export default function NavbarSearch() {
 		[router, buildTargetParams, cancelSearch],
 	);
 
+	// A suggestion is a link of its own to the address goToItem builds.
+	const followSuggestion = useCallback(() => {
+		cancelSearch();
+		setIsOpen(false);
+	}, [cancelSearch]);
+
 	const handlePreviewPageChange = useCallback(
 		(page: number) => {
 			setParams({ page });
@@ -511,7 +517,7 @@ export default function NavbarSearch() {
 														isHighlighted={
 															highlight === index
 														}
-														onOpenChange={setIsOpen}
+														onFollow={followSuggestion}
 														onHighlight={() =>
 															setHighlight(index)
 														}

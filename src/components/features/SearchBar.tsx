@@ -13,6 +13,34 @@ import { useInlineChatLayout } from "@/context/InlineChatLayout";
 /** A focus request older than this belongs to an earlier page visit. */
 const FOCUS_REQUEST_MAX_AGE_MS = 1000;
 
+type Draft = { sourceSearch: string; value: string };
+
+/**
+ * The field's search, run once typing stops: run, cancel, and run now. A search still waiting when the field goes away
+ * (a result followed straight after typing) never runs, since it would write the next page's address. It stops being
+ * what was typed, and a page kept for Back shows the search it has again, not the words that never ran.
+ */
+function useWaitingSearch(
+	handleSearchChange: (search: string) => void,
+	setDraft: (update: (draft: Draft) => Draft) => void,
+	onTyped?: (text: string | null) => void,
+) {
+	const [run, , cancel, now] = useDebounce((text: string) => {
+		onTyped?.(null);
+		handleSearchChange(text);
+	}, 300);
+	// The timer is the outside system: this drops what it still holds.
+	useEffect(
+		() => () => {
+			cancel();
+			onTyped?.(null);
+			setDraft((draft) => ({ ...draft, value: draft.sourceSearch }));
+		},
+		[cancel, onTyped, setDraft],
+	);
+	return [run, cancel, now] as const;
+}
+
 export function SearchBar({
 	handleSearchChange,
 	onTyped,
@@ -69,16 +97,14 @@ export function SearchBar({
 		element.focus({ preventScroll: true });
 		element.setSelectionRange(element.value.length, element.value.length);
 	}, [focusOnRequest, searchFocusRequest]);
-	const [draft, setDraft] = useState({
+	const [draft, setDraft] = useState<Draft>({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, , cancelSearch, searchNow] = useDebounce(
-		(text: string) => {
-			onTyped?.(null);
-			handleSearchChange(text);
-		},
-		300,
+	const [debouncedSearch, cancelSearch, searchNow] = useWaitingSearch(
+		handleSearchChange,
+		setDraft,
+		onTyped,
 	);
 	const t = useTranslations("ui");
 	const localValue =

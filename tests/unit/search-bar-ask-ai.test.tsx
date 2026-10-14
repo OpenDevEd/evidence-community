@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, Activity } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -155,6 +155,42 @@ describe("asking the assistant from the search field", () => {
 		});
 		expect(handleSearchChange).toHaveBeenCalledWith("teacher training");
 		expect(onTyped).toHaveBeenLastCalledWith(null);
+	});
+
+	// A result followed straight after typing: the waiting search must not write the next page's address, nor stay
+	// behind as what Open in OpenScholar sends. A page kept for Back (hidden, not unmounted) shows its search again.
+	it("drops a waiting search and what it held when the field goes away", async () => {
+		vi.useFakeTimers();
+		try {
+			const handleSearchChange = vi.fn();
+			const onTyped = vi.fn();
+			const show = (mode: "visible" | "hidden") =>
+				act(async () => {
+					root.render(
+						<Activity mode={mode}>
+							<SearchBar
+								handleSearchChange={handleSearchChange}
+								onTyped={onTyped}
+								search=""
+							/>
+						</Activity>,
+					);
+				});
+
+			await show("visible");
+			await type("teacher training");
+			await show("hidden");
+			await act(async () => {
+				vi.advanceTimersByTime(1000);
+			});
+			await show("visible");
+
+			expect(handleSearchChange).not.toHaveBeenCalled();
+			expect(onTyped).toHaveBeenLastCalledWith(null);
+			expect(field().value).toBe("");
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("draws its trailing control", async () => {
