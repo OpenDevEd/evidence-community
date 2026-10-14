@@ -95,11 +95,15 @@ type SendVerbs = ReturnType<typeof sendVerbs>;
 /**
  * Where sending stands: the drafts already published or submitted, which
  * can't go again, and whether a run holds the ticks while it sends. Once it
- * is done, drafts it failed on and drafts whose PDF came later can go.
+ * is done, drafts it failed on and drafts whose PDF came later can go. The
+ * DOI route stays as it is while a draft waits to be approved on a review
+ * already submitted with it, since trying again approves that review.
  */
 function sending(batch: ImportBatch) {
+	const states = [...batch.publish.values()];
 	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
-	return { sentIds, started: [...batch.publish.values()].some(({ state }) => state === "sending") };
+	const started = states.some(({ state }) => state === "sending");
+	return { routeHeld: started || states.some(({ review, state }) => state === "failed" && review), sentIds, started };
 }
 
 /**
@@ -113,7 +117,7 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
-	const { sentIds, started } = sending(batch);
+	const { routeHeld, sentIds, started } = sending(batch);
 	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again.
 	const publishable = drafts.filter(({ row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id));
 	const publishableIds = publishable.map(({ row }) => row.id);
@@ -145,6 +149,8 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${verbs.act}${chosen.size ? ` ${chosen.size}` : ""}${verbs.after}`,
 		/** Drafts sent on so far, which stay out of the ticks. */
 		sentIds,
+		/** Whether the DOI route can still change for the drafts to come. */
+		routeHeld,
 		publishable: publishableIds,
 		sent,
 		verbs,

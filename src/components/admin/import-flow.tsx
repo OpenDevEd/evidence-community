@@ -138,9 +138,13 @@ async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImporte
 
 type SentDraft = { id: string; itemKey: string; kind: "created" | "imported" | undefined };
 
-/** Gives a draft made in the library the import's DOI route; on Crossref its DOI is reserved now, and returned. */
-async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"]) {
-	await saveAdminPublishingChoice(itemKey, route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route });
+/**
+ * Gives a draft made in the library the import's DOI route, or none when it
+ * is switched off, replacing any an earlier send saved before it failed; on
+ * Crossref its DOI is reserved now, and returned.
+ */
+async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"] | null) {
+	await saveAdminPublishingChoice(itemKey, route && (route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route }));
 	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
 }
 
@@ -175,8 +179,9 @@ function failedSend(caught: unknown, submitted: PublishState["review"]): Publish
  * publishes it. A retry after the approval failed approves the review
  * already submitted.
  */
-async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"], canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
+async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["route"] | null, canApprove: boolean, submitted?: PublishState["review"]): Promise<PublishState> {
 	if (submitted) return approve(submitted);
+	// A record imported with a DOI keeps it.
 	const doi = kind === "created" ? await chooseDoiRoute(itemKey, route) : undefined;
 	const review = await submitAdminReview(itemKey);
 	return canApprove ? approve(review) : { doi, state: "submitted" };
@@ -184,10 +189,10 @@ async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["
 
 /**
  * Sends drafts on the way the record inspector does. A draft made from a
- * PDF takes the import's DOI route, and on Crossref its DOI is reserved;
- * then the draft is submitted for review. Editors and owners approve it
- * at once, which publishes it, and the publication worker activates the
- * DOI; anyone else leaves it for an editor.
+ * PDF takes the import's DOI route when one is switched on, and on
+ * Crossref its DOI is reserved; then the draft is submitted for review.
+ * Editors and owners approve it at once, which publishes it, and the
+ * publication worker activates the DOI; anyone else leaves it for an editor.
  */
 async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, onImported: ImportFlowProps["onImported"]) {
 	const mark = (id: string, state: PublishState) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
@@ -247,7 +252,7 @@ function batchChanges(batch: ImportBatch | null) {
 		/** Ready records not in `next` stay out of the import. */
 		setSelected: (next: ReadonlySet<string>) => change((current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
 		choosePublish: (ids: ReadonlySet<string>) => change((current) => ({ ...current, toPublish: ids })),
-		setPublishRoute: (route: PublishingChoice["route"]) => change((current) => ({ ...current, publishRoute: route })),
+		setPublishRoute: (route: PublishingChoice["route"] | null) => change((current) => ({ ...current, publishRoute: route })),
 		toggleSuggestion: (rowId: string, index: number) => change((current) => withSuggestionToggled(current, rowId, index)),
 		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) => change((current) => withChoiceToggled(current, rowId, kind, id)),
 	};
