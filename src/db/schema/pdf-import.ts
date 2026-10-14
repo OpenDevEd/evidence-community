@@ -11,10 +11,9 @@ export const pdfImport = pgTable("pdfImport", {
 	checks: jsonb("checks").$type<string[]>().notNull(),
 	instructions: text("instructions").notNull(),
 	collections: jsonb("collections").$type<string[]>().notNull(),
-	/** Set while one request imports the records or attaches their PDFs, so a second can't do either again. */
+	/** Set while one request imports the records, so a second can't import them again. */
 	commitStartedAt: timestamp("commitStartedAt", { withTimezone: true }),
 	results: jsonb("results").$type<AdminImportCommitResult[]>(),
-	attach: jsonb("attach").$type<Record<string, "attached" | "failed">>().notNull().default({}),
 	closedAt: timestamp("closedAt", { withTimezone: true }),
 	/** Set once a closed import's stored PDFs are gone, confirmed uploads or not. */
 	filesRemovedAt: timestamp("filesRemovedAt", { withTimezone: true }),
@@ -36,7 +35,12 @@ export const pdfImportFile = pgTable("pdfImportFile", {
 	leaseToken: text("leaseToken"),
 	leaseExpiresAt: timestamp("leaseExpiresAt", { withTimezone: true }),
 	lastError: text("lastError"),
-	/** The attachment draft importing made for this PDF, kept so an interrupted import carries on with it. */
+	/** The file's SHA-256, kept before the AI reads it, so a repeat of it in the import is known. */
+	sha256: text("sha256"),
+	/** The draft importing made from this PDF, which the worker gives the PDF. */
+	attachTo: text("attachTo"),
+	attachState: text("attachState").$type<"waiting" | "attached" | "failed">(),
+	/** The attachment draft the worker made for this PDF, kept so an interrupted attachment carries on with it. */
 	attachmentKey: text("attachmentKey"),
 }, (table) => [
 	uniqueIndex("pdfImportFile_position").on(table.importId, table.position),

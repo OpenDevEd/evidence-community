@@ -14,14 +14,11 @@ import {
 } from "@/lib/admin/item-import-contract";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, startPdfImport } from "@/lib/admin/pdf-import-service";
 
-// Importing gives each new draft its PDF, which takes a moment per file.
-export const maxDuration = 300;
-
 const startSchema = z.object({
 	action: z.literal("start"),
 	checks: z.array(z.string().trim().min(1).max(PDF_IMPORT_MAX_CRITERION_LENGTH)).max(PDF_IMPORT_MAX_CRITERIA),
 	collections: z.array(z.string()).max(50),
-	filenames: z.array(z.string().min(1).max(500)).min(1).max(PDF_IMPORT_MAX_FILES),
+	files: z.array(z.object({ name: z.string().min(1).max(500), size: z.number().int().nonnegative() })).min(1).max(PDF_IMPORT_MAX_FILES),
 	instructions: z.string().trim().max(PDF_IMPORT_MAX_GUIDANCE_LENGTH, `Keep the AI instructions under ${PDF_IMPORT_MAX_GUIDANCE_LENGTH} characters in all.`),
 });
 
@@ -40,7 +37,7 @@ type Runtime = Awaited<ReturnType<typeof getNativeFileRuntime>>;
 
 // What each action of the import does, by name; any other body is the commit.
 const actions: Record<string, (runtime: Runtime, body: unknown, clerkUserId: string) => Promise<Record<string, unknown>>> = {
-	start: (runtime, body, clerkUserId) => startPdfImport(runtime.db, runtime.storage, { ...startSchema.parse(body), createdBy: clerkUserId }),
+	start: (runtime, body, clerkUserId) => startPdfImport(runtime.db, runtime.storage, runtime.config.services.storage.maxPdfBytes, { ...startSchema.parse(body), createdBy: clerkUserId }),
 	uploaded: async (runtime, body) => {
 		const { fileId } = uploadedSchema.parse(body);
 		await confirmPdfImportUpload(runtime.db, runtime.storage, fileId);
@@ -61,7 +58,7 @@ const actions: Record<string, (runtime: Runtime, body: unknown, clerkUserId: str
 async function commit(runtime: Runtime, body: unknown) {
 	const request = adminImportRequestSchema.parse({ ...(body as object), action: "commit" });
 	if (request.action !== "commit") throw new AdminValidationError("Choose the records to import.");
-	return commitPdfImport(runtime.db, runtime.storage, runtime.config.services.storage.maxPdfBytes, request);
+	return commitPdfImport(runtime.db, request);
 }
 
 /**

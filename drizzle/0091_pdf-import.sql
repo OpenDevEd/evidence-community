@@ -9,7 +9,6 @@ CREATE TABLE "pdfImport" (
 	"collections" jsonb NOT NULL,
 	"commitStartedAt" timestamp with time zone,
 	"results" jsonb,
-	"attach" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"closedAt" timestamp with time zone,
 	"filesRemovedAt" timestamp with time zone
 );
@@ -28,6 +27,9 @@ CREATE TABLE "pdfImportFile" (
 	"leaseToken" text,
 	"leaseExpiresAt" timestamp with time zone,
 	"lastError" text,
+	"sha256" text,
+	"attachTo" text,
+	"attachState" text,
 	"attachmentKey" text
 );
 --> statement-breakpoint

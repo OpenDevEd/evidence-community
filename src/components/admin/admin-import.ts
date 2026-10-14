@@ -307,8 +307,8 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
-// Imported PDFs another request is still attaching: those of drafts made from a stored PDF with no outcome yet.
-const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
+// Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
+export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
 const pdfsSettling = () => Boolean(pdfs && (pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs)));
 
 /** The library's PDF import from the server, checked every two seconds while its PDFs upload, are read or are attached. */
@@ -334,7 +334,11 @@ export function dropLookup() {
 
 export const lookupStands = (token: symbol) => lookup === token;
 
+// Imports ended in this tab, which a change arriving late must not bring back.
+const ended = new Set<string>();
+
 export function endImportBatch(importId: string) {
+	ended.add(importId);
 	if (pdfs?.importId === importId) {
 		setSlot("pdfs", null);
 		window.localStorage.removeItem(CHOICES_KEY);
@@ -342,12 +346,17 @@ export function endImportBatch(importId: string) {
 	if (other?.importId === importId) setSlot("other", null);
 }
 
-/** Changes an import, unless it ended or another replaced it since the change began. */
-export function changeImportBatch(importId: string, change: (current: ImportBatch) => ImportBatch) {
-	if (pdfs?.importId === importId) {
-		setSlot("pdfs", change(pdfs));
-		saveChoices(pdfs);
-	} else if (other?.importId === importId) setSlot("other", change(other));
+/**
+ * Changes an import, unless it ended or another replaced it since the change
+ * began. Until the server's first answer is taken in, the library's PDF
+ * import is the one given, as the page was served with it.
+ */
+export function changeImportBatch(batch: ImportBatch, change: (current: ImportBatch) => ImportBatch) {
+	const library = pdfs ?? (batch.kind === "pdfs" && !ended.has(batch.importId) ? batch : null);
+	if (library?.importId === batch.importId) {
+		setSlot("pdfs", change(library));
+		saveChoices(pdfs!);
+	} else if (other?.importId === batch.importId) setSlot("other", change(other));
 }
 
 function subscribe(listener: () => void) {

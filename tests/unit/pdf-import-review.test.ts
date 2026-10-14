@@ -62,6 +62,15 @@ describe("the finish step", () => {
 		expect(view(batch([])).publishable).toEqual([]);
 	});
 
+	// A send that failed for a moment, such as a DOI reservation, is tried again from here, without sending the others twice.
+	it("lets the drafts a send failed on go again, and keeps the sent ones out", () => {
+		const current = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }], ["2", { message: "Try again", state: "failed" as const }]]), toPublish: new Set(["1", "2"]) };
+		expect(view(current)).toMatchObject({ publishable: ["2"], started: false });
+		expect([...view(current).chosen]).toEqual(["2"]);
+		const done = { ...current, publish: new Map([["1", { state: "published" as const }], ["2", { state: "published" as const }]]) };
+		expect(view(done)).toMatchObject({ label: "2 of 2 published", started: true });
+	});
+
 	it("ticks the drafts that pass every check, and leaves the rest to the editor", () => {
 		const current = view(batch([["1", "attached"], ["2", "attached"]]));
 		expect([...current.chosen]).toEqual(["1"]);

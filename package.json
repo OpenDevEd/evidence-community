@@ -39,7 +39,7 @@
 		"test:crossref-test-live": "tsx ./tools/verifyCrossrefTestPublication.ts",
 		"test:zenodo-sandbox-live": "tsx ./tools/verifyZenodoSandboxPublication.ts",
 		"test:publication-sandbox-lifecycle": "tsx ./tools/verifyPublicationSandboxLifecycle.ts",
-		"publication:worker:build": "esbuild ./tools/runPublicationWorker.ts --bundle --platform=node --format=esm --conditions=react-server --external:@opentelemetry/api --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=.next/publication/worker.mjs && esbuild ./tools/checkPublicationWorkerHealth.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=.next/publication/health.mjs",
+		"publication:worker:build": "esbuild ./tools/runPublicationWorker.ts --bundle --platform=node --format=esm --conditions=react-server --external:@opentelemetry/api --external:@napi-rs/canvas --external:pdfjs-dist --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=.next/publication/worker.mjs && esbuild ./tools/checkPublicationWorkerHealth.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=.next/publication/health.mjs",
 		"publication:worker": "npm run publication:worker:build && node .next/publication/worker.mjs",
 		"publication:worker:health": "node .next/publication/health.mjs",
 		"test:source-writer": "tsx ./tools/verifySourceIngestionWriter.ts",

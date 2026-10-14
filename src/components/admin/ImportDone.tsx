@@ -93,6 +93,17 @@ function sendVerbs(canPublish: boolean) {
 type SendVerbs = ReturnType<typeof sendVerbs>;
 
 /**
+ * Where sending stands: the drafts already published or submitted, and
+ * whether a run holds the ticks, which it does while it sends and once it
+ * sent every draft. A run that left failures lets the failed ones be sent again.
+ */
+function sending(batch: ImportBatch) {
+	const states = [...batch.publish.values()].map(({ state }) => state);
+	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
+	return { sentIds, started: states.length > 0 && (states.includes("sending") || !states.includes("failed")) };
+}
+
+/**
  * What the finish screen knows: the new drafts, which are ticked to publish
  * or submit, and how the import went. Drafts read from a PDF can go once
  * their PDF is attached; the ones that pass every check start ticked, and
@@ -103,10 +114,10 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
-	// A draft goes on with its PDF, so only one whose PDF is attached can, even while another tab still attaches them.
-	const publishable = drafts.filter(({ row }) => row.source && batch.attach.get(row.id) === "attached");
+	const { sentIds, started } = sending(batch);
+	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again.
+	const publishable = drafts.filter(({ row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id));
 	const publishableIds = publishable.map(({ row }) => row.id);
-	const started = batch.publish.size > 0;
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
 	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ applied, row }) => rowPasses(row, applied)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));

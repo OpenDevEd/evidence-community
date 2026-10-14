@@ -13,7 +13,7 @@ import type { AdminImportCommitRequest, AdminImportCommitResult, AdminPdfImport,
 import { commitImportRecords } from "./item-import-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-service";
 import { createNativeItemDraft } from "./native-item-service";
-import { importObjectPath, removeClosedImportFiles } from "./pdf-import-reading";
+import { importObjectPath, removeImportFiles } from "./pdf-import-reading";
 
 const PDF = "application/pdf";
 
@@ -47,6 +47,10 @@ function repeatedFiles(files: FileRow[]) {
 // A ready record of a repeated PDF repeats the earlier one; one already found in the library stays found.
 const asRepeat = (reading: PdfReading): PdfReading => (reading.record.state === "ready" ? { ...reading, record: { ...reading.record, state: "repeated" } } : reading);
 
+/** What attaching did for each imported draft, by its row: attached, or failed for good. */
+const attachOutcomes = (files: FileRow[]) =>
+	Object.fromEntries(files.flatMap(({ attachState, position }) => (attachState === "attached" || attachState === "failed" ? [[String(position), attachState]] : [])));
+
 /** The library's open import with where each PDF has got to, and the checks and instructions a new one starts from. */
 export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatus> {
 	const [open] = await db.select().from(pdfImport).where(isNull(pdfImport.closedAt)).limit(1);
@@ -57,7 +61,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 	const now = new Date();
 	const repeats = repeatedFiles(files);
 	const view: AdminPdfImport = {
-		attach: open.attach,
+		attach: attachOutcomes(files),
 		checks: open.checks,
 		collections: open.collections,
 		createdAt: open.createdAt.toISOString(),
@@ -79,7 +83,9 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
  * attachment's PDF does, because a request through the app is cut off at
  * 10 MB. They're read as they arrive.
  */
-export async function startPdfImport(db: Database, storage: EvidenceFileStorage, input: { checks: string[]; collections: string[]; createdBy: string; filenames: string[]; instructions: string }) {
+export async function startPdfImport(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, input: { checks: string[]; collections: string[]; createdBy: string; files: { name: string; size: number }[]; instructions: string }) {
+	const oversized = input.files.find(({ size }) => size > maxPdfBytes);
+	if (oversized) throw new AdminValidationError(`${oversized.name} is larger than the library takes (${Math.floor(maxPdfBytes / 1024 / 1024)} MB).`);
 	const started = await db.transaction(async (transaction) => {
 		const [open] = await transaction.select({ id: pdfImport.id }).from(pdfImport).where(isNull(pdfImport.closedAt)).limit(1);
 		if (open) throw new AdminValidationError("Another import is open. Finish or discard it first.");
@@ -89,12 +95,18 @@ export async function startPdfImport(db: Database, storage: EvidenceFileStorage,
 			.returning({ id: pdfImport.id });
 		const files = await transaction
 			.insert(pdfImportFile)
-			.values(input.filenames.map((filename, index) => ({ filename, importId: created!.id, position: index + 1 })))
+			.values(input.files.map(({ name }, index) => ({ filename: name, importId: created!.id, position: index + 1 })))
 			.returning({ filename: pdfImportFile.filename, id: pdfImportFile.id });
 		return { files, id: created!.id };
 	});
-	const files = await Promise.all(started.files.map(async (file) => ({ ...file, upload: await storage.createSignedUpload(importObjectPath(started.id, file.id)) })));
-	return { files, id: started.id };
+	try {
+		const files = await Promise.all(started.files.map(async (file) => ({ ...file, upload: await storage.createSignedUpload(importObjectPath(started.id, file.id)) })));
+		return { files, id: started.id };
+	} catch (error) {
+		// An import whose PDFs can't be sent would only stand in the way of the next one.
+		await closePdfImport(db, storage, started.id);
+		throw error;
+	}
 }
 
 /** Queues a PDF the editor's tab sent to storage, while its import is open; one discarded meanwhile loses it. */
@@ -125,112 +137,60 @@ export async function readPdfImportFile(db: Database, storage: EvidenceFileStora
 	return { bytes: await storage.downloadPrivate(file.objectPath), filename: file.filename };
 }
 
-/** Ends the import, kept or discarded, and removes its stored PDFs; imported drafts keep their own copies. */
+/**
+ * Ends the import, kept or discarded, and removes its stored PDFs; imported
+ * drafts keep their own copies. It waits while the worker still gives drafts
+ * their PDFs, which it reads from those stored copies.
+ */
 export async function closePdfImport(db: Database, storage: EvidenceFileStorage, importId: string) {
+	const [attaching] = await db.select({ id: pdfImportFile.id }).from(pdfImportFile).where(and(eq(pdfImportFile.importId, importId), eq(pdfImportFile.attachState, "waiting"))).limit(1);
+	if (attaching) throw new AdminValidationError("The drafts are still getting their PDFs. Close the import once they have them.");
 	await db.update(pdfImport).set({ closedAt: new Date() }).where(and(eq(pdfImport.id, importId), isNull(pdfImport.closedAt)));
-	// The worker's cycle retries what a storage failure leaves behind.
-	await removeClosedImportFiles(db, storage, importId).catch((error: unknown) => console.error("Removing an import's stored PDFs failed", importId, error));
-}
-
-/** The draft's attachment for an imported PDF, made once and kept on the PDF's row. */
-async function attachmentFor(db: Database, parentItem: string, file: FileRow) {
-	// Read again, not taken from the row in hand: an earlier try of this request may have made it.
-	const [kept] = await db.select({ attachmentKey: pdfImportFile.attachmentKey }).from(pdfImportFile).where(eq(pdfImportFile.id, file.id));
-	if (kept?.attachmentKey) return kept.attachmentKey;
-	// ponytail: a request that stops between these two writes leaves one empty attachment draft behind.
-	const { itemKey } = await createNativeItemDraft(db, { collections: [], itemType: "attachment", parentItem, tags: [], title: file.filename });
-	await db.update(pdfImportFile).set({ attachmentKey: itemKey }).where(eq(pdfImportFile.id, file.id));
-	return itemKey;
-}
-
-/** Gives a draft its PDF from the import, through the same staging an upload in the inspector takes. */
-async function attachPdf(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, parentItem: string, file: FileRow) {
-	const bytes = await storage.downloadPrivate(file.objectPath!);
-	const itemKey = await attachmentFor(db, parentItem, file);
-	const staged = await stageNativePdfUpload(db, storage, {
-		expectedSha256: createHash("sha256").update(bytes).digest("hex"),
-		expectedSizeBytes: bytes.byteLength,
-		filename: file.filename,
-		itemKey,
-		maxPdfBytes,
-	});
-	await storage.uploadPrivate(staged.fileDraft.objectPath, bytes, PDF);
-	await completeNativePdfUpload(db, storage, { expectedUploadRevision: staged.fileDraft.uploadRevision, itemKey, maxPdfBytes });
-}
-
-const ATTACH_TRIES = 3;
-
-/** Attaches one PDF, trying again after a moment when storage fails, as it can for a moment. */
-async function attachWithRetry(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, parentItem: string, file: FileRow) {
-	for (let attempt = 1; ; attempt++) {
-		try {
-			return await attachPdf(db, storage, maxPdfBytes, parentItem, file);
-		} catch (error) {
-			if (attempt === ATTACH_TRIES) throw error;
-			await new Promise((resolve) => setTimeout(resolve, 1_000 * attempt));
-		}
-	}
+	// The worker removes them again once their upload links have stopped working, and so retries what a storage failure leaves.
+	await removeImportFiles(db, storage, importId).catch((error: unknown) => console.error("Removing an import's stored PDFs failed", importId, error));
 }
 
 /**
- * Gives each new draft its PDF, keeping each outcome on the import as it
- * finishes, so a repeated request carries on from where one stopped and
- * tries the failed ones again.
+ * Makes the drafts, keeps their results on the import and queues each
+ * draft's PDF for the worker, in one transaction, so a retry never makes
+ * them twice and no draft is left waiting for a PDF nobody queued.
  */
-async function attachPdfs(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, importId: string, results: AdminImportCommitResult[], done: Record<string, "attached" | "failed">) {
-	const files = await db.select().from(pdfImportFile).where(eq(pdfImportFile.importId, importId));
-	const fileByRow = new Map(files.map((file) => [String(file.position), file]));
-	const attach = { ...done };
-	for (const result of results) {
-		const file = fileByRow.get(result.id);
-		if (result.outcome !== "created" || !result.itemKey || !file?.objectPath || attach[result.id] === "attached") continue;
-		try {
-			await attachWithRetry(db, storage, maxPdfBytes, result.itemKey, file);
-			attach[result.id] = "attached";
-		} catch (error) {
-			console.error("Attaching an imported PDF failed", { file: file.filename, itemKey: result.itemKey, error });
-			attach[result.id] = "failed";
-		}
-		await db.update(pdfImport).set({ attach }).where(eq(pdfImport.id, importId));
-	}
-	return { attach, results };
-}
-
-/** Makes the drafts and keeps their results on the import in one transaction, so a retry never makes them twice. */
 async function createDrafts(db: Database, input: Omit<AdminImportCommitRequest, "action">) {
 	return db.transaction(async (transaction) => {
 		const { results } = await commitImportRecords(transaction, { ...input, action: "commit" });
 		await transaction.update(pdfImport).set({ results }).where(eq(pdfImport.id, input.importId));
+		for (const { id, itemKey, outcome } of results) {
+			if (outcome !== "created" || !itemKey) continue;
+			await transaction
+				.update(pdfImportFile)
+				.set({ attachState: "waiting", attachTo: itemKey, attempts: 0, nextAttemptAt: new Date() })
+				.where(and(eq(pdfImportFile.importId, input.importId), eq(pdfImportFile.position, Number(id)), isNotNull(pdfImportFile.objectPath)));
+		}
 		return results;
 	});
 }
 
 /**
- * Imports the chosen records as drafts and gives each its PDF. One request
- * holds the import while it does both, so a second tab or a retry can't
- * import the records or attach a PDF twice; a request after the records are
- * in carries on attaching their PDFs.
+ * Imports the chosen records as drafts, and the worker then gives each its
+ * PDF. One request holds the import while it does, so a second tab or a
+ * retry can't import the records twice; one that comes after them gets the
+ * records already made.
  */
-export async function commitPdfImport(
-	db: Database,
-	storage: EvidenceFileStorage,
-	maxPdfBytes: number,
-	input: Omit<AdminImportCommitRequest, "action">,
-) {
+export async function commitPdfImport(db: Database, input: Omit<AdminImportCommitRequest, "action">) {
 	const [claimed] = await db
 		.update(pdfImport)
 		.set({ commitStartedAt: new Date() })
-		.where(and(eq(pdfImport.id, input.importId), isNull(pdfImport.closedAt), or(isNull(pdfImport.commitStartedAt), lt(pdfImport.commitStartedAt, new Date(Date.now() - COMMIT_WAIT_MS)))))
-		.returning({ attach: pdfImport.attach, results: pdfImport.results });
+		.where(and(eq(pdfImport.id, input.importId), isNull(pdfImport.closedAt), isNull(pdfImport.results), or(isNull(pdfImport.commitStartedAt), lt(pdfImport.commitStartedAt, new Date(Date.now() - COMMIT_WAIT_MS)))))
+		.returning({ id: pdfImport.id });
 	if (!claimed) {
 		const [current] = await db.select().from(pdfImport).where(eq(pdfImport.id, input.importId));
 		if (!current?.results) throw new AdminValidationError("These records are already being imported. Wait a moment, then open the import again.");
-		// Another request is attaching their PDFs; the sheet follows it.
-		return { attach: current.attach, results: current.results };
+		return { results: current.results };
 	}
 	try {
-		return await attachPdfs(db, storage, maxPdfBytes, input.importId, claimed.results ?? (await createDrafts(db, input)), claimed.attach);
-	} finally {
+		return { results: await createDrafts(db, input) };
+	} catch (error) {
 		await db.update(pdfImport).set({ commitStartedAt: null }).where(eq(pdfImport.id, input.importId));
+		throw error;
 	}
 }

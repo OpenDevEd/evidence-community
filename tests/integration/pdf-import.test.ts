@@ -16,9 +16,15 @@ vi.mock("../../src/lib/admin/pdf-import", () => ({ readImportPdf }));
 
 const EDITOR = "user_acceptance_admin";
 const MAX_PDF_BYTES = 50 * 1024 * 1024;
+const config = { services: { storage: { maxPdfBytes: MAX_PDF_BYTES } } } as LibraryServerConfig;
+const pdfFile = (name: string) => ({ name, size: 1_000 });
+type Database = Parameters<typeof pdfImportStatus>[0];
 
-test("reads uploaded PDFs on the worker, imports each once with its PDF, and removes the import's files when it closes", async () => {
-	readImportPdf.mockResolvedValue({
+// The worker retries a failed attachment later; a test makes it due now.
+const dueNow = (db: Database, importId: string) => db.update(pdfImportFile).set({ nextAttemptAt: new Date(0) }).where(eq(pdfImportFile.importId, importId));
+
+test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, and removes the import's files when it closes", async () => {
+	readImportPdf.mockReset().mockResolvedValue({
 		checks: [{ criterion: "Credits FCDO", page: 2, quote: "Funded by UK aid", recommendation: null, result: "met" }],
 		cites: [],
 		collections: [],
@@ -33,8 +39,9 @@ test("reads uploaded PDFs on the worker, imports each once with its PDF, and rem
 	});
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const started = await startPdfImport(db, storage, { checks: ["Credits FCDO"], collections: [], createdBy: EDITOR, filenames: ["report.pdf", "lost.pdf"], instructions: "" });
-		await expect(startPdfImport(db, storage, { checks: [], collections: [], createdBy: EDITOR, filenames: ["other.pdf"], instructions: "" })).rejects.toThrow("Another import is open");
+		await expect(startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [{ name: "huge.pdf", size: MAX_PDF_BYTES + 1 }], instructions: "" })).rejects.toThrow("larger than the library takes");
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: ["Credits FCDO"], collections: [], createdBy: EDITOR, files: [pdfFile("report.pdf"), pdfFile("lost.pdf")], instructions: "" });
+		await expect(startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("other.pdf")], instructions: "" })).rejects.toThrow("Another import is open");
 
 		const [report, lost] = started.files;
 		await storage.uploadPrivate(report!.upload.path, await createPdf("Girls' learning in Sierra Leone"), "application/pdf");
@@ -43,7 +50,7 @@ test("reads uploaded PDFs on the worker, imports each once with its PDF, and rem
 		await storage.uploadPrivate(lost!.upload.path, await createPdf("Lost"), "application/pdf");
 		await failPdfImportUpload(db, lost!.id, "The connection dropped.");
 
-		expect(await runPdfImportCycle(db, storage, {} as LibraryServerConfig)).toBe(true);
+		expect(await runPdfImportCycle(db, storage, config)).toBe(true);
 		// OpenScholar's author search answers the editor who started the import.
 		expect(readImportPdf).toHaveBeenCalledOnce();
 		expect(readImportPdf.mock.calls[0]![0]).toMatchObject({ clerkUserId: EDITOR });
@@ -59,84 +66,110 @@ test("reads uploaded PDFs on the worker, imports each once with its PDF, and rem
 		// The payload the review sends with the suggestion applied.
 		const payload = { ...read!.reading!.record.payload, publisher: "FCDO" };
 		const input = { collections: [], importId: started.id, records: [{ id: read!.rowId, method: "pdf" as const, payload }] };
-		const first = await commitPdfImport(db, storage, MAX_PDF_BYTES, input);
+		const first = await commitPdfImport(db, input);
 		expect(first.results).toEqual([expect.objectContaining({ outcome: "created" })]);
-		expect(first.attach).toEqual({ [read!.rowId]: "attached" });
-
-		// A retried or second-tab commit carries on from the first instead of importing again.
-		const again = await commitPdfImport(db, storage, MAX_PDF_BYTES, input);
-		expect(again.results).toEqual(first.results);
+		// A retried or second-tab commit gets the records already made instead of importing again.
+		expect((await commitPdfImport(db, input)).results).toEqual(first.results);
 		const draftKey = first.results[0]!.itemKey!;
 		const [draft] = await db.select({ patch: itemDraft.patch }).from(itemDraft).where(eq(itemDraft.itemKey, draftKey));
 		expect(draft!.patch).toMatchObject({ languageName: "en", title: "Girls' learning in Sierra Leone" });
-		expect(await db.select().from(itemDraft).then((rows) => rows.filter(({ patch }) => (patch as { title?: string }).title === "Girls' learning in Sierra Leone"))).toHaveLength(1);
+
+		// The worker attaches from the import's stored PDF, so the import stays open until it has.
+		await expect(closePdfImport(db, storage, started.id)).rejects.toThrow("still getting their PDFs");
+		await runPdfImportCycle(db, storage, config);
+		expect((await pdfImportStatus(db)).import!.attach).toEqual({ [read!.rowId]: "attached" });
+		const attachments = (await db.select({ patch: itemDraft.patch }).from(itemDraft)).filter(({ patch }) => (patch as { parentItem?: string }).parentItem === draftKey);
+		expect(attachments).toHaveLength(1);
 
 		await closePdfImport(db, storage, started.id);
 		expect([...storage.privateFiles.keys()].filter((path) => path.startsWith(`imports/${started.id}/`))).toEqual([]);
-		expect(await db.select().from(pdfImportFile).where(eq(pdfImportFile.importId, started.id))).toHaveLength(2);
 		expect((await pdfImportStatus(db)).import).toBeNull();
 	});
 });
 
-test("attaches each PDF once when two requests import at the same moment, and tries a failed one again with the same attachment", async () => {
-	readImportPdf.mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report" } });
+test("imports the records once when two requests come at the same moment, and attaches a PDF whose first try failed with the same attachment", async () => {
+	readImportPdf.mockReset().mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report" } });
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const started = await startPdfImport(db, storage, { checks: [], collections: [], createdBy: EDITOR, filenames: ["one.pdf", "two.pdf"], instructions: "" });
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("one.pdf"), pdfFile("two.pdf")], instructions: "" });
 		for (const file of started.files) {
 			await storage.uploadPrivate(file.upload.path, await createPdf(file.filename), "application/pdf");
 			await confirmPdfImportUpload(db, storage, file.id);
 		}
-		await runPdfImportCycle(db, storage, {} as LibraryServerConfig);
+		await runPdfImportCycle(db, storage, config);
 		const files = (await pdfImportStatus(db)).import!.files;
 		const input = { collections: [], importId: started.id, records: files.map((file) => ({ id: file.rowId, method: "pdf" as const, payload: file.reading!.record.payload! })) };
 
-		// Storage refuses the second PDF's copy for the attachment every time these requests try it.
+		const both = await Promise.allSettled([commitPdfImport(db, input), commitPdfImport(db, input)]);
+		expect(both.filter(({ status }) => status === "fulfilled").length).toBeGreaterThan(0);
+		const drafts = (await db.select({ patch: itemDraft.patch }).from(itemDraft)).filter(({ patch }) => (patch as { title?: string }).title === "A report");
+		expect(drafts).toHaveLength(2);
+
+		// Storage refuses the second PDF's copy for its attachment, once.
 		const second = Buffer.from(storage.privateFiles.get(started.files[1]!.upload.path)!);
 		const upload = storage.uploadPrivate.bind(storage);
-		let refusing = true;
+		let refusals = 1;
 		vi.spyOn(storage, "uploadPrivate").mockImplementation(async (path, data, type) => {
-			if (refusing && second.equals(Buffer.from(data))) throw new Error("Storage is down");
+			if (refusals > 0 && second.equals(Buffer.from(data))) {
+				refusals -= 1;
+				throw new Error("Storage is down");
+			}
 			return upload(path, data, type);
 		});
-		const both = await Promise.allSettled([commitPdfImport(db, storage, MAX_PDF_BYTES, input), commitPdfImport(db, storage, MAX_PDF_BYTES, input)]);
-		expect(both.filter(({ status }) => status === "fulfilled").length).toBeGreaterThan(0);
-		refusing = false;
-		const retried = await commitPdfImport(db, storage, MAX_PDF_BYTES, input);
-		expect(retried.attach).toEqual({ 1: "attached", 2: "attached" });
+		await runPdfImportCycle(db, storage, config);
+		expect((await pdfImportStatus(db)).import!.attach).toEqual({ 1: "attached" });
+		await dueNow(db, started.id);
+		await runPdfImportCycle(db, storage, config);
+		expect((await pdfImportStatus(db)).import!.attach).toEqual({ 1: "attached", 2: "attached" });
 
-		// One attachment per PDF, however many requests touched it.
-		const rows = await db.select({ attachmentKey: pdfImportFile.attachmentKey }).from(pdfImportFile).where(eq(pdfImportFile.importId, started.id));
-		const attachments = await db.select({ patch: itemDraft.patch }).from(itemDraft);
-		const keys = new Set(rows.map(({ attachmentKey }) => attachmentKey));
-		expect(keys.size).toBe(2);
-		expect(attachments.filter(({ patch }) => (patch as { itemType?: string }).itemType === "Attachment")).toHaveLength(2);
+		// One attachment per PDF, however many tries it took.
+		const attachments = (await db.select({ patch: itemDraft.patch }).from(itemDraft)).filter(({ patch }) => (patch as { itemType?: string }).itemType === "Attachment");
+		expect(attachments).toHaveLength(2);
 	});
 }, 60_000);
 
-test("finds a PDF that is the same file as one already in the library or earlier in the import", async () => {
-	readImportPdf.mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report without a DOI" } });
+test("finds a PDF that is the same file as one already in the library or earlier in the import, without asking the AI", async () => {
+	readImportPdf.mockReset().mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report without a DOI" } });
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
 		const bytes = await createPdf("A report without a DOI");
 		// An earlier import's draft, with this very PDF.
-		const first = await startPdfImport(db, storage, { checks: [], collections: [], createdBy: EDITOR, filenames: ["report.pdf"], instructions: "" });
+		const first = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("report.pdf")], instructions: "" });
 		await storage.uploadPrivate(first.files[0]!.upload.path, bytes, "application/pdf");
 		await confirmPdfImportUpload(db, storage, first.files[0]!.id);
-		await runPdfImportCycle(db, storage, {} as LibraryServerConfig);
+		await runPdfImportCycle(db, storage, config);
 		const [file] = (await pdfImportStatus(db)).import!.files;
-		const done = await commitPdfImport(db, storage, MAX_PDF_BYTES, { collections: [], importId: first.id, records: [{ id: file!.rowId, method: "pdf", payload: file!.reading!.record.payload! }] });
+		const done = await commitPdfImport(db, { collections: [], importId: first.id, records: [{ id: file!.rowId, method: "pdf", payload: file!.reading!.record.payload! }] });
+		await runPdfImportCycle(db, storage, config);
 		await closePdfImport(db, storage, first.id);
 
+		readImportPdf.mockClear();
 		const other = await createPdf("Another report");
-		const second = await startPdfImport(db, storage, { checks: [], collections: [], createdBy: EDITOR, filenames: ["again.pdf", "other.pdf", "other copy.pdf"], instructions: "" });
+		const second = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("again.pdf"), pdfFile("other.pdf"), pdfFile("other copy.pdf")], instructions: "" });
 		for (const [upload, pdf] of [[second.files[0]!, bytes], [second.files[1]!, other], [second.files[2]!, other]] as const) {
 			await storage.uploadPrivate(upload.upload.path, pdf, "application/pdf");
 			await confirmPdfImportUpload(db, storage, upload.id);
 		}
-		await runPdfImportCycle(db, storage, {} as LibraryServerConfig);
+		await runPdfImportCycle(db, storage, config);
 		const records = (await pdfImportStatus(db)).import!.files.map(({ reading }) => reading!.record);
 		expect(records.map(({ state }) => state)).toEqual(["existing", "ready", "repeated"]);
-		expect(records[0]!.existingKey).toBe(done.results[0]!.itemKey);
+		expect(records[0]).toMatchObject({ existingKey: done.results[0]!.itemKey, title: "A report without a DOI" });
+		// The file already in the library cost no read.
+		expect(readImportPdf.mock.calls.map(([, { filename }]) => filename)).not.toContain("again.pdf");
 	});
 }, 60_000);
+
+test("doesn't read a PDF larger than the library takes", async () => {
+	readImportPdf.mockReset();
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const small = { services: { storage: { maxPdfBytes: 100 } } } as LibraryServerConfig;
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("report.pdf")], instructions: "" });
+		await storage.uploadPrivate(started.files[0]!.upload.path, await createPdf("A long report"), "application/pdf");
+		await confirmPdfImportUpload(db, storage, started.files[0]!.id);
+		await runPdfImportCycle(db, storage, small);
+		// It fails for good at once: trying again can't make it smaller.
+		expect((await pdfImportStatus(db)).import!.files[0]).toMatchObject({ message: expect.stringContaining("larger than the library takes"), state: "failed" });
+		expect(readImportPdf).not.toHaveBeenCalled();
+	});
+});

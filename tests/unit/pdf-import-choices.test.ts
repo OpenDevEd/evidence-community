@@ -31,9 +31,9 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 	const tab = await import("@/components/admin/admin-import");
 	const batch = tab.pdfImportBatch(server);
 	tab.startImportBatch({ checks: [], collections: [], importId: batch.importId, kind: "pdfs", rows: batch.rows });
-	tab.changeImportBatch("import-1", (current) => tab.withSuggestionToggled(current, "1", 0));
-	tab.changeImportBatch("import-1", (current) => tab.withChoiceToggled(current, "1", "collections", "THEMEGEN"));
-	tab.changeImportBatch("import-1", (current) => ({ ...current, collections: ["THEMEGEN"], excluded: new Set(["1"]), publishRoute: "crossref-zenodo" }));
+	tab.changeImportBatch(batch, (current) => tab.withSuggestionToggled(current, "1", 0));
+	tab.changeImportBatch(batch, (current) => tab.withChoiceToggled(current, "1", "collections", "THEMEGEN"));
+	tab.changeImportBatch(batch, (current) => ({ ...current, collections: ["THEMEGEN"], excluded: new Set(["1"]), publishRoute: "crossref-zenodo" }));
 
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");

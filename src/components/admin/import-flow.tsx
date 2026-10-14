@@ -97,7 +97,7 @@ async function uploadPdf({ file, id, signedUrl }: PdfUpload) {
 
 /** Opens the library's PDF import. The import and its rows exist on the server first, so the review shows every PDF while they upload. */
 async function startPdfImport(input: { checks: readonly string[]; collections: string[]; guidance: string; pdfs: readonly File[] }) {
-	const started = await startAdminPdfImport({ checks: [...input.checks], collections: input.collections, filenames: input.pdfs.map(({ name }) => name), instructions: input.guidance });
+	const started = await startAdminPdfImport({ checks: [...input.checks], collections: input.collections, files: input.pdfs.map(({ name, size }) => ({ name, size })), instructions: input.guidance });
 	await mutate(PDF_IMPORT_KEY);
 	void inTurn(
 		started.files.map(({ id, upload }, index) => ({ file: input.pdfs[index]!, id, signedUrl: upload.signedUrl })),
@@ -126,15 +126,15 @@ async function startLookupImport(inputs: { collections: string[]; doiText: strin
 /** Imports the chosen records as drafts. A PDF import is kept on the server, which gives each new draft its PDF. */
 async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"]) {
 	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled) };
-	changeImportBatch(batch.importId, (current) => ({ ...current, committing: true }));
+	changeImportBatch(batch, (current) => ({ ...current, committing: true }));
 	try {
 		const { results } = batch.kind === "pdfs" ? await commitAdminPdfImport(input) : await commitAdminImport(input);
 		if (batch.kind === "pdfs") await mutate(PDF_IMPORT_KEY);
-		else changeImportBatch(batch.importId, (current) => ({ ...current, results }));
+		else changeImportBatch(batch, (current) => ({ ...current, results }));
 		// The finish step says what the import did, so no toast covers its buttons.
 		await onImported(createdKeys(results));
 	} finally {
-		changeImportBatch(batch.importId, (current) => ({ ...current, committing: false }));
+		changeImportBatch(batch, (current) => ({ ...current, committing: false }));
 	}
 }
 
@@ -163,7 +163,7 @@ async function sendDraft({ itemKey, kind }: SentDraft, route: PublishingChoice["
  * DOI; anyone else leaves it for an editor.
  */
 async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], approve: boolean, onImported: ImportFlowProps["onImported"]) {
-	const mark = (id: string, state: PublishState) => changeImportBatch(batch.importId, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
+	const mark = (id: string, state: PublishState) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state) }));
 	for (const { id } of drafts) mark(id, { state: "sending" });
 	await inTurn(drafts, SEND_CONCURRENCY, async (draft) => {
 		try {
@@ -213,8 +213,8 @@ function useAddInputs(batchKind: ImportKind | undefined) {
 }
 
 /** Changes to the import being reviewed: what is ticked, applied and chosen, and how its drafts are sent on. */
-function batchChanges(importId: string) {
-	const change = (update: (current: ImportBatch) => ImportBatch) => changeImportBatch(importId, update);
+function batchChanges(batch: ImportBatch | null) {
+	const change = (update: (current: ImportBatch) => ImportBatch) => batch && changeImportBatch(batch, update);
 	return {
 		/** Ready records not in `next` stay out of the import. */
 		setSelected: (next: ReadonlySet<string>) => change((current) => ({ ...current, excluded: new Set(readyIds(current.rows).filter((id) => !next.has(id))) })),
@@ -243,7 +243,6 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 
 	const stage = stageOf(batch);
 	const fields = batchFields(batch, inputs.collections, busy);
-	const { importId } = fields;
 	const appliedFor = (row: ImportRow) => appliedOf(batch, row);
 	const choicesOf = (row: ImportRow, kind: ChoiceKind) => (batch ? chosenOf(batch, row, kind) : new Set<string>());
 	const topicNames = (row: ImportRow) => row.topics.filter(({ id }) => choicesOf(row, "topics").has(id)).map(({ name }) => name);
@@ -294,7 +293,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		...reviewRows(batch, filter, activeId),
 		...reviewProgress(batch),
 		...addStep(inputs.kind, openPdfs, inputs, stage),
-		...batchChanges(importId),
+		...batchChanges(batch),
 		...inputs,
 		...fields,
 		appliedFor,
@@ -317,7 +316,7 @@ export function useImportFlow({ onClose, onImported, onOpenRecord, sources }: Im
 		setActiveId,
 		/** Steps out of the open PDF import's review to the Add step, leaving the import as it is. */
 		addBeside: () => setBesidePdfs(true),
-		setCollections: (keys: string[]) => (batch ? changeImportBatch(importId, (current) => ({ ...current, collections: keys })) : inputs.setCollections(keys)),
+		setCollections: (keys: string[]) => (batch ? changeImportBatch(batch, (current) => ({ ...current, collections: keys })) : inputs.setCollections(keys)),
 		setFilter,
 		setKind: (value: ImportKind) => {
 			inputs.setKind(value);

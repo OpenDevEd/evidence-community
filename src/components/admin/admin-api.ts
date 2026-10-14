@@ -618,7 +618,7 @@ export { PDF_IMPORT_KEY } from "@/lib/admin/item-import-contract";
 export const getAdminPdfImport = () => requestJson<AdminPdfImportStatus>(PDF_IMPORT_PATH);
 
 /** Opens the library's import for these PDFs, reading against these checks and instructions, with a signed upload for each. */
-export function startAdminPdfImport(input: { checks: string[]; collections: string[]; filenames: string[]; instructions: string }) {
+export function startAdminPdfImport(input: { checks: string[]; collections: string[]; files: { name: string; size: number }[]; instructions: string }) {
 	return requestJson<{ files: { filename: string; id: string; upload: { signedUrl: string } }[]; id: string }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "start", ...input }), method: "POST" });
 }
 
@@ -635,7 +635,7 @@ export function failAdminPdfImportUpload(fileId: string, message: string) {
 
 /** Imports the chosen records as drafts, each with its PDF. */
 export function commitAdminPdfImport(input: Omit<AdminImportCommitRequest, "action">) {
-	return requestJson<{ attach: Record<string, "attached" | "failed">; results: AdminImportCommitResult[] }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "commit", ...input }), method: "POST" });
+	return requestJson<{ results: AdminImportCommitResult[] }>(PDF_IMPORT_PATH, { body: JSON.stringify({ action: "commit", ...input }), method: "POST" });
 }
 
 /** Ends the import, imported or discarded. */

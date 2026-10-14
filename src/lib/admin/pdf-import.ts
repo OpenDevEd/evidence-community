@@ -19,7 +19,7 @@ import { getAdminCollectionChildrenPage, searchAdminCollections } from "./collec
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import { isTopLevelAdminItemType } from "./item-fields";
 import { findExistingRecords } from "./item-import-service";
-import { zoteroItemFrom } from "./pdf-import-record";
+import { zoteroItemFrom, type FoundProfile } from "./pdf-import-record";
 import type { CollectionSuggestion, PdfCheckResult, PdfSuggestion, TopicSuggestion } from "./item-import-contract";
 import type { PdfPropertiesReading } from "./pdf-properties";
 
@@ -138,23 +138,28 @@ export async function readImportPdf(
 ): Promise<PdfAiReading> {
 	const topicContext = { config, database };
 	const libraryId = config.authentication.openScholar.libraryId;
+	// The topics the searches return during this read: a topic the AI gives counts only when it is one of them.
+	const topicsFound = new Set<string>();
 	const searchTopics = tool({
 		description: "Search the library's topic catalogue by words. Returns topics with their ids and their domain, field and subfield.",
 		inputSchema: z.object({ query: z.string() }),
 		execute: async ({ query }) => {
 			const request = topicCatalogRequestSchema.parse({ contractVersion: 1, cursor: null, libraryId, limit: 25, query });
 			const { nodes } = await readPublicTopicCatalog(request, topicContext);
-			return nodes.filter(({ level }) => level === "topic").map(({ id, name, path }) => ({ id, name, path }));
+			const topics = nodes.filter(({ level }) => level === "topic");
+			for (const { id } of topics) topicsFound.add(id);
+			return topics.map(({ id, name, path }) => ({ id, name, path }));
 		},
 	});
-	// The profiles the searches return during this read: a profile id the AI gives counts only when it is one of them.
-	const profilesFound = new Map<string, { id: string; name: string }>();
+	// The profiles the searches return during this read, with what was searched: a profile id the AI gives counts only when
+	// a search for that author returned it.
+	const profilesFound = new Map<string, FoundProfile>();
 	const searchAuthors = tool({
 		description: "Search the library's author profiles by a person's name. Returns profiles with their id, name, headline and affiliation.",
 		inputSchema: z.object({ name: z.string() }),
 		execute: async ({ name }) => {
 			const profiles = await searchAuthorProfiles(config.authentication.openScholar, { clerkUserId, search: name }, signal);
-			for (const { id, name: profileName } of profiles) profilesFound.set(id, { id, name: profileName });
+			for (const { id, name: profileName } of profiles) profilesFound.set(id, { id, name: profileName, searches: [...(profilesFound.get(id)?.searches ?? []), name] });
 			return profiles.map(({ affiliation, headline, id, name: profileName }) => ({ affiliation, headline, id, name: profileName }));
 		},
 	});
@@ -237,7 +242,7 @@ export async function readImportPdf(
 	const zoteroItem = zoteroItemFrom(record, { cites: cites.map(({ key }) => key), profiles: profilesFound });
 	const fields = new Set(describeZoteroItemTypeFields(String(zoteroItem.itemType)).map(({ field }) => field));
 	const byNumber = new Map(answers.map((answer) => [answer.number, answer]));
-	const found = config.topics.enabled ? await resolveTopicNodes(topics.map(({ id }) => id), topicContext, { allowUnknown: true }) : [];
+	const found = config.topics.enabled ? await resolveTopicNodes(topics.flatMap(({ id }) => (topicsFound.has(id) ? [id] : [])), topicContext, { allowUnknown: true }) : [];
 	const topicById = new Map(found.filter(({ level }) => level === "topic").map((node) => [node.id, node]));
 	return {
 		cites,
