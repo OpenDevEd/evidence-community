@@ -38,6 +38,12 @@ type Role = ReaderCollectionRole | "owner";
 /** One icon per role, the same wherever a role shows. */
 const ROLE_ICONS = { owner: CrownIcon, editor: PencilEdit01Icon, viewer: ViewIcon } as const;
 
+/**
+ * The Share dialog's role column: the owner's role and each role menu in one box, font and colour. The Button's
+ * own wider padding on large screens is undone, or it pushes a menu's arrow out.
+ */
+const ROLE_COLUMN = "h-9 w-32 shrink-0 justify-start gap-1.5 px-3 text-small font-medium text-black/80 xl:gap-1.5 xl:px-3 dark:text-white/60";
+
 function useRoleLabel() {
 	const t = useTranslations("ui");
 	return (role: Role) => (role === "owner" ? t("roleOwner") : role === "editor" ? t("roleEditor") : t("roleViewer"));
@@ -168,7 +174,7 @@ function RoleMenu({
 					aria-label={label}
 					startContent={<HugeiconsIcon icon={ROLE_ICONS[role]} className="size-4 shrink-0" aria-hidden />}
 					endContent={<HugeiconsIcon icon={ArrowDown01Icon} className="ms-auto size-4 opacity-60" aria-hidden />}
-					className="h-9 w-32 min-w-0 shrink-0 justify-start gap-1.5 px-3 text-small font-medium"
+					className={`min-w-0 ${ROLE_COLUMN}`}
 				>
 					{roleLabel(role)}
 				</Button>
@@ -316,7 +322,7 @@ function SharePanel({ collection, invitations }: { collection: ReaderCollectionS
 								{readerDisplayName(reader, t)} <span className="font-normal text-black/50 dark:text-white/50">{t("youTag")}</span>
 							</>
 						}
-						end={<RoleChip role="owner" className="w-32 justify-start px-3" />}
+						end={<RoleChip role="owner" className={ROLE_COLUMN} />}
 					/>
 				) : null}
 				{collection.members.map((member) => (

@@ -167,6 +167,8 @@ export type PdfReading = {
 	record: AdminImportPreviewRecord;
 	suggestions: PdfSuggestion[];
 	topics: TopicSuggestion[];
+	/** When the worker read it; a reading kept before this was recorded has none. */
+	readAt?: string;
 };
 
 export type PdfImportFileState = "uploading" | "waiting" | "reading" | "read" | "failed";

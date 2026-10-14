@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
@@ -9,6 +11,8 @@ import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
 import { itemReview } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
+import { importChecksOf } from "../../src/lib/admin/import-checks";
+import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
 import { runPdfImportCycle } from "../../src/lib/admin/pdf-import-reading";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, readPdfImportFile, startPdfImport } from "../../src/lib/admin/pdf-import-service";
 import { createPdf, MemoryFileStorage } from "../helpers/file-storage";
@@ -56,6 +60,7 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		await failPdfImportUpload(db, lost!.id, "The connection dropped.");
 
 		expect(await runPdfImportCycle(db, storage, config)).toBe(true);
+		const readBy = Date.now();
 		// OpenScholar's author search answers the editor who started the import.
 		expect(readImportPdf).toHaveBeenCalledOnce();
 		expect(readImportPdf.mock.calls[0]![0]).toMatchObject({ clerkUserId: EDITOR });
@@ -101,6 +106,22 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		expect([...storage.privateFiles.keys()].filter((path) => path.startsWith(`imports/${started.id}/`))).toEqual([]);
 		expect((await pdfImportStatus(db)).import).toBeNull();
 		await expect(readPdfImportFile(db, storage, report!.id)).rejects.toThrow("not uploaded");
+
+		// The checks the PDF was read against stay with the record after the import is closed. The PDF opened on its own
+		// has none: they are on the record's fields.
+		const kept = { checks: [expect.objectContaining({ criterion: "Credits FCDO", result: "met" })], filename: "report.pdf" };
+		const checksOfRecord = await importChecksOf(db, draftKey);
+		expect(checksOfRecord).toMatchObject(kept);
+		// Dated when the AI read the PDF, not when it was attached.
+		expect(Date.parse(checksOfRecord!.readAt)).toBeLessThanOrEqual(readBy);
+		const [{ attachmentKey }] = await db.select({ attachmentKey: pdfImportFile.attachmentKey }).from(pdfImportFile).where(eq(pdfImportFile.id, report!.id));
+		expect(await importChecksOf(db, attachmentKey!)).toBeNull();
+		// Another PDF uploaded in its place hasn't been checked, so the record no longer shows them.
+		const replacement = await createPdf("A different report");
+		const staged = await stageNativePdfUpload(db, storage, { expectedSha256: createHash("sha256").update(replacement).digest("hex"), expectedSizeBytes: replacement.byteLength, filename: "replacement.pdf", itemKey: attachmentKey!, maxPdfBytes: MAX_PDF_BYTES });
+		await storage.uploadPrivate(staged.fileDraft.objectPath, replacement, "application/pdf");
+		await completeNativePdfUpload(db, storage, { expectedUploadRevision: staged.fileDraft.uploadRevision, itemKey: attachmentKey!, maxPdfBytes: MAX_PDF_BYTES });
+		expect(await importChecksOf(db, draftKey)).toBeNull();
 	});
 });
 

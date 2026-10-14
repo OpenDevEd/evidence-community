@@ -6,3 +6,9 @@ export const filledInputSlots = {
 	inputWrapper: filledFieldSurface,
 	input: "placeholder:text-black/60 dark:placeholder:text-white/40",
 };
+
+/** A field in the record editor, such as Item type and Study type: one height and corner for all of them. */
+export const inspectorInputClassNames = {
+	input: "text-sm",
+	inputWrapper: `h-10 min-h-10 rounded-xl ${filledFieldSurface}`,
+} as const;

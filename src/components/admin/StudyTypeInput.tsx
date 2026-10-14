@@ -1,7 +1,9 @@
 "use client";
 
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
+import { AutocompleteItem } from "@nextui-org/react";
+
+import { Autocomplete } from "@/components/nextui/Autocomplete";
+import { inspectorInputClassNames } from "@/components/nextui/field-styles";
 import { STUDY_LEVELS, STUDY_TYPES, studyType, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 
 const FROM_READING = "reading";
@@ -15,7 +17,12 @@ function readingSays(reading: StudyReading | null) {
 		: `Read by AI as “${label}”, ${Math.round(reading.confidence * 100)}% sure.`;
 }
 
-/** What kind of work a record is: what its reading found, or an editor's correction, which wins. */
+const levelOf = (level: string) => STUDY_LEVELS.find(({ key }) => key === level)?.label;
+
+/**
+ * What kind of work a record is: what its reading found, or an editor's
+ * correction, which wins. The same searchable field as the record's Item type.
+ */
 export function StudyTypeInput({
 	value,
 	reading,
@@ -34,29 +41,32 @@ export function StudyTypeInput({
 			className="overflow-hidden rounded-2xl border border-black/[0.07] bg-black/[0.025] dark:border-white/[0.07] dark:bg-white/[0.025]"
 		>
 			<div className="p-2">
-				<Select
-					isDisabled={disabled}
+				<Autocomplete
 					aria-label="Study type"
-					color="filled"
-					size="sm"
-					placement="left"
+					allowsCustomValue={false}
 					className="max-w-none"
-					selectedKeys={new Set([value ?? FROM_READING])}
-					onSelectionChange={(keys) => {
-						const key = [...keys][0];
+					classNames={{ listboxWrapper: "max-h-80" }}
+					inputProps={{ classNames: inspectorInputClassNames }}
+					isClearable={false}
+					isDisabled={disabled}
+					menuTrigger="focus"
+					placeholder="Find a study type"
+					selectedKey={value ?? FROM_READING}
+					onSelectionChange={(key) => {
 						if (typeof key === "string") onChange(key === FROM_READING ? null : (key as StudyTypeKey));
 					}}
-					classNames={{ trigger: "h-9 min-h-9 rounded-xl bg-white shadow-none dark:bg-white/5", value: "text-sm font-medium" }}
 				>
 					{[
-						<SelectItem key={FROM_READING}>From the reading</SelectItem>,
+						<AutocompleteItem key={FROM_READING} textValue="From the reading">
+							From the reading
+						</AutocompleteItem>,
 						...STUDY_TYPES.map((type) => (
-							<SelectItem key={type.key} description={STUDY_LEVELS.find((level) => level.key === type.level)?.label}>
+							<AutocompleteItem key={type.key} description={levelOf(type.level)} textValue={type.label}>
 								{type.label}
-							</SelectItem>
+							</AutocompleteItem>
 						)),
 					]}
-				</Select>
+				</Autocomplete>
 			</div>
 			<p className="px-3.5 pb-3.5 pt-1 text-xs leading-relaxed text-black/50 dark:text-white/50" aria-live="polite">
 				{value ? `Readers see your choice. ${readingSays(reading)}` : readingSays(reading)}
