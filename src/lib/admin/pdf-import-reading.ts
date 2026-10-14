@@ -285,9 +285,11 @@ async function attachClaimed(db: Database, storage: EvidenceFileStorage, config:
 		const attempts = file.attempts + 1;
 		const nextAttemptAt = retryAt(attempts, false);
 		console.error("Attaching an imported PDF failed", { attempts, error: message, file: file.filename, itemKey: file.attachTo });
+		// A PDF that won't attach ends its draft's send too, so the import doesn't wait on it.
+		const sendEnds = !nextAttemptAt && file.sendState === "waiting" ? { sendError: "Its PDF didn't attach.", sendState: "failed" as const } : {};
 		await db
 			.update(pdfImportFile)
-			.set({ attachState: nextAttemptAt ? "waiting" : "failed", attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt })
+			.set({ attachState: nextAttemptAt ? "waiting" : "failed", attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt, ...sendEnds })
 			.where(mine);
 	}
 }
@@ -302,7 +304,7 @@ async function sendClaimed(db: Database, storage: EvidenceFileStorage, config: L
 	const done = { leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null };
 	try {
 		const draft = await sendingOf(db, file.importId, file.position);
-		const sent = draft ? await sendImportedDraft(db, storage, config, draft) : { error: null, state: "sent" as const };
+		const sent = draft ? await sendImportedDraft(db, storage, config, { ...draft, attachmentKey: file.attachmentKey }) : { error: null, state: "sent" as const };
 		await db.update(pdfImportFile).set({ ...done, sendError: sent.error, sendState: sent.state }).where(mine);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

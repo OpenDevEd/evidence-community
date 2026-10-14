@@ -70,3 +70,19 @@ it("takes in what other tabs sent, without overriding a send this tab can still 
 	expect(restored.publish.get("2")).toEqual({ message: "Try again", state: "failed" });
 	expect(restored.reviews).toEqual({ 2: { id: "review-2", revision: 1 } });
 });
+
+// The server sends an import's drafts on as their PDFs attach. One it submitted and failed to approve can be tried
+// again here, which approves that review, and the DOI route starts as the one the server sent them on.
+it("offers a draft the server submitted and failed to approve to try again, on the server's route", async () => {
+	const tab = await import("@/components/admin/admin-import");
+	const batch = tab.pdfImportBatch({
+		...server,
+		id: "import-sent",
+		reviews: { 1: { id: "review-1", revision: 1 } },
+		send: { route: "zenodo" },
+		sending: { 1: { message: "Zenodo is down", state: "failed" } },
+		sent: { 1: "submitted" },
+	});
+	expect(batch.publish.get("1")).toEqual({ message: "Zenodo is down", state: "failed" });
+	expect(batch.publishRoute).toBe("zenodo");
+});

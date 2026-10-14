@@ -48,7 +48,6 @@ import {
 	reviewChecks,
 	reviewProgress,
 	reviewRows,
-	routeOf,
 	rowsFromRecords,
 	sendPdfUploads,
 	shownImport,
@@ -253,7 +252,7 @@ async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], appr
 	try {
 		await onBeforeSend(drafts.map(({ itemKey }) => itemKey));
 		const now = await sentNow(batch.importId);
-		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, routeOf(batch), approve, now, mark));
+		await inTurn(drafts, SEND_CONCURRENCY, (draft) => sendOne(draft, batch.publishRoute, approve, now, mark));
 	} catch (caught) {
 		failAll(caught);
 	}

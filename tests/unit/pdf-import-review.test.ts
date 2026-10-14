@@ -54,7 +54,6 @@ describe("the finish step", () => {
 		results: rows.map(({ id }) => created(id)),
 		reviews: {},
 		rows,
-		send: null,
 		sending: {},
 		toPublish: null,
 	});
