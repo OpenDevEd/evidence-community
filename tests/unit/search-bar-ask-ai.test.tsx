@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import { act, Activity } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-intl", () => ({
@@ -227,6 +228,26 @@ describe("asking the assistant from the search field", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	// The server draws the field before the page is interactive, and a reader can type into it then. Those words stay
+	// once React takes the page over and draws it again, and they wait to be searched like any typing.
+	it("keeps words typed before the page was interactive", async () => {
+		const handleSearchChange = vi.fn();
+		const onTyped = vi.fn();
+		const bar = <SearchBar handleSearchChange={handleSearchChange} onTyped={onTyped} search="" />;
+		container.innerHTML = renderToString(bar);
+		field().value = "teacher training";
+
+		await act(async () => {
+			root = hydrateRoot(container, bar);
+		});
+		await act(async () => {
+			root.render(<SearchBar handleSearchChange={handleSearchChange} onTyped={onTyped} search="" />);
+		});
+
+		expect(field().value).toBe("teacher training");
+		expect(onTyped).toHaveBeenLastCalledWith("teacher training");
 	});
 
 	it("draws its trailing control", async () => {

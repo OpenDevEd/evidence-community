@@ -2,12 +2,13 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Search01Icon } from "@hugeicons/core-free-icons";
-import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
 import { PropsOf } from "@nextui-org/react";
 import { Input } from "@/components/nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useEarlyTyping } from "@/hooks/useEarlyTyping";
 import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 
@@ -17,7 +18,7 @@ const FOCUS_REQUEST_MAX_AGE_MS = 1000;
 type Draft = { sourceSearch: string; value: string };
 
 /**
- * The field's search, run once typing stops: run, cancel, and run now. A search still waiting when the field goes away
+ * The field's search: take what was typed (it runs once typing stops), cancel, and run now. A search still waiting when the field goes away
  * (a result followed straight after typing) never runs, since it would write the next page's address. It stops being
  * what was typed, and a page kept for Back shows the search it has again, not the words that never ran.
  */
@@ -52,7 +53,33 @@ function useWaitingSearch(
 		document.addEventListener("click", leave, true);
 		return () => document.removeEventListener("click", leave, true);
 	}, [cancel, onTyped]);
-	return [run, cancel, now] as const;
+	const take = (text: string) => {
+		setDraft((draft) => ({ ...draft, value: text }));
+		onTyped?.(text);
+		run(text);
+	};
+	return [take, cancel, now] as const;
+}
+
+/** Takes focus when the chat beside the results asks for it, if `enabled`. */
+function useFocusOnRequest(field: RefObject<HTMLElement | null>, enabled?: boolean) {
+	const { searchFocusRequest } = useInlineChatLayout();
+
+	useEffect(() => {
+		// This also runs when the field comes back after the split view
+		// closes, which is what it is for. An old request must not steal
+		// focus on a later visit.
+		if (
+			!enabled ||
+			Date.now() - searchFocusRequest > FOCUS_REQUEST_MAX_AGE_MS
+		) {
+			return;
+		}
+		const element = field.current?.querySelector("input");
+		if (!element) return;
+		element.focus({ preventScroll: true });
+		element.setSelectionRange(element.value.length, element.value.length);
+	}, [enabled, field, searchFocusRequest]);
 }
 
 export function SearchBar({
@@ -94,28 +121,12 @@ export function SearchBar({
 	// The extended field does not hand back the input itself, so it is found
 	// through the wrapper around it.
 	const baseRef = useRef<HTMLDivElement>(null);
-	const { searchFocusRequest } = useInlineChatLayout();
-
-	useEffect(() => {
-		// This also runs when the field comes back after the split view
-		// closes, which is what it is for. An old request must not steal
-		// focus on a later visit.
-		if (
-			!focusOnRequest ||
-			Date.now() - searchFocusRequest > FOCUS_REQUEST_MAX_AGE_MS
-		) {
-			return;
-		}
-		const element = baseRef.current?.querySelector("input");
-		if (!element) return;
-		element.focus({ preventScroll: true });
-		element.setSelectionRange(element.value.length, element.value.length);
-	}, [focusOnRequest, searchFocusRequest]);
+	useFocusOnRequest(baseRef, focusOnRequest);
 	const [draft, setDraft] = useState<Draft>({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, cancelSearch, searchNow] = useWaitingSearch(
+	const [takeTyped, cancelSearch, searchNow] = useWaitingSearch(
 		handleSearchChange,
 		setDraft,
 		onTyped,
@@ -143,6 +154,7 @@ export function SearchBar({
 	}, [cancelSearch, handleSearchChange, onTyped, search]);
 
 	const ask = () => onAsk?.(localValue, clear);
+	useEarlyTyping(baseRef, localValue, takeTyped);
 
 	const field = (
 		<Input
@@ -160,12 +172,7 @@ export function SearchBar({
 				ask();
 			}}
 			value={localValue}
-			onChange={(e) => {
-				const value = e.target.value;
-				setDraft({ sourceSearch: search, value });
-				onTyped?.(value);
-				debouncedSearch(value);
-			}}
+			onChange={(e) => takeTyped(e.target.value)}
 			onClear={clear}
 			placeholder={t("search")}
 			size={"lg"}
@@ -188,14 +195,19 @@ export function SearchBar({
 		/>
 	);
 
-	if (!trailing) return field;
+	return <WithTrailing field={field} control={trailing?.(ask)} />;
+}
 
+/**
+ * The field with a control drawn over its end, and the same parent with or without one. The library page adds its Ask
+ * AI button only once it knows the reader's keyboard, after the page is interactive, and a new parent would draw the
+ * field again, taking the focus from someone already typing. Without a control the parent draws no box of its own.
+ */
+function WithTrailing({ field, control }: { field: ReactNode; control?: ReactNode }) {
 	return (
-		<div className="relative flex min-w-0 flex-1 items-center">
+		<div className={control ? "relative flex min-w-0 flex-1 items-center" : "contents"}>
 			{field}
-			<div className="absolute inset-y-0 right-3 flex items-center">
-				{trailing(ask)}
-			</div>
+			{control && <div className="absolute inset-y-0 right-3 flex items-center">{control}</div>}
 		</div>
 	);
 }
