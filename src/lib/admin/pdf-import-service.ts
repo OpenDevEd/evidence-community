@@ -61,16 +61,23 @@ const asRepeat = (reading: PdfReading): PdfReading => (reading.record.state === 
 const attachOutcomes = (files: FileRow[]) =>
 	Object.fromEntries(files.flatMap(({ attachState, position }) => (attachState === "attached" || attachState === "failed" ? [[String(position), attachState]] : [])));
 
-/** The imported drafts already sent on, by row: published ones are records now, submitted ones wait in a review. */
-async function sentDrafts(db: Database, results: AdminImportCommitResult[] | null): Promise<AdminPdfImport["sent"]> {
+/** The imported drafts already sent on, by row: published ones are records now, submitted ones wait in a review, which is given too. */
+async function sentDrafts(db: Database, results: AdminImportCommitResult[] | null): Promise<Pick<AdminPdfImport, "reviews" | "sent">> {
 	const rowByKey = new Map((results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey ? [[itemKey, id] as const] : [])));
-	if (!rowByKey.size) return {};
+	if (!rowByKey.size) return { reviews: {}, sent: {} };
 	const keys = [...rowByKey.keys()];
-	const [published, waiting] = await Promise.all([
-		db.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
-		db.select({ key: itemReview.itemKey }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
-	]);
-	return Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]);
+	// One snapshot for both, so an approval committing between them can't hide a draft from both.
+	const [published, waiting] = await db.transaction(
+		async (snapshot) => [
+			await snapshot.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
+			await snapshot.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
+		] as const,
+		{ accessMode: "read only", isolationLevel: "repeatable read" },
+	);
+	return {
+		reviews: Object.fromEntries(waiting.map(({ id, key, revision }) => [rowByKey.get(key)!, { id, revision }])),
+		sent: Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]),
+	};
 }
 
 /** The library's open import with where each PDF has got to, and the checks and instructions a new one starts from. */
@@ -96,7 +103,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
-		sent: await sentDrafts(db, open.results),
+		...(await sentDrafts(db, open.results)),
 	};
 	return { import: view, last: lastUsed };
 }

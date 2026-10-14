@@ -96,14 +96,15 @@ type SendVerbs = ReturnType<typeof sendVerbs>;
  * Where sending stands: the drafts already published or submitted, which
  * can't go again, and whether a run holds the ticks while it sends. Once it
  * is done, drafts it failed on and drafts whose PDF came later can go. The
- * DOI route stays as it is while a draft waits to be approved on a review
- * already submitted with it, since trying again approves that review.
+ * DOI route stays as it is while a draft it failed on still has its review
+ * pending, since trying again approves that review; once an editor
+ * withdraws or returns it, the route can change.
  */
 function sending(batch: ImportBatch) {
 	const states = [...batch.publish.values()];
 	const sentIds = new Set([...batch.publish].filter(([, { state }]) => state === "published" || state === "submitted").map(([id]) => id));
 	const started = states.some(({ state }) => state === "sending");
-	return { routeHeld: started || states.some(({ review, state }) => state === "failed" && review), sentIds, started };
+	return { routeHeld: started || [...batch.publish].some(([id, { state }]) => state === "failed" && batch.reviews[id]), sentIds, started };
 }
 
 /**
