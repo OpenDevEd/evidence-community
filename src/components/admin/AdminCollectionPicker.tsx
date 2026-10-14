@@ -398,7 +398,7 @@ export function AdminCollectionPicker({
 		[],
 	);
 
-	// Focus moves to the search once, after the popover places its own; a load finishing later leaves it where the editor put it.
+	// Focus moves to the search once, after the popover places its own; a load finishing later leaves it where the editor put it. It never scrolls: in the Import sheet the picker sits in a section still opening from no height, which focus would scroll.
 	useEffect(() => {
 		if (!autoFocus) return;
 		const frame = window.requestAnimationFrame(() => {
@@ -406,7 +406,7 @@ export function AdminCollectionPicker({
 				?.querySelector<HTMLInputElement>(
 					'input[aria-label="Search collections"]',
 				)
-				?.focus();
+				?.focus({ preventScroll: true });
 		});
 		return () => window.cancelAnimationFrame(frame);
 	}, [autoFocus]);

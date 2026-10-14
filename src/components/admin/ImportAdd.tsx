@@ -7,6 +7,7 @@ import { useRef, useState, type DragEvent, type ReactNode } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { useFinePointer } from "@/hooks/useBreakpoint";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
 import { ADMIN_IMPORT_FILE_EXTENSIONS, ADMIN_IMPORT_FILE_FORMATS, ADMIN_IMPORT_MAX_FILES, ADMIN_IMPORT_MAX_RECORDS, PDF_IMPORT_MAX_CRITERIA, PDF_IMPORT_MAX_CRITERION_LENGTH, PDF_IMPORT_MAX_FILES, PDF_IMPORT_MAX_GUIDANCE_LENGTH, parseDoiList } from "@/lib/admin/item-import-contract";
@@ -70,12 +71,15 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 
 /** Where the new drafts go, on the Add step and again in the review. */
 export function CollectionsSetting({ flow }: { flow: ImportFlowState }) {
+	const finePointer = useFinePointer();
 	return (
 		<Setting icon={Folder01Icon} summary={countSummary(flow.collections.length, "chosen", "chosen", "None")} title="Collections">
 			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">The new drafts go into these.</p>
 			{/* Locked while a lookup or the import runs: the batch takes the collections chosen when it starts. */}
 			<CollectionsLock locked={flow.busy || flow.locked}>
+				{/* The picker mounts when the editor opens the setting, so its search takes focus then, not when the sheet renders. */}
 				<AdminCollectionPicker
+					autoFocus={finePointer}
 					allowedSourceKeys={editableItemCollectionSourceKeysForItems([NATIVE_SOURCE_CONNECTION_KEY], flow.sources)}
 					onSelectionChange={flow.setCollections}
 					selectedKeys={flow.collections}
