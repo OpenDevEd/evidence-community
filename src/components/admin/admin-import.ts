@@ -261,6 +261,8 @@ const CHOICES_KEY = "evidence-library:pdf-import-choices";
 
 type SavedChoices = {
 	applied: [string, number[]][];
+	/** How sending each draft on went; one still sending when the page went is left out, as it stopped there. */
+	publish: [string, PublishState][];
 	chosen: Record<ChoiceKind, [string, string[]][]>;
 	collections: string[];
 	excluded: string[];
@@ -275,6 +277,7 @@ const setsOf = <Value,>(lists: [string, Value[]][]) => new Map(lists.map(([id, v
 function saveChoices(batch: ImportBatch) {
 	const saved: SavedChoices = {
 		applied: listsOf(batch.applied),
+		publish: [...batch.publish].filter(([, { state }]) => state !== "sending"),
 		chosen: { collections: listsOf(batch.chosen.collections), topics: listsOf(batch.chosen.topics) },
 		collections: batch.collections,
 		excluded: [...batch.excluded],
@@ -294,7 +297,7 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	try {
 		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
 		if (saved?.importId !== importId) return {};
-		return { applied: setsOf(saved.applied), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
 	} catch {
 		// No browser storage while the page is served, or an entry this version can't read.
 		return {};
@@ -315,14 +318,22 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
 // Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
 export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
-const pdfsSettling = () => Boolean(pdfs && (pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs)));
+/**
+ * How often to ask the server about the PDF import: every two seconds while
+ * its PDFs upload, are read or are attached, and every ten while it is open,
+ * so another tab's import or close shows here too.
+ */
+const pollEvery = () => {
+	if (!pdfs) return 0;
+	return pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) ? 2_000 : 10_000;
+};
 
-/** The library's PDF import from the server, checked every two seconds while its PDFs upload, are read or are attached. */
+/** The library's PDF import from the server, checked while it is open. */
 export function usePdfImportStatus() {
 	// SWR restarts its timer whenever this option changes, so it is a number that changes only when reading starts or
 	// stops. A function would be a new one on every render, and the sheet renders more often than it polls.
-	const polling = useSyncExternalStore(subscribe, pdfsSettling, () => false);
-	return useSWR(PDF_IMPORT_KEY, getAdminPdfImport, { onSuccess: syncPdfImport, refreshInterval: polling ? 2_000 : 0 });
+	const refreshInterval = useSyncExternalStore(subscribe, pollEvery, () => 0);
+	return useSWR(PDF_IMPORT_KEY, getAdminPdfImport, { onSuccess: syncPdfImport, refreshInterval });
 }
 
 // The DOI or file lookup the open sheet waits for. Closing the sheet drops it, so an answer that comes later never

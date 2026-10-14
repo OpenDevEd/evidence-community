@@ -2,10 +2,10 @@ import { eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
 import type { LibraryServerConfig } from "../../src/config/library-config/schema";
-import { itemDraft } from "@opendeved/evidence-library-core";
+import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
 import { runPdfImportCycle } from "../../src/lib/admin/pdf-import-reading";
-import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, startPdfImport } from "../../src/lib/admin/pdf-import-service";
+import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, readPdfImportFile, startPdfImport } from "../../src/lib/admin/pdf-import-service";
 import { createPdf, MemoryFileStorage } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -84,6 +84,7 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		await closePdfImport(db, storage, started.id);
 		expect([...storage.privateFiles.keys()].filter((path) => path.startsWith(`imports/${started.id}/`))).toEqual([]);
 		expect((await pdfImportStatus(db)).import).toBeNull();
+		await expect(readPdfImportFile(db, storage, report!.id)).rejects.toThrow("not uploaded");
 	});
 });
 
@@ -143,6 +144,8 @@ test("finds a PDF that is the same file as one already in the library or earlier
 		const done = await commitPdfImport(db, { collections: [], importId: first.id, records: [{ id: file!.rowId, method: "pdf", payload: file!.reading!.record.payload! }] });
 		await runPdfImportCycle(db, storage, config);
 		await closePdfImport(db, storage, first.id);
+		// Publishing moves the upload out of the drafts and writes the record into a new copy, whose hash differs.
+		await db.delete(itemFileDraft);
 
 		readImportPdf.mockClear();
 		const other = await createPdf("Another report");

@@ -84,26 +84,34 @@ function inRecordForm<Suggestion extends { field: string; value: string }>(itemT
 /** The record's own name for a field the AI named as Zotero does: a report's institution is its publisher, a language its languageName. */
 const recordField = (itemType: unknown, field: string) => canonicalItemFieldToDatabaseField(canonicalZoteroFieldName(String(itemType), field) ?? field);
 
-/** The library's record whose PDF is this very file, as a draft's upload or a published copy. */
+/**
+ * The library's record whose PDF is this very file: a draft's upload, a
+ * published copy, or a PDF an earlier import attached. Publishing writes the
+ * record into its copy, which changes its hash, so the import's own note of
+ * the file is what finds a published import again.
+ */
 async function fileOwner(db: Database, sha256: string) {
 	const [draft] = await db.select({ key: itemFileDraft.parentItemKey }).from(itemFileDraft).where(eq(itemFileDraft.actualSha256, sha256)).limit(1);
 	if (draft) return draft.key;
+	const [imported] = await db.select({ key: pdfImportFile.attachTo }).from(pdfImportFile).where(and(eq(pdfImportFile.sha256, sha256), eq(pdfImportFile.attachState, "attached"))).limit(1);
+	if (imported?.key) return imported.key;
 	const [published] = await db.select({ key: itemFilePublication.parentItemKey }).from(itemFilePublication).where(eq(itemFilePublication.sha256, sha256)).limit(1);
 	return published?.key;
 }
 
-/** A record's title as published, or as its draft has it when it isn't published. */
+/** A record's title as published, or as its draft has it when it isn't published; null when the record is gone. */
 async function recordTitle(db: Database, key: string) {
 	const [record] = await db.select({ title: item.title }).from(item).where(eq(item.key, key));
-	if (record) return record.title;
+	if (record) return { title: record.title };
 	const [draft] = await db.select({ patch: itemDraft.patch }).from(itemDraft).where(eq(itemDraft.itemKey, key));
-	return (draft?.patch as { title?: string } | undefined)?.title || null;
+	return draft ? { title: (draft.patch as { title?: string }).title || null } : null;
 }
 
-/** The library's record whose PDF is this very file, with its title. */
+/** The library's record whose PDF is this very file, with its title, while that record still exists. */
 async function recordWithFile(db: Database, sha256: string) {
 	const key = await fileOwner(db, sha256);
-	return key ? { key, title: await recordTitle(db, key) } : null;
+	const record = key ? await recordTitle(db, key) : null;
+	return key && record ? { key, title: record.title } : null;
 }
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string; cause?: { code?: string } }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505";

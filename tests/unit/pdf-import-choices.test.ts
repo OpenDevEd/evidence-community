@@ -34,6 +34,7 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 	tab.changeImportBatch(batch, (current) => tab.withSuggestionToggled(current, "1", 0));
 	tab.changeImportBatch(batch, (current) => tab.withChoiceToggled(current, "1", "collections", "THEMEGEN"));
 	tab.changeImportBatch(batch, (current) => ({ ...current, collections: ["THEMEGEN"], excluded: new Set(["1"]), publishRoute: "crossref-zenodo" }));
+	tab.changeImportBatch(batch, (current) => ({ ...current, publish: new Map([["1", { state: "published" as const }], ["2", { state: "sending" as const }]]) }));
 
 	vi.resetModules();
 	const reloaded = await import("@/components/admin/admin-import");
@@ -42,6 +43,8 @@ it("keeps the editor's choices on a PDF import through a reload, and drops them 
 	expect(reloaded.appliedOf(restored, row).size).toBe(0);
 	expect(reloaded.chosenOf(restored, row, "collections").size).toBe(0);
 	expect(restored).toMatchObject({ collections: ["THEMEGEN"], excluded: new Set(["1"]), publishRoute: "crossref-zenodo" });
+	// A published draft stays published; a send the reload cut off is no longer under way.
+	expect(restored.publish).toEqual(new Map([["1", { state: "published" }]]));
 	// Another import starts from the AI's choices.
 	expect(reloaded.appliedOf(reloaded.pdfImportBatch({ ...server, id: "import-2" }), row)).toEqual(new Set([0]));
 

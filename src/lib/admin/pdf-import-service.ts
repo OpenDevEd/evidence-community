@@ -139,9 +139,13 @@ export async function failPdfImportUpload(db: Database, fileId: string, message:
 	await db.update(pdfImportFile).set({ lastError: message.slice(0, 500) || NOT_UPLOADED }).where(and(eq(pdfImportFile.id, fileId), isNull(pdfImportFile.objectPath)));
 }
 
-/** An import's PDF, for its cover and for opening it in the review. */
+/** An open import's PDF, for its cover and for opening it in the review; a closed import's PDFs are gone. */
 export async function readPdfImportFile(db: Database, storage: EvidenceFileStorage, fileId: string) {
-	const [file] = await db.select().from(pdfImportFile).where(and(eq(pdfImportFile.id, fileId), isNotNull(pdfImportFile.objectPath)));
+	const [file] = await db
+		.select({ filename: pdfImportFile.filename, objectPath: pdfImportFile.objectPath })
+		.from(pdfImportFile)
+		.innerJoin(pdfImport, eq(pdfImport.id, pdfImportFile.importId))
+		.where(and(eq(pdfImportFile.id, fileId), isNotNull(pdfImportFile.objectPath), isNull(pdfImport.closedAt)));
 	if (!file?.objectPath) throw new AdminValidationError("This PDF is not uploaded.");
 	return { bytes: await storage.downloadPrivate(file.objectPath), filename: file.filename };
 }
