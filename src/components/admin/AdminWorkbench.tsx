@@ -2337,7 +2337,7 @@ export default function AdminWorkbench({
 					>
 						<Tooltip content={importLabel.text} isDisabled={showImportLabel}>
 							<Button
-								aria-label="Import Item"
+								aria-label={importLabel.text}
 								className={`h-10 min-h-10 w-10 !min-w-10 gap-2 rounded-none px-0 font-medium text-accent lg:w-auto lg:!min-w-0 lg:px-3 ${importLabel.batch ? "lg:!w-[9.5rem]" : ""}`}
 								color="secondary"
 								isDisabled={busy}
