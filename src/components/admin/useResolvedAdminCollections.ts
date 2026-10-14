@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
 
 import {
+	peekResolvedAdminCollection,
 	readResolvedAdminCollection,
 	resolveAdminCollectionKeys,
 } from "./admin-collection-resolution-cache";
@@ -118,12 +119,20 @@ export function useResolvedAdminCollections(
 		stableKeys,
 	]);
 
+	// Every key already known shows straight away, so changing the selection
+	// never empties the list while the new keys are looked up.
+	const byKey = new Map(resolution.entries.map((entry) => [entry.key, entry]));
+	const known = (key: string) => byKey.get(key) ?? peekResolvedAdminCollection(key);
 	const current = resolution.signature === signature;
 	return {
-		entries: current ? resolution.entries : [],
+		entries: stableKeys.flatMap((key) => {
+			const entry = known(key);
+			return entry ? [entry] : [];
+		}),
 		error: current ? resolution.error : false,
 		keySet,
-		loading: stableKeys.length > 0 && !current,
+		// Pending only until this selection's lookup has answered, even when some keys failed.
+		loading: !current && stableKeys.some((key) => known(key) === undefined),
 		retry,
 		stableKeys,
 	};

@@ -1,4 +1,4 @@
-import { useRef, useCallback, useLayoutEffect } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * Runs `fn` once the calls stop coming. The second value is the timer itself for older callers, the third cancels a
@@ -48,4 +48,15 @@ export function useDebounce(
 	}, [cancel]);
 
 	return [run, timeoutRef, cancel, flush];
+}
+
+/** The value as it was once it stopped changing for `delay` ms: a search box's text, sent once typing pauses. */
+export function useDebouncedValue<Value>(value: Value, delay: number) {
+	const [debounced, setDebounced] = useState(value);
+	// The timer is the outside system: it fires after the last change, and a newer change cancels it.
+	useEffect(() => {
+		const timeout = window.setTimeout(() => setDebounced(value), delay);
+		return () => window.clearTimeout(timeout);
+	}, [delay, value]);
+	return debounced;
 }
