@@ -574,6 +574,7 @@ function sourceHasCollections(
 type ShownCatalogue = {
 	rows: AdminCollectionCatalogueRow[];
 	searchMode: boolean;
+	view: "active" | "deleted";
 };
 
 /**
@@ -909,10 +910,17 @@ export function AdminCollectionCatalogue({
 		() => ({
 			rows: searchRequested ? searchRows : treeRows,
 			searchMode: searchRequested,
+			view,
 		}),
-		[searchRequested, searchRows, treeRows],
+		[searchRequested, searchRows, treeRows, view],
 	);
-	const { rows, searchMode, stale } = useShownCatalogue(
+	const {
+		rows,
+		searchMode,
+		stale,
+		// The view the rows on screen were read for, which can trail the toggle while the next list loads.
+		view: listView,
+	} = useShownCatalogue(
 		nextCatalogue,
 		searchRequested &&
 			adminCollectionSearchWaiting(catalogueState.search, searchInput),
@@ -1329,7 +1337,7 @@ export function AdminCollectionCatalogue({
 				role="tree"
 				aria-busy={stale}
 				aria-label={
-					view === "deleted" ? "Deleted collections" : "Collections"
+					listView === "deleted" ? "Deleted collections" : "Collections"
 				}
 			>
 				<div
@@ -1504,12 +1512,12 @@ export function AdminCollectionCatalogue({
 											selectedCollection === row.entry.key
 										}
 										setSize={row.setSize}
-										view={view}
+										view={listView}
 									/>
 								) : row.kind === "empty" ? (
 									row.branchKey === "search" ? (
 										<div className="flex h-full items-center px-3 text-[11px] text-black/35 dark:text-white/35">
-											{view === "deleted"
+											{listView === "deleted"
 												? "No deleted collections"
 												: "No matching collections"}
 										</div>
