@@ -26,6 +26,7 @@ import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import type { AdminImportCommitResult, PdfCheckResult, PdfSuggestion, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
+import { adminFieldLabel } from "@/lib/admin/errors";
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 
 import { humanizeAdminField } from "./admin-schema";
@@ -201,9 +202,15 @@ function ToggleButton({ locked, on, onToggle }: { locked: boolean; on: boolean; 
 	);
 }
 
-type PayloadCreator = { authorProfileId?: string; firstName?: string; institutions?: { display_name: string }[]; lastName?: string; name?: string };
+type PayloadCreator = { authorProfileId?: string; creatorType?: string; firstName?: string; institutions?: { display_name: string }[]; lastName?: string; name?: string };
 
-/** The record's authors with the affiliations the PDF prints, each marked when it links to one of the library's author profiles. */
+/** A person's role beside their name, when they aren't an author: an editor or contributor the PDF credits. */
+function RoleLabel({ creatorType }: { creatorType?: string }) {
+	if (!creatorType || creatorType === "author") return null;
+	return <span className="ms-2 text-xs text-black/50 dark:text-white/50">{adminFieldLabel(creatorType)}</span>;
+}
+
+/** The record's people with the affiliations the PDF prints, each with their role when not an author, and marked when it links to one of the library's author profiles. */
 export function AuthorList({ creators }: { creators: readonly PayloadCreator[] }) {
 	return (
 		<ul className="flex flex-col gap-3">
@@ -215,6 +222,7 @@ export function AuthorList({ creators }: { creators: readonly PayloadCreator[] }
 						<div className="min-w-0 flex-1 text-sm">
 							<p className="text-black/85 dark:text-white/85">
 								{name}
+								<RoleLabel creatorType={creator.creatorType} />
 								{creator.authorProfileId ? <span className="ms-2 text-xs text-emerald-700 dark:text-emerald-400">Linked to a profile</span> : null}
 							</p>
 							{creator.institutions?.length ? <p className="mt-0.5 text-xs leading-5 text-black/55 dark:text-white/55">{creator.institutions.map(({ display_name }) => display_name).join("; ")}</p> : null}
