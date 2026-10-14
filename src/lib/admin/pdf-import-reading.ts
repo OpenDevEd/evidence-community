@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { canonicalZoteroFieldName, getZoteroItemType } from "@opendeved/evidence-library-core/zotero-schema";
@@ -30,6 +31,8 @@ const MAX_ATTEMPTS = 3;
 // PDFs the worker reads at once, and PDFs it attaches at once.
 const READ_AT_ONCE = 8;
 const ATTACH_AT_ONCE = 2;
+// How often a free reader looks for a PDF that arrived while others are still reading.
+const LOOK_AGAIN_MS = 2_000;
 // A read may take this long; its lease outlasts it, so no other reader takes the PDF meanwhile.
 const READ_TIMEOUT_MS = 8 * 60_000;
 const LEASE = "10 minutes";
@@ -284,29 +287,62 @@ async function attachClaimed(db: Database, storage: EvidenceFileStorage, config:
 	}
 }
 
-/** Runs `work` on each PDF claimed for it until none waits or the worker is asked to stop; true when it did any. */
-async function drain(db: Database, waiting: ReturnType<typeof sql>, signal: AbortSignal | undefined, work: (file: FileRow, token: string) => Promise<void>) {
+/** What a cycle's readers and attachers share: the worker's stop, their claims under way, and how many PDFs they are working on. */
+type Cycle = { claims: Set<Promise<unknown>>; signal: AbortSignal | undefined; working: number };
+
+/** Runs `work` on each PDF claimed for it until there is nothing left to claim; true when it did any. */
+async function drain(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle, work: (file: FileRow, token: string) => Promise<void>) {
 	let worked = false;
-	// The stop is checked before each claim, so a stopping worker leaves the next PDF unclaimed.
-	for (let next = signal?.aborted ? null : await claimNext(db, waiting); next; next = signal?.aborted ? null : await claimNext(db, waiting)) {
+	for (let next = await claimInCycle(db, waiting, cycle); next; next = await claimInCycle(db, waiting, cycle)) {
 		worked = true;
-		await work(next.file, next.token);
+		await work(next.file, next.token).finally(() => cycle.working--);
 	}
 	return worked;
 }
 
+/** Claims the next PDF waiting, as one of the cycle's claims under way; a claimed PDF counts as work until its work ends. */
+function claimInto(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle) {
+	const claimed = claimNext(db, waiting).then((next) => {
+		if (next) cycle.working++;
+		return next;
+	});
+	cycle.claims.add(claimed);
+	return claimed.finally(() => cycle.claims.delete(claimed));
+}
+
+/**
+ * The next PDF waiting for this work. When none waits but another in the
+ * cycle is at work, it looks again every few seconds: an import's PDFs reach
+ * storage seconds apart, and one that arrives mid-cycle gets a free reader
+ * instead of waiting for a busy one. Before deciding nothing is at work it
+ * lets the other claims under way settle, since one may bring a PDF. Null
+ * once nothing is left, or when the worker is asked to stop, so a stopping
+ * worker leaves the next PDF unclaimed.
+ */
+async function claimInCycle(db: Database, waiting: ReturnType<typeof sql>, cycle: Cycle) {
+	while (!cycle.signal?.aborted) {
+		const next = await claimInto(db, waiting, cycle);
+		if (next) return next;
+		await Promise.allSettled(cycle.claims);
+		if (!cycle.working) return null;
+		await delay(LOOK_AGAIN_MS, undefined, { signal: cycle.signal }).catch(() => undefined);
+	}
+	return null;
+}
+
 /**
  * The publication worker's PDF import cycle: a few readers each take the
- * next PDF waiting as soon as they finish one, until none waits, so a slow
- * PDF holds up only its own reader; beside them, a couple more give the
- * imported drafts their PDFs. A failed read or attachment is retried a few
- * times, then shown as failed.
+ * next PDF waiting as soon as they finish one, until none waits and none is
+ * at work, so a slow PDF holds up only its own reader; beside them, a couple
+ * more give the imported drafts their PDFs. A failed read or attachment is
+ * retried a few times, then shown as failed.
  */
 export async function runPdfImportCycle(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, signal?: AbortSignal) {
 	await removeLateImportFiles(db, storage).catch((error: unknown) => console.error("Removing closed imports' PDFs failed", error));
+	const cycle: Cycle = { claims: new Set(), signal, working: 0 };
 	const done = await Promise.all([
-		...Array.from({ length: READ_AT_ONCE }, () => drain(db, TO_READ, signal, (file, token) => readClaimed(db, storage, config, file, token, signal))),
-		...Array.from({ length: ATTACH_AT_ONCE }, () => drain(db, TO_ATTACH, signal, (file, token) => attachClaimed(db, storage, config, file, token))),
+		...Array.from({ length: READ_AT_ONCE }, () => drain(db, TO_READ, cycle, (file, token) => readClaimed(db, storage, config, file, token, signal))),
+		...Array.from({ length: ATTACH_AT_ONCE }, () => drain(db, TO_ATTACH, cycle, (file, token) => attachClaimed(db, storage, config, file, token))),
 	]);
 	return done.some(Boolean);
 }
