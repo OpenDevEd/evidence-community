@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ImportBatch, ImportRow } from "@/components/admin/admin-import";
+import { importable, readingNeeds, type ImportBatch, type ImportRow } from "@/components/admin/admin-import";
 import { publishView } from "@/components/admin/ImportDone";
 import { propertiesAside, rowStatus } from "@/components/admin/ImportReview";
 import type { AdminImportCommitResult, AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
@@ -47,6 +47,7 @@ describe("the finish step", () => {
 		excluded: new Set(),
 		importId: "import-1",
 		kind: "pdfs",
+		needs: {},
 		publish: new Map(),
 		publishRoute: "zenodo",
 		results: rows.map(({ id }) => created(id)),
@@ -86,6 +87,35 @@ describe("the finish step", () => {
 		const current = view(batch([["1", "attached"], ["2", "attached"]]));
 		expect([...current.chosen]).toEqual(["1"]);
 		expect(current.label).toBe("Publish 1");
+	});
+
+	// Sending an undated draft on Zenodo failed after the send; it now waits until the record editor completes it.
+	it("holds back a draft until it has what its DOI route needs", () => {
+		const undated = { ...batch([["1", "attached"], ["2", "attached"]]), needs: { 1: { zenodo: { date: "Enter a valid publication date." } } } };
+		expect(view(undated)).toMatchObject({ chosen: new Set(), publishable: ["2"] });
+		// Without a DOI, publishing doesn't need the date.
+		expect(view({ ...undated, publishRoute: null }).publishable).toEqual(["1", "2"]);
+	});
+});
+
+describe("what publishing needs from a reading", () => {
+	const reading = (payload: Record<string, unknown>, overrides: Partial<ImportRow> = {}) => row("1", { record: { ...record, payload: { creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "Report", title: "A report", ...payload } }, ...overrides });
+
+	// A 2023 report read without a date was called Ready, imported, then failed to publish.
+	it("flags a ready reading without a date, and still imports it", () => {
+		const undated = reading({});
+		const needs = readingNeeds(undated, new Set());
+		expect(Object.keys(needs)).toEqual(["date"]);
+		expect(rowStatus(undated, undefined, undefined, needs)).toMatchObject({ tone: "attention" });
+		expect(importable(undated)).toBe(true);
+	});
+
+	it("needs nothing once the reading or an applied suggestion has the date, or when the record keeps its own DOI", () => {
+		expect(readingNeeds(reading({ date: "2023" }), new Set())).toEqual({});
+		expect(readingNeeds(reading({}, { suggestions: [{ apply: true, checks: [], field: "date", reason: "The cover says 2023.", value: "2023" }] }), new Set([0]))).toEqual({});
+		expect(readingNeeds(reading({ DOI: "10.5072/report" }), new Set())).toEqual({});
+		// Text that isn't a DOI gives the record no DOI of its own, so it takes the library's, as importing decides.
+		expect(Object.keys(readingNeeds(reading({ DOI: "See the cover" }), new Set()))).toEqual(["date"]);
 	});
 });
 

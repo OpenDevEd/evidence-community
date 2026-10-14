@@ -83,7 +83,7 @@ function ReviewPage({ flow, onBack, onOpen, onPage, open, page }: { flow: Import
 
 // The draft importing made from this row, once it has.
 const draftKeyOf = (flow: ImportFlowState, row: ImportRow) => flow.resultById.get(row.id)?.itemKey;
-const statusOf = (flow: ImportFlowState, row: ImportRow) => rowStatus(row, flow.resultById.get(row.id), flow.batch?.attach.get(row.id));
+const statusOf = (flow: ImportFlowState, row: ImportRow) => rowStatus(row, flow.resultById.get(row.id), flow.batch?.attach.get(row.id), flow.needsOf(row));
 // A PDF's checks count against the import's; a DOI or file record has none.
 const checkCountOf = (flow: ImportFlowState, row: ImportRow) => (row.source ? flow.checkCount : 0);
 // The checks the PDFs were read against, which a suggestion names by their place.
@@ -236,7 +236,7 @@ function RecordState({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 	return (
 		<>
 			<div className="mt-1 flex items-center gap-3">
-				<StatusText status={statusOf(flow, row)} />
+				<StatusText status={statusOf(flow, row)} wrap />
 				{importable(row) ? (
 					<span className="ms-auto">
 						<Checkbox isDisabled={flow.locked} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm">

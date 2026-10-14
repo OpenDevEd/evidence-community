@@ -15,8 +15,8 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminItemDetail } from "@/lib/admin/types";
-import { AdminValidationError, adminFieldLabel } from "@/lib/admin/errors";
-import { validateReviewPayload } from "@/lib/admin/review-validation";
+import { adminFieldLabel } from "@/lib/admin/errors";
+import { publishingNeeds } from "@/lib/admin/review-validation";
 import { validationTargetId } from "./admin-validation";
 import type { usePublishingChoice } from "./usePublishingChoice";
 
@@ -32,19 +32,10 @@ export function useReviewReadiness(
 	const loading = !submitted && saved.isLoading;
 	const error = !submitted && saved.error;
 	const loaded = submitted || saved.data !== undefined;
-	const fields = useMemo(() => {
-		try {
-			validateReviewPayload(
-				payload,
-				detail.kind === "created" ? choice : null,
-			);
-			return {};
-		} catch (error) {
-			return error instanceof AdminValidationError
-				? error.fields
-				: { _form: "Check the item details." };
-		}
-	}, [payload, choice, detail.kind]);
+	const fields = useMemo(
+		() => publishingNeeds(payload, detail.kind === "created" ? choice : null),
+		[payload, choice, detail.kind],
+	);
 	const checks = reviewChecks(payload, fields, detail.kind === "created", {
 		loading,
 		error,

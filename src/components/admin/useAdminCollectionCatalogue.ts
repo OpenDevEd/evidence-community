@@ -26,6 +26,12 @@ export type AdminCollectionCatalogueBranch = {
 	status: "error" | "idle" | "loading" | "ready";
 };
 
+type AdminCollectionSearchInput = {
+	query: string;
+	sourceConnectionKey: string | null;
+	state: AdminCollectionSearchState;
+};
+
 export type AdminCollectionCatalogueState = {
 	branches: Map<string, AdminCollectionCatalogueBranch>;
 	entries: Map<string, AdminCollectionCatalogEntry>;
@@ -360,6 +366,14 @@ export function adminCollectionCatalogueReducer(
 	};
 }
 
+/** Whether the first page of this search has yet to land: it has not started, or it is under way. */
+export function adminCollectionSearchWaiting(
+	search: AdminCollectionCatalogueState["search"],
+	input: AdminCollectionSearchInput,
+) {
+	return search.context !== JSON.stringify(input) || search.status === "loading";
+}
+
 /**
  * The status row under a branch, if any. A branch loading its first page has
  * none (its owner's chevron spins), and a branch without children shows
@@ -447,6 +461,67 @@ export function flattenAdminCollectionCatalogue(
 		if (expandedSources.has(source.key)) visit(source.key, null, 1);
 	}
 	return rows;
+}
+
+/** The rows a search shows: its results, then a row for loading, an error, more to load, or no results. */
+export function flattenAdminCollectionSearch(
+	search: AdminCollectionCatalogueState["search"],
+) {
+	const searchSetSize = search.nextCursor ? -1 : search.items.length;
+	const resultRows: AdminCollectionCatalogueRow[] = search.items.map(
+		(entry, index) => ({
+			depth: 0,
+			entry,
+			kind: "collection",
+			positionInSet: index + 1,
+			revealed: false,
+			setSize: searchSetSize,
+		}),
+	);
+	const statusPosition = resultRows.length + 1;
+	if (search.status === "loading" || search.loadingMore) {
+		resultRows.push({
+			branchKey: "search",
+			depth: 0,
+			kind: "loading",
+			parentCollection: null,
+			positionInSet: statusPosition,
+			setSize: -1,
+			sourceConnectionKey: "all",
+		});
+	} else if (search.status === "error" || search.loadMoreError) {
+		resultRows.push({
+			branchKey: "search",
+			depth: 0,
+			kind: "error",
+			parentCollection: null,
+			positionInSet: statusPosition,
+			retryMode: search.loadMoreError ? "more" : "refresh",
+			setSize: -1,
+			sourceConnectionKey: "all",
+		});
+	} else if (search.nextCursor) {
+		resultRows.push({
+			branchKey: "search",
+			depth: 0,
+			kind: "loadMore",
+			parentCollection: null,
+			positionInSet: statusPosition,
+			setSize: -1,
+			sourceConnectionKey: "all",
+		});
+	} else if (resultRows.length === 0) {
+		resultRows.push({
+			branchKey: "search",
+			depth: 0,
+			kind: "empty",
+			parentCollection: null,
+			positionInSet: 1,
+			setSize: 1,
+			sourceConnectionKey: "all",
+		});
+	}
+	return resultRows;
 }
 
 function errorMessage(error: unknown) {
@@ -589,11 +664,7 @@ export function useAdminCollectionCatalogue() {
 
 	const loadSearch = useCallback(
 		async (
-			input: {
-				query: string;
-				sourceConnectionKey: string | null;
-				state: AdminCollectionSearchState;
-			},
+			input: AdminCollectionSearchInput,
 			options: { force?: boolean; more?: boolean } = {},
 		) => {
 			const context = JSON.stringify(input);

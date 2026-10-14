@@ -4,12 +4,14 @@ import { AlertCircleIcon, InboxIcon, Loading03Icon } from "@hugeicons/core-free-
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import type { AdminFieldErrors } from "@/lib/admin/errors";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
-import { appliedOf, checkPasses, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
+import { appliedOf, checkPasses, draftNeeds, needsText, reviewChecks, rowPasses, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 import { useAdminPublication } from "./useAdminPublication";
 
-type Draft = { applied: ReadonlySet<number>; itemKey: string; kind: "created" | "imported" | undefined; row: ImportRow };
+/** A new draft, with what it still needs to publish on the route it takes. */
+type Draft = { applied: ReadonlySet<number>; itemKey: string; kind: "created" | "imported" | undefined; needs: AdminFieldErrors; row: ImportRow };
 
 const note = "flex min-w-0 items-center gap-1.5 text-xs";
 
@@ -28,17 +30,21 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 	);
 }
 
-/** Where a new draft stands: on its way, published with its DOI, waiting for an editor, or how its checks went. */
+/** Where a new draft stands: on its way, published with its DOI, waiting for an editor, what it needs before it can go, or how its checks went. */
 export function DraftState({ attach, draft, publish, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; verbs: SendVerbs }) {
+	if (publish && publish.state !== "failed") return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
+	if (attach === "failed") return <AlertNote text="The PDF didn't attach, so it stays a draft" />;
+	// Completed in the record editor; the import's status says once it is. What it needs now outranks why an earlier
+	// send failed, which may have been on another route.
+	if (Object.keys(draft.needs).length) return <AlertNote text={needsText(draft.needs)} tone="text-amber-700 dark:text-amber-400" />;
 	if (publish) return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
-	if (attach === "failed") return <FailedNote text="The PDF didn't attach, so it stays a draft" />;
 	return <ChecksState draft={draft} />;
 }
 
 /** A draft sent on from the finish step: on its way, published, waiting for an editor, or failed. */
 function SentState({ itemKey, publish, verbs }: { itemKey: string; publish: PublishState; verbs: SendVerbs }) {
 	if (publish.state === "published") return <PublishedDoi itemKey={itemKey} />;
-	if (publish.state === "failed") return <FailedNote text={publish.message ?? "The PDF didn't attach, so it stays a draft"} />;
+	if (publish.state === "failed") return <AlertNote text={publish.message ?? "The PDF didn't attach, so it stays a draft"} />;
 	if (publish.state === "submitted") {
 		return (
 			<span className={`${note} animate-fade-in text-black/55 dark:text-white/55`}>
@@ -56,9 +62,9 @@ function SentState({ itemKey, publish, verbs }: { itemKey: string; publish: Publ
 	);
 }
 
-function FailedNote({ text }: { text: string }) {
+function AlertNote({ text, tone = "text-danger" }: { text: string; tone?: string }) {
 	return (
-		<span className={`${note} text-danger`}>
+		<span className={`${note} ${tone}`}>
 			<HugeiconsIcon aria-hidden className="shrink-0" icon={AlertCircleIcon} size={13} />
 			{/* One line, as every other state, so a failure doesn't make the row taller. */}
 			<TruncatedText className="min-w-0" focusable text={text} />
@@ -116,11 +122,12 @@ function sending(batch: ImportBatch) {
 export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<string>) => void, canPublish: boolean) {
 	const results = batch.results ?? [];
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
-	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, row: rowById.get(id)! }] : []));
+	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, batch.publishRoute, id, kind), row: rowById.get(id)! }] : []));
 	const verbs = sendVerbs(canPublish);
 	const { routeHeld, sentIds, started } = sending(batch);
-	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again.
-	const publishable = drafts.filter(({ row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id));
+	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again. One that
+	// still needs a field the route asks for waits until the editor completes it in the record.
+	const publishable = drafts.filter(({ needs, row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id) && !Object.keys(needs).length);
 	const publishableIds = publishable.map(({ row }) => row.id);
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.

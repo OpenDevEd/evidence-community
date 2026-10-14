@@ -7,7 +7,10 @@ import { creatorDisplayName } from "@/lib/creator-display-name";
 import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
 
 import { adminFieldLabel } from "@/lib/admin/errors";
+import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
 import { useState } from "react";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import {
 	PencilIcon,
 	Tick01Icon,
@@ -50,6 +53,8 @@ export function ConflictValue({
 	) {
 		return <span className="text-black/45 dark:text-white/45">Empty</span>;
 	}
+	if (field === "collections" && Array.isArray(value))
+		return <CollectionConflictValue keys={value.map(String)} />;
 	if (Array.isArray(value)) {
 		return (
 			<span className="flex flex-col gap-1">
@@ -64,6 +69,53 @@ export function ConflictValue({
 	if (typeof value === "object")
 		return <ObjectConflictValue field={field} value={value} />;
 	return String(value);
+}
+
+function CollectionConflictLine({
+	entry,
+	collectionKey,
+	pending,
+}: {
+	entry: AdminCollectionCatalogEntry | undefined;
+	collectionKey: string;
+	pending: boolean;
+}) {
+	// A name read after this line first rendered fades into the line kept for it; a name the admin already held is there at once.
+	const [readLate] = useState(pending);
+	if (pending) return <span aria-hidden className="block">&nbsp;</span>;
+	// The inspector leaves out a collection that no longer exists; a choice still needs to show what it would keep, so it shows the key.
+	if (!entry)
+		return (
+			<span className="block truncate text-black/45 dark:text-white/45">
+				{collectionKey}
+			</span>
+		);
+	return (
+		<span
+			className={`flex min-w-0 gap-2 ${readLate ? "motion-safe:animate-fade-in motion-safe:[animation-duration:200ms]" : ""}`}
+		>
+			<TruncatedText text={entry.name} />
+			{entry.deleted && <span className="shrink-0 text-warning">Deleted</span>}
+		</span>
+	);
+}
+
+/** One line per collection, so names that arrive late fill their lines without moving the choices below. */
+function CollectionConflictValue({ keys }: { keys: string[] }) {
+	const { entries, loading } = useResolvedAdminCollections(keys);
+	const byKey = new Map(entries.map((entry) => [entry.key, entry]));
+	return (
+		<span className="flex flex-col gap-1">
+			{keys.map((key) => (
+				<CollectionConflictLine
+					key={key}
+					collectionKey={key}
+					entry={byKey.get(key)}
+					pending={loading && !byKey.has(key)}
+				/>
+			))}
+		</span>
+	);
 }
 
 function textField(value: unknown) {
