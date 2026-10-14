@@ -91,7 +91,8 @@ test("imports the records once when two requests come at the same moment, and at
 	readImportPdf.mockReset().mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report" } });
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("one.pdf"), pdfFile("two.pdf")], instructions: "" });
+		// A browser can send a PDF under a name without .pdf; it still attaches.
+		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("one"), pdfFile("two.pdf")], instructions: "" });
 		for (const file of started.files) {
 			await storage.uploadPrivate(file.upload.path, await createPdf(file.filename), "application/pdf");
 			await confirmPdfImportUpload(db, storage, file.id);

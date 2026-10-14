@@ -233,6 +233,17 @@ async function attachmentFor(db: Database, file: FileRow) {
 	return itemKey;
 }
 
+/**
+ * The name the PDF takes as an attachment, which must end in .pdf, hold no
+ * folders and fit 255 characters: a PDF a browser sent as "report" is
+ * still a PDF.
+ */
+function attachmentName(filename: string) {
+	const name = filename.split(/[\\/]/u).pop()!.trim() || "document";
+	const stem = name.toLowerCase().endsWith(".pdf") ? name.slice(0, -4) : name;
+	return `${stem.slice(0, 251)}.pdf`;
+}
+
 /** Gives a draft its PDF from the import, through the same staging an upload in the inspector takes. */
 async function attachOne(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, file: FileRow) {
 	const bytes = await storage.downloadPrivate(file.objectPath!);
@@ -240,7 +251,7 @@ async function attachOne(db: Database, storage: EvidenceFileStorage, maxPdfBytes
 	const staged = await stageNativePdfUpload(db, storage, {
 		expectedSha256: createHash("sha256").update(bytes).digest("hex"),
 		expectedSizeBytes: bytes.byteLength,
-		filename: file.filename,
+		filename: attachmentName(file.filename),
 		itemKey,
 		maxPdfBytes,
 	});
