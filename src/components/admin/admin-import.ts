@@ -32,6 +32,7 @@ import { needsText, publishingNeeds } from "@/lib/admin/review-validation";
 
 export { needsText };
 import { normalizeDoi } from "@/lib/doi";
+import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import { AdminApiError, failAdminPdfImportUpload, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
@@ -618,7 +619,8 @@ export function reviewChecks(row: { checks: readonly PdfCheckResult[]; suggestio
 
 /** A field's value as the record stores it: saving normalises some, such as a URL, which gains its trailing slash. */
 function stored(itemType: unknown, field: string, value: string) {
-	const descriptor = typeof itemType === "string" ? describeZoteroItemTypeFields(itemType).find((described) => described.field === field) : undefined;
+	// A saved record names its type as the library does ("Report"); Zotero's field list is by its own name ("report").
+	const descriptor = describeZoteroItemTypeFields(canonicalItemTypeToZotero(itemType)).find((described) => described.field === field);
 	return descriptor ? normalizeAdminFieldValue(descriptor, value, { keepUnparsed: true }).value : value.trim();
 }
 

@@ -170,6 +170,6 @@ describe("a record's kept checks", () => {
 	it("matches a suggested value the way the record stores it once saved", async () => {
 		const { checkPasses, heldChecks } = await import("@/components/admin/admin-import");
 		const linked = { ...kept, suggestions: [{ checks: [1], field: "url", value: "https://example.org" }] };
-		expect(heldChecks(linked, { itemType: "report", url: "https://example.org/" }).map(checkPasses)).toEqual([true, true]);
+		expect(heldChecks(linked, { itemType: "Report", url: "https://example.org/" }).map(checkPasses)).toEqual([true, true]);
 	});
 });
