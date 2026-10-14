@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckListIcon } from "@hugeicons/core-free-icons";
+import { CheckListIcon, Pdf01Icon } from "@hugeicons/core-free-icons";
 import { useReducedMotion } from "framer-motion";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -39,12 +39,15 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 						<p className="text-sm font-semibold text-black/90 dark:text-white/90">AI checks</p>
 						<CheckMeter checks={checks} count={checks.length} />
 					</div>
-					<div className="min-h-0 overflow-y-auto px-4 pb-3 pt-1">
+					{/* The PDF the checks were read from, and when. */}
+					<div className="mx-4 mb-2 flex h-8 items-center gap-2 rounded-lg bg-black/[0.04] px-2.5 text-xs dark:bg-white/[0.06]">
+						<HugeiconsIcon aria-hidden className="shrink-0 text-black/45 dark:text-white/45" icon={Pdf01Icon} size={14} />
+						<span className="min-w-0 flex-1 truncate font-medium text-black/75 dark:text-white/75">{stored.filename}</span>
+						<span className="shrink-0 tabular-nums text-black/45 dark:text-white/45">{readOn(stored.readAt)}</span>
+					</div>
+					<div className="min-h-0 overflow-y-auto px-4 pb-4 pt-1">
 						<Checks checks={checks} />
 					</div>
-					<p className="truncate px-4 pb-3.5 text-[11px] text-black/45 dark:text-white/45">
-						Read from {stored.filename} on {readOn(stored.readAt)}
-					</p>
 				</div>
 			}
 			delay={HOVER_CARD_DELAY}
