@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 
 import {
 	PDF_IMPORT_MAX_CRITERIA,
@@ -27,7 +27,7 @@ import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-recor
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
-import { AdminApiError, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
+import { AdminApiError, failAdminPdfImportUpload, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
 
 
 /** A problem with what the user typed or chose, shown before any request. */
@@ -324,8 +324,40 @@ export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
 	return { ...batch, publish: withSent(batch.publish, server.sent) };
 }
 
+// The PDFs this browser sends for the open import. The tab sending them holds a lock of the same name, so once no tab
+// holds it, any of them the server still waits for stopped with the page that sent them.
+const UPLOADS = "evidence-library:pdf-import-uploads";
+
+/** Sends an import's PDFs, holding the lock that says this browser is sending them. */
+export function sendPdfUploads(importId: string, fileIds: string[], send: () => Promise<unknown>) {
+	return navigator.locks.request(UPLOADS, async () => {
+		window.localStorage.setItem(UPLOADS, JSON.stringify({ fileIds, importId }));
+		await send();
+		window.localStorage.removeItem(UPLOADS);
+	});
+}
+
+/**
+ * Fails the PDFs this browser was sending that never arrived, once no tab is
+ * sending them: a reload or a closed tab stopped their upload. Otherwise
+ * they would show as uploading, and hold up the rest of the import, until
+ * the server gives up on them. Uploads from another browser wait for that.
+ */
+async function failStoppedUploads(server: AdminPdfImport) {
+	const sending = JSON.parse(window.localStorage.getItem(UPLOADS) ?? "null") as { fileIds: string[]; importId: string } | null;
+	const stopped = sending?.importId === server.id ? server.files.filter(({ id, state }) => state === "uploading" && sending.fileIds.includes(id)) : [];
+	if (!stopped.length) return;
+	await navigator.locks.request(UPLOADS, { ifAvailable: true }, async (lock) => {
+		if (!lock) return;
+		await Promise.all(stopped.map(({ id }) => failAdminPdfImportUpload(id, "The upload stopped when the page closed or reloaded.")));
+		window.localStorage.removeItem(UPLOADS);
+	});
+	await mutate(PDF_IMPORT_KEY);
+}
+
 /** Takes in the server's PDF import, keeping the editor's choices on it. */
 function syncPdfImport({ import: server }: AdminPdfImportStatus) {
+	if (server) void failStoppedUploads(server).catch((error: unknown) => console.error("Failing the stopped uploads failed", error));
 	const answer = JSON.stringify(server);
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
