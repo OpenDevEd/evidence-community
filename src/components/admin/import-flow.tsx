@@ -159,12 +159,13 @@ type SentNow = Pick<AdminPdfImport, "needs" | "reviews" | "sent">;
  * The import's pending reviews, sent drafts and what the rest need now, not as
  * this browser last saw them: an editor may have withdrawn a review in the record
  * since, an approval gone through whose answer was lost, or an edit just saved
- * removed a field publishing needs. Nothing when the library's
- * open import is another one, whose rows are not this import's.
+ * removed a field publishing needs. When another tab closed or replaced the
+ * import, nothing is known of its drafts, so nothing is sent.
  */
 async function sentNow(importId: string): Promise<SentNow> {
 	const current = (await getAdminPdfImport()).import;
-	return current?.id === importId ? current : { needs: {}, reviews: {}, sent: {} };
+	if (current?.id !== importId) throw new Error("This import was closed in another tab.");
+	return current;
 }
 
 /** A send that submitted a draft's review but couldn't approve it, with that review. */
