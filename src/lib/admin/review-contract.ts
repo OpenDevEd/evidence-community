@@ -8,6 +8,10 @@ export const publishingChoiceSchema = z.discriminatedUnion("route", [
 	z.object({ route: z.literal("crossref-zenodo"), identifierPolicy: z.enum(["reuse-crossref", "mint-zenodo"]) }),
 ]);
 export type PublishingChoice = z.infer<typeof publishingChoiceSchema>;
+
+/** The choice a draft made in the library takes for a DOI route: Zenodo mints its DOI, and on Crossref it reserves one. None publishes without a DOI. */
+export const routeChoice = (route: PublishingChoice["route"] | null): PublishingChoice | null =>
+	route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : route && { identifierPolicy: "reuse-crossref", route };
 export type PublishingChoiceState = {
 	choice: PublishingChoice | null;
 	canClear: boolean;

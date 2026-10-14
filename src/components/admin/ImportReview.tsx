@@ -26,11 +26,11 @@ import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import type { AdminImportCommitResult, PdfCheckResult, PdfSuggestion, TopicSuggestion } from "@/lib/admin/item-import-contract";
 import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
-import { adminFieldLabel } from "@/lib/admin/errors";
+import { adminFieldLabel, type AdminFieldErrors } from "@/lib/admin/errors";
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 
 import { humanizeAdminField } from "./admin-schema";
-import { checkPasses, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
+import { checkPasses, needsText, topicPath, type AttachState, type ImportRow, type ReviewCheck } from "./admin-import";
 
 const resultLook: Record<PdfCheckResult["result"], { bar: string; icon: typeof Tick02Icon; label: string; tone: string }> = {
 	met: { bar: "bg-emerald-500", icon: CheckmarkCircle02Icon, label: "Met", tone: "text-emerald-600 dark:text-emerald-400" },
@@ -48,8 +48,8 @@ const toneClass: Record<Tone, string> = {
 
 type Status = { icon: typeof Tick02Icon | null; label: string; tone: Tone };
 
-/** What a row's status says, from its reading, its preview, its import and its PDF. */
-export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined): Status {
+/** What a row's status says, from its reading, its preview, what publishing still needs, its import and its PDF. */
+export function rowStatus(row: ImportRow, result: AdminImportCommitResult | undefined, attach: AttachState | undefined, needs: AdminFieldErrors = {}): Status {
 	if (row.state === "uploading") return { icon: null, label: "Uploading", tone: "progress" };
 	if (row.state === "waiting") return { icon: null, label: "Queued", tone: "progress" };
 	if (row.state === "reading") return { icon: null, label: "Reading", tone: "progress" };
@@ -57,6 +57,8 @@ export function rowStatus(row: ImportRow, result: AdminImportCommitResult | unde
 	if (result?.outcome === "failed") return { icon: AlertCircleIcon, label: "Not imported", tone: "attention" };
 	if (attach === "failed") return { icon: AlertCircleIcon, label: "PDF not attached", tone: "attention" };
 	if (result?.outcome === "created") return { icon: Tick02Icon, label: "Draft created", tone: "ready" };
+	// It still imports; the editor completes it in the record before publishing.
+	if (Object.keys(needs).length) return { icon: AlertCircleIcon, label: needsText(needs), tone: "attention" };
 	const states = {
 		attention: { icon: AlertCircleIcon, label: "Needs attention", tone: "attention" },
 		existing: { icon: Copy01Icon, label: "In the library", tone: "neutral" },
@@ -67,11 +69,12 @@ export function rowStatus(row: ImportRow, result: AdminImportCommitResult | unde
 	return states[row.record.state];
 }
 
-export function StatusText({ status }: { status: Status }) {
+/** A row's status on one line; a record's page wraps it, so everything publishing needs shows in full. */
+export function StatusText({ status, wrap = false }: { status: Status; wrap?: boolean }) {
 	return (
 		<span className={`flex min-w-0 items-center gap-1.5 text-xs ${toneClass[status.tone]}`}>
 			{status.tone === "progress" ? <HugeiconsIcon aria-hidden className="shrink-0 animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} /> : status.icon ? <HugeiconsIcon aria-hidden className="shrink-0" icon={status.icon} size={13} /> : null}
-			<span className="truncate">{status.label}</span>
+			<span className={wrap ? undefined : "truncate"}>{status.label}</span>
 		</span>
 	);
 }

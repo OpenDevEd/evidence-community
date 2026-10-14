@@ -4,7 +4,7 @@ import { useState } from "react";
 import { mutate } from "swr";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import type { PublishingChoice } from "@/lib/admin/review-contract";
+import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
@@ -37,8 +37,10 @@ import {
 	errorMessage,
 	filePreviewRequest,
 	lookupStands,
+	needsText,
 	primaryLabel,
 	publishedProperties,
+	readingNeeds,
 	readyIds,
 	recordsToCommit,
 	reviewChecks,
@@ -65,8 +67,7 @@ import {
 
 /** What a draft lacks to be submitted, such as a publisher for Crossref, rather than the request's summary. */
 function publishError(error: unknown) {
-	const missing = error instanceof AdminApiError ? Object.values(error.fields).map((text) => text.replace(/\.$/u, "")) : [];
-	return missing.length ? `${missing.join(". ")}.` : errorMessage(error);
+	return error instanceof AdminApiError && Object.keys(error.fields).length ? needsText(error.fields) : errorMessage(error);
 }
 
 // Each draft is submitted and may be approved and reindexed, so a few at a time.
@@ -145,7 +146,7 @@ type SentDraft = { id: string; itemKey: string; kind: "created" | "imported" | u
  * Crossref its DOI is reserved now, and returned.
  */
 async function chooseDoiRoute(itemKey: string, route: PublishingChoice["route"] | null) {
-	await saveAdminPublishingChoice(itemKey, route && (route === "zenodo" ? { identifierPolicy: "mint-zenodo", route } : { identifierPolicy: "reuse-crossref", route }));
+	await saveAdminPublishingChoice(itemKey, routeChoice(route));
 	return route === "crossref-zenodo" ? (await reserveAdminCrossrefDoi(itemKey)).doi : undefined;
 }
 
@@ -370,6 +371,8 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		busy,
 		checksOf: (row: ImportRow) => reviewChecks(row, appliedFor(row)),
 		choicesOf,
+		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
+		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row)),
 		commit: () => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported) : undefined)),
 		error,
 		filter,

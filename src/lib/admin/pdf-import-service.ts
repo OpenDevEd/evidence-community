@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { itemDraft } from "@opendeved/evidence-library-core";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or } from "drizzle-orm";
 
 import type { Database } from "@/db";
@@ -11,11 +12,14 @@ import { item } from "@/db/schema/tables/item";
 
 import { AdminValidationError } from "./errors";
 import type { EvidenceFileStorage } from "./file-storage";
-import type { AdminImportCommitRequest, AdminImportCommitResult, AdminPdfImport, AdminPdfImportFile, AdminPdfImportStatus, PdfReading } from "./item-import-contract";
+import { applyItemDraftPatch } from "./item-draft-merge";
+import type { AdminImportCommitRequest, AdminImportCommitResult, AdminPdfImport, AdminPdfImportFile, AdminPdfImportStatus, PdfReading, PublishNeeds } from "./item-import-contract";
 import { commitImportRecords } from "./item-import-service";
 import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-service";
 import { createNativeItemDraft } from "./native-item-service";
 import { importObjectPath, removeImportFiles } from "./pdf-import-reading";
+import { routeChoice } from "./review-contract";
+import { publishingNeeds } from "./review-validation";
 
 const PDF = "application/pdf";
 
@@ -61,22 +65,54 @@ const asRepeat = (reading: PdfReading): PdfReading => (reading.record.state === 
 const attachOutcomes = (files: FileRow[]) =>
 	Object.fromEntries(files.flatMap(({ attachState, position }) => (attachState === "attached" || attachState === "failed" ? [[String(position), attachState]] : [])));
 
-/** The imported drafts already sent on, by row: published ones are records now, submitted ones wait in a review, which is given too. */
-async function sentDrafts(db: Database, results: AdminImportCommitResult[] | null): Promise<Pick<AdminPdfImport, "reviews" | "sent">> {
-	const rowByKey = new Map((results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey ? [[itemKey, id] as const] : [])));
-	if (!rowByKey.size) return { reviews: {}, sent: {} };
+const ROUTES = [null, "zenodo", "crossref-zenodo"] as const;
+
+/**
+ * What a draft still needs to publish with no DOI and on each DOI route, as
+ * the record editor's Review requirements say it. A draft imported with its
+ * own DOI keeps it, so only publishing with none applies to it.
+ */
+function publishNeedsOf(patch: Record<string, unknown>, kind: AdminImportCommitResult["kind"]): PublishNeeds {
+	// A draft never published is its patch over nothing.
+	const payload = applyItemDraftPatch({}, patch);
+	const routes = kind === "created" ? ROUTES : ([null] as const);
+	return Object.fromEntries(routes.map((route) => [route ?? "none", publishingNeeds(payload, routeChoice(route))] as const).filter(([, fields]) => Object.keys(fields).length));
+}
+
+/** The needs of the drafts not sent on yet, by row; a draft that needs nothing is left out. */
+function unsentNeeds(drafts: AdminImportCommitResult[], patches: { key: string; patch: Record<string, unknown> }[], sent: AdminPdfImport["sent"]) {
+	const draftByKey = new Map(drafts.map((draft) => [draft.itemKey, draft]));
+	const needs = patches.flatMap(({ key, patch }) => {
+		const { id, kind } = draftByKey.get(key)!;
+		return sent[id] ? [] : [[id, publishNeedsOf(patch, kind)] as const];
+	});
+	return Object.fromEntries(needs.filter(([, routes]) => Object.keys(routes).length));
+}
+
+/**
+ * Where the imported drafts stand, by row: those already sent on (published
+ * ones are records now, submitted ones wait in a review, which is given too),
+ * and what the rest still need to publish.
+ */
+async function draftStates(db: Database, results: AdminImportCommitResult[] | null): Promise<Pick<AdminPdfImport, "needs" | "reviews" | "sent">> {
+	const drafts = (results ?? []).filter(({ itemKey, outcome }) => outcome === "created" && itemKey);
+	if (!drafts.length) return { needs: {}, reviews: {}, sent: {} };
+	const rowByKey = new Map(drafts.map(({ id, itemKey }) => [itemKey!, id]));
 	const keys = [...rowByKey.keys()];
-	// One snapshot for both, so an approval committing between them can't hide a draft from both.
-	const [published, waiting] = await db.transaction(
+	// One snapshot for all three, so an approval committing between them can't hide a draft or show it twice.
+	const [published, waiting, patches] = await db.transaction(
 		async (snapshot) => [
 			await snapshot.select({ key: item.key }).from(item).where(inArray(item.key, keys)),
 			await snapshot.select({ id: itemReview.id, key: itemReview.itemKey, revision: itemReview.revision }).from(itemReview).where(and(inArray(itemReview.itemKey, keys), eq(itemReview.state, "pending"))),
+			await snapshot.select({ key: itemDraft.itemKey, patch: itemDraft.patch }).from(itemDraft).where(inArray(itemDraft.itemKey, keys)),
 		] as const,
 		{ accessMode: "read only", isolationLevel: "repeatable read" },
 	);
+	const sent: AdminPdfImport["sent"] = Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]);
 	return {
+		needs: unsentNeeds(drafts, patches, sent),
 		reviews: Object.fromEntries(waiting.map(({ id, key, revision }) => [rowByKey.get(key)!, { id, revision }])),
-		sent: Object.fromEntries([...waiting.map(({ key }) => [rowByKey.get(key)!, "submitted"]), ...published.map(({ key }) => [rowByKey.get(key)!, "published"])]),
+		sent,
 	};
 }
 
@@ -103,7 +139,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
-		...(await sentDrafts(db, open.results)),
+		...(await draftStates(db, open.results)),
 	};
 	return { import: view, last: lastUsed };
 }
