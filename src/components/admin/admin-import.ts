@@ -28,7 +28,9 @@ import { normalizeAdminFieldValue } from "@/lib/admin/field-contract";
 import type { PdfPropertiesReading } from "@/lib/admin/pdf-properties";
 import { pdfPropertiesOfRecord, type PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
-import { publishingNeeds } from "@/lib/admin/review-validation";
+import { needsText, publishingNeeds } from "@/lib/admin/review-validation";
+
+export { needsText };
 import { normalizeDoi } from "@/lib/doi";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
@@ -188,6 +190,9 @@ export const existingKeyOf = (row: ImportRow) => row.record?.existingKey;
 /** Whether publishing can write the record into this row's PDF, which it can when the PDF opens without a password. */
 export const writesProperties = (row: ImportRow) => Boolean(row.record && row.pdf?.writable);
 
+/** What importing does with the chosen records. */
+export type ImportOutcome = "drafts" | "send";
+
 /** Whether importing gave a draft its PDF; the server does it while the drafts are made. */
 export type AttachState = "attached" | "failed";
 /** A draft sent on from the finish step: published by an editor or owner, or submitted for one, with its reserved Crossref DOI. */
@@ -223,6 +228,11 @@ export type ImportBatch = {
 	publish: ReadonlyMap<string, PublishState>;
 	/** How drafts made from PDFs get their DOI, as on a record made in the library; null publishes them without one. */
 	publishRoute: PublishingChoice["route"] | null;
+	/** What importing does with the chosen records: keeps them as drafts, or sends them on (publishes them, or submits them for review) once their PDFs are attached. */
+	outcome: ImportOutcome;
+	/** Whether the server sends the imported drafts on, and how, and where each still to go stands. */
+	send: AdminPdfImport["send"];
+	sending: AdminPdfImport["sending"];
 	results: AdminImportCommitResult[] | null;
 	/** The pending review of each draft submitted and not yet decided, by row, as the server last said. */
 	reviews: AdminPdfImport["reviews"];
@@ -252,14 +262,14 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, publish: new Map(), publishRoute: null, reviews: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
 
 /** What the server says of its import, as the review takes it. */
 function fromServer(server: AdminPdfImport) {
-	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, needs: server.needs, results: server.results, reviews: server.reviews, rows: rowsFromImport(server) };
+	return { attach: new Map(Object.entries(server.attach)), checks: server.checks, needs: server.needs, results: server.results, reviews: server.reviews, rows: rowsFromImport(server), send: server.send, sending: server.sending };
 }
 
 // The editor's choices on the library's PDF import, kept in this browser so a reload keeps them. One import is open at
@@ -274,6 +284,7 @@ type SavedChoices = {
 	collections: string[];
 	excluded: string[];
 	importId: string;
+	outcome?: ImportOutcome;
 	publishRoute: PublishingChoice["route"] | null;
 	toPublish: string[] | null;
 };
@@ -289,6 +300,7 @@ function saveChoices(batch: ImportBatch) {
 		collections: batch.collections,
 		excluded: [...batch.excluded],
 		importId: batch.importId,
+		outcome: batch.outcome,
 		publishRoute: batch.publishRoute,
 		toPublish: batch.toPublish && [...batch.toPublish],
 	};
@@ -304,7 +316,7 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	try {
 		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
 		if (saved?.importId !== importId) return {};
-		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), outcome: saved.outcome ?? "drafts", publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
 	} catch {
 		// No browser storage while the page is served, or an entry this version can't read.
 		return {};
@@ -312,17 +324,32 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 }
 
 /**
- * Sends made in another tab or browser, as the server knows them, beside
- * this tab's own. A send this tab has under way, or failed on and can try
- * again, keeps its own state.
+ * Sends made in another tab or browser, or by the server, as the server
+ * knows them, beside this tab's own. A send this tab has under way, or failed
+ * on and can try again, keeps its own state. One the server submitted and
+ * then failed to approve is failed, with why, so trying again approves it.
  */
-function withSent(publish: ReadonlyMap<string, PublishState>, sent: AdminPdfImport["sent"]) {
+function withSent(publish: ReadonlyMap<string, PublishState>, server: Pick<AdminPdfImport, "send" | "sending" | "sent">) {
 	const next = new Map(publish);
-	for (const [id, state] of Object.entries(sent)) {
-		if (takesServerState(next.get(id), state)) next.set(id, { ...next.get(id), message: undefined, state });
+	for (const [id, state] of Object.entries(server.sent)) {
+		const mine = next.get(id);
+		// While the server still sends a draft, the review it submitted is a step on the way, not where the draft ends.
+		if (server.sending[id]?.state !== "waiting" && takesServerState(mine, state)) next.set(id, { ...mine, ...(approvalFailed(server, id, mine) ?? { message: undefined, state }) });
 	}
 	return next;
 }
+
+/**
+ * A draft the server submitted and then couldn't approve, as failed with why. Only an import that publishes approves,
+ * and a draft submitted from here since, as a creator's retry is, stays submitted.
+ */
+function approvalFailed(server: Pick<AdminPdfImport, "send" | "sending" | "sent">, id: string, mine: PublishState | undefined) {
+	const failed = server.send?.action === "publish" && server.sent[id] === "submitted" && server.sending[id]?.state === "failed";
+	return failed && mine?.state !== "submitted" ? { message: server.sending[id]!.message ?? undefined, state: "failed" as const } : null;
+}
+
+/** The DOI route the import's drafts take: while the server sends them, the one they were sent with, else this browser's. */
+const routeWhileSending = (server: AdminPdfImport, route: ImportBatch["publishRoute"]) => (server.send && serverSending(server) ? server.send.route : route);
 
 /**
  * Whether the server's word on a draft replaces this browser's: not while it
@@ -333,8 +360,9 @@ const takesServerState = (mine: PublishState | undefined, state: "published" | "
 
 /** The server's import with the choices this browser made on it, the collections the editor changed in the review among them. */
 export function pdfImportBatch(server: AdminPdfImport): ImportBatch {
-	const batch: ImportBatch = { ...blankChoices, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
-	return { ...batch, publish: withSent(batch.publish, server.sent) };
+	// The DOI route starts as the one the server sends the drafts on, where this browser chose none.
+	const batch: ImportBatch = { ...blankChoices, publishRoute: server.send?.route ?? null, ...fromServer(server), collections: server.collections, ...savedChoices(server.id), importId: server.id, kind: "pdfs" };
+	return { ...batch, publish: withSent(batch.publish, server), publishRoute: routeWhileSending(server, batch.publishRoute) };
 }
 
 // The PDFs this browser sends for the open import. The tab sending them holds a lock of the same name, so once no tab
@@ -396,12 +424,21 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	const answer = JSON.stringify(server);
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
-	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server.sent) } : pdfImportBatch(server)) : null);
+	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server), publishRoute: routeWhileSending(server, pdfs.publishRoute) } : pdfImportBatch(server)) : null);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
+/** Whether the server still has drafts of this import to send on. */
+export const serverSending = (batch: Pick<ImportBatch, "sending">) => Object.values(batch.sending).some(({ state }) => state === "waiting");
+
+/**
+ * Whether the server still works on the import, which stays open until it is done: the import's stored PDFs are
+ * what the worker attaches, and it sends the drafts on where the import says so.
+ */
+export const stillWorking = (batch: ImportBatch) => attaching(batch) || serverSending(batch);
+
 // Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
-export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
+const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
 /**
  * How often to ask the server about the PDF import: every two seconds while
  * its PDFs upload, are read or are attached, and every ten while it is open,
@@ -409,7 +446,7 @@ export const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ 
  */
 const pollEvery = () => {
 	if (!pdfs) return 0;
-	return pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) ? 2_000 : 10_000;
+	return pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) || serverSending(pdfs) ? 2_000 : 10_000;
 };
 
 /** The library's PDF import from the server, checked while it is open. */
@@ -545,17 +582,17 @@ export function recordPayload(row: ImportRow, applied: ReadonlySet<number>): Rec
  * a PDF without a DOI, which takes the library's, is held to what Zenodo needs: both routes register through it. One
  * with its own DOI keeps it. The record still imports as a draft, to be completed in the editor.
  */
-export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>): AdminFieldErrors {
+export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>, route: ImportBatch["publishRoute"] | "later" = "later"): AdminFieldErrors {
 	if (row.record?.state !== "ready") return {};
 	const payload = recordPayload(row, applied);
-	return publishingNeeds(payload, row.source && !keepsDoi(payload) ? routeChoice("zenodo") : null);
+	if (!row.source || keepsDoi(payload)) return publishingNeeds(payload, null);
+	// Sent on as it is imported, it is held to the route chosen in the review; chosen later, to Zenodo's.
+	return publishingNeeds(payload, routeChoice(route === "later" ? "zenodo" : route));
 }
 
 /** Whether a record keeps a DOI of its own, decided as importing decides it: only a DOI that reads as one counts. */
 const keepsDoi = (payload: Record<string, unknown>) => typeof payload.DOI === "string" && Boolean(normalizeDoi(payload.DOI));
 
-/** What publishing needs, a sentence each, in the words of the record editor's Review requirements, which name the field. */
-export const needsText = (needs: AdminFieldErrors) => `${Object.values(needs).map((text) => text.replace(/\.$/u, "")).join(". ")}.`;
 
 /** What an imported draft still needs to publish on the route it takes: the import's for a draft made here, none for one that kept its DOI. */
 export function draftNeeds(needs: AdminPdfImport["needs"], publishRoute: ImportBatch["publishRoute"], id: string, kind: "created" | "imported" | undefined): AdminFieldErrors {

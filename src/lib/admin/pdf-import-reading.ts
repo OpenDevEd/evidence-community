@@ -21,6 +21,7 @@ import { completeNativePdfUpload, stageNativePdfUpload } from "./native-file-ser
 import { createNativeItemDraft } from "./native-item-service";
 import { readImportPdf } from "./pdf-import";
 import { keepImportChecks } from "./import-checks";
+import { sendImportedDraft, sendingOf } from "./pdf-import-send";
 import { readPdfProperties } from "./pdf-properties";
 import { languageTag } from "./pdf-record-mapping";
 
@@ -32,6 +33,8 @@ const MAX_ATTEMPTS = 3;
 // PDFs the worker reads at once, and PDFs it attaches at once.
 const READ_AT_ONCE = 8;
 const ATTACH_AT_ONCE = 2;
+// Drafts it sends on at once, once their PDFs are attached, for an import that sends them.
+const SEND_AT_ONCE = 2;
 // How often a free reader looks for a PDF that arrived while others are still reading.
 const LOOK_AGAIN_MS = 2_000;
 // A read may take this long; its lease outlasts it, so no other reader takes the PDF meanwhile.
@@ -211,6 +214,7 @@ async function claimNext(db: Database, waiting: ReturnType<typeof sql>) {
 
 const TO_READ = sql`"objectPath" IS NOT NULL AND "reading" IS NULL`;
 const TO_ATTACH = sql`"attachState" = 'waiting'`;
+const TO_SEND = sql`"attachState" = 'attached' AND "sendState" = 'waiting'`;
 
 /** When a failed read or attachment is tried again, and null once it has been tried enough. */
 const retryAt = (attempts: number, permanent: boolean) => (permanent || attempts >= MAX_ATTEMPTS ? null : new Date(Date.now() + 10_000 * 2 ** attempts));
@@ -277,16 +281,38 @@ async function attachClaimed(db: Database, storage: EvidenceFileStorage, config:
 	const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
 	try {
 		await attachOne(db, storage, config.services.storage.maxPdfBytes, file);
-		await db.update(pdfImportFile).set({ attachState: "attached", lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null }).where(mine);
+		// A draft the import sends on is due to go now that it has its PDF.
+		await db.update(pdfImportFile).set({ attachState: "attached", lastError: null, leaseExpiresAt: null, leaseToken: null, nextAttemptAt: file.sendState === "waiting" ? new Date() : null }).where(mine);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		const attempts = file.attempts + 1;
 		const nextAttemptAt = retryAt(attempts, false);
 		console.error("Attaching an imported PDF failed", { attempts, error: message, file: file.filename, itemKey: file.attachTo });
+		// A PDF that won't attach ends its draft's send too, so the import doesn't wait on it.
+		const sendEnds = !nextAttemptAt && file.sendState === "waiting" ? { sendError: "Its PDF didn't attach.", sendState: "failed" as const } : {};
 		await db
 			.update(pdfImportFile)
-			.set({ attachState: nextAttemptAt ? "waiting" : "failed", attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt })
+			.set({ attachState: nextAttemptAt ? "waiting" : "failed", attempts, lastError: message.slice(0, 2000), leaseExpiresAt: null, leaseToken: null, nextAttemptAt, ...sendEnds })
 			.where(mine);
+	}
+}
+
+/**
+ * Sends a draft on once it has its PDF, and keeps how it went: sent, held
+ * with what publishing needs, or failed with why. A failed one isn't tried
+ * again here; the import's finish step can send it again.
+ */
+async function sendClaimed(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, token: string) {
+	const mine = and(eq(pdfImportFile.id, file.id), eq(pdfImportFile.leaseToken, token));
+	const done = { leaseExpiresAt: null, leaseToken: null, nextAttemptAt: null };
+	try {
+		const draft = await sendingOf(db, file.importId, file.position);
+		const sent = draft ? await sendImportedDraft(db, storage, config, { ...draft, attachmentKey: file.attachmentKey }) : { error: null, state: "sent" as const };
+		await db.update(pdfImportFile).set({ ...done, sendError: sent.error, sendState: sent.state }).where(mine);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error("Sending an imported draft on failed", { error: message, file: file.filename, itemKey: file.attachTo });
+		await db.update(pdfImportFile).set({ ...done, sendError: message.slice(0, 2000), sendState: "failed" }).where(mine);
 	}
 }
 
@@ -346,6 +372,7 @@ export async function runPdfImportCycle(db: Database, storage: EvidenceFileStora
 	const done = await Promise.all([
 		...Array.from({ length: READ_AT_ONCE }, () => drain(db, TO_READ, cycle, (file, token) => readClaimed(db, storage, config, file, token, signal))),
 		...Array.from({ length: ATTACH_AT_ONCE }, () => drain(db, TO_ATTACH, cycle, (file, token) => attachClaimed(db, storage, config, file, token))),
+		...Array.from({ length: SEND_AT_ONCE }, () => drain(db, TO_SEND, cycle, (file, token) => sendClaimed(db, storage, config, file, token))),
 	]);
 	return done.some(Boolean);
 }

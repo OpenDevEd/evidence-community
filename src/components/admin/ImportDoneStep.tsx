@@ -82,7 +82,7 @@ function DoiRoute({ flow, view }: { flow: ImportFlowState; view: PublishView }) 
 }
 
 /** Whether the drafts get a DOI, switched on as on a record of its own, and from which provider. */
-function DoiChoice({ flow, route, started }: { flow: ImportFlowState; route: ImportBatch["publishRoute"]; started: boolean }) {
+export function DoiChoice({ flow, route, started }: { flow: ImportFlowState; route: ImportBatch["publishRoute"]; started: boolean }) {
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex items-center justify-between gap-3">
@@ -98,6 +98,7 @@ function DoiChoice({ flow, route, started }: { flow: ImportFlowState; route: Imp
 /** How many drafts there are, or, when they can be sent on, how many are chosen and how many went. */
 function DraftsHeader({ view }: { view: PublishView }) {
 	if (!view.offered) return <ListHeader title={countSummary(view.drafts.length, "draft", "drafts", "0 drafts")} />;
+	if (view.serverSending) return <ListHeader title={`${view.verbs.doing} as their PDFs attach`} />;
 	return <ListHeader {...draftsHeading(view)} lead={<ChooseEveryDraft view={view} />} />;
 }
 
@@ -122,7 +123,7 @@ function DraftRow({ draft, flow, view }: { draft: PublishView["drafts"][number];
 			<ImportCover className="w-8" {...coverOf(row)} size={12} />
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
 				<span className="line-clamp-2 text-sm font-medium leading-5 text-black/85 dark:text-white/85">{draftTitle(row)}</span>
-				<DraftState attach={flow.batch!.attach.get(row.id)} draft={draft} publish={flow.batch!.publish.get(row.id)} verbs={view.verbs} />
+				<DraftState attach={flow.batch!.attach.get(row.id)} draft={draft} publish={flow.batch!.publish.get(row.id)} server={flow.batch!.sending[row.id]} verbs={view.verbs} />
 			</span>
 			<Button onPress={() => flow.onOpenRecord(itemKey)} size="xs" variant="transparent">
 				Open

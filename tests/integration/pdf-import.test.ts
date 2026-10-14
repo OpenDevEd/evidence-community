@@ -3,9 +3,13 @@ import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { expect, test, vi } from "vitest";
 
-import type { LibraryServerConfig } from "../../src/config/library-config/schema";
+import { libraryConfigSchema, type LibraryServerConfig } from "../../src/config/library-config/schema";
+import { maximalLibraryConfig } from "../fixtures/library-config";
+import { routeChoice } from "../../src/lib/admin/review-contract";
+import { getItemPublishingChoice, setItemPublishingChoice, submitItemReview } from "../../src/lib/admin/review-service";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { pdfImport, pdfImportFile } from "../../src/db/schema/pdf-import";
+import { itemReview } from "../../src/db/schema/review";
 import { item } from "../../src/db/schema/tables/item";
 import { importChecksOf } from "../../src/lib/admin/import-checks";
 import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
@@ -252,5 +256,98 @@ test("won't close an import while its records are being imported, and waits for 
 		// Another tab is importing the records right now.
 		await db.update(pdfImport).set({ commitStartedAt: new Date() }).where(eq(pdfImport.id, started.id));
 		await expect(closePdfImport(db, storage, started.id)).rejects.toThrow("being imported");
+	});
+});
+
+// An import that sends its drafts on publishes each one that can go once its PDF is attached, as the editor who imported
+// it, and holds one that lacks what its DOI route needs, saying why, without saving a route or reserving anything for it.
+const fullConfig = libraryConfigSchema.parse(maximalLibraryConfig);
+const SEND = { actor: { role: "editor" as const, userId: EDITOR }, route: "zenodo" as const };
+
+/** Reads the PDFs (dated.pdf has a date, any other none) and imports them all, to be sent on with Zenodo DOIs. */
+async function importToSend(db: Database, storage: MemoryFileStorage, names: string[]) {
+	const reading = (title: string, date?: string) => ({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { abstractNote: "What the report found.", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "report", title, ...(date ? { date } : {}) } });
+	readImportPdf.mockReset().mockImplementation(async (_: unknown, { filename }: { filename: string }) => (filename === "dated.pdf" ? reading("A dated report", "2024-06-12") : reading("An undated report")));
+	const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: names.map(pdfFile), instructions: "" });
+	for (const file of started.files) {
+		await storage.uploadPrivate(file.upload.path, await createPdf(file.filename), "application/pdf");
+		await confirmPdfImportUpload(db, storage, file.id);
+	}
+	await runPdfImportCycle(db, storage, fullConfig);
+	const files = (await pdfImportStatus(db)).import!.files;
+	const records = files.map((file) => ({ id: file.rowId, method: "pdf" as const, payload: file.reading!.record.payload! }));
+	const { results } = await commitPdfImport(db, { collections: [], importId: started.id, records, send: SEND });
+	return { files, importId: started.id, keyOf: (row: string) => results.find(({ id }) => id === row)!.itemKey! };
+}
+
+test("sends the imported drafts on once their PDFs are attached, and holds one its DOI route can't take", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { files, importId, keyOf } = await importToSend(db, storage, ["dated.pdf", "undated.pdf"]);
+		// The worker attaches each PDF, then sends its draft on.
+		await runPdfImportCycle(db, storage, fullConfig);
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		const status = (await pdfImportStatus(db)).import!;
+		const rowOf = (name: string) => files.find((file) => file.filename === name)!.rowId;
+		expect(status.send).toEqual({ action: "publish", route: "zenodo" });
+		expect(status.sent).toEqual({ [rowOf("dated.pdf")]: "published" });
+		expect(status.sending).toEqual({ [rowOf("undated.pdf")]: { message: expect.stringMatching(/date/iu), state: "held" } });
+		expect((await getItemPublishingChoice(db, keyOf(rowOf("undated.pdf")), fullConfig)).choice).toBeNull();
+		// The import stays open until nothing waits to be sent; then it closes.
+		await closePdfImport(db, storage, importId);
+	});
+});
+
+test("doesn't approve a review submitted before the draft's PDF attached, which would publish it without the PDF", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { files, importId, keyOf } = await importToSend(db, storage, ["dated.pdf"]);
+		const itemKey = keyOf(files[0]!.rowId);
+		await submitItemReview(db, itemKey, SEND.actor, fullConfig);
+		await runPdfImportCycle(db, storage, fullConfig);
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		const status = (await pdfImportStatus(db)).import!;
+		expect(status.attach).toEqual({ [files[0]!.rowId]: "attached" });
+		expect(status.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
+		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
+		expect(await db.select({ state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending" }]);
+		await closePdfImport(db, storage, importId);
+	});
+});
+
+test("doesn't approve a review someone else submitted after the PDF attached under the importing editor's name", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { files, importId, keyOf } = await importToSend(db, storage, ["dated.pdf"]);
+		const itemKey = keyOf(files[0]!.rowId);
+		// The PDF attaches; before the send goes, a creator submits the draft with the same route.
+		await db.update(pdfImportFile).set({ sendState: null }).where(eq(pdfImportFile.importId, importId));
+		await runPdfImportCycle(db, storage, fullConfig);
+		await setItemPublishingChoice(db, itemKey, routeChoice(SEND.route), fullConfig);
+		await submitItemReview(db, itemKey, { role: "creator", userId: "user_creator" }, fullConfig);
+		await db.update(pdfImportFile).set({ nextAttemptAt: new Date(), sendState: "waiting" }).where(eq(pdfImportFile.importId, importId));
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		expect((await pdfImportStatus(db)).import!.sending).toEqual({ [files[0]!.rowId]: { message: expect.any(String), state: "held" } });
+		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
+		expect(await db.select({ state: itemReview.state, submittedBy: itemReview.submittedBy }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending", submittedBy: "user_creator" }]);
+	});
+});
+
+test("ends a draft's send when its PDF won't attach, so the import doesn't wait on it", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { importId } = await importToSend(db, storage, ["dated.pdf"]);
+		// Storage refuses the attachment's copy on the last try.
+		await db.update(pdfImportFile).set({ attempts: 2 }).where(eq(pdfImportFile.importId, importId));
+		vi.spyOn(storage, "uploadPrivate").mockRejectedValue(new Error("Storage is down"));
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		const status = (await pdfImportStatus(db)).import!;
+		expect(Object.values(status.attach)).toEqual(["failed"]);
+		expect(Object.values(status.sending)).toEqual([{ message: expect.any(String), state: "failed" }]);
+		await closePdfImport(db, storage, importId);
 	});
 });

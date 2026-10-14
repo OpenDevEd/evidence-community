@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, Folder01Icon, FileExportIcon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, Folder01Icon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, Route01Icon, SentIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserCheck01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -14,7 +14,10 @@ import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, Meta
 
 import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, coverOf, existingKeyOf, importable, recordPayload, recordPayloadOf, rowPasses, rowTitle, writesProperties, type ChoiceKind, type ImportRow, type ReviewFilter } from "./admin-import";
+import { useAdminSession } from "./AdminSessionProvider";
 import { CollectionsSetting } from "./ImportAdd";
+import { DoiChoice } from "./ImportDoneStep";
+import { InspectorChoices } from "./InspectorChoices";
 import { countSummary, ListHeader, Setting, SettingsGroup, sheetTransition, SheetTabs } from "./import-parts";
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import type { ImportFlowState } from "./import-flow";
@@ -102,6 +105,7 @@ function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onO
 		<div className="flex flex-col gap-5">
 			<SettingsGroup>
 				<CollectionsSetting flow={flow} />
+				{flow.batch?.kind === "pdfs" ? <OutcomeSetting flow={flow} /> : null}
 			</SettingsGroup>
 			<div className="flex flex-col gap-2">
 				<ListHeader aside={readingAside(flow)} lead={<ChooseEvery flow={flow} />} title={`${flow.selected.size} of ${flow.readyIds.length} chosen`} />
@@ -395,5 +399,48 @@ function OpenRecordButton({ flow, row }: { flow: ImportFlowState; row: ImportRow
 		<Button onPress={() => flow.onOpenRecord(openKey)} size="xs" startContent={<HugeiconsIcon aria-hidden icon={ArrowRight02Icon} size={13} />} variant="muted">
 			{draftKey ? "Open the draft" : "Open the record"}
 		</Button>
+	);
+}
+
+/** What sending a draft on is for this person: publishing it, or submitting it to an editor. */
+function sendWords(canPublish: boolean) {
+	return canPublish ? { icon: SentIcon, label: "Publish", note: "Each record is published as soon as its PDF is attached." } : { icon: UserCheck01Icon, label: "Submit for review", note: "Each record goes to an editor for review as soon as its PDF is attached." };
+}
+
+const optionContent = (icon: typeof SentIcon, label: string) => (
+	<span className="flex items-center gap-1.5">
+		<HugeiconsIcon aria-hidden icon={icon} size={14} />
+		{label}
+	</span>
+);
+
+/**
+ * What importing does with the chosen records. As drafts they can be edited
+ * in the record editor first, then published or submitted from the finish
+ * step or the editor; otherwise the server sends each on as soon as its PDF
+ * is attached, with the DOI choice it would get in the finish step.
+ */
+function OutcomeSetting({ flow }: { flow: ImportFlowState }) {
+	const { canPublish } = useAdminSession();
+	const outcome = flow.batch!.outcome;
+	const send = sendWords(canPublish);
+	return (
+		<Setting icon={Route01Icon} summary={outcome === "send" ? send.label : "Drafts"} title="After import">
+			<div className="flex flex-col gap-3">
+				<InspectorChoices
+					disabled={flow.locked}
+					label="After import"
+					onChange={flow.setOutcome}
+					options={[
+						{ content: optionContent(PencilEdit02Icon, "Drafts"), key: "drafts", label: "Drafts" },
+						{ content: optionContent(send.icon, send.label), key: "send", label: send.label },
+					]}
+					value={outcome}
+					variant="inset"
+				/>
+				<p className="text-xs leading-5 text-black/50 dark:text-white/50">{outcome === "send" ? send.note : "Edit them in the record editor first, then publish or submit them from the finish step or the editor."}</p>
+				{outcome === "send" ? <DoiChoice flow={flow} route={flow.batch!.publishRoute} started={flow.locked} /> : null}
+			</div>
+		</Setting>
 	);
 }
