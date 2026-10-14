@@ -322,7 +322,9 @@ export function AdminCollectionPicker({
 				? availableSources[0]!.key
 				: null;
 	const [query, setQuery] = useState("");
-	const debouncedQuery = useDebouncedValue(query.trim(), 250);
+	const typedQuery = useDebouncedValue(query.trim(), 250);
+	// Only typing waits for a pause; a cleared search shows the folder at once.
+	const debouncedQuery = query.trim() ? typedQuery : "";
 	const [sourceKey, setSourceKey] = useState<string | null>(defaultSourceKey);
 	const [path, setPath] = useState<CollectionPathEntry[]>([]);
 	// A cached or preloaded top level opens at once; otherwise the first load is under way from the first frame.
@@ -544,10 +546,11 @@ export function AdminCollectionPicker({
 		return true;
 	};
 
-	const navigateToPath = (nextPath: CollectionPathEntry[]) => {
+	/** Moves to a folder; `next` is the search and source it shows under when the same press changes them. */
+	const navigateToPath = (nextPath: CollectionPathEntry[], next = { query: debouncedQuery, source: sourceKey }) => {
 		const nextParent = nextPath.at(-1)?.key ?? null;
 		if (nextParent === activeParent) return;
-		setLoading(!showCachedPage(pageKey(debouncedQuery, sourceKey, nextParent)));
+		setLoading(!showCachedPage(pageKey(next.query, next.source, nextParent)));
 		setPath(nextPath);
 		scrollRef.current?.scrollTo({ top: 0 });
 	};
@@ -555,10 +558,10 @@ export function AdminCollectionPicker({
 	const browseInto = (entry: AdminCollectionCatalogEntry) => {
 		setQuery("");
 		setSourceKey(entry.sourceConnectionKey);
-		navigateToPath([
-			...entry.ancestors,
-			{ key: entry.key, name: entry.name },
-		]);
+		navigateToPath(
+			[...entry.ancestors, { key: entry.key, name: entry.name }],
+			{ query: "", source: entry.sourceConnectionKey },
+		);
 	};
 
 	const chooseSource = (key: string) => {
