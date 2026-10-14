@@ -124,19 +124,23 @@ export function Tooltip({
 	);
 }
 
+/** The dashed underline that marks text with more to say on hover, wherever it is. */
+export const HINT_UNDERLINE = "underline decoration-black/25 decoration-dashed underline-offset-4 dark:decoration-white/30";
+
+/** The tooltip of a hint that explains with a few rows rather than a line: as wide as its rows need, within the screen. */
+export const HINT_CARD = "w-96 max-w-[calc(100vw-24px)] p-4";
+
 /**
  * Text that says more about itself on hover or keyboard focus, such as a date or a count. Its dashed underline marks it
  * the same way wherever it is.
  */
-/** The dashed underline that marks text with more to say on hover, wherever it is. */
-export const HINT_UNDERLINE = "underline decoration-black/25 decoration-dashed underline-offset-4 dark:decoration-white/30";
-
 export function Hint({
 	content,
 	children,
 	className,
 	contentClassName,
 	placement,
+	isDisabled,
 }: {
 	content: ReactNode;
 	children: ReactNode;
@@ -145,11 +149,13 @@ export function Hint({
 	/** Classes for the tooltip. */
 	contentClassName?: string;
 	placement?: Placement;
+	/** Plain text that opens nothing and takes no focus, where the same words show another way. */
+	isDisabled?: boolean;
 }) {
 	return (
-		<Tooltip content={content} placement={placement} className={contentClassName}>
+		<Tooltip content={content} placement={placement} className={contentClassName} isDisabled={isDisabled}>
 			<span
-				tabIndex={0}
+				tabIndex={isDisabled ? undefined : 0}
 				className={twMerge(
 					`inline-flex cursor-help items-center gap-1.5 rounded-md ${HINT_UNDERLINE} outline-none focus-visible:ring-2 focus-visible:ring-accent`,
 					className,

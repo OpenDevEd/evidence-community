@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, Tick01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
+import { AiMagicIcon, ArrowDown01Icon, ArrowRight01Icon, BalanceScaleIcon, Cancel01Icon, Database02Icon, FileSearchIcon, PercentCircleIcon, Tick01Icon, UserEdit01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -15,7 +15,10 @@ import { UNSETTLED_TONE, studyTone } from "@/components/features/items/study-ton
 import { studyTypeFacet } from "@/config/library-config/search";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { STUDY_TYPE_TIP, StudyTypeExplanation } from "@/components/features/items/StudyTypeLabel";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { HINT_CARD, Hint, Tooltip } from "@/components/nextui/Tooltip";
+import { Facts } from "@/components/typography/Facts";
+import { Accordion, AccordionItem } from "@nextui-org/react";
+import { ACCORDION_CONTENT_MOTION, QUESTION_ITEM } from "@/components/nextui/accordion-motion";
 import useSWR from "swr";
 import Image from "next/image";
 import { AnimatePresence, motion, useReducedMotion, type Transition } from "framer-motion";
@@ -250,11 +253,6 @@ function TypeRow({ label, count, total, tone, chosen, dimmed, onSelect, hint }: 
 }
 
 /**
- * What kind of work the results are, as an AI model read them, under the three levels of evidence; choosing a row
- * filters the results, and hovering it says what the type means. Records not read yet are counted apart, and the card
- * says how types are read.
- */
-/**
  * The results' study types as the library counts them: a library that shows uncertain types apart counts them under
  * Uncertain, in place of their types. Types with none are left out unless chosen.
  */
@@ -270,6 +268,86 @@ function useStudyTypeCounts(facets: FacetDistribution | undefined, selected: str
 	return { counts, shown, uncertain, showUncertain, read, unread: Math.max(0, base - read) };
 }
 
+/** How study types are read: what the AI reads and the rules it follows, what is typed without it, and what choosing several types shows. */
+function StudyTypeMethodRows() {
+	const t = useTranslations("studyTypes.method");
+	const em = (chunks: ReactNode) => <strong className="font-medium text-black dark:text-white">{chunks}</strong>;
+	return (
+		<div className="flex flex-col gap-3">
+			<Facts
+				rows={[
+					{ icon: AiMagicIcon, lead: t("ai.lead"), text: t("ai.text") },
+					{ icon: BalanceScaleIcon, lead: t("tie.lead"), text: t.rich("tie.text", { em }) },
+					{ icon: FileSearchIcon, lead: t("named.lead"), text: t("named.text") },
+					{ icon: PercentCircleIcon, lead: t("unsure.lead"), text: t("unsure.text") },
+					{ icon: Database02Icon, lead: t("record.lead"), text: t("record.text") },
+					{ icon: UserEdit01Icon, lead: t("editor") },
+				]}
+			/>
+			<p className={`border-t border-black/5 pt-3 text-sm leading-6 dark:border-white/10 ${MUTED}`}>{t("several")}</p>
+		</div>
+	);
+}
+
+/** A media query a component follows as the screen changes. */
+function mediaQuery(query: string) {
+	return {
+		subscribe(onChange: () => void) {
+			const list = window.matchMedia(query);
+			list.addEventListener("change", onChange);
+			return () => list.removeEventListener("change", onChange);
+		},
+		matches: () => window.matchMedia(query).matches,
+	};
+}
+
+/** Whether the screen matches a media query; false on the server. */
+function useMedia(query: ReturnType<typeof mediaQuery>) {
+	return useSyncExternalStore(query.subscribe, query.matches, () => false);
+}
+
+const WIDE = mediaQuery("(min-width: 1024px)");
+
+/** Where the Study types heading's hover opens: from sm, with a pointer that hovers. Everywhere else the accordion does. */
+const HOVERS = mediaQuery("(min-width: 640px) and (hover: hover)");
+
+/** The heading as plain text where its hover can't open, on a phone or a screen with no hover: the accordion at the card's foot says the same there. */
+const NO_HOVER = "max-sm:no-underline max-sm:cursor-auto [@media(hover:none)]:no-underline [@media(hover:none)]:cursor-auto";
+
+/** The Study types heading, which explains on hover how types are read. */
+function StudyTypesHeading() {
+	const t = useTranslations("studyTypes");
+	const hovers = useMedia(HOVERS);
+	const content = (
+		<div className="flex flex-col gap-3">
+			<div>
+				<p className="font-heading text-lg font-medium">{t("method.title")}</p>
+				<p className={`text-sm leading-6 ${MUTED}`}>{t("method.when")}</p>
+			</div>
+			<StudyTypeMethodRows />
+		</div>
+	);
+	return <Hint content={content} placement="bottom-start" contentClassName={HINT_CARD} className={NO_HOVER} isDisabled={!hovers}>{t("title")}</Hint>;
+}
+
+/** How study types are read as an accordion at the card's foot, only where the heading's hover can't open. */
+function StudyTypeMethodAccordion() {
+	const t = useTranslations("studyTypes.method");
+	const reducedMotion = useReducedMotion();
+	return (
+		<Accordion className="hidden border-t border-black/5 px-0 max-sm:block dark:border-white/10 [@media(hover:none)]:block" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
+			<AccordionItem key="method" aria-label={t("title")} title={t("title")} subtitle={t("when")} motionProps={{ variants: ACCORDION_CONTENT_MOTION }}>
+				<StudyTypeMethodRows />
+			</AccordionItem>
+		</Accordion>
+	);
+}
+
+/**
+ * What kind of work the results are, as an AI model read them, under the three levels of evidence; choosing a row
+ * filters the results, and hovering it says what the type means. Records not read yet are counted apart, and the heading
+ * says how types are read on hover, or an accordion at the foot where hovering can't.
+ */
 function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistribution | undefined; selected: string[]; onSelect: (type: string) => void }) {
 	const t = useTranslations("studyTypes");
 	const format = useFormatter();
@@ -278,7 +356,7 @@ function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistributi
 	const dimmed = (key: string) => selected.length > 0 && !selected.includes(key);
 	return (
 		<SidebarCard
-			title={t("title")}
+			title={<StudyTypesHeading />}
 			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{t("read", { count: read })}</span>}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
@@ -310,12 +388,10 @@ function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistributi
 					</ul>
 				)}
 			</div>
-			<div className="flex flex-col gap-2 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10">
-				{unread > 0 && selected.length === 0 && (
-					<p className="flex items-baseline justify-between gap-4"><span className="font-medium">{t("notRead")}</span><span className="tabular-nums">{format.number(unread)}</span></p>
-				)}
-				<p className={MUTED}>{t("method")}</p>
-			</div>
+			{unread > 0 && selected.length === 0 && (
+				<p className="flex items-baseline justify-between gap-4 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10"><span className="font-medium">{t("notRead")}</span><span className="tabular-nums">{format.number(unread)}</span></p>
+			)}
+			<StudyTypeMethodAccordion />
 		</SidebarCard>
 	);
 }
@@ -721,20 +797,12 @@ function MostCited({ shown }: { shown: boolean }) {
 	);
 }
 
-const WIDE = "(min-width: 1024px)";
-
-function subscribeToWidth(onChange: () => void) {
-	const query = window.matchMedia(WIDE);
-	query.addEventListener("change", onChange);
-	return () => query.removeEventListener("change", onChange);
-}
-
 /**
  * Whether this sidebar is on screen: the page's own shows from the lg breakpoint, where CSS stops hiding it, and
  * Explore's whenever it is open. Below lg the page's copy stays mounted but hidden, so it must not ask for its own figures.
  */
 function useShown(inExplore: boolean) {
-	const wide = useSyncExternalStore(subscribeToWidth, () => window.matchMedia(WIDE).matches, () => false);
+	const wide = useMedia(WIDE);
 	return inExplore || wide;
 }
 
