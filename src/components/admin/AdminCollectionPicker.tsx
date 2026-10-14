@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AlertCircleIcon, ArrowLeft01Icon, ArrowRight01Icon, Cancel01Icon, Folder01Icon, FolderOpenIcon, Loading03Icon, SquareLock01Icon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
@@ -141,11 +141,14 @@ function SelectionChip({
 /**
  * One list's rows. The rows of the place just left fade out under the new
  * ones and can't be used meanwhile; with reduced motion they swap at once.
+ * The ref reaches the element, so the leaving rows can be lifted out of the
+ * list's flow while they fade.
  */
-function ResultRows({ children, height, reduceMotion }: { children: ReactNode; height: number; reduceMotion: boolean | null }) {
+function ResultRows({ children, height, reduceMotion, ref }: { children: ReactNode; height: number; reduceMotion: boolean | null; ref?: Ref<HTMLDivElement> }) {
 	const present = useIsPresent();
 	return (
 		<motion.div
+			ref={ref}
 			animate={{ opacity: 1 }}
 			aria-hidden={present ? undefined : true}
 			className="relative w-full"
