@@ -116,7 +116,15 @@ export async function readerFor(config: LibraryServerConfig, database: Database,
  */
 export async function readerCollectionChange<Body>(request: Request, params: Promise<{ clerkUserId: string; id: string }>, config: LibraryServerConfig, database: Database, schema: z.ZodType<Body>) {
 	if (!config.features.readerAccounts) return { refused: refusals.readerAccountsOff };
-	const body = schema.safeParse(await request.json().catch(() => ({})));
+	// No body reads as {}; a body that isn't JSON is refused, never read as no conditions.
+	const text = await request.text();
+	let sent: unknown = {};
+	try {
+		if (text) sent = JSON.parse(text);
+	} catch {
+		return { refused: refusals.invalid("The request body isn't JSON.") };
+	}
+	const body = schema.safeParse(sent);
 	if (!body.success) return { refused: refusals.invalid(fromError(body.error).toString()) };
 	const { clerkUserId, id } = await params;
 	const readerId = await readerFor(config, database, clerkUserId);

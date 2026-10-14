@@ -112,6 +112,10 @@ it("deletes a reader's collection as its owner only, and refuses once it changed
 		expect(await remove("user_bob", expected)).toMatchObject({ status: 403, body: { error: "role" } });
 		expect(await remove("user_cy", expected)).toMatchObject({ status: 404, body: { error: "not_found" } });
 
+		// A body cut short is refused, never read as no conditions.
+		const cut = await deleteCollection(new Request(`https://library.example.org/api/v1/openscholar/readers/user_amina/collections/${id}`, { method: "DELETE", headers, body: '{"expect":{"name":"Incl' }), { params: Promise.resolve({ clerkUserId: "user_amina", id }) });
+		expect(await json(cut)).toMatchObject({ status: 400, body: { error: "invalid_request" } });
+
 		// Renamed since: refused, and it stays.
 		await database.update(readerCollection).set({ name: "Mine now" }).where(eq(readerCollection.id, id));
 		expect(await remove("user_amina", expected)).toMatchObject({ status: 409, body: { error: "changed" } });
