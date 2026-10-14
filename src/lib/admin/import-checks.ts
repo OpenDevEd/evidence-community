@@ -1,5 +1,5 @@
 import { itemFileDraft } from "@opendeved/evidence-library-core";
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "@/db";
 import { itemImportCheck } from "@/db/schema/pdf-import";
@@ -27,8 +27,9 @@ export async function keepImportChecks(db: Database, upload: { attachmentKey: st
 /**
  * The checks a record's PDF was read against when a PDF import made it, while
  * the record's PDF is still that upload: its draft upload, or, with none, the
- * upload its published copy was made from. A record opened as its PDF shows
- * them too. Nothing once the PDF is replaced or being removed.
+ * upload its published copy was made from. Nothing once the PDF is replaced
+ * or being removed, and nothing on the PDF opened on its own: the checks are
+ * on the record's fields, which the PDF's own don't hold.
  */
 export async function importChecksOf(db: Database, itemKey: string): Promise<AdminItemChecks | null> {
 	const [kept] = await db
@@ -39,7 +40,7 @@ export async function importChecksOf(db: Database, itemKey: string): Promise<Adm
 		.leftJoin(itemFileRemoval, eq(itemFileRemoval.itemKey, itemImportCheck.attachmentKey))
 		.where(
 			and(
-				or(eq(itemImportCheck.parentKey, itemKey), eq(itemImportCheck.attachmentKey, itemKey)),
+				eq(itemImportCheck.parentKey, itemKey),
 				sql`coalesce(${itemFileDraft.objectPath}, ${itemFilePublication.sourceObjectPath}) = ${itemImportCheck.objectPath}`,
 				isNull(itemFileRemoval.itemKey),
 			),

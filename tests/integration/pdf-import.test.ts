@@ -102,11 +102,12 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 		expect((await pdfImportStatus(db)).import).toBeNull();
 		await expect(readPdfImportFile(db, storage, report!.id)).rejects.toThrow("not uploaded");
 
-		// The checks the PDF was read against stay with the record, from the record and from its PDF, after the import is closed.
+		// The checks the PDF was read against stay with the record after the import is closed. The PDF opened on its own
+		// has none: they are on the record's fields.
 		const kept = { checks: [expect.objectContaining({ criterion: "Credits FCDO", result: "met" })], filename: "report.pdf" };
 		expect(await importChecksOf(db, draftKey)).toMatchObject(kept);
 		const [{ attachmentKey }] = await db.select({ attachmentKey: pdfImportFile.attachmentKey }).from(pdfImportFile).where(eq(pdfImportFile.id, report!.id));
-		expect(await importChecksOf(db, attachmentKey!)).toMatchObject(kept);
+		expect(await importChecksOf(db, attachmentKey!)).toBeNull();
 		// Another PDF uploaded in its place hasn't been checked, so the record no longer shows them.
 		const replacement = await createPdf("A different report");
 		const staged = await stageNativePdfUpload(db, storage, { expectedSha256: createHash("sha256").update(replacement).digest("hex"), expectedSizeBytes: replacement.byteLength, filename: "replacement.pdf", itemKey: attachmentKey!, maxPdfBytes: MAX_PDF_BYTES });
