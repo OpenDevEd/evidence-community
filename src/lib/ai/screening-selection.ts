@@ -11,7 +11,7 @@ export function screeningSelection(content: string) {
 	];
 
 	return {
-		/** Every record the answer links, which OpenScholar screens past the limit. */
+		/** Every record the conversation links, which OpenScholar screens past the limit. */
 		allKeys,
 		keys: allKeys.slice(0, SCREENING_BATCH_LIMIT),
 		total: allKeys.length,

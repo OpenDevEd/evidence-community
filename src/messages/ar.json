@@ -200,7 +200,7 @@
     "close": "إغلاق",
     "cancel": "إلغاء",
     "screeningLimitTitle": "هل تريد فحص أول {count} منشورًا فقط؟",
-    "screeningLimitDescription": "تستشهد هذه الإجابة بـ {total} منشورًا. يمكن للفحص الذكي معالجة {count} منشورًا في كل مرة، لذا سيتم استبعاد {omitted}.",
+    "screeningLimitDescription": "تستشهد هذه المحادثة بـ {total} منشورًا. يمكن للفحص الذكي معالجة {count} منشورًا في كل مرة، لذا سيتم استبعاد {omitted}.",
     "screeningLimitConfirm": "فحص أول {count}",
     "newLine": "سطر جديد",
     "etAl": "وآخرون",

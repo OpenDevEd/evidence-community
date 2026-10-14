@@ -200,7 +200,7 @@
     "close": "Fechar",
     "cancel": "Cancelar",
     "screeningLimitTitle": "Analisar apenas as primeiras {count} publicações?",
-    "screeningLimitDescription": "Esta resposta cita {total} publicações. A Triagem Inteligente pode processar {count} de cada vez, por isso {omitted} ficarão de fora.",
+    "screeningLimitDescription": "Esta conversa cita {total} publicações. A Triagem Inteligente pode processar {count} de cada vez, por isso {omitted} ficarão de fora.",
     "screeningLimitConfirm": "Analisar as primeiras {count}",
     "newLine": "Nova linha",
     "etAl": "et al.",
