@@ -22,6 +22,16 @@ vi.mock("sonner", () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 const config = projectPublicLibraryConfig(
 	libraryConfigSchema.parse(minimalLibraryConfig),
 );
+const collection = {
+	ancestors: [],
+	deleted: false,
+	hasChildren: false,
+	parentCollection: null,
+	revision: 1,
+	sortOrder: 0,
+	sourceConnectionKey: "native",
+	updatedAt: "2026-08-03T00:00:00.000Z",
+};
 const payload = {
 	itemType: "book",
 	title: "Submitted title",
@@ -197,6 +207,8 @@ beforeEach(() => {
 	vi.stubGlobal(
 		"fetch",
 		vi.fn(async (url: string, init?: RequestInit) => {
+			if (url.startsWith("/api/admin/collections?view=resolve"))
+				return Response.json({ items: [{ ...collection, key: "THEMEGEN", name: "Gender" }] });
 			if (url.endsWith("/api/admin/items/CHILDKEY")) {
 				childRequests.push(url);
 				const response = childResponses.shift();
@@ -520,6 +532,30 @@ it("shows report conflict values under form field names and preserves the server
 		number: "draft",
 		languageName: "published",
 	});
+});
+
+it("shows collection conflict choices by name, and by key once a collection no longer exists", async () => {
+	await act(async () =>
+		root.render(
+			<NextUIProvider disableAnimation>
+				<DraftConflict
+					conflictFields={["collections"]}
+					payload={{ itemType: "book", collections: ["THEMEGEN"] }}
+					published={{ itemType: "book", collections: ["THEMEGEN", "NCTZQS62"] }}
+					disabled={false}
+					onResolve={vi.fn()}
+				/>
+			</NextUIProvider>,
+		),
+	);
+	await act(async () => vi.runOnlyPendingTimersAsync());
+	const [draft, published] = [...container.querySelectorAll("label")].map(
+		(label) => label.textContent,
+	);
+	expect(draft).toContain("Gender");
+	expect(draft).not.toContain("THEMEGEN");
+	expect(published).toContain("Gender");
+	expect(published).toContain("NCTZQS62");
 });
 
 
