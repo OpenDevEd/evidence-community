@@ -119,3 +119,29 @@ it("takes the DOI route from what holds it, and gives the browser's back once no
 	expect(reloaded.routeOf(reloaded.pdfImportBatch(pending))).toBe("zenodo");
 	expect(reloaded.routeOf(reloaded.pdfImportBatch({ ...pending, reviews: {}, sent: {} }))).toBe("crossref-zenodo");
 });
+
+// After importing, the worker attaches each draft's PDF and the server may send it on with nothing done in the tab: the
+// admin reads again the drafts each poll reports changed, and only those.
+it("reports the drafts the server attached a PDF to or sent on since its last answer", async () => {
+	const { changedDrafts } = await import("@/components/admin/admin-import");
+	const imported: AdminPdfImport = {
+		...server,
+		results: [
+			{ id: "1", itemKey: "AAAA1111", kind: "created", outcome: "created" },
+			{ id: "2", itemKey: "BBBB2222", kind: "created", outcome: "created" },
+			{ id: "3", message: "Unreadable", outcome: "failed" },
+		],
+		send: { action: "publish", route: null },
+		sending: { "1": { message: null, state: "waiting" }, "2": { message: null, state: "waiting" } },
+	};
+	const attached = { ...imported, attach: { "1": "attached" as const } };
+	expect(changedDrafts(imported, attached)).toEqual(["AAAA1111"]);
+	const sent = { ...attached, sending: { "2": { message: "Enter a valid publication date.", state: "held" as const } }, sent: { "1": "published" as const } };
+	expect(changedDrafts(attached, sent)).toEqual(["AAAA1111", "BBBB2222"]);
+	expect(changedDrafts(sent, sent)).toEqual([]);
+	// The first answer has nothing to compare with.
+	expect(changedDrafts(null, sent)).toEqual([]);
+	// An import closed, or replaced by another, between two polls may have changed any of its drafts before it went.
+	expect(changedDrafts(sent, null)).toEqual(["AAAA1111", "BBBB2222"]);
+	expect(changedDrafts(sent, { ...server, id: "import-2" })).toEqual(["AAAA1111", "BBBB2222"]);
+});

@@ -23,6 +23,7 @@ import {
 	type SetStateAction,
 	useCallback,
 	useEffect,
+	useEffectEvent,
 	useMemo,
 	useRef,
 	useState,
@@ -63,7 +64,7 @@ import { Link } from "@/i18n/routing";
 
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
-import { importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
+import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
@@ -888,6 +889,7 @@ export default function AdminWorkbench({
 		},
 		[loadDetail],
 	);
+
 
 	useEffect(() => {
 		if (selectedKey) void loadDetail(selectedKey);
@@ -1947,6 +1949,19 @@ export default function AdminWorkbench({
 			readyKeys: itemKeys.filter((key) => !failedKeys.has(key)),
 		};
 	};
+
+	// After importing, the worker attaches each draft's PDF and the server may send it on, with no step taken here; the
+	// import's polls report each change. Edits waiting on those drafts are saved first, so reading the table and the
+	// open record again loses nothing.
+	const readChangedDrafts = useEffectEvent(async (itemKeys: string[]) => {
+		await flushBatchDrafts(itemKeys);
+		await Promise.all([loadItems(), refreshSent(itemKeys)]);
+	});
+	useEffect(() => {
+		const onChanged = (event: Event) => void readChangedDrafts((event as CustomEvent<string[]>).detail);
+		window.addEventListener(IMPORT_DRAFTS_CHANGED_EVENT, onChanged);
+		return () => window.removeEventListener(IMPORT_DRAFTS_CHANGED_EVENT, onChanged);
+	}, []);
 
 	const executeBatchMutation = async (
 		request: AdminItemBatchRequest,
