@@ -181,7 +181,7 @@ function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBa
 			<header className="flex gap-4">
 				<ImportCover className="w-16 self-start" {...coverOf(row)} size={18} />
 				<div className="flex min-w-0 flex-1 flex-col gap-1">
-					<RecordTitle row={row} />
+					<RecordTitle flow={flow} row={row} />
 					<RecordState flow={flow} row={row} />
 				</div>
 			</header>
@@ -223,25 +223,41 @@ function kindLine(record: ImportRow["record"]) {
 // While the PDF is read, pulsing lines hold the places of the type, the year and the authors, so the title sits as it will.
 const readingRow = (row: ImportRow) => row.state !== "read" && row.state !== "failed";
 
-function RecordTitle({ row }: { row: ImportRow }) {
+function RecordTitle({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 	return (
 		<>
-			<p className="flex h-4 items-center gap-3 text-xs text-black/45 dark:text-white/45">
-				{readingRow(row) ? (
-					<>
-						<span aria-hidden className={`${PLACEHOLDER_LINE} w-16`} />
-						<span aria-hidden className={`${PLACEHOLDER_LINE} w-8`} />
-					</>
-				) : (
-					kindLine(row.record).map((part) => <span key={String(part)}>{part}</span>)
-				)}
-			</p>
+			<div className="flex h-4 items-center gap-3 text-xs text-black/45 dark:text-white/45">
+				<RecordKind row={row} />
+				{/* The checks as the list shows them, at the end of the line like a badge: grey bars while the PDF is read, then how it did. */}
+				<span className="ms-auto">
+					<CheckMeter checks={flow.checksOf(row)} count={checkCountOf(flow, row)} />
+				</span>
+			</div>
 			<h3 className={`text-base font-semibold leading-6 ${titleTone(row, "text-black/90 dark:text-white/90", "text-black/40 dark:text-white/40")}`}>{rowTitle(row)}</h3>
 			<RecordAuthors row={row} />
 		</>
 	);
 }
 
+function RecordKind({ row }: { row: ImportRow }) {
+	if (readingRow(row)) {
+		return (
+			<>
+				<span aria-hidden className={`${PLACEHOLDER_LINE} w-16`} />
+				<span aria-hidden className={`${PLACEHOLDER_LINE} w-8`} />
+			</>
+		);
+	}
+	return (
+		<span className="flex min-w-0 gap-3 truncate">
+			{kindLine(row.record).map((part) => (
+				<span key={String(part)}>{part}</span>
+			))}
+		</span>
+	);
+}
+
+// The line stays once the PDF is read, saying so when it names no authors, as the list does, so the rows below don't move up.
 function RecordAuthors({ row }: { row: ImportRow }) {
 	if (readingRow(row)) {
 		return (
@@ -250,19 +266,15 @@ function RecordAuthors({ row }: { row: ImportRow }) {
 			</p>
 		);
 	}
-	const authors = row.record?.creators.join(", ");
-	return authors ? <p className="text-sm text-black/60 dark:text-white/60">{authors}</p> : null;
+	return <p className="min-h-5 text-sm text-black/60 dark:text-white/60">{row.record?.creators.join(", ") || "No authors"}</p>;
 }
 
 /** Where the record has got to, whether it is chosen, and what stops it. */
 function RecordState({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 	return (
 		<>
-			{/* As tall as the Import this record tick, so the row holds its height when the tick comes. */}
-			<div className="mt-1 flex min-h-6 items-center gap-3">
+			<div className="mt-1 flex items-center gap-3">
 				<StatusText status={statusOf(flow, row)} wrap />
-				{/* The checks as the list shows them: grey bars while the PDF is read, then how it did. */}
-				<CheckMeter checks={flow.checksOf(row)} count={checkCountOf(flow, row)} />
 				{importable(row) ? (
 					<span className="ms-auto">
 						<Checkbox isDisabled={flow.locked} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm">
