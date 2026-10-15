@@ -107,7 +107,8 @@ export function ImportChecksBadge({ checks: stored, payload }: { checks: AdminIt
 /** The checks list itself: the meter, the PDF they were read from and when, then each check. */
 function ChecksCard({ checks, stored }: { checks: ReturnType<typeof heldChecks>; stored: AdminItemChecks }) {
 	return (
-		<div className="flex max-h-[min(70vh,560px)] flex-col">
+		// The card's width, not the filename's: the bubble centres its content, so a long name would widen it past the card.
+		<div className="flex max-h-[min(70vh,560px)] w-full flex-col">
 			<div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3.5">
 				<p className="text-sm font-semibold text-black/90 dark:text-white/90">AI checks</p>
 				<CheckMeter checks={checks} count={checks.length} />
