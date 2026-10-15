@@ -13,6 +13,7 @@ import {
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ResolvedAIModel } from "./model-resolution";
+import { dropsForcedTool } from "./models";
 import {
 	OPENROUTER_RESPONSE_CACHE_TTL,
 	openRouterMaximumReasoningSettings,
@@ -223,6 +224,13 @@ export function createResearchAgent({
 	startedAt,
 }: CreateResearchAgentOptions) {
 	const { provider, modelId, createModel } = selectedModel;
+	// Where the provider drops a forced tool, the search and the read are left to the instructions.
+	const forceTool = <Name extends "searchLibrary" | "readPublications">(
+		toolName: Name,
+	) =>
+		dropsForcedTool(provider, modelId)
+			? {}
+			: { toolChoice: { type: "tool" as const, toolName } };
 	const modelSettings = openRouterModelSettings(provider, modelId, {
 		sessionId,
 	});
@@ -285,10 +293,7 @@ export function createResearchAgent({
 				logDecision("force-search");
 				return {
 					...stepSettings,
-					toolChoice: {
-						type: "tool" as const,
-						toolName: "searchLibrary" as const,
-					},
+					...forceTool("searchLibrary"),
 				};
 			}
 
@@ -299,10 +304,7 @@ export function createResearchAgent({
 					...(maximumReasoningModel
 						? { model: maximumReasoningModel }
 						: {}),
-					toolChoice: {
-						type: "tool" as const,
-						toolName: "readPublications" as const,
-					},
+					...forceTool("readPublications"),
 				};
 			}
 
