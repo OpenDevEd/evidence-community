@@ -13,7 +13,7 @@ import {
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import type { ResolvedAIModel } from "./model-resolution";
-import { forcesToolChoice } from "./models";
+import { dropsForcedTool } from "./models";
 import {
 	OPENROUTER_RESPONSE_CACHE_TTL,
 	openRouterMaximumReasoningSettings,
@@ -228,9 +228,9 @@ export function createResearchAgent({
 	const forceTool = <Name extends "searchLibrary" | "readPublications">(
 		toolName: Name,
 	) =>
-		forcesToolChoice(provider)
-			? { toolChoice: { type: "tool" as const, toolName } }
-			: {};
+		dropsForcedTool(provider, modelId)
+			? {}
+			: { toolChoice: { type: "tool" as const, toolName } };
 	const modelSettings = openRouterModelSettings(provider, modelId, {
 		sessionId,
 	});

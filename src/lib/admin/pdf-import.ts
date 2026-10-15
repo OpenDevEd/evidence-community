@@ -1,7 +1,7 @@
 import "server-only";
 
 import { describeZoteroItemTypeFields, getZoteroItemType, getZoteroItemTypes } from "@opendeved/evidence-library-core/zotero-schema";
-import { generateText, Output, stepCountIs, tool, type Tool, type ToolSet } from "ai";
+import { generateText, Output, stepCountIs, tool, ToolChoiceViolationError, type Tool, type ToolSet } from "ai";
 import { inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -9,7 +9,6 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { resolveAIModel } from "@/lib/ai/model-resolution";
-import { forcesToolChoice } from "@/lib/ai/models";
 import { openRouterCacheBreakpoint } from "@/lib/ai/openrouter";
 import { searchAuthorProfiles } from "@/lib/authors/catalog-search";
 import { normalizeDoi } from "@/lib/doi";
@@ -205,14 +204,14 @@ export async function readImportPdf(
 	const { model, modelId, provider } = await libraryModel(config);
 	const started = Date.now();
 	const stepEnds: number[] = [];
-	const result = await generateText({
+	const read = (force: boolean) => generateText({
 		abortSignal: signal,
 		model,
 		onStepFinish: () => {
 			stepEnds.push(Date.now());
 		},
 		// The first two steps must use the tools: given an answer to write, a model tends to skip the searches.
-		prepareStep: ({ stepNumber }) => (stepNumber < 2 && forcesToolChoice(provider) ? { toolChoice: "required" } : {}),
+		prepareStep: ({ stepNumber }) => (force && stepNumber < 2 ? { toolChoice: "required" } : {}),
 		output: Output.object({ schema: readingSchema }),
 		// Medium effort whatever the model's own default; OpenRouter takes it as its own option.
 		providerOptions: { openrouter: { reasoning: { effort: "medium" } } },
@@ -232,6 +231,13 @@ export async function readImportPdf(
 				],
 			},
 		],
+	});
+	// A provider that can't force a tool for the model, as Anthropic's own API can't while some models think, drops the
+	// choice, and the AI SDK fails the step when the model answers without searching; the read then runs unforced.
+	const result = await read(true).catch((error: unknown) => {
+		if (!ToolChoiceViolationError.isInstance(error)) throw error;
+		stepEnds.length = 0;
+		return read(false);
 	});
 	// How long each step took and what it read and wrote, and which tools the read used, for checking how a library's model works with them.
 	// It reads only the steps: the answer may be missing when a read fails, which is when this matters most.
