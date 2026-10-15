@@ -147,6 +147,8 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	// still needs a field the route asks for waits until the editor completes it in the record.
 	const publishable = drafts.filter(({ needs, row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id) && !Object.keys(needs).length && batch.sending[row.id]?.state !== "waiting");
 	const publishableIds = publishable.map(({ row }) => row.id);
+	// A draft already sent, or on its way from the server, is no longer the person's to send, so it gets no tick.
+	const open = drafts.filter(({ row }) => row.source && !sentIds.has(row.id) && batch.sending[row.id]?.state !== "waiting").map(({ row }) => row.id);
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
 	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ applied, row }) => rowPasses(row, applied)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
@@ -168,6 +170,8 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		failedPdfs: pdfs.some((state) => state === "failed"),
 		/** Drafts read from PDFs can be sent on. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
 		offered: drafts.some(({ row }) => row.source),
+		/** Drafts still the person's to send, which show a tick; the Publish button shows while there are any. */
+		open,
 		passing: publishable.filter(({ applied, row }) => rowPasses(row, applied)).length,
 		pdfs: pdfs.length,
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
