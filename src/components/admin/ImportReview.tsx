@@ -69,12 +69,16 @@ export function rowStatus(row: ImportRow, result: AdminImportCommitResult | unde
 	return states[row.record.state];
 }
 
+// On one line the icon centres on the text; wrapped, it sits on the first line.
+const statusLayout = { line: { box: "items-center", icon: "", text: "truncate" }, wrap: { box: "items-start", icon: "mt-0.5", text: "" } };
+
 /** A row's status on one line; a record's page wraps it, so everything publishing needs shows in full. */
 export function StatusText({ status, wrap = false }: { status: Status; wrap?: boolean }) {
+	const layout = statusLayout[wrap ? "wrap" : "line"];
 	return (
-		<span className={`flex min-w-0 items-center gap-1.5 text-xs ${toneClass[status.tone]}`}>
-			{status.tone === "progress" ? <HugeiconsIcon aria-hidden className="shrink-0 animate-spin motion-reduce:animate-none" icon={Loading03Icon} size={13} /> : status.icon ? <HugeiconsIcon aria-hidden className="shrink-0" icon={status.icon} size={13} /> : null}
-			<span className={wrap ? undefined : "truncate"}>{status.label}</span>
+		<span className={`flex min-w-0 gap-1.5 text-xs ${layout.box} ${toneClass[status.tone]}`}>
+			{status.tone === "progress" ? <HugeiconsIcon aria-hidden className={`shrink-0 animate-spin motion-reduce:animate-none ${layout.icon}`} icon={Loading03Icon} size={13} /> : status.icon ? <HugeiconsIcon aria-hidden className={`shrink-0 ${layout.icon}`} icon={status.icon} size={13} /> : null}
+			<span className={layout.text}>{status.label}</span>
 		</span>
 	);
 }

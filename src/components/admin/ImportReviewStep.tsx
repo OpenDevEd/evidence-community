@@ -273,10 +273,11 @@ function RecordAuthors({ row }: { row: ImportRow }) {
 function RecordState({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 	return (
 		<>
-			<div className="mt-1 flex items-center gap-3">
+			{/* A long status wraps beside the tick, which keeps to one line at the top. */}
+			<div className="mt-1 flex items-start gap-3">
 				<StatusText status={statusOf(flow, row)} wrap />
 				{importable(row) ? (
-					<span className="ms-auto">
+					<span className="ms-auto shrink-0 whitespace-nowrap">
 						<Checkbox isDisabled={flow.locked} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm">
 							<span className="text-xs text-black/70 dark:text-white/70">Import this record</span>
 						</Checkbox>
