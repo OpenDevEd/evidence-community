@@ -139,7 +139,9 @@ it("reports the drafts the server attached a PDF to or sent on since its last an
 	const sent = { ...attached, sending: { "2": { message: "Enter a valid publication date.", state: "held" as const } }, sent: { "1": "published" as const } };
 	expect(changedDrafts(attached, sent)).toEqual(["AAAA1111", "BBBB2222"]);
 	expect(changedDrafts(sent, sent)).toEqual([]);
-	// The first answer, and one about another import, have nothing to compare with.
+	// The first answer has nothing to compare with.
 	expect(changedDrafts(null, sent)).toEqual([]);
-	expect(changedDrafts({ ...sent, id: "import-0" }, sent)).toEqual([]);
+	// An import closed, or replaced by another, between two polls may have changed any of its drafts before it went.
+	expect(changedDrafts(sent, null)).toEqual(["AAAA1111", "BBBB2222"]);
+	expect(changedDrafts(sent, { ...server, id: "import-2" })).toEqual(["AAAA1111", "BBBB2222"]);
 });

@@ -268,22 +268,20 @@ const blankChoices = { applied: new Map(), attach: new Map(), committing: false,
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
 let syncedImport: AdminPdfImport | null = null;
-const draftListeners = new Set<(itemKeys: string[]) => void>();
+
+/** Fired on the window with the item keys of drafts the server changed, as the import's polls report them. */
+export const IMPORT_DRAFTS_CHANGED_EVENT = "admin-import-drafts-changed";
 
 /**
  * The drafts of an import whose PDF the worker attached, or that the server sent on, between two answers about it:
- * the server changed them with no step taken in this tab.
+ * the server changed them with no step taken in this tab. An import that closed or gave way to another since may have
+ * changed any of its drafts before it went, so all of them count.
  */
-export function changedDrafts(before: AdminPdfImport | null, after: AdminPdfImport): string[] {
-	if (before?.id !== after.id) return [];
+export function changedDrafts(before: AdminPdfImport | null, after: AdminPdfImport | null): string[] {
+	if (!before) return [];
+	if (before.id !== after?.id) return createdKeys(before.results ?? []);
 	const changed = (id: string) => before.attach[id] !== after.attach[id] || before.sent[id] !== after.sent[id] || before.sending[id]?.state !== after.sending[id]?.state;
-	return (after.results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey && changed(id) ? [itemKey] : []));
-}
-
-/** Calls `listener` with the drafts the server changed, as each poll of the PDF import reports them. */
-export function onServerChangedDrafts(listener: (itemKeys: string[]) => void) {
-	draftListeners.add(listener);
-	return () => void draftListeners.delete(listener);
+	return createdKeys((after.results ?? []).filter(({ id }) => changed(id)));
 }
 
 /** What the server says of its import, as the review takes it. */
@@ -446,9 +444,9 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 
 /** Tells the admin which drafts the server changed since its last answer about the import. */
 function reportChangedDrafts(server: AdminPdfImport | null) {
-	const changed = server ? changedDrafts(syncedImport, server) : [];
+	const changed = changedDrafts(syncedImport, server);
 	syncedImport = server;
-	if (changed.length) for (const listener of draftListeners) listener(changed);
+	if (changed.length) window.dispatchEvent(new CustomEvent<string[]>(IMPORT_DRAFTS_CHANGED_EVENT, { detail: changed }));
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";
