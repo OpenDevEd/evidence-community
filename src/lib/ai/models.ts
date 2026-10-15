@@ -129,11 +129,11 @@ export function starterQuestionsModelId(
 
 /**
  * Whether the provider drops a forced tool choice for the model whatever its
- * reasoning: Anthropic's own API does for Claude Sonnet 5.5, Opus 5.5 and
- * Fable 5.1, and the AI SDK then fails the call when the model answers
- * without the tool.
+ * reasoning: Anthropic's own API does for Claude Sonnet 5.5, Opus 5.5,
+ * Fable 5.1 and Mythos 5.1, and the AI SDK then fails the call when the model
+ * answers without the tool.
  */
 // ponytail: copies @ai-sdk/anthropic's capability table, which it doesn't export; a model it adds fails until listed here.
 export const dropsForcedTool = (provider: AIProvider, modelId: AIModelId) =>
 	provider === "anthropic" &&
-	/claude-(sonnet-5-5|opus-5-5|fable-5-1)/u.test(modelId);
+	/claude-(sonnet-5-5|opus-5-5|fable-5-1|mythos-5-1)/u.test(modelId);

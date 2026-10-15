@@ -132,6 +132,18 @@ async function libraryModel(config: LibraryServerConfig) {
 	return resolveAIModel(config, provider.defaultModel);
 }
 
+const READ_STEPS = 12;
+
+/**
+ * A read step's tool choice. The first two must use the tools: given an answer
+ * to write, a model tends to skip the searches. The last can't, so a model
+ * that keeps searching still writes the answer.
+ */
+function readStep(stepNumber: number, force: boolean) {
+	if (stepNumber === READ_STEPS - 1) return { toolChoice: "none" as const };
+	return force && stepNumber < 2 ? { toolChoice: "required" as const } : {};
+}
+
 /**
  * Reads one PDF with the library's own AI model. The AI gets the PDF, the
  * file's own properties, the library's instructions and checks, and every
@@ -210,13 +222,12 @@ export async function readImportPdf(
 		onStepFinish: () => {
 			stepEnds.push(Date.now());
 		},
-		// The first two steps must use the tools: given an answer to write, a model tends to skip the searches.
-		prepareStep: ({ stepNumber }) => (force && stepNumber < 2 ? { toolChoice: "required" } : {}),
+		prepareStep: ({ stepNumber }) => readStep(stepNumber, force),
 		output: Output.object({ schema: readingSchema }),
-		// Medium effort whatever the model's own default; OpenRouter takes it as its own option.
+		// Medium effort on OpenRouter, which every library uses and which fits the level to each model. A direct provider
+		// keeps its model's default: some refuse medium (Gemini 3 Pro), and Claude can't think while a tool is forced.
 		providerOptions: { openrouter: { reasoning: { effort: "medium" } } },
-		reasoning: "medium",
-		stopWhen: stepCountIs(12),
+		stopWhen: stepCountIs(READ_STEPS),
 		system: withInstructions(instructions),
 		tools,
 		messages: [
@@ -232,8 +243,8 @@ export async function readImportPdf(
 			},
 		],
 	});
-	// A provider that can't force a tool for the model, as Anthropic's own API can't while some models think, drops the
-	// choice, and the AI SDK fails the step when the model answers without searching; the read then runs unforced.
+	// A provider that can't force a tool for the model, as Anthropic's own API can't for some, drops the choice, and the
+	// AI SDK fails the step when the model answers without searching; the read then runs unforced.
 	const result = await read(true).catch((error: unknown) => {
 		if (!ToolChoiceViolationError.isInstance(error)) throw error;
 		stepEnds.length = 0;
