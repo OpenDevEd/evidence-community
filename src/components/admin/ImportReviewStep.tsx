@@ -258,7 +258,8 @@ function RecordAuthors({ row }: { row: ImportRow }) {
 function RecordState({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 	return (
 		<>
-			<div className="mt-1 flex items-center gap-3">
+			{/* As tall as the Import this record tick, so the row holds its height when the tick comes. */}
+			<div className="mt-1 flex min-h-6 items-center gap-3">
 				<StatusText status={statusOf(flow, row)} wrap />
 				{/* The checks as the list shows them: grey bars while the PDF is read, then how it did. */}
 				<CheckMeter checks={flow.checksOf(row)} count={checkCountOf(flow, row)} />
