@@ -309,17 +309,23 @@ function useMedia(query: ReturnType<typeof mediaQuery>) {
 const WIDE = mediaQuery("(min-width: 1024px)");
 
 /**
- * Where the Study types heading's hover opens: from lg, where the sidebar sits beside the results and the card has room
- * beside it, with a pointer that hovers. In the Explore sheet and on touch the accordion does.
+ * Where the Study types heading's hover opens: from lg, where the page's sidebar sits beside the results and the card has
+ * room beside it, with a pointer that hovers. In Explore, below lg and on touch the accordion does.
  */
 const HOVERS = mediaQuery("(min-width: 1024px) and (hover: hover)");
 
-/** The heading as plain text where its hover can't open, in the Explore sheet or on a screen with no hover: the accordion at the card's foot says the same there. */
-// The exact opposite of HOVERS: the config's max-lg stops at 1023px, which a zoomed window can fall just past.
+/**
+ * The heading as plain text where its hover can't open, below lg or on a screen with no hover: the accordion at the
+ * card's foot says the same there. The exact opposite of HOVERS, as the config's max-lg stops at 1023px, which a zoomed
+ * window can fall just past.
+ */
 const NO_HOVER = "[@media_not_all_and_(min-width:1024px)]:no-underline [@media_not_all_and_(min-width:1024px)]:cursor-auto [@media(hover:none)]:no-underline [@media(hover:none)]:cursor-auto";
 
-/** The Study types heading, which explains on hover how types are read, beside the card so the whole window's height is its own. */
-function StudyTypesHeading({ card }: { card: RefObject<HTMLElement | null> }) {
+/**
+ * The Study types heading, which explains on hover how types are read, beside the card so the whole window's height is
+ * its own. In Explore, a dialog or sheet with no room beside its cards, it is plain text at every width.
+ */
+function StudyTypesHeading({ card, inExplore }: { card: RefObject<HTMLElement | null>; inExplore: boolean }) {
 	const t = useTranslations("studyTypes");
 	const hovers = useMedia(HOVERS);
 	const content = (
@@ -331,15 +337,15 @@ function StudyTypesHeading({ card }: { card: RefObject<HTMLElement | null> }) {
 			<StudyTypeMethodRows />
 		</div>
 	);
-	return <Hint content={content} placement="right-start" anchorRef={card} contentClassName={HINT_CARD} className={NO_HOVER} isDisabled={!hovers}>{t("title")}</Hint>;
+	return <Hint content={content} placement="right-start" anchorRef={card} contentClassName={HINT_CARD} className={inExplore ? "cursor-auto no-underline" : NO_HOVER} isDisabled={inExplore || !hovers}>{t("title")}</Hint>;
 }
 
 /** How study types are read as an accordion at the card's foot, only where the heading's hover can't open. */
-function StudyTypeMethodAccordion() {
+function StudyTypeMethodAccordion({ inExplore }: { inExplore: boolean }) {
 	const t = useTranslations("studyTypes.method");
 	const reducedMotion = useReducedMotion();
 	return (
-		<Accordion className="hidden border-t border-black/5 px-0 [@media_not_all_and_(min-width:1024px)]:block dark:border-white/10 [@media(hover:none)]:block" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
+		<Accordion className={twMerge("hidden border-t border-black/5 px-0 [@media_not_all_and_(min-width:1024px)]:block dark:border-white/10 [@media(hover:none)]:block", inExplore && "block")} itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
 			<AccordionItem key="method" aria-label={t("title")} title={t("title")} subtitle={t("when")} motionProps={{ variants: ACCORDION_CONTENT_MOTION }}>
 				<StudyTypeMethodRows />
 			</AccordionItem>
@@ -352,7 +358,7 @@ function StudyTypeMethodAccordion() {
  * filters the results, and hovering it says what the type means. Records not read yet are counted apart, and the heading
  * says how types are read on hover, or an accordion at the foot where hovering can't.
  */
-function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistribution | undefined; selected: string[]; onSelect: (type: string) => void }) {
+function StudyTypeRows({ facets, selected, onSelect, inExplore }: { facets: FacetDistribution | undefined; selected: string[]; onSelect: (type: string) => void; inExplore: boolean }) {
 	const t = useTranslations("studyTypes");
 	const format = useFormatter();
 	const { counts, shown, uncertain, showUncertain, read, unread } = useStudyTypeCounts(facets, selected);
@@ -362,7 +368,7 @@ function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistributi
 	return (
 		<SidebarCard
 			ref={card}
-			title={<StudyTypesHeading card={card} />}
+			title={<StudyTypesHeading card={card} inExplore={inExplore} />}
 			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{t("read", { count: read })}</span>}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
@@ -397,7 +403,7 @@ function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistributi
 			{unread > 0 && selected.length === 0 && (
 				<p className="flex items-baseline justify-between gap-4 border-t border-black/5 pt-4 text-sm leading-6 dark:border-white/10"><span className="font-medium">{t("notRead")}</span><span className="tabular-nums">{format.number(unread)}</span></p>
 			)}
-			<StudyTypeMethodAccordion />
+			<StudyTypeMethodAccordion inExplore={inExplore} />
 		</SidebarCard>
 	);
 }
@@ -845,7 +851,7 @@ export function ResultsOverview({
 		<>
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
-			<StudyTypeRows facets={facetDistribution} selected={studies} onSelect={onStudySelect} />
+			<StudyTypeRows facets={facetDistribution} selected={studies} onSelect={onStudySelect} inExplore={inExplore} />
 			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} shown={shown} />}
 			<MostCited shown={shown} />
 		</>
