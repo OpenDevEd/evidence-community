@@ -213,6 +213,9 @@ export async function readImportPdf(
 		// The first two steps must use the tools: given an answer to write, a model tends to skip the searches.
 		prepareStep: ({ stepNumber }) => (stepNumber < 2 ? { toolChoice: "required" } : {}),
 		output: Output.object({ schema: readingSchema }),
+		// Medium effort whatever the model's own default; OpenRouter takes it as its own option.
+		providerOptions: { openrouter: { reasoning: { effort: "medium" } } },
+		reasoning: "medium",
 		stopWhen: stepCountIs(12),
 		system: withInstructions(instructions),
 		tools,
