@@ -241,6 +241,8 @@ function RecordState({ flow, row }: { flow: ImportFlowState; row: ImportRow }) {
 		<>
 			<div className="mt-1 flex items-center gap-3">
 				<StatusText status={statusOf(flow, row)} wrap />
+				{/* The checks as the list shows them: grey bars while the PDF is read, then how it did. */}
+				<CheckMeter checks={flow.checksOf(row)} count={checkCountOf(flow, row)} />
 				{importable(row) ? (
 					<span className="ms-auto">
 						<Checkbox isDisabled={flow.locked} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm">
