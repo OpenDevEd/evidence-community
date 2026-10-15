@@ -98,8 +98,8 @@ export function DoiChoice({ flow, route, started }: { flow: ImportFlowState; rou
 /** How many drafts there are, or, when they can be sent on, how many are chosen and how many went. */
 function DraftsHeader({ view }: { view: PublishView }) {
 	if (!view.offered) return <ListHeader title={countSummary(view.drafts.length, "draft", "drafts", "0 drafts")} />;
-	if (view.serverSending) return <ListHeader title={`${view.verbs.doing} as their PDFs attach`} />;
-	return <ListHeader {...draftsHeading(view)} lead={<ChooseEveryDraft view={view} />} />;
+	if (view.serverSending) return <ListHeader lead={<NoTick />} title={`${view.verbs.doing} as their PDFs attach`} />;
+	return <ListHeader {...draftsHeading(view)} lead={view.open.length ? <ChooseEveryDraft view={view} /> : <NoTick />} />;
 }
 
 /** Before sending, how many are chosen and how many pass; after, how many went. */
@@ -135,5 +135,9 @@ function DraftRow({ draft, flow, view }: { draft: PublishView["drafts"][number];
 /** The tick that sends a draft on, where drafts can be. */
 function DraftChoice({ id, title, view }: { id: string; title: string | undefined; view: PublishView }) {
 	if (!view.offered) return null;
+	if (!view.open.includes(id)) return <NoTick />;
 	return <Checkbox aria-label={`${view.verbs.act} ${title}`} isDisabled={view.started || !view.publishable.includes(id)} isSelected={view.chosen.has(id)} onValueChange={(checked) => view.toggle(id, checked)} size="sm" />;
 }
+
+/** A tick's space on a draft that's no longer the person's to send, so every row's cover lines up. */
+const NoTick = () => <span aria-hidden className="w-6 shrink-0" />;

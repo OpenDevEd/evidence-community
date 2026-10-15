@@ -70,11 +70,12 @@ describe("the finish step", () => {
 	// A send that failed for a moment, such as a DOI reservation, is tried again from here, without sending the others twice.
 	it("lets the drafts a send failed on go again, and keeps the sent ones out", () => {
 		const current = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }], ["2", { message: "Try again", state: "failed" as const }]]), toPublish: new Set(["1", "2"]) };
-		expect(view(current)).toMatchObject({ publishable: ["2"], started: false });
+		expect(view(current)).toMatchObject({ open: ["2"], publishable: ["2"], started: false });
 		expect([...view(current).chosen]).toEqual(["2"]);
 		// A finished run leaves nothing ticked, and a draft whose PDF came later can still go.
 		const done = { ...current, publish: new Map([["1", { state: "published" as const }], ["2", { state: "published" as const }]]) };
-		expect(view(done)).toMatchObject({ publishable: [], sent: 2, started: false });
+		// With every draft sent, none is left to tick and the Publish button goes.
+		expect(view(done)).toMatchObject({ open: [], publishable: [], sent: 2, started: false });
 		const later = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }]]) };
 		expect(view(later)).toMatchObject({ publishable: ["2"], started: false });
 	});
@@ -97,7 +98,8 @@ describe("the finish step", () => {
 	// The server sends an import's drafts on as their PDFs attach; the finish step offers only what it couldn't send.
 	it("holds back drafts the server is still sending on, and offers one whose send failed again", () => {
 		const current = { ...batch([["1", "attached"], ["2", "attached"]]), send: { action: "submit" as const, route: null }, sending: { 1: { message: null, state: "waiting" as const }, 2: { message: "Zenodo couldn't be reached", state: "failed" as const } } };
-		expect(view(current)).toMatchObject({ publishable: ["2"], routeHeld: true, serverSending: true });
+		// One the server is still sending gets no tick; the one it failed on is the editor's to send again.
+		expect(view(current)).toMatchObject({ open: ["2"], publishable: ["2"], routeHeld: true, serverSending: true });
 		// A creator's import submits, so an editor looking at it is told it submits too.
 		expect(view(current).verbs).toEqual(publishView(current, () => {}, false).verbs);
 		// Once sent, the store takes the server's word that it is published.

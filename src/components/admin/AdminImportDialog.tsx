@@ -2,6 +2,7 @@
 
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Drawer, DrawerContent } from "@nextui-org/react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -12,7 +13,7 @@ import { publishView } from "./ImportDone";
 import { ImportDoneStep } from "./ImportDoneStep";
 import { ImportReviewStep, ReviewTabs } from "./ImportReviewStep";
 import { ImportSteps } from "./ImportSteps";
-import { InputNote, StageFade } from "./import-parts";
+import { InputNote, sheetTransition, StageFade } from "./import-parts";
 import { DropHint, ImportAdd, SheetDrop, SourceTabs, UploadButton } from "./ImportAdd";
 import { action, stillWorking } from "./admin-import";
 import { useImportFlow, type ImportFlowProps, type ImportFlowState } from "./import-flow";
@@ -189,17 +190,25 @@ function ReviewActions({ canPublish, flow }: { canPublish: boolean; flow: Import
 
 function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView }) {
 	const busy = stillWorking(flow.batch!);
+	const reduceMotion = useReducedMotion();
 	return (
 		<>
 			<Button isDisabled={busy} onPress={flow.restart} size="sm" variant="transparent">
 				Import more
 			</Button>
-			{/* While the server sends the drafts on itself, there is nothing to send here. */}
-			{view.offered && !view.serverSending ? (
-				<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
-					{view.label}
-				</Button>
-			) : null}
+			{/* While the server sends the drafts on itself, there is nothing to send here. Once nothing is left to send, the
+			   button folds away rather than leave a disabled Publish, and the buttons beside it slide instead of jumping. */}
+			<AnimatePresence initial={false}>
+				{view.open.length && !view.serverSending ? (
+					// Folded, its start margin takes back the footer's gap, so it leaves no space. It clips only while it moves, so
+					// the button's focus ring shows.
+					<motion.span animate={{ marginInlineStart: "0px", opacity: 1, transitionEnd: { overflow: "visible" }, width: "auto" }} className="flex" exit={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} initial={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} key="send" transition={sheetTransition(reduceMotion, 0.22)}>
+						<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
+							{view.label}
+						</Button>
+					</motion.span>
+				) : null}
+			</AnimatePresence>
 			<Button className="min-w-20" isDisabled={busy} onPress={flow.finish} size="sm" variant="muted">
 				Done
 			</Button>
