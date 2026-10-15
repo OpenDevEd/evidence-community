@@ -267,6 +267,24 @@ const blankChoices = { applied: new Map(), attach: new Map(), committing: false,
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
+let syncedImport: AdminPdfImport | null = null;
+const draftListeners = new Set<(itemKeys: string[]) => void>();
+
+/**
+ * The drafts of an import whose PDF the worker attached, or that the server sent on, between two answers about it:
+ * the server changed them with no step taken in this tab.
+ */
+export function changedDrafts(before: AdminPdfImport | null, after: AdminPdfImport): string[] {
+	if (before?.id !== after.id) return [];
+	const changed = (id: string) => before.attach[id] !== after.attach[id] || before.sent[id] !== after.sent[id] || before.sending[id]?.state !== after.sending[id]?.state;
+	return (after.results ?? []).flatMap(({ id, itemKey, outcome }) => (outcome === "created" && itemKey && changed(id) ? [itemKey] : []));
+}
+
+/** Calls `listener` with the drafts the server changed, as each poll of the PDF import reports them. */
+export function onServerChangedDrafts(listener: (itemKeys: string[]) => void) {
+	draftListeners.add(listener);
+	return () => void draftListeners.delete(listener);
+}
 
 /** What the server says of its import, as the review takes it. */
 function fromServer(server: AdminPdfImport) {
@@ -423,6 +441,14 @@ function syncPdfImport({ import: server }: AdminPdfImportStatus) {
 	if (answer === synced && (server ? pdfs?.importId === server.id : !pdfs)) return;
 	synced = answer;
 	setSlot("pdfs", server ? (pdfs?.importId === server.id ? { ...pdfs, ...fromServer(server), publish: withSent(pdfs.publish, server) } : pdfImportBatch(server)) : null);
+	reportChangedDrafts(server);
+}
+
+/** Tells the admin which drafts the server changed since its last answer about the import. */
+function reportChangedDrafts(server: AdminPdfImport | null) {
+	const changed = server ? changedDrafts(syncedImport, server) : [];
+	syncedImport = server;
+	if (changed.length) for (const listener of draftListeners) listener(changed);
 }
 
 const settling = (state: PdfImportFileState) => state === "uploading" || state === "waiting" || state === "reading";

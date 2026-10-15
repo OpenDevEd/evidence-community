@@ -63,7 +63,7 @@ import { Link } from "@/i18n/routing";
 
 import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
-import { importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
+import { importButtonLabel, onServerChangedDrafts, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
@@ -888,6 +888,10 @@ export default function AdminWorkbench({
 		},
 		[loadDetail],
 	);
+
+	// The import's own polls: after importing, the worker attaches each draft's PDF and the server may send it on, with
+	// no step taken here, so the table and the open record are read again as each change is reported.
+	useEffect(() => onServerChangedDrafts((itemKeys) => void Promise.all([loadItems(), refreshSent(itemKeys)])), [loadItems, refreshSent]);
 
 	useEffect(() => {
 		if (selectedKey) void loadDetail(selectedKey);
