@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/nextui/Checkbox";
 
 import { ImportCover } from "./ImportCover";
 import { ImportPager, pageOf } from "./ImportPager";
-import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, ChoiceList, SuggestionList, TagList } from "./ImportReview";
+import { Abstract, AuthorList, CheckMeter, Checks, CitedList, creatorsLine, MetadataLine, openWithProperties, PdfPropertiesList, PLACEHOLDER_LINE, propertiesAside, ReadingPlaceholder, rowStatus, StatusText, ChoiceList, SuggestionList, TagList } from "./ImportReview";
 
 import { humanizeAdminField } from "./admin-schema";
 import { checkPasses, coverOf, existingKeyOf, importable, recordPayload, recordPayloadOf, rowPasses, rowTitle, writesProperties, type ChoiceKind, type ImportRow, type ReviewFilter } from "./admin-import";
@@ -220,19 +220,38 @@ function kindLine(record: ImportRow["record"]) {
 	return [record.itemType ? humanizeAdminField(record.itemType) : null, record.year].filter(Boolean);
 }
 
+// While the PDF is read, pulsing lines hold the places of the type, the year and the authors, so the title sits as it will.
+const readingRow = (row: ImportRow) => row.state !== "read" && row.state !== "failed";
+
 function RecordTitle({ row }: { row: ImportRow }) {
-	const authors = row.record?.creators.join(", ");
 	return (
 		<>
-			<p className="flex h-4 gap-3 text-xs text-black/45 dark:text-white/45">
-				{kindLine(row.record).map((part) => (
-					<span key={String(part)}>{part}</span>
-				))}
+			<p className="flex h-4 items-center gap-3 text-xs text-black/45 dark:text-white/45">
+				{readingRow(row) ? (
+					<>
+						<span aria-hidden className={`${PLACEHOLDER_LINE} w-16`} />
+						<span aria-hidden className={`${PLACEHOLDER_LINE} w-8`} />
+					</>
+				) : (
+					kindLine(row.record).map((part) => <span key={String(part)}>{part}</span>)
+				)}
 			</p>
 			<h3 className={`text-base font-semibold leading-6 ${titleTone(row, "text-black/90 dark:text-white/90", "text-black/40 dark:text-white/40")}`}>{rowTitle(row)}</h3>
-			{authors ? <p className="text-sm text-black/60 dark:text-white/60">{authors}</p> : null}
+			<RecordAuthors row={row} />
 		</>
 	);
+}
+
+function RecordAuthors({ row }: { row: ImportRow }) {
+	if (readingRow(row)) {
+		return (
+			<p aria-hidden className="flex h-5 items-center">
+				<span className={`${PLACEHOLDER_LINE} w-40`} />
+			</p>
+		);
+	}
+	const authors = row.record?.creators.join(", ");
+	return authors ? <p className="text-sm text-black/60 dark:text-white/60">{authors}</p> : null;
 }
 
 /** Where the record has got to, whether it is chosen, and what stops it. */

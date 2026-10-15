@@ -325,11 +325,14 @@ export function Abstract({ text }: { text: string }) {
 	);
 }
 
+/** One pulsing line where text will be once the PDF is read. */
+export const PLACEHOLDER_LINE = "h-2.5 animate-pulse rounded-full bg-black/[0.06] dark:bg-white/[0.07]";
+
 export function ReadingPlaceholder() {
 	return (
 		<div aria-hidden className="flex flex-col gap-2.5">
 			{["w-11/12", "w-full", "w-4/5", "w-2/3"].map((width) => (
-				<span className={`h-2.5 animate-pulse rounded-full bg-black/[0.06] dark:bg-white/[0.07] ${width}`} key={width} />
+				<span className={`${PLACEHOLDER_LINE} ${width}`} key={width} />
 			))}
 		</div>
 	);
