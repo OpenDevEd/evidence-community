@@ -257,7 +257,11 @@ function RecordKind({ row }: { row: ImportRow }) {
 	);
 }
 
-// The line stays once the PDF is read, saying so when it names no authors, as the list does, so the rows below don't move up.
+// What the authors line says once reading is over: who wrote it, or that the reading named no one, as the list says; a
+// failed read says nothing, but the line keeps its height.
+const authorsText = (record: ImportRow["record"]) => (record ? record.creators.join(", ") || "No authors" : "");
+
+// The line stays once the PDF is read, so the rows below don't move up.
 function RecordAuthors({ row }: { row: ImportRow }) {
 	if (readingRow(row)) {
 		return (
@@ -266,7 +270,7 @@ function RecordAuthors({ row }: { row: ImportRow }) {
 			</p>
 		);
 	}
-	return <p className="min-h-5 text-sm text-black/60 dark:text-white/60">{row.record?.creators.join(", ") || "No authors"}</p>;
+	return <p className="min-h-5 text-sm text-black/60 dark:text-white/60">{authorsText(row.record)}</p>;
 }
 
 /** Where the record has got to, whether it is chosen, and what stops it. */
