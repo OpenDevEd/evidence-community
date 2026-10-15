@@ -10,6 +10,7 @@ import {
 	type KeyboardEvent,
 	type ReactNode,
 	type Ref,
+	type RefObject,
 } from "react";
 import { mergeProps, useFocusable } from "react-aria";
 import { twMerge } from "@/lib/tw-merge";
@@ -75,6 +76,8 @@ type TooltipProps = {
 	crossOffset?: number;
 	shouldFlip?: boolean;
 	containerPadding?: number;
+	/** What the tooltip opens beside when that isn't its trigger, such as the whole card a heading's hint explains. */
+	anchorRef?: RefObject<Element | null>;
 	showArrow?: boolean;
 	disableAnimation?: boolean;
 	isOpen?: boolean;
@@ -140,6 +143,7 @@ export function Hint({
 	className,
 	contentClassName,
 	placement,
+	anchorRef,
 	isDisabled,
 }: {
 	content: ReactNode;
@@ -149,11 +153,12 @@ export function Hint({
 	/** Classes for the tooltip. */
 	contentClassName?: string;
 	placement?: Placement;
+	anchorRef?: RefObject<Element | null>;
 	/** Plain text that opens nothing and takes no focus, where the same words show another way. */
 	isDisabled?: boolean;
 }) {
 	return (
-		<Tooltip content={content} placement={placement} className={contentClassName} isDisabled={isDisabled}>
+		<Tooltip content={content} placement={placement} anchorRef={anchorRef} className={contentClassName} isDisabled={isDisabled}>
 			<span
 				tabIndex={isDisabled ? undefined : 0}
 				className={twMerge(
@@ -178,12 +183,14 @@ function TooltipOverlay({
 	crossOffset = 0,
 	shouldFlip = true,
 	containerPadding = 12,
+	anchorRef,
 	showArrow = false,
 	disableAnimation = false,
 	...surface
 }: OverlayProps) {
 	return (
 		<AriaTooltip
+			{...(anchorRef && { triggerRef: anchorRef })}
 			placement={ARIA_PLACEMENT[placement]}
 			offset={showArrow ? offset + 3 : offset}
 			crossOffset={crossOffset}
@@ -216,7 +223,7 @@ function TooltipSurface({
 	className,
 	classNames,
 	arrowPlacement,
-}: Omit<OverlayProps, "placement" | "offset" | "crossOffset" | "shouldFlip" | "containerPadding"> & {
+}: Omit<OverlayProps, "placement" | "offset" | "crossOffset" | "shouldFlip" | "containerPadding" | "anchorRef"> & {
 	arrowPlacement: string;
 }) {
 	const slots = popover({

@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AiMagicIcon, ArrowDown01Icon, ArrowRight01Icon, BalanceScaleIcon, Cancel01Icon, Database02Icon, FileSearchIcon, PercentCircleIcon, Tick01Icon, UserEdit01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
-import { useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useId, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { twMerge } from "@/lib/tw-merge";
 import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -308,14 +308,18 @@ function useMedia(query: ReturnType<typeof mediaQuery>) {
 
 const WIDE = mediaQuery("(min-width: 1024px)");
 
-/** Where the Study types heading's hover opens: from sm, with a pointer that hovers. Everywhere else the accordion does. */
-const HOVERS = mediaQuery("(min-width: 640px) and (hover: hover)");
+/**
+ * Where the Study types heading's hover opens: from lg, where the sidebar sits beside the results and the card has room
+ * beside it, with a pointer that hovers. In the Explore sheet and on touch the accordion does.
+ */
+const HOVERS = mediaQuery("(min-width: 1024px) and (hover: hover)");
 
-/** The heading as plain text where its hover can't open, on a phone or a screen with no hover: the accordion at the card's foot says the same there. */
-const NO_HOVER = "max-sm:no-underline max-sm:cursor-auto [@media(hover:none)]:no-underline [@media(hover:none)]:cursor-auto";
+/** The heading as plain text where its hover can't open, in the Explore sheet or on a screen with no hover: the accordion at the card's foot says the same there. */
+// The exact opposite of HOVERS: the config's max-lg stops at 1023px, which a zoomed window can fall just past.
+const NO_HOVER = "[@media_not_all_and_(min-width:1024px)]:no-underline [@media_not_all_and_(min-width:1024px)]:cursor-auto [@media(hover:none)]:no-underline [@media(hover:none)]:cursor-auto";
 
-/** The Study types heading, which explains on hover how types are read. */
-function StudyTypesHeading() {
+/** The Study types heading, which explains on hover how types are read, beside the card so the whole window's height is its own. */
+function StudyTypesHeading({ card }: { card: RefObject<HTMLElement | null> }) {
 	const t = useTranslations("studyTypes");
 	const hovers = useMedia(HOVERS);
 	const content = (
@@ -327,7 +331,7 @@ function StudyTypesHeading() {
 			<StudyTypeMethodRows />
 		</div>
 	);
-	return <Hint content={content} placement="bottom-start" contentClassName={HINT_CARD} className={NO_HOVER} isDisabled={!hovers}>{t("title")}</Hint>;
+	return <Hint content={content} placement="right-start" anchorRef={card} contentClassName={HINT_CARD} className={NO_HOVER} isDisabled={!hovers}>{t("title")}</Hint>;
 }
 
 /** How study types are read as an accordion at the card's foot, only where the heading's hover can't open. */
@@ -335,7 +339,7 @@ function StudyTypeMethodAccordion() {
 	const t = useTranslations("studyTypes.method");
 	const reducedMotion = useReducedMotion();
 	return (
-		<Accordion className="hidden border-t border-black/5 px-0 max-sm:block dark:border-white/10 [@media(hover:none)]:block" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
+		<Accordion className="hidden border-t border-black/5 px-0 [@media_not_all_and_(min-width:1024px)]:block dark:border-white/10 [@media(hover:none)]:block" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
 			<AccordionItem key="method" aria-label={t("title")} title={t("title")} subtitle={t("when")} motionProps={{ variants: ACCORDION_CONTENT_MOTION }}>
 				<StudyTypeMethodRows />
 			</AccordionItem>
@@ -352,11 +356,13 @@ function StudyTypeRows({ facets, selected, onSelect }: { facets: FacetDistributi
 	const t = useTranslations("studyTypes");
 	const format = useFormatter();
 	const { counts, shown, uncertain, showUncertain, read, unread } = useStudyTypeCounts(facets, selected);
+	const card = useRef<HTMLElement>(null);
 	if (shown.length === 0 && !showUncertain) return null;
 	const dimmed = (key: string) => selected.length > 0 && !selected.includes(key);
 	return (
 		<SidebarCard
-			title={<StudyTypesHeading />}
+			ref={card}
+			title={<StudyTypesHeading card={card} />}
 			aside={<span className={`text-sm tabular-nums ${MUTED}`}>{t("read", { count: read })}</span>}
 			band={
 				<div aria-hidden className="flex h-3 gap-[2px] overflow-hidden rounded-full">
