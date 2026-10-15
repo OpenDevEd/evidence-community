@@ -200,8 +200,9 @@ function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: Im
 			   button folds away rather than leave a disabled Publish, and the buttons beside it slide instead of jumping. */}
 			<AnimatePresence initial={false}>
 				{view.open.length && !view.serverSending ? (
-					// The negative margin takes back the footer's gap, so a folded button leaves no space.
-					<motion.span animate={{ opacity: 1, width: "auto" }} className="-ms-2 flex overflow-hidden ps-2" exit={{ opacity: 0, width: 0 }} initial={{ opacity: 0, width: 0 }} key="send" transition={sheetTransition(reduceMotion, 0.22)}>
+					// Folded, its start margin takes back the footer's gap, so it leaves no space. It clips only while it moves, so
+					// the button's focus ring shows.
+					<motion.span animate={{ marginInlineStart: "0px", opacity: 1, transitionEnd: { overflow: "visible" }, width: "auto" }} className="flex" exit={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} initial={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} key="send" transition={sheetTransition(reduceMotion, 0.22)}>
 						<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
 							{view.label}
 						</Button>
