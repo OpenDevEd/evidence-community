@@ -9,6 +9,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { resolveAIModel } from "@/lib/ai/model-resolution";
+import { forcesToolChoice } from "@/lib/ai/models";
 import { openRouterCacheBreakpoint } from "@/lib/ai/openrouter";
 import { searchAuthorProfiles } from "@/lib/authors/catalog-search";
 import { normalizeDoi } from "@/lib/doi";
@@ -211,7 +212,7 @@ export async function readImportPdf(
 			stepEnds.push(Date.now());
 		},
 		// The first two steps must use the tools: given an answer to write, a model tends to skip the searches.
-		prepareStep: ({ stepNumber }) => (stepNumber < 2 ? { toolChoice: "required" } : {}),
+		prepareStep: ({ stepNumber }) => (stepNumber < 2 && forcesToolChoice(provider) ? { toolChoice: "required" } : {}),
 		output: Output.object({ schema: readingSchema }),
 		// Medium effort whatever the model's own default; OpenRouter takes it as its own option.
 		providerOptions: { openrouter: { reasoning: { effort: "medium" } } },

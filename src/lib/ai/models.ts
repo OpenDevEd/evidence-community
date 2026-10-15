@@ -126,3 +126,11 @@ export function starterQuestionsModelId(
 	if (!first) return undefined;
 	return isAIModelId(first.defaultModel) ? first.defaultModel : undefined;
 }
+
+/**
+ * Whether the provider holds a forced tool choice. Anthropic's own API drops it
+ * for Claude Sonnet and Opus 5.5, and for any model thinking on a budget, and
+ * the AI SDK then fails the call when the model answers without the tool.
+ */
+export const forcesToolChoice = (provider: AIProvider) =>
+	provider !== "anthropic";
