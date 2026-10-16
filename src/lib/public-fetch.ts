@@ -107,8 +107,12 @@ export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect"
 /** Bytes several downloads share. A download takes from it as it receives and gives back what it took if it fails. */
 export type SharedByteBudget = { remaining: number };
 
-/** A download stopped because the files sharing its budget passed it together. */
-export class SharedBudgetExceeded extends Error {}
+/** A download stopped because the files sharing its budget passed it together. `available` is what it had to work with. */
+export class SharedBudgetExceeded extends Error {
+	constructor(readonly available: number) {
+		super("The files together are too large");
+	}
+}
 
 /**
  * Downloads a file from a public address, stopping at the time and size
@@ -140,7 +144,7 @@ type SizeLimits = { maxBytes: number; shared: SharedByteBudget };
 /** Why a file of `size` bytes can't be kept, if it can't. `taken` of them already came out of the shared budget. */
 function sizeProblem(size: number, taken: number, { maxBytes, shared }: SizeLimits) {
 	if (size > maxBytes) return new Error("File is too large");
-	if (size - taken > shared.remaining) return new SharedBudgetExceeded("The files together are too large");
+	if (size - taken > shared.remaining) return new SharedBudgetExceeded(shared.remaining + taken);
 	return null;
 }
 

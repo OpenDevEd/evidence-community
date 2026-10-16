@@ -109,7 +109,8 @@ function visiblePdfAttachments(item: Item) {
 /**
  * Downloads PDFs that share one request budget, all at once. A failed
  * download gives its bytes back only when it fails, so a PDF refused for the
- * budget is tried once more, in order, after every download has finished.
+ * budget is tried once more, in order, after every download has finished, if
+ * there is now more room than it had.
  */
 async function downloadPdfs(attachments: Item[]) {
 	const shared = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES };
@@ -117,7 +118,8 @@ async function downloadPdfs(attachments: Item[]) {
 		fetchPublicPdf(attachmentPdfUrl(attachment), shared);
 	const results = await Promise.allSettled(attachments.map(download));
 	for (const [index, result] of results.entries()) {
-		if (result.status === "fulfilled" || !(result.reason instanceof SharedBudgetExceeded)) continue;
+		const refused = result.status === "rejected" && result.reason instanceof SharedBudgetExceeded ? result.reason : null;
+		if (!refused || shared.remaining <= refused.available) continue;
 		results[index] = await download(attachments[index]).then(
 			(value) => ({ status: "fulfilled", value }) as const,
 			(reason: unknown) => ({ status: "rejected", reason }) as const,
