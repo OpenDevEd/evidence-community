@@ -44,6 +44,14 @@ export class ZoteroSnapshotTooLargeError extends ZoteroSourceConfigurationError 
 	}
 }
 
+/** The group kept changing through every pass of a read. */
+export class ZoteroSnapshotChangedError extends Error {
+	constructor() {
+		super("Zotero library changed while its sync snapshot was read");
+		this.name = "ZoteroSnapshotChangedError";
+	}
+}
+
 function zoteroScope(connection: ZoteroSourceConnection): ZoteroLibraryScope {
 	if (!connection.externalScopeKey) {
 		throw new ZoteroSourceConfigurationError(

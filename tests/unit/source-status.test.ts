@@ -8,7 +8,7 @@ import {
 	type SourceStatusInput,
 } from "@/lib/source-ingestion/source-status";
 import { ZoteroApiError } from "@/lib/source-ingestion/zotero/client";
-import { ZoteroSnapshotTooLargeError } from "@/lib/source-ingestion/zotero/connection";
+import { ZoteroSnapshotChangedError, ZoteroSnapshotTooLargeError } from "@/lib/source-ingestion/zotero/connection";
 
 const now = new Date("2026-09-27T12:10:00.000Z");
 const minutesAgo = (minutes: number) =>
@@ -316,6 +316,7 @@ describe("classifySourceError", () => {
 		[new ZoteroApiError("Zotero request failed with 503", 503), "unavailable"],
 		[new SourceCredentialNotFoundError("openalex-teachers"), "missing_key"],
 		[new ZoteroSnapshotTooLargeError("snapshot", 250_000, 200_000), "too_large"],
+		[new ZoteroSnapshotChangedError(), "interrupted"],
 		[new Error("database connection reset"), "internal"],
 	] as const)("classifies %s as %s", (error, code) => {
 		expect(classifySourceError(error)).toBe(code);

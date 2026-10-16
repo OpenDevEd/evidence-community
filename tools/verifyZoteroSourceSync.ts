@@ -39,6 +39,9 @@ type RemoteState = {
 	deletedCollections: Map<string, number>;
 	deletedItems: Map<string, number>;
 	driftOnItemsVersions: (() => void) | null;
+	driftOnItemsFetch: (() => void) | null;
+	/** Every item key the read asked for, once per request. */
+	itemRequests: string[];
 	items: Map<string, RemoteRecord>;
 	version: number;
 };
@@ -72,6 +75,8 @@ function createRemoteState(): RemoteState {
 	return {
 		version: 10,
 		driftOnItemsVersions: null,
+		driftOnItemsFetch: null,
+		itemRequests: [],
 		deletedCollections: new Map(),
 		deletedItems: new Map(),
 		collections: new Map([
@@ -501,6 +506,10 @@ async function verify() {
 			return;
 		}
 		if (url.pathname === "/groups/999/items") {
+			const drift = remote.driftOnItemsFetch;
+			remote.driftOnItemsFetch = null;
+			drift?.();
+			remote.itemRequests.push(...requestedKeys(url, "itemKey"));
 			json(
 				response,
 				requestedKeys(url, "itemKey").flatMap((key) => {
@@ -1179,7 +1188,7 @@ async function verify() {
 					"EEEE2345,KKKK2345,RRRR2345" &&
 				finalCursor.softTrashedItemKeys?.join(",") ===
 					"CHILD234,PPPP2345,TRASH234",
-			`Concurrent Zotero change did not restart from a stable snapshot: ${JSON.stringify(
+			`Concurrent Zotero change did not settle on a stable snapshot: ${JSON.stringify(
 				{
 					cursor: finalConnection?.syncCursor,
 					targetVersion: drifted.targetVersion,
@@ -1332,6 +1341,57 @@ async function verify() {
 			"Restored subtree or collection membership was incomplete",
 		);
 
+		// The group changes while its records are fetched: one record is edited
+		// again and another is deleted. The read keeps what it already has and
+		// reads only what changed since.
+		remote.version = 17;
+		for (const key of ["AAAA2345", "FFFF2345", "IIII2345"]) {
+			const record = remote.items.get(key)!;
+			record.version = 17;
+			record.data = { ...record.data, title: "Edited before the read", version: 17 };
+		}
+		remote.driftOnItemsFetch = () => {
+			remote.version = 18;
+			const record = remote.items.get("AAAA2345")!;
+			record.version = 18;
+			record.data = { ...record.data, title: "Edited during the read", version: 18 };
+			remote.items.delete("FFFF2345");
+			remote.deletedItems.set("FFFF2345", 18);
+		};
+		remote.itemRequests = [];
+		const caughtUp = await syncZoteroSource({
+			database,
+			sourceConnectionKey: connectionKey,
+			credentialResolver,
+			sleep: async () => {},
+		});
+		const itemRow = ({ key }: { key: string }) =>
+			database.select().from(item).where(eq(item.key, key)).then((rows) => rows[0]);
+		const [editedDuring, editedBefore, deletedDuring, [caughtUpConnection]] =
+			await Promise.all([
+				itemRow(parentIdentity),
+				itemRow(memberIdentity),
+				itemRow(retainedItemIdentity),
+				database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey)),
+			]);
+		const requestsFor = (key: string) =>
+			remote.itemRequests.filter((requested) => requested === key).length;
+		assert(
+			caughtUp.targetVersion === 18 &&
+				(caughtUpConnection?.syncCursor as { libraryVersion?: number }).libraryVersion === 18 &&
+				editedDuring?.title === "Edited during the read" &&
+				editedBefore?.title === "Edited before the read" &&
+				deletedDuring?.deleted === 1 &&
+				requestsFor("IIII2345") === 1 &&
+				requestsFor("AAAA2345") === 2,
+			`A change during the read was not caught up from what was already read: ${JSON.stringify({
+				cursor: caughtUpConnection?.syncCursor,
+				deleted: deletedDuring?.deleted,
+				itemRequests: remote.itemRequests,
+				targetVersion: caughtUp.targetVersion,
+			})}`,
+		);
+
 		console.log(
 			JSON.stringify({
 				checkpointResumed: true,
@@ -1341,7 +1401,8 @@ async function verify() {
 				reparentPreserved: true,
 				restoredTrashSubtree: true,
 				staleMembershipFiltered: true,
-				snapshotRestarted: true,
+				snapshotCaughtUp: true,
+				snapshotSettled: true,
 			}),
 		);
 	} finally {
