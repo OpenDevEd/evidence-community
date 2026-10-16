@@ -1418,6 +1418,7 @@ export function AdminInspector({
 	versionActions,
 	versionStatus,
 	versionWithdraw,
+	actionsReady = true,
 	reviewId,
 	onAddPdf,
 	pdfProgress,
@@ -1473,6 +1474,8 @@ export function AdminInspector({
 	versionActions?: ReactNode;
 	versionStatus?: ReactNode;
 	versionWithdraw?: ReactNode;
+	/** False until the record's review is read, so the actions arrive once, in their final place. */
+	actionsReady?: boolean;
 	reviewId?: string;
 	onAddPdf: (file: File) => void;
 	pdfProgress?: PdfUploadStep;
@@ -1664,8 +1667,9 @@ export function AdminInspector({
 	const restoring =
 		detail.state === "deleted" &&
 		(Boolean(detail.parentItem) || !detail.draft);
-	const showPrimaryAction =
-		!detail.parentItem || !detail.draft || restoring || !detail.editable;
+	// An attachment acts like its record: Edit, then Submit for review, which sends the record with it. One it can't
+	// change has no main action.
+	const showPrimaryAction = !detail.parentItem || detail.editable;
 	const primaryAction = {
 		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
 		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
@@ -1683,7 +1687,6 @@ export function AdminInspector({
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
-		(!detail.editable && isAttachment) ||
 		(Boolean(detail.draft) &&
 			(saveState === "saving" ||
 				saveState === "conflict" ||
@@ -2000,7 +2003,8 @@ export function AdminInspector({
 				}
 
 				actions={
-					<>
+					actionsReady && (
+					<div className="flex min-w-0 flex-1 animate-fade-in items-center gap-2">
 						{versionActions ??
 							(showPrimaryAction && (
 								<Button
@@ -2025,7 +2029,8 @@ export function AdminInspector({
 								</Button>
 							))}
 						{versionWithdraw}
-					</>
+					</div>
+					)
 				}
 			/>
 
