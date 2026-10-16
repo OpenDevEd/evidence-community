@@ -27,8 +27,7 @@ import {
 } from "@/components/ai-elements/InlineCitation";
 import CopyButton from "@/components/features/items/CopyButton";
 import { CompactBookmarkButton } from "@/components/features/items/LikeButton";
-import { CollectionPickerDialog } from "@/components/features/items/Resource";
-import { usePickerAhead } from "@/components/features/collections/CollectionPicker";
+import { CollectionPickerDialog, usePickerAhead } from "@/components/features/collections/CollectionPicker";
 import { Button } from "@/components/nextui/Button";
 import { useReaderData } from "@/hooks/useReaderData";
 import {
@@ -509,11 +508,15 @@ export function PublicationLink({
 }) {
 	const [open, setOpen] = useState(false);
 	const [picking, setPicking] = useState(false);
+	// Mounted once first opened, then kept for its closing animation: an answer can hold many links.
+	const [pickerMounted, setPickerMounted] = useState(false);
 	const openAccess = use(CitedPublications)[itemKey]?.openAccess;
 	return (
 		<InlineCitation className="inline align-baseline">
 			{/* Beside the card, not in it: the card closes as the picker opens, and the picker stays. Its links open in a new tab, so the chat behind stays open. */}
-			<CollectionPickerDialog itemKey={itemKey} isOpen={picking} onOpenChange={setPicking} onClose={() => setPicking(false)} linksInNewTab />
+			{pickerMounted ? (
+				<CollectionPickerDialog itemKey={itemKey} isOpen={picking} onOpenChange={setPicking} onClose={() => setPicking(false)} linksInNewTab />
+			) : null}
 			<InlineCitationCard open={open} onOpenChange={setOpen}>
 				<InlineCitationCardTrigger>
 					<Link
@@ -542,6 +545,7 @@ export function PublicationLink({
 							onAsked={() => setOpen(false)}
 							onSaveToCollection={() => {
 								setOpen(false);
+								setPickerMounted(true);
 								setPicking(true);
 							}}
 						/>

@@ -12,10 +12,10 @@ import {
 } from "@hugeicons/core-free-icons";
 import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { fetcher, firstNonNullOrEmpty } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
@@ -30,11 +30,9 @@ import { cloneElement, useState, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
-import GenericHeader from "../modals/GenericHeader";
-import { CollectionPicker, usePickerAhead } from "../collections/CollectionPicker";
+import { CollectionPickerDialog, usePickerAhead } from "../collections/CollectionPicker";
 import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
-import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
@@ -47,60 +45,6 @@ import { useGapMaps } from "@/context/Providers";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
 import { OpenAccessLabel } from "./OpenAccessLabel";
-
-/**
- * The collections a record goes into, as a dialog. `linksInNewTab` opens a collection in a new tab, for a dialog
- * opened over the chat, which a page change would close.
- */
-export function CollectionPickerDialog({
-	itemKey,
-	isOpen,
-	onOpenChange,
-	onClose,
-	revalidateResults,
-	collectionId,
-	linksInNewTab = false,
-}: {
-	itemKey: string | undefined;
-	isOpen: boolean;
-	onOpenChange: (isOpen: boolean) => void;
-	onClose: () => void;
-	revalidateResults?: () => unknown;
-	/** The collection the list behind shows, if any. */
-	collectionId?: string;
-	linksInNewTab?: boolean;
-}) {
-	const { refresh } = useReaderData();
-	const t = useTranslations("ui");
-	// Puts the record in the collection or takes it out. Taking it out of the collection this list shows closes the picker, as the record leaves the list behind it.
-	const onCollectionSelect = async (pressedCollectionId: string, heldRecord: boolean) => {
-		if (!itemKey) return;
-		const willClose = pressedCollectionId === collectionId && heldRecord;
-		const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey } });
-		if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
-		await Promise.allSettled([revalidateResults?.(), refresh()]);
-		if (willClose) onClose();
-	};
-
-	return (
-		// On wider screens it hangs from a fixed top, so a page of fewer rows or a new collection grows it downward.
-		<DialogModal
-			size="lg"
-			classNames={{ wrapper: "sm:items-start", base: "sm:mt-[12vh]" }}
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-		>
-			<ModalContent>
-				<GenericHeader onClose={onClose}>
-					{t("selectCollection")}
-				</GenericHeader>
-				<ModalBody className="px-6 pb-6 pt-0">
-					<CollectionPicker itemKey={itemKey} onToggle={onCollectionSelect} linksInNewTab={linksInNewTab} />
-				</ModalBody>
-			</ModalContent>
-		</DialogModal>
-	);
-}
 
 export function AddButton({
 	itemData,

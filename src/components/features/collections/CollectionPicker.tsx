@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
-import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
+import { DropdownItem, DropdownMenu, DropdownTrigger, ModalBody, ModalContent } from "@nextui-org/react";
 import {
 	Add01Icon,
 	ArrowDown01Icon,
@@ -19,6 +19,8 @@ import {
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
+import DialogModal from "@/components/nextui/DialogModal";
+import GenericHeader from "@/components/features/modals/GenericHeader";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Input } from "@/components/nextui/Input";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -35,7 +37,7 @@ import { twMerge } from "@/lib/tw-merge";
 import { READER_COLLECTION_NAME_LIMIT } from "@/db/schema/tables/reader";
 import type { CollectionsPage, PickerCollection } from "@/lib/readers/data";
 import { PICKER_COLLECTIONS_PER_PAGE, pickerCollectionsKey } from "@/lib/readers/collection-pages";
-import { fetcher } from "@/lib/utils";
+import { fetcher, setter } from "@/lib/utils";
 
 type Sort = "recent" | "name";
 
@@ -104,12 +106,66 @@ async function post(path: string, body: object) {
 }
 
 /**
+ * The collections a record goes into, as a dialog. `linksInNewTab` opens a collection in a new tab, for a dialog
+ * opened over the chat, which a page change would close.
+ */
+export function CollectionPickerDialog({
+	itemKey,
+	isOpen,
+	onOpenChange,
+	onClose,
+	revalidateResults,
+	collectionId,
+	linksInNewTab = false,
+}: {
+	itemKey: string | undefined;
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onClose: () => void;
+	revalidateResults?: () => unknown;
+	/** The collection the list behind shows, if any. */
+	collectionId?: string;
+	linksInNewTab?: boolean;
+}) {
+	const { refresh } = useReaderData();
+	const t = useTranslations("ui");
+	// Puts the record in the collection or takes it out. Taking it out of the collection this list shows closes the picker, as the record leaves the list behind it.
+	const onCollectionSelect = async (pressedCollectionId: string, heldRecord: boolean) => {
+		if (!itemKey) return;
+		const willClose = pressedCollectionId === collectionId && heldRecord;
+		const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey } });
+		if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
+		await Promise.allSettled([revalidateResults?.(), refresh()]);
+		if (willClose) onClose();
+	};
+
+	return (
+		// On wider screens it hangs from a fixed top, so a page of fewer rows or a new collection grows it downward.
+		<DialogModal
+			size="lg"
+			classNames={{ wrapper: "sm:items-start", base: "sm:mt-[12vh]" }}
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+		>
+			<ModalContent>
+				<GenericHeader onClose={onClose}>
+					{t("selectCollection")}
+				</GenericHeader>
+				<ModalBody className="px-6 pb-6 pt-0">
+					<CollectionPicker itemKey={itemKey} onToggle={onCollectionSelect} linksInNewTab={linksInNewTab} />
+				</ModalBody>
+			</ModalContent>
+		</DialogModal>
+	);
+}
+
+/**
  * Where a record goes into collections: a search and a sort, a row that makes
  * a new collection with the record already in it, then the collections a page
  * at a time from the server. Each row toggles the record in or out and has its
  * own button to open the collection.
  */
-export function CollectionPicker({
+function CollectionPicker({
 	itemKey,
 	onToggle,
 	linksInNewTab = false,
