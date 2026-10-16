@@ -6,7 +6,7 @@ import {
 	adminErrorResponse,
 	requireAdminSession,
 } from "@/lib/admin/http";
-import { discardNativePdfDraft } from "@/lib/admin/native-file-service";
+import { discardPdfDraft } from "@/lib/admin/source-file-choice";
 
 export async function DELETE(
 	request: NextRequest,
@@ -20,7 +20,7 @@ export async function DELETE(
 			params,
 			getNativeFileRuntime(),
 		]);
-		await discardNativePdfDraft(runtime.db, runtime.storage, key);
+		await discardPdfDraft(runtime, key);
 		return new NextResponse(null, {
 			status: 204,
 			headers: ADMIN_RESPONSE_HEADERS,

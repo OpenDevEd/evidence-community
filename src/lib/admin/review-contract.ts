@@ -22,6 +22,9 @@ export const reviewRecordSchema = z.object({
 	itemKey,
 	baseRevision: z.number().int().nonnegative(),
 	payload: z.record(z.string(), z.unknown()),
+	// Captured without a draft: shown with the review, but not checked or published again, and it may change after
+	// submission (a Zotero record its import keeps up to date). A review older than this field publishes every record.
+	unchanged: z.literal(true).optional(),
 });
 export type ReviewRecord = z.infer<typeof reviewRecordSchema>;
 

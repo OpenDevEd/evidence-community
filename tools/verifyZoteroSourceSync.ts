@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, notExists } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { itemSourceFileChoice } from "../src/db/schema/review";
 import { sourceSnapshot } from "../src/db/schema/source";
 import { collection } from "../src/db/schema/tables/collection";
 import { item } from "../src/db/schema/tables/item";
@@ -914,6 +915,30 @@ async function verify() {
 		await database.update(sourceConnection).set({ syncCursor: olderCursor }).where(eq(sourceConnection.key, connectionKey));
 		const afterUpdate = await syncWithPdfs();
 		assert(afterUpdate.records === 0, `A cursor without a recorded PDF rule reread the group: ${afterUpdate.records}`);
+
+		// A PDF choice approved in review reaches the import on its next run: the attachment is read again though
+		// Zotero didn't change it, the PDF step sees the choice, the choice is marked applied, and the run after reads
+		// nothing.
+		const [choiceAttachment] = await database.select({ key: item.key }).from(item)
+			.where(and(eq(item.sourceConnectionKey, connectionKey), eq(item.sourceRecordKey, "BBBB2345")));
+		await database.insert(itemSourceFileChoice).values({ itemKey: choiceAttachment!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "BBBB2345", choice: "withhold", applied: false });
+		const choicesSeen: (string | undefined)[] = [];
+		const choiceProcessor = async (record: RemoteRecord, context?: { choices?: ReadonlyMap<string, string> }) => {
+			if (record.key === "BBBB2345") choicesSeen.push(context?.choices?.get("BBBB2345"));
+			return attachmentProcessor(record);
+		};
+		const syncWithChoices = () =>
+			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: choiceProcessor, sleep: async () => {} });
+		remote.itemRequests = [];
+		await syncWithChoices();
+		const choiceRequests = [...remote.itemRequests];
+		const [appliedChoice] = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, choiceAttachment!.key));
+		const afterChoice = await syncWithChoices();
+		assert(
+			choiceRequests.includes("BBBB2345") && choicesSeen[0] === "withhold" && appliedChoice?.applied === true && afterChoice.records === 0,
+			`An approved PDF choice did not reach the import once: ${JSON.stringify({ choiceRequests, choicesSeen, applied: appliedChoice?.applied, afterChoice: afterChoice.records })}`,
+		);
+		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, choiceAttachment!.key));
 
 		// A read left unfinished under one setting starts over when the setting changes.
 		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));

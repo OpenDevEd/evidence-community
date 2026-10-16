@@ -11,6 +11,7 @@ export default defineConfig({
 		environment: "node",
 		include: [
 			"tests/integration/library-export-selection.test.ts",
+			"tests/integration/zotero-pdf-review.test.ts",
 			"tests/integration/topic-review.test.ts",
             "tests/integration/item-preview.test.ts",
 			"tests/integration/topics-lifecycle.test.ts",

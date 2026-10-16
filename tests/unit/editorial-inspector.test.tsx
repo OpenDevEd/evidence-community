@@ -78,6 +78,8 @@ const submitted: AdminReviewSnapshot = {
 	openAccessFromSources: null,
 	readingStudyType: null,
 	sourceFileUrl: null,
+	sourcePdf: null,
+	sourcePdfChangePending: false,
 	links: {
 		fromSources: [],
 		citedBy: [],

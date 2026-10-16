@@ -4,6 +4,7 @@ import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
 import { CrossrefActivationValidationError, ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
 import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
 import { resolveItemWritebackTargets } from "@/lib/source-writeback/policy";
+import { applySourceFileChoices, holdSourceFileChoices, releaseSourceFileChoices } from "./source-file-choice";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { activateCrossrefPublicationInTransaction, reserveCrossrefDoi } from "@/lib/publication/crossref-activation-service";
 import { activateZenodoPublicationInTransaction } from "@/lib/publication/zenodo-activation-service";
@@ -229,6 +230,7 @@ export async function submitItemReview(
 				},
 			})
 			.returning();
+		await holdSourceFileChoices(transaction, review!.id, keys);
 		if (capturedFiles.length)
 			await transaction.insert(itemReviewFile).values(
 				capturedFiles.map(({ itemKey, file, removalId }) => ({
@@ -293,6 +295,7 @@ export async function resolveItemReview(
 			throw new AdminValidationError(
 				"You can only withdraw your own submission.",
 			);
+		await releaseSourceFileChoices(transaction, review.id);
 		const [updated] = await transaction
 			.update(itemReview)
 			.set({
@@ -388,6 +391,11 @@ export async function correctItemReview(
 	});
 }
 
+/** A record the review only shows: captured without a draft, and not corrected since. */
+function isUnchangedReviewRecord(review: typeof itemReview.$inferSelect, record: ReviewRecord) {
+	return record.unchanged === true && !review.corrections.some((correction) => correction.itemKey === record.itemKey);
+}
+
 function effectiveReviewRecord(
 	review: typeof itemReview.$inferSelect,
 	submitted: ReviewRecord,
@@ -415,6 +423,7 @@ export async function publishReviewRecords(
 			Number(a.itemKey === locked.itemKey),
 	);
 	for (const submitted of records) {
+		if (isUnchangedReviewRecord(locked, submitted)) continue;
 		const approved = effectiveReviewRecord(locked, submitted);
 		const [latest] = await transaction
 			.select({ revision: item.revision })
@@ -467,6 +476,7 @@ export async function assertReviewCurrent(
 		.where(inArray(item.key, review.snapshot.records.map((record) => record.itemKey)))
 		.for("update");
 	for (const record of review.snapshot.records) {
+		if (isUnchangedReviewRecord(review, record)) continue;
 		if (
 			(current.find(({ key }) => key === record.itemKey)
 				?.revision ?? 0) !== record.baseRevision
@@ -480,6 +490,7 @@ export async function assertReviewCurrent(
 /** Throws what stops a review from publishing: missing fields, including those its identifier choice needs. */
 export function assertReviewPublishable(review: typeof itemReview.$inferSelect) {
 	for (const record of review.snapshot.records) {
+		if (isUnchangedReviewRecord(review, record)) continue;
 		validateReviewPayload(
 			effectiveReviewRecord(review, record).payload,
 			record.itemKey === review.itemKey
@@ -660,6 +671,7 @@ export async function approveItemReview(
 				files,
 				input.zenodoFileChange,
 			);
+			await applySourceFileChoices(transaction, locked.id);
 			await activateChosenIdentifiers(transaction, locked.itemKey, locked.snapshot.publishingChoice, config, actor.userId);
 			const [published] = await transaction
 				.update(itemReview)

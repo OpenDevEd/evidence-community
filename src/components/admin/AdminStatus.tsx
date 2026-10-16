@@ -9,6 +9,7 @@ import {
 	PencilIcon,
 	Undo02Icon,
 	Tick01Icon,
+	ViewOffSlashIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 
@@ -42,6 +43,11 @@ const fileConfig = {
 		className: "text-black/40 dark:text-white/40",
 		icon: FileXIcon,
 		label: "No PDF",
+	},
+	unpublished: {
+		className: "text-black/55 dark:text-white/55",
+		icon: ViewOffSlashIcon,
+		label: "Not published",
 	},
 	processing: {
 		className: "text-amber-700 dark:text-amber-300",

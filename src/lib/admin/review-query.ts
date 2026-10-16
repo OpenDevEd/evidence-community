@@ -15,8 +15,11 @@ import { ItemNotFoundError } from "./native-item-service";
 import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { readStudyReading } from "@/lib/readings/reading";
+import { itemFilePublication } from "@/db/schema/source";
+import { projectSourcePdf, readSourceFileChoices } from "./source-file-choice";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -57,10 +60,30 @@ function snapshotFileState(
 	};
 }
 
+/** A Zotero PDF change this review holds, shown as the review shows any other file change; none for anything else. */
+function heldSourcePdf(
+	itemKey: string,
+	reviewId: string,
+	held: {
+		choices: Awaited<ReturnType<typeof readSourceFileChoices>>;
+		items: (typeof item.$inferSelect)[];
+		publications: { itemKey: string }[];
+		config: Pick<LibraryServerConfig, "sources"> | null;
+	},
+) {
+	const choice = held.choices.get(itemKey);
+	const projected = held.config && choice?.reviewId === reviewId
+		? projectSourcePdf(held.items.find((entry) => entry.key === itemKey) ?? null, choice, held.publications.some((publication) => publication.itemKey === itemKey), held.config)
+		: null;
+	if (!projected) return { sourcePdf: null };
+	const { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl } = projected;
+	return { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl };
+}
+
 export async function getAdminReviewSnapshot(
 	db: Database,
 	reviewId: string,
-	options: { topicsEnabled?: boolean } = {},
+	options: { topicsEnabled?: boolean; config?: Pick<LibraryServerConfig, "sources"> } = {},
 ) {
 	const topicsEnabled =
 		options.topicsEnabled ?? (await getLibraryConfig()).topics.enabled;
@@ -70,7 +93,7 @@ export async function getAdminReviewSnapshot(
 		.where(eq(itemReview.id, reviewId));
 	if (!review) throw new ItemNotFoundError(reviewId);
 	const records = review.snapshot.records;
-	const [identities, files, publishedRevisions] = await Promise.all([
+	const [identities, files, publishedRevisions, choices, publications] = await Promise.all([
 		db
 			.select()
 			.from(itemIdentity)
@@ -85,7 +108,7 @@ export async function getAdminReviewSnapshot(
 			.from(itemReviewFile)
 			.where(eq(itemReviewFile.reviewId, review.id)),
 		db
-			.select({ key: item.key, revision: item.revision })
+			.select()
 			.from(item)
 			.where(
 				inArray(
@@ -93,7 +116,16 @@ export async function getAdminReviewSnapshot(
 					records.map((record) => record.itemKey),
 				),
 			),
+		readSourceFileChoices(db, records.map((record) => record.itemKey)),
+		db
+			.select({ itemKey: itemFilePublication.itemKey })
+			.from(itemFilePublication)
+			.where(inArray(itemFilePublication.itemKey, records.map((record) => record.itemKey))),
 	]);
+	// The sources' rules matter only to a review that holds a Zotero PDF change.
+	const sourceConfig = [...choices.values()].some((choice) => choice.reviewId === review.id)
+		? (options.config ?? (await getLibraryConfig()))
+		: null;
 	const details = await Promise.all(
 		records.map(
 			async (
@@ -130,7 +162,7 @@ export async function getAdminReviewSnapshot(
 					related: [],
 				};
 				const sourceFields = await readSourceFields(db, record.itemKey);
-				return {
+				const detail: AdminItemDetail & { draft: NonNullable<AdminItemDetail["draft"]> } = {
 					...itemSummary(null, draft, null, null, payload),
 					sourceFields: sourceFields.filter(
 						(field) => topicsEnabled || field.field !== "topics",
@@ -181,7 +213,10 @@ export async function getAdminReviewSnapshot(
 						originSourceKey: null,
 						selected: [],
 					},
+					sourcePdfChangePending: false,
+					...heldSourcePdf(record.itemKey, review.id, { choices, items: publishedRevisions, publications, config: sourceConfig }),
 				};
+				return detail;
 			},
 		),
 	);

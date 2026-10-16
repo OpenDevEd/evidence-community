@@ -38,6 +38,7 @@ import {
 	type ZoteroItemResponse,
 } from "./schema";
 import { ZOTERO_MAPPING_PROFILE_VERSION } from "./profile";
+import { markSourceFileChoicesApplied, sourceFileChoicesFor } from "@/lib/admin/source-file-choice";
 import { saveSourceDisplayName } from "../display-name";
 
 type Fetch = typeof fetch;
@@ -230,7 +231,16 @@ type SnapshotReader = {
 	/** How many passes a read may take while the library keeps changing. */
 	maxPasses: number;
 	sleep: (milliseconds: number) => Promise<void>;
+	/** Items read again even when Zotero didn't change them: attachments whose PDF choice isn't applied yet. */
+	alsoReadItemKeys?: readonly string[];
 };
+
+/** Reads the items a read must hold though Zotero didn't change them, unless it already holds or deletes them. */
+async function readAlso(reader: SnapshotReader, itemsByKey: Map<string, ZoteroItemResponse>, deletedItemKeys: ReadonlySet<string>) {
+	const unread = (reader.alsoReadItemKeys ?? []).filter((key) => !itemsByKey.has(key) && !deletedItemKeys.has(key));
+	for (const keyChunk of chunkValues(unread, ZOTERO_OBJECT_REQUEST_SIZE))
+		for (const record of (await reader.client.items(reader.prefix, keyChunk)).data) itemsByKey.set(record.key, record);
+}
 
 /**
  * Reads everything that changed since `since`. When the library changes
@@ -308,6 +318,7 @@ async function readManifest(reader: SnapshotReader, since: number) {
 		passSince = targetVersion;
 		await reader.sleep(Math.min(100 * 2 ** pass, 2_000));
 	}
+	await readAlso(reader, itemsByKey, deletedItemKeys);
 	const collections = [...collectionsByKey.values()];
 	const items = [...itemsByKey.values()];
 
@@ -969,11 +980,13 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		});
 	await client.verifyKeyAccess(scope);
 	await saveSourceDisplayName(options.database, connection, () => client.libraryName(scope));
+	const { choices, unapplied } = await sourceFileChoicesFor(options.database, options.sourceConnectionKey);
 	const attachmentContext: ZoteroAttachmentProcessorContext = {
 		client,
 		prefix,
 		sourceConnectionKey: options.sourceConnectionKey,
 		pdfs: zoteroPdfRule(config),
+		choices,
 	};
 	const pdfRule = zoteroPdfRuleKey(attachmentContext.pdfs);
 	await options.attachmentProcessor?.flushCleanup?.(
@@ -994,6 +1007,8 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	]);
 	const previousSoftTrash = previousSoftTrashState(cursor);
 	const start = readStart(cursor, requiresMappingReplay, pdfRule);
+	// A read that resumes keeps the entries it started with; choices not applied yet wait for the next one.
+	const applying = start.resumes ? [] : unapplied;
 	const snapshot = await readSnapshot(
 		{
 			client,
@@ -1001,6 +1016,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			maxSnapshotRecords: config.maxSnapshotRecords,
 			maxPasses: config.maxConsistencyRetries,
 			sleep: options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))),
+			alsoReadItemKeys: applying.map((row) => row.sourceRecordKey),
 		},
 		{
 			start,
@@ -1050,16 +1066,18 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	}
 
 	if (manifest.entries.length === 0) {
-		return completeEmptyRead(options, {
+		const result = await completeEmptyRead(options, {
 			expectedConfiguration: connection.config,
 			expectedCursor,
 			fetchedAt,
 			nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, pdfRule),
 			targetVersion: manifest.targetVersion,
 		});
+		await markSourceFileChoicesApplied(options.database, applying);
+		return result;
 	}
 
-	return writeManifestBatches(options, {
+	const result = await writeManifestBatches(options, {
 		manifest,
 		offset,
 		cursor,
@@ -1073,4 +1091,6 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		maxRecordsPerBatch: config.maxRecordsPerBatch,
 		expectedConfiguration: connection.config,
 	});
+	await markSourceFileChoicesApplied(options.database, applying);
+	return result;
 }

@@ -1,6 +1,7 @@
-import { itemIdentity } from "@opendeved/evidence-library-core";
+import { itemIdentity, sourceConnection } from "@opendeved/evidence-library-core";
 import { sql } from "drizzle-orm";
-import { check, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { item } from "./tables/item";
 import type { PublishingChoice, ReviewFile, ReviewRecord, ReviewSnapshot } from "@/lib/admin/review-contract";
 
 export const itemPublishingChoice = pgTable("itemPublishingChoice", {
@@ -45,3 +46,26 @@ export const itemFileRemoval = pgTable("itemFileRemoval", {
 	itemKey: varchar("itemKey", { length: 8 }).primaryKey().references(() => itemIdentity.key),
 	createdAt: timestamp("createdAt", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** What an editor chose for one Zotero PDF: publish it or take it down, whatever its source's rule. See 0094. */
+export type SourceFileChoice = "publish" | "withhold";
+
+export const itemSourceFileChoice = pgTable("itemSourceFileChoice", {
+	itemKey: varchar("itemKey", { length: 8 }).primaryKey().references(() => item.key, { onDelete: "cascade" }),
+	sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 }).references(() => sourceConnection.key, { onUpdate: "cascade", onDelete: "cascade" }).notNull(),
+	sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
+	/** The approved choice. */
+	choice: text("choice").$type<SourceFileChoice>(),
+	/** The change in the working draft, held by `reviewId` while a review is pending. */
+	pending: text("pending").$type<SourceFileChoice>(),
+	reviewId: uuid("reviewId").references(() => itemReview.id, { onDelete: "set null" }),
+	/** False from approval until the source's import has applied the choice. */
+	applied: boolean("applied").notNull().default(true),
+	/** The PDF's size in Zotero, read when it is staged. */
+	sizeBytes: bigint("sizeBytes", { mode: "number" }),
+	updatedAt: timestamp("updatedAt", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+	check("itemSourceFileChoice_choice_valid", sql`${table.choice} IS NULL OR ${table.choice} IN ('publish', 'withhold')`),
+	check("itemSourceFileChoice_pending_valid", sql`${table.pending} IS NULL OR ${table.pending} IN ('publish', 'withhold')`),
+	check("itemSourceFileChoice_present", sql`${table.choice} IS NOT NULL OR ${table.pending} IS NOT NULL`),
+]);
