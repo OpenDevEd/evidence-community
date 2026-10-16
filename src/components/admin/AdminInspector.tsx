@@ -3,6 +3,7 @@ import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
+import { isZoteroPdf, ZoteroPdfFile } from "./ZoteroPdfFile";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { ImportChecksBadge } from "./ImportChecksBadge";
 import { AdminPdfCover } from "./AdminPdfCover";
@@ -1321,7 +1322,9 @@ function AttachmentFilePanel({
 	onUpload,
 	readOnly,
 	readOnlyVersion,
+	source,
 }: {
+	source?: AdminSource;
 	busy: boolean;
 	detail: AdminItemDetail;
 	fileError?: string;
@@ -1340,6 +1343,9 @@ function AttachmentFilePanel({
 				>
 					{fileError}
 				</div>
+			) : null}
+			{source && isZoteroPdf(detail, source) && !readOnlyVersion ? (
+				<ZoteroPdfFile detail={detail} source={source} />
 			) : null}
 			{detail.filePublication && (
 				<PublishedAttachmentFile
@@ -2328,6 +2334,7 @@ export function AdminInspector({
 							onUpload={onUpload}
 							readOnly={filesReadOnly}
 							readOnlyVersion={readOnlyVersion}
+							source={sources.find((entry) => entry.key === detail.sourceConnectionKey)}
 						/>
 					) : (
 						<AttachmentList

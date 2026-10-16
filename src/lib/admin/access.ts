@@ -90,7 +90,11 @@ export async function authorizeAdminRequest(
 	config?: LibraryServerConfig,
 ): Promise<AdminSessionAuthorization> {
 	config ??= await getLibraryConfig();
-	const reader = await getSignedInOpenScholarUser(headers, config);
+	// Mock only, never merged: a local copy against a live library acts as the owner OpenScholar names.
+	const mockOwner = process.env.MOCK_ADMIN_CLERK_USER_ID;
+	const reader = mockOwner
+		? { clerkUserId: mockOwner, name: "Mock owner", image: null }
+		: await getSignedInOpenScholarUser(headers, config);
 	if (!reader) return { status: "unauthenticated" };
 	const answer = await readAdminRole(config, reader.clerkUserId);
 	if (!answer) return { status: "unavailable" };

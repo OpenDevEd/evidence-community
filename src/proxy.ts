@@ -348,6 +348,8 @@ function adminMethodNotAllowedResponse() {
 
 /** Only whether a session cookie is there: the admin page checks the session and the role itself. */
 function hasSessionCookie(request: NextRequest) {
+	// Mock only, never merged: see MOCK_ADMIN_CLERK_USER_ID in lib/admin/access.ts.
+	if (process.env.MOCK_ADMIN_CLERK_USER_ID) return true;
 	return Boolean(getSessionCookie(request, { cookiePrefix: "evidence-library" }));
 }
 
