@@ -12,6 +12,7 @@ import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { PDF_FILTER, PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
+import { PDF_HANDOFF_TEXT } from "./prompt-context";
 import {
 	CURRENT_RESULTS_WINDOW_SIZE,
 	createCurrentResultsCursor,
@@ -140,13 +141,18 @@ function toolSearchParams(query: string, filters: SearchFilters | undefined) {
 	};
 }
 
+function isPdfHandoff(message: ModelMessage) {
+	return Array.isArray(message.content) && message.content[0]?.type === "text" && message.content[0].text === PDF_HANDOFF_TEXT;
+}
+
+/** What the person last asked, skipping the PDF handoffs the agent adds after each read. */
 function latestUserText(messages: ModelMessage[]) {
 	const withoutContext = (text: string) =>
 		text.replace(/<request_context>[\s\S]*?<\/request_context>/g, "");
 
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
 		const message = messages[index];
-		if (message.role !== "user") continue;
+		if (message.role !== "user" || isPdfHandoff(message)) continue;
 		if (typeof message.content === "string") {
 			return withoutContext(message.content);
 		}

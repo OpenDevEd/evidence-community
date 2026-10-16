@@ -21,7 +21,7 @@ import {
 	openRouterModelSettings,
 	openRouterResponseCacheHeaders,
 } from "./openrouter";
-import { EVIDENCE_CITATION_INSTRUCTIONS } from "./prompt-context";
+import { EVIDENCE_CITATION_INSTRUCTIONS, PDF_HANDOFF_TEXT } from "./prompt-context";
 import type { ResearchUIData } from "./request-context";
 import { trackAIUsage } from "./telemetry";
 import { createResearchTools, type ResearchMode } from "./tools";
@@ -142,9 +142,6 @@ function liftedFileNote(filename: string | undefined) {
 		text: `(The file ${JSON.stringify(filename ?? "document.pdf")} is attached in the user message that follows this tool result.)`,
 	};
 }
-
-const PDF_HANDOFF_TEXT =
-	"The PDF files for the publications returned by readPublications are attached to this message. Use them as the evidence for that read, citing pages as instructed in the tool result.";
 
 /**
  * Moves PDFs out of a tool result and into a user message right after it. A

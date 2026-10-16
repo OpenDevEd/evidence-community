@@ -28,6 +28,7 @@ import {
 	createResearchToolSchemas,
 	validateSearchFiltersAgainstUserRequest,
 } from "@/lib/ai/tool-schemas";
+import { PDF_HANDOFF_TEXT } from "@/lib/ai/prompt-context";
 import { createResearchTools } from "@/lib/ai/tools";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { PDF_FILTER } from "@/lib/search-filter-constants";
@@ -268,6 +269,22 @@ describe("searching the library for the assistant", () => {
 		);
 
 		expect(searchOptions().filter).toEqual(expect.arrayContaining(['key IN ["SAVED001","SAVED002"]']));
+	});
+
+	it("keeps the reader's year range when PDFs were read before the search", async () => {
+		const tools = createResearchTools("quick", config);
+		const messages = [
+			{ role: "user" as const, content: "What else since 2020 fits this collection?" },
+			{ role: "user" as const, content: [{ type: "text" as const, text: PDF_HANDOFF_TEXT }] },
+		];
+
+		const result = (await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: ["automated feedback"], filters: { yearRange: [2020, 2026] } }),
+			{ messages } as never,
+		)) as { appliedFilters: { yearRange?: number[] }; ignoredFilters: string[] };
+
+		expect(result.ignoredFilters).toEqual([]);
+		expect(result.appliedFilters.yearRange).toEqual([2020, 2026]);
 	});
 
 	it("tells which library hits are already on the reader's list, so only new ones are recommended", async () => {

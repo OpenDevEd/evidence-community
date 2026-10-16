@@ -4,6 +4,10 @@ export function currentDateContext(now = new Date()) {
 	return `The current date is ${currentDate} (UTC). Resolve relative dates from this date; for example, "the past 12 months" means the rolling 12-month period ending today unless the user specifies a different interpretation.`;
 }
 
+/** Opens the user message the agent adds to carry a read's PDFs. The person asking never wrote it. */
+export const PDF_HANDOFF_TEXT =
+	"The PDF files for the publications returned by readPublications are attached to this message. Use them as the evidence for that read, citing pages as instructed in the tool result.";
+
 export const EVIDENCE_CITATION_INSTRUCTIONS = [
 	"<evidence_citation_rules>",
 	"Every factual claim drawn from Evidence Library evidence MUST show both its publication source and the exact PDF page in one inline citation.",
