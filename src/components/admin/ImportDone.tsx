@@ -7,6 +7,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 
 import { publicationPresentation } from "./AdminPublicationStatus";
+import { creatorsLine } from "./ImportReview";
 import { appliedOf, checkPasses, draftNeeds, heldRoute, needsText, reviewChecks, routeOf, rowPasses, serverSending, type AttachState, type ImportBatch, type ImportRow, type PublishState } from "./admin-import";
 import { useAdminPublication } from "./useAdminPublication";
 
@@ -30,7 +31,7 @@ function PublishedDoi({ itemKey }: { itemKey: string }) {
 	);
 }
 
-/** Where a new draft stands: on its way, published with its DOI, waiting for an editor, what it needs before it can go, or how its checks went. */
+/** Where a new draft stands: on its way, published with its DOI, waiting for an editor, what it needs before it can go, or who wrote it. */
 type ServerSend = ImportBatch["sending"][string];
 
 export function DraftState({ attach, draft, publish, server, verbs }: { attach: AttachState | undefined; draft: Draft; publish: PublishState | undefined; server?: ServerSend; verbs: SendVerbs }) {
@@ -43,7 +44,7 @@ export function DraftState({ attach, draft, publish, server, verbs }: { attach: 
 	// send failed, which may have been on another route.
 	if (Object.keys(draft.needs).length) return <AlertNote text={needsText(draft.needs)} tone="text-amber-700 dark:text-amber-400" />;
 	if (publish) return <SentState itemKey={draft.itemKey} publish={publish} verbs={verbs} />;
-	return <ChecksState draft={draft} />;
+	return <DraftAuthors row={draft.row} />;
 }
 
 /**
@@ -88,17 +89,9 @@ function AlertNote({ text, tone = "text-danger" }: { text: string; tone?: string
 	);
 }
 
-/** A draft not sent on: how its PDF's checks went. */
-function ChecksState({ draft: { applied, row } }: { draft: Draft }) {
-	if (!row.checks.length) return <span className="text-xs text-black/45 dark:text-white/45">In Drafts</span>;
-	if (rowPasses(row, applied)) return <span className="text-xs text-emerald-700 dark:text-emerald-400">Passes every check</span>;
-	const failing = reviewChecks(row, applied).filter((check) => !checkPasses(check)).length;
-	return (
-		<span className={`${note} text-amber-700 dark:text-amber-400`}>
-			<HugeiconsIcon aria-hidden icon={AlertCircleIcon} size={13} />
-			{failing} {failing === 1 ? "check fails" : "checks fail"}
-		</span>
-	);
+/** A draft not sent on: who wrote it, as the review's list shows a ready record. Its checks show beside it. */
+function DraftAuthors({ row }: { row: ImportRow }) {
+	return <span className="block truncate text-xs text-black/50 dark:text-white/50">{creatorsLine(row.record?.creators ?? []) || "No authors"}</span>;
 }
 
 /**
@@ -130,6 +123,17 @@ function sending(batch: ImportBatch) {
 	return { routeHeld: started || heldRoute(batch) !== undefined, sentIds, started };
 }
 
+/** How far a draft is from going on: 0 it can't until something is fixed, 1 it can or is on its way, 2 it went. */
+function draftStage(batch: ImportBatch, sentIds: ReadonlySet<string>, { needs, row }: Draft) {
+	if (sentIds.has(row.id)) return 2;
+	return row.source && batch.attach.get(row.id) !== "failed" && !Object.keys(needs).length ? 1 : 0;
+}
+
+const passingChecks = ({ applied, row }: Draft) => reviewChecks(row, applied).filter(checkPasses).length;
+
+/** The list's order, worst first: by stage, then the fewest passing checks. A draft moves as it goes on, never as it's ticked. */
+const byStage = (batch: ImportBatch, sentIds: ReadonlySet<string>) => (a: Draft, b: Draft) => draftStage(batch, sentIds, a) - draftStage(batch, sentIds, b) || passingChecks(a) - passingChecks(b);
+
 /**
  * What the finish screen knows: the new drafts, which are ticked to publish
  * or submit, and how the import went. Drafts read from a PDF can go once
@@ -147,8 +151,6 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	// still needs a field the route asks for waits until the editor completes it in the record.
 	const publishable = drafts.filter(({ needs, row }) => row.source && batch.attach.get(row.id) === "attached" && !sentIds.has(row.id) && !Object.keys(needs).length && batch.sending[row.id]?.state !== "waiting");
 	const publishableIds = publishable.map(({ row }) => row.id);
-	// A draft already sent, or on its way from the server, is no longer the person's to send, so it gets no tick.
-	const open = drafts.filter(({ row }) => row.source && !sentIds.has(row.id) && batch.sending[row.id]?.state !== "waiting").map(({ row }) => row.id);
 	// Once sending starts, the ticks are the drafts it was started for. Before
 	// that, a ticked draft whose PDF then fails to attach drops out.
 	const chosen = started ? new Set(batch.publish.keys()) : new Set((batch.toPublish ? [...batch.toPublish] : publishable.filter(({ applied, row }) => rowPasses(row, applied)).map(({ row }) => row.id)).filter((id) => publishableIds.includes(id)));
@@ -166,12 +168,12 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		/** Drafts made in the library, which take the import's DOI route. Known once the import returns, so the row never comes or goes later. */
 		created: drafts.some(({ kind, row }) => kind === "created" && row.source),
 		chosen,
-		drafts,
+		/** Whether the ticks can be used: some draft can go, and nothing is sending drafts on. Only a draft that can go shows one. */
+		choosing: publishableIds.length > 0 && !started && !serverSending(batch),
+		drafts: drafts.toSorted(byStage(batch, sentIds)),
 		failedPdfs: pdfs.some((state) => state === "failed"),
-		/** Drafts read from PDFs can be sent on. Fixed once the import returns, so the ticks and the button don't come and go as PDFs attach. */
+		/** Drafts read from PDFs can be sent on, so the list keeps a tick's space. Fixed once the import returns. */
 		offered: drafts.some(({ row }) => row.source),
-		/** Drafts still the person's to send, which show a tick; the Publish button shows while there are any. */
-		open,
 		passing: publishable.filter(({ applied, row }) => rowPasses(row, applied)).length,
 		pdfs: pdfs.length,
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),

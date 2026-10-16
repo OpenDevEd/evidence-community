@@ -18,7 +18,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { CollectionsSetting } from "./ImportAdd";
 import { DoiChoice } from "./ImportDoneStep";
 import { InspectorChoices } from "./InspectorChoices";
-import { countSummary, ListHeader, Setting, SettingsGroup, sheetTransition, SheetTabs } from "./import-parts";
+import { checkCountOf, countSummary, ListHeader, Setting, SettingsGroup, sheetTransition, SheetTabs, Tick } from "./import-parts";
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import type { ImportFlowState } from "./import-flow";
 
@@ -87,8 +87,6 @@ function ReviewPage({ flow, onBack, onOpen, onPage, open, page }: { flow: Import
 // The draft importing made from this row, once it has.
 const draftKeyOf = (flow: ImportFlowState, row: ImportRow) => flow.resultById.get(row.id)?.itemKey;
 const statusOf = (flow: ImportFlowState, row: ImportRow) => rowStatus(row, flow.resultById.get(row.id), flow.batch?.attach.get(row.id), flow.needsOf(row));
-// A PDF's checks count against the import's; a DOI or file record has none.
-const checkCountOf = (flow: ImportFlowState, row: ImportRow) => (row.source ? flow.checkCount : 0);
 // The checks the PDFs were read against, which a suggestion names by their place.
 const batchChecks = (flow: ImportFlowState) => flow.batch?.checks ?? [];
 
@@ -124,9 +122,12 @@ function RecordList({ flow, onOpen, onPage, page }: { flow: ImportFlowState; onO
 /** How far reading has got, while the worker still reads the import's PDFs. */
 const readingAside = (flow: ImportFlowState) => (flow.batch?.kind === "pdfs" && flow.reading ? `${flow.counts.done} of ${flow.counts.total} read` : undefined);
 
+// No tick to choose every record until one is ready, or while the import is on its way.
+const choosingAll = (flow: ImportFlowState) => flow.readyIds.length > 0 && !flow.locked;
+
 function ChooseEvery({ flow }: { flow: ImportFlowState }) {
 	const all = flow.readyIds.length > 0 && flow.readyIds.every((id) => flow.selected.has(id));
-	return <Checkbox aria-label="Choose every ready record" isDisabled={flow.locked || !flow.readyIds.length} isIndeterminate={flow.selected.size > 0 && !all} isSelected={all} onValueChange={(checked) => flow.setSelected(new Set(checked ? flow.readyIds : []))} size="sm" />;
+	return <Tick>{choosingAll(flow) ? <Checkbox aria-label="Choose every ready record" isIndeterminate={flow.selected.size > 0 && !all} isSelected={all} onValueChange={(checked) => flow.setSelected(new Set(checked ? flow.readyIds : []))} size="sm" /> : null}</Tick>;
 }
 
 // A title the record has, or the file's name in a quieter colour while it has none.
@@ -136,7 +137,8 @@ function RecordListRow({ flow, onOpen, row }: { flow: ImportFlowState; onOpen: (
 	const title = rowTitle(row);
 	return (
 		<li className="flex items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
-			<Checkbox aria-label={`Import ${title}`} isDisabled={flow.locked || !importable(row)} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm" />
+			{/* A record still reading, or that can't be imported, has no tick until it can, and none has while the import is on its way. */}
+			<Tick>{importable(row) && !flow.locked ? <Checkbox aria-label={`Import ${title}`} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm" /> : null}</Tick>
 			<button className="flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-md py-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onOpen(row.id)} type="button">
 				<ImportCover className="w-8" {...coverOf(row)} size={12} />
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">

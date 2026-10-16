@@ -6284,9 +6284,9 @@ test.describe("PDF import", () => {
 		await (await preview).close();
 		await sheet.getByRole("button", { name: /^Import\s1\srecord$/u }).click();
 		await expect(sheet.getByText("Drafts created")).toBeVisible();
-		// A draft goes on with its PDF, so it can be chosen to publish only once the PDF is attached.
+		// A draft goes on with its PDF, so its tick to publish shows only once the PDF is attached.
 		const choose = sheet.getByRole("checkbox", { name: `Publish ${title}` });
-		await expect(choose).toBeDisabled();
+		await expect(choose).toBeHidden();
 		await expect(choose).toBeEnabled();
 		expect(committed!.records[0]!.payload).toMatchObject({ collections: ["THEMEGEN"], languageName: "en", title });
 	});

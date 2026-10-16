@@ -70,12 +70,12 @@ describe("the finish step", () => {
 	// A send that failed for a moment, such as a DOI reservation, is tried again from here, without sending the others twice.
 	it("lets the drafts a send failed on go again, and keeps the sent ones out", () => {
 		const current = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }], ["2", { message: "Try again", state: "failed" as const }]]), toPublish: new Set(["1", "2"]) };
-		expect(view(current)).toMatchObject({ open: ["2"], publishable: ["2"], started: false });
+		expect(view(current)).toMatchObject({ choosing: true, publishable: ["2"], started: false });
 		expect([...view(current).chosen]).toEqual(["2"]);
 		// A finished run leaves nothing ticked, and a draft whose PDF came later can still go.
 		const done = { ...current, publish: new Map([["1", { state: "published" as const }], ["2", { state: "published" as const }]]) };
 		// With every draft sent, none is left to tick and the Publish button goes.
-		expect(view(done)).toMatchObject({ open: [], publishable: [], sent: 2, started: false });
+		expect(view(done)).toMatchObject({ choosing: false, publishable: [], sent: 2, started: false });
 		const later = { ...batch([["1", "attached"], ["2", "attached"]]), publish: new Map([["1", { state: "published" as const }]]) };
 		expect(view(later)).toMatchObject({ publishable: ["2"], started: false });
 	});
@@ -98,13 +98,21 @@ describe("the finish step", () => {
 	// The server sends an import's drafts on as their PDFs attach; the finish step offers only what it couldn't send.
 	it("holds back drafts the server is still sending on, and offers one whose send failed again", () => {
 		const current = { ...batch([["1", "attached"], ["2", "attached"]]), send: { action: "submit" as const, route: null }, sending: { 1: { message: null, state: "waiting" as const }, 2: { message: "Zenodo couldn't be reached", state: "failed" as const } } };
-		// One the server is still sending gets no tick; the one it failed on is the editor's to send again.
-		expect(view(current)).toMatchObject({ open: ["2"], publishable: ["2"], routeHeld: true, serverSending: true });
+		// The one it failed on is the editor's to send again, once the server has sent the rest; until then nothing is ticked.
+		expect(view(current)).toMatchObject({ choosing: false, publishable: ["2"], routeHeld: true, serverSending: true });
 		// A creator's import submits, so an editor looking at it is told it submits too.
 		expect(view(current).verbs).toEqual(publishView(current, () => {}, false).verbs);
 		// Once sent, the store takes the server's word that it is published.
 		const sent = { ...current, publish: new Map([["1", { state: "published" as const }]]), sending: { 2: current.sending[2] } };
-		expect(view(sent)).toMatchObject({ publishable: ["2"], routeHeld: false, serverSending: false });
+		expect(view(sent)).toMatchObject({ choosing: true, publishable: ["2"], routeHeld: false, serverSending: false });
+	});
+
+	// Worst first, so what needs the editor is on top: what can't go, then what can or is going, then what went.
+	it("lists the drafts that can't go first and the sent ones last, the fewest passing checks first in each", () => {
+		const check = (result: "met" | "not_met") => ({ criterion: "Credits FCDO", page: null, quote: null, recommendation: null, result });
+		const rows = [row("1", { checks: [check("met")] }), row("2", { checks: [check("met")] }), row("3", { checks: [check("not_met")] }), row("4", { checks: [check("met")] }), row("5", { checks: [check("not_met")] })];
+		const current = { ...batch([["1", "attached"], ["2", "attached"], ["3", "attached"], ["4", "failed"], ["5", "failed"]], rows), publish: new Map([["1", { state: "published" as const }]]) };
+		expect(view(current).drafts.map(({ row }) => row.id)).toEqual(["5", "4", "3", "2", "1"]);
 	});
 
 	it("ticks the drafts that pass every check, and leaves the rest to the editor", () => {

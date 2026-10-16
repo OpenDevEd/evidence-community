@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertCircleIcon, Attachment01Icon, CheckmarkCircle02Icon, Copy01Icon, Link01Icon } from "@hugeicons/core-free-icons";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
@@ -13,8 +14,9 @@ import { ImportPager, pageOf } from "./ImportPager";
 import { Switch } from "@/components/nextui/Switch";
 
 import { InspectorChoices } from "./InspectorChoices";
+import { CheckMeter } from "./ImportReview";
 import { DOI_PROVIDER_HELP, doiProviderOptions } from "./PublishingChoicePanel";
-import { countSummary, ListHeader, Setting, SettingsGroup, SummaryRow } from "./import-parts";
+import { checkCountOf, countSummary, ListHeader, Setting, SettingsGroup, sheetTransition, SummaryRow, Tick } from "./import-parts";
 import { coverOf, routeOf, type ImportBatch } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 
@@ -33,16 +35,23 @@ export function ImportDoneStep({ flow }: { flow: ImportFlowState }) {
 	const { canPublish } = useAdminSession();
 	const view = publishView(flow.batch!, flow.choosePublish, canPublish);
 	const { current, items, pages } = pageOf(view.drafts, page, ROWS_PER_PAGE);
+	const reduceMotion = useReducedMotion();
 	// Every row is known once the import returns, so none appears later and pushes the list.
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 pt-5 [scrollbar-gutter:stable]">
 			<DoneSummary flow={flow} view={view} />
 			<div className="flex flex-col gap-2">
 				<DraftsHeader view={view} />
-				<ul className="flex flex-col">
-					{items.map((draft) => (
-						<DraftRow draft={draft} flow={flow} key={draft.row.id} view={view} />
-					))}
+				{/* A draft slides to its place as it goes on; one moving to another page fades out, and the one taking its place
+				   fades in. Turning the page starts the list afresh. */}
+				<ul className="relative flex flex-col" key={current}>
+					<AnimatePresence initial={false} mode="popLayout">
+						{items.map((draft) => (
+							<motion.li animate={{ opacity: 1 }} className="flex min-h-16 items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]" exit={{ opacity: 0 }} initial={{ opacity: 0 }} key={draft.row.id} layout={reduceMotion ? false : "position"} transition={sheetTransition(reduceMotion, 0.32)}>
+								<DraftRow draft={draft} flow={flow} view={view} />
+							</motion.li>
+						))}
+					</AnimatePresence>
 				</ul>
 				<ImportPager label="Pages of new drafts" onChange={setPage} page={current} pages={pages} perPage={ROWS_PER_PAGE} total={view.drafts.length} />
 			</div>
@@ -98,8 +107,8 @@ export function DoiChoice({ flow, route, started }: { flow: ImportFlowState; rou
 /** How many drafts there are, or, when they can be sent on, how many are chosen and how many went. */
 function DraftsHeader({ view }: { view: PublishView }) {
 	if (!view.offered) return <ListHeader title={countSummary(view.drafts.length, "draft", "drafts", "0 drafts")} />;
-	if (view.serverSending) return <ListHeader lead={<NoTick />} title={`${view.verbs.doing} as their PDFs attach`} />;
-	return <ListHeader {...draftsHeading(view)} lead={view.open.length ? <ChooseEveryDraft view={view} /> : <NoTick />} />;
+	if (view.serverSending) return <ListHeader lead={<Tick>{null}</Tick>} title={`${view.verbs.doing} as their PDFs attach`} />;
+	return <ListHeader {...draftsHeading(view)} lead={<Tick>{view.choosing ? <ChooseEveryDraft view={view} /> : null}</Tick>} />;
 }
 
 /** Before sending, how many are chosen and how many pass; after, how many went. */
@@ -110,7 +119,7 @@ function draftsHeading(view: PublishView) {
 }
 
 function ChooseEveryDraft({ view }: { view: PublishView }) {
-	return <Checkbox aria-label={`Choose every draft ${view.verbs.to}`} isDisabled={view.started || !view.publishable.length} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" />;
+	return <Checkbox aria-label={`Choose every draft ${view.verbs.to}`} isIndeterminate={view.chosen.size > 0 && !view.all} isSelected={view.all} onValueChange={view.toggleAll} size="sm" />;
 }
 
 const draftTitle = (row: ImportFlowState["shown"][number]) => row.record?.title ?? row.record?.source;
@@ -118,26 +127,29 @@ const draftTitle = (row: ImportFlowState["shown"][number]) => row.record?.title 
 function DraftRow({ draft, flow, view }: { draft: PublishView["drafts"][number]; flow: ImportFlowState; view: PublishView }) {
 	const { itemKey, row } = draft;
 	return (
-		<li className="flex min-h-16 items-center gap-3 rounded-lg pe-1 ps-1.5 hover:bg-black/[0.03] dark:hover:bg-white/[0.04]">
+		<>
 			<DraftChoice id={row.id} title={draftTitle(row)} view={view} />
 			<ImportCover className="w-8" {...coverOf(row)} size={12} />
 			<span className="flex min-w-0 flex-1 flex-col gap-0.5 py-2">
 				<span className="line-clamp-2 text-sm font-medium leading-5 text-black/85 dark:text-white/85">{draftTitle(row)}</span>
-				<DraftState attach={flow.batch!.attach.get(row.id)} draft={draft} publish={flow.batch!.publish.get(row.id)} server={flow.batch!.sending[row.id]} verbs={view.verbs} />
+				{/* Where it stands, then its checks as the review's list shows them, on every draft alike. */}
+				<span className="flex items-center gap-2">
+					{/* A flex box, so a state that is only text keeps its own line height as it changes. */}
+					<span className="flex min-w-0 flex-1">
+						<DraftState attach={flow.batch!.attach.get(row.id)} draft={draft} publish={flow.batch!.publish.get(row.id)} server={flow.batch!.sending[row.id]} verbs={view.verbs} />
+					</span>
+					<CheckMeter checks={flow.checksOf(row)} count={checkCountOf(flow, row)} />
+				</span>
 			</span>
 			<Button onPress={() => flow.onOpenRecord(itemKey)} size="xs" variant="transparent">
 				Open
 			</Button>
-		</li>
+		</>
 	);
 }
 
-/** The tick that sends a draft on, where drafts can be. */
+/** The tick that sends a draft on, on a draft that can go while nothing is sending. */
 function DraftChoice({ id, title, view }: { id: string; title: string | undefined; view: PublishView }) {
 	if (!view.offered) return null;
-	if (!view.open.includes(id)) return <NoTick />;
-	return <Checkbox aria-label={`${view.verbs.act} ${title}`} isDisabled={view.started || !view.publishable.includes(id)} isSelected={view.chosen.has(id)} onValueChange={(checked) => view.toggle(id, checked)} size="sm" />;
+	return <Tick>{view.choosing && view.publishable.includes(id) ? <Checkbox aria-label={`${view.verbs.act} ${title}`} isSelected={view.chosen.has(id)} onValueChange={(checked) => view.toggle(id, checked)} size="sm" /> : null}</Tick>;
 }
-
-/** A tick's space on a draft that's no longer the person's to send, so every row's cover lines up. */
-const NoTick = () => <span aria-hidden className="w-6 shrink-0" />;
