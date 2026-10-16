@@ -169,12 +169,33 @@ function expiryFrom(now: Date, leaseDurationMs: number) {
 
 const EXPIRED_RUN_ERROR = "SourceLeaseLostError: worker lease expired";
 
+type RunLine = { source: string; provider?: string; run: number; seconds: number } & ({ status: "succeeded"; result: SourceSyncResult } | { status: "failed"; code: string; error: string });
+
+function failedRunLine(source: string, run: number, startedAt: Date, now: Date, code: string, error: string): RunLine {
+	return { source, run, seconds: Math.round((now.getTime() - startedAt.getTime()) / 1000), status: "failed", code, error };
+}
+
+/** One line per finished run, so a library's logs say what each import did without reading its database. */
+function logRuns(lines: readonly RunLine[]) {
+	for (const line of lines) {
+		if (line.status === "failed") console.error("Source import run", JSON.stringify(line));
+		else console.info("Source import run", JSON.stringify(line));
+	}
+}
+
+function runFailure(error: unknown) {
+	return {
+		code: error instanceof SourceLeaseLostError ? "interrupted" : classifySourceError(error),
+		message: errorMessage(error),
+	};
+}
+
 /**
  * Marks the running runs of a source whose worker died as failed. Their
  * batches stay written, so what they changed is counted as a failed run's is.
  * Returns the sync state fields that record it.
  */
-async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey: string, now: Date) {
+async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey: string, now: Date, closed: RunLine[]) {
 	const expiredRuns = await transaction
 		.update(sourceSyncRun)
 		.set({ error: EXPIRED_RUN_ERROR, finishedAt: now, heartbeatAt: now, status: "failed" })
@@ -184,7 +205,8 @@ async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey:
 				eq(sourceSyncRun.status, "running"),
 			),
 		)
-		.returning({ id: sourceSyncRun.id });
+		.returning({ id: sourceSyncRun.id, startedAt: sourceSyncRun.startedAt });
+	closed.push(...expiredRuns.map((run) => failedRunLine(sourceConnectionKey, run.id, run.startedAt, now, "interrupted", EXPIRED_RUN_ERROR)));
 	let changedPatch = {};
 	for (const run of expiredRuns) {
 		changedPatch = { ...changedPatch, ...(await changedRecordsPatch(transaction, run.id)) };
@@ -219,7 +241,8 @@ async function claimRun(
 	workerId: string,
 ): Promise<ClaimedRun> {
 	const now = (options.now ?? (() => new Date()))();
-	return options.database.transaction(async (transaction) => {
+	const closed: RunLine[] = [];
+	const claimed = await options.database.transaction(async (transaction) => {
 		const [connection] = await transaction
 			.select()
 			.from(sourceConnection)
@@ -273,7 +296,7 @@ async function claimRun(
 		// Checked under the row lock, so a run that just finished is already seen.
 		assertDue(options, connection, connection.provider, now);
 
-		const abandoned = await closeAbandonedRuns(transaction, connection.key, now);
+		const abandoned = await closeAbandonedRuns(transaction, connection.key, now, closed);
 
 		const [run] = await transaction
 			.insert(sourceSyncRun)
@@ -306,6 +329,8 @@ async function claimRun(
 
 		return { connection, runId: run.id };
 	});
+	logRuns(closed);
+	return claimed;
 }
 
 /**
@@ -317,7 +342,8 @@ async function claimRun(
  * old process still running can no longer renew the lease.
  */
 export async function releaseWorkerLeases(database: Database, workerId: string, now = new Date()) {
-	return database.transaction(async (transaction) => {
+	const closed: RunLine[] = [];
+	const released = await database.transaction(async (transaction) => {
 		const held = await transaction
 			.select({ key: sourceSyncState.sourceConnectionKey })
 			.from(sourceSyncState)
@@ -327,7 +353,7 @@ export async function releaseWorkerLeases(database: Database, workerId: string, 
 			await transaction
 				.update(sourceSyncState)
 				.set({
-					...(await closeAbandonedRuns(transaction, key, now)),
+					...(await closeAbandonedRuns(transaction, key, now, closed)),
 					activeRunId: null,
 					leaseExpiresAt: null,
 					leaseOwner: null,
@@ -338,6 +364,8 @@ export async function releaseWorkerLeases(database: Database, workerId: string, 
 		}
 		return held.map(({ key }) => key);
 	});
+	logRuns(closed);
+	return released;
 }
 
 async function heartbeatRun(
@@ -472,11 +500,7 @@ async function finishRunFailed(
 	workerId: string,
 ) {
 	const now = (options.now ?? (() => new Date()))();
-	const message = errorMessage(error);
-	const code =
-		error instanceof SourceLeaseLostError
-			? "interrupted"
-			: classifySourceError(error);
+	const { code, message } = runFailure(error);
 	await options.database.transaction(async (transaction) => {
 		const changedPatch = await changedRecordsPatch(transaction, claimed.runId);
 		const [state] = await transaction
@@ -592,7 +616,9 @@ export async function runSourceConnection(
 	const { heartbeatIntervalMs, leaseDurationMs, workerId } =
 		validateOptions(options);
 	const claimed = await claimRun(options, leaseDurationMs, workerId);
+	const startedAt = new Date();
 	const provider = claimed.connection.provider;
+	const line = { source: claimed.connection.key, provider, run: claimed.runId };
 	if (!isSyncableSourceProvider(provider)) {
 		throw new SourceConnectionNotRunnableError(
 			claimed.connection.key,
@@ -637,6 +663,7 @@ export async function runSourceConnection(
 		if (heartbeatFailure) throw heartbeatFailure;
 		await heartbeatRun(options, claimed, leaseDurationMs, workerId);
 		await finishRunSucceeded(options, claimed, result, workerId);
+		logRuns([{ ...line, seconds: Math.round((Date.now() - startedAt.getTime()) / 1000), status: "succeeded", result }]);
 		return {
 			connectionKey: claimed.connection.key,
 			provider,
@@ -645,6 +672,9 @@ export async function runSourceConnection(
 			status: "succeeded",
 		};
 	} catch (error) {
+		// Logged before the failure is saved, so a run whose database is gone still leaves its line.
+		const { code, message } = runFailure(error);
+		logRuns([{ ...failedRunLine(line.source, line.run, startedAt, new Date(), code, message), provider }]);
 		await finishRunFailed(options, claimed, error, workerId);
 		throw error;
 	} finally {
