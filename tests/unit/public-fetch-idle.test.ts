@@ -44,3 +44,18 @@ describe("fetchPublicFile idle timeout", () => {
 		expect([...data]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 	});
 });
+
+describe("fetchPublicFile shared budget", () => {
+	it("stops a download once the files together pass the budget, and gives back what it took", async () => {
+		const shared = { remaining: 5 };
+		const options = { accept: "application/pdf", timeoutMs: 10_000, shared };
+		vi.mocked(transport).mockResolvedValueOnce(new Response(trickle(3, 0, true)));
+		await fetchPublicFile(new URL("https://publisher.example/first.pdf"), options);
+		vi.mocked(transport).mockResolvedValueOnce(new Response(trickle(3, 0, true)));
+
+		await expect(fetchPublicFile(new URL("https://publisher.example/second.pdf"), options)).rejects.toThrow(
+			"The files together are too large",
+		);
+		expect(shared.remaining).toBe(2);
+	});
+});
