@@ -72,7 +72,6 @@ it("publishes the reviewed country set, keeps later edits private, and preserves
 			{
 				reviewId: submitted.id,
 				expectedRevision: submitted.revision,
-				publicationTags: [],
 			},
 			{ userId: "country-editor", role: "editor" },
 			config,

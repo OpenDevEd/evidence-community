@@ -11,20 +11,36 @@ export function hasAnyTag(tags: TagsInput, expectedTags: readonly string[]): boo
 }
 
 
-type PublicAttachmentTags = { hidden: readonly string[]; publish: readonly string[] };
+/** Each Zotero source's publish tags, by source key. */
+export type SourcePublishTags = Readonly<Record<string, readonly string[]>>;
+
+/** Each Zotero source's publish tags, from the library configuration. */
+export function sourcePublishTags(sources: readonly { key: string; provider: string; settings: object }[]): Record<string, string[]> {
+	return Object.fromEntries(
+		sources.flatMap((source) => {
+			const rule = source.provider === "zotero" ? (source.settings as { pdfPublishing?: { tags: readonly string[] } }).pdfPublishing : undefined;
+			return rule ? [[source.key, [...rule.tags]]] : [];
+		}),
+	);
+}
 
 /**
- * Remove non-public attachments before a record reaches readers or exports.
- * A note is public only when it carries a publish tag; the rest are private
- * working notes, so they never leave the server.
+ * The tags that make a record's notes and links public: its Zotero source's publish tags. Null for a record the
+ * library made itself, whose notes and links are always public; a record from any other source has none.
  */
-export function filterPublicAttachments<T extends { deleted?: number | null; itemType?: string | null; note?: string | null; tags?: readonly string[] | null }>(attachments: readonly T[] | undefined, tags: PublicAttachmentTags) {
-	return attachments
-		?.filter(attachment =>
-			attachment.deleted === 0 &&
-			!hasAnyTag(attachment.tags, tags.hidden) &&
-			(attachment.itemType !== "Note" || hasAnyTag(attachment.tags, tags.publish)),
-		)
-		// Only published notes show their text; a note kept on a file is never shown.
-		.map(attachment => attachment.itemType === "Note" || attachment.note == null ? attachment : { ...attachment, note: null });
+export function recordPublishTags(bySource: SourcePublishTags, sourceConnectionKey: string | null | undefined): readonly string[] | null {
+	if (sourceConnectionKey === "native") return null;
+	return (sourceConnectionKey && bySource[sourceConnectionKey]) || [];
+}
+
+/** Whether these tags publish a note or link; null publish tags publish every one. */
+export function publishedByTags(tags: TagsInput, publishTags: readonly string[] | null) {
+	return publishTags === null || hasAnyTag(tags, publishTags);
+}
+
+/** What decides which records and attachments readers see: the hidden tags, and each source's publish tags. */
+export type PublicTagRules = { hidden: readonly string[]; publishBySource: SourcePublishTags };
+
+export function publicTagRules(config: { content: { tags: { hidden: readonly string[] } }; sources: readonly { key: string; provider: string; settings: object }[] }): PublicTagRules {
+	return { hidden: config.content.tags.hidden, publishBySource: sourcePublishTags(config.sources) };
 }

@@ -18,7 +18,6 @@ export function createSourceSyncRuntime(
 	const attachmentProcessor = createZoteroAttachmentProcessor({
 		database,
 		maxPdfBytes: config.services.storage.maxPdfBytes,
-		publishTags: config.content.tags.publish,
 		storage,
 	});
 

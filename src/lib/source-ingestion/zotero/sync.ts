@@ -31,6 +31,8 @@ import {
 } from "./mapper";
 import {
 	zoteroCursorSchema,
+	zoteroPdfRule,
+	zoteroPdfRuleKey,
 	type ZoteroCollectionResponse,
 	type ZoteroCursor,
 	type ZoteroItemResponse,
@@ -639,46 +641,35 @@ function nextSoftTrashState(
 	return next;
 }
 
-function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfs: boolean) {
+function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfRule: string) {
 	return {
 		libraryVersion: targetVersion,
 		softTrashedCollectionKeys: [
 			...softTrash.softTrashedCollectionKeys,
 		].sort(),
 		softTrashedItemKeys: [...softTrash.softTrashedItemKeys].sort(),
-		...pdfsField(pdfs),
+		pdfRule,
 	};
 }
 
-/** The cursor field recording a read that left PDFs out; absent when it added them. */
-function pdfsField(pdfs: boolean) {
-	return pdfs ? {} : { pdfs: false as const };
-}
-
-/**
- * Where a read starts. An unfinished read under the same PDF setting carries
- * on where it stopped. A mapping change, a PDF setting change, or an
- * unfinished read under the other setting starts from the beginning, so
- * every record is read again. Otherwise it reads what changed since the last
- * complete read.
- */
 /** The cursor of a read that stopped part-way: the last complete read's state, plus where this one got to. */
 function pendingCursor(
 	cursor: ZoteroCursor,
 	previousSoftTrash: SoftTrashState,
-	read: { offset: number; snapshotSince: number; targetVersion: number; pdfs: boolean },
+	read: { offset: number; snapshotSince: number; targetVersion: number; pdfRule: string },
 ) {
 	return {
 		libraryVersion: currentLibraryVersion(cursor),
 		softTrashedCollectionKeys: [...previousSoftTrash.softTrashedCollectionKeys].sort(),
 		softTrashedItemKeys: [...previousSoftTrash.softTrashedItemKeys].sort(),
 		// Kept until the read completes, so an interrupted change is read again in full.
-		...pdfsField(cursorAddedPdfs(cursor)),
+		...("pdfRule" in cursor && cursor.pdfRule !== undefined ? { pdfRule: cursor.pdfRule } : {}),
+		...("pdfs" in cursor && cursor.pdfs === false ? { pdfs: false as const } : {}),
 		pending: {
 			offset: read.offset,
 			snapshotSince: read.snapshotSince,
 			targetVersion: read.targetVersion,
-			...pdfsField(read.pdfs),
+			pdfRule: read.pdfRule,
 		},
 	};
 }
@@ -713,18 +704,30 @@ async function readSnapshot(
 	return { manifest: await readManifest(reader, 0), snapshotSince: 0 };
 }
 
-function readStart(cursor: ZoteroCursor, replay: boolean, downloadPdfs: boolean) {
+/**
+ * Where a read starts. An unfinished read under the same PDF rule carries on
+ * where it stopped. A mapping change, a PDF rule change, or an unfinished read
+ * under another rule starts from the beginning, so every record is read again
+ * and its PDF is published or taken down to match. Otherwise it reads what
+ * changed since the last complete read.
+ */
+function readStart(cursor: ZoteroCursor, replay: boolean, pdfRule: string) {
 	const pending = "pending" in cursor ? cursor.pending : undefined;
-	if (pending && (pending.pdfs ?? true) === downloadPdfs) {
+	if (pending && recordedPdfRule(pending, pdfRule) === pdfRule) {
 		return { snapshotSince: pending.snapshotSince, resumes: true };
 	}
-	const fromStart = Boolean(pending) || replay || cursorAddedPdfs(cursor) !== downloadPdfs;
+	const fromStart = Boolean(pending) || replay || ("libraryVersion" in cursor && recordedPdfRule(cursor, pdfRule) !== pdfRule);
 	return { snapshotSince: fromStart ? 0 : currentLibraryVersion(cursor), resumes: false };
 }
 
-/** Whether the last complete read added PDFs; a cursor from before the setting did. */
-function cursorAddedPdfs(cursor: ZoteroCursor) {
-	return !("pdfs" in cursor && cursor.pdfs === false);
+/**
+ * The PDF rule a read followed. One saved before the rule was recorded left PDFs out (`pdfs: false`) or added them
+ * under the rule in force then, which is taken to be the current one: a library update reads nothing again by itself.
+ */
+function recordedPdfRule(read: { pdfRule?: string; pdfs?: false }, current: string) {
+	if (read.pdfRule !== undefined) return read.pdfRule;
+	if (read.pdfs === false) return zoteroPdfRuleKey({ mode: "off" });
+	return current === zoteroPdfRuleKey({ mode: "off" }) ? "added" : current;
 }
 
 function expandLocalDescendantKeys<
@@ -895,7 +898,7 @@ async function writeManifestBatches(
 		excludedCollectionKeys: Set<string>;
 		attachmentContext: ZoteroAttachmentProcessorContext;
 		fetchedAt: Date;
-		downloadPdfs: boolean;
+		pdfRule: string;
 		maxRecordsPerBatch: number;
 		expectedConfiguration: Record<string, unknown>;
 	},
@@ -918,12 +921,12 @@ async function writeManifestBatches(
 		);
 		const nextCursor =
 			end === manifest.entries.length
-				? completedCursor(manifest.targetVersion, nextSoftTrash, read.downloadPdfs)
+				? completedCursor(manifest.targetVersion, nextSoftTrash, read.pdfRule)
 				: pendingCursor(cursor, previousSoftTrash, {
 						offset: end,
 						snapshotSince,
 						targetVersion: manifest.targetVersion,
-						pdfs: read.downloadPdfs,
+						pdfRule: read.pdfRule,
 					});
 		const written = await writeSourceIngestionBatch(options.database, {
 			...mapped,
@@ -970,8 +973,9 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		client,
 		prefix,
 		sourceConnectionKey: options.sourceConnectionKey,
-		publishPdfs: config.downloadPdfs,
+		pdfs: zoteroPdfRule(config),
 	};
+	const pdfRule = zoteroPdfRuleKey(attachmentContext.pdfs);
 	await options.attachmentProcessor?.flushCleanup?.(
 		options.sourceConnectionKey,
 	);
@@ -989,7 +993,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		),
 	]);
 	const previousSoftTrash = previousSoftTrashState(cursor);
-	const start = readStart(cursor, requiresMappingReplay, config.downloadPdfs);
+	const start = readStart(cursor, requiresMappingReplay, pdfRule);
 	const snapshot = await readSnapshot(
 		{
 			client,
@@ -1050,7 +1054,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			expectedConfiguration: connection.config,
 			expectedCursor,
 			fetchedAt,
-			nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs),
+			nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, pdfRule),
 			targetVersion: manifest.targetVersion,
 		});
 	}
@@ -1065,7 +1069,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		excludedCollectionKeys,
 		attachmentContext,
 		fetchedAt,
-		downloadPdfs: config.downloadPdfs,
+		pdfRule,
 		maxRecordsPerBatch: config.maxRecordsPerBatch,
 		expectedConfiguration: connection.config,
 	});

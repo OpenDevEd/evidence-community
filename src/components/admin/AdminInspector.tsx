@@ -834,14 +834,14 @@ const TagsEditor = memo(function TagsEditor({
 	recordKey: string;
 }) {
 	const [value, setValue] = useState("");
-	const { content } = useLibraryConfig();
+	const libraryConfig = useLibraryConfig();
 	const error = firstAdminFieldError(errors, "tags");
 	const tags = Array.isArray(payload.tags)
 		? payload.tags.filter(
 				(entry): entry is string => typeof entry === "string",
 			)
 		: [];
-	const visibleTags = ordinaryItemTags(tags, content.tags);
+	const visibleTags = ordinaryItemTags(tags, libraryConfig);
 	const tag = value.trim();
 	const alreadyAdded = hasTag(tags, tag);
 	const addTag = () => {
@@ -1525,7 +1525,8 @@ export function AdminInspector({
 	validationErrors: AdminFieldErrors;
 	validationRevision: number;
 }) {
-	const { identity, content, topics: topicsConfig } = useLibraryConfig();
+	const libraryConfig = useLibraryConfig();
+	const { identity, topics: topicsConfig } = libraryConfig;
 	const { canPublish } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
@@ -1636,7 +1637,7 @@ export function AdminInspector({
 		);
 	}
 
-	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, content.tags);
+	const tagsForEditor = (tags: string[]) => ordinaryItemTags(tags, libraryConfig);
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const importedOpenAlex = detail.kind === "imported" && detail.writeback.available.some(
 		(target) => target.isOrigin && isOpenAlexWorkProvider(target.provider),

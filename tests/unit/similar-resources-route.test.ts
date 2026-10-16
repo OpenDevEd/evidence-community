@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
 	config: {
 		content: { tags: { hidden: [] as string[] } },
+		sources: [],
 		features: { relatedResources: true },
 		search: {
 			embedder: {

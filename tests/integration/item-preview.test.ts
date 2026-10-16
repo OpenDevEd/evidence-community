@@ -100,7 +100,7 @@ it("shows the Crossref DOI a review reserves, before approval and after", async 
 		expect(preview?.DOI).toMatch(new RegExp(`^${config.services.publication.crossref?.prefix}/`));
 		expect(await db.select().from(item).where(eq(item.key, draft.itemKey))).toEqual([]);
 
-		await approveItemReview(db, new MemoryFileStorage(), { reviewId: review.id, expectedRevision: review.revision, publicationTags: ["publish-record"] }, { userId: "editor", role: "editor" }, config);
+		await approveItemReview(db, new MemoryFileStorage(), { reviewId: review.id, expectedRevision: review.revision }, { userId: "editor", role: "editor" }, config);
 		const [published] = await db.select({ DOI: item.DOI }).from(item).where(eq(item.key, draft.itemKey));
 		expect((await previewItem(db, draft.itemKey, config, review.id))?.DOI).toBe(published?.DOI);
 	});

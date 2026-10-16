@@ -277,18 +277,11 @@ type StageNativePdfInput = {
 	maxPdfBytes: number;
 };
 
+/** None when no Zotero group the record writes back to needs a tag to publish the PDF. */
 function normalizePublicationTags(values: readonly string[]) {
 	const tags = [...new Set(values.map((value) => value.trim()))].filter(
 		Boolean,
 	);
-	if (tags.length === 0) {
-		throw new NativeFileValidationError(
-			"PDF publication is not configured.",
-			{
-				file: "Configure at least one PDF publication tag, then try again.",
-			},
-		);
-	}
 	return tags.sort();
 }
 
@@ -983,19 +976,21 @@ export async function prepareNativePdfPublication(
 					updatedAt: now,
 				})
 				.where(eq(item.key, parent.key));
-			await transaction
-				.insert(tag)
-				.values(normalizedPublicationTags.map((name) => ({ name })))
-				.onConflictDoNothing();
-			await transaction
-				.insert(itemToTag)
-				.values(
-					normalizedPublicationTags.map((tagName) => ({
-						itemKey,
-						tagName,
-					})),
-				)
-				.onConflictDoNothing();
+			if (normalizedPublicationTags.length > 0) {
+				await transaction
+					.insert(tag)
+					.values(normalizedPublicationTags.map((name) => ({ name })))
+					.onConflictDoNothing();
+				await transaction
+					.insert(itemToTag)
+					.values(
+						normalizedPublicationTags.map((tagName) => ({
+							itemKey,
+							tagName,
+						})),
+					)
+					.onConflictDoNothing();
+			}
 			await advanceOpenNativeDraftBaseRevision(
 				transaction,
 				attachment.key,
@@ -1365,14 +1360,15 @@ export async function unpublishNativePdfInTransaction(
 				updatedAt: now,
 			})
 			.where(eq(item.key, parent.key));
-		await transaction
-			.delete(itemToTag)
-			.where(
-				and(
-					eq(itemToTag.itemKey, itemKey),
-					inArray(itemToTag.tagName, publication.publicationTags),
-				),
-			);
+		if (publication.publicationTags.length > 0)
+			await transaction
+				.delete(itemToTag)
+				.where(
+					and(
+						eq(itemToTag.itemKey, itemKey),
+						inArray(itemToTag.tagName, publication.publicationTags),
+					),
+				);
 		await advanceOpenNativeDraftBaseRevision(
 			transaction,
 			attachment.key,

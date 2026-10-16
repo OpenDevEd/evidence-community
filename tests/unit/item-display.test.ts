@@ -24,7 +24,7 @@ describe("tag-backed item display", () => {
 		expect(setItemDisplayTag(["topic"], [], true)).toEqual(["topic"]);
 	});
 	it("keeps only subject tags in the generic editor; every configured library tag is a system tag", () => {
-		const config = libraryConfigSchema.shape.content.parse({}).tags;
+		const config = { content: libraryConfigSchema.in.shape.content.parse({}), sourcePublishTags: { "zotero-1": ["approved"] } };
 		expect(
 			ordinaryItemTags(
 				[
@@ -36,6 +36,7 @@ describe("tag-backed item display", () => {
 					"_comingsoon",
 					"_category_description",
 					"_redirects",
+					"approved",
 				],
 				config,
 			),

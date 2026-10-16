@@ -103,6 +103,8 @@ describe("library configuration fixtures", () => {
 					requestTimeoutMs: 30_000,
 					// Existing groups keep adding their tagged PDFs.
 					downloadPdfs: true,
+					// A configuration saved before sources had their own rule keeps the library's publish tags.
+					pdfPublishing: { mode: "tagged", tags: ["publish-record"] },
 				},
 				// A source screens nothing until its owner turns screening on and writes a subject.
 				screening: { enabled: false, subject: "", keptOut: ["not-about"] },

@@ -24,7 +24,8 @@ import { getMainAttributes, publicRecordFilters } from "@/lib/search";
 import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
-import { filterPublicAttachments } from "@/lib/tags";
+import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { publicTagRules } from "@/lib/tags";
 import { normalizeDoi } from "@/lib/doi";
 import { openAlexItemKeys } from "@/lib/source-ingestion/openalex/references";
 import { toOpenScholarRecord, type OpenScholarRecord } from "./records";
@@ -258,7 +259,7 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 	const { index } = await getMeilisearchForConfig(config);
 	// The index keeps hidden and deleted records too: a record hidden since the source was resolved isn't read.
 	const found = await index.search("", { filter: [meilisearchIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)], limit: unique.length, attributesToRetrieve: await getMainAttributes(config) });
-	const tags = config.content.tags;
+	const rules = publicTagRules(config);
 	const byKey = new Map(found.hits.map((hit) => [String(hit.key), hit]));
 	const records: OpenScholarRecord[] = [];
 	const unread: string[] = [];
@@ -270,7 +271,7 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 			unread.push(key);
 			continue;
 		}
-		const record = toOpenScholarRecord({ ...hit, attachmentsData: filterPublicAttachments(hit.attachmentsData as never, tags) } as never);
+		const record = toOpenScholarRecord({ ...hit, attachmentsData: filterPublicAttachments(hit.attachmentsData as never, rules, hit.sourceConnectionKey as string | undefined) } as never);
 		const size = Buffer.byteLength(JSON.stringify(record));
 		if (records.length && bytes + size > BATCH_MAX_BYTES) {
 			unread.push(key);

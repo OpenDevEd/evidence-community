@@ -1,6 +1,6 @@
 import type { ListAttachment } from "@/app/api/item/types";
 import { isIdentifierAttachment } from "@/lib/publication/publication-display-adapter";
-import { hasAnyTag } from "@/lib/tags";
+import { hasAnyTag, publishedByTags, recordPublishTags, type PublicTagRules } from "@/lib/tags";
 
 type AttachmentVisibilityFields = {
 	PDFCoverPageImage?: string | null;
@@ -29,23 +29,23 @@ export function isVisiblePdfAttachment(
 
 export function isPublishedNote(
 	attachment: ItemPageAttachmentFields,
-	publishTags: readonly string[],
+	publishTags: readonly string[] | null,
 ) {
 	return (
 		attachment.itemType === "Note" &&
 		Boolean(attachment.note) &&
-		hasAnyTag(attachment.tags, publishTags)
+		publishedByTags(attachment.tags, publishTags)
 	);
 }
 
 export function isPublishedLink(
 	attachment: ItemPageAttachmentFields,
-	publishTags: readonly string[],
+	publishTags: readonly string[] | null,
 ) {
 	return (
 		attachment.linkMode === "linked_url" &&
 		Boolean(attachment.url) &&
-		hasAnyTag(attachment.tags, publishTags)
+		publishedByTags(attachment.tags, publishTags)
 	);
 }
 
@@ -56,7 +56,7 @@ export function isPublishedLink(
  */
 export function itemPageAttachments(
 	attachments: readonly ListAttachment[] | undefined,
-	publishTags: readonly string[],
+	publishTags: readonly string[] | null,
 ): ListAttachment[] | undefined {
 	return attachments
 		?.filter(
@@ -88,4 +88,22 @@ export function hasVisiblePdfAttachment(
 		| undefined,
 ) {
 	return Boolean(item?.attachmentsData?.some(isVisiblePdfAttachment));
+}
+
+/**
+ * Remove non-public attachments before a record reaches readers or exports. A note or an ordinary link is public only
+ * when it carries one of its record's publish tags; the rest are private working notes and links, so they never leave
+ * the server. Published PDFs and identifier links always stay.
+ */
+export function filterPublicAttachments<T extends { deleted?: number | null; itemType?: string | null; note?: string | null; tags?: readonly string[] | null } & AttachmentVisibilityFields>(attachments: readonly T[] | undefined, rules: PublicTagRules, sourceConnectionKey: string | null | undefined) {
+	const publish = recordPublishTags(rules.publishBySource, sourceConnectionKey);
+	return attachments
+		?.filter(attachment =>
+			attachment.deleted === 0 &&
+			!hasAnyTag(attachment.tags, rules.hidden) &&
+			(attachment.itemType !== "Note" || publishedByTags(attachment.tags, publish)) &&
+			(attachment.linkMode !== "linked_url" || isVisiblePdfAttachment(attachment) || isIdentifierAttachment(attachment) || publishedByTags(attachment.tags, publish)),
+		)
+		// Only published notes show their text; a note kept on a file is never shown.
+		.map(attachment => attachment.itemType === "Note" || attachment.note == null ? attachment : { ...attachment, note: null });
 }

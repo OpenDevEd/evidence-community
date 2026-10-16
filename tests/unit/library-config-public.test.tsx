@@ -84,6 +84,7 @@ describe("public library configuration", () => {
 				"revision",
 				"schemaVersion",
 				"search",
+				"sourcePublishTags",
 				"theme",
 				"topics",
 				"updatedAt",

@@ -74,6 +74,6 @@ export async function sendImportedDraft(
 	if (pending && !pending.matches) return { error: "It was submitted for review another way, so it waits for that review.", state: "held" };
 	if (kind === "created" && !pending) await chooseRoute(db, itemKey, route, send, config);
 	const review = pending ?? (await submitItemReview(db, itemKey, send.actor, config));
-	if (send.actor.role !== "creator") await approveItemReview(db, storage, { expectedRevision: review.revision, publicationTags: config.content.tags.publish, reviewId: review.id }, send.actor, config);
+	if (send.actor.role !== "creator") await approveItemReview(db, storage, { expectedRevision: review.revision, reviewId: review.id }, send.actor, config);
 	return { error: null, state: "sent" };
 }

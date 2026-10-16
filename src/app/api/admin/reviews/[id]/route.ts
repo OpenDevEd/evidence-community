@@ -79,10 +79,7 @@ export async function POST(
 				const approved = await approveItemReview(
 					runtime.db,
 					runtime.storage,
-					{
-						...input,
-						publicationTags: runtime.config.content.tags.publish,
-					},
+					input,
 					actor,
 					runtime.config,
 				);

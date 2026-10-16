@@ -3,7 +3,7 @@ import postcss, { type Root } from "postcss";
 import { z } from "zod";
 
 import { openAlexConnectionConfigSchema, openAlexWorksConfigSchema } from "@/lib/source-ingestion/openalex/schema";
-import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
+import { zoteroSourceSettingsSchema } from "@/lib/source-ingestion/zotero/schema";
 
 import {
 	PLATFORM_AI_PROVIDERS,
@@ -1411,7 +1411,7 @@ const zoteroSourceConfigurationSchema = z
 		apiKey: secretSchema(1, 512),
 		enabled: z.boolean().default(true),
 		writebackEnabled: z.boolean().default(false),
-		settings: zoteroConnectionConfigSchema.prefault({}),
+		settings: zoteroSourceSettingsSchema.prefault({}),
 		screening: sourceScreeningSchema.prefault({}),
 	})
 	.strict();
@@ -1983,16 +1983,26 @@ function validateTagSemantics(
 		}
 	}
 
-	for (const [index, tag] of config.content.tags.publish.entries()) {
-		if (
-			config.content.tags.hidden.includes(tag) ||
-			config.content.tags.internal.includes(tag)
-		) {
-			addRequiredIssue(
-				context,
-				["content", "tags", "publish", index],
-				"Publish tags cannot also be hidden or internal",
-			);
+	const publishTagLists: { tags: readonly string[]; path: (string | number)[] }[] = [
+		{ tags: config.content.tags.publish, path: ["content", "tags", "publish"] },
+		...config.sources.flatMap((source, index) =>
+			source.provider === "zotero" && source.settings.pdfPublishing
+				? [{ tags: source.settings.pdfPublishing.tags, path: ["sources", index, "settings", "pdfPublishing", "tags"] }]
+				: [],
+		),
+	];
+	for (const { tags, path } of publishTagLists) {
+		for (const [index, tag] of tags.entries()) {
+			if (
+				config.content.tags.hidden.includes(tag) ||
+				config.content.tags.internal.includes(tag)
+			) {
+				addRequiredIssue(
+					context,
+					[...path, index],
+					"Publish tags cannot also be hidden or internal",
+				);
+			}
 		}
 	}
 }
@@ -2198,7 +2208,22 @@ export function createLibraryConfigSchema(
 		}
 
 		validateTagSemantics(config, context);
-	});
+	}).transform(withSourcePdfPublishing);
+}
+
+/**
+ * Gives each Zotero source its own PDF rule. A configuration saved before sources had one keeps the library's publish
+ * tags for it, so nothing published changes until OpenScholar saves the rule on every source (EL-30, then removed).
+ */
+function withSourcePdfPublishing<T extends z.output<ReturnType<typeof baseServerConfigSchema>>>(config: T) {
+	return {
+		...config,
+		sources: config.sources.map((source) =>
+			source.provider === "zotero" && !source.settings.pdfPublishing
+				? { ...source, settings: { ...source.settings, pdfPublishing: { mode: "tagged" as const, tags: [...config.content.tags.publish] } } }
+				: source,
+		),
+	};
 }
 
 export const libraryConfigSchema = createLibraryConfigSchema();
@@ -2255,6 +2280,8 @@ export const publicLibraryConfigSchema = z
 		analytics: analyticsSchema,
 		notifications: notificationsSchema,
 		authentication: publicAuthenticationSchema,
+		/** Each Zotero source's publish tags: they make its records' notes and links public. */
+		sourcePublishTags: z.record(z.string(), z.array(tagSchema).max(10)),
 	})
 	.strict();
 

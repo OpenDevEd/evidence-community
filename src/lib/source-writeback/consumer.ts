@@ -27,12 +27,13 @@ import {
 	lockCollectionMutation,
 	lockItemMutation,
 } from "@/db/canonical-mutation-lock";
-import { sourceSnapshot } from "@/db/schema/source";
+import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { publishedAdminItemPayload } from "@/lib/admin/item-draft-patch";
+import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
 import {
 	relatedRemoteUris,
 	relationsForWriteback,
@@ -661,11 +662,13 @@ async function loadItemRequest(
 			parentSourceRecordKey = parentLink.sourceRecordKey;
 		}
 
+		const tags = tagRows.map(({ name }) => name);
+		const groupTag = await publishedFileGroupTag(transaction, job.itemKey, state.connection);
 		const payload = publishedAdminItemPayload(state.item, {
 			collectionKeys: collectionRows.map(
 				({ sourceRecordKey }) => sourceRecordKey,
 			),
-			tags: tagRows.map(({ name }) => name),
+			tags: groupTag && !tags.includes(groupTag) ? [...tags, groupTag] : tags,
 		});
 		if (parentSourceRecordKey) payload.parentItem = parentSourceRecordKey;
 		// The link table, not the record's JSON, decides which items are "related" in the source.
@@ -695,6 +698,18 @@ async function loadItemRequest(
 		};
 		return { disposition: "write" as const, request, state };
 	});
+}
+
+/**
+ * The publish tag a PDF the library publishes needs in this Zotero group, so the group's import keeps it published:
+ * the group's first publish tag. None for a group that publishes every PDF, or a record without a published PDF.
+ */
+async function publishedFileGroupTag(transaction: Pick<Database, "select">, itemKey: string, connection: { provider: string; config: unknown }) {
+	if (connection.provider !== "zotero") return null;
+	const rule = zoteroConnectionConfigSchema.safeParse(connection.config).data?.pdfPublishing;
+	if (rule?.mode !== "tagged" || !rule.tags[0]) return null;
+	const [published] = await transaction.select({ itemKey: itemFilePublication.itemKey }).from(itemFilePublication).where(eq(itemFilePublication.itemKey, itemKey)).limit(1);
+	return published ? rule.tags[0] : null;
 }
 
 async function loadCollectionRequest(

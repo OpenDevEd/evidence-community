@@ -1,6 +1,7 @@
 "use server";
 
-import { filterPublicAttachments } from "./tags";
+import { filterPublicAttachments } from "./attachment-visibility";
+import { publicTagRules } from "./tags";
 
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
@@ -170,7 +171,7 @@ async function searchIndex(
 					) as Collection[];
 			}
 
-			item.attachmentsData = filterPublicAttachments(item.attachmentsData, libraryConfig.content.tags);
+			item.attachmentsData = filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey);
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,

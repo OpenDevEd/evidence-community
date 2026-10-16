@@ -12,7 +12,7 @@ import type {
 } from "./mapper";
 import { ZoteroAttachmentPermanentError } from "./mapper";
 import { ZoteroApiError } from "./client";
-import type { ZoteroItemResponse } from "./schema";
+import type { ZoteroItemResponse, ZoteroPdfRule } from "./schema";
 
 import {
 	MAX_SOURCE_FULL_TEXT_BYTES,
@@ -29,7 +29,6 @@ const ZOTERO_ITEM_KEY_PATTERN = /^[A-Z0-9]{8}$/u;
 type AttachmentProcessorOptions = {
 	database: Database;
 	maxPdfBytes: number;
-	publishTags: readonly string[];
 	storage: EvidenceFileStorage;
 };
 
@@ -46,13 +45,11 @@ function optionalString(value: unknown, maxLength: number) {
 		: null;
 }
 
-function tags(item: ZoteroItemResponse) {
-	return new Set((item.data.tags ?? []).map(({ tag }) => tag));
-}
-
-function isPublished(item: ZoteroItemResponse, publishTags: readonly string[]) {
-	const itemTags = tags(item);
-	return publishTags.some((tag) => itemTags.has(tag));
+/** Whether the source's rule publishes this attachment's PDF: every PDF, or one carrying a publish tag. */
+function isPublished(item: ZoteroItemResponse, rule: ZoteroPdfRule) {
+	if (rule.mode !== "tagged") return rule.mode === "every";
+	const itemTags = new Set((item.data.tags ?? []).map(({ tag }) => tag));
+	return rule.tags.some((tag) => itemTags.has(tag));
 }
 
 export function sourcePublicationPaths(
@@ -103,30 +100,18 @@ function baseFile(item: ZoteroItemResponse) {
 export function createZoteroAttachmentProcessor(
 	options: AttachmentProcessorOptions,
 ): ZoteroAttachmentProcessor {
-	const publishTags = [
-		...new Set(options.publishTags.map((tag) => tag.trim())),
-	].filter(Boolean);
-	if (publishTags.length === 0) {
-		throw new Error("At least one Zotero PDF publication tag is required");
-	}
-
 	const processor = async (
 		item: ZoteroItemResponse,
 		context?: ZoteroAttachmentProcessorContext,
 	) => {
 		const base = baseFile(item);
-		if (
-			context?.publishPdfs === false ||
-			item.data.contentType !== PDF_CONTENT_TYPE ||
-			!isPublished(item, publishTags)
-		) {
-			return base;
-		}
+		if (item.data.contentType !== PDF_CONTENT_TYPE) return base;
 		if (!context) {
 			throw new Error(
 				`Zotero attachment ${item.key}: processor context is missing`,
 			);
 		}
+		if (!isPublished(item, context.pdfs)) return base;
 		const linkMode = optionalString(item.data.linkMode, 128);
 		if (!item.data.parentItem) {
 			throw new ZoteroAttachmentPermanentError(
