@@ -1,8 +1,8 @@
 "use client";
 
 import { ArrowDown01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Suspense, use, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
+import { Suspense, use, useRef, useState, type ComponentProps, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -12,6 +12,7 @@ import { ImportPager, pageOf } from "./ImportPager";
 import type { ImportStage } from "./ImportSteps";
 import { megabytes, RemoveButton } from "./ImportInputs";
 import { adminPanelTabState } from "./admin-tab-styles";
+import type { ImportRow } from "./admin-import";
 import type { ImportFlowState } from "./import-flow";
 import { pdfPageCount } from "./pdf-thumbnail";
 
@@ -124,13 +125,41 @@ export function SheetTabs<Id extends string>({ disabled = false, label, onSelect
 	);
 }
 
-/** A group of rows on a soft surface: the settings at the top of each step, and a record's parts. */
 /** The sheet's motion: a quick ease-out, or none for someone who asked for less motion. */
 export const sheetTransition = (reduceMotion: boolean | null, seconds: number) => ({ duration: reduceMotion ? 0 : seconds, ease: [0.32, 0.72, 0, 1] as const });
+
+/** A motion span that goes inert as it leaves, so a control fading out takes no click or focus with what it last knew. */
+export function LeavingSpan(props: ComponentProps<typeof motion.span>) {
+	const present = useIsPresent();
+	return <motion.span {...props} inert={!present} />;
+}
+
+/**
+ * A list row's tick, shown only while it can be used and faded as it comes and
+ * goes. Its space stays when it can't, so every row's cover lines up.
+ */
+export function Tick({ children }: { children: ReactNode }) {
+	const reduceMotion = useReducedMotion();
+	return (
+		<span className="grid w-6 shrink-0">
+			<AnimatePresence initial={false}>
+				{children ? (
+					<LeavingSpan animate={{ opacity: 1 }} className="col-start-1 row-start-1 flex" exit={{ opacity: 0 }} initial={{ opacity: 0 }} key="tick" transition={sheetTransition(reduceMotion, 0.18)}>
+						{children}
+					</LeavingSpan>
+				) : null}
+			</AnimatePresence>
+		</span>
+	);
+}
+
+// A PDF's checks count against the import's; a DOI or file record has none.
+export const checkCountOf = (flow: ImportFlowState, row: ImportRow) => (row.source ? flow.checkCount : 0);
 
 /** A setting's summary: how many there are, or what it says when there are none. */
 export const countSummary = (count: number, one: string, many: string, none: string) => (count ? `${count} ${count === 1 ? one : many}` : none);
 
+/** A group of rows on a soft surface: the settings at the top of each step, and a record's parts. */
 export function SettingsGroup({ children }: { children: ReactNode }) {
 	return <div className="shrink-0 divide-y divide-black/[0.05] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.06] dark:bg-white/[0.035]">{children}</div>;
 }
