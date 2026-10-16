@@ -68,7 +68,8 @@ import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfI
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
-import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
+import { setAdminPdfRemoval, stageAdminZoteroPdf, submitAdminReview } from "./admin-api";
+import { mockZoteroChangePending } from "./mock-zotero-pdf";
 import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
@@ -1341,10 +1342,12 @@ export default function AdminWorkbench({
 	};
 
 	const publishCurrent = () => {
-        if (!detail?.draft || detail.parentItem) return;
+        // Mock: a record whose only change is to its Zotero PDFs has no draft of its own to flush.
+        const zoteroOnly = Boolean(detail && !detail.draft && mockZoteroChangePending(detail.key));
+        if ((!detail?.draft && !zoteroOnly) || !detail || detail.parentItem) return;
         const recordKey = detail.key;
         setConfirmDialog({title: "Submit snapshot for review?", message: "The Editor reviews this version. Further edits stay in the working draft.", confirmLabel: "Submit snapshot", action: async () => {
-            await flushDraft(recordKey, draftPayload);
+            if (!zoteroOnly) await flushDraft(recordKey, draftPayload);
             await submitAdminReview(recordKey);
             await mutate(["admin-reviews", recordKey]);
             await Promise.all([loadDetail(recordKey), loadItems()]);
@@ -1582,6 +1585,13 @@ export default function AdminWorkbench({
 				})),
 		});
 	};
+
+    const stageSourcePdf = (key: string) => void runBusy(async () => {
+        await stageAdminZoteroPdf(key);
+        if (detail) await loadDetail(detail.key);
+        await loadItems();
+        toast.success("PDF added to the working draft");
+    });
 
     const changePdfRemoval = (key: string) => void runBusy(async () => {
         const record = detail?.key === key ? detail : detail?.attachments.find(attachment => attachment.key === key);
@@ -2788,6 +2798,7 @@ export default function AdminWorkbench({
 							onUnpublish={unpublishCurrent}
 							onSelectAttachment={(key) => setSelectedKey(key)}
 							onChangePdfRemoval={changePdfRemoval}
+							onStageSourcePdf={stageSourcePdf}
 							onUpload={uploadPdf}
 							onAddPdf={(file) => {
 								if (detail)

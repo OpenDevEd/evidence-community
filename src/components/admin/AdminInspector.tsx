@@ -3,6 +3,7 @@ import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
+import { mockZoteroChangePending, mockZoteroPdfRule } from "./mock-zotero-pdf";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
 import { ImportChecksBadge } from "./ImportChecksBadge";
 import { AdminPdfCover } from "./AdminPdfCover";
@@ -24,6 +25,7 @@ import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
+	CloudUploadIcon,
 	Add01Icon,
 	AlertCircleIcon,
 	ArchiveIcon,
@@ -1318,10 +1320,12 @@ function AttachmentFilePanel({
 	fileError,
 	onDiscardFile,
 	onChangePdfRemoval,
+	onStageSourcePdf,
 	onUpload,
 	readOnly,
 	readOnlyVersion,
 }: {
+	onStageSourcePdf?: (key: string) => void;
 	busy: boolean;
 	detail: AdminItemDetail;
 	fileError?: string;
@@ -1331,6 +1335,8 @@ function AttachmentFilePanel({
 	readOnly: boolean;
 	readOnlyVersion: boolean;
 }) {
+	// Mock: a Zotero PDF takes the library's file actions, but its file is Zotero's, so nothing is uploaded over it.
+	const zotero = readOnlyVersion ? null : mockZoteroPdfRule(detail);
 	return (
 		<div className="space-y-3">
 			{fileError ? (
@@ -1369,31 +1375,61 @@ function AttachmentFilePanel({
 							Source PDF
 						</p>
 					</div>
-					<Button
-						as="a"
-						className="mt-2"
-						href={detail.sourceFileUrl}
-						rel="noreferrer"
-						size="xs"
-						startContent={
-							<HugeiconsIcon
-								icon={Download01Icon}
-								aria-hidden
-								size={14}
-							/>
-						}
-						target="_blank"
-						variant="transparent"
-					>
-						Open PDF
-					</Button>
+					{zotero ? (
+						<p className="mt-1 flex flex-wrap items-center gap-1 text-black/45 dark:text-white/45">
+							{zotero.takenDown ? "Taken down in this library" : (
+								<>
+									Published when tagged in Zotero with
+									{zotero.tags.map((tag) => (
+										<span key={tag} className="rounded bg-black/[0.05] px-1 font-mono text-[10px] text-black/60 dark:bg-white/[0.07] dark:text-white/60">{tag}</span>
+									))}
+								</>
+							)}
+						</p>
+					) : null}
+					<div className="mt-2 flex flex-wrap gap-1">
+						<Button
+							as="a"
+							href={detail.sourceFileUrl}
+							rel="noreferrer"
+							size="xs"
+							startContent={
+								<HugeiconsIcon
+									icon={Download01Icon}
+									aria-hidden
+									size={14}
+								/>
+							}
+							target="_blank"
+							variant="transparent"
+						>
+							Open PDF
+						</Button>
+						{zotero && !readOnly && onStageSourcePdf ? (
+							<Button
+								isDisabled={busy}
+								onPress={() => onStageSourcePdf(detail.key)}
+								size="xs"
+								startContent={
+									<HugeiconsIcon
+										icon={CloudUploadIcon}
+										aria-hidden
+										size={14}
+									/>
+								}
+								variant="transparent"
+							>
+								Stage PDF
+							</Button>
+						) : null}
+					</div>
 				</div>
 			) : null}
 
 			<div>
 				<PdfFileInput
 					attachmentKey={detail.key}
-					disabled={readOnly || busy}
+					disabled={readOnly || busy || Boolean(zotero)}
 					label={
 						detail.filePublication
 							? "Stage replacement"
@@ -1454,6 +1490,7 @@ export function AdminInspector({
 	onStartLinkPick,
 	onStopLinkPick,
 	onChangePdfRemoval,
+	onStageSourcePdf,
 	onUpload,
 	payload,
 	saveMessage,
@@ -1517,6 +1554,8 @@ export function AdminInspector({
 	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
 	onStopLinkPick?: () => void;
 	onChangePdfRemoval: (key: string) => void;
+	/** Mock: stages a Zotero attachment's own PDF to publish. */
+	onStageSourcePdf?: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	payload: Record<string, unknown>;
 	saveMessage: string | null;
@@ -1647,7 +1686,10 @@ export function AdminInspector({
 	const holdsLibraryFiles =
 		native ||
 		(!isAttachment && isOpenAlexWorkProvider(sources.find((source) => source.key === detail.sourceConnectionKey)?.provider));
-	const filesReadOnly = readOnlyVersion || !holdsLibraryFiles || unrestored || !detail.draft || !detail.editable;
+	// Mock: a Zotero PDF's file changes go into the draft even while writeback keeps the record itself read-only.
+	const zoteroPdf = Boolean(mockZoteroPdfRule(detail));
+	const filesReadOnly = readOnlyVersion || unrestored || (zoteroPdf ? false : !holdsLibraryFiles || !detail.draft || !detail.editable);
+	const zoteroChangePending = !readOnlyVersion && !detail.parentItem && mockZoteroChangePending(detail.key);
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -1672,7 +1714,9 @@ export function AdminInspector({
 		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
 		submit: { label: "Submit for review", icon: SentIcon, onPress: onPublish },
 	}[
-		!detail.editable && !readOnlyVersion
+		zoteroChangePending
+			? "submit"
+			: !detail.editable && !readOnlyVersion
 			? "duplicate"
 			: restoring
 				? "restore"
@@ -1684,6 +1728,7 @@ export function AdminInspector({
 		busy ||
 		readOnlyVersion ||
 		(!detail.editable && isAttachment) ||
+		(zoteroChangePending && reviewPending) ||
 		(Boolean(detail.draft) &&
 			(saveState === "saving" ||
 				saveState === "conflict" ||
@@ -2325,6 +2370,7 @@ export function AdminInspector({
 							fileError={fileErrors[detail.key]}
 							onDiscardFile={onDiscardFile}
 							onChangePdfRemoval={onChangePdfRemoval}
+							onStageSourcePdf={onStageSourcePdf}
 							onUpload={onUpload}
 							readOnly={filesReadOnly}
 							readOnlyVersion={readOnlyVersion}

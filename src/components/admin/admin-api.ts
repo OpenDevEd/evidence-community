@@ -1,6 +1,18 @@
 "use client";
 
 import { mutate } from "swr";
+import {
+	isMockZoteroPdf,
+	mockApproveReview,
+	mockPendingReviewCount,
+	mockReviewQueueRows,
+	mockReviewSnapshot,
+	mockReviewsFor,
+	mockSubmitReview,
+	mockUpdateReview,
+	mockZoteroDetail,
+	setMockZoteroChange,
+} from "./mock-zotero-pdf";
 import type {
 	AdminInstitutionPage,
 	InstitutionCountries,
@@ -263,14 +275,23 @@ export function restoreAdminSourceIssues(sourceKey: string, batch: string) {
 	});
 }
 
-export function getAdminItems(
+export async function getAdminItems(
 	searchParams: URLSearchParams,
 	signal?: AbortSignal,
 ) {
-	return requestJson<AdminItemListPage>(
+	const page = await requestJson<AdminItemListPage>(
 		`/api/admin/items?${searchParams.toString()}`,
 		{ signal },
 	);
+	// Mock: records whose Zotero PDF change awaits review join the review queue.
+	if (searchParams.get("review") !== "pending" || searchParams.get("cursor")) return page;
+	const rows = await mockReviewQueueRows(async (key, title) => {
+		const params = new URLSearchParams(searchParams);
+		params.delete("review");
+		params.set("search", title);
+		return (await requestJson<AdminItemListPage>(`/api/admin/items?${params.toString()}`, { signal })).items.find((row) => row.key === key);
+	});
+	return { ...page, items: [...rows, ...page.items.filter((item) => !rows.some((row) => row.key === item.key))] };
 }
 
 function collectionCatalogUrl(
@@ -340,12 +361,16 @@ export function resolveAdminCollectionCatalog(
 	);
 }
 
-export async function getAdminItem(key: string) {
+async function getStoredAdminItem(key: string) {
 	return (
 		await requestJson<{ item: AdminItemDetail }>(
 			`/api/admin/items/${encodeURIComponent(key)}`,
 		)
 	).item;
+}
+
+export async function getAdminItem(key: string) {
+	return mockZoteroDetail(await getStoredAdminItem(key), getStoredAdminItem);
 }
 
 type AdminPublicationMutationResponse = {
@@ -777,7 +802,13 @@ export function completeAdminPdf(key: string, expectedUploadRevision: number) {
 	);
 }
 
-export function discardAdminPdfDraft(key: string) {
+/** Mock: stages a Zotero attachment's own PDF to publish, as an upload is staged. */
+export async function stageAdminZoteroPdf(key: string) {
+	setMockZoteroChange(key, "publish");
+}
+
+export async function discardAdminPdfDraft(key: string) {
+	if (setMockZoteroChange(key, null)) return;
 	return requestJson<void>(
 		`/api/admin/items/${encodeURIComponent(key)}/file/draft`,
 		{ method: "DELETE" },
@@ -873,17 +904,29 @@ export async function sha256File(file: File) {
 export type AdminReviewSnapshot = Awaited<ReturnType<typeof getAdminReviewSnapshot>>;
 
 export async function getAdminItemReviews(key: string) {
-	return (await requestJson<{ reviews: SavedReview[] }>(`/api/admin/items/${encodeURIComponent(key)}/review`)).reviews;
+	return [...mockReviewsFor(key), ...(await requestJson<{ reviews: SavedReview[] }>(`/api/admin/items/${encodeURIComponent(key)}/review`)).reviews];
 }
 export async function getAdminReview(id: string) {
+	const mock = await mockReviewSnapshot(id, getAdminItem);
+	if (mock) return mock as unknown as AdminReviewSnapshot;
 	return (await requestJson<{ snapshot: AdminReviewSnapshot }>(`/api/admin/reviews/${encodeURIComponent(id)}`)).snapshot;
 }
 export async function submitAdminReview(key: string) {
+	const mock = mockSubmitReview(key, (await getStoredAdminItem(key)).title);
+	if (mock) {
+		void mutate("admin-review-count").catch(() => undefined);
+		return mock;
+	}
 	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/items/${encodeURIComponent(key)}/review`, { method: "POST" } )).review;
 	void mutate("admin-review-count").catch(() => undefined);
 	return review;
 }
 export async function approveAdminReview(id: string, expectedRevision: number, zenodoFileChange?: "minor_correction") {
+    const mock = mockApproveReview(id);
+    if (mock) {
+        void mutate("admin-review-count").catch(() => undefined);
+        return mock;
+    }
     const result = await requestIndexingMutation<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify({ action: "approve", expectedRevision, ...(zenodoFileChange ? { zenodoFileChange } : {}) }) });
     void mutate("admin-review-count").catch(() => undefined);
     return result;
@@ -893,6 +936,11 @@ export async function updateAdminReview(id: string, body:
 	| { action: "returned" | "withdrawn"; expectedRevision: number; note?: string }
 	| { action: "resolve-conflicts"; expectedRevision: number; itemKey: string; generation: string; draftRevision: number; choices: Record<string, "draft" | "published"> }
 ) {
+	const mock = body.action === "returned" || body.action === "withdrawn" ? mockUpdateReview(id, body.action, body.note) : null;
+	if (mock) {
+		void mutate("admin-review-count").catch(() => undefined);
+		return mock;
+	}
 	const review = (await requestJson<{ review: SavedReview }>(`/api/admin/reviews/${encodeURIComponent(id)}`, { method: "POST", body: JSON.stringify(body) } )).review;
 	void mutate("admin-review-count").catch(() => undefined);
 	return review;
@@ -937,10 +985,14 @@ export function getAdminDigestPapers(id: string, query: DigestPapersQuery) {
 }
 
 export async function getAdminReviewCount() {
-	return (await requestJson<{ count: number }>("/api/admin/reviews")).count;
+	return (await requestJson<{ count: number }>("/api/admin/reviews")).count + mockPendingReviewCount();
 }
 
-export function setAdminPdfRemoval(key: string, remove: boolean) {
+export async function setAdminPdfRemoval(key: string, remove: boolean) {
+ if (isMockZoteroPdf(key)) {
+  setMockZoteroChange(key, remove ? "takeDown" : null);
+  return;
+ }
  return requestJson<void>(`/api/admin/items/${encodeURIComponent(key)}/file/removal`, {method: remove ? "POST" : "DELETE"});
 }
 
