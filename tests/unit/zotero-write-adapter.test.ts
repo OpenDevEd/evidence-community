@@ -498,6 +498,20 @@ describe("Zotero writeback adapter", () => {
 		).toHaveLength(2);
 	});
 
+	it("adds the library's publish tag to tags added in Zotero after a 412", async () => {
+		const zotero = createFakeZotero([remoteReport({ tags: [{ tag: "Before" }] })]);
+		zotero.conflictOnPatch((item) => {
+			item.data.tags = [{ tag: "Before" }, { tag: "Added in Zotero" }];
+		});
+
+		await createZoteroWritebackAdapter({ fetch: zotero.fetch, sleep: async () => undefined }).write(
+			request({ addedTags: ["_publish"], dirtyFields: ["tags"], payload: { ...request().payload, tags: ["Before", "_publish"] } }),
+			context(),
+		);
+
+		expect(zotero.items.get("ABCD2345")?.data.tags).toEqual([{ tag: "Before" }, { tag: "Added in Zotero" }, { tag: "_publish" }]);
+	});
+
 	it("reports a clean key collision when a replay field is absent remotely", async () => {
 		const zotero = createFakeZotero([remoteReport({ title: undefined })]);
 		await expect(

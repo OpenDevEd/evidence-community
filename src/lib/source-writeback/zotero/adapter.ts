@@ -66,6 +66,12 @@ function isMissing(error: unknown) {
 	return error instanceof ZoteroApiError && error.status === 404;
 }
 
+/** The item's latest tags in Zotero with the library's added ones, so a retry keeps tags added in Zotero meanwhile. */
+function withAddedTags(remote: unknown, added: readonly string[]) {
+	const tags = Array.isArray(remote) ? (remote as { tag?: unknown }[]) : [];
+	return [...tags, ...added.filter((tag) => !tags.some((entry) => entry.tag === tag)).map((tag) => ({ tag }))];
+}
+
 function isOptimisticConflict(error: unknown) {
 	return error instanceof ZoteroApiError && error.status === 412;
 }
@@ -749,6 +755,7 @@ export function createZoteroWritebackAdapter(
 					}
 					version = latest.data.version;
 					if (latest.data.data.deleted) patch.deleted = false;
+					if (request.addedTags) patch.tags = withAddedTags(latest.data.data.tags, request.addedTags);
 					await sleep(retryDelay(attempt));
 				}
 			}
