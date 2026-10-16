@@ -83,6 +83,7 @@ export function CompactBookmarkButton({ itemData, className }: { itemData: Item 
     <Tooltip content={label}>
       <Button
         variant="transparent"
+        size="sm"
         isIconOnly
         // Not disabled while it saves, which would dim it: a second press just waits.
         onPress={mutationLoading ? undefined : toggle}
@@ -90,7 +91,7 @@ export function CompactBookmarkButton({ itemData, className }: { itemData: Item 
         aria-label={label}
         aria-pressed={isLiked}
       >
-        <HugeiconsIcon icon={isLiked ? BookmarkCheck01Icon : Bookmark02Icon} className="size-3.5" />
+        <HugeiconsIcon icon={isLiked ? BookmarkCheck01Icon : Bookmark02Icon} className="size-3" />
       </Button>
     </Tooltip>
   );
