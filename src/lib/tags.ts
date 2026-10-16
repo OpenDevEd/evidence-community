@@ -11,20 +11,30 @@ export function hasAnyTag(tags: TagsInput, expectedTags: readonly string[]): boo
 }
 
 
-type PublicAttachmentTags = { hidden: readonly string[]; publish: readonly string[] };
+/** The publish tags of each source's records, by source key. */
+export type SourcePublishTags = Readonly<Record<string, readonly string[]>>;
 
-/**
- * Remove non-public attachments before a record reaches readers or exports.
- * A note is public only when it carries a publish tag; the rest are private
- * working notes, so they never leave the server.
- */
-export function filterPublicAttachments<T extends { deleted?: number | null; itemType?: string | null; note?: string | null; tags?: readonly string[] | null }>(attachments: readonly T[] | undefined, tags: PublicAttachmentTags) {
-	return attachments
-		?.filter(attachment =>
-			attachment.deleted === 0 &&
-			!hasAnyTag(attachment.tags, tags.hidden) &&
-			(attachment.itemType !== "Note" || hasAnyTag(attachment.tags, tags.publish)),
-		)
-		// Only published notes show their text; a note kept on a file is never shown.
-		.map(attachment => attachment.itemType === "Note" || attachment.note == null ? attachment : { ...attachment, note: null });
+type PublishTagConfig = { content: { tags: { publish: readonly string[] } }; sources: readonly { key: string; provider: string; settings: object }[] };
+
+/** The library's publish tags for the records it made itself, and each Zotero source's own. */
+export function sourcePublishTags(config: PublishTagConfig): Record<string, string[]> {
+	return Object.fromEntries([
+		["native", [...config.content.tags.publish]],
+		...config.sources.flatMap((source) => {
+			const rule = source.provider === "zotero" ? (source.settings as { pdfPublishing?: { tags: readonly string[] } }).pdfPublishing : undefined;
+			return rule ? [[source.key, [...rule.tags]]] : [];
+		}),
+	]);
+}
+
+/** The tags that make a record's notes and links public: its source's publish tags; none for any other source. */
+export function recordPublishTags(bySource: SourcePublishTags, sourceConnectionKey: string | null | undefined): readonly string[] {
+	return sourceConnectionKey && Object.hasOwn(bySource, sourceConnectionKey) ? bySource[sourceConnectionKey]! : [];
+}
+
+/** What decides which records and attachments readers see: the hidden tags, and each source's publish tags. */
+export type PublicTagRules = { hidden: readonly string[]; publishBySource: SourcePublishTags };
+
+export function publicTagRules(config: PublishTagConfig & { content: { tags: { hidden: readonly string[] } } }): PublicTagRules {
+	return { hidden: config.content.tags.hidden, publishBySource: sourcePublishTags(config) };
 }

@@ -31,7 +31,8 @@ import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import type { Item } from "@/app/api/item/types";
@@ -731,7 +732,8 @@ export async function projectPublicItems(
 		const result = document as unknown as Item;
 		result.attachmentsData = filterPublicAttachments(
 			result.attachmentsData,
-			config.content.tags,
+			publicTagRules(config),
+			result.sourceConnectionKey,
 		);
 		const attachmentKeys = new Set(
 			result.attachmentsData?.map((attachment) => attachment.key),

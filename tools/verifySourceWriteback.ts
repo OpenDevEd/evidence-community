@@ -11,7 +11,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { sourceSnapshot } from "../src/db/schema/source";
+import { itemFilePublication, sourceSnapshot } from "../src/db/schema/source";
 import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
@@ -1221,6 +1221,69 @@ async function verify() {
 				sentRelations?.["dc:relation"] ===
 					`http://zotero.org/groups/writeback-${marker}/items/${relatedTarget.itemKey}`,
 			`Related writeback payload is wrong: ${JSON.stringify({ dirtyFields: relatedCall?.dirtyFields, relations: sentRelations, status: relatedResult.status })}`,
+		);
+
+		// A PDF the library publishes stays published in a group that publishes only tagged PDFs: its writeback carries
+		// that group's first publish tag. A group that publishes every PDF needs none.
+		const setRule = (pdfPublishing: { mode: "tagged" | "every"; tags: string[] }) =>
+			db.update(sourceConnection).set({ config: { pdfPublishing } }).where(eq(sourceConnection.key, connectionKey));
+		await setRule({ mode: "tagged", tags: ["group-publish", "group-other"] });
+		const pdfParent = await createNativeItemDraft(db, { itemType: "report", title: "Record with a library PDF" });
+		const pdfAttachment = await createNativeItemDraft(db, { itemType: "attachment", title: "report.pdf", parentItem: pdfParent.itemKey });
+		createdItemKeys.push(pdfParent.itemKey, pdfAttachment.itemKey);
+		await publishItemDraftWithContext(db, pdfParent.itemKey, publishToSource);
+		await publishItemDraftWithContext(db, pdfAttachment.itemKey, publishToSource);
+		await db.insert(itemFilePublication).values({
+			itemKey: pdfAttachment.itemKey, sourceConnectionKey: "native", parentItemKey: pdfParent.itemKey, uploadRevision: 1, revision: 1,
+			sourceObjectPath: `verify/${marker}/source.pdf`, sourceCoverObjectPath: `verify/${marker}/source.jpg`, objectPath: `verify/${marker}/report.pdf`,
+			publicUrl: `https://storage.example.org/${marker}/report.pdf`, filename: "report.pdf", contentType: "application/pdf", sizeBytes: 1,
+			sha256: "a".repeat(64), md5: "b".repeat(32), coverObjectPath: `verify/${marker}/cover.jpg`, coverPublicUrl: `https://storage.example.org/${marker}/cover.jpg`,
+			coverWidth: 1, coverHeight: 1, pageCount: 1, publishedAt: new Date(), publicationTags: [],
+		});
+		const callsBeforePdf = calls.length;
+		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+			// drain the record and its PDF
+		}
+		const taggedTags = calls.slice(callsBeforePdf).find((call) => call.entity === "item" && call.itemKey === pdfAttachment.itemKey)?.payload.tags;
+		await setRule({ mode: "every", tags: ["group-publish"] });
+		const attachmentDraft = await openItemDraft(db, pdfAttachment.itemKey);
+		await saveItemDraft(db, {
+			itemKey: pdfAttachment.itemKey,
+			expectedDraftGeneration: attachmentDraft.generation,
+			expectedDraftRevision: attachmentDraft.draftRevision,
+			expectedPayload: attachmentDraft.payload,
+			payload: { ...attachmentDraft.payload, title: "report (final).pdf" },
+		});
+		await publishItemDraft(db, pdfAttachment.itemKey);
+		const callsBeforeEvery = calls.length;
+		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+			// drain the edit
+		}
+		const everyTags = calls.slice(callsBeforeEvery).find((call) => call.entity === "item" && call.itemKey === pdfAttachment.itemKey)?.payload.tags;
+		// Back to tagged PDFs, an edit to the title alone still sends the tag, as a changed field.
+		await setRule({ mode: "tagged", tags: ["group-publish"] });
+		const retitleDraft = await openItemDraft(db, pdfAttachment.itemKey);
+		await saveItemDraft(db, {
+			itemKey: pdfAttachment.itemKey,
+			expectedDraftGeneration: retitleDraft.generation,
+			expectedDraftRevision: retitleDraft.draftRevision,
+			expectedPayload: retitleDraft.payload,
+			payload: { ...retitleDraft.payload, title: "report (retitled).pdf" },
+		});
+		await publishItemDraft(db, pdfAttachment.itemKey);
+		const callsBeforeRetitle = calls.length;
+		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+			// drain the retitle
+		}
+		const retitled = calls.slice(callsBeforeRetitle).find((call) => call.entity === "item" && call.itemKey === pdfAttachment.itemKey);
+		assert(
+			Array.isArray(retitled?.payload.tags) && (retitled.payload.tags as string[]).includes("group-publish") && retitled.dirtyFields.includes("tags"),
+			`A retitled PDF's writeback did not send its group's tag as a change: ${JSON.stringify({ tags: retitled?.payload.tags, dirtyFields: retitled?.dirtyFields })}`,
+		);
+		assert(
+			Array.isArray(taggedTags) && taggedTags.includes("group-publish") && !taggedTags.includes("group-other") &&
+				Array.isArray(everyTags) && !everyTags.includes("group-publish"),
+			`A published PDF's writeback did not carry its group's publish tag: ${JSON.stringify({ taggedTags, everyTags })}`,
 		);
 
 		console.log(

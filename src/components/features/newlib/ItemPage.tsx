@@ -74,7 +74,7 @@ import {
 	isPublishedNote,
 	isVisiblePdfAttachment,
 } from "@/lib/attachment-visibility";
-import { hasTag } from "@/lib/tags";
+import { hasTag, recordPublishTags } from "@/lib/tags";
 import useSWR from "swr";
 import { type DoiDisplayLink } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
@@ -1248,13 +1248,14 @@ function useNotesDescription() {
 }
 
 function ItemNotes({ item }: { item: Item | undefined }) {
-	const { content } = useLibraryConfig();
+	const { sourcePublishTags } = useLibraryConfig();
+	const publishTags = recordPublishTags(sourcePublishTags, item?.sourceConnectionKey);
 	const notes = item?.attachmentsData?.filter((attachment) =>
-		isPublishedNote(attachment, content.tags.publish),
+		isPublishedNote(attachment, publishTags),
 	);
 	const links = item?.attachmentsData?.filter(
 		(attachment) =>
-			isPublishedLink(attachment, content.tags.publish) &&
+			isPublishedLink(attachment, publishTags) &&
 			!isVisiblePdfAttachment(attachment),
 	);
 

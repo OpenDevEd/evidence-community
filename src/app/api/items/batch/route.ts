@@ -5,7 +5,8 @@ import { getMainAttributes, LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/se
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { hasAnyTag, publicTagRules } from "@/lib/tags";
 
 async function getPaginatedItems(
 	keys: string[],
@@ -35,8 +36,8 @@ async function getPaginatedItems(
 		return {
 			items: items.map((item) =>
 				includeHeavyFields
-					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
-					: toLightweightItem(item, tags),
+					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }
+					: toLightweightItem(item, publicTagRules(libraryConfig)),
 			),
 			total: result.estimatedTotalHits || result.hits.length,
 		};

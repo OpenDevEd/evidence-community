@@ -1,34 +1,81 @@
 import { z } from "zod";
 
+import { tagSchema } from "@/config/library-config/primitives";
+
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 
+/** The publish tags a library starts with; Zotero users tag attachments with them to publish them. */
+const DEFAULT_ZOTERO_PUBLISH_TAGS = ["_publish", "publishPDF"] as const;
+
+/**
+ * Which of the group's PDFs the library publishes: those whose attachment carries one of `tags`, or every one.
+ * The tags also make the group's notes and links public, whichever PDFs are published.
+ */
+const zoteroPdfPublishingSchema = z
+	.object({
+		mode: z.enum(["tagged", "every"]),
+		tags: z.array(tagSchema).max(10),
+	})
+	.strict()
+	.superRefine((rule, context) => {
+		if (rule.mode === "tagged" && rule.tags.length === 0)
+			context.addIssue({ code: "custom", message: "Tagged PDFs need at least one publish tag", path: ["tags"] });
+		for (const [index, tag] of rule.tags.entries())
+			if (rule.tags.indexOf(tag) !== index)
+				context.addIssue({ code: "custom", message: "Each publish tag can be listed once", path: ["tags", index] });
+	});
+
+const zoteroConnectionSettingsShape = {
+	apiBaseUrl: z.string().url().default("https://api.zotero.org"),
+	attachmentDownloadTimeoutMs: z
+		.number()
+		.int()
+		.min(1_000)
+		.max(900_000)
+		.default(120_000),
+	maxConsistencyRetries: z.number().int().min(1).max(10).default(4),
+	maxRecordsPerBatch: z.number().int().min(1).max(1_000).default(500),
+	maxSnapshotRecords: z
+		.number()
+		.int()
+		.min(1)
+		.max(1_000_000)
+		.default(100_000),
+	requestTimeoutMs: z
+		.number()
+		.int()
+		.min(1_000)
+		.max(120_000)
+		.default(30_000),
+	// Off, the group adds no PDFs, not even for attachments tagged for publication.
+	downloadPdfs: z.boolean().default(true),
+};
+
+/** A source's settings as its library configuration gives them; see `withSourcePdfPublishing` for a missing rule. */
+export const zoteroSourceSettingsSchema = z
+	.object({ ...zoteroConnectionSettingsShape, pdfPublishing: zoteroPdfPublishingSchema.optional() })
+	.strict();
+
+/** A connection's settings as the import reads them. */
 export const zoteroConnectionConfigSchema = z
 	.object({
-		apiBaseUrl: z.string().url().default("https://api.zotero.org"),
-		attachmentDownloadTimeoutMs: z
-			.number()
-			.int()
-			.min(1_000)
-			.max(900_000)
-			.default(120_000),
-		maxConsistencyRetries: z.number().int().min(1).max(10).default(4),
-		maxRecordsPerBatch: z.number().int().min(1).max(1_000).default(500),
-		maxSnapshotRecords: z
-			.number()
-			.int()
-			.min(1)
-			.max(1_000_000)
-			.default(100_000),
-		requestTimeoutMs: z
-			.number()
-			.int()
-			.min(1_000)
-			.max(120_000)
-			.default(30_000),
-		// Off, the group adds no PDFs, not even for attachments tagged for publication.
-		downloadPdfs: z.boolean().default(true),
+		...zoteroConnectionSettingsShape,
+		pdfPublishing: zoteroPdfPublishingSchema.default({ mode: "tagged", tags: [...DEFAULT_ZOTERO_PUBLISH_TAGS] }),
 	})
 	.strict();
+
+/** What the import does with the group's PDFs: none, every one, or those carrying a publish tag. */
+export type ZoteroPdfRule = { mode: "off" } | { mode: "every" } | { mode: "tagged"; tags: readonly string[] };
+
+export function zoteroPdfRule(config: Pick<z.output<typeof zoteroConnectionConfigSchema>, "downloadPdfs" | "pdfPublishing">): ZoteroPdfRule {
+	if (!config.downloadPdfs) return { mode: "off" };
+	return config.pdfPublishing.mode === "every" ? { mode: "every" } : { mode: "tagged", tags: config.pdfPublishing.tags };
+}
+
+/** The rule as the cursor records it, so a changed rule reads the group again. */
+export function zoteroPdfRuleKey(rule: ZoteroPdfRule) {
+	return rule.mode === "tagged" ? `tagged:${[...rule.tags].sort().join("\n")}` : rule.mode;
+}
 
 export const zoteroGroupResponseSchema = z
 	.object({
@@ -90,14 +137,17 @@ export const zoteroCursorSchema = z.union([
 			libraryVersion: z.number().int().nonnegative(),
 			softTrashedCollectionKeys: z.array(z.string().min(1).max(512)),
 			softTrashedItemKeys: z.array(z.string().min(1).max(512)),
-			// False once a complete read left PDFs out; absent, the last read added them.
+			// The PDF rule the last complete read followed (`zoteroPdfRuleKey`). A cursor saved before the rule was
+			// recorded has `pdfs: false` when that read left PDFs out, and nothing when it added them.
+			pdfRule: z.string().max(4_000).optional(),
 			pdfs: z.literal(false).optional(),
 			pending: z
 				.object({
 					offset: z.number().int().nonnegative(),
 					snapshotSince: z.number().int().nonnegative(),
 					targetVersion: z.number().int().nonnegative(),
-					// False while this read leaves PDFs out.
+					// The PDF rule this read follows; an older pending read has `pdfs: false` when it left PDFs out.
+					pdfRule: z.string().max(4_000).optional(),
 					pdfs: z.literal(false).optional(),
 				})
 				.strict()

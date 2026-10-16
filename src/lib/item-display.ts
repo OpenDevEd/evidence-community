@@ -19,14 +19,12 @@ export const ITEM_DISPLAY_OPTIONS = [
 	},
 ] as const;
 
-type ContentTags = LibraryPublicConfig["content"]["tags"];
-
 /** A tag the library itself reads: display state, publication marker, category marker. Controls manage these, never chips. */
-function isSystemTag(tag: string, config: ContentTags) {
-	return Object.values(config).some((aliases) => hasAnyTag([tag], aliases));
+function isSystemTag(tag: string, config: Pick<LibraryPublicConfig, "content" | "sourcePublishTags">) {
+	return [...Object.values(config.content.tags), ...Object.values(config.sourcePublishTags)].some((aliases) => hasAnyTag([tag], aliases));
 }
 
-export function ordinaryItemTags(tags: readonly string[], config: ContentTags) {
+export function ordinaryItemTags(tags: readonly string[], config: Pick<LibraryPublicConfig, "content" | "sourcePublishTags">) {
 	return tags.filter((tag) => !isSystemTag(tag, config));
 }
 

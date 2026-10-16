@@ -1,4 +1,4 @@
-import { filterPublicAttachments } from "@/lib/tags";
+import { filterPublicAttachments } from "@/lib/attachment-visibility";
 import { describe, expect, it } from "vitest";
 
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
@@ -246,7 +246,7 @@ it("excludes hidden attachment DOIs from search result exports", () => {
 	const attachments = filterPublicAttachments([
 		{ deleted: 0, url: "https://doi.org/10.5555/hidden", tags: ["_r:doi", "Hidden"] },
 		{ deleted: 1, url: "https://doi.org/10.5555/deleted", tags: ["_r:doi"] },
-	], { hidden: ["hidden"], publish: [] });
+	], { hidden: ["hidden"], publishBySource: {} }, "zotero-1");
 	expect(attachments).toEqual([]);
 	expect(resolvePublicDoi({ attachments })).toBeNull();
 });

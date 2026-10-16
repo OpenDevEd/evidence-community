@@ -38,11 +38,13 @@ it("removes hidden and deleted attachments, file note text and PDF full text fro
 it("gives list results only the attachments the item page shows, without unpublished note text", async () => {
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
 	config.content.tags.hidden = ["hidden"];
-	config.content.tags.publish = ["_publish"];
+	// The record's publish tags are its Zotero source's.
+	const zotero = config.sources.find((source) => source.provider === "zotero")!;
+	if (zotero.provider === "zotero") zotero.settings.pdfPublishing = { mode: "tagged", tags: ["_publish"] };
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
 	const attachment = { deleted: 0, parentItem: "PUBAAAAA", filename: null, title: null, url: null, PDFCoverPageImage: null, linkMode: null, itemType: "Attachment", note: null, fullTextPDF: [{ text: "body", page: 1 }] };
 	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
-		key: "PUBAAAAA", title: "Published record", attachmentsData: [
+		key: "PUBAAAAA", title: "Published record", sourceConnectionKey: zotero.key, attachmentsData: [
 			{ ...attachment, key: "COVERPDF", tags: [], filename: "report.pdf", PDFCoverPageImage: "cover.png" },
 			{ ...attachment, key: "PLAINPDF", tags: [], filename: "draft.pdf" },
 			{ ...attachment, key: "DOILINKA", tags: ["_r:doi"], linkMode: "linked_url", url: "https://doi.org/10.5281/zenodo.123" },

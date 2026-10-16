@@ -365,10 +365,11 @@ async function verifyLiveWriteback() {
 		zoteroClient = zotero.client;
 		zoteroPrefix = zotero.prefix;
 
-		const publicationTags = config.content.tags.publish;
+		const liveRule = config.sources.find((source) => source.key === LIVE_ZOTERO_CONNECTION_KEY);
+		const publicationTags = liveRule?.provider === "zotero" && liveRule.settings.pdfPublishing?.mode === "tagged" ? liveRule.settings.pdfPublishing.tags.slice(0, 1) : [];
 		assert(
 			publicationTags.length > 0,
-			"The active configuration needs at least one PDF publication tag",
+			"The live Zotero source needs to publish tagged PDFs, with at least one publish tag",
 		);
 		assert(
 			config.sources.some(

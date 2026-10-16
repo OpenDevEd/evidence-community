@@ -10,6 +10,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { Item } from "@/app/api/item/types";
 import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
+import { publicTagRules } from "@/lib/tags";
 import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 
 function canRecommendSimilarResources(config: LibraryServerConfig) {
@@ -115,7 +116,7 @@ export async function GET(
 	}
 
 	// Similar records open the item page from this copy, so they carry the same fields as list results.
-	const hits = (result.hits as Item[]).map((hit) => toLightweightItem(hit, config.content.tags));
+	const hits = (result.hits as Item[]).map((hit) => toLightweightItem(hit, publicTagRules(config)));
 	return NextResponse.json({ ...result, hits }, {
 		headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 	});

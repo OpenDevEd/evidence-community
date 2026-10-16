@@ -584,7 +584,6 @@ export async function approveItemReview(
 	input: {
 		reviewId: string;
 		expectedRevision: number;
-		publicationTags: readonly string[];
 		zenodoFileChange?: "minor_correction";
 	},
 	actor: ReviewActor,
@@ -621,7 +620,8 @@ export async function approveItemReview(
 	};
 	try {
 		for (const file of files) {
-			const next = await prepareReviewFile(db, storage, review, file, input, actor, config);
+			// Each Zotero group's publish tag is added when the PDF is written back to it, so none is stored here.
+			const next = await prepareReviewFile(db, storage, review, file, { ...input, publicationTags: [] }, actor, config);
 			if (next) prepared.push(next);
 		}
 		committed = await db.transaction(async (transaction) => {

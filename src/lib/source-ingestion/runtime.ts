@@ -18,7 +18,6 @@ export function createSourceSyncRuntime(
 	const attachmentProcessor = createZoteroAttachmentProcessor({
 		database,
 		maxPdfBytes: config.services.storage.maxPdfBytes,
-		publishTags: config.content.tags.publish,
 		storage,
 	});
 
@@ -34,7 +33,7 @@ export function createSourceSyncRuntime(
 	return {
 		credentialResolver,
 		registry: createDefaultSourceAdapterRegistry({
-			zotero: { attachmentProcessor },
+			zotero: { attachmentProcessor, legacyPublishTags: config.content.tags.publish },
 			openalex,
 			openscholar: { ...openalex, service: config.authentication.openScholar },
 		}),

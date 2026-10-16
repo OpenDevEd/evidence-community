@@ -10,7 +10,8 @@ import {
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { filterPublicAttachments, hasAnyTag } from "@/lib/tags";
+import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { getMainAttributes } from "@/lib/search";
 
 export type CitationYearData = {
@@ -45,7 +46,7 @@ async function getSourceItem(
 			return null;
 		}
 
-		return { ...result, attachmentsData: filterPublicAttachments(result.attachmentsData, tags) } as Item;
+		return { ...result, attachmentsData: filterPublicAttachments(result.attachmentsData, publicTagRules(libraryConfig), result.sourceConnectionKey) } as Item;
 	} catch (error: any) {
 		if (error?.response?.status !== 404) {
 			console.warn("Error fetching source item from meilisearch:", error);
@@ -89,7 +90,7 @@ async function getCitingItems(
 		const { tags } = libraryConfig.content;
 		const filteredItems = (result.hits as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
-			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }));
+			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }));
 
 		return {
 			items: filteredItems,

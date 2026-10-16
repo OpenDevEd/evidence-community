@@ -114,6 +114,8 @@ function attachment(
 	};
 }
 
+const TAGGED = { mode: "tagged", tags: ["purple-publish"] } as const;
+
 describe("Zotero attachment publication", () => {
 	it("keeps untagged PDFs metadata-only without downloading or publishing", async () => {
 		const storage = new MemoryStorage();
@@ -121,7 +123,6 @@ describe("Zotero attachment publication", () => {
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage,
 		});
 		const result = await processor(
@@ -130,7 +131,7 @@ describe("Zotero attachment publication", () => {
 				client: { downloadAttachment } as unknown as ZoteroApiClient,
 				prefix: "groups/6632364",
 				sourceConnectionKey: "zotero-openscholar-test",
-				publishPdfs: true,
+				pdfs: TAGGED,
 			},
 		);
 		expect(result).toMatchObject({
@@ -149,14 +150,13 @@ describe("Zotero attachment publication", () => {
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage,
 		});
 		const result = await processor(attachment({ md5: "a".repeat(32) }), {
 			client: { downloadAttachment } as unknown as ZoteroApiClient,
 			prefix: "groups/6632364",
 			sourceConnectionKey: "zotero-openscholar-test",
-			publishPdfs: false,
+			pdfs: { mode: "off" },
 		});
 		expect(result).toMatchObject({ url: null, managedPublication: null });
 		expect(downloadAttachment).not.toHaveBeenCalled();
@@ -175,14 +175,13 @@ describe("Zotero attachment publication", () => {
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage,
 		});
 		const result = await processor(attachment({ md5 }), {
 			client: { downloadAttachment } as unknown as ZoteroApiClient,
 			prefix: "groups/6632364",
 			sourceConnectionKey: "zotero-openscholar-test",
-			publishPdfs: true,
+			pdfs: TAGGED,
 		});
 		const paths = sourcePublicationPaths(
 			"zotero-openscholar-test",
@@ -214,13 +213,31 @@ describe("Zotero attachment publication", () => {
 		);
 	});
 
+	it("publishes an untagged PDF for a source that publishes every PDF", async () => {
+		const bytes = await fixturePdf();
+		const md5 = createHash("md5").update(bytes).digest("hex");
+		const downloadAttachment = vi.fn().mockResolvedValue({ bytes, contentType: "application/pdf", etag: md5 });
+		const processor = createZoteroAttachmentProcessor({
+			database: publicationDatabase(),
+			maxPdfBytes: 10_000_000,
+			storage: new MemoryStorage(),
+		});
+		const result = await processor(attachment({ md5, tags: [] }), {
+			client: { downloadAttachment } as unknown as ZoteroApiClient,
+			prefix: "groups/6632364",
+			sourceConnectionKey: "zotero-openscholar-test",
+			pdfs: { mode: "every" },
+		});
+		expect(downloadAttachment).toHaveBeenCalledOnce();
+		expect(result?.managedPublication?.sizeBytes).toBe(bytes.byteLength);
+	});
+
 	it("rejects changed bytes instead of publishing mismatched content", async () => {
 		const bytes = await fixturePdf();
 		const storage = new MemoryStorage();
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage,
 		});
 		await expect(
@@ -230,7 +247,7 @@ describe("Zotero attachment publication", () => {
 				} as unknown as ZoteroApiClient,
 				prefix: "groups/6632364",
 				sourceConnectionKey: "zotero-openscholar-test",
-				publishPdfs: true,
+				pdfs: TAGGED,
 			}),
 		).rejects.toBeInstanceOf(ZoteroAttachmentProcessingError);
 		expect(storage.publicObjects.size).toBe(0);
@@ -266,7 +283,6 @@ describe("Zotero attachment publication", () => {
 				},
 			]),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage,
 		});
 		const result = await processor(
@@ -275,7 +291,7 @@ describe("Zotero attachment publication", () => {
 				client: { downloadAttachment } as unknown as ZoteroApiClient,
 				prefix: "groups/6632364",
 				sourceConnectionKey: "zotero-openscholar-test",
-				publishPdfs: true,
+				pdfs: TAGGED,
 			},
 		);
 		expect(downloadAttachment).not.toHaveBeenCalled();
@@ -291,7 +307,6 @@ describe("Zotero attachment publication", () => {
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage: new MemoryStorage(),
 		});
 		const mapped = await mapZoteroItem(
@@ -307,7 +322,7 @@ describe("Zotero attachment publication", () => {
 				client: { downloadAttachment } as unknown as ZoteroApiClient,
 				prefix: "groups/6632364",
 				sourceConnectionKey: "zotero-openscholar-test",
-				publishPdfs: true,
+				pdfs: TAGGED,
 			},
 		);
 		expect(mapped).toMatchObject({
@@ -328,7 +343,6 @@ describe("Zotero attachment publication", () => {
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
 			maxPdfBytes: 10_000_000,
-			publishTags: ["purple-publish"],
 			storage: new MemoryStorage(),
 		});
 		const mapped = await mapZoteroItem(
@@ -339,7 +353,7 @@ describe("Zotero attachment publication", () => {
 				client: { downloadAttachment } as unknown as ZoteroApiClient,
 				prefix: "groups/6632364",
 				sourceConnectionKey: "zotero-openscholar-test",
-				publishPdfs: true,
+				pdfs: TAGGED,
 			},
 		);
 		expect(mapped).toMatchObject({

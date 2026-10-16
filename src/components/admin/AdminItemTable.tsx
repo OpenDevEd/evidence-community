@@ -619,7 +619,7 @@ export function AdminItemTable({
 		[sources],
 	);
 	const editableSourceKeys = useMemo(() => editableCollectionSourceKeys(sources), [sources]);
-	const { content } = useLibraryConfig();
+	const libraryConfig = useLibraryConfig();
 	const columns = useMemo<ColumnDef<AdminTableItem>[]>(
 		() => [
 			{
@@ -749,7 +749,7 @@ export function AdminItemTable({
 			{
 				cell: ({ row }) => (
 					<RelationCell
-						entries={ordinaryItemTags(row.original.tags, content.tags).map((label, index) => ({
+						entries={ordinaryItemTags(row.original.tags, libraryConfig).map((label, index) => ({
 							key: `${label}:${index}`,
 							label,
 						}))}
@@ -803,7 +803,7 @@ export function AdminItemTable({
 			someVisibleSelected,
 			sourceLabels,
 			profiles,
-			content.tags,
+			libraryConfig,
 		],
 	);
 

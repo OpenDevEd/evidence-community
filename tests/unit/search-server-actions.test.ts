@@ -20,10 +20,12 @@ import * as actions from "@/lib/actions";
 it("lets no server action caller choose search options, so unpublished note text cannot come back", async () => {
 	expect(actions).not.toHaveProperty("searchIndex");
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
-	config.content.tags.publish = ["_publish"];
+	// The record's publish tags are its Zotero source's.
+	const zotero = config.sources.find((source) => source.provider === "zotero")!;
+	if (zotero.provider === "zotero") zotero.settings.pdfPublishing = { mode: "tagged", tags: ["_publish"] };
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
 	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
-		key: "PUBAAAAA", attachmentsData: [
+		key: "PUBAAAAA", sourceConnectionKey: zotero.key, attachmentsData: [
 			{ key: "PUBNTEAA", deleted: 0, itemType: "Note", tags: ["_publish"], note: "<p>Shown</p>" },
 			{ key: "PRIVNTEA", deleted: 0, itemType: "Note", tags: ["_cites"], note: "<p>Private</p>" },
 		],

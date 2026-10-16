@@ -6,6 +6,7 @@ import {
 import { getEnabledGapMaps } from "./gap-maps";
 import { getRuntimePagePath } from "./links";
 import { getRuntimePageAvailability } from "./pages";
+import { sourcePublishTags } from "@/lib/tags";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -71,6 +72,7 @@ export function projectPublicLibraryConfig(
 				siteUrl: new URL(config.authentication.openScholar.libraryUrl).origin,
 			},
 		},
+		sourcePublishTags: sourcePublishTags(config),
 	});
 
 	publicConfigCache.set(config, publicConfig);

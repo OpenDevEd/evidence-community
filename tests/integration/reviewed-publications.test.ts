@@ -25,7 +25,7 @@ it("lists each publication with a PDF once, reviewed or not, newest first, with 
 		const publish = async (title: string, editor: string) => {
 			const draft = await createNativeItemDraft(db, { itemType: "Report", title });
 			const review = await submitItemReview(db, draft.itemKey, creator, config);
-			await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision, publicationTags: ["publish-record"] }, { userId: editor, role: "editor" }, config);
+			await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, { userId: editor, role: "editor" }, config);
 			await withPdf(draft.itemKey);
 			return draft.itemKey;
 		};

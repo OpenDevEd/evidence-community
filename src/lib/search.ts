@@ -1,4 +1,4 @@
-import { filterPublicAttachments } from "./tags";
+import { publicTagRules, recordPublishTags, type PublicTagRules } from "./tags";
 import { getCachedCollections } from "@/app/api/cache";
 import { Collection } from "@/app/api/collections/types";
 import { ListItem } from "@/app/api/item/types";
@@ -31,7 +31,7 @@ import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
-import { itemPageAttachments } from "./attachment-visibility";
+import { filterPublicAttachments, itemPageAttachments } from "./attachment-visibility";
 import { getDatabaseForConfig } from "@/db";
 import { readTopicTree, resolveTopicAncestry } from "./topics/catalog";
 import { creatorFullName } from "./search-index/projection";
@@ -138,15 +138,12 @@ export async function getMainAttributes(config?: LibraryServerConfig) {
 }
 
 /** A list result keeps only its public attachments that the item page reads. */
-export function toLightweightItem(
-	item: ListItem,
-	tags: Pick<LibraryPublicConfig["content"]["tags"], "hidden" | "publish">,
-): ListItem {
+export function toLightweightItem(item: ListItem, rules: PublicTagRules): ListItem {
 	return {
 		...item,
 		attachmentsData: itemPageAttachments(
-			filterPublicAttachments(item.attachmentsData, tags),
-			tags.publish,
+			filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey),
+			recordPublishTags(rules.publishBySource, item.sourceConnectionKey),
 		),
 	};
 }
@@ -375,11 +372,11 @@ export async function getPublicItems(
 		getCachedCollections(libraryConfig),
 	]);
 
-	const { tags } = libraryConfig.content;
+	const rules = publicTagRules(libraryConfig);
 	const items = (searchResults.hits as ListItem[]).map((item) =>
 		includeHeavyFields
-			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, tags) }
-			: toLightweightItem(item, tags),
+			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey) }
+			: toLightweightItem(item, rules),
 	);
 
 	applyCollectionsData(items, collections as Collection[]);
@@ -417,7 +414,7 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 		}),
 		getCachedCollections(libraryConfig),
 	]);
-	const items = (searchResults.hits as ListItem[]).map((item) => toLightweightItem(item, tags));
+	const items = (searchResults.hits as ListItem[]).map((item) => toLightweightItem(item, publicTagRules(libraryConfig)));
 	applyCollectionsData(items, collections as Collection[]);
 	return items;
 }

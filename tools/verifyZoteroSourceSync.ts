@@ -863,18 +863,19 @@ async function verify() {
 		);
 
 		// Turning PDFs off, then on again, rereads the whole group once each time.
-		const pdfsSeen: boolean[] = [];
-		const watchingProcessor = async (record: RemoteRecord, context?: { publishPdfs: boolean }) => {
-			pdfsSeen.push(context?.publishPdfs ?? true);
+		const pdfsSeen: string[] = [];
+		const watchingProcessor = async (record: RemoteRecord, context?: { pdfs: { mode: string } }) => {
+			pdfsSeen.push(context?.pdfs.mode ?? "none");
 			return attachmentProcessor(record);
 		};
-		const setPdfs = async (downloadPdfs: boolean) => {
+		const setSettings = async (patch: Record<string, unknown>) => {
 			const [current] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
 			await database
 				.update(sourceConnection)
-				.set({ config: { ...(current!.config as Record<string, unknown>), downloadPdfs } })
+				.set({ config: { ...(current!.config as Record<string, unknown>), ...patch } })
 				.where(eq(sourceConnection.key, connectionKey));
 		};
+		const setPdfs = (downloadPdfs: boolean) => setSettings({ downloadPdfs });
 		const syncWithPdfs = () =>
 			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: watchingProcessor, sleep: async () => {} });
 		await setPdfs(false);
@@ -885,10 +886,48 @@ async function verify() {
 		const pdfsOn = await syncWithPdfs();
 		assert(
 			pdfsOff.records === 15 && pdfsOffSettled.records === 0 && pdfsOn.records === 15 &&
-				offSeen.length > 0 && offSeen.every((publish) => !publish) &&
-				pdfsSeen.slice(offSeen.length).every((publish) => publish),
+				offSeen.length > 0 && offSeen.every((mode) => mode === "off") &&
+				pdfsSeen.slice(offSeen.length).every((mode) => mode === "tagged"),
 			`A PDF setting change did not reread the group exactly once: ${JSON.stringify({ off: pdfsOff.records, settled: pdfsOffSettled.records, on: pdfsOn.records, pdfsSeen })}`,
 		);
+
+		// Publishing every PDF, then other tags, rereads the group once each time, so each PDF follows the new rule.
+		pdfsSeen.length = 0;
+		await setSettings({ pdfPublishing: { mode: "every", tags: [] } });
+		const everyPdf = await syncWithPdfs();
+		const everySettled = await syncWithPdfs();
+		const everySeen = [...pdfsSeen];
+		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "approved"] } });
+		const retagged = await syncWithPdfs();
+		assert(
+			everyPdf.records === 15 && everySettled.records === 0 && retagged.records === 15 &&
+				everySeen.length > 0 && everySeen.every((mode) => mode === "every") &&
+				pdfsSeen.slice(everySeen.length).every((mode) => mode === "tagged"),
+			`A PDF rule change did not reread the group exactly once: ${JSON.stringify({ every: everyPdf.records, settled: everySettled.records, retagged: retagged.records, pdfsSeen })}`,
+		);
+		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "publishPDF"] } });
+		await syncWithPdfs();
+
+		// A cursor saved before the rule was recorded was read under the library-wide publish tags: the same rule reads
+		// nothing again, and a different one, such as every PDF, reads the group again once.
+		const legacySync = () =>
+			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: watchingProcessor, legacyPublishTags: ["_publish", "publishPDF"], sleep: async () => {} });
+		const dropRecordedRule = async () => {
+			const [recorded] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+			const { pdfRule: _recordedRule, ...olderCursor } = recorded!.syncCursor as { pdfRule?: string };
+			await database.update(sourceConnection).set({ syncCursor: olderCursor }).where(eq(sourceConnection.key, connectionKey));
+		};
+		await dropRecordedRule();
+		const afterUpdate = await legacySync();
+		await setSettings({ pdfPublishing: { mode: "every", tags: [] } });
+		await dropRecordedRule();
+		const adopted = await legacySync();
+		assert(
+			afterUpdate.records === 0 && adopted.records === 15,
+			`A cursor without a recorded PDF rule was not compared with the library-wide tags: ${JSON.stringify({ afterUpdate: afterUpdate.records, adopted: adopted.records })}`,
+		);
+		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "publishPDF"] } });
+		await syncWithPdfs();
 
 		// A read left unfinished under one setting starts over when the setting changes.
 		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
@@ -906,7 +945,7 @@ async function verify() {
 		pdfsSeen.length = 0;
 		const restarted = await syncWithPdfs();
 		assert(
-			restarted.records === 15 && pdfsSeen.length > 0 && pdfsSeen.every((publish) => !publish),
+			restarted.records === 15 && pdfsSeen.length > 0 && pdfsSeen.every((mode) => mode === "off"),
 			`An unfinished read did not start over after the PDF setting changed: ${JSON.stringify({ records: restarted.records, pdfsSeen })}`,
 		);
 		await setPdfs(true);

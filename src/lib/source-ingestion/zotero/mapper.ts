@@ -3,7 +3,7 @@ import {
 	MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH,
 	type SourceIngestionBatch,
 } from "../batch-schema";
-import type { ZoteroCollectionResponse, ZoteroItemResponse } from "./schema";
+import type { ZoteroCollectionResponse, ZoteroItemResponse, ZoteroPdfRule } from "./schema";
 import type { ZoteroApiClient } from "./client";
 import { canonicalZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
 import {
@@ -22,8 +22,8 @@ export type ZoteroAttachmentProcessorContext = {
 	client: ZoteroApiClient;
 	prefix: string;
 	sourceConnectionKey: string;
-	/** False when the source adds no PDFs. */
-	publishPdfs: boolean;
+	/** Which of the group's PDFs the library publishes. */
+	pdfs: ZoteroPdfRule;
 };
 
 export type ZoteroAttachmentProcessor = {

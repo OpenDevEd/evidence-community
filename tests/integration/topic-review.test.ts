@@ -40,7 +40,6 @@ const disabledConfig = libraryConfigSchema.parse({
 const enabledPolicy = { writebackConfig: enabledConfig };
 const creator = { userId: "topic-review-creator", role: "creator" } as const;
 const editor = { userId: "topic-review-editor", role: "editor" } as const;
-const publicationTags = ["publish-record"] as const;
 
 async function seedTopics(db: Database) {
 	await db.insert(topicCatalogCache).values(
@@ -74,7 +73,6 @@ async function approveReview(
 		{
 			reviewId: review.id,
 			expectedRevision: review.revision,
-			publicationTags,
 		},
 		editor,
 		config,
