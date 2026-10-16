@@ -1,7 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { BookOpen01Icon, LinkSquare01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, BookOpen01Icon, LinkSquare01Icon } from "@hugeicons/core-free-icons";
 import { CoverImage } from "@/components/features/items/CoverImage";
 import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
@@ -26,6 +26,10 @@ import {
 	InlineCitationSource,
 } from "@/components/ai-elements/InlineCitation";
 import CopyButton from "@/components/features/items/CopyButton";
+import { CompactBookmarkButton } from "@/components/features/items/LikeButton";
+import { CollectionPickerDialog, usePickerAhead } from "@/components/features/collections/CollectionPicker";
+import { Button } from "@/components/nextui/Button";
+import { useReaderData } from "@/hooks/useReaderData";
 import {
 	PublicationHoverPreview,
 	publicationPreviewData,
@@ -50,8 +54,11 @@ export const CitedPublications = createContext<CitedPublicationsByKey>({});
 const pdfHrefPattern = /^\/lib\/([^/?#]+)\/download\/([^/?#]+)(?:[?#].*)?$/;
 
 // Sized with an arbitrary length: NextUI merges these with its own tailwind-merge, which drops `text-citation`.
+const cardIconButtonClassName =
+	"!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-[length:theme(fontSize.citation)] text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70";
+
 const copyLinkClassNames = {
-	button: "!h-7 !min-w-0 !rounded-lg !border-0 !bg-transparent !px-1.5 text-[length:theme(fontSize.citation)] text-black/40 shadow-none hover:!bg-black/[0.045] hover:!text-black/65 dark:text-white/40 dark:hover:!bg-white/[0.07] dark:hover:!text-white/70",
+	button: cardIconButtonClassName,
 	icon: "size-3",
 	text: "leading-none",
 };
@@ -86,6 +93,29 @@ function CitationCopyLink({
 					isIconOnly
 				/>
 			</span>
+		</Tooltip>
+	);
+}
+
+/** Opens the collection picker for a record, read ahead as the pointer reaches for it. Only a signed-in reader has it. */
+function SaveToCollectionButton({ itemKey, onOpen }: { itemKey: string; onOpen: () => void }) {
+	const { reader } = useReaderData();
+	const picker = usePickerAhead(itemKey);
+	const t = useTranslations("ui");
+	if (!reader) return null;
+	return (
+		<Tooltip content={t("selectCollection")}>
+			<Button
+				isIconOnly
+				variant="transparent"
+				aria-label={t("selectCollection")}
+				onPress={() => picker.open(onOpen)}
+				onPointerEnter={picker.warm}
+				onFocus={picker.warm}
+				className={cardIconButtonClassName}
+			>
+				<HugeiconsIcon icon={Add01Icon} className="size-3.5" />
+			</Button>
 		</Tooltip>
 	);
 }
@@ -386,11 +416,14 @@ export function PublicationLinkPreview({
 	itemKey,
 	href,
 	onAsked,
+	onSaveToCollection,
 }: {
 	itemKey: string;
 	href: string;
 	/** Closes the hover card once its publication is handed to the chat, so the card does not sit over it. */
 	onAsked?: () => void;
+	/** Opens the collection picker, which lives outside the card so it outlasts it. Without it, the card has no bookmark or save buttons. */
+	onSaveToCollection?: () => void;
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
@@ -436,7 +469,16 @@ export function PublicationLinkPreview({
 					<SiteFavicon className="size-3.5 rounded-favicon" />
 					<span className="truncate">{identity.name}</span>
 				</span>
-				<span className="pointer-events-auto flex items-center gap-1"><AskAboutButton item={{ key: itemKey, title: preview.title === "-" ? itemKey : preview.title }} compact onAsked={onAsked} /><CitationCopyLink href={href} itemKey={itemKey} /></span>
+				<span className="pointer-events-auto flex shrink-0 items-center gap-1">
+					<AskAboutButton item={{ key: itemKey, title: preview.title === "-" ? itemKey : preview.title }} compact onAsked={onAsked} />
+					{onSaveToCollection ? (
+						<>
+							<CompactBookmarkButton itemData={data.item} className={cardIconButtonClassName} />
+							<SaveToCollectionButton itemKey={itemKey} onOpen={onSaveToCollection} />
+						</>
+					) : null}
+					<CitationCopyLink href={href} itemKey={itemKey} />
+				</span>
 			</div>
 			<div className="pointer-events-none relative">
 			<PublicationHoverPreview
@@ -465,9 +507,16 @@ export function PublicationLink({
 	children: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const [picking, setPicking] = useState(false);
+	// Mounted once first opened, then kept for its closing animation: an answer can hold many links.
+	const [pickerMounted, setPickerMounted] = useState(false);
 	const openAccess = use(CitedPublications)[itemKey]?.openAccess;
 	return (
 		<InlineCitation className="inline align-baseline">
+			{/* Beside the card, not in it: the card closes as the picker opens, and the picker stays. Its links open in a new tab, so the chat behind stays open. */}
+			{pickerMounted ? (
+				<CollectionPickerDialog itemKey={itemKey} isOpen={picking} onOpenChange={setPicking} onClose={() => setPicking(false)} linksInNewTab />
+			) : null}
 			<InlineCitationCard open={open} onOpenChange={setOpen}>
 				<InlineCitationCardTrigger>
 					<Link
@@ -490,7 +539,16 @@ export function PublicationLink({
 				</InlineCitationCardTrigger>
 				<InlineCitationCardBody className="w-96 max-w-[calc(100vw-1.5rem)]">
 					<InlineCitationSource>
-						<PublicationLinkPreview itemKey={itemKey} href={href} onAsked={() => setOpen(false)} />
+						<PublicationLinkPreview
+							itemKey={itemKey}
+							href={href}
+							onAsked={() => setOpen(false)}
+							onSaveToCollection={() => {
+								setOpen(false);
+								setPickerMounted(true);
+								setPicking(true);
+							}}
+						/>
 					</InlineCitationSource>
 				</InlineCitationCardBody>
 			</InlineCitationCard>

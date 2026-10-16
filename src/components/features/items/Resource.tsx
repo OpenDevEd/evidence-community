@@ -12,10 +12,10 @@ import {
 } from "@hugeicons/core-free-icons";
 import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { fetcher, firstNonNullOrEmpty } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
@@ -30,11 +30,9 @@ import { cloneElement, useState, useMemo, useId, useRef } from "react";
 import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
-import GenericHeader from "../modals/GenericHeader";
-import { CollectionPicker, usePickerAhead } from "../collections/CollectionPicker";
+import { CollectionPickerDialog, usePickerAhead } from "../collections/CollectionPicker";
 import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
-import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
@@ -52,44 +50,30 @@ export function AddButton({
 	itemData,
 	revalidateResults,
 	collectionId,
+	linksInNewTab = false,
 }: {
 	itemData: Item | ListItem | undefined;
 	revalidateResults?: any;
 	collectionId?: string;
+	linksInNewTab?: boolean;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const { reader, refresh } = useReaderData();
+	const { reader } = useReaderData();
 	const t = useTranslations("ui");
 	const picker = usePickerAhead(itemData?.key);
-	// Puts the record in the collection or takes it out. Taking it out of the collection this list shows closes the picker, as the record leaves the list behind it.
-	const onCollectionSelect = async (pressedCollectionId: string, heldRecord: boolean) => {
-		if (!itemData) return;
-		const willClose = pressedCollectionId === collectionId && heldRecord;
-		const response = await setter(`/reader/collections/${pressedCollectionId}/items`, { arg: { itemKey: itemData.key } });
-		if (!response.ok) throw new Error(`Collection change failed with HTTP ${response.status}`);
-		await Promise.allSettled([revalidateResults && revalidateResults(), refresh()]);
-		if (willClose) onClose();
-	};
 
 	return (
 		reader && (
 			<>
-				{/* On wider screens it hangs from a fixed top, so a page of fewer rows or a new collection grows it downward. */}
-				<DialogModal
-					size="lg"
-					classNames={{ wrapper: "sm:items-start", base: "sm:mt-[12vh]" }}
+				<CollectionPickerDialog
+					itemKey={itemData?.key}
 					isOpen={isOpen}
 					onOpenChange={onOpenChange}
-				>
-					<ModalContent>
-						<GenericHeader onClose={onClose}>
-							{t("selectCollection")}
-						</GenericHeader>
-						<ModalBody className="px-6 pb-6 pt-0">
-							<CollectionPicker itemKey={itemData?.key} onToggle={onCollectionSelect} />
-						</ModalBody>
-					</ModalContent>
-				</DialogModal>
+					onClose={onClose}
+					revalidateResults={revalidateResults}
+					collectionId={collectionId}
+					linksInNewTab={linksInNewTab}
+				/>
 				<Button
 					isIconOnly
 					size="sm"
@@ -120,8 +104,10 @@ function FixURL(url: string | null) {
  */
 function CitationCounts({
 	itemData,
+	linksInNewTab,
 }: {
 	itemData: Item | ListItem | undefined;
+	linksInNewTab: boolean;
 }) {
 	const t = useTranslations("ui");
 	// The reader's chosen language, so the server and the browser write a total the same way.
@@ -143,7 +129,7 @@ function CitationCounts({
 			className="flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
-			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} />)}
+			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} linksInNewTab={linksInNewTab} />)}
 		</div>
 	);
 }
@@ -178,9 +164,10 @@ type CountRow = {
 // A narrow card drops the words; the tooltip and screen readers still get them.
 const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
 const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
+const NEW_TAB = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 /** One direction: how many the library holds, linked to its list, and of how many in OpenScholar. */
-function CountItem({ count, locale, of, onOpenAlex }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string }) {
+function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string; linksInNewTab: boolean }) {
 	const { icon, tone, colour, held, total, here, label, words } = count;
 	// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
 	const all = total !== null && total >= held ? total : null;
@@ -188,7 +175,7 @@ function CountItem({ count, locale, of, onOpenAlex }: { count: CountRow; locale:
 		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
 			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
 				<HugeiconsIcon icon={icon} className="size-3.5" />
-				{held > 0 ? <Link href={here} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+				{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
 				{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
 				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
 			</span>
@@ -276,12 +263,15 @@ function ResourceInteractions({
 	revalidateResults,
 	collectionId,
 	itemHref,
+	linksInNewTab,
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
 	revalidateResults?: any;
 	collectionId?: string;
 	itemHref?: string;
+	/** In the chat, where a page change would close it. */
+	linksInNewTab: boolean;
 }) {
 	const t = useTranslations("ui");
 
@@ -289,12 +279,13 @@ function ResourceInteractions({
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					<CitationCounts itemData={itemData} />
+					<CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} />
 					<div className="ml-auto flex shrink-0 items-center justify-end z-10 gap-2 pl-2">
 						{itemHref && (
 							<Button
 								as={Link}
 								href={itemHref}
+								{...(linksInNewTab ? NEW_TAB : {})}
 								onPointerEnter={() => preloadItemCovers(itemData)}
 								onFocus={() => preloadItemCovers(itemData)}
 								onTouchStart={() => preloadItemCovers(itemData)}
@@ -313,6 +304,7 @@ function ResourceInteractions({
 							itemData={itemData}
 							revalidateResults={revalidateResults}
 							collectionId={collectionId}
+							linksInNewTab={linksInNewTab}
 						/>
 						<LikeButton
 							itemData={itemData}
@@ -641,6 +633,7 @@ export default function Resource({
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}
 				itemHref={gapMapHref ? itemTargetHref : undefined}
+				linksInNewTab={openLinksInNewTab}
 			/>
 		</ResourceWrapper>
 	);
