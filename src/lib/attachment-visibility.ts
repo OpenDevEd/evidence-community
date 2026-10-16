@@ -1,6 +1,6 @@
 import type { ListAttachment } from "@/app/api/item/types";
 import { isIdentifierAttachment } from "@/lib/publication/publication-display-adapter";
-import { hasAnyTag, publishedByTags, recordPublishTags, type PublicTagRules } from "@/lib/tags";
+import { hasAnyTag, recordPublishTags, type PublicTagRules } from "@/lib/tags";
 
 type AttachmentVisibilityFields = {
 	PDFCoverPageImage?: string | null;
@@ -29,23 +29,23 @@ export function isVisiblePdfAttachment(
 
 export function isPublishedNote(
 	attachment: ItemPageAttachmentFields,
-	publishTags: readonly string[] | null,
+	publishTags: readonly string[],
 ) {
 	return (
 		attachment.itemType === "Note" &&
 		Boolean(attachment.note) &&
-		publishedByTags(attachment.tags, publishTags)
+		hasAnyTag(attachment.tags, publishTags)
 	);
 }
 
 export function isPublishedLink(
 	attachment: ItemPageAttachmentFields,
-	publishTags: readonly string[] | null,
+	publishTags: readonly string[],
 ) {
 	return (
 		attachment.linkMode === "linked_url" &&
 		Boolean(attachment.url) &&
-		publishedByTags(attachment.tags, publishTags)
+		hasAnyTag(attachment.tags, publishTags)
 	);
 }
 
@@ -56,7 +56,7 @@ export function isPublishedLink(
  */
 export function itemPageAttachments(
 	attachments: readonly ListAttachment[] | undefined,
-	publishTags: readonly string[] | null,
+	publishTags: readonly string[],
 ): ListAttachment[] | undefined {
 	return attachments
 		?.filter(
@@ -101,8 +101,8 @@ export function filterPublicAttachments<T extends { deleted?: number | null; ite
 		?.filter(attachment =>
 			attachment.deleted === 0 &&
 			!hasAnyTag(attachment.tags, rules.hidden) &&
-			(attachment.itemType !== "Note" || publishedByTags(attachment.tags, publish)) &&
-			(attachment.linkMode !== "linked_url" || isVisiblePdfAttachment(attachment) || isIdentifierAttachment(attachment) || publishedByTags(attachment.tags, publish)),
+			(attachment.itemType !== "Note" || hasAnyTag(attachment.tags, publish)) &&
+			(attachment.linkMode !== "linked_url" || isVisiblePdfAttachment(attachment) || isIdentifierAttachment(attachment) || hasAnyTag(attachment.tags, publish)),
 		)
 		// Only published notes show their text; a note kept on a file is never shown.
 		.map(attachment => attachment.itemType === "Note" || attachment.note == null ? attachment : { ...attachment, note: null });

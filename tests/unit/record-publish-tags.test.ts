@@ -4,7 +4,7 @@ import { filterPublicAttachments } from "@/lib/attachment-visibility";
 import { publicTagRules } from "@/lib/tags";
 
 const rules = publicTagRules({
-	content: { tags: { hidden: ["hide"] } },
+	content: { tags: { hidden: ["hide"], publish: ["library-publish"] } },
 	sources: [
 		{ key: "zotero-1", provider: "zotero", settings: { pdfPublishing: { mode: "every", tags: ["approved"] } } },
 		{ key: "openalex", provider: "openalex", settings: {} },
@@ -13,6 +13,7 @@ const rules = publicTagRules({
 const notes = [
 	{ key: "TAGGED01", deleted: 0, itemType: "Note", note: "<p>Tagged</p>", tags: ["approved"] },
 	{ key: "PLAIN001", deleted: 0, itemType: "Note", note: "<p>Plain</p>", tags: [] },
+	{ key: "LIBRARY1", deleted: 0, itemType: "Note", note: "<p>Library</p>", tags: ["library-publish"] },
 	{ key: "HIDDEN01", deleted: 0, itemType: "Note", note: "<p>Hidden</p>", tags: ["approved", "hide"] },
 ];
 const shown = (sourceConnectionKey: string) =>
@@ -23,8 +24,8 @@ describe("which notes a record shows", () => {
 		expect(shown("zotero-1")).toEqual(["TAGGED01"]);
 	});
 
-	it("shows every note the library made itself, except hidden ones", () => {
-		expect(shown("native")).toEqual(["TAGGED01", "PLAIN001"]);
+	it("shows a library-made record's notes that carry the library's publish tags", () => {
+		expect(shown("native")).toEqual(["LIBRARY1"]);
 	});
 
 	it("shows no note from a source without publish tags, or one no longer configured", () => {

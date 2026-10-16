@@ -72,7 +72,7 @@ export function projectPublicLibraryConfig(
 				siteUrl: new URL(config.authentication.openScholar.libraryUrl).origin,
 			},
 		},
-		sourcePublishTags: sourcePublishTags(config.sources),
+		sourcePublishTags: sourcePublishTags(config),
 	});
 
 	publicConfigCache.set(config, publicConfig);
