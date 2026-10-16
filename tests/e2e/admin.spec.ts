@@ -40,7 +40,7 @@ async function mockSubmittedReview(page: Page, onApprove: (body: Record<string, 
     await route.fulfill({json: {snapshot: {
       ...publishedDetail(true), reviewId: review.id, reviewRevision: review.revision,
       reviewState: review.state, submittedAt: timestamp, submittedBy: "editor",
-      frozenAttachments: [], remainingConflicts: {}, note: null, publishing: null,
+      frozenAttachments: [], remainingConflicts: {}, note: null, publishing: null, unchangedKeys: [],
     }}});
   });
   return {resubmit: () => {review.state = "pending"; review.revision += 1;}};
@@ -2633,7 +2633,7 @@ async function mockBookWithAttachment(
 		title: "PDF attachment",
 		updatedAt: timestamp,
 		writeback: { available: [], originSourceKey: null, selected: [] },
-		sourcePdf: null as null | { publishTags: string[] | null; choice: null; pending: "publish" | null; inReview: boolean; applied: boolean },
+		sourcePdf: null as null | { publishTags: string[] | null; choice: null; pending: "publish" | null; inReview: boolean; applied: boolean; pdfsOn: boolean },
 		sourcePdfChangePending: false,
 		...(options.sourcePdf
 			? {
@@ -2643,7 +2643,7 @@ async function mockBookWithAttachment(
 					filePublication: null,
 					fileState: "unpublished",
 					sourceFileUrl: `/api/admin/items/${attachmentKey}/file/source`,
-					sourcePdf: { publishTags: ["_publish"], choice: null, pending: null, inReview: false, applied: true },
+					sourcePdf: { publishTags: ["_publish"], choice: null, pending: null, inReview: false, applied: true, pdfsOn: true },
 				}
 			: {}),
 	};

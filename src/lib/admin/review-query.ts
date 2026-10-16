@@ -76,6 +76,9 @@ function heldSourcePdf(
 		? projectSourcePdf(held.items.find((entry) => entry.key === itemKey) ?? null, choice, held.publications.some((publication) => publication.itemKey === itemKey), held.config)
 		: null;
 	if (!projected) return { sourcePdf: null };
+	// A take-down shows as the review shows any removal: the PDF it holds goes.
+	if (choice?.pending === "withhold")
+		return { sourcePdf: projected.sourcePdf, fileState: "none" as const, fileDraft: null, fileRemovalPending: true, sourceFileUrl: null };
 	const { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl } = projected;
 	return { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl };
 }
@@ -243,5 +246,9 @@ export async function getAdminReviewSnapshot(
 		remainingConflicts: review.remainingConflicts,
 		note: review.note,
 		publishing: review.snapshot.publishingChoice,
+		/** Records the review only shows, not corrected since: approving doesn't check or publish them. */
+		unchangedKeys: records
+			.filter((record) => record.unchanged && !review.corrections.some((correction) => correction.itemKey === record.itemKey))
+			.map((record) => record.itemKey),
 	};
 }

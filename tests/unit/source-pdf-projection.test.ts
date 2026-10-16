@@ -14,7 +14,7 @@ const attachment = {
 	md5: "a".repeat(32),
 	updatedAt: new Date("2026-10-16T00:00:00Z"),
 } as Parameters<typeof projectSourcePdf>[0];
-const config = { sources: [{ key: "zotero-1", provider: "zotero", settings: { pdfPublishing: { mode: "tagged", tags: ["_publish"] } } }] } as unknown as Parameters<typeof projectSourcePdf>[3];
+const config = { sources: [{ key: "zotero-1", provider: "zotero", settings: { downloadPdfs: true, pdfPublishing: { mode: "tagged", tags: ["_publish"] } } }] } as unknown as Parameters<typeof projectSourcePdf>[3];
 const choice = (fields: Partial<SourceFileChoiceRow>): SourceFileChoiceRow => ({
 	itemKey: "ZATT2345", sourceConnectionKey: "zotero-1", sourceRecordKey: "ZATT2345", choice: null, pending: null,
 	reviewId: null, applied: true, sizeBytes: null, updatedAt: new Date("2026-10-16T01:00:00Z"), ...fields,

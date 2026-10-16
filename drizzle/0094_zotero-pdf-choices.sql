@@ -161,6 +161,16 @@ BEGIN
 				WHEN EXISTS (SELECT 1 FROM "itemFileDraft" file WHERE file."parentItemKey" = effective.key AND file."readyAt" IS NOT NULL) THEN 'staged'
 				WHEN EXISTS (SELECT 1 FROM "itemFileDraft" file WHERE file."parentItemKey" = effective.key) THEN 'processing'
 				WHEN EXISTS (
+					SELECT 1 FROM "itemSourceFileChoice" choice
+					JOIN "item" attachment ON attachment.key = choice."itemKey"
+					WHERE attachment."parentItem" = effective.key AND choice.pending = 'publish'
+				) THEN 'staged'
+				WHEN EXISTS (
+					SELECT 1 FROM "itemSourceFileChoice" choice
+					JOIN "item" attachment ON attachment.key = choice."itemKey"
+					WHERE attachment."parentItem" = effective.key AND NOT choice.applied
+				) THEN 'processing'
+				WHEN EXISTS (
 					SELECT 1 FROM "item" attachment
 					WHERE attachment."parentItem" = effective.key
 						AND attachment."itemType" = 'Attachment'
@@ -249,6 +259,13 @@ BEGIN
 	END IF;
 END;
 $$;--> statement-breakpoint
+-- A staged or approved choice changes what the records table says about the record's PDF.
+CREATE TRIGGER admin_item_list_source_file_choice_insert_refresh AFTER INSERT ON "itemSourceFileChoice" REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trigger_admin_item_list_projection_refresh('', 'new_rows');
+--> statement-breakpoint
+CREATE TRIGGER admin_item_list_source_file_choice_update_refresh AFTER UPDATE ON "itemSourceFileChoice" REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION trigger_admin_item_list_projection_refresh('old_rows', 'new_rows');
+--> statement-breakpoint
+CREATE TRIGGER admin_item_list_source_file_choice_delete_refresh AFTER DELETE ON "itemSourceFileChoice" REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION trigger_admin_item_list_projection_refresh('old_rows', '');
+--> statement-breakpoint
 UPDATE "adminItemListProjection" projection
 SET "fileState" = 'unpublished'
 WHERE projection."fileState" = 'none'

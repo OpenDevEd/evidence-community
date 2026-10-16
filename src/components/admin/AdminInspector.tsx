@@ -1376,7 +1376,7 @@ function SourcePdfRow({ busy, detail, onStageSourcePdf, readOnly }: {
 				>
 					Open PDF
 				</Button>
-				{detail.sourcePdf?.applied && !readOnly && onStageSourcePdf ? (
+				{detail.sourcePdf?.applied && detail.sourcePdf.pdfsOn && !readOnly && onStageSourcePdf ? (
 					<Button
 						isDisabled={busy}
 						onPress={() => onStageSourcePdf(detail.key)}
@@ -1400,6 +1400,8 @@ function SourcePdfRow({ busy, detail, onStageSourcePdf, readOnly }: {
 
 /** Why a Zotero PDF isn't published: an editor took it down here, or it lacks one of its source's publish tags. */
 function SourcePdfReason({ sourcePdf }: { sourcePdf: NonNullable<AdminItemDetail["sourcePdf"]> }) {
+	if (!sourcePdf.pdfsOn)
+		return <p className="mt-1 text-black/45 dark:text-white/45">PDFs are off for this source</p>;
 	if (!sourcePdf.applied)
 		return <p className="mt-1 text-black/45 dark:text-white/45">Changes on the next import</p>;
 	if (sourcePdf.choice === "withhold")

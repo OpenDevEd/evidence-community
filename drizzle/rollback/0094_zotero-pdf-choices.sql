@@ -219,4 +219,4 @@ BEGIN
 	END IF;
 END;
 $$;
-DROP TABLE IF EXISTS "itemSourceFileChoice";
+DROP TABLE IF EXISTS "itemSourceFileChoice" CASCADE;

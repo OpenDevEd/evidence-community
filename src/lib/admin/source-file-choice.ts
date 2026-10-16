@@ -91,13 +91,15 @@ export async function downloadSourcePdf(db: Database, config: LibraryServerConfi
 		credentialResolver: createManifestSourceCredentialResolver(config.sources),
 	});
 	const { bytes } = await client.downloadAttachment(prefix, row!.sourceRecordKey ?? row!.key, config.services.storage.maxPdfBytes);
-	return { bytes, filename: row!.filename ?? `${row!.key}.pdf` };
+	return { bytes, filename: row!.filename ?? `${row!.key}.pdf`, sourceConnectionKey: row!.sourceConnectionKey };
 }
 
 /** Stages a Zotero PDF the library doesn't publish, to publish it once a review approves it. */
 export async function stageSourcePdf(db: Database, config: LibraryServerConfig, itemKey: string) {
 	// Read before the lock: it checks the file is there and how large it is.
-	const { bytes } = await downloadSourcePdf(db, config, itemKey);
+	const { bytes, sourceConnectionKey } = await downloadSourcePdf(db, config, itemKey);
+	if (!sourcePdfSettings(config, sourceConnectionKey).pdfsOn)
+		throw new AdminValidationError("This source adds no PDFs. Turn on its PDFs in the library's settings first.");
 	await db.transaction(async (transaction) => {
 		const row = await lockSourcePdf(transaction, itemKey);
 		if (row.published) throw new AdminValidationError("This PDF is already published.");
@@ -214,10 +216,15 @@ function stagedSourcePdf(published: typeof item.$inferSelect, choice: SourceFile
 }
 
 /** The tags that publish a source's PDFs; null when it publishes every one. */
-function sourcePublishTags(config: Pick<LibraryServerConfig, "sources">, sourceConnectionKey: string) {
-	const source = config.sources.find((entry) => entry.key === sourceConnectionKey);
-	const rule = source?.provider === "zotero" ? source.settings.pdfPublishing : undefined;
+function publishTagsOf(rule: { mode: "tagged" | "every"; tags: string[] } | undefined) {
 	return rule?.mode === "every" ? null : (rule?.tags ?? []);
+}
+
+/** A Zotero source's PDF settings: whether it adds PDFs, and the tags that publish them. */
+function sourcePdfSettings(config: Pick<LibraryServerConfig, "sources">, sourceConnectionKey: string) {
+	const source = config.sources.find((entry) => entry.key === sourceConnectionKey);
+	if (source?.provider !== "zotero") return { pdfsOn: false, publishTags: [] };
+	return { pdfsOn: source.settings.downloadPdfs, publishTags: publishTagsOf(source.settings.pdfPublishing) };
 }
 
 /**
@@ -232,7 +239,7 @@ export function projectSourcePdf(
 ) {
 	if (!published || !isSourcePdf(published)) return null;
 	const sourcePdf: AdminSourcePdf = {
-		publishTags: sourcePublishTags(config, published.sourceConnectionKey),
+		...sourcePdfSettings(config, published.sourceConnectionKey),
 		choice: choice?.choice ?? null,
 		pending: choice?.pending ?? null,
 		inReview: Boolean(choice?.reviewId),

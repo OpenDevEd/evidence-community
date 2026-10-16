@@ -98,6 +98,7 @@ const submitted: AdminReviewSnapshot = {
 	remainingConflicts: {},
 	note: null,
 	publishing: null,
+	unchangedKeys: [],
 };
 const draftPayload = { ...payload, title: "Newer working title" };
 let root: Root;

@@ -145,7 +145,8 @@ export async function captureItemReviewSnapshot(
 			key,
 			current,
 			fileDrafts.find((record) => record.itemKey === key),
-			files.find((record) => record.itemKey === key),
+			// A record the review only shows keeps its PDF as it is, wherever its source publishes it from.
+			record.unchanged ? undefined : files.find((record) => record.itemKey === key),
 			removals.find((record) => record.itemKey === key),
 		);
 		if (file) capturedFiles.push(file);

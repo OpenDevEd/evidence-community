@@ -91,6 +91,8 @@ export type AdminSourcePdf = {
 	inReview: boolean;
 	/** False from approval until the source's import has applied the choice. */
 	applied: boolean;
+	/** The source adds PDFs at all; off, none is published, by a tag or a choice. */
+	pdfsOn: boolean;
 };
 
 export type AdminAttachment = AdminItemSummary & {

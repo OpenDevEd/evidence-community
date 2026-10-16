@@ -940,6 +940,43 @@ async function verify() {
 		);
 		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, choiceAttachment!.key));
 
+		// A read interrupted while it holds such attachments resumes holding the same ones, so its offset still
+		// points where it stopped, and it applies their choices when it completes.
+		const [choiceParent] = await database.select({ key: item.key }).from(item)
+			.where(and(eq(item.sourceConnectionKey, connectionKey), eq(item.sourceRecordKey, "AAAA2345")));
+		await database.insert(itemSourceFileChoice).values([
+			{ itemKey: choiceParent!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "AAAA2345", choice: "withhold", applied: false },
+			{ itemKey: choiceAttachment!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "BBBB2345", choice: "withhold", applied: false },
+		]);
+		await setSettings({ maxRecordsPerBatch: 1 });
+		let interruptOnce = true;
+		let choiceReadInterrupted = false;
+		try {
+			await syncZoteroSource({
+				database, sourceConnectionKey: connectionKey, credentialResolver, sleep: async () => {},
+				attachmentProcessor: async (record: RemoteRecord) => {
+					if (interruptOnce) {
+						interruptOnce = false;
+						throw new Error("simulated interruption while applying choices");
+					}
+					return attachmentProcessor(record);
+				},
+			});
+		} catch (error) {
+			choiceReadInterrupted = error instanceof Error && error.message === "simulated interruption while applying choices";
+		}
+		const [interruptedChoiceRead] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+		const heldAlsoRead = (interruptedChoiceRead!.syncCursor as { pending?: { offset?: number; alsoRead?: string[] } }).pending;
+		await syncWithChoices();
+		const resumedChoices = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		assert(
+			choiceReadInterrupted && heldAlsoRead?.offset === 1 && heldAlsoRead.alsoRead?.join() === "AAAA2345,BBBB2345" &&
+				resumedChoices.length === 2 && resumedChoices.every((row) => row.applied),
+			`A resumed read did not hold the attachments it was applying choices for: ${JSON.stringify({ choiceReadInterrupted, heldAlsoRead, applied: resumedChoices.map((row) => row.applied) })}`,
+		);
+		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		await setSettings({ maxRecordsPerBatch: 500 });
+
 		// A read left unfinished under one setting starts over when the setting changes.
 		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
 		const settledCursor = settled!.syncCursor as { libraryVersion: number };

@@ -667,7 +667,7 @@ function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfRu
 function pendingCursor(
 	cursor: ZoteroCursor,
 	previousSoftTrash: SoftTrashState,
-	read: { offset: number; snapshotSince: number; targetVersion: number; pdfRule: string },
+	read: { offset: number; snapshotSince: number; targetVersion: number; pdfRule: string; alsoRead: readonly string[] },
 ) {
 	return {
 		libraryVersion: currentLibraryVersion(cursor),
@@ -681,6 +681,7 @@ function pendingCursor(
 			snapshotSince: read.snapshotSince,
 			targetVersion: read.targetVersion,
 			pdfRule: read.pdfRule,
+			...(read.alsoRead.length ? { alsoRead: [...read.alsoRead] } : {}),
 		},
 	};
 }
@@ -910,6 +911,7 @@ async function writeManifestBatches(
 		attachmentContext: ZoteroAttachmentProcessorContext;
 		fetchedAt: Date;
 		pdfRule: string;
+		alsoRead: readonly string[];
 		maxRecordsPerBatch: number;
 		expectedConfiguration: Record<string, unknown>;
 	},
@@ -938,6 +940,7 @@ async function writeManifestBatches(
 						snapshotSince,
 						targetVersion: manifest.targetVersion,
 						pdfRule: read.pdfRule,
+						alsoRead: read.alsoRead,
 					});
 		const written = await writeSourceIngestionBatch(options.database, {
 			...mapped,
@@ -1007,8 +1010,9 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	]);
 	const previousSoftTrash = previousSoftTrashState(cursor);
 	const start = readStart(cursor, requiresMappingReplay, pdfRule);
-	// A read that resumes keeps the entries it started with; choices not applied yet wait for the next one.
-	const applying = start.resumes ? [] : unapplied;
+	// A read that resumes holds the same entries it started with, so its offset still points where it stopped.
+	const alsoRead = start.resumes && "pending" in cursor ? (cursor.pending?.alsoRead ?? []) : unapplied.map((row) => row.sourceRecordKey);
+	const applying = unapplied.filter((row) => alsoRead.includes(row.sourceRecordKey));
 	const snapshot = await readSnapshot(
 		{
 			client,
@@ -1016,7 +1020,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			maxSnapshotRecords: config.maxSnapshotRecords,
 			maxPasses: config.maxConsistencyRetries,
 			sleep: options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))),
-			alsoReadItemKeys: applying.map((row) => row.sourceRecordKey),
+			alsoReadItemKeys: alsoRead,
 		},
 		{
 			start,
@@ -1088,6 +1092,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		attachmentContext,
 		fetchedAt,
 		pdfRule,
+		alsoRead,
 		maxRecordsPerBatch: config.maxRecordsPerBatch,
 		expectedConfiguration: connection.config,
 	});
