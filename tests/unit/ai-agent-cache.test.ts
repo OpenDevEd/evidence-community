@@ -117,3 +117,12 @@ describe("Claude prompt caching in a long chat", () => {
 		}
 	});
 });
+
+describe("a chat that uses every step it may take", () => {
+	it.each(["quick", "research"] as const)("leaves the last %s step for the answer, so the reply is never empty", async (mode) => {
+		const requests = await requestsOfLongChat(mode);
+
+		expect(requests.slice(0, -1).map((request) => request.tool_choice)).not.toContain("none");
+		expect(requests.at(-1)?.tool_choice).toBe("none");
+	});
+});

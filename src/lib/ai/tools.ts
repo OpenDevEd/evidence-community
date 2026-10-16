@@ -12,6 +12,7 @@ import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { PDF_FILTER, PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
+import { PDF_HANDOFF_TEXT } from "./prompt-context";
 import {
 	CURRENT_RESULTS_WINDOW_SIZE,
 	createCurrentResultsCursor,
@@ -140,13 +141,18 @@ function toolSearchParams(query: string, filters: SearchFilters | undefined) {
 	};
 }
 
+function isPdfHandoff(message: ModelMessage) {
+	return Array.isArray(message.content) && message.content[0]?.type === "text" && message.content[0].text === PDF_HANDOFF_TEXT;
+}
+
+/** What the person last asked, skipping the PDF handoffs the agent adds after each read. */
 function latestUserText(messages: ModelMessage[]) {
 	const withoutContext = (text: string) =>
 		text.replace(/<request_context>[\s\S]*?<\/request_context>/g, "");
 
 	for (let index = messages.length - 1; index >= 0; index -= 1) {
 		const message = messages[index];
-		if (message.role !== "user") continue;
+		if (message.role !== "user" || isPdfHandoff(message)) continue;
 		if (typeof message.content === "string") {
 			return withoutContext(message.content);
 		}
@@ -202,6 +208,8 @@ async function searchOne(
 	limit: number,
 	allowedKeys?: string[],
 	logContext?: SearchLogContext,
+	/** The reader's list on a profile: each hit says whether it is already on it. */
+	listKeys?: ReadonlySet<string>,
 ) {
 	if (allowedKeys?.length === 0) {
 		logDevelopmentSearch("query.skipped", {
@@ -244,7 +252,10 @@ async function searchOne(
 			const { hybrid: _hybrid, ...keywordOptions } = searchOptions;
 			return index.search(query, keywordOptions);
 		});
-		const hits = result.hits.map(searchHitToModelHit);
+		const hits = result.hits.map((hit) => {
+			const modelHit = searchHitToModelHit(hit);
+			return listKeys ? { ...modelHit, inCurrentList: listKeys.has(modelHit.key) } : modelHit;
+		});
 		const totalHits = result.estimatedTotalHits ?? result.hits.length;
 
 		logDevelopmentSearch("query.completed", {
@@ -395,6 +406,7 @@ export function createResearchTools(
 	readerListKeys?: string[],
 ) {
 	const schemas = createResearchToolSchemas(mode);
+	const listKeys = readerListKeys && new Set(readerListKeys);
 	let currentWindowId: string | undefined;
 	let currentWindowPromise: Promise<CurrentResultsWindow> | undefined;
 
@@ -491,6 +503,7 @@ export function createResearchTools(
 								limitPerQuery,
 								currentResults?.keys,
 								{ requestId, searchId, mode },
+								listKeys,
 							),
 						),
 					),

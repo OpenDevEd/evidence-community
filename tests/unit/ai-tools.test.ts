@@ -28,6 +28,7 @@ import {
 	createResearchToolSchemas,
 	validateSearchFiltersAgainstUserRequest,
 } from "@/lib/ai/tool-schemas";
+import { PDF_HANDOFF_TEXT } from "@/lib/ai/prompt-context";
 import { createResearchTools } from "@/lib/ai/tools";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { PDF_FILTER } from "@/lib/search-filter-constants";
@@ -268,6 +269,44 @@ describe("searching the library for the assistant", () => {
 		);
 
 		expect(searchOptions().filter).toEqual(expect.arrayContaining(['key IN ["SAVED001","SAVED002"]']));
+	});
+
+	it("keeps the reader's year range when PDFs were read before the search", async () => {
+		const tools = createResearchTools("quick", config);
+		const messages = [
+			{ role: "user" as const, content: "What else since 2020 fits this collection?" },
+			{ role: "user" as const, content: [{ type: "text" as const, text: PDF_HANDOFF_TEXT }] },
+		];
+
+		const result = (await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: ["automated feedback"], filters: { yearRange: [2020, 2026] } }),
+			{ messages } as never,
+		)) as { appliedFilters: { yearRange?: number[] }; ignoredFilters: string[] };
+
+		expect(result.ignoredFilters).toEqual([]);
+		expect(result.appliedFilters.yearRange).toEqual([2020, 2026]);
+	});
+
+	it("tells which library hits are already on the reader's list, so only new ones are recommended", async () => {
+		search.mockResolvedValue({ hits: [{ key: "SAVED001" }, { key: "OTHER001" }], estimatedTotalHits: 2 });
+		const tools = createResearchTools(
+			"quick",
+			config,
+			normalizeLibrarySearchContext({ readerList: { userId: "reader-amina", collectionId: "" } }),
+			"request-1",
+			["SAVED001", "SAVED002"],
+		);
+
+		const result = (await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: ["teacher training"], withinCurrentResults: false }),
+			{ messages: userMessages("what else would fit this collection?") } as never,
+		)) as { queries: Array<{ hits: Array<{ key: string; inCurrentList: boolean }> }> };
+
+		expect(searchOptions().filter).not.toEqual(expect.arrayContaining([expect.stringContaining("SAVED")]));
+		expect(result.queries[0].hits.map(({ key, inCurrentList }) => ({ key, inCurrentList }))).toEqual([
+			{ key: "SAVED001", inCurrentList: true },
+			{ key: "OTHER001", inCurrentList: false },
+		]);
 	});
 
 	it("keeps the reader's topic filter when reading their results", async () => {
