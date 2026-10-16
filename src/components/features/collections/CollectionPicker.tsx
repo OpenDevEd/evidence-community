@@ -185,8 +185,8 @@ function CollectionPicker({
 	const { draft, search } = query;
 	// Collections made here since the picker opened, which slide open.
 	const [made, setMade] = useState<ReadonlySet<string>>(new Set());
-	const { pending, toggle } = usePendingToggles(onToggle);
 	const shown = usePickerPage(itemKey, search, sort, page);
+	const { pending, toggle } = usePendingToggles(onToggle, shown.rows);
 
 	// Only making the collection can fail the row: once it exists, the row closes whatever else fails, so it isn't made twice.
 	const create = async (name: string) => {
@@ -274,9 +274,18 @@ type PendingToggle = { from: boolean; to: boolean; saving: boolean };
  * until the reloaded list shows it too: a reload can lag behind the save, as one save's reload is dropped when
  * another starts. A failed change goes back and says so.
  */
-function usePendingToggles(onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>) {
+function usePendingToggles(onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>, rows: readonly PickerCollection[]) {
 	const t = useTranslations("ui");
 	const [pending, setPending] = useState<ReadonlyMap<string, PendingToggle>>(new Map());
+	// Once the list shows a saved change, the list has it: a later change from elsewhere then shows as it is.
+	const settled = settledToggles(rows, pending);
+	if (settled.length > 0) {
+		setPending((current) => {
+			const next = new Map(current);
+			for (const id of settled) next.delete(id);
+			return next;
+		});
+	}
 	const update = (collectionId: string, row: PendingToggle | undefined) =>
 		setPending((rows) => {
 			const next = new Map(rows);
@@ -297,6 +306,14 @@ function usePendingToggles(onToggle: (collectionId: string, heldRecord: boolean)
 		}
 	};
 	return { pending, toggle };
+}
+
+/** The saved toggles the list now shows. */
+export function settledToggles(rows: readonly { id: string; holdsRecord: boolean }[], pending: ReadonlyMap<string, PendingToggle>) {
+	return rows.filter((row) => {
+		const toggle = pending.get(row.id);
+		return toggle !== undefined && !toggle.saving && row.holdsRecord === toggle.to;
+	}).map((row) => row.id);
 }
 
 /** What a row shows: a pressed row's new state while it saves, and after, until the list it is read from catches up. */

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { shownChecked } from "@/components/features/collections/CollectionPicker";
+import { settledToggles, shownChecked } from "@/components/features/collections/CollectionPicker";
 
 describe("a collection picker row the reader pressed", () => {
 	const added = { from: false, to: true };
@@ -20,5 +20,20 @@ describe("a collection picker row the reader pressed", () => {
 		expect(shownChecked(true, { ...added, saving: false })).toBe(true);
 		expect(shownChecked(true, undefined)).toBe(true);
 		expect(shownChecked(false, undefined)).toBe(false);
+	});
+
+	// Kept past that point, a later change from another picker would bring the old press back.
+	it("is settled once the list shows its change, and not while the list is behind or the change still saves", () => {
+		const pending = new Map([
+			["shown", { ...added, saving: false }],
+			["behind", { ...added, saving: false }],
+			["saving", { ...added, saving: true }],
+		]);
+		const rows = [
+			{ id: "shown", holdsRecord: true },
+			{ id: "behind", holdsRecord: false },
+			{ id: "saving", holdsRecord: true },
+		];
+		expect(settledToggles(rows, pending)).toEqual(["shown"]);
 	});
 });
