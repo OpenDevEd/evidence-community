@@ -1260,6 +1260,26 @@ async function verify() {
 			// drain the edit
 		}
 		const everyTags = calls.slice(callsBeforeEvery).find((call) => call.entity === "item" && call.itemKey === pdfAttachment.itemKey)?.payload.tags;
+		// Back to tagged PDFs, an edit to the title alone still sends the tag, as a changed field.
+		await setRule({ mode: "tagged", tags: ["group-publish"] });
+		const retitleDraft = await openItemDraft(db, pdfAttachment.itemKey);
+		await saveItemDraft(db, {
+			itemKey: pdfAttachment.itemKey,
+			expectedDraftGeneration: retitleDraft.generation,
+			expectedDraftRevision: retitleDraft.draftRevision,
+			expectedPayload: retitleDraft.payload,
+			payload: { ...retitleDraft.payload, title: "report (retitled).pdf" },
+		});
+		await publishItemDraft(db, pdfAttachment.itemKey);
+		const callsBeforeRetitle = calls.length;
+		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+			// drain the retitle
+		}
+		const retitled = calls.slice(callsBeforeRetitle).find((call) => call.entity === "item" && call.itemKey === pdfAttachment.itemKey);
+		assert(
+			Array.isArray(retitled?.payload.tags) && (retitled.payload.tags as string[]).includes("group-publish") && retitled.dirtyFields.includes("tags"),
+			`A retitled PDF's writeback did not send its group's tag as a change: ${JSON.stringify({ tags: retitled?.payload.tags, dirtyFields: retitled?.dirtyFields })}`,
+		);
 		assert(
 			Array.isArray(taggedTags) && taggedTags.includes("group-publish") && !taggedTags.includes("group-other") &&
 				Array.isArray(everyTags) && !everyTags.includes("group-publish"),

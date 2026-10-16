@@ -31,6 +31,8 @@ describe("which notes a record shows", () => {
 	it("shows no note from a source without publish tags, or one no longer configured", () => {
 		expect(shown("openalex")).toEqual([]);
 		expect(shown("zotero-removed")).toEqual([]);
+		// A source key may share a name with an object's built-in properties.
+		expect(shown("constructor")).toEqual([]);
 	});
 });
 

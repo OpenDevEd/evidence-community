@@ -48,6 +48,8 @@ type SyncZoteroSourceOptions = {
 	credentialResolver?: SourceCredentialResolver;
 	database: Database;
 	fetch?: Fetch;
+	/** The library-wide publish tags a source read before it had its own PDF rule was read under. */
+	legacyPublishTags?: readonly string[];
 	/** The import run, when an orchestrator started this sync. */
 	run?: SourceRunProgress;
 	sourceConnectionKey: string;
@@ -723,22 +725,31 @@ async function readSnapshot(
  * and its PDF is published or taken down to match. Otherwise it reads what
  * changed since the last complete read.
  */
-function readStart(cursor: ZoteroCursor, replay: boolean, pdfRule: string) {
+function readStart(cursor: ZoteroCursor, replay: boolean, pdfRule: string, legacy: string) {
 	const pending = "pending" in cursor ? cursor.pending : undefined;
-	if (pending && recordedPdfRule(pending, pdfRule) === pdfRule) {
+	if (pending && recordedPdfRule(pending, legacy) === pdfRule) {
 		return { snapshotSince: pending.snapshotSince, resumes: true };
 	}
-	const fromStart = Boolean(pending) || replay || ("libraryVersion" in cursor && recordedPdfRule(cursor, pdfRule) !== pdfRule);
+	const fromStart = Boolean(pending) || replay || ("libraryVersion" in cursor && recordedPdfRule(cursor, legacy) !== pdfRule);
 	return { snapshotSince: fromStart ? 0 : currentLibraryVersion(cursor), resumes: false };
 }
 
 /**
- * The PDF rule a read followed. One saved before the rule was recorded left PDFs out (`pdfs: false`) or added them
- * under the rule in force then, which is taken to be the current one: a library update reads nothing again by itself.
+ * The PDF rule a read followed. One saved before the rule was recorded left PDFs out (`pdfs: false`), or added the PDFs
+ * carrying one of the library-wide publish tags: the legacy rule. A library update reads nothing again by itself, and a
+ * new rule that differs from what it read under reads the group again.
  */
-function recordedPdfRule(read: { pdfRule?: string; pdfs?: false }, current: string) {
+function recordedPdfRule(read: { pdfRule?: string; pdfs?: false }, legacy: string) {
 	if (read.pdfRule !== undefined) return read.pdfRule;
-	if (read.pdfs === false) return zoteroPdfRuleKey({ mode: "off" });
+	return read.pdfs === false ? zoteroPdfRuleKey({ mode: "off" }) : legacy;
+}
+
+/**
+ * The rule a read saved before sources had their own followed: the library-wide tags. Unknown, it added PDFs under
+ * whatever rule is current, unless PDFs are now off.
+ */
+function legacyPdfRule(options: SyncZoteroSourceOptions, current: string) {
+	if (options.legacyPublishTags) return zoteroPdfRuleKey({ mode: "tagged", tags: options.legacyPublishTags });
 	return current === zoteroPdfRuleKey({ mode: "off" }) ? "added" : current;
 }
 
@@ -1009,7 +1020,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		),
 	]);
 	const previousSoftTrash = previousSoftTrashState(cursor);
-	const start = readStart(cursor, requiresMappingReplay, pdfRule);
+	const start = readStart(cursor, requiresMappingReplay, pdfRule, legacyPdfRule(options, pdfRule));
 	// A read that resumes holds the same entries it started with, so its offset still points where it stopped.
 	const alsoRead = start.resumes && "pending" in cursor ? (cursor.pending?.alsoRead ?? []) : unapplied.map((row) => row.sourceRecordKey);
 	const applying = unapplied.filter((row) => alsoRead.includes(row.sourceRecordKey));

@@ -29,7 +29,7 @@ export function sourcePublishTags(config: PublishTagConfig): Record<string, stri
 
 /** The tags that make a record's notes and links public: its source's publish tags; none for any other source. */
 export function recordPublishTags(bySource: SourcePublishTags, sourceConnectionKey: string | null | undefined): readonly string[] {
-	return (sourceConnectionKey && bySource[sourceConnectionKey]) || [];
+	return sourceConnectionKey && Object.hasOwn(bySource, sourceConnectionKey) ? bySource[sourceConnectionKey]! : [];
 }
 
 /** What decides which records and attachments readers see: the hidden tags, and each source's publish tags. */

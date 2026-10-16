@@ -3,7 +3,6 @@ import { readPublicationRepositorySnapshot } from "@/lib/publication/repository"
 import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
 import { CrossrefActivationValidationError, ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
 import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
-import { resolveItemWritebackTargets } from "@/lib/source-writeback/policy";
 import { applySourceFileChoices, holdSourceFileChoices, releaseSourceFileChoices } from "./source-file-choice";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { activateCrossrefPublicationInTransaction, reserveCrossrefDoi } from "@/lib/publication/crossref-activation-service";
@@ -590,19 +589,6 @@ async function prepareReviewFile(
 	});
 }
 
-/**
- * The tags a published PDF carries so each Zotero group the record writes back to keeps it published: that group's
- * first publish tag. A group that publishes every PDF needs none, and neither does a record written back nowhere.
- */
-async function writebackPublishTags(db: Database, itemKey: string, config: LibraryServerConfig) {
-	const { selected } = await resolveItemWritebackTargets(db, itemKey, config);
-	return [...new Set(selected.flatMap((key) => {
-		const source = config.sources.find((entry) => entry.key === key);
-		const rule = source?.provider === "zotero" ? source.settings.pdfPublishing : undefined;
-		return rule?.mode === "tagged" && rule.tags[0] ? [rule.tags[0]] : [];
-	}))];
-}
-
 export async function approveItemReview(
 	db: Database,
 	storage: EvidenceFileStorage,
@@ -644,9 +630,9 @@ export async function approveItemReview(
 		indexingRecords: { key: string; revision: number }[];
 	};
 	try {
-		const publicationTags = await writebackPublishTags(db, review.itemKey, config);
 		for (const file of files) {
-			const next = await prepareReviewFile(db, storage, review, file, { ...input, publicationTags }, actor, config);
+			// Each Zotero group's publish tag is added when the PDF is written back to it, so none is stored here.
+			const next = await prepareReviewFile(db, storage, review, file, { ...input, publicationTags: [] }, actor, config);
 			if (next) prepared.push(next);
 		}
 		committed = await db.transaction(async (transaction) => {

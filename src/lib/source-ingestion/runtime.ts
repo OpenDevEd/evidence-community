@@ -33,7 +33,7 @@ export function createSourceSyncRuntime(
 	return {
 		credentialResolver,
 		registry: createDefaultSourceAdapterRegistry({
-			zotero: { attachmentProcessor },
+			zotero: { attachmentProcessor, legacyPublishTags: config.content.tags.publish },
 			openalex,
 			openscholar: { ...openalex, service: config.authentication.openScholar },
 		}),

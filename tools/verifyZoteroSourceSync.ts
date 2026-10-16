@@ -909,12 +909,26 @@ async function verify() {
 		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "publishPDF"] } });
 		await syncWithPdfs();
 
-		// A cursor saved before the rule was recorded reads nothing again by itself.
-		const [recorded] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
-		const { pdfRule: _recordedRule, ...olderCursor } = recorded!.syncCursor as { pdfRule?: string };
-		await database.update(sourceConnection).set({ syncCursor: olderCursor }).where(eq(sourceConnection.key, connectionKey));
-		const afterUpdate = await syncWithPdfs();
-		assert(afterUpdate.records === 0, `A cursor without a recorded PDF rule reread the group: ${afterUpdate.records}`);
+		// A cursor saved before the rule was recorded was read under the library-wide publish tags: the same rule reads
+		// nothing again, and a different one, such as every PDF, reads the group again once.
+		const legacySync = () =>
+			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: watchingProcessor, legacyPublishTags: ["_publish", "publishPDF"], sleep: async () => {} });
+		const dropRecordedRule = async () => {
+			const [recorded] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+			const { pdfRule: _recordedRule, ...olderCursor } = recorded!.syncCursor as { pdfRule?: string };
+			await database.update(sourceConnection).set({ syncCursor: olderCursor }).where(eq(sourceConnection.key, connectionKey));
+		};
+		await dropRecordedRule();
+		const afterUpdate = await legacySync();
+		await setSettings({ pdfPublishing: { mode: "every", tags: [] } });
+		await dropRecordedRule();
+		const adopted = await legacySync();
+		assert(
+			afterUpdate.records === 0 && adopted.records === 15,
+			`A cursor without a recorded PDF rule was not compared with the library-wide tags: ${JSON.stringify({ afterUpdate: afterUpdate.records, adopted: adopted.records })}`,
+		);
+		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "publishPDF"] } });
+		await syncWithPdfs();
 
 		// A PDF choice approved in review reaches the import on its next run: the attachment is read again though
 		// Zotero didn't change it, the PDF step sees the choice, the choice is marked applied, and the run after reads

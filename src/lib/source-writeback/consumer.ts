@@ -664,11 +664,12 @@ async function loadItemRequest(
 
 		const tags = tagRows.map(({ name }) => name);
 		const groupTag = await publishedFileGroupTag(transaction, job.itemKey, state.connection);
+		const addsGroupTag = Boolean(groupTag) && !tags.includes(groupTag!);
 		const payload = publishedAdminItemPayload(state.item, {
 			collectionKeys: collectionRows.map(
 				({ sourceRecordKey }) => sourceRecordKey,
 			),
-			tags: groupTag && !tags.includes(groupTag) ? [...tags, groupTag] : tags,
+			tags: addsGroupTag ? [...tags, groupTag!] : tags,
 		});
 		if (parentSourceRecordKey) payload.parentItem = parentSourceRecordKey;
 		// The link table, not the record's JSON, decides which items are "related" in the source.
@@ -685,7 +686,8 @@ async function loadItemRequest(
 		}
 
 		const request: SourceWritebackRequest = {
-			dirtyFields: job.dirtyFields,
+			// The group's tag reaches Zotero only as a changed field.
+			dirtyFields: addsGroupTag && !job.dirtyFields.includes("tags") ? [...job.dirtyFields, "tags"] : job.dirtyFields,
 			entity: "item",
 			idempotencyKey: job.idempotencyKey,
 			itemKey: job.itemKey,
