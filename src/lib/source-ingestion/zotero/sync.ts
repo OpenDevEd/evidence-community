@@ -20,6 +20,7 @@ import {
 	createZoteroConnectionClient,
 	loadZoteroSourceConnection,
 	ZoteroSourceConfigurationError,
+	ZoteroSnapshotChangedError,
 	ZoteroSnapshotTooLargeError,
 } from "./connection";
 import {
@@ -107,19 +108,8 @@ type SoftTrashState = {
 	softTrashedItemKeys: Set<string>;
 };
 
-export class ZoteroSnapshotChangedError extends Error {
-	constructor() {
-		super("Zotero library changed while its sync snapshot was read");
-		this.name = "ZoteroSnapshotChangedError";
-	}
-}
-
 function currentLibraryVersion(cursor: ZoteroCursor) {
 	return "libraryVersion" in cursor ? cursor.libraryVersion : 0;
-}
-
-function assertSnapshotVersion(actual: number, expected: number) {
-	if (actual !== expected) throw new ZoteroSnapshotChangedError();
 }
 
 function isTrashed(value: unknown) {
@@ -189,107 +179,135 @@ function topologicalOrder<T>(
 	return ordered;
 }
 
-async function fetchCollections(
-	client: ZoteroApiClient,
-	prefix: string,
+/**
+ * Fetches the listed records into `into`. Returns false when the library
+ * moved past `targetVersion` while they were read: a record came back newer
+ * than listed, or was gone. The next pass reads those again.
+ */
+async function fetchRecords<T extends { key: string; version: number }>(
+	fetchChunk: (keys: string[]) => Promise<{ data: T[]; libraryVersion: number }>,
+	versions: Record<string, number>,
 	keys: string[],
 	targetVersion: number,
+	into: Map<string, T>,
 ) {
-	const records: ZoteroCollectionResponse[] = [];
+	let settled = true;
 	for (const keyChunk of chunkValues(keys, ZOTERO_OBJECT_REQUEST_SIZE)) {
-		const response = await client.collections(prefix, keyChunk);
-		assertSnapshotVersion(response.libraryVersion, targetVersion);
+		const response = await fetchChunk(keyChunk);
+		if (response.libraryVersion !== targetVersion) settled = false;
 		const returned = new Map(
 			response.data.map((record) => [record.key, record]),
 		);
 		for (const key of keyChunk) {
 			const record = returned.get(key);
-			if (!record) throw new ZoteroSnapshotChangedError();
-			records.push(record);
+			if (!record || record.version !== versions[key]) settled = false;
+			if (record) into.set(key, record);
 		}
 	}
-	return records;
+	return settled;
 }
 
-async function fetchItems(
-	client: ZoteroApiClient,
-	prefix: string,
-	keys: string[],
-	targetVersion: number,
+/** Moves one pass's deletions into the read: deleted keys leave it, listed keys stop counting as deleted. */
+function applyDeletions<T>(
+	records: Map<string, T>,
+	deletedKeys: Set<string>,
+	passDeleted: ReadonlySet<string>,
+	passListed: readonly string[],
 ) {
-	const records: ZoteroItemResponse[] = [];
-	for (const keyChunk of chunkValues(keys, ZOTERO_OBJECT_REQUEST_SIZE)) {
-		const response = await client.items(prefix, keyChunk);
-		assertSnapshotVersion(response.libraryVersion, targetVersion);
-		const returned = new Map(
-			response.data.map((record) => [record.key, record]),
-		);
-		for (const key of keyChunk) {
-			const record = returned.get(key);
-			if (!record) throw new ZoteroSnapshotChangedError();
-			records.push(record);
-		}
+	for (const key of passDeleted) {
+		deletedKeys.add(key);
+		records.delete(key);
 	}
-	return records;
+	for (const key of passListed) deletedKeys.delete(key);
 }
 
-async function readManifest(
-	client: ZoteroApiClient,
-	prefix: string,
-	since: number,
-	maxSnapshotRecords: number,
-) {
-	const collectionVersions = await client.versions(
-		prefix,
-		"collections",
-		since,
-	);
-	const targetVersion = collectionVersions.libraryVersion;
-	const itemVersions = await client.versions(prefix, "items", since);
-	assertSnapshotVersion(itemVersions.libraryVersion, targetVersion);
-	const deleted = await client.deleted(prefix, since);
-	assertSnapshotVersion(deleted.libraryVersion, targetVersion);
+type SnapshotReader = {
+	client: ZoteroApiClient;
+	prefix: string;
+	maxSnapshotRecords: number;
+	/** How many passes a read may take while the library keeps changing. */
+	maxPasses: number;
+	sleep: (milliseconds: number) => Promise<void>;
+};
 
-	const deletedCollectionKeys = new Set(deleted.data.collections);
-	const deletedItemKeys = new Set(deleted.data.items);
-	const collectionKeys = Object.keys(collectionVersions.data)
-		.filter((key) => !deletedCollectionKeys.has(key))
-		.sort();
-	const itemKeys = Object.keys(itemVersions.data)
-		.filter((key) => !deletedItemKeys.has(key))
-		.sort();
-	const snapshotRecordCount =
-		collectionKeys.length +
-		itemKeys.length +
-		deletedCollectionKeys.size +
-		deletedItemKeys.size;
-	if (snapshotRecordCount > maxSnapshotRecords) {
-		throw new ZoteroSnapshotTooLargeError(
-			"snapshot",
-			snapshotRecordCount,
-			maxSnapshotRecords,
+/**
+ * Reads everything that changed since `since`. When the library changes
+ * during a pass, the records already read are kept and the next pass reads
+ * only what changed since the version that pass started at, waiting longer
+ * each time so the other client can finish (Zotero's sync guide, step 3.iii).
+ * The read ends at the first pass the library holds still for.
+ */
+async function readManifest(reader: SnapshotReader, since: number) {
+	const { client, prefix, maxSnapshotRecords } = reader;
+	const collectionsByKey = new Map<string, ZoteroCollectionResponse>();
+	const itemsByKey = new Map<string, ZoteroItemResponse>();
+	const deletedCollectionKeys = new Set<string>();
+	const deletedItemKeys = new Set<string>();
+	let passSince = since;
+	let targetVersion: number;
+	for (let pass = 0; ; pass += 1) {
+		const collectionVersions = await client.versions(
+			prefix,
+			"collections",
+			passSince,
 		);
-	}
-	// Keep requests sequential so that Zotero's shared Backoff response
-	// applies before the next request starts.
-	const collections = await fetchCollections(
-		client,
-		prefix,
-		collectionKeys,
-		targetVersion,
-	);
-	const items = await fetchItems(client, prefix, itemKeys, targetVersion);
+		targetVersion = collectionVersions.libraryVersion;
+		const itemVersions = await client.versions(prefix, "items", passSince);
+		const deleted = await client.deleted(prefix, passSince);
 
-	for (const record of collections) {
-		if (record.version !== collectionVersions.data[record.key]) {
-			throw new ZoteroSnapshotChangedError();
+		const passDeletedCollections = new Set(deleted.data.collections);
+		const passDeletedItems = new Set(deleted.data.items);
+		const collectionKeys = Object.keys(collectionVersions.data)
+			.filter((key) => !passDeletedCollections.has(key))
+			.sort();
+		const itemKeys = Object.keys(itemVersions.data)
+			.filter((key) => !passDeletedItems.has(key))
+			.sort();
+		applyDeletions(collectionsByKey, deletedCollectionKeys, passDeletedCollections, collectionKeys);
+		applyDeletions(itemsByKey, deletedItemKeys, passDeletedItems, itemKeys);
+		// Counts what the whole read will hold, earlier passes included.
+		const snapshotRecordCount =
+			new Set([...collectionsByKey.keys(), ...collectionKeys]).size +
+			new Set([...itemsByKey.keys(), ...itemKeys]).size +
+			deletedCollectionKeys.size +
+			deletedItemKeys.size;
+		if (snapshotRecordCount > maxSnapshotRecords) {
+			throw new ZoteroSnapshotTooLargeError(
+				"snapshot",
+				snapshotRecordCount,
+				maxSnapshotRecords,
+			);
 		}
-	}
-	for (const record of items) {
-		if (record.version !== itemVersions.data[record.key]) {
-			throw new ZoteroSnapshotChangedError();
+		// Keep requests sequential so that Zotero's shared Backoff response
+		// applies before the next request starts.
+		const collectionsSettled = await fetchRecords(
+			(keys) => client.collections(prefix, keys),
+			collectionVersions.data,
+			collectionKeys,
+			targetVersion,
+			collectionsByKey,
+		);
+		const itemsSettled = await fetchRecords(
+			(keys) => client.items(prefix, keys),
+			itemVersions.data,
+			itemKeys,
+			targetVersion,
+			itemsByKey,
+		);
+		if (
+			itemVersions.libraryVersion === targetVersion &&
+			deleted.libraryVersion === targetVersion &&
+			collectionsSettled &&
+			itemsSettled
+		) {
+			break;
 		}
+		if (pass === reader.maxPasses - 1) throw new ZoteroSnapshotChangedError();
+		passSince = targetVersion;
+		await reader.sleep(Math.min(100 * 2 ** pass, 2_000));
 	}
+	const collections = [...collectionsByKey.values()];
+	const items = [...itemsByKey.values()];
 
 	const softTrashedCollectionKeys = trashedSubtreeKeys(
 		collections,
@@ -678,9 +696,7 @@ function resumeOffset(cursor: ZoteroCursor, resumes: boolean, manifest: ZoteroMa
  * descendants and memberships come back with it.
  */
 async function readSnapshot(
-	client: ZoteroApiClient,
-	prefix: string,
-	maxSnapshotRecords: number,
+	reader: SnapshotReader,
 	read: {
 		start: { snapshotSince: number; resumes: boolean };
 		baseVersion: number;
@@ -688,13 +704,13 @@ async function readSnapshot(
 		previousSoftTrash: SoftTrashState;
 	},
 ) {
-	const manifest = await readManifest(client, prefix, read.start.snapshotSince, maxSnapshotRecords);
+	const manifest = await readManifest(reader, read.start.snapshotSince);
 	const restores =
 		!read.start.resumes &&
 		read.baseVersion > 0 &&
 		manifestRestoresTombstone(manifest, read.localState, read.previousSoftTrash);
 	if (!restores) return { manifest, snapshotSince: read.start.snapshotSince };
-	return { manifest: await readManifest(client, prefix, 0, maxSnapshotRecords), snapshotSince: 0 };
+	return { manifest: await readManifest(reader, 0), snapshotSince: 0 };
 }
 
 function readStart(cursor: ZoteroCursor, replay: boolean, downloadPdfs: boolean) {
@@ -960,113 +976,97 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		options.sourceConnectionKey,
 	);
 
-	for (
-		let attempt = 0;
-		attempt < config.maxConsistencyRetries;
-		attempt += 1
-	) {
-		const latestConnection = await loadZoteroSourceConnection(
+	const cursor = zoteroCursorSchema.parse(connection.syncCursor);
+	const baseVersion = currentLibraryVersion(cursor);
+	const [localState, requiresMappingReplay] = await Promise.all([
+		loadLocalSourceState(
 			options.database,
 			options.sourceConnectionKey,
+		),
+		mappingReplayRequired(
+			options.database,
+			options.sourceConnectionKey,
+		),
+	]);
+	const previousSoftTrash = previousSoftTrashState(cursor);
+	const start = readStart(cursor, requiresMappingReplay, config.downloadPdfs);
+	const snapshot = await readSnapshot(
+		{
+			client,
+			prefix,
+			maxSnapshotRecords: config.maxSnapshotRecords,
+			maxPasses: config.maxConsistencyRetries,
+			sleep: options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))),
+		},
+		{
+			start,
+			baseVersion,
+			localState,
+			previousSoftTrash,
+		},
+	);
+	const snapshotSince = snapshot.snapshotSince;
+	let manifest = snapshot.manifest;
+	const nextSoftTrash = nextSoftTrashState(
+		manifest,
+		previousSoftTrash,
+		snapshotSince,
+	);
+	manifest = expandLocalDescendantDeletes(manifest, localState);
+	const { collectionUpserts, itemUpserts } =
+		manifestUpsertKeys(manifest);
+	expandLocalDescendantKeys(
+		localState.items,
+		(record) => record.parentItem,
+		nextSoftTrash.softTrashedItemKeys,
+		itemUpserts,
+	);
+	expandLocalDescendantKeys(
+		localState.collections,
+		(record) => record.parentCollection,
+		nextSoftTrash.softTrashedCollectionKeys,
+		collectionUpserts,
+	);
+	const excludedCollectionKeys = new Set([
+		...nextSoftTrash.softTrashedCollectionKeys,
+		...manifest.trashedCollectionKeys,
+	]);
+	if (manifest.entries.length > config.maxSnapshotRecords) {
+		throw new ZoteroSnapshotTooLargeError(
+			"manifest",
+			manifest.entries.length,
+			config.maxSnapshotRecords,
 		);
-		const cursor = zoteroCursorSchema.parse(latestConnection.syncCursor);
-		const baseVersion = currentLibraryVersion(cursor);
-		try {
-			const [localState, requiresMappingReplay] = await Promise.all([
-				loadLocalSourceState(
-					options.database,
-					options.sourceConnectionKey,
-				),
-				mappingReplayRequired(
-					options.database,
-					options.sourceConnectionKey,
-				),
-			]);
-			const previousSoftTrash = previousSoftTrashState(cursor);
-			const start = readStart(cursor, requiresMappingReplay, config.downloadPdfs);
-			const snapshot = await readSnapshot(client, prefix, config.maxSnapshotRecords, {
-				start,
-				baseVersion,
-				localState,
-				previousSoftTrash,
-			});
-			const snapshotSince = snapshot.snapshotSince;
-			let manifest = snapshot.manifest;
-			const nextSoftTrash = nextSoftTrashState(
-				manifest,
-				previousSoftTrash,
-				snapshotSince,
-			);
-			manifest = expandLocalDescendantDeletes(manifest, localState);
-			const { collectionUpserts, itemUpserts } =
-				manifestUpsertKeys(manifest);
-			expandLocalDescendantKeys(
-				localState.items,
-				(record) => record.parentItem,
-				nextSoftTrash.softTrashedItemKeys,
-				itemUpserts,
-			);
-			expandLocalDescendantKeys(
-				localState.collections,
-				(record) => record.parentCollection,
-				nextSoftTrash.softTrashedCollectionKeys,
-				collectionUpserts,
-			);
-			const excludedCollectionKeys = new Set([
-				...nextSoftTrash.softTrashedCollectionKeys,
-				...manifest.trashedCollectionKeys,
-			]);
-			if (manifest.entries.length > config.maxSnapshotRecords) {
-				throw new ZoteroSnapshotTooLargeError(
-					"manifest",
-					manifest.entries.length,
-					config.maxSnapshotRecords,
-				);
-			}
-			const offset = resumeOffset(cursor, start.resumes, manifest);
-			const expectedCursor = cursor;
-			const fetchedAt = new Date();
-			if (manifest.entries.length > 0) {
-				await options.run?.report(offset, manifest.entries.length);
-			}
-
-			if (manifest.entries.length === 0) {
-				return completeEmptyRead(options, {
-					expectedConfiguration: connection.config,
-					expectedCursor,
-					fetchedAt,
-					nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs),
-					targetVersion: manifest.targetVersion,
-				});
-			}
-
-			return writeManifestBatches(options, {
-				manifest,
-				offset,
-				cursor,
-				previousSoftTrash,
-				nextSoftTrash,
-				snapshotSince,
-				excludedCollectionKeys,
-				attachmentContext,
-				fetchedAt,
-				downloadPdfs: config.downloadPdfs,
-				maxRecordsPerBatch: config.maxRecordsPerBatch,
-				expectedConfiguration: connection.config,
-			});
-		} catch (error) {
-			if (
-				!(error instanceof ZoteroSnapshotChangedError) ||
-				attempt === config.maxConsistencyRetries - 1
-			) {
-				throw error;
-			}
-			await (
-				options.sleep ??
-				((milliseconds) =>
-					new Promise((resolve) => setTimeout(resolve, milliseconds)))
-			)(Math.min(100 * 2 ** attempt, 2_000));
-		}
 	}
-	throw new ZoteroSnapshotChangedError();
+	const offset = resumeOffset(cursor, start.resumes, manifest);
+	const expectedCursor = cursor;
+	const fetchedAt = new Date();
+	if (manifest.entries.length > 0) {
+		await options.run?.report(offset, manifest.entries.length);
+	}
+
+	if (manifest.entries.length === 0) {
+		return completeEmptyRead(options, {
+			expectedConfiguration: connection.config,
+			expectedCursor,
+			fetchedAt,
+			nextCursor: completedCursor(manifest.targetVersion, nextSoftTrash, config.downloadPdfs),
+			targetVersion: manifest.targetVersion,
+		});
+	}
+
+	return writeManifestBatches(options, {
+		manifest,
+		offset,
+		cursor,
+		previousSoftTrash,
+		nextSoftTrash,
+		snapshotSince,
+		excludedCollectionKeys,
+		attachmentContext,
+		fetchedAt,
+		downloadPdfs: config.downloadPdfs,
+		maxRecordsPerBatch: config.maxRecordsPerBatch,
+		expectedConfiguration: connection.config,
+	});
 }

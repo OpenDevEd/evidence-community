@@ -37,7 +37,7 @@ import { OpenAlexApiError } from "./openalex/client";
 import { OpenScholarCollectionGoneError } from "./openscholar/client";
 import { OpenScholarServiceError } from "@/lib/openscholar-service";
 import { ZoteroApiError } from "./zotero/client";
-import { ZoteroSnapshotTooLargeError } from "./zotero/connection";
+import { ZoteroSnapshotChangedError, ZoteroSnapshotTooLargeError } from "./zotero/connection";
 import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 const PROVIDER_STATUS_CODES: Partial<Record<number, SourceSyncErrorCode>> = {
@@ -64,6 +64,8 @@ export function classifySourceError(error: unknown): SourceSyncErrorCode {
 		return PROVIDER_STATUS_CODES[error.status] ?? "internal";
 	}
 	if (error instanceof ZoteroSnapshotTooLargeError) return "too_large";
+	// The group kept changing while it was read. The next sweep reads it again.
+	if (error instanceof ZoteroSnapshotChangedError) return "interrupted";
 	if (error instanceof ZoteroApiError || error instanceof OpenAlexApiError) {
 		return providerErrorCode(error);
 	}
