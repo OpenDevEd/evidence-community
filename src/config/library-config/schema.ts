@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { openAlexConnectionConfigSchema, openAlexWorksConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { zoteroSourceSettingsSchema } from "@/lib/source-ingestion/zotero/schema";
+import { hasAnyTag } from "@/lib/tags";
 
 import {
 	PLATFORM_AI_PROVIDERS,
@@ -1993,10 +1994,8 @@ function validateTagSemantics(
 	];
 	for (const { tags, path } of publishTagLists) {
 		for (const [index, tag] of tags.entries()) {
-			if (
-				config.content.tags.hidden.includes(tag) ||
-				config.content.tags.internal.includes(tag)
-			) {
+			// Tags are matched without case, so a publish tag differing from a hidden one only by case is the same tag.
+			if (hasAnyTag([tag], [...config.content.tags.hidden, ...config.content.tags.internal])) {
 				addRequiredIssue(
 					context,
 					[...path, index],
