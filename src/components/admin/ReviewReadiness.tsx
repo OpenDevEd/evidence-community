@@ -32,11 +32,14 @@ export function useReviewReadiness(
 	const loading = !submitted && saved.isLoading;
 	const error = !submitted && saved.error;
 	const loaded = submitted || saved.data !== undefined;
+	// The publishing choice belongs to the record a review is for; an attachment is checked without one, as the
+	// server checks it.
+	const created = detail.kind === "created" && !detail.parentItem;
 	const fields = useMemo(
-		() => publishingNeeds(payload, detail.kind === "created" ? choice : null),
-		[payload, choice, detail.kind],
+		() => publishingNeeds(payload, created ? choice : null),
+		[payload, choice, created],
 	);
-	const checks = reviewChecks(payload, fields, detail.kind === "created", {
+	const checks = reviewChecks(payload, fields, created, {
 		loading,
 		error,
 		loaded,
@@ -46,7 +49,7 @@ export function useReviewReadiness(
 		checks,
 		missing: checks.filter((check) => !check.ready).length,
 		saving: !submitted && publishing.saving,
-		loading: detail.kind === "created" && loading,
+		loading: created && loading,
 	};
 }
 

@@ -2580,7 +2580,6 @@ async function mockBookWithAttachment(
 		itemKey: attachmentKey,
 		payload: {
 			collections: [],
-			creators: [],
 			itemType: "Attachment",
 			parentItem: publishedItemKey,
 			tags: [],
@@ -3432,10 +3431,30 @@ for (const editable of [true, false]) {
 		if (editable) {
 			await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeEnabled();
 		} else {
-			await expect(inspector.getByRole("button", { name: "Duplicate as native", exact: true })).toBeDisabled();
+			// Duplicating belongs to the record; an attachment it can't change offers nothing.
+			await expect(inspector.getByRole("button", { name: "Duplicate as native", exact: true })).toHaveCount(0);
 		}
 	});
 }
+
+test("submits an attachment's change with its record", async ({page}) => {
+	await mockBookWithAttachment(page, {attachmentState: "draft"});
+	const submitted: string[] = [];
+	await page.route("**/api/admin/items/*/review", async (route) => {
+		if (route.request().method() !== "POST") return route.fallback();
+		submitted.push(new URL(route.request().url()).pathname);
+		await route.fulfill({json: {review: {id: "review-1", itemKey: publishedItemKey, state: "pending", revision: 1, submittedBy: "editor", submittedAt: timestamp, resolvedAt: null, resolvedBy: null, note: null, corrections: [], remainingConflicts: {}, snapshot: {records: [], publishingChoice: null}}}});
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
+	const dialog = page.getByRole("dialog", {name: "Submit snapshot for review?"});
+	await dialog.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+	await expect(dialog).toBeHidden();
+	// A review is always for the whole record, so the attachment's change goes with its parent.
+	expect(submitted).toEqual([`/api/admin/items/${publishedItemKey}/review`]);
+});
 
 test("keeps an unpublished attachment private and stages it with the parent review", async ({page}) => {
     await mockBookWithAttachment(page, {attachmentState: "draft"});

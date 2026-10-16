@@ -289,13 +289,11 @@ export function ReviewVersionNotice({
 }
 
 export function ReviewWithdrawButton({
-	pending,
 	submittedBy,
 	withdrawing,
 	onWithdraw,
 	compact = false,
 }: {
-	pending: boolean;
 	submittedBy?: string;
 	withdrawing: boolean;
 	onWithdraw: () => void;
@@ -311,7 +309,7 @@ export function ReviewWithdrawButton({
 			aria-label="Withdraw"
 			className={compact ? "h-9 w-9 shrink-0 rounded-xl px-0" : "h-9 shrink-0 rounded-xl px-3"}
 			isIconOnly={compact}
-			isDisabled={!pending || !canWithdraw || withdrawing}
+			isDisabled={!canWithdraw || withdrawing}
 			isLoading={withdrawing}
 			onPress={onWithdraw}
 			startContent={compact ? undefined : <HugeiconsIcon icon={Undo02Icon} size={14} />}

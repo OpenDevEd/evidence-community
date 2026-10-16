@@ -401,6 +401,14 @@ const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.i
 /** Whether the open record is one of these, or the PDF attached to one. */
 const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
 
+/** A review is always for the whole record, so an attachment submits its record with it. */
+function reviewSubmission(detail: AdminItemDetail) {
+	const message = "The Editor reviews this version. Further edits stay in the working draft.";
+	return detail.parentItem
+		? { reviewKey: detail.parentItem, message: `This attachment goes to review with its record. ${message}` }
+		: { reviewKey: detail.key, message };
+}
+
 export default function AdminWorkbench({
 	configurationHref,
 	definitions,
@@ -1341,12 +1349,13 @@ export default function AdminWorkbench({
 	};
 
 	const publishCurrent = () => {
-        if (!detail?.draft || detail.parentItem) return;
+        if (!detail?.draft) return;
         const recordKey = detail.key;
-        setConfirmDialog({title: "Submit snapshot for review?", message: "The Editor reviews this version. Further edits stay in the working draft.", confirmLabel: "Submit snapshot", action: async () => {
+        const { reviewKey, message } = reviewSubmission(detail);
+        setConfirmDialog({title: "Submit snapshot for review?", message, confirmLabel: "Submit snapshot", action: async () => {
             await flushDraft(recordKey, draftPayload);
-            await submitAdminReview(recordKey);
-            await mutate(["admin-reviews", recordKey]);
+            await submitAdminReview(reviewKey);
+            await mutate(["admin-reviews", reviewKey]);
             await Promise.all([loadDetail(recordKey), loadItems()]);
             toast.success("Snapshot submitted for review");
         }});
