@@ -32,7 +32,6 @@ function readToolMessage(): ModelMessage {
 							mediaType: "application/pdf",
 							filename: "teacher-training.pdf",
 						},
-						{ type: "file-url", url: "https://files.example.org/a.pdf" },
 					],
 				},
 			},
@@ -60,7 +59,7 @@ describe("handing read PDFs to the model", () => {
 		const files = (handoff.content as Array<{ type: string }>).filter(
 			(part) => part.type === "file",
 		);
-		expect(files).toHaveLength(2);
+		expect(files).toHaveLength(1);
 		expect(files[0]).toMatchObject({
 			mediaType: "application/pdf",
 			filename: "teacher-training.pdf",
@@ -89,6 +88,35 @@ describe("handing read PDFs to the model", () => {
 		];
 
 		expect(liftToolResultFilesToUserMessage(messages)).toEqual(messages);
+	});
+
+	it("keeps the latest read's PDF and leaves out an earlier one once they fill the request", () => {
+		const elevenMegabytes = Buffer.alloc(11 * 1024 * 1024).toString("base64");
+		const read = (toolCallId: string, filename: string): ModelMessage => ({
+			role: "tool",
+			content: [
+				{
+					type: "tool-result",
+					toolCallId,
+					toolName: "readPublications",
+					output: {
+						type: "content",
+						value: [{ type: "file-data", data: elevenMegabytes, mediaType: "application/pdf", filename }],
+					},
+				},
+			],
+		});
+
+		const once = liftToolResultFilesToUserMessage([read("call-1", "first.pdf")]);
+		const messages = liftToolResultFilesToUserMessage([...once, read("call-2", "second.pdf")]);
+
+		const files = messages.flatMap((message) =>
+			message.role === "user" && Array.isArray(message.content)
+				? message.content.filter((part) => part.type === "file")
+				: [],
+		);
+		expect(files.map((file) => file.filename)).toEqual(["second.pdf"]);
+		expect(JSON.stringify(messages[1])).toMatch(/first\.pdf.*not attached/);
 	});
 
 	it("runs twice without duplicating the attachments", () => {

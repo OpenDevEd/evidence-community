@@ -9,29 +9,25 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { buildPdfDownloadPath, pdfFilename } from "./citations";
 import type { AIModelId, AIProvider } from "./models";
 import { openRouterCacheBreakpoint } from "./openrouter";
-import { fetchPublicFile, publicRequest } from "@/lib/public-fetch";
+import { fetchPublicFile, SharedBudgetExceeded, type SharedByteBudget } from "@/lib/public-fetch";
+import { isPdf } from "@/lib/source-ingestion/openalex/pdf-download";
 
 const PDF_FETCH_TIMEOUT_MS = 30_000;
-const PDF_PROBE_TIMEOUT_MS = 8_000;
 
 /**
- * How PDFs reach the model. An inline PDF is uploaded with the request and
- * the provider caches it, so later turns are fast and cheap, but very large
- * bodies are rejected at the gateway. So: attach inline while the request
- * stays within this budget, and attach anything over it by link instead.
- * Never drop a PDF silently.
+ * How PDFs reach the model. Every PDF is downloaded here and sent with the
+ * request, never as a link: the provider downloads a link before the model
+ * runs, and one it cannot download fails the whole request. Very large bodies
+ * are rejected at the gateway, so the downloads of one read share this budget
+ * and a PDF that doesn't fit is named as unavailable. Never drop a PDF silently.
  */
 export const READ_TOOL_MAX_TOTAL_PDF_BYTES = 20 * 1024 * 1024;
-export const READ_TOOL_MAX_SINGLE_PDF_BYTES = 12 * 1024 * 1024;
-
-type LoadedPdfSource =
-	| { type: "url"; url: URL; size?: number }
-	| { type: "data"; data: Uint8Array };
+const READ_TOOL_MAX_SINGLE_PDF_BYTES = 12 * 1024 * 1024;
 
 type LoadedPdf = {
 	attachmentKey: string;
 	filename: string;
-	source: LoadedPdfSource;
+	data: Uint8Array;
 };
 
 export type UnavailablePdf = {
@@ -48,51 +44,10 @@ export type LoadedPublication = {
 	unavailable: UnavailablePdf[];
 };
 
-export type PdfBudget = { maxTotalBytes: number; maxFileBytes: number };
-
-const DEFAULT_PDF_BUDGET: PdfBudget = {
-	maxTotalBytes: READ_TOOL_MAX_TOTAL_PDF_BYTES,
-	maxFileBytes: READ_TOOL_MAX_SINGLE_PDF_BYTES,
-};
-
-function pdfByteLength(file: LoadedPdf) {
-	return file.source.type === "data"
-		? file.source.data.byteLength
-		: (file.source.size ?? 0);
-}
-
-/**
- * A quick HEAD request guards against a dead or non-PDF link, which would
- * otherwise fail the whole model call instead of this one attachment.
- */
-async function probePublicPdfUrl(
-	url: URL,
-): Promise<{ ok: boolean; size?: number }> {
-	try {
-		const response = await publicRequest(url, {
-			method: "HEAD",
-			headers: { "User-Agent": "Evidence-Library/1.0" },
-			signal: AbortSignal.timeout(PDF_PROBE_TIMEOUT_MS),
-		});
-		if (!response.ok) return { ok: false };
-		const contentType = response.headers.get("content-type") ?? "";
-		const length = Number(response.headers.get("content-length"));
-		return {
-			ok:
-				contentType.includes("pdf") ||
-				contentType.includes("octet-stream") ||
-				contentType === "",
-			size: Number.isFinite(length) && length > 0 ? length : undefined,
-		};
-	} catch {
-		return { ok: false };
-	}
-}
-
-async function fetchPublicPdf(url: URL): Promise<Uint8Array> {
-	const { data } = await fetchPublicFile(url, { accept: "application/pdf", timeoutMs: PDF_FETCH_TIMEOUT_MS });
-	const signature = new TextDecoder("ascii").decode(data.slice(0, 5));
-	if (signature !== "%PDF-") {
+async function fetchPublicPdf(url: URL, shared: SharedByteBudget): Promise<Uint8Array> {
+	const { data } = await fetchPublicFile(url, { accept: "application/pdf", timeoutMs: PDF_FETCH_TIMEOUT_MS, maxBytes: READ_TOOL_MAX_SINGLE_PDF_BYTES, shared });
+	if (!isPdf(data)) {
+		shared.remaining += data.byteLength;
 		throw new Error("Attachment did not contain a PDF");
 	}
 
@@ -141,50 +96,54 @@ export async function loadPublicationMetadata(itemKey: string) {
 	};
 }
 
-export async function loadPublication(
-	itemKey: string,
-	options: { inline?: boolean } = {},
-): Promise<LoadedPublication | null> {
+async function readItem(itemKey: string) {
 	// Always the live record: attachment keys are what the model cites, and a
 	// stale cached record hands out keys the download route cannot match.
-	const response = await getCachedItem(itemKey);
-	const item = response?.item;
-	if (!item) return null;
+	return (await getCachedItem(itemKey))?.item ?? null;
+}
 
-	const attachments = (item.attachmentsData ?? []).filter(
-		isVisiblePdfAttachment,
-	);
-	const settled = await Promise.allSettled(
-		attachments.map(async (attachment): Promise<LoadedPdf> => {
-			const filename = pdfFilename(attachment);
-			const url = attachmentPdfUrl(attachment);
-			const probe = await probePublicPdfUrl(url);
-			if (probe.ok) {
-				return {
-					attachmentKey: attachment.key,
-					filename,
-					source: { type: "url", url, size: probe.size },
-				};
-			}
-			return {
-				attachmentKey: attachment.key,
-				filename,
-				source: { type: "data", data: await fetchPublicPdf(url) },
-			};
-		}),
-	);
+function visiblePdfAttachments(item: Item) {
+	return (item.attachmentsData ?? []).filter(isVisiblePdfAttachment);
+}
 
+/**
+ * Downloads PDFs that share one request budget, all at once. A failed
+ * download gives its bytes back only when it fails, so a PDF refused for the
+ * budget is tried once more, in order, after every download has finished, if
+ * there is now more room than it had.
+ */
+async function downloadPdfs(attachments: Item[]) {
+	const shared = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES };
+	const download = async (attachment: Item) =>
+		fetchPublicPdf(attachmentPdfUrl(attachment), shared);
+	const results = await Promise.allSettled(attachments.map(download));
+	for (const [index, result] of results.entries()) {
+		const refused = result.status === "rejected" && result.reason instanceof SharedBudgetExceeded ? result.reason : null;
+		if (!refused || shared.remaining <= refused.available) continue;
+		results[index] = await download(attachments[index]).then(
+			(value) => ({ status: "fulfilled", value }) as const,
+			(reason: unknown) => ({ status: "rejected", reason }) as const,
+		);
+	}
+	return results;
+}
+
+function toPublication(
+	item: Item,
+	attachments: Item[],
+	results: PromiseSettledResult<Uint8Array>[],
+): LoadedPublication {
 	const files: LoadedPdf[] = [];
 	const unavailable: UnavailablePdf[] = [];
-	for (const [index, result] of settled.entries()) {
+	for (const [index, result] of results.entries()) {
 		const attachment = attachments[index];
+		const named = { attachmentKey: attachment.key, filename: pdfFilename(attachment) };
 		if (result.status === "fulfilled") {
-			files.push(result.value);
+			files.push({ ...named, data: result.value });
 			continue;
 		}
 		unavailable.push({
-			attachmentKey: attachment.key,
-			filename: pdfFilename(attachment),
+			...named,
 			reason:
 				result.reason instanceof Error
 					? result.reason.message
@@ -192,85 +151,46 @@ export async function loadPublication(
 		});
 	}
 
-	const publication: LoadedPublication = {
+	return {
 		key: item.key,
 		title: item.title || "Untitled publication",
 		metadata: publicationMetadata(item),
 		files,
 		unavailable,
 	};
-	if (options.inline !== false) {
-		await inlinePdfsWithinBudget([publication]);
-	}
-	return publication;
 }
 
-/**
- * Downloads linked PDFs into the request while the budget allows, in the
- * caller's order. Anything that does not fit stays a link: it still reaches
- * the model, it is just not cached between turns.
- */
-export async function inlinePdfsWithinBudget(
-	publications: LoadedPublication[],
-	budget: PdfBudget = DEFAULT_PDF_BUDGET,
-) {
-	let remaining = budget.maxTotalBytes;
-	const downloads: Array<Promise<void>> = [];
-
-	for (const publication of publications) {
-		for (const file of publication.files) {
-			if (file.source.type === "data") {
-				remaining -= file.source.data.byteLength;
-				continue;
-			}
-			const size = file.source.size;
-			if (
-				size === undefined ||
-				size > budget.maxFileBytes ||
-				size > remaining
-			) {
-				continue;
-			}
-			remaining -= size;
-			const url = file.source.url;
-			downloads.push(
-				fetchPublicPdf(url)
-					.then((data) => {
-						file.source = { type: "data", data };
-					})
-					.catch(() => {
-						// Keep the link; the provider can still fetch it.
-					}),
-			);
-		}
-	}
-
-	await Promise.all(downloads);
-	return publications;
+/** The publication with every PDF the reader can see that fits in one request. */
+export async function loadPublication(itemKey: string) {
+	const item = await readItem(itemKey);
+	if (!item) return null;
+	const attachments = visiblePdfAttachments(item);
+	return toPublication(item, attachments, await downloadPdfs(attachments));
 }
 
-async function loadPublications(
-	itemKeys: string[],
-	budget: PdfBudget = DEFAULT_PDF_BUDGET,
-) {
-	const loaded = await Promise.all(
-		itemKeys.map(async (itemKey) => ({
-			itemKey,
-			...(await loadPublication(itemKey, { inline: false })
-				.then((publication) => ({ publication }))
-				.catch(() => ({
-					publication: null,
-					error: "Publication could not be loaded.",
-				}))),
-		})),
+/** Several publications whose PDFs share one request budget, in the caller's order. */
+async function loadPublications(itemKeys: string[]) {
+	const items = await Promise.all(
+		itemKeys.map((itemKey) =>
+			readItem(itemKey).then(
+				(item) => ({ item }),
+				() => ({ item: null, error: "Publication could not be loaded." }),
+			),
+		),
 	);
+	const attachments = items.map(({ item }) => (item ? visiblePdfAttachments(item) : []));
+	const results = await downloadPdfs(attachments.flat());
 
-	await inlinePdfsWithinBudget(
-		loaded.flatMap(({ publication }) => (publication ? [publication] : [])),
-		budget,
-	);
-
-	return loaded;
+	let offset = 0;
+	return items.map((loaded, index) => {
+		const own = attachments[index];
+		const ownResults = results.slice(offset, (offset += own.length));
+		return {
+			itemKey: itemKeys[index],
+			...("error" in loaded ? { error: loaded.error } : {}),
+			publication: loaded.item ? toPublication(loaded.item, own, ownResults) : null,
+		};
+	});
 }
 
 function citationInstruction(itemKey: string, file: LoadedPdf) {
@@ -318,10 +238,7 @@ export function publicationPromptParts(
 				type: "file",
 				mediaType: "application/pdf",
 				filename: file.filename,
-				data:
-					file.source.type === "url"
-						? file.source.url
-						: file.source.data,
+				data: file.data,
 			},
 		]),
 	];
@@ -354,15 +271,10 @@ type PublicationToolContent = Extract<
 	{ type: "content" }
 >["value"];
 
-/** An inline PDF travels as base64; an oversized one travels as a link. */
 function toolFilePart(file: LoadedPdf): PublicationToolContent[number] {
-	if (file.source.type === "url") {
-		return { type: "file-url", url: file.source.url.href };
-	}
-
 	return {
 		type: "file-data",
-		data: Buffer.from(file.source.data).toString("base64"),
+		data: Buffer.from(file.data).toString("base64"),
 		mediaType: "application/pdf",
 		filename: file.filename,
 	};
@@ -385,8 +297,7 @@ export async function publicationToolModelOutput(
 			files: publication?.files.map((file) => ({
 				attachmentKey: file.attachmentKey,
 				filename: file.filename,
-				source: file.source.type,
-				bytes: pdfByteLength(file),
+				bytes: file.data.byteLength,
 			})),
 			unavailable: publication?.unavailable,
 		});

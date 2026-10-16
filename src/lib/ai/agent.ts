@@ -25,6 +25,7 @@ import { EVIDENCE_CITATION_INSTRUCTIONS, PDF_HANDOFF_TEXT } from "./prompt-conte
 import type { ResearchUIData } from "./request-context";
 import { trackAIUsage } from "./telemetry";
 import { createResearchTools, type ResearchMode } from "./tools";
+import { READ_TOOL_MAX_TOTAL_PDF_BYTES } from "./attachments";
 
 const QUICK_STEP_LIMIT = 6;
 const RESEARCH_STEP_LIMIT = 12;
@@ -143,6 +144,64 @@ function liftedFileNote(filename: string | undefined) {
 	};
 }
 
+function leftOutFileNote(filename: string | undefined) {
+	return {
+		type: "text" as const,
+		text: `(The file ${JSON.stringify(filename ?? "document.pdf")} is not attached: it is too large to send with the PDFs read more recently. Do not cite it. Read it again if you need it.)`,
+	};
+}
+
+function fileBytes(data: FilePart["data"]) {
+	if (typeof data === "string") return Buffer.byteLength(data, "base64");
+	return data instanceof Uint8Array || data instanceof ArrayBuffer ? data.byteLength : 0;
+}
+
+/** Every PDF the messages carry, oldest first: lifted into a user message, or still in a read's result. */
+function pdfParts(messages: ModelMessage[]) {
+	return messages.flatMap<{ data: FilePart["data"] }>((message) => {
+		if (message.role === "user") {
+			return Array.isArray(message.content)
+				? message.content.filter((part) => part.type === "file")
+				: [];
+		}
+		if (message.role !== "tool") return [];
+		return message.content.flatMap((part) =>
+			part.type === "tool-result" &&
+			part.toolName === "readPublications" &&
+			part.output.type === "content"
+				? part.output.value.filter((item) => item.type === "file-data")
+				: [],
+		);
+	});
+}
+
+/**
+ * Every read's PDFs travel together, so they share one request budget. The
+ * most recent reads come first: they hold the evidence the answer is working on.
+ */
+function pdfsThatFit(messages: ModelMessage[]) {
+	const kept = new Set<object>();
+	let remaining = READ_TOOL_MAX_TOTAL_PDF_BYTES;
+	for (const part of pdfParts(messages).reverse()) {
+		const size = fileBytes(part.data);
+		if (size > remaining) continue;
+		remaining -= size;
+		kept.add(part);
+	}
+	return kept;
+}
+
+/** A user message keeps the PDFs that still fit; the rest are named as left out. */
+function withPdfsThatFit(message: ModelMessage, kept: Set<object>): ModelMessage {
+	if (message.role !== "user" || !Array.isArray(message.content)) return message;
+	return {
+		...message,
+		content: message.content.map((part) =>
+			part.type !== "file" || kept.has(part) ? part : leftOutFileNote(part.filename),
+		),
+	};
+}
+
 /**
  * Moves PDFs out of a tool result and into a user message right after it. A
  * tool message carrying a file is translated into each provider's own
@@ -150,15 +209,17 @@ function liftedFileNote(filename: string | undefined) {
  * file at all. A file in a user message works the same way everywhere.
  * The messages a step prepares carry into the next step, so this also runs
  * on its own earlier output. A lifted result has no files left to lift.
+ * A PDF over the request budget is named as left out instead of sent.
  */
 export function liftToolResultFilesToUserMessage(
 	messages: ModelMessage[],
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
+	const kept = pdfsThatFit(messages);
 
 	for (const message of messages) {
 		if (message.role !== "tool") {
-			result.push(message);
+			result.push(withPdfsThatFit(message, kept));
 			continue;
 		}
 
@@ -177,29 +238,18 @@ export function liftToolResultFilesToUserMessage(
 			const value: ToolContent = part.output.value.flatMap<
 				ToolContent[number]
 			>((item) => {
-				if (item.type === "file-data") {
-					lifted.push({
-						type: "file",
-						mediaType: item.mediaType,
-						filename: item.filename,
-						data: item.data,
-					});
-					return [liftedFileNote(item.filename)];
-				}
-
-				if (item.type === "file-url") {
-					lifted.push({
-						type: "file",
-						mediaType: "application/pdf",
-						data: new URL(item.url),
-					});
-					return [liftedFileNote(undefined)];
-				}
-
-				return [item];
+				if (item.type !== "file-data") return [item];
+				if (!kept.has(item)) return [leftOutFileNote(item.filename)];
+				lifted.push({
+					type: "file",
+					mediaType: item.mediaType,
+					filename: item.filename,
+					data: item.data,
+				});
+				return [liftedFileNote(item.filename)];
 			});
 
-			return { ...part, output: { type: "content" as const, value } };
+		return { ...part, output: { type: "content" as const, value } };
 		});
 
 		result.push({ ...toolMessage, content } as ToolModelMessage);
