@@ -112,11 +112,14 @@ async function post(path: string, body: object) {
 export function CollectionPicker({
 	itemKey,
 	onToggle,
+	linksInNewTab = false,
 }: {
 	/** The record; until it is known the rows can't be pressed. */
 	itemKey: string | undefined;
 	/** Puts the record in a collection or takes it out, told whether the collection held it. */
 	onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>;
+	/** Opens a collection in a new tab, where the picker sits over something a page change would close. */
+	linksInNewTab?: boolean;
 }) {
 	const t = useTranslations("ui");
 	const { refresh } = useReaderData();
@@ -162,9 +165,10 @@ export function CollectionPicker({
 										key={collection.id}
 										collection={collection}
 										entering={made.has(collection.id)}
-										pending={pending.has(collection.id)}
+										pending={pending.get(collection.id)}
 										disabled={!itemKey}
-										onToggle={() => void toggle(collection.id, collection.holdsRecord)}
+										linksInNewTab={linksInNewTab}
+										onToggle={(heldRecord) => void toggle(collection.id, heldRecord)}
 									/>
 								))}
 								<NothingFound total={shown.loaded ? shown.pager.total : undefined} search={search} />
@@ -206,26 +210,42 @@ function usePickerSearch(onSearch: () => void) {
 	};
 }
 
-/** Toggling the record in a collection, one row at a time: each row waits for its own change, and a failed one says so. */
+/** A pressed row: what it showed when pressed, what it shows now, and whether its change is still saving. */
+type PendingToggle = { from: boolean; to: boolean; saving: boolean };
+
+/**
+ * Toggling the record in a collection, one row at a time. A pressed row shows its new state at once and keeps it
+ * until the reloaded list shows it too: a reload can lag behind the save, as one save's reload is dropped when
+ * another starts. A failed change goes back and says so.
+ */
 function usePendingToggles(onToggle: (collectionId: string, heldRecord: boolean) => Promise<void>) {
 	const t = useTranslations("ui");
-	const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+	const [pending, setPending] = useState<ReadonlyMap<string, PendingToggle>>(new Map());
+	const update = (collectionId: string, row: PendingToggle | undefined) =>
+		setPending((rows) => {
+			const next = new Map(rows);
+			if (row) next.set(collectionId, row);
+			else next.delete(collectionId);
+			return next;
+		});
 	const toggle = async (collectionId: string, heldRecord: boolean) => {
-		setPending((set) => new Set(set).add(collectionId));
+		const row = { from: heldRecord, to: !heldRecord };
+		update(collectionId, { ...row, saving: true });
 		try {
 			await onToggle(collectionId, heldRecord);
+			update(collectionId, { ...row, saving: false });
 		} catch (error) {
 			console.error(error);
 			toast({ type: "error", title: t("collectionSaveFailed") });
-		} finally {
-			setPending((set) => {
-				const next = new Set(set);
-				next.delete(collectionId);
-				return next;
-			});
+			update(collectionId, undefined);
 		}
 	};
 	return { pending, toggle };
+}
+
+/** What a row shows: a pressed row's new state while it saves, and after, until the list it is read from catches up. */
+export function shownChecked(holdsRecord: boolean, pending: PendingToggle | undefined) {
+	return pending && (pending.saving || holdsRecord === pending.from) ? pending.to : holdsRecord;
 }
 
 /** Said in place of the rows when a search found none of the reader's collections. */
@@ -383,24 +403,29 @@ function PickerRow({
 	entering,
 	pending,
 	disabled,
+	linksInNewTab,
 	onToggle,
 }: {
 	collection: PickerCollection;
 	entering: boolean;
-	pending: boolean;
+	pending: PendingToggle | undefined;
 	disabled: boolean;
-	onToggle: () => void;
+	linksInNewTab: boolean;
+	/** Told whether the collection holds the record as the row shows it. */
+	onToggle: (heldRecord: boolean) => void;
 }) {
 	const t = useTranslations("ui");
-	const { ownerId, owner, holdsRecord: checked } = collection;
+	const { ownerId, owner } = collection;
+	const checked = shownChecked(collection.holdsRecord, pending);
 	return (
 		<li className={twMerge("grid grid-rows-[1fr]", entering && "animate-row-open motion-reduce:animate-none")}>
 			<div className="flex h-16 min-h-0 items-center gap-1 overflow-hidden">
 				<button
 					type="button"
 					aria-pressed={checked}
-					disabled={disabled || pending}
-					onClick={onToggle}
+					disabled={disabled}
+					// A row saving its change ignores presses rather than being disabled, which would drop focus out of the dialog and take Escape with it.
+					onClick={pending?.saving ? undefined : () => onToggle(checked)}
 					className="group flex h-full min-w-0 flex-1 items-center gap-3 rounded-xl px-2 text-start outline-none hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default dark:hover:bg-white/[0.06]"
 				>
 					<CoverStack userId={ownerId} collectionId={collection.id} count={collection.count} fanned={false} size="sm" />
@@ -431,7 +456,6 @@ function PickerRow({
 						className={twMerge(
 							"flex size-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors duration-150",
 							checked ? "border-accent bg-accent text-white" : "border-black/20 text-transparent group-hover:border-black/40 dark:border-white/25 dark:group-hover:border-white/45",
-							pending && "animate-pulse",
 						)}
 					>
 						<HugeiconsIcon icon={Tick02Icon} className="size-3.5" strokeWidth={3} />
@@ -441,6 +465,7 @@ function PickerRow({
 					<Button
 						as={Link}
 						href={`/profile/${ownerId}?collectionId=${collection.id}`}
+						{...(linksInNewTab ? { target: "_blank", rel: "noopener noreferrer" } : {})}
 						isIconOnly
 						variant="transparent"
 						aria-label={t("openCollection")}

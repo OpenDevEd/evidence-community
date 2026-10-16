@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { ACCEPTANCE_ADMINS, signInAs } from "./admin-login";
 import { dismissConsent } from "./consent";
 
 test.skip(
@@ -125,6 +126,53 @@ test("keeps results, sources and filters usable beside the conversation", async 
 	await expect(chatPanel(page)).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(chatPanel(page)).toHaveCount(0);
+});
+
+test("lets a signed-in reader bookmark and save a publication the answer links to, without leaving the chat", async ({
+	page,
+	context,
+}) => {
+	await signInAs(context, ACCEPTANCE_ADMINS.editor);
+	await page.reload();
+	const resultLink = page.locator('#main-content a[href*="/lib/"]').first();
+	const key = (await resultLink.getAttribute("href"))?.match(/\/lib\/([A-Za-z0-9]+)/)?.[1];
+	expect(key).toBeTruthy();
+	await page.route("**/api/ai/chat", (route) =>
+		route.fulfill({ contentType: "text/event-stream", body: answerStream(`See [the linked publication](/lib/${key}).`) }),
+	);
+	await searchField(page).fill("Which publication fits?");
+	await askButton(page).click();
+	const link = chatPanel(page).getByRole("link", { name: /the linked publication/ });
+	await link.hover();
+	// The hover card the link opens, which has a bookmark of its own beside the results' ones.
+	const card = page.locator("[data-state=open]").filter({ has: page.getByRole("button", { name: "Save to collection" }) });
+	const bookmark = card.getByRole("button", { name: /^(Bookmark|Remove from Bookmarks)$/ });
+	const bookmarked = await bookmark.getAttribute("aria-pressed");
+	await bookmark.click();
+	await expect(bookmark).toHaveAttribute("aria-pressed", bookmarked === "true" ? "false" : "true");
+
+	await card.getByRole("button", { name: "Save to collection" }).click();
+	const picker = page.getByRole("dialog", { name: "Save to collection" });
+	await expect(picker).toBeVisible();
+	// The card closes as the picker opens; the picker stays.
+	await expect(card).toHaveCount(0);
+	const name = `Chat picks ${Date.now()}`;
+	await picker.getByRole("button", { name: "New collection" }).click();
+	await picker.getByLabel("Collection name").fill(name);
+	await picker.getByRole("button", { name: "Create", exact: true }).click();
+	const row = picker.getByRole("button", { name: new RegExp(name) });
+	await expect(row).toHaveAttribute("aria-pressed", "true");
+	// A collection opens in a new tab, so the chat behind stays open.
+	await expect(picker.getByRole("button", { name: "Open collection" }).first()).toHaveAttribute("target", "_blank");
+
+	await row.click();
+	await expect(row).toHaveAttribute("aria-pressed", "false");
+	// Focus stays on the row while it saves, so Escape still reaches the picker.
+	await expect(row).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(picker).toHaveCount(0);
+	await expect(chatPanel(page)).toBeVisible();
+	await expect(link).toBeVisible();
 });
 
 test("answers a reader who has turned cookies down", async ({ page }, run) => {
