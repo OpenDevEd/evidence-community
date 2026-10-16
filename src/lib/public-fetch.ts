@@ -136,7 +136,8 @@ async function downloadPublicFile(
 	stillReceiving: () => void,
 ): Promise<{ data: Uint8Array; contentType: string; url: URL }> {
 	const response = await publicRequest(url, {
-		headers: { Accept: accept, "User-Agent": "Evidence-Library/1.0" },
+		// Some servers answer 404 to a strict Accept, EPrints repositories among them, though they serve the file to */*.
+		headers: { Accept: `${accept}, */*;q=0.8`, "User-Agent": "Evidence-Library/1.0" },
 		signal,
 	});
 	if (!response.ok) throw new Error(`Download returned ${response.status}`);

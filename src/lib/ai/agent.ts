@@ -25,6 +25,7 @@ import { EVIDENCE_CITATION_INSTRUCTIONS, PDF_HANDOFF_TEXT } from "./prompt-conte
 import type { ResearchUIData } from "./request-context";
 import { trackAIUsage } from "./telemetry";
 import { createResearchTools, type ResearchMode } from "./tools";
+import { READ_TOOL_MAX_TOTAL_PDF_BYTES } from "./attachments";
 
 const QUICK_STEP_LIMIT = 6;
 const RESEARCH_STEP_LIMIT = 12;
@@ -143,6 +144,27 @@ function liftedFileNote(filename: string | undefined) {
 	};
 }
 
+function leftOutFileNote(filename: string | undefined) {
+	return {
+		type: "text" as const,
+		text: `Attachment ${JSON.stringify(filename ?? "document.pdf")} was unavailable: it is too large to send with the PDFs already read. Continue with the available evidence.`,
+	};
+}
+
+function fileBytes(data: FilePart["data"]) {
+	if (typeof data === "string") return Buffer.byteLength(data, "base64");
+	return data instanceof Uint8Array || data instanceof ArrayBuffer ? data.byteLength : 0;
+}
+
+/** What the files a user message already carries add to the request. */
+function attachedBytes(message: ModelMessage) {
+	if (message.role !== "user" || !Array.isArray(message.content)) return 0;
+	return message.content.reduce(
+		(sum, part) => sum + (part.type === "file" ? fileBytes(part.data) : 0),
+		0,
+	);
+}
+
 /**
  * Moves PDFs out of a tool result and into a user message right after it. A
  * tool message carrying a file is translated into each provider's own
@@ -150,13 +172,17 @@ function liftedFileNote(filename: string | undefined) {
  * file at all. A file in a user message works the same way everywhere.
  * The messages a step prepares carry into the next step, so this also runs
  * on its own earlier output. A lifted result has no files left to lift.
+ * Every read's PDFs travel together, so they share one request budget: a PDF
+ * that no longer fits is named as unavailable instead of lifted.
  */
 export function liftToolResultFilesToUserMessage(
 	messages: ModelMessage[],
 ): ModelMessage[] {
 	const result: ModelMessage[] = [];
+	let remaining = READ_TOOL_MAX_TOTAL_PDF_BYTES;
 
 	for (const message of messages) {
+		remaining -= attachedBytes(message);
 		if (message.role !== "tool") {
 			result.push(message);
 			continue;
@@ -178,6 +204,9 @@ export function liftToolResultFilesToUserMessage(
 				ToolContent[number]
 			>((item) => {
 				if (item.type === "file-data") {
+					const size = fileBytes(item.data);
+					if (size > remaining) return [leftOutFileNote(item.filename)];
+					remaining -= size;
 					lifted.push({
 						type: "file",
 						mediaType: item.mediaType,
@@ -185,15 +214,6 @@ export function liftToolResultFilesToUserMessage(
 						data: item.data,
 					});
 					return [liftedFileNote(item.filename)];
-				}
-
-				if (item.type === "file-url") {
-					lifted.push({
-						type: "file",
-						mediaType: "application/pdf",
-						data: new URL(item.url),
-					});
-					return [liftedFileNote(undefined)];
 				}
 
 				return [item];

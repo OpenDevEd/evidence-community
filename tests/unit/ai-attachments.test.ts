@@ -7,7 +7,7 @@ vi.mock("@/app/api/cache", () => ({ getCachedItem }));
 import {
 	READ_TOOL_MAX_SINGLE_PDF_BYTES,
 	READ_TOOL_MAX_TOTAL_PDF_BYTES,
-	inlinePdfsWithinBudget,
+	fitPdfsInBudget,
 	publicationToolModelOutput,
 	type LoadedPublication,
 } from "@/lib/ai/attachments";
@@ -21,16 +21,8 @@ function pdfBytes(size: number) {
 	return data;
 }
 
-function linkedFile(name: string, size: number) {
-	return {
-		attachmentKey: name,
-		filename: `${name}.pdf`,
-		source: {
-			type: "url" as const,
-			url: new URL(`https://files.example.org/${name}.pdf`),
-			size,
-		},
-	};
+function downloadedFile(name: string, size: number) {
+	return { attachmentKey: name, filename: `${name}.pdf`, data: pdfBytes(size) };
 }
 
 function publication(
@@ -58,49 +50,23 @@ beforeEach(() => {
 });
 
 describe("fitting PDFs into one request", () => {
-	it("attaches the files that fit inside the request", async () => {
-		const target = publication([linkedFile("small", 1_000_000)]);
-
-		await inlinePdfsWithinBudget([target]);
-
-		expect(target.files[0].source.type).toBe("data");
-	});
-
-	it("keeps an oversized file as a link instead of dropping it", async () => {
-		const target = publication([
-			linkedFile("huge", READ_TOOL_MAX_SINGLE_PDF_BYTES + 1),
-		]);
-
-		await inlinePdfsWithinBudget([target]);
-
-		expect(target.files[0].source.type).toBe("url");
-		expect(fetchMock).not.toHaveBeenCalled();
-	});
-
-	it("stops attaching once the request is full", async () => {
+	it("names a PDF that does not fit as unavailable instead of dropping it", async () => {
 		// The first file fits inside both caps and leaves less than the
 		// second file needs.
 		const target = publication([
-			linkedFile("first", READ_TOOL_MAX_SINGLE_PDF_BYTES - 1),
-			linkedFile(
+			downloadedFile("first", READ_TOOL_MAX_SINGLE_PDF_BYTES - 1),
+			downloadedFile(
 				"second",
 				READ_TOOL_MAX_TOTAL_PDF_BYTES - READ_TOOL_MAX_SINGLE_PDF_BYTES + 2,
 			),
 		]);
 
-		await inlinePdfsWithinBudget([target]);
+		fitPdfsInBudget([target]);
 
-		expect(target.files[0].source.type).toBe("data");
-		expect(target.files[1].source.type).toBe("url");
-	});
-
-	it("keeps the link when the download fails", async () => {
-		fetchMock.mockRejectedValue(new Error("network down"));
-		const target = publication([linkedFile("small", 1_000)]);
-
-		await inlinePdfsWithinBudget([target]);
-
-		expect(target.files[0].source.type).toBe("url");
+		expect(target.files.map((file) => file.filename)).toEqual(["first.pdf"]);
+		expect(target.unavailable.map((file) => file.filename)).toEqual([
+			"second.pdf",
+		]);
 	});
 });
 
@@ -156,6 +122,21 @@ describe("what a read publication sends to the model", () => {
 				? output.value.filter((part) => part.type.startsWith("file"))
 				: [];
 		expect(files).toHaveLength(1);
+	});
+
+	it("sends no file and names the PDF when its download fails", async () => {
+		// The server says it has the PDF, then refuses to send it.
+		fetchMock.mockImplementation(async (_url: URL, init?: RequestInit) =>
+			init?.method === "HEAD"
+				? { ok: true, status: 200, headers: new Headers({ "content-type": "application/pdf", "content-length": "1024" }) }
+				: { ok: false, status: 404, headers: new Headers({ "content-type": "text/html" }) },
+		);
+
+		const output = await publicationToolModelOutput(["ITEM0001"]);
+
+		const parts = output.type === "content" ? output.value : [];
+		expect(parts.filter((part) => part.type.startsWith("file"))).toHaveLength(0);
+		expect(toolText(output)).toContain("teacher-training.pdf");
 	});
 
 	it("names an attachment it could not fetch and carries on", async () => {
