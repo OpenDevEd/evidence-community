@@ -515,10 +515,18 @@ describe("AI routes", () => {
 		});
 
 		it("gives the agent exactly the records of the list the reader is looking at", async () => {
-			mocks.readReaderListKeys.mockResolvedValue({ keys: ["SAVED001", "SAVED002"] });
+			mocks.readReaderListKeys.mockResolvedValue({ keys: ["SAVED001", "SAVED002"], collection: null });
 			await chat(chatRequest({ searchContext: profileContext("") }));
 
-			expect(mocks.createResearchAgent.mock.calls[0]?.[0].readerListKeys).toEqual(["SAVED001", "SAVED002"]);
+			expect(mocks.createResearchAgent.mock.calls[0]?.[0].readerList.keys).toEqual(["SAVED001", "SAVED002"]);
+		});
+
+		it("tells the agent which collection the reader has open", async () => {
+			const collection = { name: "Teacher coaching", description: "Coaching studies in low-income countries" };
+			mocks.readReaderListKeys.mockResolvedValue({ keys: ["SAVED001"], collection });
+			await chat(chatRequest({ searchContext: profileContext("6b3a8f2e-1c4d-4e5f-8a9b-0c1d2e3f4a5b") }));
+
+			expect(mocks.createResearchAgent.mock.calls[0]?.[0].readerList.collection).toEqual(collection);
 		});
 	});
 

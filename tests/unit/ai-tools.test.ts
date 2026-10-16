@@ -270,6 +270,28 @@ describe("searching the library for the assistant", () => {
 		expect(searchOptions().filter).toEqual(expect.arrayContaining(['key IN ["SAVED001","SAVED002"]']));
 	});
 
+	it("tells which library hits are already on the reader's list, so only new ones are recommended", async () => {
+		search.mockResolvedValue({ hits: [{ key: "SAVED001" }, { key: "OTHER001" }], estimatedTotalHits: 2 });
+		const tools = createResearchTools(
+			"quick",
+			config,
+			normalizeLibrarySearchContext({ readerList: { userId: "reader-amina", collectionId: "" } }),
+			"request-1",
+			["SAVED001", "SAVED002"],
+		);
+
+		const result = (await tools.searchLibrary.execute?.(
+			searchInput("quick", { queries: ["teacher training"], withinCurrentResults: false }),
+			{ messages: userMessages("what else would fit this collection?") } as never,
+		)) as { queries: Array<{ hits: Array<{ key: string; inCurrentList: boolean }> }> };
+
+		expect(searchOptions().filter).not.toEqual(expect.arrayContaining([expect.stringContaining("SAVED")]));
+		expect(result.queries[0].hits.map(({ key, inCurrentList }) => ({ key, inCurrentList }))).toEqual([
+			{ key: "SAVED001", inCurrentList: true },
+			{ key: "OTHER001", inCurrentList: false },
+		]);
+	});
+
 	it("keeps the reader's topic filter when reading their results", async () => {
 		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
 		const tools = createResearchTools(

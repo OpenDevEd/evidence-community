@@ -357,6 +357,9 @@ export async function readReaderProfile(
 
 export type ReaderListRequest = { userId: string; collectionId: string };
 
+/** A reader's list as read: its record keys, and the collection's own words, null for bookmarks. */
+export type ReaderListRead = { keys: string[]; collection: { name: string; description: string | null } | null };
+
 /**
  * The record keys of a reader's bookmarks, or of one of their collections,
  * as the viewer may see them. A private collection is refused to anyone but
@@ -369,28 +372,31 @@ async function readerListQuery(
 	viewerUserId: string | null,
 ) {
 	if (!collectionId) {
-		return { query: database.select({ itemKey: readerBookmark.itemKey }).from(readerBookmark).where(eq(readerBookmark.userId, userId)) };
+		return { query: database.select({ itemKey: readerBookmark.itemKey }).from(readerBookmark).where(eq(readerBookmark.userId, userId)), collection: null };
 	}
 	if (!isReaderCollectionId(collectionId)) return { refused: 404 as const };
 	const collection = await database.query.readerCollection.findFirst({
 		where: and(eq(readerCollection.id, collectionId), eq(readerCollection.userId, userId)),
-		columns: { private: true },
+		columns: { private: true, name: true, description: true },
 	});
 	if (!collection) return { refused: 404 as const };
 	if (collection.private && viewerUserId !== userId && !(viewerUserId && (await memberRole(database, collectionId, viewerUserId)))) {
 		return { refused: 403 as const };
 	}
-	return { query: database
-		.select({ itemKey: readerCollectionItem.itemKey })
-		.from(readerCollectionItem)
-		.where(eq(readerCollectionItem.collectionId, collectionId)) };
+	return {
+		query: database
+			.select({ itemKey: readerCollectionItem.itemKey })
+			.from(readerCollectionItem)
+			.where(eq(readerCollectionItem.collectionId, collectionId)),
+		collection: { name: collection.name, description: collection.description },
+	};
 }
 
-export async function readReaderListKeys(database: Database, request: ReaderListRequest, viewerUserId: string | null): Promise<{ keys: string[] } | { refused: 403 | 404 }> {
+export async function readReaderListKeys(database: Database, request: ReaderListRequest, viewerUserId: string | null): Promise<ReaderListRead | { refused: 403 | 404 }> {
 	const selection = await readerListQuery(database, request, viewerUserId);
 	if (selection.refused) return { refused: selection.refused };
 	const rows = await selection.query;
-	return { keys: rows.map((row) => row.itemKey) };
+	return { keys: rows.map((row) => row.itemKey), collection: selection.collection };
 }
 
 /** Compare membership without sending the entire collection over the network for every export page. */

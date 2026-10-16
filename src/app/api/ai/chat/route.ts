@@ -122,11 +122,11 @@ function ensureLatestRequestContext(
 }
 
 /**
- * The records of the reader's list a profile chat is about, as the person
+ * The reader's list a profile chat is about, its records as the person
  * asking may see them. Someone else's private collection is refused before
  * the model sees anything.
  */
-async function resolveReaderListKeys(
+async function resolveReaderList(
 	config: LibraryServerConfig,
 	searchContext: LibrarySearchContext | null | undefined,
 	request: Request,
@@ -145,7 +145,7 @@ async function resolveReaderListKeys(
 			list.refused,
 		);
 	}
-	return list.keys;
+	return list;
 }
 
 export async function POST(request: Request) {
@@ -160,7 +160,7 @@ export async function POST(request: Request) {
 		const { distinctId, itemKey, mode, modelId, searchContext } =
 			chatRequest;
 		const selectedModel = await resolveAIModel(config, modelId);
-		const readerListKeys = await resolveReaderListKeys(config, searchContext, request);
+		const readerList = await resolveReaderList(config, searchContext, request);
 		const publication = await currentPublication(itemKey);
 		const locale = await getRuntimeRequestLocale(request);
 
@@ -178,7 +178,7 @@ export async function POST(request: Request) {
 			sessionId: openRouterSessionId("chat", modelId, chatRequest.id),
 			refreshResponseCache: chatRequest.trigger === "regenerate-message",
 			searchContext,
-			readerListKeys,
+			readerList,
 			startedAt,
 		});
 
