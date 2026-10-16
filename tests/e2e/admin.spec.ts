@@ -3456,6 +3456,23 @@ test("submits an attachment's change with its record", async ({page}) => {
 	expect(submitted).toEqual([`/api/admin/items/${publishedItemKey}/review`]);
 });
 
+test("opens the record when a review sent from its attachment is refused", async ({page}) => {
+	await mockBookWithAttachment(page, {attachmentState: "draft"});
+	await page.route("**/api/admin/items/*/review", async (route) => {
+		if (route.request().method() !== "POST") return route.fallback();
+		await route.fulfill({status: 422, json: {error: {code: "validation_failed", fields: {title: "Add a title"}, message: "Fix the highlighted fields."}}});
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
+	const dialog = page.getByRole("dialog", {name: "Submit snapshot for review?"});
+	await dialog.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+	await expect(dialog.getByRole("alert")).toBeVisible();
+	// The record's review requirements say what it still needs.
+	await expect(page).toHaveURL(new RegExp(`item=${publishedItemKey}`, "u"));
+});
+
 test("keeps an unpublished attachment private and stages it with the parent review", async ({page}) => {
     await mockBookWithAttachment(page, {attachmentState: "draft"});
     await page.goto("/admin");
