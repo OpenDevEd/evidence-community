@@ -88,15 +88,16 @@ function ReviewInspector(props: Props & { detail: AdminItemDetail }) {
 				viewingSubmitted={viewingSubmitted}
 			/>
 		),
-		versionWithdraw: (
+		// Withdraw is there only while a review it can take back is pending.
+		versionWithdraw: pending ? (
 			<ReviewWithdrawButton
-				pending={pending}
 				submittedBy={snapshot?.submittedBy}
 				withdrawing={version.withdrawing}
 				onWithdraw={version.withdraw}
 				compact={model.withdrawCompact}
 			/>
-		),
+		) : null,
+		actionsReady: !model.reviewLoading,
 		reviewId: snapshot?.reviewId,
 	};
 
@@ -347,6 +348,7 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		publishing,
 		snapshot,
 		pending,
+		reviewLoading: review.loading,
 		error,
 		session,
 		withdrawCompact: withdrawCompact(viewingSubmitted, pending, session.canPublish),
