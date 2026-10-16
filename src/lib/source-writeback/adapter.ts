@@ -30,6 +30,8 @@ export type SourceWritebackRequest =
 	| (SourceWritebackRequestBase & {
 			entity: "item";
 			itemKey: string;
+			/** Tags the library adds to the record's own in the source, merged into its latest tags if the source changed meanwhile. */
+			addedTags?: readonly string[];
 	  });
 
 export type SourceWritebackResult = {
