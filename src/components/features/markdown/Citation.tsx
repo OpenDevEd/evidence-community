@@ -108,13 +108,14 @@ function SaveToCollectionButton({ itemKey, onOpen }: { itemKey: string; onOpen: 
 			<Button
 				isIconOnly
 				variant="transparent"
+				size="sm"
 				aria-label={t("selectCollection")}
 				onPress={() => picker.open(onOpen)}
 				onPointerEnter={picker.warm}
 				onFocus={picker.warm}
 				className={cardIconButtonClassName}
 			>
-				<HugeiconsIcon icon={Add01Icon} className="size-3.5" />
+				<HugeiconsIcon icon={Add01Icon} className="size-3" />
 			</Button>
 		</Tooltip>
 	);
