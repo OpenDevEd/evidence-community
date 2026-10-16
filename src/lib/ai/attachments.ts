@@ -9,7 +9,8 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { buildPdfDownloadPath, pdfFilename } from "./citations";
 import type { AIModelId, AIProvider } from "./models";
 import { openRouterCacheBreakpoint } from "./openrouter";
-import { fetchPublicFile } from "@/lib/public-fetch";
+import { fetchPublicFile, type SharedByteBudget } from "@/lib/public-fetch";
+import { isPdf } from "@/lib/source-ingestion/openalex/pdf-download";
 
 const PDF_FETCH_TIMEOUT_MS = 30_000;
 
@@ -17,11 +18,11 @@ const PDF_FETCH_TIMEOUT_MS = 30_000;
  * How PDFs reach the model. Every PDF is downloaded here and sent with the
  * request, never as a link: the provider downloads a link before the model
  * runs, and one it cannot download fails the whole request. Very large bodies
- * are rejected at the gateway, so a PDF over this budget is named as
- * unavailable instead. Never drop a PDF silently.
+ * are rejected at the gateway, so the downloads of one read share this budget
+ * and a PDF that doesn't fit is named as unavailable. Never drop a PDF silently.
  */
 export const READ_TOOL_MAX_TOTAL_PDF_BYTES = 20 * 1024 * 1024;
-export const READ_TOOL_MAX_SINGLE_PDF_BYTES = 12 * 1024 * 1024;
+const READ_TOOL_MAX_SINGLE_PDF_BYTES = 12 * 1024 * 1024;
 
 type LoadedPdf = {
 	attachmentKey: string;
@@ -43,10 +44,10 @@ export type LoadedPublication = {
 	unavailable: UnavailablePdf[];
 };
 
-async function fetchPublicPdf(url: URL, maxBytes: number): Promise<Uint8Array> {
-	const { data } = await fetchPublicFile(url, { accept: "application/pdf", timeoutMs: PDF_FETCH_TIMEOUT_MS, maxBytes });
-	const signature = new TextDecoder("ascii").decode(data.slice(0, 5));
-	if (signature !== "%PDF-") {
+async function fetchPublicPdf(url: URL, shared: SharedByteBudget): Promise<Uint8Array> {
+	const { data } = await fetchPublicFile(url, { accept: "application/pdf", timeoutMs: PDF_FETCH_TIMEOUT_MS, maxBytes: READ_TOOL_MAX_SINGLE_PDF_BYTES, shared });
+	if (!isPdf(data)) {
+		shared.remaining += data.byteLength;
 		throw new Error("Attachment did not contain a PDF");
 	}
 
@@ -95,15 +96,10 @@ export async function loadPublicationMetadata(itemKey: string) {
 	};
 }
 
-/** The publication with every PDF the reader can see, downloaded and fitted into the budget. */
-export async function loadPublication(itemKey: string) {
-	const publication = await downloadPublication(itemKey);
-	if (publication) fitPdfsInBudget([publication]);
-	return publication;
-}
-
-async function downloadPublication(
+/** The publication with every PDF the reader can see that fits in one request. */
+export async function loadPublication(
 	itemKey: string,
+	shared: SharedByteBudget = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES },
 ): Promise<LoadedPublication | null> {
 	// Always the live record: attachment keys are what the model cites, and a
 	// stale cached record hands out keys the download route cannot match.
@@ -118,10 +114,7 @@ async function downloadPublication(
 		attachments.map(async (attachment): Promise<LoadedPdf> => ({
 			attachmentKey: attachment.key,
 			filename: pdfFilename(attachment),
-			data: await fetchPublicPdf(
-				attachmentPdfUrl(attachment),
-				READ_TOOL_MAX_SINGLE_PDF_BYTES,
-			),
+			data: await fetchPublicPdf(attachmentPdfUrl(attachment), shared),
 		})),
 	);
 
@@ -152,38 +145,12 @@ async function downloadPublication(
 	};
 }
 
-/**
- * Keeps PDFs in the caller's order while they fit in one request. A PDF that
- * does not fit is named as unavailable, so the model can say it was left out.
- */
-export function fitPdfsInBudget(
-	publications: LoadedPublication[],
-	maxTotalBytes = READ_TOOL_MAX_TOTAL_PDF_BYTES,
-) {
-	let remaining = maxTotalBytes;
-	for (const publication of publications) {
-		publication.files = publication.files.filter((file) => {
-			if (file.data.byteLength <= remaining) {
-				remaining -= file.data.byteLength;
-				return true;
-			}
-			publication.unavailable.push({
-				attachmentKey: file.attachmentKey,
-				filename: file.filename,
-				reason: "it is too large to send with the other PDFs",
-			});
-			return false;
-		});
-	}
-	return publications;
-}
-
-// ponytail: every PDF downloads before the budget is applied, so one that doesn't fit was downloaded for nothing. Stop at the budget if reads get slow.
 async function loadPublications(itemKeys: string[]) {
-	const loaded = await Promise.all(
+	const shared = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES };
+	return Promise.all(
 		itemKeys.map(async (itemKey) => ({
 			itemKey,
-			...(await downloadPublication(itemKey)
+			...(await loadPublication(itemKey, shared)
 				.then((publication) => ({ publication }))
 				.catch(() => ({
 					publication: null,
@@ -191,12 +158,6 @@ async function loadPublications(itemKeys: string[]) {
 				}))),
 		})),
 	);
-
-	fitPdfsInBudget(
-		loaded.flatMap(({ publication }) => (publication ? [publication] : [])),
-	);
-
-	return loaded;
 }
 
 function citationInstruction(itemKey: string, file: LoadedPdf) {

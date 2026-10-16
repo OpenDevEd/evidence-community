@@ -4,13 +4,7 @@ vi.mock("server-only", () => ({}));
 const getCachedItem = vi.hoisted(() => vi.fn());
 vi.mock("@/app/api/cache", () => ({ getCachedItem }));
 
-import {
-	READ_TOOL_MAX_SINGLE_PDF_BYTES,
-	READ_TOOL_MAX_TOTAL_PDF_BYTES,
-	fitPdfsInBudget,
-	publicationToolModelOutput,
-	type LoadedPublication,
-} from "@/lib/ai/attachments";
+import { publicationToolModelOutput } from "@/lib/ai/attachments";
 
 const fetchMock = vi.hoisted(() => vi.fn());
 vi.mock("undici", () => ({ Agent: class {}, fetch: fetchMock }));
@@ -19,23 +13,6 @@ function pdfBytes(size: number) {
 	const data = new Uint8Array(size);
 	data.set(new TextEncoder().encode("%PDF-"), 0);
 	return data;
-}
-
-function downloadedFile(name: string, size: number) {
-	return { attachmentKey: name, filename: `${name}.pdf`, data: pdfBytes(size) };
-}
-
-function publication(
-	files: LoadedPublication["files"],
-	unavailable: LoadedPublication["unavailable"] = [],
-): LoadedPublication {
-	return {
-		key: "ITEM0001",
-		title: "Teaching by radio",
-		metadata: { key: "ITEM0001", title: "Teaching by radio" },
-		files,
-		unavailable,
-	};
 }
 
 beforeEach(() => {
@@ -47,27 +24,6 @@ beforeEach(() => {
 		headers: new Headers({ "content-type": "application/pdf" }),
 		arrayBuffer: async () => pdfBytes(1_024).buffer,
 	}));
-});
-
-describe("fitting PDFs into one request", () => {
-	it("names a PDF that does not fit as unavailable instead of dropping it", async () => {
-		// The first file fits inside both caps and leaves less than the
-		// second file needs.
-		const target = publication([
-			downloadedFile("first", READ_TOOL_MAX_SINGLE_PDF_BYTES - 1),
-			downloadedFile(
-				"second",
-				READ_TOOL_MAX_TOTAL_PDF_BYTES - READ_TOOL_MAX_SINGLE_PDF_BYTES + 2,
-			),
-		]);
-
-		fitPdfsInBudget([target]);
-
-		expect(target.files.map((file) => file.filename)).toEqual(["first.pdf"]);
-		expect(target.unavailable.map((file) => file.filename)).toEqual([
-			"second.pdf",
-		]);
-	});
 });
 
 function toolText(output: Awaited<ReturnType<typeof publicationToolModelOutput>>) {
@@ -137,6 +93,29 @@ describe("what a read publication sends to the model", () => {
 		const parts = output.type === "content" ? output.value : [];
 		expect(parts.filter((part) => part.type.startsWith("file"))).toHaveLength(0);
 		expect(toolText(output)).toContain("teacher-training.pdf");
+	});
+
+	it("names the PDF that no longer fits once the read's PDFs fill the request", async () => {
+		const elevenMegabytes = pdfBytes(11 * 1024 * 1024);
+		fetchMock.mockImplementation(async () => ({
+			ok: true,
+			status: 200,
+			headers: new Headers({ "content-type": "application/pdf" }),
+			arrayBuffer: async () => elevenMegabytes.buffer,
+		}));
+		getCachedItem.mockImplementation(async (key: string) => ({
+			item: {
+				key,
+				title: key,
+				attachmentsData: [{ key: `${key}-PDF`, filename: `${key}.pdf`, url: `https://files.example.org/${key}.pdf`, PDFCoverPageImage: "cover.png" }],
+			},
+		}));
+
+		const output = await publicationToolModelOutput(["ITEM0001", "ITEM0002"]);
+
+		const parts = output.type === "content" ? output.value : [];
+		expect(parts.filter((part) => part.type === "file-data")).toHaveLength(1);
+		expect(toolText(output)).toMatch(/was unavailable/);
 	});
 
 	it("names an attachment it could not fetch and carries on", async () => {

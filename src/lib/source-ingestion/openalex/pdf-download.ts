@@ -8,7 +8,8 @@ const FALLBACK_BUDGET_MS = 60_000;
 // Unpaywall asks callers to name themselves by email; this is the platform's.
 const UNPAYWALL_EMAIL = "contact@opendeved.net";
 
-const isPdf = (bytes: Uint8Array) => {
+/** A PDF may carry a short preamble before its header, so the header is looked for in the first kilobyte. */
+export const isPdf = (bytes: Uint8Array) => {
 	const header = Buffer.from(bytes.buffer, bytes.byteOffset, Math.min(bytes.byteLength, 1_024)).indexOf(PDF_HEADER);
 	return header >= 0;
 };

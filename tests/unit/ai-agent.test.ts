@@ -90,7 +90,7 @@ describe("handing read PDFs to the model", () => {
 		expect(liftToolResultFilesToUserMessage(messages)).toEqual(messages);
 	});
 
-	it("names a later read's PDF as unavailable once earlier reads fill the request", () => {
+	it("keeps the latest read's PDF and leaves out an earlier one once they fill the request", () => {
 		const elevenMegabytes = Buffer.alloc(11 * 1024 * 1024).toString("base64");
 		const read = (toolCallId: string, filename: string): ModelMessage => ({
 			role: "tool",
@@ -115,8 +115,8 @@ describe("handing read PDFs to the model", () => {
 				? message.content.filter((part) => part.type === "file")
 				: [],
 		);
-		expect(files.map((file) => file.filename)).toEqual(["first.pdf"]);
-		expect(JSON.stringify(messages.at(-1))).toContain("second.pdf");
+		expect(files.map((file) => file.filename)).toEqual(["second.pdf"]);
+		expect(JSON.stringify(messages[1])).toMatch(/first\.pdf.*not attached/);
 	});
 
 	it("runs twice without duplicating the attachments", () => {
