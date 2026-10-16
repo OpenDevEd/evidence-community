@@ -6,7 +6,7 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { and, asc, DrizzleQueryError, eq, gt, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, DrizzleQueryError, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -171,8 +171,8 @@ const EXPIRED_RUN_ERROR = "SourceLeaseLostError: worker lease expired";
 
 type RunLine = { source: string; provider?: string; run: number; seconds: number } & ({ status: "succeeded"; result: SourceSyncResult } | { status: "failed"; code: string; error: string });
 
-function failedRunLine(source: string, run: number, startedAt: Date, now: Date, code: string, error: string): RunLine {
-	return { source, run, seconds: Math.round((now.getTime() - startedAt.getTime()) / 1000), status: "failed", code, error };
+function failedRunLine(source: string, provider: string | undefined, run: number, startedAt: Date, now: Date, code: string, error: string): RunLine {
+	return { source, provider, run, seconds: Math.round((now.getTime() - startedAt.getTime()) / 1000), status: "failed", code, error };
 }
 
 /** One line per finished run, so a library's logs say what each import did without reading its database. */
@@ -195,7 +195,7 @@ function runFailure(error: unknown) {
  * batches stay written, so what they changed is counted as a failed run's is.
  * Returns the sync state fields that record it.
  */
-async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey: string, now: Date, closed: RunLine[]) {
+async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey: string, now: Date, closed: RunLine[], provider: string | undefined) {
 	const expiredRuns = await transaction
 		.update(sourceSyncRun)
 		.set({ error: EXPIRED_RUN_ERROR, finishedAt: now, heartbeatAt: now, status: "failed" })
@@ -206,7 +206,7 @@ async function closeAbandonedRuns(transaction: Transaction, sourceConnectionKey:
 			),
 		)
 		.returning({ id: sourceSyncRun.id, startedAt: sourceSyncRun.startedAt });
-	closed.push(...expiredRuns.map((run) => failedRunLine(sourceConnectionKey, run.id, run.startedAt, now, "interrupted", EXPIRED_RUN_ERROR)));
+	closed.push(...expiredRuns.map((run) => failedRunLine(sourceConnectionKey, provider, run.id, run.startedAt, now, "interrupted", EXPIRED_RUN_ERROR)));
 	let changedPatch = {};
 	for (const run of expiredRuns) {
 		changedPatch = { ...changedPatch, ...(await changedRecordsPatch(transaction, run.id)) };
@@ -296,7 +296,7 @@ async function claimRun(
 		// Checked under the row lock, so a run that just finished is already seen.
 		assertDue(options, connection, connection.provider, now);
 
-		const abandoned = await closeAbandonedRuns(transaction, connection.key, now, closed);
+		const abandoned = await closeAbandonedRuns(transaction, connection.key, now, closed, connection.provider);
 
 		const [run] = await transaction
 			.insert(sourceSyncRun)
@@ -349,11 +349,16 @@ export async function releaseWorkerLeases(database: Database, workerId: string, 
 			.from(sourceSyncState)
 			.where(and(eq(sourceSyncState.leaseOwner, workerId), gt(sourceSyncState.leaseExpiresAt, now)))
 			.for("update");
+		const providers = new Map(
+			held.length
+				? (await transaction.select({ key: sourceConnection.key, provider: sourceConnection.provider }).from(sourceConnection).where(inArray(sourceConnection.key, held.map(({ key }) => key)))).map(({ key, provider }) => [key, provider])
+				: [],
+		);
 		for (const { key } of held) {
 			await transaction
 				.update(sourceSyncState)
 				.set({
-					...(await closeAbandonedRuns(transaction, key, now, closed)),
+					...(await closeAbandonedRuns(transaction, key, now, closed, providers.get(key))),
 					activeRunId: null,
 					leaseExpiresAt: null,
 					leaseOwner: null,
@@ -501,7 +506,8 @@ async function finishRunFailed(
 ) {
 	const now = (options.now ?? (() => new Date()))();
 	const { code, message } = runFailure(error);
-	await options.database.transaction(async (transaction) => {
+	// Whether this process closed the run: false when another worker already closed it as abandoned.
+	return options.database.transaction(async (transaction) => {
 		const changedPatch = await changedRecordsPatch(transaction, claimed.runId);
 		const [state] = await transaction
 			.update(sourceSyncState)
@@ -529,7 +535,7 @@ async function finishRunFailed(
 			)
 			.returning({ sourceConnectionKey: sourceSyncState.sourceConnectionKey });
 
-		await transaction
+		const [run] = await transaction
 			.update(sourceSyncRun)
 			.set({
 				error: message,
@@ -542,11 +548,13 @@ async function finishRunFailed(
 					eq(sourceSyncRun.id, claimed.runId),
 					eq(sourceSyncRun.status, "running"),
 				),
-			);
+			)
+			.returning({ id: sourceSyncRun.id });
 
 		if (!state && !(error instanceof SourceLeaseLostError)) {
 			throw new SourceLeaseLostError(claimed.connection.key);
 		}
+		return Boolean(run);
 	});
 }
 
@@ -674,8 +682,14 @@ export async function runSourceConnection(
 	} catch (error) {
 		// Logged before the failure is saved, so a run whose database is gone still leaves its line.
 		const { code, message } = runFailure(error);
-		logRuns([{ ...failedRunLine(line.source, line.run, startedAt, new Date(), code, message), provider }]);
-		await finishRunFailed(options, claimed, error, workerId);
+		const failed = failedRunLine(line.source, provider, line.run, startedAt, new Date(), code, message);
+		// One line per run: logged here when this process closes the run, or when its failure can't be saved. A run
+		// another worker already closed as abandoned was logged there.
+		const closed = await finishRunFailed(options, claimed, error, workerId).catch((saveError: unknown) => {
+			if (!(saveError instanceof SourceLeaseLostError)) logRuns([failed]);
+			throw saveError;
+		});
+		if (closed) logRuns([failed]);
 		throw error;
 	} finally {
 		abortController.abort();
