@@ -107,6 +107,9 @@ export async function publicRequest(url: URL, init: Omit<RequestInit, "redirect"
 /** Bytes several downloads share. A download takes from it as it receives and gives back what it took if it fails. */
 export type SharedByteBudget = { remaining: number };
 
+/** A download stopped because the files sharing its budget passed it together. */
+export class SharedBudgetExceeded extends Error {}
+
 /**
  * Downloads a file from a public address, stopping at the time and size
  * limits. With `idleTimeoutMs`, a download that receives nothing for that
@@ -136,8 +139,8 @@ type SizeLimits = { maxBytes: number; shared: SharedByteBudget };
 
 /** Why a file of `size` bytes can't be kept, if it can't. `taken` of them already came out of the shared budget. */
 function sizeProblem(size: number, taken: number, { maxBytes, shared }: SizeLimits) {
-	if (size > maxBytes) return "File is too large";
-	if (size - taken > shared.remaining) return "The files together are too large";
+	if (size > maxBytes) return new Error("File is too large");
+	if (size - taken > shared.remaining) return new SharedBudgetExceeded("The files together are too large");
 	return null;
 }
 
@@ -153,11 +156,11 @@ async function downloadPublicFile(
 		headers: { Accept: `${accept}, */*;q=0.8`, "User-Agent": "Evidence-Library/1.0" },
 		signal,
 	});
-	const refused = !response.ok ? `Download returned ${response.status}` : sizeProblem(Number(response.headers?.get("content-length")) || 0, 0, limits);
+	const refused = !response.ok ? new Error(`Download returned ${response.status}`) : sizeProblem(Number(response.headers?.get("content-length")) || 0, 0, limits);
 	if (refused) {
 		// Release the connection: an unread body holds it open.
 		await response.body?.cancel().catch(() => undefined);
-		throw new Error(refused);
+		throw refused;
 	}
 	const contentType = response.headers?.get("content-type") ?? "";
 	// Where redirects ended, so a page's relative links resolve against it.
@@ -165,7 +168,7 @@ async function downloadPublicFile(
 	if (!response.body) {
 		const data = new Uint8Array(await response.arrayBuffer());
 		const tooLarge = sizeProblem(data.byteLength, 0, limits);
-		if (tooLarge) throw new Error(tooLarge);
+		if (tooLarge) throw tooLarge;
 		limits.shared.remaining -= data.byteLength;
 		return { data, contentType, url: finalUrl };
 	}
@@ -192,7 +195,7 @@ async function readBody(
 			const tooLarge = sizeProblem(size + part.value.byteLength, size, limits);
 			if (tooLarge) {
 				await reader.cancel();
-				throw new Error(tooLarge);
+				throw tooLarge;
 			}
 			size += part.value.byteLength;
 			limits.shared.remaining -= part.value.byteLength;

@@ -9,7 +9,7 @@ import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { buildPdfDownloadPath, pdfFilename } from "./citations";
 import type { AIModelId, AIProvider } from "./models";
 import { openRouterCacheBreakpoint } from "./openrouter";
-import { fetchPublicFile, type SharedByteBudget } from "@/lib/public-fetch";
+import { fetchPublicFile, SharedBudgetExceeded, type SharedByteBudget } from "@/lib/public-fetch";
 import { isPdf } from "@/lib/source-ingestion/openalex/pdf-download";
 
 const PDF_FETCH_TIMEOUT_MS = 30_000;
@@ -96,39 +96,52 @@ export async function loadPublicationMetadata(itemKey: string) {
 	};
 }
 
-/** The publication with every PDF the reader can see that fits in one request. */
-export async function loadPublication(
-	itemKey: string,
-	shared: SharedByteBudget = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES },
-): Promise<LoadedPublication | null> {
+async function readItem(itemKey: string) {
 	// Always the live record: attachment keys are what the model cites, and a
 	// stale cached record hands out keys the download route cannot match.
-	const response = await getCachedItem(itemKey);
-	const item = response?.item;
-	if (!item) return null;
+	return (await getCachedItem(itemKey))?.item ?? null;
+}
 
-	const attachments = (item.attachmentsData ?? []).filter(
-		isVisiblePdfAttachment,
-	);
-	const settled = await Promise.allSettled(
-		attachments.map(async (attachment): Promise<LoadedPdf> => ({
-			attachmentKey: attachment.key,
-			filename: pdfFilename(attachment),
-			data: await fetchPublicPdf(attachmentPdfUrl(attachment), shared),
-		})),
-	);
+function visiblePdfAttachments(item: Item) {
+	return (item.attachmentsData ?? []).filter(isVisiblePdfAttachment);
+}
 
+/**
+ * Downloads PDFs that share one request budget, all at once. A failed
+ * download gives its bytes back only when it fails, so a PDF refused for the
+ * budget is tried once more, in order, after every download has finished.
+ */
+async function downloadPdfs(attachments: Item[]) {
+	const shared = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES };
+	const download = async (attachment: Item) =>
+		fetchPublicPdf(attachmentPdfUrl(attachment), shared);
+	const results = await Promise.allSettled(attachments.map(download));
+	for (const [index, result] of results.entries()) {
+		if (result.status === "fulfilled" || !(result.reason instanceof SharedBudgetExceeded)) continue;
+		results[index] = await download(attachments[index]).then(
+			(value) => ({ status: "fulfilled", value }) as const,
+			(reason: unknown) => ({ status: "rejected", reason }) as const,
+		);
+	}
+	return results;
+}
+
+function toPublication(
+	item: Item,
+	attachments: Item[],
+	results: PromiseSettledResult<Uint8Array>[],
+): LoadedPublication {
 	const files: LoadedPdf[] = [];
 	const unavailable: UnavailablePdf[] = [];
-	for (const [index, result] of settled.entries()) {
+	for (const [index, result] of results.entries()) {
 		const attachment = attachments[index];
+		const named = { attachmentKey: attachment.key, filename: pdfFilename(attachment) };
 		if (result.status === "fulfilled") {
-			files.push(result.value);
+			files.push({ ...named, data: result.value });
 			continue;
 		}
 		unavailable.push({
-			attachmentKey: attachment.key,
-			filename: pdfFilename(attachment),
+			...named,
 			reason:
 				result.reason instanceof Error
 					? result.reason.message
@@ -145,19 +158,37 @@ export async function loadPublication(
 	};
 }
 
+/** The publication with every PDF the reader can see that fits in one request. */
+export async function loadPublication(itemKey: string) {
+	const item = await readItem(itemKey);
+	if (!item) return null;
+	const attachments = visiblePdfAttachments(item);
+	return toPublication(item, attachments, await downloadPdfs(attachments));
+}
+
+/** Several publications whose PDFs share one request budget, in the caller's order. */
 async function loadPublications(itemKeys: string[]) {
-	const shared = { remaining: READ_TOOL_MAX_TOTAL_PDF_BYTES };
-	return Promise.all(
-		itemKeys.map(async (itemKey) => ({
-			itemKey,
-			...(await loadPublication(itemKey, shared)
-				.then((publication) => ({ publication }))
-				.catch(() => ({
-					publication: null,
-					error: "Publication could not be loaded.",
-				}))),
-		})),
+	const items = await Promise.all(
+		itemKeys.map((itemKey) =>
+			readItem(itemKey).then(
+				(item) => ({ item }),
+				() => ({ item: null, error: "Publication could not be loaded." }),
+			),
+		),
 	);
+	const attachments = items.map(({ item }) => (item ? visiblePdfAttachments(item) : []));
+	const results = await downloadPdfs(attachments.flat());
+
+	let offset = 0;
+	return items.map((loaded, index) => {
+		const own = attachments[index];
+		const ownResults = results.slice(offset, (offset += own.length));
+		return {
+			itemKey: itemKeys[index],
+			...("error" in loaded ? { error: loaded.error } : {}),
+			publication: loaded.item ? toPublication(loaded.item, own, ownResults) : null,
+		};
+	});
 }
 
 function citationInstruction(itemKey: string, file: LoadedPdf) {
