@@ -31,7 +31,7 @@ type Option = { key: number; name: string; count: number; icon?: ReactNode };
 
 /**
  * One of the filter's dropdowns: any number of its options, each with how many papers it would highlight. Escape closes it and
- * keeps what is chosen, where a list on its own would clear it.
+ * keeps what is chosen, where a list on its own would clear it. The list is as wide as its field.
  */
 function FilterSelect({ label, placeholder, options, selected, onChange }: { label: string; placeholder: string; options: Option[]; selected: ReadonlySet<number>; onChange: (next: ReadonlySet<number>) => void }) {
 	return (
@@ -53,7 +53,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 							{({ isSelected }) => (
 								<>
 									{option.icon}
-									<span className="min-w-0 flex-1 truncate font-medium">{option.name}</span>
+									<span className="min-w-0 flex-1 font-medium leading-snug">{option.name}</span>
 									<span className={twMerge("text-xs tabular-nums", muted)}>{option.count}</span>
 									<HugeiconsIcon icon={Tick02Icon} size={16} aria-hidden className={twMerge("text-accent", !isSelected && "invisible")} />
 								</>
@@ -89,7 +89,8 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Chec
 				{/* Kept in place while hidden, so the heading never changes height. */}
 				<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className={twMerge("rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent", !types.size && !verdicts.size && "invisible")}>Clear</button>
 			</div>
-			<div className="space-y-2">
+			{/* Side by side below 1,280 px, where the top bar must stay short for the map; an option too long for its list wraps. */}
+			<div className="flex gap-2 xl:flex-col">
 				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} />
 				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} />
 			</div>

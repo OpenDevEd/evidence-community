@@ -3,10 +3,14 @@ export type Area = { left: number; right: number; top: number; bottom: number };
 
 const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
-/** Wide: the search panel on the left, the paper's on the right. */
+/**
+ * Wide: the search panel on the left, the paper's on the right, and with a paper open the notice over the map that says what is
+ * in front, under the header: 2.75 rem high with 0.5 rem below it. It is not on the page yet while the paper opens, so it is
+ * counted rather than measured.
+ */
 function wideArea(withPaper: boolean, width: number, height: number): Area {
 	const r = rem();
-	return { left: 24 * r, right: withPaper ? width - 27 * r : width, top: 7 * r, bottom: height - r };
+	return { left: 24 * r, right: withPaper ? width - 27 * r : width, top: (withPaper ? 10.25 : 7) * r, bottom: height - r };
 }
 
 /**

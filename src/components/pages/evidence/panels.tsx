@@ -54,7 +54,8 @@ export function Controls({ graph }: { graph: EvidenceGraph | null }) {
 /** A short notice over the map, with the one button that undoes what it says. */
 function Notice({ children, action, onPress, className }: { children: ReactNode; action: string; onPress: () => void; className?: string }) {
 	return (
-		<div role="status" className={twMerge(PANEL, "flex animate-fade-in items-center gap-3 py-2 pl-4 pr-2 text-sm motion-reduce:animate-none", className)}>
+		// One line, 2.75 rem high: the map is fitted below the notices by that height.
+		<div role="status" className={twMerge(PANEL, "flex h-11 animate-fade-in items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm motion-reduce:animate-none", className)}>
 			<span>{children}</span>
 			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
 		</div>
@@ -72,19 +73,17 @@ export function Missing({ onClear }: { onClear: () => void }) {
 
 /**
  * Why the map is faded, over it from 1,280 px wide, in the middle of the space the panels leave: a paper (or every checked
- * paper) brought to the front, and the filter highlighting some papers. Each says how to undo it.
+ * paper) brought to the front, or else the filter highlighting some papers. One at a time, so the map fitted below it never
+ * moves when the filter changes; each says how to undo it.
  */
 export function MapStatus({ focus, highlighted, paperOpen, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; paperOpen: boolean; onShowAll: () => void; onClearFilter: () => void }) {
-	if (!focus && highlighted === null) return null;
+	const at = twMerge("fixed top-28 z-20 hidden -translate-x-1/2 xl:flex", paperOpen ? "left-[calc(50%-1.5rem)]" : "left-[calc(50%+12rem)]");
+	if (focus) return <Notice action="Show the whole map" onPress={onShowAll} className={at}><strong className="font-semibold">{focus}</strong> in front, the rest faded</Notice>;
+	if (highlighted === null) return null;
 	return (
-		<div className={twMerge("fixed top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex", paperOpen ? "left-[calc(50%-1.5rem)]" : "left-[calc(50%+12rem)]")}>
-			{focus && <Notice action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front, the rest faded</Notice>}
-			{highlighted !== null && (
-				<Notice action="Clear filter" onPress={onClearFilter}>
-					<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
-				</Notice>
-			)}
-		</div>
+		<Notice action="Clear filter" onPress={onClearFilter} className={at}>
+			<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+		</Notice>
 	);
 }
 
