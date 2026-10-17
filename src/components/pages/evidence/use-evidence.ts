@@ -6,7 +6,8 @@ import type { useFiltersContext } from "@/context/FiltersProvider";
 import { listingParams, resultParams, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { evidenceClient, type Loaded, type More } from "./client";
-import { CHECKED, FLAG, type Theme } from "./data";
+import { CHECKED, type Theme } from "./data";
+import { matchesChecks } from "./filter";
 import { EvidenceGraph } from "./graph";
 import { setHover } from "./hover";
 import type { Lit } from "./lists";
@@ -144,10 +145,6 @@ function restOf(query: string, first: Hits | undefined) {
 const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.total === first?.total ? all : first);
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
-/** Whether the switches light a paper: of a type that is on, if any is, and with a check that is on, if any is. Methods references and strays are never lit, as they are never counted. */
-export const matchesChecks = ({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => (i: number) =>
-	!(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i]));
-
 const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
 
 /** What lights up: the search's papers, the checks' papers, or the papers both light. Nothing lit lights everything. */

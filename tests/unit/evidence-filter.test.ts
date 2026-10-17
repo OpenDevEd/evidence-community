@@ -1,8 +1,7 @@
 // The evidence map's filter: a type and a check, each any number of options, highlighting papers that match both.
 import { describe, expect, it } from "vitest";
 
-import { highlightedCount } from "@/components/pages/evidence/filter";
-import { matchesChecks } from "@/components/pages/evidence/use-evidence";
+import { highlightedCount, highlightedNow, matchesChecks } from "@/components/pages/evidence/filter";
 
 // Three primary studies (one broken, one validated, one not assessed) and a broken meta-analysis; kinds 1 and 3, checks 7 and 3.
 const counts = { 1: { 0: 1, 3: 1, 7: 1 }, 3: { 7: 1 } };
@@ -19,5 +18,16 @@ describe("the evidence map's filter", () => {
 		expect(highlightedCount(counts, new Set([1]), new Set([7]))).toBe(1);
 		expect(highlightedCount(counts, new Set([1, 3]), new Set([7, 3]))).toBe(3);
 		expect(highlightedCount(counts, new Set(), new Set())).toBeNull();
+	});
+
+	it("counts only the open chain's papers while a chain is in front", () => {
+		// The meta-analysis (3) and two of its studies (0 and 2): one broken study and the broken meta-analysis match "broken".
+		const shown = { index: 3, chain: { focus: 3, layers: [[0, 2], [3]], links: [], others: [] }, cites: [], citedBy: [] } as never;
+		const broken = { checkCounts: counts, types: new Set<number>(), verdicts: new Set([7]), loaded };
+		expect(highlightedNow({ ...broken, shown })).toBe(2);
+		expect(highlightedNow({ ...broken, shown: null })).toBe(2);
+		expect(highlightedNow({ ...broken, verdicts: new Set([3]), shown })).toBe(0);
+		expect(highlightedNow({ ...broken, verdicts: new Set([3]), shown: null })).toBe(1);
+		expect(highlightedNow({ ...broken, verdicts: new Set(), shown })).toBeNull();
 	});
 });

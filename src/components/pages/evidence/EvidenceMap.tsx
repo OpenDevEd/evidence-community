@@ -9,14 +9,14 @@ import { CHECKED, type ChainEntry, type Label, type Theme } from "./data";
 import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
 import { nameOf } from "./overlay";
-import { checkedCount, highlightedCount, type CheckCounts } from "./filter";
+import { checkedCount, highlightedNow, type CheckCounts } from "./filter";
 import type { Lit } from "./lists";
 import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
 import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
 import { useOpenedName } from "./records";
-import { matchesChecks, useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
+import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
 
 /**
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
@@ -109,13 +109,6 @@ function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null
 	if (now.target === CHECKED) return "All checked papers";
 	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
 	return label ? nameOf(label) : null;
-}
-
-/** How many papers the filter highlights: in an open chain, those of the chain; else across the library. */
-function highlightedNow({ checkCounts, types, verdicts, loaded, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; loaded: Loaded | null; shown: Selection | null }) {
-	const all = highlightedCount(checkCounts, types, verdicts);
-	if (all === null || !shown?.chain || !loaded) return all;
-	return [...new Set(shown.chain.layers.flat())].filter(matchesChecks(loaded, types, verdicts)).length;
 }
 
 /**

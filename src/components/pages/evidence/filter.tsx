@@ -5,7 +5,9 @@ import type { ReactNode } from "react";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { twMerge } from "@/lib/tw-merge";
-import { KINDS, VERDICTS } from "./data";
+import type { Loaded } from "./client";
+import { FLAG, KINDS, VERDICTS } from "./data";
+import type { Selection } from "./graph";
 import { muted } from "./lists";
 import { VerdictIcon } from "./verdict-chip";
 import { KIND_PLURAL, TYPE_ORDER, VERDICT, VERDICT_ORDER } from "./verdicts";
@@ -26,6 +28,18 @@ export const checkedCount = (counts: CheckCounts) => countWhere(counts, () => tr
 /** How many papers the filter highlights, or null with nothing chosen. */
 export const highlightedCount = (counts: CheckCounts, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) =>
 	types.size || verdicts.size ? countWhere(counts, (kind) => !types.size || types.has(kind), (verdict) => !verdicts.size || verdicts.has(verdict)) : null;
+
+/** Whether the filter lights a paper: of a type chosen, if any is, and with a check chosen, if any is. Methods references and strays
+ * are never lit, as they are never counted. */
+export const matchesChecks = ({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => (i: number) =>
+	!(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i]));
+
+/** How many papers the filter highlights: in an open chain, those of the chain; else across the library. Null with nothing chosen. */
+export function highlightedNow({ checkCounts, types, verdicts, loaded, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; loaded: Loaded | null; shown: Selection | null }) {
+	const all = highlightedCount(checkCounts, types, verdicts);
+	if (all === null || !shown?.chain || !loaded) return all;
+	return [...new Set(shown.chain.layers.flat())].filter(matchesChecks(loaded, types, verdicts)).length;
+}
 
 type Option = { key: number; name: string; count: number; icon?: ReactNode };
 
