@@ -132,6 +132,23 @@ type VersionInspectorProps = Props & {
 	notice: ReactNode;
 };
 
+/**
+ * Why the working draft can't be submitted yet: a conflict, readiness still loading or missing, or the record's
+ * review pending, though this attachment isn't in it (it can't be submitted, but it can be deleted).
+ */
+function submissionBlocked(
+	hasConflict: boolean,
+	readiness: { loading: boolean; saving: boolean; missing: number },
+	recordReviewPending: boolean,
+) {
+	return hasConflict || readiness.loading || readiness.saving || readiness.missing > 0 || recordReviewPending;
+}
+
+/** A Zotero PDF change has no draft to delete, so the record's review blocks it as its own would. */
+function draftReviewPending(pending: boolean, recordReviewPending: boolean, hasDraft: boolean) {
+	return pending || (recordReviewPending && !hasDraft);
+}
+
 function WorkingDraftInspector({
 	model,
 	controls,
@@ -173,16 +190,8 @@ function WorkingDraftInspector({
 					readiness={readiness}
 				/>
 			}
-			submissionBlocked={
-				hasConflict ||
-				readiness.loading ||
-				readiness.saving ||
-				readiness.missing > 0 ||
-				// The record's review, though this attachment isn't in it: it can't be submitted, but it can be deleted.
-				model.recordReviewPending
-			}
-			// A Zotero PDF change has no draft to delete, so the record's review blocks it too.
-			reviewPending={pending || (model.recordReviewPending && !props.detail.draft)}
+			submissionBlocked={submissionBlocked(hasConflict, readiness, model.recordReviewPending)}
+			reviewPending={draftReviewPending(pending, model.recordReviewPending, Boolean(props.detail.draft))}
 		/>
 	);
 }
