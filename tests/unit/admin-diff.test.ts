@@ -70,6 +70,8 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 		revision: 1,
 		sourceConnectionKey: "native",
 		sourceFileUrl: null,
+		sourcePdf: null,
+		sourcePdfChangePending: false,
 		state: "edited",
 		tags: ["draft"],
 		title: "Draft title",

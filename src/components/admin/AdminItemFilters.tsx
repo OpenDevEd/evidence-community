@@ -79,9 +79,9 @@ function optionsForColumn(
 				label: humanizeAdminField(key),
 			}));
 		case "fileState":
-			return ["none", "processing", "staged", "published"].map((key) => ({
+			return ["none", "unpublished", "processing", "staged", "published"].map((key) => ({
 				key,
-				label: key === "none" ? "No PDF" : humanizeAdminField(key),
+				label: key === "none" ? "No PDF" : key === "unpublished" ? "Not published" : humanizeAdminField(key),
 			}));
 		case "itemType":
 			return definitions.map(({ itemType }) => ({

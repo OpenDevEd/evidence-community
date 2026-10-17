@@ -145,21 +145,40 @@ function DisplayToggles({
 }
 
 /** Attachments only hide or show; the record's other display states do not apply to a file. */
-export function AttachmentDisplay({ tags, readOnly, onChange }: { tags: readonly string[]; readOnly: boolean; onChange: (tags: string[]) => void }) {
+/**
+ * An attachment's place in the public record. A note or an ordinary link is public only with one of its record's
+ * publish tags, so it says which tags those are.
+ */
+export function AttachmentDisplay({ tags, readOnly, onChange, publishTags }: {
+	tags: readonly string[];
+	readOnly: boolean;
+	onChange: (tags: string[]) => void;
+	/** The tags that make this note or link public; omitted for attachments shown without one. */
+	publishTags?: readonly string[];
+}) {
 	const { content } = useLibraryConfig();
 	const hidden = hasAnyTag(tags, content.tags.hidden);
+	const unpublished = Boolean(publishTags) && !hasAnyTag(tags, publishTags ?? []);
 	return (
 		<section aria-label="Library display">
 			<AdminStatusAccordion
 				title="Library display"
 				summary={
 					<span className="inline-flex items-center gap-1">
-						<HugeiconsIcon icon={hidden ? displayIcons.hidden : ViewIcon} size={12} />
-						{hidden ? "Hidden" : "Visible"}
+						<HugeiconsIcon icon={hidden || unpublished ? displayIcons.hidden : ViewIcon} size={12} />
+						{hidden ? "Hidden" : unpublished ? "Private" : "Visible"}
 					</span>
 				}
 			>
 				<DisplayToggles tags={tags} readOnly={readOnly} onChange={onChange} keys={["hidden"]} />
+				{publishTags ? (
+					<p className="mb-3 flex flex-wrap items-center gap-1 px-1 text-xs text-black/55 dark:text-white/55">
+						{publishTags.length ? "Public with one of these tags" : "Its source has no publish tags, so it stays private"}
+						{publishTags.map((tag) => (
+							<span key={tag} className="rounded bg-black/[0.05] px-1 font-mono text-[10px] text-black/60 dark:bg-white/[0.07] dark:text-white/60">{tag}</span>
+						))}
+					</p>
+				) : null}
 			</AdminStatusAccordion>
 		</section>
 	);

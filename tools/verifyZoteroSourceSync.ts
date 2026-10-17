@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, notExists } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { itemSourceFileChoice } from "../src/db/schema/review";
 import { sourceSnapshot } from "../src/db/schema/source";
 import { collection } from "../src/db/schema/tables/collection";
 import { item } from "../src/db/schema/tables/item";
@@ -928,6 +929,76 @@ async function verify() {
 		);
 		await setSettings({ pdfPublishing: { mode: "tagged", tags: ["_publish", "publishPDF"] } });
 		await syncWithPdfs();
+
+		// A PDF choice approved in review reaches the import on its next run: the attachment is read again though
+		// Zotero didn't change it, the PDF step sees the choice, the choice is marked applied, and the run after reads
+		// nothing.
+		const [choiceAttachment] = await database.select({ key: item.key }).from(item)
+			.where(and(eq(item.sourceConnectionKey, connectionKey), eq(item.sourceRecordKey, "BBBB2345")));
+		await database.insert(itemSourceFileChoice).values({ itemKey: choiceAttachment!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "BBBB2345", choice: "withhold", applied: false });
+		const choicesSeen: (string | undefined)[] = [];
+		const choiceProcessor = async (record: RemoteRecord, context?: { choices?: ReadonlyMap<string, string> }) => {
+			if (record.key === "BBBB2345") choicesSeen.push(context?.choices?.get("BBBB2345"));
+			return attachmentProcessor(record);
+		};
+		const syncWithChoices = () =>
+			syncZoteroSource({ database, sourceConnectionKey: connectionKey, credentialResolver, attachmentProcessor: choiceProcessor, sleep: async () => {} });
+		remote.itemRequests = [];
+		await syncWithChoices();
+		const choiceRequests = [...remote.itemRequests];
+		const [appliedChoice] = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, choiceAttachment!.key));
+		const afterChoice = await syncWithChoices();
+		assert(
+			choiceRequests.includes("BBBB2345") && choicesSeen[0] === "withhold" && appliedChoice?.applied === true && afterChoice.records === 0,
+			`An approved PDF choice did not reach the import once: ${JSON.stringify({ choiceRequests, choicesSeen, applied: appliedChoice?.applied, afterChoice: afterChoice.records })}`,
+		);
+		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, choiceAttachment!.key));
+
+		// A read interrupted while it holds such attachments resumes holding the same ones, so its offset still
+		// points where it stopped, and it applies their choices when it completes.
+		const [choiceParent] = await database.select({ key: item.key }).from(item)
+			.where(and(eq(item.sourceConnectionKey, connectionKey), eq(item.sourceRecordKey, "AAAA2345")));
+		await database.insert(itemSourceFileChoice).values([
+			{ itemKey: choiceParent!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "AAAA2345", choice: "withhold", applied: false },
+			{ itemKey: choiceAttachment!.key, sourceConnectionKey: connectionKey, sourceRecordKey: "BBBB2345", choice: "withhold", applied: false },
+		]);
+		await setSettings({ maxRecordsPerBatch: 1 });
+		let interruptOnce = true;
+		let choiceReadInterrupted = false;
+		try {
+			await syncZoteroSource({
+				database, sourceConnectionKey: connectionKey, credentialResolver, sleep: async () => {},
+				attachmentProcessor: async (record: RemoteRecord) => {
+					if (interruptOnce) {
+						interruptOnce = false;
+						throw new Error("simulated interruption while applying choices");
+					}
+					return attachmentProcessor(record);
+				},
+			});
+		} catch (error) {
+			choiceReadInterrupted = error instanceof Error && error.message === "simulated interruption while applying choices";
+		}
+		const [interruptedChoiceRead] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
+		const heldAlsoRead = (interruptedChoiceRead!.syncCursor as { pending?: { offset?: number; alsoRead?: { key: string }[] } }).pending;
+		// An editor changes a choice the read already passed before it resumes: the resumed read can't apply it,
+		// so it stays waiting and the next read takes the attachment again.
+		await database.update(itemSourceFileChoice).set({ choice: "publish", updatedAt: new Date() }).where(eq(itemSourceFileChoice.itemKey, choiceParent!.key));
+		await syncWithChoices();
+		const resumedChoices = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		remote.itemRequests = [];
+		await syncWithChoices();
+		const changedChoiceRequests = [...remote.itemRequests];
+		const finalChoices = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		const appliedOf = (rows: typeof finalChoices, key: string) => rows.find((row) => row.sourceRecordKey === key)?.applied;
+		assert(
+			choiceReadInterrupted && heldAlsoRead?.offset === 1 && heldAlsoRead.alsoRead?.map((read) => read.key).join() === "AAAA2345,BBBB2345" &&
+				appliedOf(resumedChoices, "BBBB2345") === true && appliedOf(resumedChoices, "AAAA2345") === false &&
+				changedChoiceRequests.includes("AAAA2345") && finalChoices.every((row) => row.applied),
+			`A resumed read did not hold the attachments it was applying choices for, or applied one changed behind it: ${JSON.stringify({ choiceReadInterrupted, heldAlsoRead, resumed: resumedChoices.map((row) => [row.sourceRecordKey, row.applied]), changedChoiceRequests, final: finalChoices.map((row) => row.applied) })}`,
+		);
+		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		await setSettings({ maxRecordsPerBatch: 500 });
 
 		// A read left unfinished under one setting starts over when the setting changes.
 		const [settled] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));

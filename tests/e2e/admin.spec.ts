@@ -40,7 +40,7 @@ async function mockSubmittedReview(page: Page, onApprove: (body: Record<string, 
     await route.fulfill({json: {snapshot: {
       ...publishedDetail(true), reviewId: review.id, reviewRevision: review.revision,
       reviewState: review.state, submittedAt: timestamp, submittedBy: "editor",
-      frozenAttachments: [], remainingConflicts: {}, note: null, publishing: null,
+      frozenAttachments: [], remainingConflicts: {}, note: null, publishing: null, unchangedKeys: [],
     }}});
   });
   return {resubmit: () => {review.state = "pending"; review.revision += 1;}};
@@ -2569,7 +2569,7 @@ test("toggles collection filters directly from the catalogue", async ({
 
 async function mockBookWithAttachment(
 	page: Page,
-	options: { attachmentState?: "draft" | "published"; imported?: boolean; editable?: boolean } = {},
+	options: { attachmentState?: "draft" | "published"; imported?: boolean; editable?: boolean; sourcePdf?: boolean } = {},
 ) {
 	const attachmentKey = "PDFATT22";
 	const attachmentState = options.attachmentState ?? "published";
@@ -2633,6 +2633,19 @@ async function mockBookWithAttachment(
 		title: "PDF attachment",
 		updatedAt: timestamp,
 		writeback: { available: [], originSourceKey: null, selected: [] },
+		sourcePdf: null as null | { publishTags: string[] | null; choice: null; pending: "publish" | null; inReview: boolean; applied: boolean; pdfsOn: boolean },
+		sourcePdfChangePending: false,
+		...(options.sourcePdf
+			? {
+					// A Zotero PDF the library doesn't publish, on a record writeback can't change.
+					draft: null,
+					fileDraft: null,
+					filePublication: null,
+					fileState: "unpublished",
+					sourceFileUrl: `/api/admin/items/${attachmentKey}/file/source`,
+					sourcePdf: { publishTags: ["_publish"], choice: null, pending: null, inReview: false, applied: true, pdfsOn: true },
+				}
+			: {}),
 	};
 	const parentDetail = {
 		...publishedDetail(false),
@@ -2663,6 +2676,14 @@ async function mockBookWithAttachment(
 	await page.route("**/api/admin/**", async (route) => {
 		const request = route.request();
 		const pathname = new URL(request.url()).pathname;
+		if (request.method() === "POST" && pathname === `/api/admin/items/${attachmentKey}/file/source`) {
+			// Staging the Zotero PDF puts it in the working draft as an uploaded one would be.
+			const staged = { ...fileDraft, filename: "report.pdf" };
+			Object.assign(attachmentDetail, { fileDraft: staged, fileState: "staged", sourcePdf: { ...attachmentSummary.sourcePdf!, pending: "publish" }, sourcePdfChangePending: true });
+			Object.assign(parentDetail, { sourcePdfChangePending: true, attachments: [{ ...attachmentSummary, fileDraft: staged, fileState: "staged" }] });
+			await route.fulfill({ status: 204 });
+			return;
+		}
         if (request.method() === "GET" && pathname.endsWith("/review")) {
             await route.fulfill({json: {reviews: []}});
             return;
@@ -3453,6 +3474,30 @@ test("submits an attachment's change with its record", async ({page}) => {
 	await dialog.getByRole("button", {name: "Submit snapshot", exact: true}).click();
 	await expect(dialog).toBeHidden();
 	// A review is always for the whole record, so the attachment's change goes with its parent.
+	expect(submitted).toEqual([`/api/admin/items/${publishedItemKey}/review`]);
+});
+
+test("stages a Zotero PDF and submits its record for review while writeback is off", async ({page}) => {
+	await mockBookWithAttachment(page, {imported: true, editable: false, sourcePdf: true});
+	const submitted: string[] = [];
+	await page.route("**/api/admin/items/*/review", async (route) => {
+		if (route.request().method() !== "POST") return route.fallback();
+		submitted.push(new URL(route.request().url()).pathname);
+		await route.fulfill({json: {review: {id: "review-1", itemKey: publishedItemKey, state: "pending", revision: 1, submittedBy: "editor", submittedAt: timestamp, resolvedAt: null, resolvedBy: null, note: null, corrections: [], remainingConflicts: {}, snapshot: {records: [], publishingChoice: null}}}});
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	const source = inspector.locator('[data-admin-file-row="source"]');
+	await expect(source).toContainText("_publish");
+	// A Zotero PDF is Zotero's file: nothing is uploaded over it here.
+	await expect(inspector.getByRole("button", {name: "Upload PDF"})).toHaveCount(0);
+	await source.getByRole("button", {name: "Stage PDF", exact: true}).click();
+	await expect(inspector.locator('[data-admin-file-row="staged"]')).toContainText("report.pdf");
+	await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
+	const dialog = page.getByRole("dialog", {name: "Submit snapshot for review?"});
+	await dialog.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+	await expect(dialog).toBeHidden();
 	expect(submitted).toEqual([`/api/admin/items/${publishedItemKey}/review`]);
 });
 

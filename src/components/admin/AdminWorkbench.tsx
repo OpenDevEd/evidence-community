@@ -68,7 +68,7 @@ import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfI
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
-import { setAdminPdfRemoval, submitAdminReview } from "./admin-api";
+import { setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
 import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
@@ -400,6 +400,11 @@ const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.i
 
 /** Whether the open record is one of these, or the PDF attached to one. */
 const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
+
+/** A draft, or a Zotero PDF change: a Zotero record whose only change is its PDF has no draft of its own. */
+function hasChangeToSubmit(detail: AdminItemDetail) {
+	return Boolean(detail.draft) || detail.sourcePdfChangePending;
+}
 
 /** A review is always for the whole record, so an attachment submits its record with it. */
 function reviewSubmission(detail: AdminItemDetail) {
@@ -1349,11 +1354,11 @@ export default function AdminWorkbench({
 	};
 
 	const publishCurrent = () => {
-        if (!detail?.draft) return;
+        if (!detail || !hasChangeToSubmit(detail)) return;
         const recordKey = detail.key;
         const { reviewKey, message } = reviewSubmission(detail);
         setConfirmDialog({title: "Submit snapshot for review?", message, confirmLabel: "Submit snapshot", action: async () => {
-            await flushDraft(recordKey, draftPayload);
+            if (detail.draft) await flushDraft(recordKey, draftPayload);
             // The record's own unsaved edits go with it too.
             if (reviewKey !== recordKey) await flushDraft(reviewKey);
             await submitAdminReview(reviewKey);
@@ -1595,6 +1600,14 @@ export default function AdminWorkbench({
 				})),
 		});
 	};
+
+    const stageSourcePdf = (key: string) => void runBusy(async () => {
+        await stageAdminSourcePdf(key);
+        setFileErrors(current => withoutRecordError(current, key));
+        if (detail) await loadDetail(detail.key);
+        await loadItems();
+        toast.success("PDF added to the working draft");
+    }, error => setFileErrors(current => ({...current, [key]: fileErrorMessage(error)})));
 
     const changePdfRemoval = (key: string) => void runBusy(async () => {
         const record = detail?.key === key ? detail : detail?.attachments.find(attachment => attachment.key === key);
@@ -2801,6 +2814,7 @@ export default function AdminWorkbench({
 							onUnpublish={unpublishCurrent}
 							onSelectAttachment={(key) => setSelectedKey(key)}
 							onChangePdfRemoval={changePdfRemoval}
+							onStageSourcePdf={stageSourcePdf}
 							onUpload={uploadPdf}
 							onAddPdf={(file) => {
 								if (detail)

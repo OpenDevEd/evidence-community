@@ -1,4 +1,6 @@
 import { readStudyReading } from "@/lib/readings/reading";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { hasUnsubmittedSourceFileChoice, projectSourcePdf, readSourceFileChoices } from "./source-file-choice";
 import { readSourceFields } from "./source-fields";
 import { sourceTopicAssignment } from "@/db/schema/topics";
 import "server-only";
@@ -139,6 +141,17 @@ function summaryText(
 	return typeof value === "string" ? value : published?.[field];
 }
 
+/** The PDF a source holds, when the library publishes none: a linked PDF's address, or a Zotero file read through the admin. */
+function publishedSourceFileUrl(
+	published: typeof item.$inferSelect | null,
+	filePublication: unknown,
+	sourcePdf: ReturnType<typeof projectSourcePdf>,
+) {
+	if (filePublication) return null;
+	if (sourcePdf) return sourcePdf.sourceFileUrl;
+	return published?.contentType?.toLowerCase() === "application/pdf" && published.url ? published.url : null;
+}
+
 export function itemSummary(
 	published: typeof item.$inferSelect | null,
 	draft: typeof itemDraft.$inferSelect | null,
@@ -169,6 +182,7 @@ export function itemSummary(
 async function getAdminAttachments(
 	db: Database,
 	parentItemKey: string,
+	config: Pick<LibraryServerConfig, "sources">,
 ): Promise<AdminAttachment[]> {
 	const publishedRows = await db
 		.select()
@@ -197,7 +211,7 @@ async function getAdminAttachments(
 	];
 	if (keys.length === 0) return [];
 
-	const [fileDraftRows, filePublicationRows, tagRows, membershipRows, removalRows] =
+	const [fileDraftRows, filePublicationRows, tagRows, membershipRows, removalRows, choices] =
 		await Promise.all([
 			db
 				.select()
@@ -219,6 +233,7 @@ async function getAdminAttachments(
 				.from(itemToCollection)
 				.where(inArray(itemToCollection.itemKey, keys)),
 			db.select({ itemKey: itemFileRemoval.itemKey }).from(itemFileRemoval).where(inArray(itemFileRemoval.itemKey, keys)),
+			readSourceFileChoices(db, keys),
 		]);
 	const publishedByKey = new Map(publishedRows.map((row) => [row.key, row]));
 	const draftByKey = new Map(draftRows.map((row) => [row.itemKey, row]));
@@ -250,27 +265,25 @@ async function getAdminAttachments(
 			draft?.patch,
 		);
 		if (effectiveParentItem !== parentItemKey) return [];
+		const sourcePdf = projectSourcePdf(published, choices.get(key), Boolean(filePublication), config);
+		const summary = itemSummary(
+			published,
+			draft,
+			fileDraft,
+			filePublication,
+			effectivePayload,
+		);
 		return [
 			{
-				...itemSummary(
-					published,
-					draft,
-					fileDraft,
-					filePublication,
-					effectivePayload,
-				),
+				...summary,
+				fileState: sourcePdf?.fileState ?? summary.fileState,
 				draft: draftJson(draft, effectivePayload),
-				fileDraft: fileDraftJson(fileDraft),
+				fileDraft: sourcePdf?.fileDraft ?? fileDraftJson(fileDraft),
 				filePublication: filePublicationJson(filePublication),
-				fileRemovalPending: removalRows.some((row) => row.itemKey === key),
+				fileRemovalPending: removalRows.some((row) => row.itemKey === key) || Boolean(sourcePdf?.fileRemovalPending),
 				parentItem: effectiveParentItem,
-				sourceFileUrl:
-					!filePublication &&
-					published?.contentType?.toLowerCase() ===
-						"application/pdf" &&
-					published.url
-						? published.url
-						: null,
+				sourceFileUrl: publishedSourceFileUrl(published, filePublication, sourcePdf),
+				sourcePdf: sourcePdf?.sourcePdf ?? null,
 			},
 		];
 	});
@@ -405,7 +418,7 @@ export async function getAdminItemDetail(
 						.from(itemToCollection)
 						.where(eq(itemToCollection.itemKey, itemKey))
 				: Promise.resolve([]),
-			getAdminAttachments(db, itemKey),
+			getAdminAttachments(db, itemKey, config),
 			getManualLinkKeys(db, itemKey),
 		]);
 	const basePayload = publishedAdminItemPayload(published, {
@@ -449,17 +462,24 @@ export async function getAdminItemDetail(
 			])
 		: [null, null];
 
-	const summary = itemSummary(
+	const [choices, sourcePdfChangePending] = await Promise.all([
+		readSourceFileChoices(db, [itemKey]),
+		hasUnsubmittedSourceFileChoice(db, [itemKey, ...attachments.map((attachment) => attachment.key)]),
+	]);
+	const sourcePdf = projectSourcePdf(published, choices.get(itemKey), Boolean(filePublication), config);
+	const plainSummary = itemSummary(
 		published,
 		draft,
 		fileDraft,
 		filePublication,
 		payload,
 	);
+	const summary = { ...plainSummary, fileState: sourcePdf?.fileState ?? plainSummary.fileState };
 	const attachmentFileState = attachments.reduce<AdminFileState>(
 		(current, attachment) => {
 			const priority: Record<AdminFileState, number> = {
 				none: 0,
+				unpublished: 0.5,
 				processing: 1,
 				staged: 2,
 				published: 3,
@@ -489,9 +509,9 @@ export async function getAdminItemDetail(
 		editable:
 			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
 			importedItemEditBlockReason(writeback) === null,
-		fileDraft: fileDraftJson(fileDraft),
+		fileDraft: sourcePdf?.fileDraft ?? fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
-		fileRemovalPending: Boolean(removal),
+		fileRemovalPending: Boolean(removal) || Boolean(sourcePdf?.fileRemovalPending),
 		links,
 		openAccessFromSources: fromSources,
 		readingStudyType,
@@ -503,12 +523,9 @@ export async function getAdminItemDetail(
 		published: publishedItemJson(published),
 		publishedCollectionKeys: membershipRows.map(({ key }) => key),
 		publishedTags: tagRows.map(({ name }) => name),
-		sourceFileUrl:
-			!filePublication &&
-			published?.contentType?.toLowerCase() === "application/pdf" &&
-			published.url
-				? published.url
-				: null,
+		sourceFileUrl: publishedSourceFileUrl(published, filePublication, sourcePdf),
+		sourcePdf: sourcePdf?.sourcePdf ?? null,
+		sourcePdfChangePending,
 		tags: draftTags ?? tagRows.map(({ name }) => name),
 		writeback,
 	};

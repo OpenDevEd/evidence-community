@@ -207,7 +207,8 @@ export function AdminPdfCover({
 			{progress ? "Please wait" : presentation.footer}
 		</span>
 	);
-	if (isUnrestoredRecord(detail) || (submitted && !pdfUrl))
+	// A Zotero PDF is Zotero's file: the cover shows it, and nothing is added from here.
+	if (isUnrestoredRecord(detail) || detail.sourcePdf || (submitted && !pdfUrl))
 		return <CoverFrame label={hasPdf ? "PDF cover" : "No PDF"}>{cover}</CoverFrame>;
 	if (submitted)
 		return <CoverFrame href={pdfUrl} label={presentation.label}>{cover}{footer}</CoverFrame>;

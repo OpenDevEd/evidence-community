@@ -45,8 +45,13 @@ function optionalString(value: unknown, maxLength: number) {
 		: null;
 }
 
-/** Whether the source's rule publishes this attachment's PDF: every PDF, or one carrying a publish tag. */
-function isPublished(item: ZoteroItemResponse, rule: ZoteroPdfRule) {
+/**
+ * Whether the library publishes this attachment's PDF: as an editor chose for it, or by the source's rule, every PDF
+ * or one carrying a publish tag. A source that adds no PDFs publishes none.
+ */
+function isPublished(item: ZoteroItemResponse, rule: ZoteroPdfRule, choice: "publish" | "withhold" | undefined) {
+	if (rule.mode === "off") return false;
+	if (choice) return choice === "publish";
 	if (rule.mode !== "tagged") return rule.mode === "every";
 	const itemTags = new Set((item.data.tags ?? []).map(({ tag }) => tag));
 	return rule.tags.some((tag) => itemTags.has(tag));
@@ -111,7 +116,7 @@ export function createZoteroAttachmentProcessor(
 				`Zotero attachment ${item.key}: processor context is missing`,
 			);
 		}
-		if (!isPublished(item, context.pdfs)) return base;
+		if (!isPublished(item, context.pdfs, context.choices?.get(item.key))) return base;
 		const linkMode = optionalString(item.data.linkMode, 128);
 		if (!item.data.parentItem) {
 			throw new ZoteroAttachmentPermanentError(

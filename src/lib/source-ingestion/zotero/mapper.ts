@@ -24,6 +24,8 @@ export type ZoteroAttachmentProcessorContext = {
 	sourceConnectionKey: string;
 	/** Which of the group's PDFs the library publishes. */
 	pdfs: ZoteroPdfRule;
+	/** What editors chose for single PDFs, by Zotero key, through review; it overrides the rule. */
+	choices?: ReadonlyMap<string, "publish" | "withhold">;
 };
 
 export type ZoteroAttachmentProcessor = {

@@ -4,7 +4,8 @@ import type { SourceStatus } from "@/lib/source-ingestion/source-status";
 import type { SourceFieldConflict } from "./source-field-contract";
 export type AdminRecordState = "deleted" | "draft" | "edited" | "published";
 
-export type AdminFileState = "none" | "processing" | "staged" | "published";
+/** `unpublished`: a source PDF the library doesn't publish. */
+export type AdminFileState = "none" | "unpublished" | "processing" | "staged" | "published";
 
 export type AdminCreator = {
 	authorProfileId?: string;
@@ -79,8 +80,24 @@ export type AdminFilePublication = {
 	uploadRevision: number;
 };
 
+/** A Zotero attachment's PDF: the tags its source publishes PDFs by, and the library's choice for this one. */
+export type AdminSourcePdf = {
+	/** The tags that publish it in Zotero; null when its source publishes every PDF. */
+	publishTags: string[] | null;
+	choice: "publish" | "withhold" | null;
+	/** The change in the working draft. */
+	pending: "publish" | "withhold" | null;
+	/** A pending review holds the change. */
+	inReview: boolean;
+	/** False from approval until the source's import has applied the choice. */
+	applied: boolean;
+	/** The source adds PDFs at all; off, none is published, by a tag or a choice. */
+	pdfsOn: boolean;
+};
+
 export type AdminAttachment = AdminItemSummary & {
 	draft: AdminItemDraft | null;
+	sourcePdf: AdminSourcePdf | null;
 	fileDraft: AdminFileDraft | null;
 	filePublication: AdminFilePublication | null;
 	fileRemovalPending: boolean;
@@ -153,6 +170,9 @@ export type AdminItemDetail = AdminItemSummary & {
 	publishedCollectionKeys: string[];
 	publishedTags: string[];
 	sourceFileUrl: string | null;
+	sourcePdf: AdminSourcePdf | null;
+	/** The record or one of its attachments holds a Zotero PDF change no review has yet. */
+	sourcePdfChangePending: boolean;
 	tags: string[];
 	writeback: AdminItemWriteback;
 };

@@ -60,6 +60,8 @@ function detail(): AdminItemDetail {
 		revision: 2,
 		sourceConnectionKey: "native",
 		sourceFileUrl: null,
+		sourcePdf: null,
+		sourcePdfChangePending: false,
 		state: "published",
 		tags: [],
 		title: "Self",
