@@ -3471,6 +3471,38 @@ test("opens the record when a review sent from its attachment is refused", async
 	await expect(dialog.getByRole("alert")).toBeVisible();
 	// The record's review requirements say what it still needs.
 	await expect(page).toHaveURL(new RegExp(`item=${publishedItemKey}`, "u"));
+	await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+	await expect(inspector.getByRole("button", {name: "Parent record"})).toHaveCount(0);
+});
+
+test("stays on the attachment when its own save fails before the review is sent", async ({page}) => {
+	await mockBookWithAttachment(page, {attachmentState: "draft"});
+	await page.route("**/api/admin/items/PDFATT22/draft", async (route) => {
+		if (route.request().method() === "GET") return route.fallback();
+		await route.fulfill({status: 500, json: {error: {code: "internal", message: "The draft could not be saved."}}});
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	// An edit the attachment has yet to save, so submitting saves it first.
+	await inspector.getByRole("textbox", {name: "Title", exact: true}).fill("Renamed PDF");
+	await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
+	const dialog = page.getByRole("dialog", {name: "Submit snapshot for review?"});
+	await dialog.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+	await expect(dialog.getByRole("alert")).toBeVisible();
+	await dialog.getByRole("button", {name: "Cancel", exact: true}).click();
+	// Still on the attachment, where the failed save can be retried.
+	await expect(inspector.getByRole("button", {name: "Parent record"})).toBeVisible();
+});
+
+test("offers no review for an attachment added after its record was submitted", async ({page}) => {
+	await mockBookWithAttachment(page, {attachmentState: "draft"});
+	// The record's pending review was taken before the attachment existed.
+	await mockSubmittedReview(page, async () => ({json: {}}));
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	await expect(inspector.getByRole("button", {name: "Submit for review", exact: true})).toBeDisabled();
 });
 
 test("keeps an unpublished attachment private and stages it with the parent review", async ({page}) => {

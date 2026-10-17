@@ -179,7 +179,7 @@ function WorkingDraftInspector({
 				readiness.saving ||
 				readiness.missing > 0
 			}
-			reviewPending={pending}
+			reviewPending={model.recordReviewPending}
 		/>
 	);
 }
@@ -348,6 +348,8 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		publishing,
 		snapshot,
 		pending,
+		// The record's review is pending, though an attachment added after it isn't in its snapshot.
+		recordReviewPending: Boolean(review.pending),
 		reviewLoading: review.loading,
 		error,
 		session,

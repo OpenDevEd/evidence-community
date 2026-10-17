@@ -1352,17 +1352,20 @@ export default function AdminWorkbench({
         if (!detail?.draft) return;
         const recordKey = detail.key;
         const { reviewKey, message } = reviewSubmission(detail);
+        // Set once the saves are through, so only the record's refusal opens the record.
+        let submitted = false;
         setConfirmDialog({title: "Submit snapshot for review?", message, confirmLabel: "Submit snapshot", action: async () => {
             await flushDraft(recordKey, draftPayload);
             // The record's own unsaved edits go with it too.
             if (reviewKey !== recordKey) await flushDraft(reviewKey);
+            submitted = true;
             await submitAdminReview(reviewKey);
             await mutate(["admin-reviews", reviewKey]);
             await Promise.all([loadDetail(recordKey), loadItems()]);
             toast.success("Snapshot submitted for review");
         },
         // A record that isn't ready opens beside the error, with what it still needs.
-        onError: reviewKey === recordKey ? undefined : () => setSelectedKey(reviewKey)});
+        onError: reviewKey === recordKey ? undefined : () => { if (submitted) setSelectedKey(reviewKey); }});
     };
 
 	const manageSources = () => {
