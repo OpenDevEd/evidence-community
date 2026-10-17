@@ -23,16 +23,18 @@ export const KIND_LABEL: Record<Kind, string | null> = {
 	secondOrder: "Review of reviews",
 	commentary: "Commentary",
 	methods: "Methods reference",
+	critique: "Critique",
 };
 
 /** The types a reader can light, in the order of a chain's columns: studies, what analyses them, what reviews those. */
-export const TYPE_ORDER = ["primary", "meta", "review", "secondOrder", "commentary"] as const satisfies readonly Kind[];
+export const TYPE_ORDER = ["primary", "meta", "review", "secondOrder", "critique", "commentary"] as const satisfies readonly Kind[];
 
 export const KIND_PLURAL: Record<(typeof TYPE_ORDER)[number], string> = {
 	primary: "Primary studies",
 	meta: "Meta-analyses",
 	review: "Systematic reviews",
 	secondOrder: "Reviews of reviews",
+	critique: "Critiques",
 	commentary: "Commentaries",
 };
 

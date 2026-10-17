@@ -182,7 +182,7 @@ for (const [key, doi, y, t, a, n] of csv("/tmp/evidence-data/aied-doi.csv")) if 
 
 // Björn's evidence map. Points: linked library records [0, L), then library records without links, then papers outside the library.
 const map = JSON.parse(fs.readFileSync(MAP, "utf8"));
-const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, UNCLASSIFIED: 0 };
+const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, CRITIQUE: 7, UNCLASSIFIED: 0 };
 const METHODS = /\b(prisma|statement|guideline|guidance|reporting|bias in meta|publication bias|heterogeneity|inconsistency|metafor|introduction to meta|practical meta|trim and fill|funnel|effect size|statistical power|r package|handbook|meta-analysis in r|robust variance|quality assessment|risk of bias)\b/i;
 const unlinked = new Map(), outsideIdx = new Map(), evidence = new Map();
 for (const entry of map) {
