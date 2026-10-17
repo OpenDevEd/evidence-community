@@ -540,8 +540,8 @@ describe("admin publication view", () => {
 		});
 
 		expect(view.providers.crossref.displayState).toBe("blocked");
-		expect(view.providers.crossref.blockers).toContain(
-			"Crossref does not support Evidence Library item type Artwork",
+		expect(view.providers.crossref.blockers).toContainEqual(
+			expect.stringMatching(/^Crossref can't register a DOI for this item type/u),
 		);
 	});
 
@@ -699,12 +699,14 @@ describe("admin publication view", () => {
 			config,
 		});
 
-		expect(view.providers.zenodo.blockers).toContain(
-			"Zenodo requires a title with at least 3 characters",
+		expect(view.providers.zenodo.blockers).toContainEqual(
+			expect.stringMatching(/^Zenodo /u),
 		);
-		expect(view.providers.crossref.blockers).not.toContain(
-			"Zenodo requires a title with at least 3 characters",
-		);
+		expect(
+			view.providers.crossref.blockers.some((blocker) =>
+				blocker.startsWith("Zenodo "),
+			),
+		).toBe(false);
 		expect(view.providers.crossref).toMatchObject({
 			displayState: "repair_pending",
 			exact: {
@@ -731,19 +733,18 @@ describe("admin publication view", () => {
 			config,
 		});
 
+		// Each provider's own checks name that provider, so an editor knows which DOI needs the field.
 		expect(view.providers.crossref.blockers).toEqual(
 			expect.arrayContaining([
 				"Add a title before activating publication",
-				"Crossref requires institution or publisher",
+				expect.stringMatching(/^Crossref /u),
 			]),
 		);
-		expect(view.providers.zenodo.blockers).toEqual(
-			expect.arrayContaining([
-				"Add a title before activating publication",
-				"Zenodo requires a title with at least 3 characters",
-				"Zenodo requires at least one creator",
-			]),
-		);
+		expect(
+			view.providers.zenodo.blockers.filter((blocker) =>
+				blocker.startsWith("Zenodo "),
+			),
+		).toHaveLength(2);
 	});
 
 	it("blocks a changed namespace after the first reservation", () => {

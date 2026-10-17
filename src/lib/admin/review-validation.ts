@@ -2,9 +2,8 @@ import {
 	validateCrossrefPublicationRecord,
 	validateZenodoPublicationRecord,
 } from "@opendeved/doi-sync-core/metadata";
-import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { publicationRecordMetadata } from "@/lib/publication/record-metadata";
-import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
+import { describeProviderIssue } from "@/lib/publication/provider-issue";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 import { inspectNativeItemDraft } from "./native-item-validation";
 import type { PublishingChoice } from "./review-contract";
@@ -26,32 +25,22 @@ export function validateReviewPayload(
 	const item = validated.item;
 	const metadata = reviewMetadata(validated);
 	const issues = [
-		...validateZenodoPublicationRecord(metadata),
+		...validateZenodoPublicationRecord(metadata).map(
+			(issue) => ["Zenodo", issue] as const,
+		),
 		...(choice.route === "crossref-zenodo"
-			? validateCrossrefPublicationRecord(metadata)
+			? validateCrossrefPublicationRecord(metadata).map(
+					(issue) => ["Crossref", issue] as const,
+				)
 			: []),
 	];
-	const descriptors = describeZoteroItemTypeFields(
-		canonicalItemTypeToZotero(item.itemType),
-	);
-	for (const issue of issues) {
-		const raw = issue.path.replace(/^fields\./u, "");
-		const field =
-			(
-				{
-					publicationDate: "date",
-					abstract: "abstractNote",
-					institution: "publisher",
-				} as Record<string, string>
-			)[raw] ?? raw;
-		const descriptor = descriptors.find(
-			(entry) => entry.field === field || entry.semanticField === field,
+	for (const [provider, issue] of issues) {
+		const { field, text } = describeProviderIssue(
+			provider,
+			issue,
+			item.itemType,
 		);
-		const path = descriptor?.field ?? field;
-		fields[path] ??=
-			raw === "publicationDate"
-				? "Enter a valid publication date."
-				: issue.message;
+		fields[field] ??= text;
 	}
 	if (Object.keys(fields).length)
 		throw new AdminValidationError(

@@ -30,6 +30,7 @@ import {
 } from "./record-adapter";
 import type { PublicationRepositorySnapshot } from "./repository";
 import { PublicationItemNotFoundError } from "./errors";
+import { describeProviderIssue } from "./provider-issue";
 import {
 	currentManagedDoi,
 	identifiersFor,
@@ -446,9 +447,16 @@ const PLAN_REASON_MESSAGES: Record<NeedsAttentionReason, string> = {
 			"The allowed time for this Zenodo PDF correction has ended",
 };
 
-function planIssues(plan: PublicationSyncPlan | null) {
+function planIssues(
+	plan: PublicationSyncPlan | null,
+	provider: "Crossref" | "Zenodo",
+	itemType: string,
+) {
 	if (plan?.status !== "needs_attention") return [];
-	if (plan.issues?.length) return plan.issues.map((issue) => issue.message);
+	if (plan.issues?.length)
+		return plan.issues.map(
+			(issue) => describeProviderIssue(provider, issue, itemType).text,
+		);
 	return [PLAN_REASON_MESSAGES[plan.reason]];
 }
 
@@ -633,7 +641,11 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			`${publicationConfig.crossref.prefix}/${publicationConfig.crossref.suffixNamespace ?? "preview."}validation`;
 		const mapped = mapCrossrefRecord(validationRecord, validationDoi);
 		if (!mapped.ok) {
-			crossrefValidation = mapped.issues.map((issue) => issue.message);
+			crossrefValidation = mapped.issues.map(
+				(issue) =>
+					describeProviderIssue("Crossref", issue, validationRecord.itemType)
+						.text,
+			);
 		}
 	}
 	if (validationRecord) {
@@ -651,7 +663,11 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				},
 			},
 		});
-		zenodoValidation = planIssues(validationPlan);
+		zenodoValidation = planIssues(
+			validationPlan,
+			"Zenodo",
+			validationRecord.itemType,
+		);
 	}
 	const crossrefRelationWaiting = Boolean(
 		crossrefTarget &&
@@ -769,7 +785,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		canonicalManagedMismatch,
 		stateErrors.crossref,
 		...crossrefValidation,
-		...planIssues(crossrefPlan),
+		...planIssues(crossrefPlan, "Crossref", validationRecord?.itemType ?? ""),
 	]);
 	const preparingFirstDraft = Boolean(zenodoTarget && files.files.length === 0 && zenodoJournals.length === 0 && !zenodoVersionDoi && !zenodoState?.zenodoRecordId);
 	const zenodoBlockers = unique([
@@ -784,7 +800,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			: null,
 		stateErrors.zenodo,
 		...(preparingFirstDraft ? [] : zenodoValidation),
-		...(preparingFirstDraft ? [] : planIssues(zenodoPlan)),
+		...(preparingFirstDraft ? [] : planIssues(zenodoPlan, "Zenodo", validationRecord?.itemType ?? "")),
 	]);
 
 	const waitingOn =
