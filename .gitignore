@@ -68,3 +68,6 @@ src/app/manifest.json
 .env.sentry-build-plugin
 
 public/apa.csl
+
+# Build input for naming the evidence map's regions; not served.
+public/evidence-data/*/places-raw.json

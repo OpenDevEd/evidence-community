@@ -103,7 +103,7 @@ export default function Footer() {
 	const { capabilities, openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
-	const isMapPage = pathname.includes("/map");
+	const isMapPage = pathname.includes("/map") || pathname.includes("/evidence");
 	const onPolicyPage = isPolicyPage(pathname, { identity, legal });
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
 	const hasContact = hasContactDetails(contact);

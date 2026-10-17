@@ -32,6 +32,7 @@ import { FuturePublicationHint } from "@/components/features/items/FuturePublica
 import { StudyTypeLabel } from "@/components/features/items/StudyTypeLabel";
 import { isFuturePublication } from "@/lib/bibliographic-date";
 import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
+import { EvidenceVerdict, VisualizeButton } from "@/components/pages/evidence/record-evidence";
 
 /** The record's study type in the header, once it has been read. */
 function ItemStudyType({ reading }: { reading: Item["reading"] }) {
@@ -175,6 +176,7 @@ function ItemHeaderActions({
 				aria-label={t("itemDownloadAriaLabel")}
 			/>
 			<GapMapAction tags={item?.tags} size="sm" />
+			<VisualizeButton item={item} />
 			<CopyButton textToCopy={item ? itemUrl(item.key) : ""} label={t("copyLink")}>
 				<Button size="sm" aria-label={t("itemCopyUrlAriaLabel")}>
 					{t("copyLink")}
@@ -259,6 +261,7 @@ export default function ItemHeader({
 						</HeaderSection>
 						<ItemStudyType reading={item?.reading} />
 						<OpenAccessLabel openAccess={item?.openAccess} className="gap-2" />
+						<EvidenceVerdict item={item} />
 					</div>
 					<ItemHeaderActions
 						item={item}

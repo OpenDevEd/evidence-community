@@ -1,5 +1,6 @@
 "use client";
 
+import { useEvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Alert02Icon,
@@ -1186,6 +1187,22 @@ function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }
 	);
 }
 
+/** For a meta-analysis whose analysed studies are known: how its references split, as Björn counts them (the evidence map). */
+function AnalysedStudies({ itemKey }: { itemKey: string | undefined }) {
+	const evidence = useEvidenceRecord(itemKey);
+	if (!evidence?.analysed) return null;
+	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
+	return (
+		<p className="text-black/80 dark:text-white/80">
+			{`Of the works it cites, ${evidence.analysed} are studies it analysed, ${evidence.analysedHere} of them in this library, and ${others} are other works it cites. `}
+			<Link href={`/evidence?paper=${itemKey}`} className="font-medium text-accent hover:underline">See the studies it analysed</Link>
+		</p>
+	);
+}
+
+const hasLibraryLinks = (links: Item["links"] | undefined) =>
+	Boolean(links && (links.cites.length > 0 || links.citedBy.length > 0 || links.related.length > 0));
+
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	// A card's reference count opens this page on its References list, and its citation count on Citations.
@@ -1206,15 +1223,9 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		links: item?.links,
 		relations: item?.relations as RelationsType,
 	});
-	const hasLinks = Boolean(
-		item?.links &&
-		(item.links.cites.length > 0 ||
-			item.links.citedBy.length > 0 ||
-			item.links.related.length > 0),
-	);
-
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
-	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return null;
+	// The studies a meta-analysis pooled come from the evidence map, not its links, so they show without them.
+	if (isOpenAlexWorkProvider(item?.provider) && !hasLibraryLinks(item?.links)) return <AnalysedStudies itemKey={item?.key} />;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -1231,6 +1242,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 				{descriptions[activeTab] || descriptions.general}
 				<OpenScholarTotal item={item} tab={activeTab} />
 			</p>
+			<AnalysedStudies itemKey={item?.key} />
 			<Relations
 				links={item?.links}
 				relations={item?.relations as RelationsType}

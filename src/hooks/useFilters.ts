@@ -93,6 +93,7 @@ export function useFilters() {
 		!admin &&
 		(normalizedPathname === "/lib" ||
 			normalizedPathname.startsWith("/map") ||
+			normalizedPathname.startsWith("/evidence") ||
 			isLibraryFeatureEnabled(features, "navbarSearch"));
 
 	const { data: noteData, isLoading: isNoteLoading } =

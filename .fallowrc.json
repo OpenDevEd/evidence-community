@@ -3,5 +3,8 @@
 		"drizzle-kit",
 		"react-dom",
 		"typescript7"
+	],
+	"ignorePatterns": [
+		"scripts/evidence-map/**"
 	]
 }
