@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { NextRequest, NextResponse } from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 import { EVIDENCE_DATA } from "@/components/pages/evidence/data";
 import { hasEvidenceMap } from "@/components/pages/evidence/server-data";
 import { getPublicItemKeys } from "@/lib/search";
@@ -27,6 +27,8 @@ function mapPoints() {
  * it finds, the answer is a few kilobytes. `limit` asks for the first few thousand quickly; a second request fetches all of them.
  */
 export async function GET(request: NextRequest) {
+	// Answered per request: which library is asking is only known at run time.
+	await connection();
 	if (!(await hasEvidenceMap())) return NextResponse.json({ error: "not_found" }, { status: 404 });
 	const url = new URL(request.url);
 	const limit = Math.min(MOST, Math.max(1, Number(url.searchParams.get("limit")) || 5000));

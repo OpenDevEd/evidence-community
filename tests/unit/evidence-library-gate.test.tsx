@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const library = vi.hoisted(() => ({ baseUrl: "https://aied.openscholar.ai" }));
 
 vi.mock("server-only", () => ({}));
+// A route asks for a request scope, which a test has none of.
+vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));
 vi.mock("@/context/LibraryConfigProvider", () => ({ useLibraryConfig: () => ({ identity: { baseUrl: library.baseUrl } }) }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: async () => ({ identity: { baseUrl: library.baseUrl } }) }));
 vi.mock("@/i18n/routing", () => ({
