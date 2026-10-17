@@ -253,7 +253,8 @@ export class LabelOverlay {
 	private nameAreas() {
 		const camera = this.camera;
 		if (camera.chain || camera.scale <= 1.6) return;
-		const weight = Math.max(0, Math.min(1, (camera.scale - 1.6) / 0.6)) * Math.max(0.35, Math.min(1, (9 - camera.scale) / 3));
+		// Once in, an area's name stays at full strength however close the reader comes: it says where they are.
+		const weight = Math.max(0, Math.min(1, (camera.scale - 1.6) / 0.6));
 		const font = `600 13px ${this.family}`;
 		for (const area of this.areas) {
 			if (!this.inside(camera.x(area.x), camera.y(area.y))) continue;
