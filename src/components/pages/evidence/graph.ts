@@ -616,6 +616,11 @@ export class EvidenceGraph {
 		this.fitTo(this.placed, 0.15);
 	}
 
+	/** Fits what is in front again, as it moves: the space beside the panels changed (a notice over the map came or went). */
+	refit() {
+		if (this.placed) this.fitTo(this.placed, this.placedPadding);
+	}
+
 	private release() {
 		if (this.focus === null) return;
 		this.focus = null;

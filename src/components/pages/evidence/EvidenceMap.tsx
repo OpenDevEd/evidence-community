@@ -16,7 +16,7 @@ import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
 import { useOpenedName } from "./records";
-import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
+import { matchesChecks, useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
 
 /**
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
@@ -37,6 +37,8 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const focus = useFocusName(now, shown, more);
+	const highlighted = highlightedNow({ checkCounts, types, verdicts, loaded, shown });
+	useRefitOnNotice(graph, highlighted !== null);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
@@ -46,7 +48,7 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} checked={checked} checks={checks} />
 			<Controls graph={graph} />
-			<MapStatus focus={focus} highlighted={highlightedCount(checkCounts, types, verdicts)} paperOpen={Boolean(shown)} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
+			<MapStatus focus={focus} highlighted={highlighted} paperOpen={Boolean(shown)} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
 			<HoverCard selected={now.index} loaded={loaded} more={more} />
 		</main>
@@ -107,6 +109,21 @@ function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null
 	if (now.target === CHECKED) return "All checked papers";
 	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
 	return label ? nameOf(label) : null;
+}
+
+/** How many papers the filter highlights: in an open chain, those of the chain; else across the library. */
+function highlightedNow({ checkCounts, types, verdicts, loaded, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; loaded: Loaded | null; shown: Selection | null }) {
+	const all = highlightedCount(checkCounts, types, verdicts);
+	if (all === null || !shown?.chain || !loaded) return all;
+	return [...new Set(shown.chain.layers.flat())].filter(matchesChecks(loaded, types, verdicts)).length;
+}
+
+/**
+ * The filter's notice over the map, once on the page or gone from it, changes the room for what is in front: cosmos.gl, an outside
+ * system, fits it again.
+ */
+function useRefitOnNotice(graph: EvidenceGraph | null, filterOn: boolean) {
+	useEffect(() => { graph?.refit(); }, [graph, filterOn]);
 }
 
 type PanelInputs = {
