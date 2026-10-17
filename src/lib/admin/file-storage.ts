@@ -35,6 +35,32 @@ export class EvidenceFileStorageError extends Error {
 	}
 }
 
+type StorageFailure = { message: string; status?: number; statusCode?: string; originalError?: unknown };
+
+/** What the storage service said, for the log: the HTTP status and code, the message, and what a network error was. */
+function describeStorageFailure(error: StorageFailure) {
+	const cause = error.originalError instanceof Error ? ` (${error.originalError.message})` : "";
+	const status = error.status === undefined ? "no response" : `HTTP ${error.status}${error.statusCode ? ` ${error.statusCode}` : ""}`;
+	return `${status}: ${error.message}${cause}`;
+}
+
+const STORAGE_WRITE_DELAYS_MS = [1_000, 4_000];
+
+/**
+ * A write the storage service can fail for a moment (no response, 429 or a 5xx) is tried again twice, so one
+ * hiccup doesn't end an import of thousands of files. Anything else fails at once.
+ */
+async function storageWrite(operation: string, write: () => Promise<{ error: StorageFailure | null }>) {
+	for (let attempt = 0; ; attempt += 1) {
+		const { error } = await write();
+		if (!error) return;
+		const transient = error.status === undefined || error.status === 429 || error.status >= 500;
+		if (!transient || attempt >= STORAGE_WRITE_DELAYS_MS.length)
+			throw new EvidenceFileStorageError(operation, describeStorageFailure(error));
+		await new Promise((resolve) => setTimeout(resolve, STORAGE_WRITE_DELAYS_MS[attempt]));
+	}
+}
+
 export function createSupabaseFileStorage(
 	configuration: LibraryServerConfig["services"]["storage"],
 ): EvidenceFileStorage {
@@ -91,35 +117,15 @@ export function createSupabaseFileStorage(
 		},
 
 		async uploadPrivate(path, data, contentType) {
-			const { error } = await client.storage
-				.from(configuration.privateBucket)
-				.upload(path, data, {
-					cacheControl: "3600",
-					contentType,
-					upsert: true,
-				});
-			if (error) {
-				throw new EvidenceFileStorageError(
-					"private upload",
-					error.message,
-				);
-			}
+			await storageWrite("private upload", () =>
+				client.storage.from(configuration.privateBucket).upload(path, data, { cacheControl: "3600", contentType, upsert: true }),
+			);
 		},
 
 		async uploadPublic(path, data, contentType) {
-			const { error } = await client.storage
-				.from(configuration.publicBucket)
-				.upload(path, data, {
-					cacheControl: "60",
-					contentType,
-					upsert: true,
-				});
-			if (error) {
-				throw new EvidenceFileStorageError(
-					"public upload",
-					error.message,
-				);
-			}
+			await storageWrite("public upload", () =>
+				client.storage.from(configuration.publicBucket).upload(path, data, { cacheControl: "60", contentType, upsert: true }),
+			);
 		},
 
 		publicUrl(path) {
@@ -130,28 +136,12 @@ export function createSupabaseFileStorage(
 
 		async removePrivate(paths) {
 			if (paths.length === 0) return;
-			const { error } = await client.storage
-				.from(configuration.privateBucket)
-				.remove(paths);
-			if (error) {
-				throw new EvidenceFileStorageError(
-					"private removal",
-					error.message,
-				);
-			}
+			await storageWrite("private removal", () => client.storage.from(configuration.privateBucket).remove(paths));
 		},
 
 		async removePublic(paths) {
 			if (paths.length === 0) return;
-			const { error } = await client.storage
-				.from(configuration.publicBucket)
-				.remove(paths);
-			if (error) {
-				throw new EvidenceFileStorageError(
-					"public removal",
-					error.message,
-				);
-			}
+			await storageWrite("public removal", () => client.storage.from(configuration.publicBucket).remove(paths));
 		},
 	};
 }
