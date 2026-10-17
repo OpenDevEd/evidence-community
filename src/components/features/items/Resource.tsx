@@ -1,6 +1,6 @@
 import { CitationControl } from "./CitationControl";
 import { useAuthorProfiles } from "@/lib/authors/use-author-profiles";
-import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
 	Alert02Icon,
@@ -14,7 +14,6 @@ import { twMerge } from "@/lib/tw-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { fetcher, firstNonNullOrEmpty } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { Tooltip } from "@/components/nextui/Tooltip";
 import { useDisclosure } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
@@ -26,7 +25,7 @@ import { Link } from "@/i18n/routing";
 import { preloadItemCovers } from "./PdfCover";
 import { useFormatter, useTranslations, useLocale } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { cloneElement, useState, useMemo, useId, useRef } from "react";
+import { useMemo, useId } from "react";
 import CopyButton from "./CopyButton";
 import LikeButton from "./LikeButton";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
@@ -126,10 +125,10 @@ function CitationCounts({
 	const counts = [evidence?.analysed ? analysedRow(context, evidence) : referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
 	if (counts.length === 0) return null;
 
+	// Each count stays whole: on a card too narrow for both, the second takes its own line.
 	return (
 		<div
-			data-count-row
-			className="flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap"
+			className="flex flex-wrap items-center gap-x-4 whitespace-nowrap"
 			onClick={(e) => e.stopPropagation()}
 		>
 			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} linksInNewTab={linksInNewTab} />)}
@@ -143,7 +142,7 @@ type CountContext = {
 };
 function referenceRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
 	return {
-		id: "references", icon: ArrowUpRight01Icon, tone: "reference", colour: "text-violet-700 dark:text-violet-300",
+		id: "references", icon: ArrowUpRight01Icon, colour: "text-violet-700 dark:text-violet-300",
 		held: links?.cites.length ?? 0, total: source?.referencedWorksCount ?? null,
 		here: `${resourceHref(key, { set: { links: "references" } })}#relations-tabs`, there: there("references"),
 		label: (count) => t("referenceLabel", { count }),
@@ -154,7 +153,7 @@ function referenceRow({ t, key, links, source, resourceHref, there }: CountConte
 function analysedRow({ key }: CountContext, evidence: EvidenceRecord): CountRow {
 	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
 	return {
-		id: "analysed", icon: ArrowUpRight01Icon, tone: "reference", colour: "text-violet-700 dark:text-violet-300",
+		id: "analysed", icon: ArrowUpRight01Icon, colour: "text-violet-700 dark:text-violet-300",
 		held: evidence.analysedHere ?? 0, total: evidence.analysed ?? null,
 		// Both numbers open the chain: it lists every study it analysed, the ones outside the library too.
 		here: `/evidence?paper=${key}`, there: `/evidence?paper=${key}`, thereInside: true,
@@ -164,7 +163,7 @@ function analysedRow({ key }: CountContext, evidence: EvidenceRecord): CountRow 
 }
 function citationRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
 	return {
-		id: "citations", icon: ArrowDownLeft01Icon, tone: "library", colour: "text-accent",
+		id: "citations", icon: ArrowDownLeft01Icon, colour: "text-accent",
 		held: links?.citedBy.length ?? 0, total: source?.citedByCount ?? null,
 		here: resourceHref(key, { base: "/citation" }), there: there("citations"),
 		label: (count) => t("citationLabel", { count }),
@@ -173,28 +172,24 @@ function citationRow({ t, key, links, source, resourceHref, there }: CountContex
 }
 
 type CountRow = {
-	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
+	id: string; icon: typeof ArrowUpRight01Icon; colour: string; held: number; total: number | null;
 	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
-// A narrow card drops the words; the tooltip and screen readers still get them.
-const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
 const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 const NEW_TAB = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 /** One direction: how many the library holds, linked to its list, and of how many in OpenScholar. */
 function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string; linksInNewTab: boolean }) {
-	const { icon, tone, colour, held, total, here, label, words } = count;
+	const { icon, colour, held, total, here, label, words } = count;
 	// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
 	const all = total !== null && total >= held ? total : null;
 	return (
-		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
-			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
-				<HugeiconsIcon icon={icon} className="size-3.5" />
-				{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
-				{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
-				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
-			</span>
-		</CountTooltip>
+		<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
+			<HugeiconsIcon icon={icon} className="size-3.5" />
+			{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+			{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
+			<span className="opacity-70">{label(all ?? held)}</span>
+		</span>
 	);
 }
 
@@ -210,72 +205,6 @@ function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count
 			<span className="font-semibold tabular-nums">{text}</span>
 		)}
 	</>;
-}
-
-// Each tooltip wears the colours of the count it explains. The tint is layered
-// over an opaque background so the card never shows through.
-const COUNT_TOOLTIP_TONES = {
-	library:
-		"bg-white dark:bg-secondary bg-[linear-gradient(theme(colors.accent.DEFAULT/0.12),theme(colors.accent.DEFAULT/0.12))] dark:bg-[linear-gradient(theme(colors.accent.DEFAULT/0.2),theme(colors.accent.DEFAULT/0.2))] text-accent",
-	reference:
-		"bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
-	source:
-		"bg-cyan-50 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300",
-};
-
-/**
- * A count's words are hidden on narrow cards, cut short with an ellipsis, or
- * clipped by the row when the counts beside it take the room.
- */
-function countLabelIsShortened(trigger: HTMLElement | null) {
-	const label = trigger?.querySelector<HTMLElement>("[data-count-label]");
-	if (!label || label.clientWidth <= 1 || label.scrollWidth > label.clientWidth) {
-		return true;
-	}
-	const row = label.closest<HTMLElement>("[data-count-row]");
-	return Boolean(
-		row &&
-			label.getBoundingClientRect().right >
-				row.getBoundingClientRect().right + 0.5,
-	);
-}
-
-/** Shows the count's full wording only when the card cannot. */
-function CountTooltip({
-	tone,
-	icon,
-	text,
-	children,
-}: {
-	tone: keyof typeof COUNT_TOOLTIP_TONES;
-	icon: IconSvgElement;
-	text: string;
-	children: React.ReactElement<{ ref?: React.Ref<HTMLElement> }>;
-}) {
-	const triggerRef = useRef<HTMLElement>(null);
-	const [isOpen, setOpen] = useState(false);
-	return (
-		<Tooltip
-			isOpen={isOpen}
-			onOpenChange={(open) =>
-				setOpen(open && countLabelIsShortened(triggerRef.current))
-			}
-			content={
-				<span className="inline-flex items-center gap-1.5">
-					<HugeiconsIcon icon={icon} className="size-3.5" />
-					{text}
-				</span>
-			}
-			classNames={{
-				content: twMerge(
-					"rounded-xl border-0 px-3 py-1.5 text-xs font-medium shadow-md",
-					COUNT_TOOLTIP_TONES[tone],
-				),
-			}}
-		>
-			{cloneElement(children, { ref: triggerRef })}
-		</Tooltip>
-	);
 }
 
 function ResourceInteractions({
@@ -299,7 +228,7 @@ function ResourceInteractions({
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
-				<div className="w-full rounded-2xl flex flex-row items-center">
+				<div className="w-full rounded-2xl flex flex-row flex-wrap items-center gap-y-1">
 					<CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} />
 					<div className="ml-auto flex shrink-0 items-center justify-end z-10 gap-2 pl-2">
 						{itemHref && (
