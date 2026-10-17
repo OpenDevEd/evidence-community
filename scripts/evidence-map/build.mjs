@@ -181,8 +181,19 @@ const libraryByDoi = new Map();
 for (const [key, doi, y, t, a, n] of csv("/tmp/evidence-data/aied-doi.csv")) if (doi && !libraryByDoi.has(doi)) libraryByDoi.set(doi, { key, year: Number(y) || 0, title: t, author: a, authors: Number(n) || 0 });
 
 // Björn's evidence map. Points: linked library records [0, L), then library records without links, then papers outside the library.
-const map = JSON.parse(fs.readFileSync(MAP, "utf8"));
-const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, CRITIQUE: 7, UNCLASSIFIED: 0 };
+// The file can carry a whole reference tree (`tree_depth`, `cited_by`, `references`); the map draws only the evidence map's own
+// graph: the corpus, the papers that list what they analysed or cite, and the papers in those lists.
+const LISTS = ["analyses_these_papers", "also_cites_reviews", "also_cites_other"];
+const whole = JSON.parse(fs.readFileSync(MAP, "utf8"));
+const inGraph = new Set();
+for (const e of whole) {
+  const listed = LISTS.flatMap((list) => e[list] ?? []);
+  if (e.in_corpus || listed.length) inGraph.add(e.doi.toLowerCase());
+  for (const d of listed) inGraph.add(d.toLowerCase());
+}
+const map = whole.filter((e) => inGraph.has(e.doi.toLowerCase()));
+log("evidence map file:", whole.length, "papers, of which", map.length, "in its own graph");
+const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, METHODS: 6, CRITIQUE: 7, UNCLASSIFIED: 0 };
 const METHODS = /\b(prisma|statement|guideline|guidance|reporting|bias in meta|publication bias|heterogeneity|inconsistency|metafor|introduction to meta|practical meta|trim and fill|funnel|effect size|statistical power|r package|handbook|meta-analysis in r|robust variance|quality assessment|risk of bias)\b/i;
 const unlinked = new Map(), outsideIdx = new Map(), evidence = new Map();
 for (const entry of map) {
@@ -216,7 +227,8 @@ for (const [i, entry] of evidence) {
   if (entry.analyses_these_papers?.length) flags[i] |= 4;
   if (i >= L2) { flags[i] |= 8; years[i] = bibYear(entry.bib); }
   if (!entry.in_corpus && (entry.cited_by?.length ?? 0) >= 12 && METHODS.test(entry.bib)) { flags[i] |= 16; kind[i] = 6; }
-  for (const [list, type] of [["analyses_these_papers", 1], ["also_cites_reviews", 2], ["also_cites_other", 3]])
+  if (kind[i] === 6) flags[i] |= 16;
+  for (const [list, type] of LISTS.map((list, k) => [list, k + 1]))
     for (const d of entry[list] ?? []) { const j = pointOf(d); if (j !== undefined && j !== i) evidenceLinks.push(i, j, type); }
 }
 // A point without a place of its own sits among the papers it is linked to, slightly apart: placed points pass their place on, a few times over.
