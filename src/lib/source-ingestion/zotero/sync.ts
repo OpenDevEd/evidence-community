@@ -15,6 +15,7 @@ import type { SourceCredentialResolver } from "../credentials";
 import type { SourceIngestionBatch } from "../batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
+import { pdfWorkerCount } from "@/lib/admin/pdf-pool";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { ZOTERO_OBJECT_REQUEST_SIZE, type ZoteroApiClient } from "./client";
 import {
@@ -59,8 +60,6 @@ type SyncZoteroSourceOptions = {
 
 // Zotero's API takes several requests at once and says when to back off; four keep a read well under its limits.
 const ZOTERO_READ_CONCURRENCY = 4;
-// As many as the PDF reading pool has workers: every file comes from Zotero, so there is one host to share.
-const ZOTERO_PDF_CONCURRENCY = 8;
 
 type ManifestEntry =
 	| {
@@ -461,8 +460,9 @@ async function mapManifestEntries(
 	excludedCollectionKeys: ReadonlySet<string> = new Set(),
 	attachmentContext?: ZoteroAttachmentProcessorContext,
 ) {
-	// Several entries at once, as OpenAlex's PDFs are: each attachment's PDF is downloaded, read and uploaded in turn.
-	const mapped = await mapWithConcurrency(entries, ZOTERO_PDF_CONCURRENCY, (entry) =>
+	// Several entries at once, as OpenAlex's PDFs are: as many as the PDF pool reads at once, so no downloaded PDF
+	// waits in memory for a worker. Every file comes from Zotero, one host, so the plain pool fits, not per-host lanes.
+	const mapped = await mapWithConcurrency(entries, pdfWorkerCount(), (entry) =>
 		mapManifestEntry(entry, attachmentProcessor, excludedCollectionKeys, attachmentContext),
 	);
 	return {
