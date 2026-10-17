@@ -28,7 +28,7 @@ vi.mock("@/components/pages/evidence/graph", () => ({
 	EvidenceGraph: class {
 		ready = Promise.resolve();
 		select(index: number | null) { return Promise.resolve(index === null ? null : { index, chain: index === -1 ? checked : null, cites: [], citedBy: [] }); }
-		setMore() {} setTheme() {} setHighlight() {} hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {}
+		setMore() {} setTheme() {} setHighlight() {} hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {} refit() {}
 	},
 }));
 
