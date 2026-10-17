@@ -117,7 +117,8 @@ const config: Config = {
 					"background-color, border-color, color, box-shadow",
 				// What moves when the chat opens beside the results.
 				chrome: "transform, border-radius",
-				header: "height, padding",
+				// The header's bar: shorter beside the chat, zoomed to three quarters over the map pages.
+				header: "height, padding, zoom, max-width",
 				"page-space": "padding",
 				composer: "border-color, box-shadow",
 				citation:
