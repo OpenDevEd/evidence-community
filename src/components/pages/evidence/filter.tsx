@@ -34,17 +34,19 @@ type Option = { key: number; name: string; count: number; icon?: ReactNode };
  * keeps what is chosen, where a list on its own would clear it. The list is as wide as its field.
  */
 function FilterSelect({ label, placeholder, options, selected, onChange }: { label: string; placeholder: string; options: Option[]; selected: ReadonlySet<number>; onChange: (next: ReadonlySet<number>) => void }) {
+	// A dropdown with something chosen is tinted in the accent, so a filter that is on never reads as one that is off.
+	const on = selected.size > 0;
 	return (
 		<Select selectionMode="multiple" value={[...selected]} onChange={(keys) => onChange(new Set(keys.map(Number)))} placeholder={placeholder} className="min-w-0 flex-1">
 			<Label className="sr-only">{label}</Label>
-			<Button className="flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]">
+			<Button className={twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
 				<span className="min-w-0 flex-1">
-					<span aria-hidden className={twMerge("block text-xs leading-4", muted)}>{label}</span>
-					<SelectValue className="block truncate text-sm font-medium leading-5">
+					<span aria-hidden className={twMerge("block text-xs leading-4", on ? "opacity-80" : muted)}>{label}</span>
+					<SelectValue className={twMerge("block truncate text-sm font-medium leading-5", !on && muted)}>
 						{({ isPlaceholder, selectedItems, selectedText }) => (isPlaceholder ? placeholder : selectedItems.length > 1 ? `${selectedItems.length} chosen` : selectedText)}
 					</SelectValue>
 				</span>
-				<HugeiconsIcon icon={ArrowDown01Icon} size={16} aria-hidden className={muted} />
+				<HugeiconsIcon icon={ArrowDown01Icon} size={16} aria-hidden className={on ? undefined : muted} />
 			</Button>
 			<Popover offset={6} className="w-[var(--trigger-width)] rounded-2xl border-small border-black/10 bg-white p-1 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] outline-none data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150 dark:border-white/10 dark:bg-secondary">
 				<ListBox escapeKeyBehavior="none" items={options} className="max-h-80 overflow-y-auto outline-none">
