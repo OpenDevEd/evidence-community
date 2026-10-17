@@ -31,7 +31,7 @@ async function expectCrossrefSynced(page: Page) {
     await expect.poll(async () => (await readPublication(page)).providers.crossref.displayState).toBe("synced");
     const inspector = page.locator("#admin-inspector-pane");
     await expect(inspector.getByText(expectedDoi, {exact: true})).toBeVisible();
-    await expect(inspector.getByText("Registered", {exact: true})).toBeVisible();
+    await expect(inspector.getByText("Active", {exact: true})).toBeVisible();
     return inspector;
 }
 
