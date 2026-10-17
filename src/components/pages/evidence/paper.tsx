@@ -55,6 +55,8 @@ function PaperLink({ itemKey, doi }: { itemKey: string | null; doi: string | und
 /** The opened paper's heading: what it is, its check, its title, who wrote it, and where to read it. */
 function PaperHeading({ index, record, loaded, more, onClose }: { index: number; record: ListItem | null | undefined; loaded: Loaded; more: More; onClose: () => void }) {
 	const key = more.keyOf(index), label = more.labels.get(index);
+	// A library record the search no longer returns (unpublished, hidden, or the search unreachable): no link to a page that fails.
+	const missing = Boolean(key && record === null);
 	const kind = KIND_LABEL[KINDS[loaded.points.kind[index]]];
 	return (
 		<>
@@ -67,8 +69,8 @@ function PaperHeading({ index, record, loaded, more, onClose }: { index: number;
 			</div>
 			<div className="px-5 pb-3 pt-3">
 				<h2 className="text-base font-semibold leading-snug">{record?.title || label?.title || " "}</h2>
-				<Byline record={record} label={label} missing={Boolean(key && record === null && !label?.title)} />
-				<div className="mt-3 flex flex-wrap gap-2"><PaperLink itemKey={key} doi={more.doiOf.get(index)} /></div>
+				<Byline record={record} label={label} missing={missing} />
+				<div className="mt-3 flex flex-wrap gap-2"><PaperLink itemKey={missing ? null : key} doi={more.doiOf.get(index)} /></div>
 			</div>
 		</>
 	);

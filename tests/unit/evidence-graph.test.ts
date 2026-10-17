@@ -47,6 +47,7 @@ vi.mock("@/components/pages/evidence/client", () => ({
 	evidenceClient: () => ({
 		more: () => Promise.resolve(),
 		chain: (index: number) => Promise.resolve(index === 2 ? chain : null),
+		opened: (index: number) => Promise.resolve({ index, chain: index === 2 ? chain : null, cites: [], citedBy: [] }),
 		neighbourhood: () => Promise.resolve({ cites: [], citedBy: [] }),
 		colours: () => Promise.resolve(new Float32Array(16).fill(1)),
 		links: () => Promise.resolve({ pairs: new Float32Array(), colours: new Float32Array() }),

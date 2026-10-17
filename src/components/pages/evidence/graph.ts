@@ -1,12 +1,12 @@
 import { Graph, LinkStyle, PointShape, TransitionEasing } from "@cosmos.gl/graph";
-import type { Loaded, More } from "./client";
+import type { Loaded, More, Opened } from "./client";
 import { evidenceClient } from "./client";
 import { CHECKED, FLAG, VERDICTS, type Chain, type Label, type Theme } from "./data";
 import { LabelOverlay, type Camera } from "./overlay";
 import { edgeColour, inkAt, STAGE, type RGBA } from "./palette";
 
 /** An opened paper: its chain, if the evidence map has one, and its citations inside the library. */
-export type Selection = { index: number; chain: Chain | null; cites: number[]; citedBy: number[] };
+export type Selection = Opened;
 
 export type GraphEvents = {
 	onHover: (index: number | null, screen: [number, number] | null) => void;
@@ -509,14 +509,11 @@ export class EvidenceGraph {
 	async select(index: number | null): Promise<Selection | null> {
 		if (index === null) { this.release(); return null; }
 		this.focus = index;
-		const client = evidenceClient();
-		// A paper opened from the address before the chains and citations arrive waits for them.
-		await client.more().catch(() => null);
-		const [chain, around] = await Promise.all([client.chain(index), index === CHECKED ? { cites: [], citedBy: [] } : client.neighbourhood(index)]);
+		const opened = await evidenceClient().opened(index);
 		if (this.focus !== index || this.destroyed) return null;
-		if (chain) this.showChain(chain);
-		else this.showNeighbourhood(index, around.cites, around.citedBy);
-		return { index, chain, cites: around.cites, citedBy: around.citedBy };
+		if (opened.chain) this.showChain(opened.chain);
+		else this.showNeighbourhood(index, opened.cites, opened.citedBy);
+		return opened;
 	}
 
 	private chainLinks(chain: Chain): Links {

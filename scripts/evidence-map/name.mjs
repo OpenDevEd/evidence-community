@@ -1,7 +1,8 @@
 // Names the map's places from their most cited titles and distinctive words, with GPT-6 Luna through OpenRouter.
 import fs from "node:fs";
 const DIR = process.argv[2];
-const key = fs.readFileSync("/Users/mcharrad/Documents/Github/openscholar/dev-self/.env.local", "utf8").match(/^OPENROUTER_API_KEY=(.*)$/m)[1].replace(/"/g, "").trim();
+const key = process.env.OPENROUTER_API_KEY;
+if (!key) throw new Error("Set OPENROUTER_API_KEY to name the regions and areas.");
 const places = JSON.parse(fs.readFileSync(`${DIR}/places-raw.json`, "utf8"));
 const regionOf = new Map();
 async function ask(batch, context) {

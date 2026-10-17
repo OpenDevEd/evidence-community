@@ -13,7 +13,7 @@ whose address matches the data's (`aied.openscholar.ai`) shows the map, its butt
    communities, layout, Hilbert renumbering and the binary columns, about 35 seconds, the same map every run. Needs
    `graphology`, `graphology-layout-forceatlas2` and `graphology-communities-louvain`, installed outside the app.
 4. `node scripts/evidence-map/name.mjs public/evidence-data/aied`: names the regions and areas with GPT-6 Luna through
-   OpenRouter (6 calls, under a cent). Only needed when the layout changed (`places-raw.json` differs).
+   OpenRouter with `OPENROUTER_API_KEY` set (6 calls, under a cent). Only needed when the layout changed (`places-raw.json` differs).
 
 Checks, against a `next dev` server (their test handle is development-only):
 

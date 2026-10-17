@@ -1,9 +1,12 @@
-import { EVIDENCE_DATA, type Chain, type FromWorker, type Label, type Neighbourhood, type Points, type Theme, type ToWorker } from "./data";
+import { CHECKED, EVIDENCE_DATA, type Chain, type FromWorker, type Label, type Neighbourhood, type Points, type Theme, type ToWorker } from "./data";
 
 /** The first frame's data. `theme` is the theme its colours were made for. */
 export type Loaded = { points: Points; colours: Float32Array; sizes: Float32Array; theme: Theme };
 /** What arrives after the first frame: each labelled paper's line, every library record's key, and DOIs for the rest. */
 export type More = { labels: Map<number, Label>; keyOf: (index: number) => string | null; indexOf: (key: string) => number | undefined; doiOf: Map<number, string> };
+
+/** An opened paper: its chain, if the evidence map has one, and its citations inside the library. */
+export type Opened = { index: number; chain: Chain | null; cites: number[]; citedBy: number[] };
 
 /** One worker for the page's lifetime: it holds the citations, so every later question is a message, not a download. */
 class EvidenceClient {
@@ -72,6 +75,16 @@ class EvidenceClient {
 
 	neighbourhood(index: number) {
 		return this.ask({ type: "neighbourhood", index, id: this.next++ }, (a): Neighbourhood => (a.type === "neighbourhood" ? a.neighbourhood : { cites: [], citedBy: [] }));
+	}
+
+	/**
+	 * What opening a paper shows: its chain, if the evidence map has one, and its citations inside the library. A paper opened
+	 * before the chains and citations have arrived waits for them; the whole graph of checked papers has no citations of its own.
+	 */
+	async opened(index: number): Promise<Opened> {
+		await this.more().catch(() => null);
+		const [chain, around] = await Promise.all([this.chain(index), index === CHECKED ? { cites: [], citedBy: [] } : this.neighbourhood(index)]);
+		return { index, chain, cites: around.cites, citedBy: around.citedBy };
 	}
 
 	links(rect: [number, number, number, number], theme: Theme) {

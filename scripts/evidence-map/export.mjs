@@ -12,6 +12,7 @@ const DOI = `SELECT i."key", lower(regexp_replace(i."DOI", '^https?://(dx\\.)?do
   coalesce(nullif(i."creators"->0->>'lastName', ''), substring(i."creators"->0->>'name' from '(\\S+)\\s*$'), ''),
   coalesce(jsonb_array_length(i."creators"), 0)
   FROM "item" i WHERE coalesce(i."DOI", '') <> '' AND coalesce(i."deleted", 0) <> 1
+  AND coalesce(i."parentItem", '') = '' AND i."itemType"::text NOT IN ('Note', 'Attachment', 'Annotation')
   AND NOT EXISTS (SELECT 1 FROM "itemToTag" t WHERE t."itemKey" = i."key" AND lower(t."tagName") = ANY($1))
   AND NOT EXISTS (SELECT 1 FROM "itemReading" r WHERE r."itemKey" = i."key" AND r."screenedOut")`;
 (async () => {

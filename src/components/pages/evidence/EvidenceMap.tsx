@@ -6,7 +6,7 @@ import { useFiltersContext } from "@/context/FiltersProvider";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { twMerge } from "@/lib/tw-merge";
 import { CHECKED, type ChainEntry, type Label, type Theme } from "./data";
-import type { Loaded, More } from "./client";
+import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
 import type { Lit } from "./lists";
 import { Controls, HoverCard, Missing, SearchPanel } from "./panels";
@@ -32,7 +32,7 @@ export default function EvidenceMap({ chains, verdictCounts }: { chains: ChainEn
 	const { loaded, more, graph, failed } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
 	const { results, lit, litCount } = useLighting(filters, loaded, verdicts);
-	const shown = useGraphFollows(graph, now, more, lit);
+	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts });
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
@@ -75,14 +75,16 @@ function Stage({ stage, labels, drawn, failed }: { stage: RefObject<HTMLDivEleme
  * even when the labels file leaves it out, and lights what the search and checks light. Returns the opened paper once the map
  * has opened it.
  */
-function useGraphFollows(graph: EvidenceGraph | null, now: ReturnType<typeof useOpened>, more: More | null, lit: number[] | undefined) {
+function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: ReturnType<typeof useOpened>, more: More | null, lit: number[] | undefined) {
 	const [selection, setSelection] = useState<Selection | null>(null);
 	useEffect(() => {
-		if (!graph) return;
+		// Without a map (the graphics card refused), the lists still open papers: their chains and citations come from the data.
+		if (!graph && !failed) return;
 		let current = true;
-		void graph.select(now.target).then((result) => current && setSelection(result));
+		const opening = graph ? graph.select(now.target) : now.target === null ? Promise.resolve(null) : evidenceClient().opened(now.target);
+		void opening.then((result) => current && setSelection(result));
 		return () => { current = false; };
-	}, [graph, now.target]);
+	}, [graph, failed, now.target]);
 	const openedName = useOpenedName(now.index, more);
 	useEffect(() => {
 		if (graph && now.index !== null && openedName) graph.name(now.index, openedName);
