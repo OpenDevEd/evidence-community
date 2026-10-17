@@ -904,8 +904,10 @@ for (const missingTitle of [false, true]) {
 		}
 		await page.goto(`/en-GB/lib?search=${encodeURIComponent(expectedSearchItemTitle)}&scope=title`);
 		await dismissConsent(page);
-		const card = page.locator(`a[href*="/lib/${expectedSearchItemKey}"]`).filter({ has: page.getByRole("heading", { level: 3 }) }).first();
-		const heading = card.getByRole("heading", { level: 3 });
+		// The card's link lies under its content and is named by the card's heading.
+		const card = page.locator(`a[href*="/lib/${expectedSearchItemKey}"][aria-labelledby]`).first();
+		const heading = page.locator(`[id="${(await card.getAttribute("aria-labelledby"))!.split(" ")[0]}"]`);
+		await expect(heading).toHaveRole("heading");
 		await expect(heading).toContainText(missingTitle ? expectedSearchItemKey : expectedSearchItemTitle);
 		await expect(card).toHaveAccessibleName((await heading.innerText()).trim());
 		await card.focus();
