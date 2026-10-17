@@ -7,6 +7,8 @@ import {
 	ArrowDownLeft01Icon,
 	ArrowRight01Icon,
 	ArrowUpRight01Icon,
+	Bookmark02Icon,
+	SparklesIcon,
 	CalendarClockIcon,
 	MapsIcon,
 } from "@hugeicons/core-free-icons";
@@ -34,6 +36,7 @@ import { CollectionPickerDialog, usePickerAhead } from "../collections/Collectio
 import { useReaderData } from "@/hooks/useReaderData";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import useSWR from "swr";
+import { useQueryState } from "nuqs";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
 import { openAlexTotals, openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
@@ -106,9 +109,11 @@ function FixURL(url: string | null) {
 function CitationCounts({
 	itemData,
 	linksInNewTab,
+	variant,
 }: {
 	itemData: Item | ListItem | undefined;
 	linksInNewTab: boolean;
+	variant: CountsVariant;
 }) {
 	const t = useTranslations("ui");
 	// The reader's chosen language, so the server and the browser write a total the same way.
@@ -129,10 +134,10 @@ function CitationCounts({
 	return (
 		<div
 			data-count-row
-			className="flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap"
+			className={COUNT_ROW[variant]}
 			onClick={(e) => e.stopPropagation()}
 		>
-			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} linksInNewTab={linksInNewTab} />)}
+			{counts.map((count) => <CountItem key={count.id} count={count} locale={locale} of={t("of")} onOpenAlex={(all) => t("onOpenAlex", { count: all })} linksInNewTab={linksInNewTab} variant={variant} />)}
 		</div>
 	);
 }
@@ -176,24 +181,47 @@ type CountRow = {
 	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
 	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
-// A narrow card drops the words; the tooltip and screen readers still get them.
-const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
+// MOCK: three ways to stop the counts' words being cut off, picked with ?counts=fit|wrap|body.
+export type CountsVariant = "now" | "fit" | "wrap" | "body";
+const COUNT_ROW: Record<CountsVariant, string> = {
+	// What main does today.
+	now: "flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap",
+	// The row asks for its numbers' width and grows to take the words when there is room. When even the numbers and the
+	// buttons don't fit, the buttons move to a second line and the counts get the whole width.
+	fit: "flex min-w-0 grow basis-[min-content] max-w-max items-center gap-4 overflow-hidden",
+	// The counts keep their width; when they and the buttons don't fit on one line, the buttons move below them.
+	wrap: "flex shrink-0 items-center gap-4 whitespace-nowrap",
+	// In the card, under the byline, where the counts have the card's whole width.
+	body: "flex flex-wrap items-center gap-x-4 whitespace-nowrap",
+};
 const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 const NEW_TAB = { target: "_blank", rel: "noopener noreferrer" } as const;
 
 /** One direction: how many the library holds, linked to its list, and of how many in OpenScholar. */
-function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string; linksInNewTab: boolean }) {
+function CountItem({ count, locale, of, onOpenAlex, linksInNewTab, variant }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string; linksInNewTab: boolean; variant: CountsVariant }) {
 	const { icon, tone, colour, held, total, here, label, words } = count;
 	// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
 	const all = total !== null && total >= held ? total : null;
+	const numbers = <>
+		<HugeiconsIcon icon={icon} className="size-3.5" />
+		{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
+		{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
+	</>;
+	const word = <span data-count-label className={twMerge("h-8 shrink-0 whitespace-nowrap leading-8 opacity-70", variant === "now" && "sr-only @[400px]:not-sr-only")}>{label(all ?? held)}</span>;
 	return (
 		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
-			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
-				<HugeiconsIcon icon={icon} className="size-3.5" />
-				{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
-				{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
-				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
-			</span>
+			{variant === "fit" ? (
+				// Its word wraps out of sight as a whole, never cut; screen readers and the tooltip still have it.
+				<span className={twMerge("flex h-8 min-w-min flex-wrap content-start items-center gap-x-1.5 overflow-hidden text-xs font-medium first:shrink-[100]", colour)}>
+					<span className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap">{numbers}</span>
+					{word}
+				</span>
+			) : (
+				<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
+					{numbers}
+					{word}
+				</span>
+			)}
 		</CountTooltip>
 	);
 }
@@ -230,6 +258,10 @@ const COUNT_TOOLTIP_TONES = {
 function countLabelIsShortened(trigger: HTMLElement | null) {
 	const label = trigger?.querySelector<HTMLElement>("[data-count-label]");
 	if (!label || label.clientWidth <= 1 || label.scrollWidth > label.clientWidth) {
+		return true;
+	}
+	// Wrapped to the count's hidden second line.
+	if (trigger && label.getBoundingClientRect().top >= trigger.getBoundingClientRect().bottom - 0.5) {
 		return true;
 	}
 	const row = label.closest<HTMLElement>("[data-count-row]");
@@ -278,6 +310,14 @@ function CountTooltip({
 	);
 }
 
+function MockReaderButtons() {
+	return <>
+		<Button isIconOnly size="sm" aria-label="Add to a collection"><HugeiconsIcon icon={Add01Icon} className="size-5" /></Button>
+		<Button isIconOnly size="sm" aria-label="Bookmark"><HugeiconsIcon icon={Bookmark02Icon} /></Button>
+		<Button size="sm" aria-label="Ask AI" className="min-w-0 aspect-square px-0 @[720px]:aspect-auto @[720px]:px-3" startContent={<HugeiconsIcon icon={SparklesIcon} className="size-3.5 shrink-0" />}><span className="hidden @[720px]:inline">Ask AI</span></Button>
+	</>;
+}
+
 function ResourceInteractions({
 	itemData,
 	isLoading,
@@ -285,6 +325,7 @@ function ResourceInteractions({
 	collectionId,
 	itemHref,
 	linksInNewTab,
+	counts,
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
@@ -293,14 +334,16 @@ function ResourceInteractions({
 	itemHref?: string;
 	/** In the chat, where a page change would close it. */
 	linksInNewTab: boolean;
+	counts: CountsVariant;
 }) {
 	const t = useTranslations("ui");
+	const { reader } = useReaderData();
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
-				<div className="w-full rounded-2xl flex flex-row items-center">
-					<CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} />
+				<div className={twMerge("w-full rounded-2xl flex flex-row items-center", counts !== "now" && "flex-wrap gap-y-1")}>
+					{counts !== "body" && <CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} variant={counts} />}
 					<div className="ml-auto flex shrink-0 items-center justify-end z-10 gap-2 pl-2">
 						{itemHref && (
 							<Button
@@ -321,6 +364,8 @@ function ResourceInteractions({
 								{t("viewDetails")}
 							</Button>
 						)}
+						{/* MOCK: a signed-in reader's buttons, standing in where the local library has no reader or AI. */}
+						{!reader && <MockReaderButtons />}
 						<AddButton
 							itemData={itemData}
 							revalidateResults={revalidateResults}
@@ -416,6 +461,7 @@ type ArticleProps = {
 	t: ReturnType<typeof useTranslations<"ui">>;
 	tNav: ReturnType<typeof useTranslations<"nav">>;
 	format: ReturnType<typeof useFormatter>;
+	counts: CountsVariant;
 };
 
 /**
@@ -512,6 +558,7 @@ function ResourceArticle(props: ArticleProps) {
 			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
 				<ResourceByline {...props} />
 			</Skeleton>
+			{props.counts === "body" && <CitationCounts itemData={finalItemData} linksInNewTab={false} variant="body" />}
 			<ResourceAbstract {...props} />
 		</article>
 	);
@@ -552,6 +599,8 @@ export default function Resource({
 	const t = useTranslations("ui");
 	const tNav = useTranslations("nav");
 	const format = useFormatter();
+	const [countsParam] = useQueryState("counts");
+	const counts: CountsVariant = countsParam === "now" || countsParam === "wrap" || countsParam === "body" ? countsParam : "fit";
 
 	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
 		useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
@@ -590,6 +639,7 @@ export default function Resource({
 			t={t}
 			tNav={tNav}
 			format={format}
+			counts={counts}
 		/>
 	);
 
@@ -651,6 +701,7 @@ export default function Resource({
 				collectionId={collectionId}
 				itemHref={gapMapHref ? itemTargetHref : undefined}
 				linksInNewTab={openLinksInNewTab}
+				counts={counts}
 			/>
 		</ResourceWrapper>
 	);
