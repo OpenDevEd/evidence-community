@@ -3548,6 +3548,9 @@ test("offers no review for an attachment added after its record was submitted", 
 	const inspector = page.locator("#admin-inspector-pane");
 	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
 	await expect(inspector.getByRole("button", {name: "Submit for review", exact: true})).toBeDisabled();
+	// It isn't in that review, so it can still be deleted.
+	await inspector.getByRole("button", {name: "Record status and sources"}).click();
+	await expect(page.getByRole("button", {name: "Delete draft", exact: true})).toBeEnabled();
 });
 
 test("keeps an unpublished attachment private and stages it with the parent review", async ({page}) => {

@@ -177,9 +177,11 @@ function WorkingDraftInspector({
 				hasConflict ||
 				readiness.loading ||
 				readiness.saving ||
-				readiness.missing > 0
+				readiness.missing > 0 ||
+				// The record's review, though this attachment isn't in it: it can't be submitted, but it can be deleted.
+				model.recordReviewPending
 			}
-			reviewPending={model.recordReviewPending}
+			reviewPending={pending}
 		/>
 	);
 }
