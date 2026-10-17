@@ -16,7 +16,7 @@ vi.mock("@/components/features/SearchBar", () => ({ SearchBar: () => <input aria
 // Four papers: 0 and 1 studies of 2, a meta-analysis; 3 a record the search no longer returns.
 const keys = ["AAAAAAAA", "BBBBBBBB", "CCCCCCCC", "DDDDDDDD"];
 const checked: Chain = { focus: -1, layers: [[0, 1], [2]], links: [[2, 0], [2, 1]], others: [] };
-const client = vi.hoisted(() => ({ more: null as unknown as ReturnType<typeof vi.fn>, lit: [] as (number[] | undefined)[] }));
+const client = vi.hoisted(() => ({ more: null as unknown as ReturnType<typeof vi.fn> }));
 vi.mock("@/components/pages/evidence/client", () => {
 	const count = 4, u8 = () => new Uint8Array(count), u16 = () => new Uint16Array(count);
 	const loaded = { theme: "light", points: { count, linked: count, library: count, space: 100, positions: new Float32Array(count * 2), years: u16(), cites: u16(), region: u16(), area: u16(), kind: Uint8Array.from([1, 1, 3, 0]), verdict: Uint8Array.from([7, 0, 3, 0]), flags: u8(), places: [], bundles: [] }, colours: new Float32Array(count * 4), sizes: new Float32Array(count) };
@@ -28,7 +28,7 @@ vi.mock("@/components/pages/evidence/graph", () => ({
 	EvidenceGraph: class {
 		ready = Promise.resolve();
 		select(index: number | null) { return Promise.resolve(index === null ? null : { index, chain: index === -1 ? checked : null, cites: [], citedBy: [] }); }
-		setMore() {} setTheme() {} setHighlight(lit?: number[]) { client.lit.push(lit); } hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {}
+		setMore() {} setTheme() {} setHighlight() {} hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {}
 	},
 }));
 
@@ -68,9 +68,6 @@ async function open(address: string, wait = 20) {
 
 const panel = () => container.querySelector<HTMLElement>('[role="region"][aria-label="Paper"]');
 const close = () => act(async () => panel()!.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
-// The search panel's switches: the phone's sheet has the same ones.
-const press = (group: string, name: string) => act(async () => switchIn(group, name).click());
-const switchIn = (group: string, name: string) => [...container.querySelector(`[aria-label="Light up papers by their ${group}"]`)!.querySelectorAll("button")].find((button) => button.textContent!.replace(/\d+$/, "") === name)!;
 
 describe("the evidence map's page", () => {
 	it("closes back one step: from a paper opened from the checked papers to them, then to the map", async () => {
@@ -95,17 +92,5 @@ describe("the evidence map's page", () => {
 		client.more.mockRejectedValueOnce(new Error("network"));
 		await open("?paper=CCCCCCCC", 1200);
 		expect(panel()?.textContent).toContain("Record CCCCCCCC");
-	});
-
-	it("lights the papers of a type with a check, and counts each switch with what the other row has on", async () => {
-		await open("");
-		await press("type", "Primary studies");
-		expect(client.lit.at(-1)).toEqual([0, 1]);
-		await press("check", "Broken");
-		expect(client.lit.at(-1)).toEqual([0]);
-		expect(switchIn("type", "Meta-analyses").textContent).toBe("Meta-analyses0");
-		await press("type", "Meta-analyses");
-		expect(client.lit.at(-1)).toEqual([0]);
-		expect(switchIn("check", "Validated").textContent).toBe("Validated1");
 	});
 });

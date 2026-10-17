@@ -1,7 +1,7 @@
 import EvidenceMap from "@/components/pages/evidence/EvidenceMap";
 import { EVIDENCE_DATA, type ChainEntry } from "@/components/pages/evidence/data";
 import { hasEvidenceMap, readEvidenceData } from "@/components/pages/evidence/server-data";
-import type { CheckCounts } from "@/components/pages/evidence/lists";
+import type { CheckCounts } from "@/components/pages/evidence/filter";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { preload } from "react-dom";
