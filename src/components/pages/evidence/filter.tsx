@@ -34,11 +34,16 @@ export const highlightedCount = (counts: CheckCounts, types: ReadonlySet<number>
 export const matchesChecks = ({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => (i: number) =>
 	!(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i]));
 
-/** How many papers the filter highlights: in an open chain, those of the chain; else across the library. Null with nothing chosen. */
-export function highlightedNow({ checkCounts, types, verdicts, loaded, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; loaded: Loaded | null; shown: Selection | null }) {
+/**
+ * How many papers the filter highlights, null with nothing chosen: those lit on the map (where a search narrows the filter, the
+ * papers both light), and in an open chain only the chain's. Until the map's data is in, the counts built with it.
+ */
+export function highlightedNow({ checkCounts, types, verdicts, lit, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; lit: number[] | undefined; shown: Selection | null }) {
 	const all = highlightedCount(checkCounts, types, verdicts);
-	if (all === null || !shown?.chain || !loaded) return all;
-	return [...new Set(shown.chain.layers.flat())].filter(matchesChecks(loaded, types, verdicts)).length;
+	if (all === null || !lit) return all;
+	if (!shown?.chain) return lit.length;
+	const on = new Set(lit);
+	return [...new Set(shown.chain.layers.flat())].filter((i) => on.has(i)).length;
 }
 
 type Option = { key: number; name: string; count: number; icon?: ReactNode };

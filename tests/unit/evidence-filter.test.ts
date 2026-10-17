@@ -20,14 +20,16 @@ describe("the evidence map's filter", () => {
 		expect(highlightedCount(counts, new Set(), new Set())).toBeNull();
 	});
 
-	it("counts only the open chain's papers while a chain is in front", () => {
-		// The meta-analysis (3) and two of its studies (0 and 2): one broken study and the broken meta-analysis match "broken".
+	it("counts the papers lit on the map: narrowed by a search, and only the open chain's while a chain is in front", () => {
+		const broken = { checkCounts: counts, types: new Set<number>(), verdicts: new Set([7]) };
+		// Before the map's data is in, the counts built with it.
+		expect(highlightedNow({ ...broken, lit: undefined, shown: null })).toBe(2);
+		// The filter lights 0 and 3; a search that keeps only 0 narrows the count with it.
+		expect(highlightedNow({ ...broken, lit: [0, 3], shown: null })).toBe(2);
+		expect(highlightedNow({ ...broken, lit: [0], shown: null })).toBe(1);
+		// A chain of the meta-analysis (3) and two of its studies (0 and 2): only its own lit papers count.
 		const shown = { index: 3, chain: { focus: 3, layers: [[0, 2], [3]], links: [], others: [] }, cites: [], citedBy: [] } as never;
-		const broken = { checkCounts: counts, types: new Set<number>(), verdicts: new Set([7]), loaded };
-		expect(highlightedNow({ ...broken, shown })).toBe(2);
-		expect(highlightedNow({ ...broken, shown: null })).toBe(2);
-		expect(highlightedNow({ ...broken, verdicts: new Set([3]), shown })).toBe(0);
-		expect(highlightedNow({ ...broken, verdicts: new Set([3]), shown: null })).toBe(1);
-		expect(highlightedNow({ ...broken, verdicts: new Set(), shown })).toBeNull();
+		expect(highlightedNow({ ...broken, lit: [0, 3, 9], shown })).toBe(2);
+		expect(highlightedNow({ ...broken, verdicts: new Set(), lit: [0, 3], shown })).toBeNull();
 	});
 });

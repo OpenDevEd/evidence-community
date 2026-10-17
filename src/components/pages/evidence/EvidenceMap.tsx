@@ -37,7 +37,7 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const focus = useFocusName(now, shown, more);
-	const highlighted = highlightedNow({ checkCounts, types, verdicts, loaded, shown });
+	const highlighted = highlightedNow({ checkCounts, types, verdicts, lit, shown });
 	useRefitOnNotice(graph, highlighted !== null);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.

@@ -54,14 +54,14 @@ export function Controls({ graph }: { graph: EvidenceGraph | null }) {
 }
 
 /** A short notice over the map, with the one button that undoes what it says. */
-function Notice({ children, action, onPress, className, kind }: { children: ReactNode; action: string; onPress: () => void; className?: string; kind?: string }) {
+function Notice({ children, action, onPress, kind }: { children: ReactNode; action: string; onPress: () => void; kind?: string }) {
 	const still = useReducedMotion();
 	// A notice on its way out no longer takes room: the map is fitted as if it were gone.
 	const leaving = !useIsPresent();
 	const hidden = { opacity: 0, y: still ? 0 : -16 };
 	return (
 		// One line, 2.75 rem high: the map is fitted below the notices by that height. It slides down into place and back up.
-		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm", className)}>
+		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm")}>
 			<span>{children}</span>
 			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
 		</motion.div>
@@ -71,9 +71,10 @@ function Notice({ children, action, onPress, className, kind }: { children: Reac
 /** A paper address that is not on the map: said plainly, with the way back. */
 export function Missing({ onClear }: { onClear: () => void }) {
 	return (
-		<Notice action="Back to the map" onPress={onClear} className="fixed left-1/2 top-[12.5rem] z-20 -translate-x-1/2 xl:left-[calc(50%+12rem)] xl:top-28">
-			That paper is not on this map.
-		</Notice>
+		// Centred by its wrapper: the notice's own transform is its slide.
+		<div className="fixed left-1/2 top-[12.5rem] z-20 -translate-x-1/2 xl:top-28">
+			<Notice action="Back to the map" onPress={onClear}>That paper is not on this map.</Notice>
+		</div>
 	);
 }
 
