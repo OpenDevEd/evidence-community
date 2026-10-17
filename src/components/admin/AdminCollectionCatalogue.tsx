@@ -7,7 +7,6 @@ import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	type KeyboardEvent,
-	type RefObject,
 	useCallback,
 	useEffect,
 	useLayoutEffect,
@@ -485,7 +484,7 @@ type CatalogueProps = {
 	onMove: (collection: AdminCollectionCatalogEntry) => void;
 	onRestore: (collection: AdminCollectionCatalogEntry) => void;
 	onSelect: (key: string) => void;
-	scrollElementRef: RefObject<HTMLElement | null>;
+	scrollElement: HTMLElement | null;
 	selectedCollection: string | null;
 	sources: AdminSource[];
 };
@@ -595,7 +594,7 @@ export function AdminCollectionCatalogue({
 	onMove,
 	onRestore,
 	onSelect,
-	scrollElementRef,
+	scrollElement,
 	selectedCollection,
 	sources,
 }: CatalogueProps) {
@@ -636,16 +635,24 @@ export function AdminCollectionCatalogue({
 	const restoredExpansion = useRef(false);
 	const scrolledSelection = useRef("");
 	const storageKey = `admin.collection-catalogue.expanded:${identity.baseUrl}`;
+	// The virtualizer needs where the tree starts in the sidebar it scrolls with. It is measured before the first paint
+	// the sidebar is there for, and a ResizeObserver measures it again whenever a section above the tree, or the tree,
+	// changes size: they load and open after the tree mounts.
 	useLayoutEffect(() => {
 		const list = catalogueListRef.current;
-		const scrollElement = scrollElementRef.current;
 		if (!list || !scrollElement) return;
-		const nextMargin =
-			list.getBoundingClientRect().top -
-			scrollElement.getBoundingClientRect().top +
-			scrollElement.scrollTop;
-		setScrollMargin(nextMargin);
-	}, [scrollElementRef, sources.length]);
+		const measure = () =>
+			setScrollMargin(
+				list.getBoundingClientRect().top -
+					scrollElement.getBoundingClientRect().top +
+					scrollElement.scrollTop,
+			);
+		const observer = new ResizeObserver(measure);
+		for (const section of scrollElement.children) observer.observe(section);
+		observer.observe(list);
+		measure();
+		return () => observer.disconnect();
+	}, [scrollElement]);
 	useEffect(() => {
 		const cancelStaleStatusTransfer = (event: FocusEvent) => {
 			const pending = pendingStatusFocus.current;
@@ -978,7 +985,7 @@ export function AdminCollectionCatalogue({
 		count: rows.length,
 		estimateSize: () => ROW_HEIGHT,
 		getItemKey: (index) => rowId(rows[index]!),
-		getScrollElement: () => scrollElementRef.current,
+		getScrollElement: () => scrollElement,
 		// Before the sidebar is measured, and on the server, the rows a sidebar this tall would show are drawn, so the
 		// tree is there with the page.
 		initialRect: { width: 0, height: 900 },
