@@ -63,7 +63,7 @@ const REGION_HUES = [250, 160, 310, 40, 200, 340, 100, 280, 15, 220, 130, 70];
 const regionHue = (region: number) => REGION_HUES[region % REGION_HUES.length];
 export const regionDot = (region: number, theme: Theme): RGBA => (theme === "dark" ? oklch(0.66, 0.085, regionHue(region), 0.9) : oklch(0.72, 0.06, regionHue(region), 0.8));
 /** A region's name, in a deeper shade of its colour. */
-export const regionInk = (region: number, theme: Theme, alpha: number): RGBA => (theme === "dark" ? oklch(0.86, 0.1, regionHue(region), alpha) : oklch(0.42, 0.09, regionHue(region), alpha));
+export const regionInk = (region: number, theme: Theme, alpha: number): RGBA => (theme === "dark" ? oklch(0.86, 0.1, regionHue(region), alpha) : oklch(0.38, 0.1, regionHue(region), alpha));
 
 /** The page's ink at some strength: everything on the map that is not a check. */
 export const inkAt = (theme: Theme, alpha: number): RGBA => [STAGE[theme].ink[0], STAGE[theme].ink[1], STAGE[theme].ink[2], alpha];

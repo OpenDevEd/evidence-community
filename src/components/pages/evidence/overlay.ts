@@ -33,8 +33,8 @@ const CELL_SPACE = 64;
 const FADE_MS = 180;
 
 type Box = { x: number; y: number; w: number; h: number };
-/** How a label is drawn, kept so it can keep fading out after it has lost its place. */
-type Look = { value: string; at: (camera: Camera) => [number, number]; font: string; colour: string; align: CanvasTextAlign & ("center" | "left" | "right"); weight: number };
+/** How a label is drawn, kept so it can keep fading out after it has lost its place. A topic's name has a wider halo, to read over its own dense points. */
+type Look = { value: string; at: (camera: Camera) => [number, number]; font: string; colour: string; align: CanvasTextAlign & ("center" | "left" | "right"); weight: number; halo?: number };
 
 /**
  * The map's words, drawn like a map's: region names when the whole library is in view, area names closer in, then papers by
@@ -54,6 +54,8 @@ export class LabelOverlay {
 	private family = typeof document === "undefined" ? "sans-serif" : getComputedStyle(document.body).fontFamily || "sans-serif";
 	private regions: Place[];
 	private areas: Place[];
+	/** Each area's region, so its name takes the region's colour. */
+	private regionOf = new Map<number, number>();
 	private theme: Theme;
 	private grid = new Uint8Array(0);
 	private columns = 0;
@@ -66,6 +68,9 @@ export class LabelOverlay {
 		this.theme = theme;
 		this.regions = points.places.filter((place) => place.level === 1).sort((a, b) => b.size - a.size);
 		this.areas = points.places.filter((place) => place.level === 2).sort((a, b) => b.size - a.size);
+		// An area is laid out inside its region, so its centre lies in the region's circle.
+		const edge = (area: Place, region: Place) => Math.hypot(region.x - area.x, region.y - area.y) - region.radius;
+		for (const area of this.areas) this.regionOf.set(area.id, this.regions.reduce((best, region) => (edge(area, region) < edge(area, best) ? region : best)).id);
 	}
 
 	setTheme(theme: Theme) {
@@ -170,7 +175,7 @@ export class LabelOverlay {
 		ctx.textAlign = look.align;
 		ctx.textBaseline = "middle";
 		ctx.lineJoin = "round";
-		ctx.lineWidth = 4;
+		ctx.lineWidth = look.halo ?? 4;
 		ctx.strokeStyle = STAGE[this.theme].halo;
 		ctx.strokeText(look.value, x, y);
 		ctx.fillStyle = look.colour;
@@ -198,7 +203,7 @@ export class LabelOverlay {
 		this.text(`p${index}`, {
 			value: nameOf(label),
 			at: (c) => { const [px, py] = c.position(index); return [c.x(px) + offset, c.y(py)]; },
-			font: `${strong ? "600 13px" : "500 11.5px"} ${this.family}`,
+			font: `${strong ? "600 13px" : "400 11px"} ${this.family}`,
 			colour: this.inkFor(index),
 			align: side === "left" ? "right" : "left",
 			weight: leftOut(camera, index) ? 0.55 : 1,
@@ -210,10 +215,10 @@ export class LabelOverlay {
 		return this.inside(this.camera.x(sx), this.camera.y(sy), 0);
 	}
 
-	/** A paper's name in the page's ink, fainter for a paper outside the library. */
+	/** A paper's name in the page's ink, quieter than the topics' coloured names, fainter for a paper outside the library. */
 	private inkFor(index: number) {
 		const ink = STAGE[this.theme].ink;
-		return css([ink[0], ink[1], ink[2], this.points.flags[index] & FLAG.outside ? 0.6 : 0.9]);
+		return css([ink[0], ink[1], ink[2], this.points.flags[index] & FLAG.outside ? 0.5 : 0.72]);
 	}
 
 	/**
@@ -238,10 +243,10 @@ export class LabelOverlay {
 		const camera = this.camera;
 		const weight = camera.chain ? 0.35 : Math.max(0, Math.min(1, (3.2 - camera.scale) / 1.2));
 		if (weight <= 0.02) return;
-		const font = `600 15px ${this.family}`;
+		const font = `700 17px ${this.family}`;
 		for (const region of this.regions) {
 			if (!this.inside(camera.x(region.x), camera.y(region.y))) continue;
-			this.text(`r${region.id}`, { value: region.name, at: (c) => [c.x(region.x), c.y(region.y)], font, colour: css(regionInk(region.id, this.theme, 0.9)), align: "center", weight });
+			this.text(`r${region.id}`, { value: region.name, at: (c) => [c.x(region.x), c.y(region.y)], font, colour: css(regionInk(region.id, this.theme, 1)), align: "center", weight, halo: 6 });
 		}
 	}
 
@@ -249,10 +254,10 @@ export class LabelOverlay {
 		const camera = this.camera;
 		if (camera.chain || camera.scale <= 1.6) return;
 		const weight = Math.max(0, Math.min(1, (camera.scale - 1.6) / 0.6)) * Math.max(0.35, Math.min(1, (9 - camera.scale) / 3));
-		const font = `500 12px ${this.family}`, ink = STAGE[this.theme].ink;
+		const font = `600 13px ${this.family}`;
 		for (const area of this.areas) {
 			if (!this.inside(camera.x(area.x), camera.y(area.y))) continue;
-			this.text(`a${area.id}`, { value: area.name, at: (c) => [c.x(area.x), c.y(area.y)], font, colour: css([ink[0], ink[1], ink[2], 0.62]), align: "center", weight });
+			this.text(`a${area.id}`, { value: area.name, at: (c) => [c.x(area.x), c.y(area.y)], font, colour: css(regionInk(this.regionOf.get(area.id) ?? 0, this.theme, 0.85)), align: "center", weight, halo: 5 });
 		}
 	}
 
