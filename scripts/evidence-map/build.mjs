@@ -193,7 +193,7 @@ for (const e of whole) {
 }
 const map = whole.filter((e) => inGraph.has(e.doi.toLowerCase()));
 log("evidence map file:", whole.length, "papers, of which", map.length, "in its own graph");
-const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, METHODS: 6, CRITIQUE: 7, UNCLASSIFIED: 0 };
+const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, CRITIQUE: 7, METHODS: 8, UNCLASSIFIED: 0 };
 const METHODS = /\b(prisma|statement|guideline|guidance|reporting|bias in meta|publication bias|heterogeneity|inconsistency|metafor|introduction to meta|practical meta|trim and fill|funnel|effect size|statistical power|r package|handbook|meta-analysis in r|robust variance|quality assessment|risk of bias)\b/i;
 const unlinked = new Map(), outsideIdx = new Map(), evidence = new Map();
 for (const entry of map) {
@@ -221,13 +221,13 @@ const bibYear = (bib) => Number((bib.match(/\((\d{4})[a-z]?\)/) ?? [])[1] ?? 0);
 const evidenceLinks = []; // from, to, type: 1 analyses, 2 cites a review, 3 cites
 for (const [i, entry] of evidence) {
   kind[i] = KIND[entry.study_type] ?? 0;
-  if (entry.study_level === 0) kind[i] = 5;
+  // Level 0 is a commentary, unless the file says it is a methods paper: a paper on how to do the work, in the corpus.
+  if (entry.study_level === 0 && entry.study_type !== "METHODS") kind[i] = 5;
   verdict[i] = entry.integrity_assessment?.cat ?? 0;
   if (entry.in_corpus) flags[i] |= 2;
   if (entry.analyses_these_papers?.length) flags[i] |= 4;
   if (i >= L2) { flags[i] |= 8; years[i] = bibYear(entry.bib); }
   if (!entry.in_corpus && (entry.cited_by?.length ?? 0) >= 12 && METHODS.test(entry.bib)) { flags[i] |= 16; kind[i] = 6; }
-  if (kind[i] === 6) flags[i] |= 16;
   for (const [list, type] of LISTS.map((list, k) => [list, k + 1]))
     for (const d of entry[list] ?? []) { const j = pointOf(d); if (j !== undefined && j !== i) evidenceLinks.push(i, j, type); }
 }

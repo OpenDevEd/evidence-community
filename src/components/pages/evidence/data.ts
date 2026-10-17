@@ -35,7 +35,7 @@ export type Points = {
 export const FLAG = { library: 1, corpus: 2, chain: 4, outside: 8, methods: 16, stray: 32 } as const;
 
 /** What a paper is, by the evidence map's reading; `unknown` for most of the library, which the map does not cover. */
-export const KINDS = ["unknown", "primary", "review", "meta", "secondOrder", "commentary", "methods", "critique"] as const;
+export const KINDS = ["unknown", "primary", "review", "meta", "secondOrder", "commentary", "methods", "critique", "methodsPaper"] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** Björn's integrity verdicts, in his order: 0 is not assessed. */
