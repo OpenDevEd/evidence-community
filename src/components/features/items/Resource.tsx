@@ -153,11 +153,11 @@ function referenceRow({ t, key, links, source, resourceHref, there }: CountConte
 function analysedRow({ key }: CountContext, evidence: EvidenceRecord): CountRow {
 	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
 	return {
-		id: "analysed", icon: ArrowUpRight01Icon, colour: "text-violet-700 dark:text-violet-300",
+		id: "analysed", icon: ArrowUpRight01Icon, colour: "text-teal-700 dark:text-teal-300",
 		held: evidence.analysedHere ?? 0, total: evidence.analysed ?? null,
 		// Both numbers open the chain: it lists every study it analysed, the ones outside the library too.
 		here: `/evidence?paper=${key}`, there: `/evidence?paper=${key}`, thereInside: true,
-		label: (count) => (count === 1 ? "analysed study" : "analysed studies"),
+		label: () => "analysed",
 		words: (held, total) => `${held} of the ${total ?? held} studies it analysed are in this library; it also cites ${others} other works`,
 	};
 }
