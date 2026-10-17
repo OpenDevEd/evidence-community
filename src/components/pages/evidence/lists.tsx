@@ -170,6 +170,10 @@ const countWhere = (counts: CheckCounts, ofType: (kind: number) => boolean, ofCh
 /** The checked papers, of every type. */
 export const checkedCount = (counts: CheckCounts) => countWhere(counts, () => true, (verdict) => verdict > 0);
 
+/** How many papers the switches that are on highlight, or null with none on. */
+export const highlightedCount = (counts: CheckCounts, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) =>
+	types.size || verdicts.size ? countWhere(counts, (kind) => !types.size || types.has(kind), (verdict) => !verdicts.size || verdicts.has(verdict)) : null;
+
 const toggled = (set: ReadonlySet<number>, value: number) => {
 	const next = new Set(set);
 	if (!next.delete(value)) next.add(value);
@@ -181,15 +185,16 @@ const SWITCH = "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap roun
 /** A switch: its name, how many papers it would light, and whether it is on. */
 function Switch({ on, count, onPress, children }: { on: boolean; count: number; onPress: () => void; children: ReactNode }) {
 	return (
-		<button type="button" aria-pressed={on} onClick={onPress} className={twMerge(SWITCH, on && "bg-black/[0.07] dark:bg-white/15")}>
+		<button type="button" aria-pressed={on} onClick={onPress} className={twMerge(SWITCH, on && "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white dark:hover:bg-accent/25")}>
 			{children}
-			<span className={twMerge("tabular-nums", muted)}>{count}</span>
+			<span className={twMerge("tabular-nums", on ? "opacity-70" : muted)}>{count}</span>
 		</button>
 	);
 }
 
 /**
- * Two rows of switches that light papers on the map: by type, then by check. Within a row any switch on lights its papers; with
+ * The map's filter: two rows of switches that highlight papers on the map, by type, then by check, under a heading that says so
+ * and clears them. Within a row any switch on lights its papers; with
  * both rows on, a paper must match each. A switch's count is what it would light with the other row as it is.
  */
 export function CheckSwitches({ counts, types, verdicts, onTypes, onVerdicts, wrap }: Checks & { wrap: boolean }) {
@@ -199,6 +204,11 @@ export function CheckSwitches({ counts, types, verdicts, onTypes, onVerdicts, wr
 	const shown = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]);
 	return (
 		<div className="space-y-1.5">
+			<div className="flex h-7 items-center justify-between pl-2.5">
+				<span className="text-xs font-semibold">Filter the map</span>
+				{/* Kept in place while hidden, so the heading never changes height. */}
+				<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className={twMerge("rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent", !types.size && !verdicts.size && "invisible")}>Clear</button>
+			</div>
 			<div role="group" aria-label="Light up papers by their type" className={row}>
 				{shown.map((name) => {
 					const kind = KINDS.indexOf(name);

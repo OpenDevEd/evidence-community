@@ -1,7 +1,7 @@
 "use client";
 
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -50,12 +50,39 @@ export function Controls({ graph }: { graph: EvidenceGraph | null }) {
 	);
 }
 
+/** A short notice over the map, with the one button that undoes what it says. */
+function Notice({ children, action, onPress, className }: { children: ReactNode; action: string; onPress: () => void; className?: string }) {
+	return (
+		<div role="status" className={twMerge(PANEL, "flex animate-fade-in items-center gap-3 py-2 pl-4 pr-2 text-sm motion-reduce:animate-none", className)}>
+			<span>{children}</span>
+			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
+		</div>
+	);
+}
+
 /** A paper address that is not on the map: said plainly, with the way back. */
 export function Missing({ onClear }: { onClear: () => void }) {
 	return (
-		<div role="status" className={twMerge(PANEL, "fixed left-1/2 top-[12.5rem] z-20 flex -translate-x-1/2 animate-fade-in items-center gap-3 py-2 pl-4 pr-2 text-sm motion-reduce:animate-none xl:left-[calc(50%+12rem)] xl:top-28")}>
+		<Notice action="Back to the map" onPress={onClear} className="fixed left-1/2 top-[12.5rem] z-20 -translate-x-1/2 xl:left-[calc(50%+12rem)] xl:top-28">
 			That paper is not on this map.
-			<button type="button" onClick={onClear} className="rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10">Back to the map</button>
+		</Notice>
+	);
+}
+
+/**
+ * Why the map is faded, over it from 1,280 px wide, in the middle of the space the panels leave: a paper (or every checked
+ * paper) brought to the front, and the filter highlighting some papers. Each says how to undo it.
+ */
+export function MapStatus({ focus, highlighted, paperOpen, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; paperOpen: boolean; onShowAll: () => void; onClearFilter: () => void }) {
+	if (!focus && highlighted === null) return null;
+	return (
+		<div className={twMerge("fixed top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex", paperOpen ? "left-[calc(50%-1.5rem)]" : "left-[calc(50%+12rem)]")}>
+			{focus && <Notice action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front, the rest faded</Notice>}
+			{highlighted !== null && (
+				<Notice action="Clear filter" onPress={onClearFilter}>
+					<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+				</Notice>
+			)}
 		</div>
 	);
 }

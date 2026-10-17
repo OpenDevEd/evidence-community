@@ -8,13 +8,14 @@ import { twMerge } from "@/lib/tw-merge";
 import { CHECKED, type ChainEntry, type Label, type Theme } from "./data";
 import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
-import { checkedCount, type CheckCounts, type Lit } from "./lists";
-import { Controls, HoverCard, Missing, SearchPanel } from "./panels";
+import { nameOf } from "./overlay";
+import { checkedCount, highlightedCount, type CheckCounts, type Lit } from "./lists";
+import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
 import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
 import { useOpenedName } from "./records";
-import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
+import { matchesChecks, useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
 
 /**
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
@@ -34,6 +35,7 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	const now = useOpened(address, more);
 	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
+	const focus = useFocusName(now, shown, more);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
@@ -42,6 +44,7 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} checked={checked} checks={checks} />
 			<Controls graph={graph} />
+			<MapStatus focus={focus} highlighted={highlightedNow({ checkCounts, types, verdicts, loaded, shown })} paperOpen={Boolean(shown)} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
 			<HoverCard selected={now.index} loaded={loaded} more={more} />
 		</main>
@@ -93,6 +96,22 @@ function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: Retu
 	}, [graph, now.index, openedName]);
 	useEffect(() => { graph?.setHighlight(lit); }, [graph, lit]);
 	return selection?.index === now.target ? selection : null;
+}
+
+/** What the map has brought to the front, by name: the opened paper, or every checked paper. */
+function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null, more: More | null) {
+	const opened = useOpenedName(now.index, more);
+	if (!shown) return null;
+	if (now.target === CHECKED) return "All checked papers";
+	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
+	return label ? nameOf(label) : null;
+}
+
+/** How many papers the filter highlights: in an open chain, those of the chain; else across the library. */
+function highlightedNow({ checkCounts, types, verdicts, loaded, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; loaded: Loaded | null; shown: Selection | null }) {
+	const all = highlightedCount(checkCounts, types, verdicts);
+	if (all === null || !shown?.chain || !loaded) return all;
+	return [...new Set(shown.chain.layers.flat())].filter(matchesChecks(loaded, types, verdicts)).length;
 }
 
 type PanelInputs = {

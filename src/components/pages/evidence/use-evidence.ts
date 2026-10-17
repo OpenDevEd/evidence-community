@@ -48,6 +48,8 @@ export function useOpened(address: Address, more: More | null) {
 		openChecked: () => { void setPaper(null); void setView("checked"); },
 		close: () => closeIn(address),
 		clear: () => void setPaper(null),
+		/** Back to the whole map, from a paper or the checked papers. */
+		showAll: () => { void setPaper(null); void setView(null); },
 	};
 }
 
@@ -142,10 +144,11 @@ function restOf(query: string, first: Hits | undefined) {
 const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.total === first?.total ? all : first);
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
-/** The papers the switches light: of a type that is on, if any is, and with a check that is on, if any is. Methods references and strays are never lit, as they are never counted. */
-function withChecks({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
-	return Array.from(points.verdict.keys()).filter((i) => !(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i])));
-}
+/** Whether the switches light a paper: of a type that is on, if any is, and with a check that is on, if any is. Methods references and strays are never lit, as they are never counted. */
+export const matchesChecks = ({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => (i: number) =>
+	!(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i]));
+
+const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
 
 /** What lights up: the search's papers, the checks' papers, or the papers both light. Nothing lit lights everything. */
 function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
