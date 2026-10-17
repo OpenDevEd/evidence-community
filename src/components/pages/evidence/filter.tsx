@@ -6,7 +6,7 @@ import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } fro
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded } from "./client";
-import { FLAG, KINDS, VERDICTS } from "./data";
+import { aroundOf, FLAG, KINDS, VERDICTS } from "./data";
 import type { Selection } from "./graph";
 import { muted } from "./lists";
 import { VerdictIcon } from "./verdict-chip";
@@ -36,14 +36,16 @@ export const matchesChecks = ({ points }: Loaded, types: ReadonlySet<number>, ve
 
 /**
  * How many papers the filter highlights, null with nothing chosen: those lit on the map (where a search narrows the filter, the
- * papers both light), and in an open chain only the chain's. Until the map's data is in, the counts built with it.
+ * papers both light), and with a paper open only those of its chain or its citations, as the map lights. Until the map's data
+ * is in, the counts built with it.
  */
 export function highlightedNow({ checkCounts, types, verdicts, lit, shown }: { checkCounts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; lit: number[] | undefined; shown: Selection | null }) {
 	const all = highlightedCount(checkCounts, types, verdicts);
 	if (all === null || !lit) return all;
-	if (!shown?.chain) return lit.length;
+	if (!shown) return lit.length;
+	const members = shown.chain ? shown.chain.layers.flat() : aroundOf(shown.index, shown.cites, shown.citedBy);
 	const on = new Set(lit);
-	return [...new Set(shown.chain.layers.flat())].filter((i) => on.has(i)).length;
+	return [...new Set(members)].filter((i) => on.has(i)).length;
 }
 
 type Option = { key: number; name: string; count: number; icon?: ReactNode };

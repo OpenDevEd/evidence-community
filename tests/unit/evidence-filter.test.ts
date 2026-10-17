@@ -20,7 +20,7 @@ describe("the evidence map's filter", () => {
 		expect(highlightedCount(counts, new Set(), new Set())).toBeNull();
 	});
 
-	it("counts the papers lit on the map: narrowed by a search, and only the open chain's while a chain is in front", () => {
+	it("counts the papers lit on the map: narrowed by a search, and only those of the open chain or citations", () => {
 		const broken = { checkCounts: counts, types: new Set<number>(), verdicts: new Set([7]) };
 		// Before the map's data is in, the counts built with it.
 		expect(highlightedNow({ ...broken, lit: undefined, shown: null })).toBe(2);
@@ -31,5 +31,8 @@ describe("the evidence map's filter", () => {
 		const shown = { index: 3, chain: { focus: 3, layers: [[0, 2], [3]], links: [], others: [] }, cites: [], citedBy: [] } as never;
 		expect(highlightedNow({ ...broken, lit: [0, 3, 9], shown })).toBe(2);
 		expect(highlightedNow({ ...broken, verdicts: new Set(), lit: [0, 3], shown })).toBeNull();
+		// A paper with no chain (1) opened: only it and its citations (0, and 2, cited twice) count.
+		const around = { index: 1, chain: null, cites: [0, 2], citedBy: [2] } as never;
+		expect(highlightedNow({ ...broken, lit: [0, 3], shown: around })).toBe(1);
 	});
 });

@@ -164,6 +164,8 @@ export function useLighting(filters: ReturnType<typeof useFiltersContext>, loade
 		if (!loaded) return undefined;
 		return litPoints(query && hits ? pointsOf(hits.bits) : null, types.size || verdicts.size ? withChecks(loaded, types, verdicts) : null);
 	}, [loaded, hits, query, types, verdicts]);
-	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: hits.lit, complete: hits.found >= hits.total } : undefined;
+	// With the filter on, the results lit on the map are those the filter keeps too.
+	const filtered = (types.size || verdicts.size) && lit;
+	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: filtered ? filtered.length : hits.lit, complete: hits.found >= hits.total } : undefined;
 	return { results: query ? results : undefined, lit, litCount };
 }

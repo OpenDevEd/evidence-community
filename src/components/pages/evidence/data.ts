@@ -54,6 +54,9 @@ export type Chain = { focus: number; layers: number[][]; links: [number, number]
 /** The chain asked for in place of a paper: Björn's whole graph of checked papers. */
 export const CHECKED = -1;
 
+/** An opened paper and the citations to and from it, the most a neighbourhood lights. */
+export const aroundOf = (index: number, cites: number[], citedBy: number[]) => [index, ...[...new Set([...cites, ...citedBy])].slice(0, 1500)];
+
 /** A record's neighbourhood inside the library. */
 export type Neighbourhood = { cites: number[]; citedBy: number[] };
 
