@@ -106,6 +106,22 @@ function FixURL(url: string | null) {
  * library holds, and how many OpenAlex lists in all. The first number opens the library's list, the second the
  * whole list in OpenScholar. A direction with nothing on either side is left out.
  */
+function useCountRows(itemData: Item | ListItem | undefined) {
+	const t = useTranslations("ui");
+	const resourceHref = useResourceHref();
+	const openScholar = useOpenScholarUrl();
+	const context: CountContext = {
+		t, key: itemData?.key ?? "", links: itemData?.links,
+		// OpenAlex's own totals, as of the last import.
+		source: openAlexTotals(itemData), resourceHref,
+		there: (list) => { const path = openScholarList(itemData, list)?.path; return path ? openScholar(path) : undefined; },
+	};
+	// A meta-analysis whose analysed studies are known counts those, not every work it cites (the evidence map).
+	const evidence = useEvidenceRecord(itemData?.key);
+	const counts = [evidence?.analysed ? analysedRow(context, evidence) : referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
+	return counts;
+}
+
 function CitationCounts({
 	itemData,
 	linksInNewTab,
@@ -118,17 +134,7 @@ function CitationCounts({
 	const t = useTranslations("ui");
 	// The reader's chosen language, so the server and the browser write a total the same way.
 	const locale = useLocale();
-	const resourceHref = useResourceHref();
-	const openScholar = useOpenScholarUrl();
-	const context: CountContext = {
-		t, key: itemData?.key ?? "", links: itemData?.links,
-		// OpenAlex's own totals, as of the last import.
-		source: openAlexTotals(itemData), resourceHref,
-		there: (list) => { const path = openScholarList(itemData, list)?.path; return path ? openScholar(path) : undefined; },
-	};
-	// A meta-analysis whose analysed studies are known counts those, not every work it cites (the evidence map).
-	const evidence = useEvidenceRecord(itemData?.key);
-	const counts = [evidence?.analysed ? analysedRow(context, evidence) : referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
+	const counts = useCountRows(itemData);
 	if (counts.length === 0) return null;
 
 	return (
@@ -182,7 +188,10 @@ type CountRow = {
 	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
 // MOCK: three ways to stop the counts' words being cut off, picked with ?counts=fit|wrap|body.
-export type CountsVariant = "now" | "fit" | "wrap" | "body";
+export type CountsVariant = "now" | "fit" | "wrap" | "body" | "head" | "inline";
+/** Variants that put the counts in the card's first row, beside the study type. */
+const IN_HEADER = new Set<CountsVariant>(["head", "inline"]);
+const FITS = new Set<CountsVariant>(["fit"]);
 const COUNT_ROW: Record<CountsVariant, string> = {
 	// What main does today.
 	now: "flex min-w-0 items-center gap-4 overflow-hidden whitespace-nowrap",
@@ -193,6 +202,10 @@ const COUNT_ROW: Record<CountsVariant, string> = {
 	wrap: "flex shrink-0 items-center gap-4 whitespace-nowrap",
 	// In the card, under the byline, where the counts have the card's whole width.
 	body: "flex flex-wrap items-center gap-x-4 whitespace-nowrap",
+	// At the end of the study type's row; alone on the row they start it.
+	head: "ml-auto first:ml-0 flex items-center gap-4 whitespace-nowrap",
+	// After the study type, past the divider the byline uses.
+	inline: "flex items-center gap-4 whitespace-nowrap",
 };
 const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 const NEW_TAB = { target: "_blank", rel: "noopener noreferrer" } as const;
@@ -202,22 +215,24 @@ function CountItem({ count, locale, of, onOpenAlex, linksInNewTab, variant }: { 
 	const { icon, tone, colour, held, total, here, label, words } = count;
 	// A reference an editor added by hand may not be one OpenAlex lists, so the total is only shown when it holds.
 	const all = total !== null && total >= held ? total : null;
+	const big = IN_HEADER.has(variant);
+	const line = big ? "h-7 leading-7" : "h-8 leading-8";
 	const numbers = <>
 		<HugeiconsIcon icon={icon} className="size-3.5" />
 		{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
 		{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
 	</>;
-	const word = <span data-count-label className={twMerge("h-8 shrink-0 whitespace-nowrap leading-8 opacity-70", variant === "now" && "sr-only @[400px]:not-sr-only")}>{label(all ?? held)}</span>;
+	const word = <span data-count-label className={twMerge("shrink-0 break-all opacity-70", line, variant === "now" && "sr-only @[400px]:not-sr-only", big && "sr-only @[720px]:not-sr-only")}>{label(all ?? held)}</span>;
 	return (
 		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
-			{variant === "fit" ? (
+			{FITS.has(variant) ? (
 				// Its word wraps out of sight as a whole, never cut; screen readers and the tooltip still have it.
-				<span className={twMerge("flex h-8 min-w-min flex-wrap content-start items-center gap-x-1.5 overflow-hidden text-xs font-medium first:shrink-[100]", colour)}>
-					<span className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap">{numbers}</span>
+				<span className={twMerge("flex min-w-min flex-wrap content-start items-center gap-x-1.5 overflow-hidden font-medium first:shrink-[100]", line, big ? "text-sm" : "text-xs", colour)}>
+					<span className={twMerge("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap", line)}>{numbers}</span>
 					{word}
 				</span>
 			) : (
-				<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
+				<span className={twMerge("inline-flex shrink-0 items-center gap-1.5 font-medium", line, big ? "text-sm" : "text-xs", colour)}>
 					{numbers}
 					{word}
 				</span>
@@ -343,7 +358,7 @@ function ResourceInteractions({
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className={twMerge("w-full rounded-2xl flex flex-row items-center", counts !== "now" && "flex-wrap gap-y-1")}>
-					{counts !== "body" && <CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} variant={counts} />}
+					{counts !== "body" && !IN_HEADER.has(counts) && <CitationCounts itemData={itemData} linksInNewTab={linksInNewTab} variant={counts} />}
 					<div className="ml-auto flex shrink-0 items-center justify-end z-10 gap-2 pl-2">
 						{itemHref && (
 							<Button
@@ -468,16 +483,19 @@ type ArticleProps = {
  * What the record is and, where it has been checked, how it held up: read first, above the title. A library with AI types its
  * records, so a card still loading there keeps the line's place.
  */
-function ResourceFacts({ item, isLoading }: { item: Item | ListItem | undefined; isLoading: boolean }) {
+function ResourceFacts({ item, isLoading, counts }: { item: Item | ListItem | undefined; isLoading: boolean; counts: CountsVariant }) {
 	const typesRecords = useLibraryConfig().ai.providers.some((provider) => provider.enabled);
 	const record = useEvidenceRecord(item?.key);
 	if (isLoading && typesRecords) return <Skeleton isLoaded={false} className="-mb-2 h-7 w-40 rounded-2xl" />;
 	const reading = item?.reading;
-	if (!record?.verdict && !reading) return null;
+	const hasCounts = useCountRows(item).length > 0 && IN_HEADER.has(counts);
+	if (!record?.verdict && !reading && !hasCounts) return null;
 	return (
-		<div className="-mb-2 flex h-7 items-center gap-3 text-sm">
-			{reading && <StudyTypeLabel reading={reading} />}
+		<div className={twMerge("-mb-2 flex h-7 items-center gap-3 text-sm", hasCounts && "h-auto min-h-7 flex-wrap")}>
+			{reading && <StudyTypeLabel reading={reading} className={hasCounts ? "shrink-0 whitespace-nowrap" : undefined} />}
 			<EvidenceVerdict item={item} />
+			{hasCounts && counts === "inline" && <span aria-hidden className="hidden text-black/80 dark:text-white/60 @[380px]:inline">|</span>}
+			{hasCounts && <CitationCounts itemData={item} linksInNewTab={false} variant={counts} />}
 		</div>
 	);
 }
@@ -551,7 +569,7 @@ function ResourceArticle(props: ArticleProps) {
 	const { titleId, finalItemData, finalIsLoading } = props;
 	return (
 		<article className="flex flex-col gap-4">
-			<ResourceFacts item={finalItemData} isLoading={finalIsLoading} />
+			<ResourceFacts item={finalItemData} isLoading={finalIsLoading} counts={props.counts} />
 			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
 				<ResourceTitle id={titleId} item={finalItemData} />
 			</Skeleton>
@@ -600,7 +618,7 @@ export default function Resource({
 	const tNav = useTranslations("nav");
 	const format = useFormatter();
 	const [countsParam] = useQueryState("counts");
-	const counts: CountsVariant = countsParam === "now" || countsParam === "wrap" || countsParam === "body" ? countsParam : "fit";
+	const counts: CountsVariant = (["now", "wrap", "body", "head", "inline"] as const).find((v) => v === countsParam) ?? "fit";
 
 	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
 		useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
