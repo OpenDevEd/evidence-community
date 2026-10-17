@@ -38,8 +38,9 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const focus = useFocusName(now, shown, more);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
+	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
-		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
+		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
 			<SearchPanel ref={searchPanel} {...lists} checked={checked} checks={checks} smallLayout={smallLayout} />
 			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
