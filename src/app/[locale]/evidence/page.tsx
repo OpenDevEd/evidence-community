@@ -1,6 +1,7 @@
 import EvidenceMap from "@/components/pages/evidence/EvidenceMap";
 import { EVIDENCE_DATA, type ChainEntry } from "@/components/pages/evidence/data";
 import { hasEvidenceMap, readEvidenceData } from "@/components/pages/evidence/server-data";
+import type { CheckCounts } from "@/components/pages/evidence/filter";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { preload } from "react-dom";
@@ -14,7 +15,7 @@ export default async function EvidencePage() {
 	if (!(await hasEvidenceMap())) notFound();
 	// The map's first frame needs these three files: they start downloading with the page, before the script that reads them.
 	for (const file of ["meta.json", "places.json", "points.bin.gz"]) preload(`${EVIDENCE_DATA}/${file}`, { as: "fetch", crossOrigin: "anonymous" });
-	// The chains list and the checks' counts are in the page itself, so the panels are whole from the first frame.
-	const [chains, meta] = await Promise.all([readEvidenceData<ChainEntry[]>("chains.json"), readEvidenceData<{ verdicts: Record<string, number> }>("meta.json")]);
-	return <EvidenceMap chains={chains} verdictCounts={meta.verdicts} />;
+	// The chains list and the switches' counts are in the page itself, so the panels are whole from the first frame.
+	const [chains, meta] = await Promise.all([readEvidenceData<ChainEntry[]>("chains.json"), readEvidenceData<{ checks: CheckCounts }>("meta.json")]);
+	return <EvidenceMap chains={chains} checkCounts={meta.checks} />;
 }

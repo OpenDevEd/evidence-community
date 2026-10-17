@@ -26,7 +26,6 @@ export type Results = SWRResponse<ItemsGetResponse>;
 export type OnHover = (index: number | null, label?: Label) => void;
 /** What the search lights up on the map: how many it found, how many of those are on the map, and whether that is all of them. */
 export type Lit = { total: number; lit: number; complete: boolean };
-export type Checks = { counts: Record<string, number>; selected: ReadonlySet<number>; onChange: (next: ReadonlySet<number>) => void };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -155,30 +154,6 @@ export function ResultList({ filters, results, lit, typing, more, loaded, onOpen
 			</ol>
 			<Pages total={Math.min(data?.totalPages ?? 1, 50)} page={filters.queryParams.page || 1} onChange={filters.handlePageChange} label="Pages of results" />
 		</section>
-	);
-}
-
-/** The checks as switches: each lights its papers up on the map. */
-export function VerdictSwitches({ counts, selected, onChange, wrap }: Checks & { wrap: boolean }) {
-	const toggle = (v: number) => {
-		const next = new Set(selected);
-		if (next.has(v)) next.delete(v);
-		else next.add(v);
-		onChange(next);
-	};
-	return (
-		<div role="group" aria-label="Light up papers by their check" className={twMerge("flex gap-1", wrap ? "flex-wrap" : "overflow-x-auto no-scrollbar")}>
-			{VERDICT_ORDER.map((name) => {
-				const v = VERDICTS.indexOf(name), on = selected.has(v);
-				return (
-					<button key={name} type="button" aria-pressed={on} onClick={() => toggle(v)} className={twMerge("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-xs font-medium outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10", on && "bg-black/[0.07] dark:bg-white/15")}>
-						<VerdictIcon verdict={v} size={14} />
-						{VERDICT[name].label}
-						<span className={twMerge("tabular-nums", muted)}>{counts[v] ?? 0}</span>
-					</button>
-				);
-			})}
-		</div>
 	);
 }
 

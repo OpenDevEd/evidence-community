@@ -18,6 +18,7 @@ import ItemsList from "../features/items/ItemsList";
 import { AnimatePresence, motion } from "framer-motion";
 import { Card } from "@/components/nextui/Card";
 import { SearchBar } from "@/components/features/SearchBar";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -463,10 +464,11 @@ function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 	return (
 		<div className="fixed top-20 md:bottom-0 md:top-auto left-0 z-10">
 			<div className="w-screen md:w-[42rem] md:p-4">
-				<div className="bg-white dark:bg-secondary-400 md:rounded-2xl flex gap-4 p-2 shadow-[0_-10px_10px_0_theme(colors.accent.500)] md:shadow-none">
+				<div className="bg-white dark:bg-secondary-400 md:rounded-2xl flex gap-4 p-2 shadow-[0_-10px_10px_0_theme(colors.accent.500)] md:shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)]">
 					<SearchBar
 						handleSearchChange={props.handleSearchChange}
 						search={props.queryParams.search}
+						classNames={filledInputSlots}
 					/>
 				</div>
 			</div>

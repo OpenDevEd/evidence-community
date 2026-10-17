@@ -1,7 +1,7 @@
 import { Graph, LinkStyle, PointShape, TransitionEasing } from "@cosmos.gl/graph";
 import type { Loaded, More, Opened } from "./client";
 import { evidenceClient } from "./client";
-import { CHECKED, FLAG, VERDICTS, type Chain, type Label, type Theme } from "./data";
+import { aroundOf, CHECKED, FLAG, VERDICTS, type Chain, type Label, type Theme } from "./data";
 import { LabelOverlay, type Camera } from "./overlay";
 import { edgeColour, inkAt, STAGE, type RGBA } from "./palette";
 
@@ -501,8 +501,7 @@ export class EvidenceGraph {
 
 	/** A paper and the citations to and from it that light up when it is opened. */
 	private aroundMembers() {
-		const [index, cites, citedBy] = this.around!;
-		return [index, ...[...new Set([...cites, ...citedBy])].slice(0, 1500)];
+		return aroundOf(...this.around!);
 	}
 
 	/** Opens a paper: its chain moves into layers in front of the map, or its citations light up where they are. */
@@ -614,6 +613,11 @@ export class EvidenceGraph {
 		this.placed = [px, py, q(xs, 0.15, px), q(ys, 0.15, py), q(xs, 0.85, px), q(ys, 0.85, py)];
 		this.placedPadding = 0.15;
 		this.fitTo(this.placed, 0.15);
+	}
+
+	/** Fits what is in front again, as it moves: the space beside the panels changed (a notice over the map came or went). */
+	refit() {
+		if (this.placed) this.fitTo(this.placed, this.placedPadding);
 	}
 
 	private release() {

@@ -28,7 +28,7 @@ vi.mock("@/components/pages/evidence/graph", () => ({
 	EvidenceGraph: class {
 		ready = Promise.resolve();
 		select(index: number | null) { return Promise.resolve(index === null ? null : { index, chain: index === -1 ? checked : null, cites: [], citedBy: [] }); }
-		setMore() {} setTheme() {} setHighlight() {} hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {}
+		setMore() {} setTheme() {} setHighlight() {} hoverHost() {} name() {} destroy() {} zoomBy() {} fitAll() {} refit() {}
 	},
 }));
 
@@ -58,7 +58,7 @@ async function open(address: string, wait = 20) {
 		root.render(
 			<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
 				<NuqsTestingAdapter searchParams={address} onUrlUpdate={(event: UrlUpdateEvent) => updates.push(event.searchParams)}>
-					<EvidenceMap chains={[]} verdictCounts={{ 3: 1, 7: 1 }} />
+					<EvidenceMap chains={[]} checkCounts={{ 1: { 0: 1, 7: 1 }, 3: { 3: 1 } }} />
 				</NuqsTestingAdapter>
 			</SWRConfig>,
 		);

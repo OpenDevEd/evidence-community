@@ -1,17 +1,20 @@
 "use client";
 
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
-import type { Ref } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
+import type { ReactNode, Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import type { ChainEntry, Label } from "./data";
 import type { EvidenceGraph } from "./graph";
 import { useHover, type Hover } from "./hover";
-import { Chains, muted, PANEL, ResultList, VerdictSwitches, type Checked, type Checks, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { MapFilter, type Checks } from "./filter";
+import { Chains, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
 import { labelOfRecord, useRecord } from "./records";
 import { VerdictChip } from "./verdict-chip";
 
@@ -21,10 +24,10 @@ export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loade
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
 				<div className="p-2">
-					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} />
+					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
 				</div>
 				<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
-					<VerdictSwitches {...checks} wrap />
+					<MapFilter {...checks} />
 				</div>
 				<div className="flex min-h-0 flex-1 flex-col pt-2">
 					{results ? (
@@ -50,12 +53,47 @@ export function Controls({ graph }: { graph: EvidenceGraph | null }) {
 	);
 }
 
+/** A short notice over the map, with the one button that undoes what it says. */
+function Notice({ children, action, onPress, kind }: { children: ReactNode; action: string; onPress: () => void; kind?: string }) {
+	const still = useReducedMotion();
+	// A notice on its way out no longer takes room: the map is fitted as if it were gone.
+	const leaving = !useIsPresent();
+	const hidden = { opacity: 0, y: still ? 0 : -16 };
+	return (
+		// One line, 2.75 rem high: the map is fitted below the notices by that height. It slides down into place and back up.
+		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm")}>
+			<span>{children}</span>
+			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
+		</motion.div>
+	);
+}
+
 /** A paper address that is not on the map: said plainly, with the way back. */
 export function Missing({ onClear }: { onClear: () => void }) {
 	return (
-		<div role="status" className={twMerge(PANEL, "fixed left-1/2 top-[12.5rem] z-20 flex -translate-x-1/2 animate-fade-in items-center gap-3 py-2 pl-4 pr-2 text-sm motion-reduce:animate-none xl:left-[calc(50%+12rem)] xl:top-28")}>
-			That paper is not on this map.
-			<button type="button" onClick={onClear} className="rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10">Back to the map</button>
+		// Centred by its wrapper: the notice's own transform is its slide.
+		<div className="fixed left-1/2 top-[12.5rem] z-20 -translate-x-1/2 xl:top-28">
+			<Notice action="Back to the map" onPress={onClear}>That paper is not on this map.</Notice>
+		</div>
+	);
+}
+
+/**
+ * Why the map is faded, over it from 1,280 px wide, centred on the page whichever panels are open: a paper (or every checked
+ * paper) brought to the front, and the filter highlighting some papers, one under the other. Each says how to undo it; the map
+ * is fitted below them.
+ */
+export function MapStatus({ focus, highlighted, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; onShowAll: () => void; onClearFilter: () => void }) {
+	return (
+		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
+			<AnimatePresence>
+				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front</Notice>}
+				{highlighted !== null && (
+					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
+						<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+					</Notice>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

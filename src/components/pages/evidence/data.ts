@@ -35,7 +35,7 @@ export type Points = {
 export const FLAG = { library: 1, corpus: 2, chain: 4, outside: 8, methods: 16, stray: 32 } as const;
 
 /** What a paper is, by the evidence map's reading; `unknown` for most of the library, which the map does not cover. */
-export const KINDS = ["unknown", "primary", "review", "meta", "secondOrder", "commentary", "methods"] as const;
+export const KINDS = ["unknown", "primary", "review", "meta", "secondOrder", "commentary", "methods", "critique", "methodsPaper"] as const;
 export type Kind = (typeof KINDS)[number];
 
 /** Björn's integrity verdicts, in his order: 0 is not assessed. */
@@ -53,6 +53,9 @@ export type Chain = { focus: number; layers: number[][]; links: [number, number]
 
 /** The chain asked for in place of a paper: Björn's whole graph of checked papers. */
 export const CHECKED = -1;
+
+/** An opened paper and the citations to and from it, the most a neighbourhood lights. */
+export const aroundOf = (index: number, cites: number[], citedBy: number[]) => [index, ...[...new Set([...cites, ...citedBy])].slice(0, 1500)];
 
 /** A record's neighbourhood inside the library. */
 export type Neighbourhood = { cites: number[]; citedBy: number[] };
@@ -80,8 +83,8 @@ export type Theme = "light" | "dark";
 /** A meta-analysis or review that names the studies it analysed, as the chains list shows it. */
 export type ChainEntry = { index: number; paper: string; who: string; year: number | null; title: string; verdict: number; outside: boolean; analyses: number };
 
-/** A paper's level in Björn's graph, by its kind: 1 a primary study, 2 a meta-analysis or review, 3 a review of reviews. */
+/** A paper's level in Björn's graph, by its kind: 1 a primary study, 2 a meta-analysis or review, 3 a review of reviews or a critique of meta-analyses. */
 export function levelOf(kind: number) {
 	const name = KINDS[kind];
-	return name === "secondOrder" ? 3 : name === "meta" || name === "review" ? 2 : 1;
+	return name === "secondOrder" || name === "critique" ? 3 : name === "meta" || name === "review" ? 2 : 1;
 }

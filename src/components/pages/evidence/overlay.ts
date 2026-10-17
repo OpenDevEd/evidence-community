@@ -310,7 +310,7 @@ export class LabelOverlay {
 const isStrong = (camera: Camera, index: number, chainLabel: boolean) => (chainLabel && index === camera.focus) || index === camera.hovered;
 
 /** A paper's name on the map: who and when. */
-const nameOf = (label: { who: string; year: number | null }) => (label.year ? `${label.who} ${label.year}` : label.who);
+export const nameOf = (label: { who: string; year: number | null }) => (label.year ? `${label.who} ${label.year}` : label.who);
 
 /** Few enough names that the map still reads as a map: more as the reader comes closer. */
 const namesAt = (scale: number) => (scale > 12 ? 90 : scale > 6 ? 60 : 36);

@@ -47,15 +47,30 @@ const BAR_BESIDE_CHAT: Record<NavbarStyleVariant, string> = {
 	wide: "lg:h-14 lg:py-2 xl:h-navbar-split xl:py-4",
 };
 
+/**
+ * The bar over a page that runs under the header (the map, the evidence map, the
+ * home page hero), at three quarters of its size, as the small style scales its
+ * whole header. The wide band behind it must stay full width, so only the bar is
+ * zoomed: unlike a scale, the zoom gives up the height it takes from the bar, and
+ * the bar still fills the band, up to the site's width (96rem, a third more before
+ * the zoom).
+ */
+const BAR_OVER_PAGE: Record<NavbarStyleVariant, string> = {
+	small: "",
+	wide: "xl:[zoom:0.75] xl:max-w-[128rem]",
+};
+
 /** The bar inside the header: its size, surface and corners. */
-function barClassName(
-	styleVariant: NavbarStyleVariant,
-	chatEngaged: boolean,
-	showNavbarSearch: boolean,
-) {
+function barClassName({ styleVariant, floatsOverPage, chatEngaged, showNavbarSearch }: {
+	styleVariant: NavbarStyleVariant;
+	floatsOverPage: boolean;
+	chatEngaged: boolean;
+	showNavbarSearch: boolean;
+}) {
 	return twMerge(
 		"navbar-bar xl:h-navbar h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-header duration-split ease-split motion-reduce:transition-none",
 		BAR_STYLE[styleVariant],
+		floatsOverPage && BAR_OVER_PAGE[styleVariant],
 		chatEngaged && BAR_BESIDE_CHAT[styleVariant],
 		// When the search bar is docked beneath the navbar (non-wide
 		// style), square the bottom so the two read as one unit.
@@ -144,11 +159,7 @@ export default function Navbar() {
 			className={headerClassName(styleVariant, floatsOverPage, chatEngaged)}
 		>
 			<div
-				className={barClassName(
-					styleVariant,
-					chatEngaged,
-					showNavbarSearch,
-				)}
+				className={barClassName({ styleVariant, floatsOverPage, chatEngaged, showNavbarSearch })}
 			>
 				<Logo />
 

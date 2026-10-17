@@ -7,6 +7,7 @@ import { listingParams, resultParams, serializeSearchParams } from "@/lib/search
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { evidenceClient, type Loaded, type More } from "./client";
 import { CHECKED, type Theme } from "./data";
+import { matchesChecks } from "./filter";
 import { EvidenceGraph } from "./graph";
 import { setHover } from "./hover";
 import type { Lit } from "./lists";
@@ -48,6 +49,8 @@ export function useOpened(address: Address, more: More | null) {
 		openChecked: () => { void setPaper(null); void setView("checked"); },
 		close: () => closeIn(address),
 		clear: () => void setPaper(null),
+		/** Back to the whole map, from a paper or the checked papers. */
+		showAll: () => { void setPaper(null); void setView(null); },
 	};
 }
 
@@ -142,7 +145,7 @@ function restOf(query: string, first: Hits | undefined) {
 const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.total === first?.total ? all : first);
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
-const withVerdicts = (loaded: Loaded, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter((i) => verdicts.has(loaded.points.verdict[i]));
+const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
 
 /** What lights up: the search's papers, the checks' papers, or the papers both light. Nothing lit lights everything. */
 function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
@@ -152,15 +155,17 @@ function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
 }
 
 /** The search's page of results, how much of it is lit, and what the search and the checks light on the map. */
-export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, verdicts: ReadonlySet<number>) {
+export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
 	const query = searchQuery(filters.queryParams);
 	// The list's page of results is fetched only while there is a search: without one the panel lists the evidence chains.
 	const results = useSWR<ItemsGetResponse>(query ? buildItemsQuery(listingParams(filters.queryParams), "/items") : null, fetcher, { ...once, keepPreviousData: true });
 	const hits = useSearchHits(query);
 	const lit = useMemo(() => {
 		if (!loaded) return undefined;
-		return litPoints(query && hits ? pointsOf(hits.bits) : null, verdicts.size ? withVerdicts(loaded, verdicts) : null);
-	}, [loaded, hits, query, verdicts]);
-	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: hits.lit, complete: hits.found >= hits.total } : undefined;
+		return litPoints(query && hits ? pointsOf(hits.bits) : null, types.size || verdicts.size ? withChecks(loaded, types, verdicts) : null);
+	}, [loaded, hits, query, types, verdicts]);
+	// With the filter on, the results lit on the map are those the filter keeps too.
+	const filtered = (types.size || verdicts.size) && lit;
+	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: filtered ? filtered.length : hits.lit, complete: hits.found >= hits.total } : undefined;
 	return { results: query ? results : undefined, lit, litCount };
 }

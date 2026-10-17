@@ -3,10 +3,15 @@ export type Area = { left: number; right: number; top: number; bottom: number };
 
 const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
-/** Wide: the search panel on the left, the paper's on the right. */
+/**
+ * Wide: the search panel on the left, the paper's on the right, and the notices over the map under the header, each 2.75 rem high
+ * with 0.5 rem below it: the one that says what is in front whenever a paper is open (counted, as it is not on the page yet while
+ * the paper opens), and the filter's while it is on.
+ */
 function wideArea(withPaper: boolean, width: number, height: number): Area {
 	const r = rem();
-	return { left: 24 * r, right: withPaper ? width - 27 * r : width, top: 7 * r, bottom: height - r };
+	const notices = Number(withPaper) + Number(Boolean(document.querySelector("[data-evidence-notice=filter]")));
+	return { left: 24 * r, right: withPaper ? width - 27 * r : width, top: (7 + notices * 3.25) * r, bottom: height - r };
 }
 
 /**

@@ -181,8 +181,19 @@ const libraryByDoi = new Map();
 for (const [key, doi, y, t, a, n] of csv("/tmp/evidence-data/aied-doi.csv")) if (doi && !libraryByDoi.has(doi)) libraryByDoi.set(doi, { key, year: Number(y) || 0, title: t, author: a, authors: Number(n) || 0 });
 
 // Björn's evidence map. Points: linked library records [0, L), then library records without links, then papers outside the library.
-const map = JSON.parse(fs.readFileSync(MAP, "utf8"));
-const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, UNCLASSIFIED: 0 };
+// The file can carry a whole reference tree (`tree_depth`, `cited_by`, `references`); the map draws only the evidence map's own
+// graph: the corpus, the papers that list what they analysed or cite, and the papers in those lists.
+const LISTS = ["analyses_these_papers", "also_cites_reviews", "also_cites_other"];
+const whole = JSON.parse(fs.readFileSync(MAP, "utf8"));
+const inGraph = new Set();
+for (const e of whole) {
+  const listed = LISTS.flatMap((list) => e[list] ?? []);
+  if (e.in_corpus || listed.length) inGraph.add(e.doi.toLowerCase());
+  for (const d of listed) inGraph.add(d.toLowerCase());
+}
+const map = whole.filter((e) => inGraph.has(e.doi.toLowerCase()));
+log("evidence map file:", whole.length, "papers, of which", map.length, "in its own graph");
+const KIND = { PRIMARY: 1, RCT: 1, QUANT: 1, REVIEW: 2, SR: 2, MA: 3, "SECOND-ORDER": 4, COMMENTARY: 5, CRITIQUE: 7, METHODS: 8, UNCLASSIFIED: 0 };
 const METHODS = /\b(prisma|statement|guideline|guidance|reporting|bias in meta|publication bias|heterogeneity|inconsistency|metafor|introduction to meta|practical meta|trim and fill|funnel|effect size|statistical power|r package|handbook|meta-analysis in r|robust variance|quality assessment|risk of bias)\b/i;
 const unlinked = new Map(), outsideIdx = new Map(), evidence = new Map();
 for (const entry of map) {
@@ -210,13 +221,14 @@ const bibYear = (bib) => Number((bib.match(/\((\d{4})[a-z]?\)/) ?? [])[1] ?? 0);
 const evidenceLinks = []; // from, to, type: 1 analyses, 2 cites a review, 3 cites
 for (const [i, entry] of evidence) {
   kind[i] = KIND[entry.study_type] ?? 0;
-  if (entry.study_level === 0) kind[i] = 5;
+  // Level 0 is a commentary, unless the file says it is a methods paper: a paper on how to do the work, in the corpus.
+  if (entry.study_level === 0 && entry.study_type !== "METHODS") kind[i] = 5;
   verdict[i] = entry.integrity_assessment?.cat ?? 0;
   if (entry.in_corpus) flags[i] |= 2;
   if (entry.analyses_these_papers?.length) flags[i] |= 4;
   if (i >= L2) { flags[i] |= 8; years[i] = bibYear(entry.bib); }
   if (!entry.in_corpus && (entry.cited_by?.length ?? 0) >= 12 && METHODS.test(entry.bib)) { flags[i] |= 16; kind[i] = 6; }
-  for (const [list, type] of [["analyses_these_papers", 1], ["also_cites_reviews", 2], ["also_cites_other", 3]])
+  for (const [list, type] of LISTS.map((list, k) => [list, k + 1]))
     for (const d of entry[list] ?? []) { const j = pointOf(d); if (j !== undefined && j !== i) evidenceLinks.push(i, j, type); }
 }
 // A point without a place of its own sits among the papers it is linked to, slightly apart: placed points pass their place on, a few times over.
@@ -316,7 +328,9 @@ for (const [i, e] of evidence) {
 }
 // Only papers drawn on the map are counted, so a switch lights as many as it says: a methods reference or a paper joined to
 // nothing on the map has no place there.
-const verdictCounts = {}; for (let i = 0; i < N; i++) if (verdict[i] && !(flags[i] & 48)) verdictCounts[verdict[i]] = (verdictCounts[verdict[i]] ?? 0) + 1;
+// The evidence map's papers by type and check, for the switches' counts: methods references and strays are left out.
+const checks = {};
+for (let i = 0; i < N; i++) if ((kind[i] || verdict[i]) && !(flags[i] & 48)) { const byVerdict = (checks[kind[i]] ??= {}); byVerdict[verdict[i]] = (byVerdict[verdict[i]] ?? 0) + 1; }
 
 // Write: one binary file of columns, all little-endian, each 4-byte aligned.
 // Positions to 1/16 of a space unit, in 16 bits: half the bytes of floats, and far below what a screen can show.
@@ -351,6 +365,6 @@ fs.writeFileSync(`${OUT}/chains.json`, JSON.stringify(chains));
 // The record page reads this at build time, so its counts are there in the first paint: next to the app, not in public/.
 fs.writeFileSync(new URL("../../src/components/pages/evidence/records.json", import.meta.url), JSON.stringify({ host: LIBRARY, records }));
 fs.writeFileSync(`${OUT}/places-raw.json`, JSON.stringify(places));
-fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ host: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, verdicts: verdictCounts, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
+fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ host: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, checks, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
 for (const f of fs.readdirSync(OUT)) log(f, (fs.statSync(`${OUT}/${f}`).size / 1e6).toFixed(2), "MB");
 log("regions", places.filter((p) => p.level === 1).slice(0, 10).map((p) => `${p.terms.slice(0, 3).join("/")} (${p.size})`).join(" | "));
