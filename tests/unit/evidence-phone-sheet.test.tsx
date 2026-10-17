@@ -33,7 +33,7 @@ async function show() {
 				<PhoneSheet
 					selection={{ index: 0, chain: null, cites: [], citedBy: [] }} opening={false} loaded={loaded as never} more={more as never}
 					filters={{ queryParams: {}, handleSearchChange: vi.fn(), handlePageChange: vi.fn() } as never} results={results as never} lit={undefined} typing={false} onTyped={vi.fn()}
-					chains={[]} checked={{ count: 0, open: false, onOpen: vi.fn() }} checks={{ counts: {}, selected: new Set(), onChange: vi.fn() }} selected={0}
+					chains={[]} checked={{ count: 0, open: false, onOpen: vi.fn() }} checks={{ counts: {}, types: new Set(), verdicts: new Set(), onTypes: vi.fn(), onVerdicts: vi.fn() }} selected={0}
 					onOpen={vi.fn()} onOpenKey={onOpenKey} onClose={vi.fn()} onHover={vi.fn()}
 				/>
 			</SWRConfig>,

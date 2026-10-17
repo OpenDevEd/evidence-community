@@ -11,7 +11,7 @@ import type { Loaded, More } from "./client";
 import type { ChainEntry, Label } from "./data";
 import type { EvidenceGraph } from "./graph";
 import { useHover, type Hover } from "./hover";
-import { Chains, muted, PANEL, ResultList, VerdictSwitches, type Checked, type Checks, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { Chains, CheckSwitches, muted, PANEL, ResultList, type Checked, type Checks, type Filters, type Lit, type OnHover, type Results } from "./lists";
 import { labelOfRecord, useRecord } from "./records";
 import { VerdictChip } from "./verdict-chip";
 
@@ -24,7 +24,7 @@ export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loade
 					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} />
 				</div>
 				<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
-					<VerdictSwitches {...checks} wrap />
+					<CheckSwitches {...checks} wrap />
 				</div>
 				<div className="flex min-h-0 flex-1 flex-col pt-2">
 					{results ? (

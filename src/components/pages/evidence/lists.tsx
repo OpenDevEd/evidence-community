@@ -11,11 +11,11 @@ import { Pagination } from "@/components/nextui/Pagination";
 import type { useFiltersContext } from "@/context/FiltersProvider";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import { FLAG, VERDICTS, type ChainEntry, type Label } from "./data";
+import { FLAG, KINDS, VERDICTS, type ChainEntry, type Label } from "./data";
 import { css, verdictDot } from "./palette";
 import { labelOfRecord } from "./records";
 import { VerdictIcon } from "./verdict-chip";
-import { VERDICT, VERDICT_ORDER } from "./verdicts";
+import { KIND_PLURAL, TYPE_ORDER, VERDICT, VERDICT_ORDER } from "./verdicts";
 
 export const PANEL = "rounded-2xl bg-white shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] dark:bg-secondary-400";
 export const muted = "text-black/55 dark:text-white/55";
@@ -26,7 +26,8 @@ export type Results = SWRResponse<ItemsGetResponse>;
 export type OnHover = (index: number | null, label?: Label) => void;
 /** What the search lights up on the map: how many it found, how many of those are on the map, and whether that is all of them. */
 export type Lit = { total: number; lit: number; complete: boolean };
-export type Checks = { counts: Record<string, number>; selected: ReadonlySet<number>; onChange: (next: ReadonlySet<number>) => void };
+/** The switches' counts, which types and checks are on, and how to turn them. */
+export type Checks = { counts: CheckCounts; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; onTypes: (next: ReadonlySet<number>) => void; onVerdicts: (next: ReadonlySet<number>) => void };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -159,25 +160,66 @@ export function ResultList({ filters, results, lit, typing, more, loaded, onOpen
 }
 
 /** The checks as switches: each lights its papers up on the map. */
-export function VerdictSwitches({ counts, selected, onChange, wrap }: Checks & { wrap: boolean }) {
-	const toggle = (v: number) => {
-		const next = new Set(selected);
-		if (next.has(v)) next.delete(v);
-		else next.add(v);
-		onChange(next);
-	};
+/** How many of the evidence map's papers a type and a check share, from the counts built with the map: types, then checks. */
+export type CheckCounts = Record<string, Record<string, number>>;
+
+/** The papers counted where both tests hold: a type and a check. */
+const countWhere = (counts: CheckCounts, ofType: (kind: number) => boolean, ofCheck: (verdict: number) => boolean) =>
+	Object.entries(counts).reduce((sum, [kind, checks]) => (ofType(Number(kind)) ? Object.entries(checks).reduce((all, [verdict, n]) => (ofCheck(Number(verdict)) ? all + n : all), sum) : sum), 0);
+
+/** The checked papers, of every type. */
+export const checkedCount = (counts: CheckCounts) => countWhere(counts, () => true, (verdict) => verdict > 0);
+
+const toggled = (set: ReadonlySet<number>, value: number) => {
+	const next = new Set(set);
+	if (!next.delete(value)) next.add(value);
+	return next;
+};
+
+const SWITCH = "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-xs font-medium outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10";
+
+/** A switch: its name, how many papers it would light, and whether it is on. */
+function Switch({ on, count, onPress, children }: { on: boolean; count: number; onPress: () => void; children: ReactNode }) {
 	return (
-		<div role="group" aria-label="Light up papers by their check" className={twMerge("flex gap-1", wrap ? "flex-wrap" : "overflow-x-auto no-scrollbar")}>
-			{VERDICT_ORDER.map((name) => {
-				const v = VERDICTS.indexOf(name), on = selected.has(v);
-				return (
-					<button key={name} type="button" aria-pressed={on} onClick={() => toggle(v)} className={twMerge("inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-2.5 py-1.5 text-xs font-medium outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10", on && "bg-black/[0.07] dark:bg-white/15")}>
-						<VerdictIcon verdict={v} size={14} />
-						{VERDICT[name].label}
-						<span className={twMerge("tabular-nums", muted)}>{counts[v] ?? 0}</span>
-					</button>
-				);
-			})}
+		<button type="button" aria-pressed={on} onClick={onPress} className={twMerge(SWITCH, on && "bg-black/[0.07] dark:bg-white/15")}>
+			{children}
+			<span className={twMerge("tabular-nums", muted)}>{count}</span>
+		</button>
+	);
+}
+
+/**
+ * Two rows of switches that light papers on the map: by type, then by check. Within a row any switch on lights its papers; with
+ * both rows on, a paper must match each. A switch's count is what it would light with the other row as it is.
+ */
+export function CheckSwitches({ counts, types, verdicts, onTypes, onVerdicts, wrap }: Checks & { wrap: boolean }) {
+	const row = twMerge("flex gap-1", wrap ? "flex-wrap" : "overflow-x-auto no-scrollbar");
+	const inTypes = (kind: number) => !types.size || types.has(kind);
+	const inChecks = (verdict: number) => !verdicts.size || verdicts.has(verdict);
+	const shown = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]);
+	return (
+		<div className="space-y-1.5">
+			<div role="group" aria-label="Light up papers by their type" className={row}>
+				{shown.map((name) => {
+					const kind = KINDS.indexOf(name);
+					return (
+						<Switch key={name} on={types.has(kind)} count={countWhere(counts, (k) => k === kind, inChecks)} onPress={() => onTypes(toggled(types, kind))}>
+							{KIND_PLURAL[name]}
+						</Switch>
+					);
+				})}
+			</div>
+			<div role="group" aria-label="Light up papers by their check" className={twMerge(row, "border-t border-black/[0.06] pt-1.5 dark:border-white/[0.08]")}>
+				{VERDICT_ORDER.map((name) => {
+					const verdict = VERDICTS.indexOf(name);
+					return (
+						<Switch key={name} on={verdicts.has(verdict)} count={countWhere(counts, inTypes, (v) => v === verdict)} onPress={() => onVerdicts(toggled(verdicts, verdict))}>
+							<VerdictIcon verdict={verdict} size={14} />
+							{VERDICT[name].label}
+						</Switch>
+					);
+				})}
+			</div>
 		</div>
 	);
 }

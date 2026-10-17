@@ -8,7 +8,7 @@ import { twMerge } from "@/lib/tw-merge";
 import { CHECKED, type ChainEntry, type Label, type Theme } from "./data";
 import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
-import type { Lit } from "./lists";
+import { checkedCount, type CheckCounts, type Lit } from "./lists";
 import { Controls, HoverCard, Missing, SearchPanel } from "./panels";
 import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
@@ -20,9 +20,10 @@ import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evid
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
  * on top, coloured by their checks. Search lights papers up; opening one moves its chain into columns in front of the map.
  */
-export default function EvidenceMap({ chains, verdictCounts }: { chains: ChainEntry[]; verdictCounts: Record<string, number> }) {
+export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntry[]; checkCounts: CheckCounts }) {
 	const { theme, smallLayout, stage, labels, searchPanel, paperPanel } = usePageLook();
 	const filters = useFiltersContext();
+	const [types, setTypes] = useState<ReadonlySet<number>>(new Set());
 	const [verdicts, setVerdicts] = useState<ReadonlySet<number>>(new Set());
 	// Text typed into the search that has not run yet: the results on screen are already the last search's.
 	const [typing, setTyping] = useState(false);
@@ -31,9 +32,9 @@ export default function EvidenceMap({ chains, verdictCounts }: { chains: ChainEn
 	const address = useAddress();
 	const { loaded, more, graph, failed, incomplete } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
-	const { results, lit, litCount } = useLighting(filters, loaded, verdicts);
+	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
-	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts });
+	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
@@ -97,16 +98,16 @@ function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: Retu
 type PanelInputs = {
 	filters: ReturnType<typeof useFiltersContext>; results: ReturnType<typeof useLighting>["results"]; litCount: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void;
 	loaded: Loaded | null; more: More | null; chains: ChainEntry[]; now: ReturnType<typeof useOpened>; graph: EvidenceGraph | null; shown: Selection | null;
-	verdictCounts: Record<string, number>; verdicts: ReadonlySet<number>; setVerdicts: (next: ReadonlySet<number>) => void;
+	checkCounts: CheckCounts; types: ReadonlySet<number>; setTypes: (next: ReadonlySet<number>) => void; verdicts: ReadonlySet<number>; setVerdicts: (next: ReadonlySet<number>) => void;
 };
 
 /** What the side panels and the phone's sheet are given: the lists, the opened paper, the check switches and the checked graph. */
-function panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts }: PanelInputs) {
+function panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
 	const onHover = (i: number | null, label?: Label) => graph?.hoverHost(i ?? undefined, label);
 	return {
 		lists: { filters, results, lit: litCount, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
 		paper: { selection: shown, opening: now.target !== null && !shown, loaded, more, onOpen: now.open, onClose: now.close, onHover },
-		checks: { counts: verdictCounts, selected: verdicts, onChange: setVerdicts },
-		checked: { count: Object.values(verdictCounts).reduce((sum, n) => sum + n, 0), open: now.target === CHECKED, onOpen: now.openChecked },
+		checks: { counts: checkCounts, types, verdicts, onTypes: setTypes, onVerdicts: setVerdicts },
+		checked: { count: checkedCount(checkCounts), open: now.target === CHECKED, onOpen: now.openChecked },
 	};
 }

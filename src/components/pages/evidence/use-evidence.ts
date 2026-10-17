@@ -6,7 +6,7 @@ import type { useFiltersContext } from "@/context/FiltersProvider";
 import { listingParams, resultParams, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, fetcher } from "@/lib/utils";
 import { evidenceClient, type Loaded, type More } from "./client";
-import { CHECKED, type Theme } from "./data";
+import { CHECKED, FLAG, type Theme } from "./data";
 import { EvidenceGraph } from "./graph";
 import { setHover } from "./hover";
 import type { Lit } from "./lists";
@@ -142,7 +142,10 @@ function restOf(query: string, first: Hits | undefined) {
 const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.total === first?.total ? all : first);
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
-const withVerdicts = (loaded: Loaded, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter((i) => verdicts.has(loaded.points.verdict[i]));
+/** The papers the switches light: of a type that is on, if any is, and with a check that is on, if any is. Methods references and strays are never lit, as they are never counted. */
+function withChecks({ points }: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
+	return Array.from(points.verdict.keys()).filter((i) => !(points.flags[i] & (FLAG.methods | FLAG.stray)) && (!types.size || types.has(points.kind[i])) && (!verdicts.size || verdicts.has(points.verdict[i])));
+}
 
 /** What lights up: the search's papers, the checks' papers, or the papers both light. Nothing lit lights everything. */
 function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
@@ -152,15 +155,15 @@ function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
 }
 
 /** The search's page of results, how much of it is lit, and what the search and the checks light on the map. */
-export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, verdicts: ReadonlySet<number>) {
+export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
 	const query = searchQuery(filters.queryParams);
 	// The list's page of results is fetched only while there is a search: without one the panel lists the evidence chains.
 	const results = useSWR<ItemsGetResponse>(query ? buildItemsQuery(listingParams(filters.queryParams), "/items") : null, fetcher, { ...once, keepPreviousData: true });
 	const hits = useSearchHits(query);
 	const lit = useMemo(() => {
 		if (!loaded) return undefined;
-		return litPoints(query && hits ? pointsOf(hits.bits) : null, verdicts.size ? withVerdicts(loaded, verdicts) : null);
-	}, [loaded, hits, query, verdicts]);
+		return litPoints(query && hits ? pointsOf(hits.bits) : null, types.size || verdicts.size ? withChecks(loaded, types, verdicts) : null);
+	}, [loaded, hits, query, types, verdicts]);
 	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: hits.lit, complete: hits.found >= hits.total } : undefined;
 	return { results: query ? results : undefined, lit, litCount };
 }

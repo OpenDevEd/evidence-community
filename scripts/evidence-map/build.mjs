@@ -316,7 +316,9 @@ for (const [i, e] of evidence) {
 }
 // Only papers drawn on the map are counted, so a switch lights as many as it says: a methods reference or a paper joined to
 // nothing on the map has no place there.
-const verdictCounts = {}; for (let i = 0; i < N; i++) if (verdict[i] && !(flags[i] & 48)) verdictCounts[verdict[i]] = (verdictCounts[verdict[i]] ?? 0) + 1;
+// The evidence map's papers by type and check, for the switches' counts: methods references and strays are left out.
+const checks = {};
+for (let i = 0; i < N; i++) if ((kind[i] || verdict[i]) && !(flags[i] & 48)) { const byVerdict = (checks[kind[i]] ??= {}); byVerdict[verdict[i]] = (byVerdict[verdict[i]] ?? 0) + 1; }
 
 // Write: one binary file of columns, all little-endian, each 4-byte aligned.
 // Positions to 1/16 of a space unit, in 16 bits: half the bytes of floats, and far below what a screen can show.
@@ -351,6 +353,6 @@ fs.writeFileSync(`${OUT}/chains.json`, JSON.stringify(chains));
 // The record page reads this at build time, so its counts are there in the first paint: next to the app, not in public/.
 fs.writeFileSync(new URL("../../src/components/pages/evidence/records.json", import.meta.url), JSON.stringify({ host: LIBRARY, records }));
 fs.writeFileSync(`${OUT}/places-raw.json`, JSON.stringify(places));
-fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ host: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, verdicts: verdictCounts, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
+fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ host: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, checks, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
 for (const f of fs.readdirSync(OUT)) log(f, (fs.statSync(`${OUT}/${f}`).size / 1e6).toFixed(2), "MB");
 log("regions", places.filter((p) => p.level === 1).slice(0, 10).map((p) => `${p.terms.slice(0, 3).join("/")} (${p.size})`).join(" | "));
