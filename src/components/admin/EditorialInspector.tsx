@@ -177,9 +177,12 @@ function WorkingDraftInspector({
 				hasConflict ||
 				readiness.loading ||
 				readiness.saving ||
-				readiness.missing > 0
+				readiness.missing > 0 ||
+				// The record's review, though this attachment isn't in it: it can't be submitted, but it can be deleted.
+				model.recordReviewPending
 			}
-			reviewPending={pending}
+			// A Zotero PDF change has no draft to delete, so the record's review blocks it too.
+			reviewPending={pending || (model.recordReviewPending && !props.detail.draft)}
 		/>
 	);
 }
@@ -349,6 +352,8 @@ function useReviewInspector(props: Props & { detail: AdminItemDetail }) {
 		publishing,
 		snapshot,
 		pending,
+		// The record's review is pending, though an attachment added after it isn't in its snapshot.
+		recordReviewPending: Boolean(review.pending),
 		reviewLoading: review.loading,
 		error,
 		session,

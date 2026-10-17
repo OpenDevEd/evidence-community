@@ -1357,8 +1357,11 @@ export default function AdminWorkbench({
         if (!detail || !hasChangeToSubmit(detail)) return;
         const recordKey = detail.key;
         const { reviewKey, message } = reviewSubmission(detail);
+        // Set once the attachment's own edits are saved: a failure after that is the record's, shown on the record.
+        let attachmentSaved = false;
         setConfirmDialog({title: "Submit snapshot for review?", message, confirmLabel: "Submit snapshot", action: async () => {
             if (detail.draft) await flushDraft(recordKey, draftPayload);
+            attachmentSaved = true;
             // The record's own unsaved edits go with it too.
             if (reviewKey !== recordKey) await flushDraft(reviewKey);
             await submitAdminReview(reviewKey);
@@ -1367,7 +1370,7 @@ export default function AdminWorkbench({
             toast.success("Snapshot submitted for review");
         },
         // A record that isn't ready opens beside the error, with what it still needs.
-        onError: reviewKey === recordKey ? undefined : () => setSelectedKey(reviewKey)});
+        onError: reviewKey === recordKey ? undefined : () => { if (attachmentSaved) setSelectedKey(reviewKey); }});
     };
 
 	const manageSources = () => {
