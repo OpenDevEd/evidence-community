@@ -300,9 +300,9 @@ export class EvidenceGraph {
 	 * How far the reader can zoom: from half the whole library out, to far enough in that a dense cluster opens up into
 	 * separate papers, and no further, past which there is only empty space. cosmos.gl 3.5 has no setting for it, so its d3 zoom is told directly.
 	 */
-	private limitZoom() {
+	private limitZoom(least = Infinity) {
 		const zoom = (this.graph as unknown as { zoomInstance?: { behavior?: { scaleExtent(extent: [number, number]): unknown } } }).zoomInstance;
-		zoom?.behavior?.scaleExtent([this.fitZoom * MIN_ZOOM, this.fitZoom * MAX_ZOOM]);
+		zoom?.behavior?.scaleExtent([Math.min(least, this.fitZoom * MIN_ZOOM), this.fitZoom * MAX_ZOOM]);
 	}
 
 	/** Points grow as the reader zooms in, from specks across the whole library to dots that can be pointed at. */
@@ -688,6 +688,8 @@ export class EvidenceGraph {
 		const bx = (x0 + x1) / 2 - ((area.left + area.right) / 2 - width / 2) / (k * dx);
 		const by = (y0 + y1) / 2 - ((area.top + area.bottom) / 2 - height / 2) / (k * dy);
 		const hw = width / (2 * k), hh = height / (2 * k);
+		// cosmos.gl clamps a fit to the zoom range, and a long chain can stand taller than the whole library: let it zoom out that far.
+		this.limitZoom((k * this.graph.getZoomLevel()) / Math.abs(ux - ox));
 		this.graph.fitViewByPointPositions([bx - hw, by - hh, bx + hw, by + hh], duration, 0);
 	}
 
