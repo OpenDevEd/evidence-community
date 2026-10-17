@@ -22,7 +22,7 @@ type Tab = "paper" | "results";
  */
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
-		<div data-evidence-top className="fixed inset-x-3 top-20 z-10 space-y-2 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
+		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 space-y-2 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
 			<div className={twMerge(PANEL, "p-1.5")}><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} /></div>
 			<div className={twMerge(PANEL, "p-1.5", checks.types.size + checks.verdicts.size === 0 && "[@media(max-width:1279px)_and_(orientation:landscape)_and_(max-height:600px)]:hidden")}><MapFilter {...checks} /></div>
 		</div>
@@ -95,7 +95,7 @@ function contentOf(paper: boolean, results: boolean, tab: Tab) {
 	return results ? "results" : "chains";
 }
 
-const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)] xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-20 [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[min(26rem,55%)] [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-r-none [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-bl-none";
+const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)] xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[min(26rem,55%)] [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-r-none [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-bl-none";
 
 /** The search's results in the sheet, a tab of it when a paper is open too. */
 function SheetResults({ props, inTab, onOpenKey }: { props: SheetProps; inTab: boolean; onOpenKey: (key: string) => void }) {
