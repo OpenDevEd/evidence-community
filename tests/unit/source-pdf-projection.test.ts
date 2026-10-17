@@ -37,6 +37,11 @@ describe("how the admin shows a Zotero PDF", () => {
 		expect(projectSourcePdf(attachment, choice({ choice: "publish", applied: false }), false, config)?.fileState).toBe("processing");
 	});
 
+	it("leaves another source's PDF, such as OpenAlex's, to the library's own file actions", () => {
+		const openAlex = { sources: [{ key: "zotero-1", provider: "openalex", settings: {} }] } as unknown as Parameters<typeof projectSourcePdf>[3];
+		expect(projectSourcePdf(attachment, undefined, false, openAlex)).toBeNull();
+	});
+
 	it("shows nothing for a PDF the library keeps itself", () => {
 		expect(projectSourcePdf({ ...attachment!, sourceConnectionKey: "native" }, undefined, false, config)).toBeNull();
 	});

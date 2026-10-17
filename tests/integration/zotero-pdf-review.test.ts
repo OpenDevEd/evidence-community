@@ -14,8 +14,11 @@ import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
-// No source writes back, so the Zotero record itself can't be changed or published from the admin.
-const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
+// The group doesn't write back, so the Zotero record itself can't be changed or published from the admin.
+const config = libraryConfigSchema.parse({
+	...maximalLibraryConfig,
+	sources: [{ ...maximalLibraryConfig.sources[0], key: "zotero-review", groupId: "991", writebackEnabled: false }],
+});
 const creator = { userId: "creator", role: "creator" } as const;
 const editor = { userId: "editor", role: "editor" } as const;
 const RECORD = "ZREC2345";
@@ -55,6 +58,22 @@ it("publishes a staged Zotero PDF through a review, though writeback can't chang
 		// Approving changed nothing the import owns.
 		const [record] = await db.select().from(item).where(eq(item.key, RECORD));
 		expect(record).toMatchObject({ revision: 7, title: "Retitled in Zotero" });
+	});
+});
+
+it("holds only the PDF changes the review shows", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await seedZoteroRecordWithPdf(db);
+		// A child deleted in Zotero isn't in the review, so its staged PDF can't go with it.
+		const GONE = "ZDEL2345";
+		await db.insert(itemIdentity).values({ key: GONE, sourceConnectionKey: "zotero-review", sourceRecordKey: GONE, kind: "imported" });
+		await db.insert(item).values({ key: GONE, sourceConnectionKey: "zotero-review", sourceRecordKey: GONE, itemType: "Attachment", title: "old.pdf", parentItem: RECORD, deleted: 1, contentType: "application/pdf", linkMode: "imported_url", filename: "old.pdf" });
+		await db.insert(itemSourceFileChoice).values({ itemKey: GONE, sourceConnectionKey: "zotero-review", sourceRecordKey: GONE, pending: "publish", sizeBytes: 10 });
+		const review = await submitItemReview(db, RECORD, creator, config);
+		const [gone] = await db.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, GONE));
+		expect(review.snapshot.records.map((record) => record.itemKey)).not.toContain(GONE);
+		expect(gone?.reviewId).toBeNull();
+		expect((await choiceOf(db))?.reviewId).toBe(review.id);
 	});
 });
 

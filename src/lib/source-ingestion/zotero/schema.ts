@@ -148,8 +148,12 @@ export const zoteroCursorSchema = z.union([
 					targetVersion: z.number().int().nonnegative(),
 					// The PDF rule this read follows; an older pending read has `pdfs: false` when it left PDFs out.
 					pdfRule: z.string().max(4_000).optional(),
-					// Items this read holds though Zotero didn't change them, so a resumed read holds the same ones.
-					alsoRead: z.array(z.string().min(1).max(512)).max(100_000).optional(),
+					// Items this read holds though Zotero didn't change them, with the version of the library's choice it
+					// applies, so a resumed read holds the same ones and applies only the choices it started with.
+					alsoRead: z
+						.array(z.object({ key: z.string().min(1).max(512), version: z.string().min(1).max(64) }).strict())
+						.max(100_000)
+						.optional(),
 					pdfs: z.literal(false).optional(),
 				})
 				.strict()

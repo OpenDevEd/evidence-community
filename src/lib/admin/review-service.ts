@@ -229,7 +229,8 @@ export async function submitItemReview(
 				},
 			})
 			.returning();
-		await holdSourceFileChoices(transaction, review!.id, keys);
+		// Only the PDFs the review shows go with it; a child moving to another record keeps its own.
+		await holdSourceFileChoices(transaction, review!.id, records.map((record) => record.itemKey));
 		if (capturedFiles.length)
 			await transaction.insert(itemReviewFile).values(
 				capturedFiles.map(({ itemKey, file, removalId }) => ({

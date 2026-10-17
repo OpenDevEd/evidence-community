@@ -980,13 +980,22 @@ async function verify() {
 			choiceReadInterrupted = error instanceof Error && error.message === "simulated interruption while applying choices";
 		}
 		const [interruptedChoiceRead] = await database.select().from(sourceConnection).where(eq(sourceConnection.key, connectionKey));
-		const heldAlsoRead = (interruptedChoiceRead!.syncCursor as { pending?: { offset?: number; alsoRead?: string[] } }).pending;
+		const heldAlsoRead = (interruptedChoiceRead!.syncCursor as { pending?: { offset?: number; alsoRead?: { key: string }[] } }).pending;
+		// An editor changes a choice the read already passed before it resumes: the resumed read can't apply it,
+		// so it stays waiting and the next read takes the attachment again.
+		await database.update(itemSourceFileChoice).set({ choice: "publish", updatedAt: new Date() }).where(eq(itemSourceFileChoice.itemKey, choiceParent!.key));
 		await syncWithChoices();
 		const resumedChoices = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		remote.itemRequests = [];
+		await syncWithChoices();
+		const changedChoiceRequests = [...remote.itemRequests];
+		const finalChoices = await database.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
+		const appliedOf = (rows: typeof finalChoices, key: string) => rows.find((row) => row.sourceRecordKey === key)?.applied;
 		assert(
-			choiceReadInterrupted && heldAlsoRead?.offset === 1 && heldAlsoRead.alsoRead?.join() === "AAAA2345,BBBB2345" &&
-				resumedChoices.length === 2 && resumedChoices.every((row) => row.applied),
-			`A resumed read did not hold the attachments it was applying choices for: ${JSON.stringify({ choiceReadInterrupted, heldAlsoRead, applied: resumedChoices.map((row) => row.applied) })}`,
+			choiceReadInterrupted && heldAlsoRead?.offset === 1 && heldAlsoRead.alsoRead?.map((read) => read.key).join() === "AAAA2345,BBBB2345" &&
+				appliedOf(resumedChoices, "BBBB2345") === true && appliedOf(resumedChoices, "AAAA2345") === false &&
+				changedChoiceRequests.includes("AAAA2345") && finalChoices.every((row) => row.applied),
+			`A resumed read did not hold the attachments it was applying choices for, or applied one changed behind it: ${JSON.stringify({ choiceReadInterrupted, heldAlsoRead, resumed: resumedChoices.map((row) => [row.sourceRecordKey, row.applied]), changedChoiceRequests, final: finalChoices.map((row) => row.applied) })}`,
 		);
 		await database.delete(itemSourceFileChoice).where(eq(itemSourceFileChoice.sourceConnectionKey, connectionKey));
 		await setSettings({ maxRecordsPerBatch: 500 });

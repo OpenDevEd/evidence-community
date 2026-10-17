@@ -665,11 +665,14 @@ function completedCursor(targetVersion: number, softTrash: SoftTrashState, pdfRu
 	};
 }
 
+/** An item a read holds for the library's choice on its PDF, and the version of that choice. */
+type ChoiceRead = { key: string; version: string };
+
 /** The cursor of a read that stopped part-way: the last complete read's state, plus where this one got to. */
 function pendingCursor(
 	cursor: ZoteroCursor,
 	previousSoftTrash: SoftTrashState,
-	read: { offset: number; snapshotSince: number; targetVersion: number; pdfRule: string; alsoRead: readonly string[] },
+	read: { offset: number; snapshotSince: number; targetVersion: number; pdfRule: string; alsoRead: readonly ChoiceRead[] },
 ) {
 	return {
 		libraryVersion: currentLibraryVersion(cursor),
@@ -922,7 +925,7 @@ async function writeManifestBatches(
 		attachmentContext: ZoteroAttachmentProcessorContext;
 		fetchedAt: Date;
 		pdfRule: string;
-		alsoRead: readonly string[];
+		alsoRead: readonly ChoiceRead[];
 		maxRecordsPerBatch: number;
 		expectedConfiguration: Record<string, unknown>;
 	},
@@ -1022,8 +1025,11 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	const previousSoftTrash = previousSoftTrashState(cursor);
 	const start = readStart(cursor, requiresMappingReplay, pdfRule, legacyPdfRule(options, pdfRule));
 	// A read that resumes holds the same entries it started with, so its offset still points where it stopped.
-	const alsoRead = start.resumes && "pending" in cursor ? (cursor.pending?.alsoRead ?? []) : unapplied.map((row) => row.sourceRecordKey);
-	const applying = unapplied.filter((row) => alsoRead.includes(row.sourceRecordKey));
+	const alsoRead: readonly ChoiceRead[] = start.resumes && "pending" in cursor
+		? (cursor.pending?.alsoRead ?? [])
+		: unapplied.map((row) => ({ key: row.sourceRecordKey, version: row.version }));
+	// A choice that changed since the read began may sit behind its offset, so the next read applies it.
+	const applying = unapplied.filter((row) => alsoRead.some((read) => read.key === row.sourceRecordKey && read.version === row.version));
 	const snapshot = await readSnapshot(
 		{
 			client,
@@ -1031,7 +1037,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			maxSnapshotRecords: config.maxSnapshotRecords,
 			maxPasses: config.maxConsistencyRetries,
 			sleep: options.sleep ?? ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))),
-			alsoReadItemKeys: alsoRead,
+			alsoReadItemKeys: alsoRead.map((read) => read.key),
 		},
 		{
 			start,

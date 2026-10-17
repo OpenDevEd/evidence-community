@@ -98,7 +98,7 @@ export async function downloadSourcePdf(db: Database, config: LibraryServerConfi
 export async function stageSourcePdf(db: Database, config: LibraryServerConfig, itemKey: string) {
 	// Read before the lock: it checks the file is there and how large it is.
 	const { bytes, sourceConnectionKey } = await downloadSourcePdf(db, config, itemKey);
-	if (!sourcePdfSettings(config, sourceConnectionKey).pdfsOn)
+	if (!zoteroSource(config, sourceConnectionKey)?.settings.downloadPdfs)
 		throw new AdminValidationError("This source adds no PDFs. Turn on its PDFs in the library's settings first.");
 	await db.transaction(async (transaction) => {
 		const row = await lockSourcePdf(transaction, itemKey);
@@ -199,8 +199,13 @@ export async function markSourceFileChoicesApplied(db: Database, rows: readonly 
 
 /** Whether this attachment's PDF is its Zotero source's, for routes shared with the library's own files. */
 async function isSourcePdfItem(db: Database, itemKey: string) {
-	const [row] = await db.select().from(item).where(eq(item.key, itemKey)).limit(1);
-	return isSourcePdf(row);
+	const [row] = await db
+		.select({ item, provider: sourceConnection.provider })
+		.from(item)
+		.innerJoin(sourceConnection, eq(sourceConnection.key, item.sourceConnectionKey))
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	return row?.provider === "zotero" && isSourcePdf(row.item);
 }
 
 function sourcePdfFileState(choice: SourceFileChoiceRow | undefined, hasPublication: boolean): AdminFileState {
@@ -221,10 +226,9 @@ function publishTagsOf(rule: { mode: "tagged" | "every"; tags: string[] } | unde
 }
 
 /** A Zotero source's PDF settings: whether it adds PDFs, and the tags that publish them. */
-function sourcePdfSettings(config: Pick<LibraryServerConfig, "sources">, sourceConnectionKey: string) {
+function zoteroSource(config: Pick<LibraryServerConfig, "sources">, sourceConnectionKey: string) {
 	const source = config.sources.find((entry) => entry.key === sourceConnectionKey);
-	if (source?.provider !== "zotero") return { pdfsOn: false, publishTags: [] };
-	return { pdfsOn: source.settings.downloadPdfs, publishTags: publishTagsOf(source.settings.pdfPublishing) };
+	return source?.provider === "zotero" ? source : null;
 }
 
 /**
@@ -237,9 +241,12 @@ export function projectSourcePdf(
 	hasPublication: boolean,
 	config: Pick<LibraryServerConfig, "sources">,
 ) {
-	if (!published || !isSourcePdf(published)) return null;
+	// Other sources' PDFs, such as OpenAlex's, keep the library's ordinary file actions.
+	const source = published && zoteroSource(config, published.sourceConnectionKey);
+	if (!source || !isSourcePdf(published)) return null;
 	const sourcePdf: AdminSourcePdf = {
-		...sourcePdfSettings(config, published.sourceConnectionKey),
+		pdfsOn: source.settings.downloadPdfs,
+		publishTags: publishTagsOf(source.settings.pdfPublishing),
 		choice: choice?.choice ?? null,
 		pending: choice?.pending ?? null,
 		inReview: Boolean(choice?.reviewId),
