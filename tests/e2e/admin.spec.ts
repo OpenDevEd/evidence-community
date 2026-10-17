@@ -3477,6 +3477,18 @@ test("submits an attachment's change with its record", async ({page}) => {
 	expect(submitted).toEqual([`/api/admin/items/${publishedItemKey}/review`]);
 });
 
+test("offers no review for a Zotero PDF staged while its record is in review", async ({page}) => {
+	await mockBookWithAttachment(page, {imported: true, editable: false, sourcePdf: true});
+	// The record's pending review was taken before this PDF was staged.
+	await mockSubmittedReview(page, async () => ({json: {}}));
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", {name: "Open PDF attachment"}).click();
+	await inspector.locator('[data-admin-file-row="source"]').getByRole("button", {name: "Stage PDF", exact: true}).click();
+	await expect(inspector.locator('[data-admin-file-row="staged"]')).toContainText("report.pdf");
+	await expect(inspector.getByRole("button", {name: "Submit for review", exact: true})).toBeDisabled();
+});
+
 test("stages a Zotero PDF and submits its record for review while writeback is off", async ({page}) => {
 	await mockBookWithAttachment(page, {imported: true, editable: false, sourcePdf: true});
 	const submitted: string[] = [];
