@@ -73,6 +73,14 @@ async function materializeReviewRecord(
 	};
 }
 
+/** A record the review shows as it is: not checked, since it isn't published again. */
+function unchangedRecord(record: ReviewRecord, rootKey: string, parentItem: string | null): ReviewRecord | null {
+	if (record.itemKey === rootKey && parentItem)
+		throw new AdminValidationError("Submit the parent item for review.");
+	if (record.itemKey !== rootKey && parentItem !== rootKey) return null;
+	return { ...record, unchanged: true };
+}
+
 async function captureRecord(
 	transaction: DatabaseTransaction,
 	rootKey: string,
@@ -81,7 +89,7 @@ async function captureRecord(
 	current: typeof item.$inferSelect | undefined,
 	draft: typeof itemDraft.$inferSelect | undefined,
 ): Promise<ReviewRecord | null> {
-	if (!draft && (!current || current.deleted)) return null;
+	if (!draft) return current && !current.deleted ? unchangedRecord(await materializeReviewRecord(transaction, key, current, draft), rootKey, current.parentItem) : null;
 	const record = await materializeReviewRecord(transaction, key, current, draft);
 	const validated = validateReviewPayload(
 		record.payload,
@@ -137,7 +145,8 @@ export async function captureItemReviewSnapshot(
 			key,
 			current,
 			fileDrafts.find((record) => record.itemKey === key),
-			files.find((record) => record.itemKey === key),
+			// A record the review only shows keeps its PDF as it is, wherever its source publishes it from.
+			record.unchanged ? undefined : files.find((record) => record.itemKey === key),
 			removals.find((record) => record.itemKey === key),
 		);
 		if (file) capturedFiles.push(file);

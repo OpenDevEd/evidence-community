@@ -246,11 +246,12 @@ function SubmittedInspector({
 	);
 	const allowCorrections = pending && session.canPublish;
 	const saveState = corrections.saving ? "saving" : "saved";
+	const checks = submittedChecks(snapshot, frozenDetail, corrections.payloads, readiness);
 	const reviewActions = (
 		<ReviewActions
 			snapshot={snapshot}
 			disabled={corrections.saving || Boolean(corrections.error)}
-			publishBlocked={!frozenDetail.parentItem && readiness.missing > 0}
+			publishBlocked={checks.publishBlocked}
 			onUpdated={changed}
 		/>
 	);
@@ -275,7 +276,7 @@ function SubmittedInspector({
 				<SubmittedNotice
 					pending={pending}
 					frozenDetail={frozenDetail}
-					readiness={readiness}
+					readiness={checks.shown}
 					reviewActions={reviewActions}
 				/>
 			}
@@ -444,6 +445,20 @@ function WorkingDraftConflict({
 	);
 }
 
+/** A submitted record's checks: they gate publishing, unless the review only shows the record, uncorrected. */
+function submittedChecks(
+	snapshot: AdminReviewSnapshot,
+	frozenDetail: AdminItemDetail,
+	corrected: Record<string, unknown>,
+	readiness: ReturnType<typeof useReviewReadiness>,
+) {
+	const onlyShown = snapshot.unchangedKeys.includes(frozenDetail.key) && !corrected[frozenDetail.key];
+	return {
+		publishBlocked: !frozenDetail.parentItem && !onlyShown && readiness.missing > 0,
+		shown: onlyShown ? null : readiness,
+	};
+}
+
 function SubmittedNotice({
 	pending,
 	frozenDetail,
@@ -452,12 +467,12 @@ function SubmittedNotice({
 }: {
 	pending: boolean;
 	frozenDetail: AdminItemDetail;
-	readiness: ReturnType<typeof useReviewReadiness>;
+	readiness: ReturnType<typeof useReviewReadiness> | null;
 	reviewActions: ReactNode;
 }) {
 	return (
 		<>
-			{pending && !frozenDetail.parentItem ? (
+			{pending && !frozenDetail.parentItem && readiness ? (
 				<ReviewReadiness
 					recordKey={frozenDetail.key}
 					readiness={readiness}

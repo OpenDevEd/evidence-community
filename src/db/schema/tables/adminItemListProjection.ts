@@ -51,7 +51,7 @@ export const adminItemListProjection = pgTable(
 			enum: ["deleted", "draft", "edited", "published"],
 		}).notNull(),
 		fileState: text("fileState", {
-			enum: ["none", "processing", "staged", "published"],
+			enum: ["none", "unpublished", "processing", "staged", "published"],
 		}).notNull(),
 		updatedAt: timestamp("updatedAt", {
 			withTimezone: true,

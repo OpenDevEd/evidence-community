@@ -231,6 +231,8 @@ it('rejects approval when public data changes after submission', async () => {
 
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, staleRoot.itemKey));
         await publishNativeItemDraft(db, staleRoot.itemKey);
+        // A submitted change: a record the review only shows is never published again, so it can't go stale.
+        await openNativeItemDraft(db, staleRoot.itemKey);
         const staleSubmission = await submitItemReview(db, staleRoot.itemKey, noFileActor, reviewConfig);
         const citing = await createNativeItemDraft(db, {itemType: "Report", title: "New citation", links: {cites: [staleRoot.itemKey], related: []}});
 

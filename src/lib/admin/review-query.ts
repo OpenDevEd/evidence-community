@@ -15,8 +15,11 @@ import { ItemNotFoundError } from "./native-item-service";
 import { payloadStringList } from "./item-payload";
 import type { AdminItemDetail } from "./types";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { readStudyReading } from "@/lib/readings/reading";
+import { itemFilePublication } from "@/db/schema/source";
+import { projectSourcePdf } from "./source-file-choice";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -57,10 +60,38 @@ function snapshotFileState(
 	};
 }
 
+/**
+ * A Zotero PDF change this review holds, shown as the review shows any other file change, as it was submitted
+ * whether or not the review is resolved; none for anything else.
+ */
+function heldSourcePdf(
+	itemKey: string,
+	review: Pick<typeof itemReview.$inferSelect, "id" | "snapshot" | "submittedAt">,
+	held: {
+		items: (typeof item.$inferSelect)[];
+		config: Pick<LibraryServerConfig, "sources"> | null;
+	},
+) {
+	const change = review.snapshot.sourcePdfChanges?.find((entry) => entry.itemKey === itemKey);
+	const published = held.items.find((entry) => entry.key === itemKey) ?? null;
+	const projected = held.config && change && published
+		? projectSourcePdf(published, {
+			itemKey, sourceConnectionKey: published.sourceConnectionKey, sourceRecordKey: published.sourceRecordKey ?? itemKey,
+			choice: null, pending: change.change, reviewId: review.id, applied: true, sizeBytes: change.sizeBytes, updatedAt: review.submittedAt,
+		}, false, held.config)
+		: null;
+	if (!projected) return { sourcePdf: null };
+	// A take-down shows as the review shows any removal: the PDF it holds goes.
+	if (change?.change === "withhold")
+		return { sourcePdf: projected.sourcePdf, fileState: "none" as const, fileDraft: null, fileRemovalPending: true, sourceFileUrl: null };
+	const { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl } = projected;
+	return { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl };
+}
+
 export async function getAdminReviewSnapshot(
 	db: Database,
 	reviewId: string,
-	options: { topicsEnabled?: boolean } = {},
+	options: { topicsEnabled?: boolean; config?: Pick<LibraryServerConfig, "sources"> } = {},
 ) {
 	const topicsEnabled =
 		options.topicsEnabled ?? (await getLibraryConfig()).topics.enabled;
@@ -85,7 +116,7 @@ export async function getAdminReviewSnapshot(
 			.from(itemReviewFile)
 			.where(eq(itemReviewFile.reviewId, review.id)),
 		db
-			.select({ key: item.key, revision: item.revision })
+			.select()
 			.from(item)
 			.where(
 				inArray(
@@ -94,6 +125,10 @@ export async function getAdminReviewSnapshot(
 				),
 			),
 	]);
+	// The sources' rules matter only to a review that holds a Zotero PDF change.
+	const sourceConfig = review.snapshot.sourcePdfChanges?.length
+		? (options.config ?? (await getLibraryConfig()))
+		: null;
 	const details = await Promise.all(
 		records.map(
 			async (
@@ -130,7 +165,7 @@ export async function getAdminReviewSnapshot(
 					related: [],
 				};
 				const sourceFields = await readSourceFields(db, record.itemKey);
-				return {
+				const detail: AdminItemDetail & { draft: NonNullable<AdminItemDetail["draft"]> } = {
 					...itemSummary(null, draft, null, null, payload),
 					sourceFields: sourceFields.filter(
 						(field) => topicsEnabled || field.field !== "topics",
@@ -181,7 +216,10 @@ export async function getAdminReviewSnapshot(
 						originSourceKey: null,
 						selected: [],
 					},
+					sourcePdfChangePending: false,
+					...heldSourcePdf(record.itemKey, review, { items: publishedRevisions, config: sourceConfig }),
 				};
+				return detail;
 			},
 		),
 	);
@@ -208,5 +246,9 @@ export async function getAdminReviewSnapshot(
 		remainingConflicts: review.remainingConflicts,
 		note: review.note,
 		publishing: review.snapshot.publishingChoice,
+		/** Records the review only shows, not corrected since: approving doesn't check or publish them. */
+		unchangedKeys: records
+			.filter((record) => record.unchanged && !review.corrections.some((correction) => correction.itemKey === record.itemKey))
+			.map((record) => record.itemKey),
 	};
 }

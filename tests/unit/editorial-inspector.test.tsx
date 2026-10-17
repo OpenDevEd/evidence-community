@@ -78,6 +78,8 @@ const submitted: AdminReviewSnapshot = {
 	openAccessFromSources: null,
 	readingStudyType: null,
 	sourceFileUrl: null,
+	sourcePdf: null,
+	sourcePdfChangePending: false,
 	links: {
 		fromSources: [],
 		citedBy: [],
@@ -96,6 +98,7 @@ const submitted: AdminReviewSnapshot = {
 	remainingConflicts: {},
 	note: null,
 	publishing: null,
+	unchangedKeys: [],
 };
 const draftPayload = { ...payload, title: "Newer working title" };
 let root: Root;

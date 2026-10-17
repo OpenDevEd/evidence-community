@@ -777,6 +777,11 @@ export function completeAdminPdf(key: string, expectedUploadRevision: number) {
 	);
 }
 
+/** Stages a Zotero attachment's own PDF in the working draft, to publish once a review approves it. */
+export function stageAdminSourcePdf(key: string) {
+	return requestJson<void>(`/api/admin/items/${encodeURIComponent(key)}/file/source`, { method: "POST" });
+}
+
 export function discardAdminPdfDraft(key: string) {
 	return requestJson<void>(
 		`/api/admin/items/${encodeURIComponent(key)}/file/draft`,

@@ -659,6 +659,13 @@
       "when": 1792000166930,
       "tag": "0093_import-sends",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1792200000000,
+      "tag": "0094_zotero-pdf-choices",
+      "breakpoints": true
     }
   ]
 }

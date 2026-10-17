@@ -1,6 +1,6 @@
 "use client";
 import { ordinaryItemTags } from "@/lib/item-display";
-import { hasTag } from "@/lib/tags";
+import { hasTag, recordPublishTags } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
 import { PdfFileInput } from "./PdfFileInput";
 import { AdminDocumentHeader } from "./AdminDocumentHeader";
@@ -25,6 +25,7 @@ import { PublishingChoicePanel } from "./PublishingChoicePanel";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Add01Icon,
+	CloudUploadIcon,
 	AlertCircleIcon,
 	ArchiveIcon,
 	ArchiveRestoreIcon,
@@ -1312,12 +1313,118 @@ function PublishedAttachmentFile({
 	);
 }
 
+/**
+ * A note or an ordinary link, which readers see only when it carries one of its record's publish tags; read from
+ * the payload being edited, so a draft that makes an attachment a link shows the link's rule.
+ */
+function taggedForPublic(detail: AdminItemDetail, payload: Record<string, unknown>) {
+	if (detail.itemType === "Note") return true;
+	return payload.linkMode === "linked_url" && String(payload.contentType ?? "").toLowerCase() !== "application/pdf";
+}
+
+/** Uploads a PDF the library keeps. A Zotero PDF is Zotero's file: a new one is added there, never uploaded here. */
+function LibraryPdfUpload({ busy, detail, onUpload, readOnly }: {
+	busy: boolean;
+	detail: AdminItemDetail;
+	onUpload: (key: string, file: File) => void;
+	readOnly: boolean;
+}) {
+	if (detail.sourcePdf) return null;
+	return (
+		<div>
+			<PdfFileInput
+				attachmentKey={detail.key}
+				disabled={readOnly || busy}
+				label={detail.filePublication ? "Stage replacement" : "Upload PDF"}
+				onUpload={onUpload}
+			/>
+		</div>
+	);
+}
+
+/** The PDF its source holds, when the library publishes none: open it, and stage a Zotero one to publish it. */
+function SourcePdfRow({ busy, detail, onStageSourcePdf, readOnly }: {
+	busy: boolean;
+	detail: AdminItemDetail & { sourceFileUrl: string };
+	onStageSourcePdf?: (key: string) => void;
+	readOnly: boolean;
+}) {
+	return (
+		<div className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]" data-admin-file-row={detail.sourcePdf ? "source" : undefined}>
+			<div className="flex items-start justify-between gap-3">
+				<div className="min-w-0 flex-1">
+					<p className="font-medium text-black/80 dark:text-white/80">
+						Source PDF
+					</p>
+					{detail.sourcePdf ? <SourcePdfReason sourcePdf={detail.sourcePdf} /> : null}
+				</div>
+				{detail.sourcePdf ? <FileStateChip state={detail.fileState} /> : null}
+			</div>
+			<div className="mt-2 flex flex-wrap gap-1">
+				<Button
+					as="a"
+					href={detail.sourceFileUrl}
+					rel="noreferrer"
+					size="xs"
+					startContent={
+						<HugeiconsIcon
+							icon={Download01Icon}
+							aria-hidden
+							size={14}
+						/>
+					}
+					target="_blank"
+					variant="transparent"
+				>
+					Open PDF
+				</Button>
+				{detail.sourcePdf?.applied && detail.sourcePdf.pdfsOn && !readOnly && onStageSourcePdf ? (
+					<Button
+						isDisabled={busy}
+						onPress={() => onStageSourcePdf(detail.key)}
+						size="xs"
+						startContent={
+							<HugeiconsIcon
+								icon={CloudUploadIcon}
+								aria-hidden
+								size={14}
+							/>
+						}
+						variant="transparent"
+					>
+						Stage PDF
+					</Button>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
+/** Why a Zotero PDF isn't published: an editor took it down here, or it lacks one of its source's publish tags. */
+function SourcePdfReason({ sourcePdf }: { sourcePdf: NonNullable<AdminItemDetail["sourcePdf"]> }) {
+	if (!sourcePdf.pdfsOn)
+		return <p className="mt-1 text-black/45 dark:text-white/45">PDFs are off for this source</p>;
+	if (!sourcePdf.applied)
+		return <p className="mt-1 text-black/45 dark:text-white/45">Changes on the next import</p>;
+	if (sourcePdf.choice === "withhold")
+		return <p className="mt-1 text-black/45 dark:text-white/45">Taken down in this library</p>;
+	return (
+		<p className="mt-1 flex flex-wrap items-center gap-1 text-black/45 dark:text-white/45">
+			Publishes when tagged
+			{(sourcePdf.publishTags ?? []).map((tag) => (
+				<span key={tag} className="rounded bg-black/[0.05] px-1 font-mono text-[10px] text-black/60 dark:bg-white/[0.07] dark:text-white/60">{tag}</span>
+			))}
+		</p>
+	);
+}
+
 function AttachmentFilePanel({
 	busy,
 	detail,
 	fileError,
 	onDiscardFile,
 	onChangePdfRemoval,
+	onStageSourcePdf,
 	onUpload,
 	readOnly,
 	readOnlyVersion,
@@ -1327,6 +1434,7 @@ function AttachmentFilePanel({
 	fileError?: string;
 	onDiscardFile: (key: string) => void;
 	onChangePdfRemoval: (key: string) => void;
+	onStageSourcePdf?: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	readOnly: boolean;
 	readOnlyVersion: boolean;
@@ -1363,45 +1471,10 @@ function AttachmentFilePanel({
 			{!detail.filePublication &&
 			!detail.fileDraft &&
 			detail.sourceFileUrl ? (
-				<div className="rounded-xl bg-black/[0.03] p-3 text-xs dark:bg-white/[0.04]">
-					<div className="flex items-center justify-between gap-3">
-						<p className="font-medium text-black/80 dark:text-white/80">
-							Source PDF
-						</p>
-					</div>
-					<Button
-						as="a"
-						className="mt-2"
-						href={detail.sourceFileUrl}
-						rel="noreferrer"
-						size="xs"
-						startContent={
-							<HugeiconsIcon
-								icon={Download01Icon}
-								aria-hidden
-								size={14}
-							/>
-						}
-						target="_blank"
-						variant="transparent"
-					>
-						Open PDF
-					</Button>
-				</div>
+				<SourcePdfRow busy={busy} detail={{ ...detail, sourceFileUrl: detail.sourceFileUrl }} onStageSourcePdf={onStageSourcePdf} readOnly={readOnly} />
 			) : null}
 
-			<div>
-				<PdfFileInput
-					attachmentKey={detail.key}
-					disabled={readOnly || busy}
-					label={
-						detail.filePublication
-							? "Stage replacement"
-							: "Upload PDF"
-					}
-					onUpload={onUpload}
-				/>
-			</div>
+			<LibraryPdfUpload busy={busy} detail={detail} onUpload={onUpload} readOnly={readOnly} />
 		</div>
 	);
 }
@@ -1455,6 +1528,7 @@ export function AdminInspector({
 	onStartLinkPick,
 	onStopLinkPick,
 	onChangePdfRemoval,
+	onStageSourcePdf,
 	onUpload,
 	payload,
 	saveMessage,
@@ -1520,6 +1594,8 @@ export function AdminInspector({
 	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
 	onStopLinkPick?: () => void;
 	onChangePdfRemoval: (key: string) => void;
+	/** Stages a Zotero attachment's own PDF to publish. */
+	onStageSourcePdf?: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
 	payload: Record<string, unknown>;
 	saveMessage: string | null;
@@ -1651,7 +1727,9 @@ export function AdminInspector({
 	const holdsLibraryFiles =
 		native ||
 		(!isAttachment && isOpenAlexWorkProvider(sources.find((source) => source.key === detail.sourceConnectionKey)?.provider));
-	const filesReadOnly = readOnlyVersion || !holdsLibraryFiles || unrestored || !detail.draft || !detail.editable;
+	// A Zotero PDF's changes go into the working draft whatever writeback allows the record itself, until a review holds them.
+	const filesReadOnly = readOnlyVersion || unrestored || (detail.sourcePdf ? detail.sourcePdf.inReview : !holdsLibraryFiles || !detail.draft || !detail.editable);
+	const sourcePdfChange = !readOnlyVersion && detail.sourcePdfChangePending;
 	const editable =
 		(allowReviewCorrections || (!readOnlyVersion && detail.editable)) &&
 		Boolean(detail.draft) &&
@@ -1670,14 +1748,16 @@ export function AdminInspector({
 		(Boolean(detail.parentItem) || !detail.draft);
 	// An attachment acts like its record: Edit, then Submit for review, which sends the record with it. One it can't
 	// change has no main action.
-	const showPrimaryAction = !detail.parentItem || detail.editable;
+	const showPrimaryAction = !detail.parentItem || detail.editable || sourcePdfChange;
 	const primaryAction = {
 		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
 		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
 		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
 		submit: { label: "Submit for review", icon: SentIcon, onPress: onPublish },
 	}[
-		!detail.editable && !readOnlyVersion
+		sourcePdfChange && !detail.draft
+			? "submit"
+			: !detail.editable && !readOnlyVersion
 			? "duplicate"
 			: restoring
 				? "restore"
@@ -1688,6 +1768,7 @@ export function AdminInspector({
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
+		(sourcePdfChange && reviewPending) ||
 		(Boolean(detail.draft) &&
 			(saveState === "saving" ||
 				saveState === "conflict" ||
@@ -1987,6 +2068,7 @@ export function AdminInspector({
 								tags={Array.isArray(payload.tags) ? payload.tags.filter((tag): tag is string => typeof tag === "string") : []}
 								readOnly={readOnly}
 								onChange={(tags) => patchPayload({ tags })}
+								publishTags={taggedForPublic(detail, payload) ? recordPublishTags(libraryConfig.sourcePublishTags, detail.sourceConnectionKey) : undefined}
 							/>
 						)}
 						{detail.parentItem && (
@@ -2331,6 +2413,7 @@ export function AdminInspector({
 							fileError={fileErrors[detail.key]}
 							onDiscardFile={onDiscardFile}
 							onChangePdfRemoval={onChangePdfRemoval}
+							onStageSourcePdf={onStageSourcePdf}
 							onUpload={onUpload}
 							readOnly={filesReadOnly}
 							readOnlyVersion={readOnlyVersion}
