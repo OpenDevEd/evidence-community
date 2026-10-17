@@ -9,7 +9,7 @@ import { getAdminReviewCount } from "./admin-api";
 import { DigestsPage, type DigestShow } from "./admin-digests-page";
 
 import { AdminSourceStatusBadge } from "./AdminSourceStatus";
-import { type ReactNode, useContext, useRef } from "react";
+import { type ReactNode, useContext, useState } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
@@ -276,11 +276,12 @@ export function AdminNavigation({
 	sources: AdminSource[];
 	state: AdminRecordState | "all" | null;
 }) {
-	const navigationRef = useRef<HTMLElement>(null);
+	// State, not a ref: the catalogue measures against the sidebar before the first paint, and a ref is attached after the catalogue's own layout effects run.
+	const [navigation, setNavigation] = useState<HTMLElement | null>(null);
 
 	return (
 		<nav
-			ref={navigationRef}
+			ref={setNavigation}
 			aria-label="Admin filters and collections"
 			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
@@ -312,7 +313,7 @@ export function AdminNavigation({
 						onSelectCollection(collection === key ? null : key)
 					}
 					selectedCollection={collection}
-					scrollElementRef={navigationRef}
+					scrollElement={navigation}
 					sources={sources}
 				/>
 			</div>

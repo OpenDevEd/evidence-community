@@ -529,6 +529,8 @@ export function AdminCollectionPicker({
 			});
 	}, [contextKey, loadPage, loading, loadingMore, nextCursor, refreshing]);
 
+	// The sticky Top level row sits above the rows in the scrolled list, so the rows start below it.
+	const topLevelHeight = showTopLevel ? 44 : 0;
 	// TanStack Virtual intentionally returns unstable callbacks; this component's
 	// `use no memo` directive keeps React Compiler away from the virtualizer.
 	// eslint-disable-next-line react-hooks/incompatible-library
@@ -537,10 +539,10 @@ export function AdminCollectionPicker({
 		estimateSize: () => 54,
 		getScrollElement: () => scrollRef.current,
 		overscan: 6,
+		scrollMargin: topLevelHeight,
 	});
 	// The list's height follows what it shows, so it grows and shrinks smoothly
 	// instead of jumping: the rows, a gap held for a first load, or the empty note.
-	const topLevelHeight = showTopLevel ? 44 : 0;
 	const stale = itemsKey !== pageKey(debouncedQuery, sourceKey, activeParent);
 	const listHeight = topLevelHeight + (items.length ? virtualizer.getTotalSize() : loading ? FIRST_LOAD_HEIGHT : 56);
 
@@ -823,7 +825,7 @@ export function AdminCollectionPicker({
 														className="absolute left-0 top-0 flex w-full items-center justify-center"
 														style={{
 															height: virtualRow.size,
-															transform: `translateY(${virtualRow.start}px)`,
+															transform: `translateY(${virtualRow.start - topLevelHeight}px)`,
 														}}
 													>
 														<Button
@@ -867,7 +869,7 @@ export function AdminCollectionPicker({
 													className="absolute left-0 top-0 w-full px-1 py-0.5"
 													style={{
 														height: virtualRow.size,
-														transform: `translateY(${virtualRow.start}px)`,
+														transform: `translateY(${virtualRow.start - topLevelHeight}px)`,
 													}}
 												>
 													<CollectionResultRow
