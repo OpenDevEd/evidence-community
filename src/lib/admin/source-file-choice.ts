@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
@@ -128,12 +128,20 @@ async function discardSourcePdfStage(db: Database, itemKey: string) {
 /** Whether these records hold a Zotero PDF change no review has yet. */
 export async function hasUnsubmittedSourceFileChoice(db: Database | DatabaseTransaction, keys: readonly string[]) {
 	if (keys.length === 0) return false;
+	// An attachment deleted in Zotero leaves the review, so a change staged on it is no longer one to submit.
 	const [row] = await db
 		.select({ itemKey: itemSourceFileChoice.itemKey })
 		.from(itemSourceFileChoice)
-		.where(and(inArray(itemSourceFileChoice.itemKey, [...keys]), isNotNull(itemSourceFileChoice.pending), isNull(itemSourceFileChoice.reviewId)))
+		.innerJoin(item, eq(item.key, itemSourceFileChoice.itemKey))
+		.where(and(inArray(itemSourceFileChoice.itemKey, [...keys]), isNotNull(itemSourceFileChoice.pending), isNull(itemSourceFileChoice.reviewId), ne(item.deleted, 1)))
 		.limit(1);
 	return Boolean(row);
+}
+
+/** The Zotero PDF changes these records hold that no review has yet, as a review keeps them. */
+export async function unsubmittedSourcePdfChanges(db: DatabaseTransaction, keys: readonly string[]) {
+	const rows = [...(await readSourceFileChoices(db, keys)).values()];
+	return rows.flatMap((row) => (row.pending && !row.reviewId ? [{ itemKey: row.itemKey, change: row.pending, sizeBytes: row.sizeBytes }] : []));
 }
 
 /** The review a record is submitted for holds its attachments' PDF changes. */

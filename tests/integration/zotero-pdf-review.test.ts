@@ -10,6 +10,7 @@ import { sourceConnection } from "../../src/db/schema/source";
 import { item } from "../../src/db/schema/tables/item";
 import { getAdminReviewSnapshot } from "../../src/lib/admin/review-query";
 import { approveItemReview, resolveItemReview, submitItemReview } from "../../src/lib/admin/review-service";
+import { hasUnsubmittedSourceFileChoice } from "../../src/lib/admin/source-file-choice";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -55,6 +56,9 @@ it("publishes a staged Zotero PDF through a review, though writeback can't chang
 		await approveItemReview(db, new MemoryFileStorage(), { reviewId: review.id, expectedRevision: review.revision }, editor, config);
 
 		expect(await choiceOf(db)).toMatchObject({ choice: "publish", pending: null, reviewId: null, applied: false });
+		// The resolved review still shows the PDF it published.
+		const resolved = await getAdminReviewSnapshot(db, review.id, { topicsEnabled: false, config });
+		expect(resolved.frozenAttachments.find((attachment) => attachment.key === ATTACHMENT)?.fileState).toBe("staged");
 		// Approving changed nothing the import owns.
 		const [record] = await db.select().from(item).where(eq(item.key, RECORD));
 		expect(record).toMatchObject({ revision: 7, title: "Retitled in Zotero" });
@@ -73,6 +77,8 @@ it("holds only the PDF changes the review shows", async () => {
 		const [gone] = await db.select().from(itemSourceFileChoice).where(eq(itemSourceFileChoice.itemKey, GONE));
 		expect(review.snapshot.records.map((record) => record.itemKey)).not.toContain(GONE);
 		expect(gone?.reviewId).toBeNull();
+		// Nor is it a change left to submit.
+		expect(await hasUnsubmittedSourceFileChoice(db, [GONE])).toBe(false);
 		expect((await choiceOf(db))?.reviewId).toBe(review.id);
 	});
 });

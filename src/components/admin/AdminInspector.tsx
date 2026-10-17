@@ -1313,11 +1313,13 @@ function PublishedAttachmentFile({
 	);
 }
 
-/** A note or an ordinary link, which readers see only when it carries one of its record's publish tags. */
-function taggedForPublic(detail: AdminItemDetail) {
+/**
+ * A note or an ordinary link, which readers see only when it carries one of its record's publish tags; read from
+ * the payload being edited, so a draft that makes an attachment a link shows the link's rule.
+ */
+function taggedForPublic(detail: AdminItemDetail, payload: Record<string, unknown>) {
 	if (detail.itemType === "Note") return true;
-	const published = detail.published ?? {};
-	return published.linkMode === "linked_url" && String(published.contentType ?? "").toLowerCase() !== "application/pdf";
+	return payload.linkMode === "linked_url" && String(payload.contentType ?? "").toLowerCase() !== "application/pdf";
 }
 
 /** Uploads a PDF the library keeps. A Zotero PDF is Zotero's file: a new one is added there, never uploaded here. */
@@ -2066,7 +2068,7 @@ export function AdminInspector({
 								tags={Array.isArray(payload.tags) ? payload.tags.filter((tag): tag is string => typeof tag === "string") : []}
 								readOnly={readOnly}
 								onChange={(tags) => patchPayload({ tags })}
-								publishTags={taggedForPublic(detail) ? recordPublishTags(libraryConfig.sourcePublishTags, detail.sourceConnectionKey) : undefined}
+								publishTags={taggedForPublic(detail, payload) ? recordPublishTags(libraryConfig.sourcePublishTags, detail.sourceConnectionKey) : undefined}
 							/>
 						)}
 						{detail.parentItem && (

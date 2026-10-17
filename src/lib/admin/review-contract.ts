@@ -31,6 +31,10 @@ export type ReviewRecord = z.infer<typeof reviewRecordSchema>;
 const reviewSnapshotSchema = z.object({
 	records: z.array(reviewRecordSchema).min(1),
 	publishingChoice: publishingChoiceSchema.nullable(),
+	// The Zotero PDFs the review publishes or takes down in this library, kept as submitted once it is resolved.
+	sourcePdfChanges: z
+		.array(z.object({ itemKey, change: z.enum(["publish", "withhold"]), sizeBytes: z.number().int().nonnegative().nullable() }))
+		.optional(),
 });
 export type ReviewSnapshot = z.infer<typeof reviewSnapshotSchema>;
 

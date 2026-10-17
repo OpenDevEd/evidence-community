@@ -3,7 +3,7 @@ import { readPublicationRepositorySnapshot } from "@/lib/publication/repository"
 import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
 import { CrossrefActivationValidationError, ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
 import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
-import { applySourceFileChoices, holdSourceFileChoices, releaseSourceFileChoices } from "./source-file-choice";
+import { applySourceFileChoices, holdSourceFileChoices, releaseSourceFileChoices, unsubmittedSourcePdfChanges } from "./source-file-choice";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { activateCrossrefPublicationInTransaction, reserveCrossrefDoi } from "@/lib/publication/crossref-activation-service";
 import { activateZenodoPublicationInTransaction } from "@/lib/publication/zenodo-activation-service";
@@ -218,6 +218,8 @@ export async function submitItemReview(
 		);
 		if (!records.some((record) => record.itemKey === rootKey))
 			throw new ItemNotFoundError(rootKey);
+		// Only the PDFs the review shows go with it; a child moving to another record keeps its own.
+		const sourcePdfChanges = await unsubmittedSourcePdfChanges(transaction, records.map((record) => record.itemKey));
 		const [review] = await transaction
 			.insert(itemReview)
 			.values({
@@ -226,11 +228,11 @@ export async function submitItemReview(
 				snapshot: {
 					records,
 					publishingChoice,
+					...(sourcePdfChanges.length ? { sourcePdfChanges } : {}),
 				},
 			})
 			.returning();
-		// Only the PDFs the review shows go with it; a child moving to another record keeps its own.
-		await holdSourceFileChoices(transaction, review!.id, records.map((record) => record.itemKey));
+		await holdSourceFileChoices(transaction, review!.id, sourcePdfChanges.map((change) => change.itemKey));
 		if (capturedFiles.length)
 			await transaction.insert(itemReviewFile).values(
 				capturedFiles.map(({ itemKey, file, removalId }) => ({

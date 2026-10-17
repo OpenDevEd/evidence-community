@@ -19,7 +19,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { readStudyReading } from "@/lib/readings/reading";
 import { itemFilePublication } from "@/db/schema/source";
-import { projectSourcePdf, readSourceFileChoices } from "./source-file-choice";
+import { projectSourcePdf } from "./source-file-choice";
 
 function snapshotFileDraft(
 	file: (typeof itemReviewFile.$inferSelect)["file"] | undefined,
@@ -60,24 +60,29 @@ function snapshotFileState(
 	};
 }
 
-/** A Zotero PDF change this review holds, shown as the review shows any other file change; none for anything else. */
+/**
+ * A Zotero PDF change this review holds, shown as the review shows any other file change, as it was submitted
+ * whether or not the review is resolved; none for anything else.
+ */
 function heldSourcePdf(
 	itemKey: string,
-	reviewId: string,
+	review: Pick<typeof itemReview.$inferSelect, "id" | "snapshot" | "submittedAt">,
 	held: {
-		choices: Awaited<ReturnType<typeof readSourceFileChoices>>;
 		items: (typeof item.$inferSelect)[];
-		publications: { itemKey: string }[];
 		config: Pick<LibraryServerConfig, "sources"> | null;
 	},
 ) {
-	const choice = held.choices.get(itemKey);
-	const projected = held.config && choice?.reviewId === reviewId
-		? projectSourcePdf(held.items.find((entry) => entry.key === itemKey) ?? null, choice, held.publications.some((publication) => publication.itemKey === itemKey), held.config)
+	const change = review.snapshot.sourcePdfChanges?.find((entry) => entry.itemKey === itemKey);
+	const published = held.items.find((entry) => entry.key === itemKey) ?? null;
+	const projected = held.config && change && published
+		? projectSourcePdf(published, {
+			itemKey, sourceConnectionKey: published.sourceConnectionKey, sourceRecordKey: published.sourceRecordKey ?? itemKey,
+			choice: null, pending: change.change, reviewId: review.id, applied: true, sizeBytes: change.sizeBytes, updatedAt: review.submittedAt,
+		}, false, held.config)
 		: null;
 	if (!projected) return { sourcePdf: null };
 	// A take-down shows as the review shows any removal: the PDF it holds goes.
-	if (choice?.pending === "withhold")
+	if (change?.change === "withhold")
 		return { sourcePdf: projected.sourcePdf, fileState: "none" as const, fileDraft: null, fileRemovalPending: true, sourceFileUrl: null };
 	const { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl } = projected;
 	return { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl };
@@ -96,7 +101,7 @@ export async function getAdminReviewSnapshot(
 		.where(eq(itemReview.id, reviewId));
 	if (!review) throw new ItemNotFoundError(reviewId);
 	const records = review.snapshot.records;
-	const [identities, files, publishedRevisions, choices, publications] = await Promise.all([
+	const [identities, files, publishedRevisions] = await Promise.all([
 		db
 			.select()
 			.from(itemIdentity)
@@ -119,14 +124,9 @@ export async function getAdminReviewSnapshot(
 					records.map((record) => record.itemKey),
 				),
 			),
-		readSourceFileChoices(db, records.map((record) => record.itemKey)),
-		db
-			.select({ itemKey: itemFilePublication.itemKey })
-			.from(itemFilePublication)
-			.where(inArray(itemFilePublication.itemKey, records.map((record) => record.itemKey))),
 	]);
 	// The sources' rules matter only to a review that holds a Zotero PDF change.
-	const sourceConfig = [...choices.values()].some((choice) => choice.reviewId === review.id)
+	const sourceConfig = review.snapshot.sourcePdfChanges?.length
 		? (options.config ?? (await getLibraryConfig()))
 		: null;
 	const details = await Promise.all(
@@ -217,7 +217,7 @@ export async function getAdminReviewSnapshot(
 						selected: [],
 					},
 					sourcePdfChangePending: false,
-					...heldSourcePdf(record.itemKey, review.id, { choices, items: publishedRevisions, publications, config: sourceConfig }),
+					...heldSourcePdf(record.itemKey, review, { items: publishedRevisions, config: sourceConfig }),
 				};
 				return detail;
 			},
