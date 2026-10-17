@@ -29,14 +29,14 @@ export default function EvidenceMap({ chains, verdictCounts }: { chains: ChainEn
 	// Made here, so the React Compiler keeps it the same from render to render: the search box restarts its wait when it changes.
 	const onTyped = (text: string | null) => setTyping(text !== null);
 	const address = useAddress();
-	const { loaded, more, graph, failed } = useEvidenceGraph(theme, stage, labels, address);
+	const { loaded, more, graph, failed, incomplete } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
 	const { results, lit, litCount } = useLighting(filters, loaded, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts });
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
-			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} />
+			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
 			<SearchPanel ref={searchPanel} {...lists} checked={checked} checks={checks} smallLayout={smallLayout} />
 			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} checked={checked} checks={checks} />
@@ -58,14 +58,15 @@ function usePageLook() {
 }
 
 /** Where cosmos.gl draws the map, with the canvas for its names over it; it fades in once drawn, or says it cannot be. */
-function Stage({ stage, labels, drawn, failed }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean }) {
+function Stage({ stage, labels, drawn, failed, incomplete }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean; incomplete: boolean }) {
+	const problem = incomplete ? "Part of the map's data didn't load. Reload the page to try again." : failed ? "This device could not draw the map. Search and the lists still work." : null;
 	return (
 		<>
 			<div className={twMerge("absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none", drawn ? "opacity-100" : "opacity-0")} aria-hidden>
 				<div ref={stage} className="absolute inset-0" />
 				<canvas ref={labels} className="pointer-events-none absolute inset-0 size-full" />
 			</div>
-			{failed && <p role="alert" className="absolute inset-x-0 top-1/2 mx-auto max-w-sm -translate-y-1/2 text-center text-sm text-black/60 dark:text-white/60">This device could not draw the map. Search and the lists still work.</p>}
+			{problem && <p role="alert" className="absolute inset-x-0 top-1/2 mx-auto max-w-sm -translate-y-1/2 text-center text-sm text-black/60 dark:text-white/60">{problem}</p>}
 		</>
 	);
 }

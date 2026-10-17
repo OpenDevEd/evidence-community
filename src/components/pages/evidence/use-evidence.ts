@@ -62,6 +62,7 @@ export function useEvidenceGraph(theme: Theme, stage: RefObject<HTMLDivElement |
 	const [more, setMore] = useState<More | null>(null);
 	const [graph, setGraph] = useState<EvidenceGraph | null>(null);
 	const [failed, setFailed] = useState(false);
+	const [incomplete, setIncomplete] = useState(false);
 	// The map calls this from its own clicks, with the address as it is when it is called.
 	const select = useEffectEvent((index: number | null) => (index === null ? closeIn(address) : void address.setPaper(paperOf(index, more))));
 	useEffect(() => {
@@ -81,7 +82,13 @@ export function useEvidenceGraph(theme: Theme, stage: RefObject<HTMLDivElement |
 				if (alive) setFailed(true);
 			});
 		};
-		const rest = () => client.more().then((m) => { if (!alive) return; setMore(m); made?.setMore(m); }, (error: Error) => console.error("Evidence map: labels and chains did not load", error.message));
+		// Labels, keys and chains: without them nothing opens, so a failed load is asked for again, then said.
+		const rest = (tries = 4): Promise<void> => client.more().then((m) => { if (!alive) return; setMore(m); made?.setMore(m); }, (error: Error) => {
+			console.error("Evidence map: labels and chains did not load", error.message);
+			if (!alive) return;
+			if (tries > 1) window.setTimeout(() => void rest(tries - 1), (5 - tries) * 1000);
+			else setIncomplete(true);
+		});
 		client.loaded.then((data) => {
 			if (!alive || !stage.current || !labels.current) return;
 			setLoaded(data);
@@ -93,7 +100,7 @@ export function useEvidenceGraph(theme: Theme, stage: RefObject<HTMLDivElement |
 		// The map is made once: the theme it starts in is only the first colours' theme.
 	}, []);
 	useEffect(() => { void graph?.setTheme(theme); }, [graph, theme]);
-	return { loaded, more, graph, failed };
+	return { loaded, more, graph, failed, incomplete };
 }
 
 /** The points a search lit: the set bits of its answer. */

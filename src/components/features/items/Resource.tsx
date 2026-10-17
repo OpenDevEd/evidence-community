@@ -431,7 +431,7 @@ function ResourceFacts({ item, isLoading }: { item: Item | ListItem | undefined;
 	return (
 		<div className="-mb-2 flex h-7 items-center gap-3 text-sm">
 			{reading && <StudyTypeLabel reading={reading} />}
-			<EvidenceVerdict item={item} insideLink />
+			<EvidenceVerdict item={item} />
 		</div>
 	);
 }
@@ -614,37 +614,36 @@ export default function Resource({
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>
 			)}
-			{gapMapHref ? (
-				<a
-					aria-labelledby={`${titleId} ${titleId}-gap-map`}
-					href={gapMapHref}
-					target="_blank"
-					rel="noopener noreferrer"
-					className={twMerge(
-						CARD_LINK,
-						!finalItemData?.key && "!pointer-events-none",
-						!finalIsLoading && !finalItemData?.key && "no-data",
-						!finalIsLoading && finalItemData?.key && "has-data",
-					)}
-				>
-					{article}
-				</a>
-			) : (
-				<Link
-					aria-labelledby={titleId}
-					target={openLinksInNewTab ? "_blank" : undefined}
-					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
-					{...itemLink}
-					className={twMerge(
-						CARD_LINK,
-						!finalItemData?.key && "!pointer-events-none",
-						!finalIsLoading && !finalItemData?.key && "no-data",
-						!finalIsLoading && finalItemData?.key && "has-data",
-					)}
-				>
-					{article}
-				</Link>
-			)}
+			<div className={CARD}>
+				{gapMapHref ? (
+					<a
+						aria-labelledby={`${titleId} ${titleId}-gap-map`}
+						href={gapMapHref}
+						target="_blank"
+						rel="noopener noreferrer"
+						className={twMerge(
+							CARD_LINK,
+							!finalItemData?.key && "!pointer-events-none",
+							!finalIsLoading && !finalItemData?.key && "no-data",
+							!finalIsLoading && finalItemData?.key && "has-data",
+						)}
+					/>
+				) : (
+					<Link
+						aria-labelledby={titleId}
+						target={openLinksInNewTab ? "_blank" : undefined}
+						rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
+						{...itemLink}
+						className={twMerge(
+							CARD_LINK,
+							!finalItemData?.key && "!pointer-events-none",
+							!finalIsLoading && !finalItemData?.key && "no-data",
+							!finalIsLoading && finalItemData?.key && "has-data",
+						)}
+					/>
+				)}
+				<div className={CARD_CONTENT}>{article}</div>
+			</div>
 			<ResourceInteractions
 				itemData={finalItemData}
 				isLoading={finalIsLoading}
@@ -658,10 +657,13 @@ export default function Resource({
 }
 
 /**
- * The card's link. Its hover tints the card rather than darkening everything in it, so a rating keeps its colours, and it
- * stays off while the pointer is on the rating, which is a control of its own.
+ * The card is one link, laid under what it shows rather than around it, so the controls on a card (a record's check, its study
+ * type's explanation) sit beside the link rather than inside it. The pointer goes through the card's text to the link, the
+ * skeletons that turn it back on once loaded too, and its hover tints the card behind the text.
  */
-const CARD_LINK = "p-4 @[720px]:p-6 flex-1 rounded-t-xl transition-colors [&:hover:not(:has([data-evidence-chip]:hover))]:bg-black/[0.06] dark:[&:hover:not(:has([data-evidence-chip]:hover))]:bg-black/25";
+const CARD = "relative p-4 @[720px]:p-6 flex-1";
+const CARD_LINK = "absolute inset-0 rounded-t-xl transition-colors hover:bg-black/[0.06] dark:hover:bg-black/25";
+const CARD_CONTENT = "pointer-events-none relative [&_*]:!pointer-events-none [&_:is(a,button,[tabindex])]:!pointer-events-auto";
 
 function ResourceWrapper({
 	as,

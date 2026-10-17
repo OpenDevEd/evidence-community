@@ -16,11 +16,13 @@ vi.mock("@/components/features/SearchBar", () => ({ SearchBar: () => <input aria
 // Four papers: 0 and 1 studies of 2, a meta-analysis; 3 a record the search no longer returns.
 const keys = ["AAAAAAAA", "BBBBBBBB", "CCCCCCCC", "DDDDDDDD"];
 const checked: Chain = { focus: -1, layers: [[0, 1], [2]], links: [[2, 0], [2, 1]], others: [] };
+const client = vi.hoisted(() => ({ more: null as unknown as ReturnType<typeof vi.fn> }));
 vi.mock("@/components/pages/evidence/client", () => {
 	const count = 4, u8 = () => new Uint8Array(count), u16 = () => new Uint16Array(count);
 	const loaded = { theme: "light", points: { count, linked: count, library: count, space: 100, positions: new Float32Array(count * 2), years: u16(), cites: u16(), region: u16(), area: u16(), kind: Uint8Array.from([1, 1, 3, 0]), verdict: Uint8Array.from([7, 0, 3, 0]), flags: u8(), places: [], bundles: [] }, colours: new Float32Array(count * 4), sizes: new Float32Array(count) };
 	const more = { labels: new Map([[0, { who: "Song et al.", year: 2023, title: "A broken study" }], [1, { who: "Li", year: 2023, title: "A study" }], [2, { who: "Suo et al.", year: 2026, title: "A meta-analysis" }]]), keyOf: (i: number) => keys[i] ?? null, indexOf: (key: string) => (keys.includes(key) ? keys.indexOf(key) : undefined), doiOf: new Map() };
-	return { evidenceClient: () => ({ loaded: Promise.resolve(loaded), more: () => Promise.resolve(more) }) };
+	client.more = vi.fn(() => Promise.resolve(more));
+	return { evidenceClient: () => ({ loaded: Promise.resolve(loaded), more: client.more }) };
 });
 vi.mock("@/components/pages/evidence/graph", () => ({
 	EvidenceGraph: class {
@@ -48,7 +50,7 @@ beforeEach(() => {
 });
 afterEach(() => { act(() => root.unmount()); container.remove(); vi.unstubAllGlobals(); });
 
-async function open(address: string) {
+async function open(address: string, wait = 20) {
 	// The testing adapter reads its address when it is first rendered: each address is a fresh page.
 	act(() => root.unmount());
 	root = createRoot(container);
@@ -61,7 +63,7 @@ async function open(address: string) {
 			</SWRConfig>,
 		);
 	});
-	await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
+	await act(async () => { await new Promise((resolve) => setTimeout(resolve, wait)); });
 }
 
 const panel = () => container.querySelector<HTMLElement>('[role="region"][aria-label="Paper"]');
@@ -84,5 +86,11 @@ describe("the evidence map's page", () => {
 	it("says a record couldn't be loaded when the search does not return it, rather than showing an empty paper", async () => {
 		await open("?paper=DDDDDDDD");
 		expect(panel()?.querySelector('[role="status"]')?.textContent).toMatch(/couldn.t be loaded/);
+	});
+
+	it("asks again for the labels and keys when they fail to load, so a paper still opens", async () => {
+		client.more.mockRejectedValueOnce(new Error("network"));
+		await open("?paper=CCCCCCCC", 1200);
+		expect(panel()?.textContent).toContain("Record CCCCCCCC");
 	});
 });

@@ -1200,6 +1200,9 @@ function AnalysedStudies({ itemKey }: { itemKey: string | undefined }) {
 	);
 }
 
+const hasLibraryLinks = (links: Item["links"] | undefined) =>
+	Boolean(links && (links.cites.length > 0 || links.citedBy.length > 0 || links.related.length > 0));
+
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	// A card's reference count opens this page on its References list, and its citation count on Citations.
@@ -1220,15 +1223,9 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		links: item?.links,
 		relations: item?.relations as RelationsType,
 	});
-	const hasLinks = Boolean(
-		item?.links &&
-		(item.links.cites.length > 0 ||
-			item.links.citedBy.length > 0 ||
-			item.links.related.length > 0),
-	);
-
 	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
-	if (isOpenAlexWorkProvider(item?.provider) && !hasLinks) return null;
+	// The studies a meta-analysis pooled come from the evidence map, not its links, so they show without them.
+	if (isOpenAlexWorkProvider(item?.provider) && !hasLibraryLinks(item?.links)) return <AnalysedStudies itemKey={item?.key} />;
 
 	return (
 		<div className="flex flex-col gap-4">

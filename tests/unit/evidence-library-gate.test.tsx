@@ -14,7 +14,6 @@ vi.mock("@/context/LibraryConfigProvider", () => ({ useLibraryConfig: () => ({ i
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: async () => ({ identity: { baseUrl: library.baseUrl } }) }));
 vi.mock("@/i18n/routing", () => ({
 	Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => <a href={href} {...rest}>{children}</a>,
-	useRouter: () => ({ push: vi.fn() }),
 }));
 
 const { EvidenceVerdict, VisualizeButton } = await import("@/components/pages/evidence/record-evidence");

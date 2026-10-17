@@ -14,12 +14,15 @@ import { OpenedPaper } from "./paper";
 import { usePaper } from "./records";
 
 type Tab = "paper" | "results";
-/** The search and the checks, at the top of the screen. A phone on its side keeps its little height for the map: no checks. */
+/**
+ * The search and the checks, at the top of the screen. A phone on its side keeps its little height for the map: no checks,
+ * unless one is on, which stays there to be turned off.
+ */
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
 		<div data-evidence-top className="fixed inset-x-3 top-20 z-10 space-y-2 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
 			<div className={twMerge(PANEL, "p-1.5")}><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={filters.queryParams.search} /></div>
-			<div className={twMerge(PANEL, "p-1.5 [@media(max-width:1279px)_and_(orientation:landscape)_and_(max-height:600px)]:hidden")}><VerdictSwitches {...checks} wrap={false} /></div>
+			<div className={twMerge(PANEL, "p-1.5", checks.selected.size === 0 && "[@media(max-width:1279px)_and_(orientation:landscape)_and_(max-height:600px)]:hidden")}><VerdictSwitches {...checks} wrap={false} /></div>
 		</div>
 	);
 }

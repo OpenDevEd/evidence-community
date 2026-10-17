@@ -4,7 +4,7 @@ import { FlowchartIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link } from "@/i18n/routing";
 import { libraryHost, VERDICTS } from "./data";
 import data from "./records.json";
 import { VerdictChip } from "./verdict-chip";
@@ -38,27 +38,18 @@ export function useEvidenceRecord(key: string | undefined): EvidenceRecord | nul
 const CHIP_CONTROL = "group/chip rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-accent";
 const CHIP_HOVER = "transition-shadow group-hover/chip:ring-[color:var(--ink)] dark:group-hover/chip:ring-[color:var(--ink-dark)]";
 
-/**
- * Björn's check on the record, beside its study type. On a record in a chain it opens that chain on the evidence map. A card
- * is one link already, so there it is a button that opens the chain and keeps the card's link from following.
- */
-export function EvidenceVerdict({ item, insideLink = false }: { item: { key?: string } | undefined; insideLink?: boolean }) {
+/** The check on the record, beside its study type. On a record in a chain it opens that chain on the evidence map. */
+export function EvidenceVerdict({ item }: { item: { key?: string } | undefined }) {
 	const itemKey = item?.key;
-	const router = useRouter();
 	const record = useEvidenceRecord(itemKey);
 	if (!record?.verdict) return null;
 	if (!record.chain) return <VerdictChip verdict={record.verdict} />;
-	const href = `/evidence?paper=${itemKey}`;
 	const label = `${VERDICT[VERDICTS[record.verdict] as keyof typeof VERDICT].label}, open its chain`;
-	const chip = <VerdictChip verdict={record.verdict} className={CHIP_HOVER} />;
-	if (insideLink) {
-		return (
-			<button type="button" data-evidence-chip aria-label={label} className={CHIP_CONTROL} onClick={(event) => { event.preventDefault(); event.stopPropagation(); router.push(href); }}>
-				{chip}
-			</button>
-		);
-	}
-	return <Link href={href} data-evidence-chip aria-label={label} className={CHIP_CONTROL}>{chip}</Link>;
+	return (
+		<Link href={`/evidence?paper=${itemKey}`} aria-label={label} className={CHIP_CONTROL}>
+			<VerdictChip verdict={record.verdict} className={CHIP_HOVER} />
+		</Link>
+	);
 }
 
 /**
