@@ -1,6 +1,7 @@
 "use client";
 
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
 import type { ReactNode, Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
@@ -54,12 +55,16 @@ export function Controls({ graph }: { graph: EvidenceGraph | null }) {
 
 /** A short notice over the map, with the one button that undoes what it says. */
 function Notice({ children, action, onPress, className, kind }: { children: ReactNode; action: string; onPress: () => void; className?: string; kind?: string }) {
+	const still = useReducedMotion();
+	// A notice on its way out no longer takes room: the map is fitted as if it were gone.
+	const leaving = !useIsPresent();
+	const hidden = { opacity: 0, y: still ? 0 : -16 };
 	return (
-		// One line, 2.75 rem high: the map is fitted below the notices by that height.
-		<div role="status" data-evidence-notice={kind} className={twMerge(PANEL, "flex h-11 animate-fade-in items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm motion-reduce:animate-none", className)}>
+		// One line, 2.75 rem high: the map is fitted below the notices by that height. It slides down into place and back up.
+		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm", className)}>
 			<span>{children}</span>
 			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
-		</div>
+		</motion.div>
 	);
 }
 
@@ -78,15 +83,16 @@ export function Missing({ onClear }: { onClear: () => void }) {
  * is fitted below them.
  */
 export function MapStatus({ focus, highlighted, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; onShowAll: () => void; onClearFilter: () => void }) {
-	if (!focus && highlighted === null) return null;
 	return (
 		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
-			{focus && <Notice action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front, the rest faded</Notice>}
-			{highlighted !== null && (
-				<Notice kind="filter" action="Clear filter" onPress={onClearFilter}>
-					<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
-				</Notice>
-			)}
+			<AnimatePresence>
+				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front</Notice>}
+				{highlighted !== null && (
+					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
+						<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+					</Notice>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }
