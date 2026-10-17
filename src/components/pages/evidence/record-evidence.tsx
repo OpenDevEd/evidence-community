@@ -25,7 +25,7 @@ const records = data.records as Record<string, EvidenceRecord>;
  */
 function useEvidenceMap() {
 	const { identity } = useLibraryConfig();
-	return libraryHost(identity.baseUrl) === data.library;
+	return libraryHost(identity.baseUrl) === data.host;
 }
 
 /** What the map knows about a record of this library, or nothing in a library without the map. */

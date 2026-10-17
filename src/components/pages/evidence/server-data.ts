@@ -12,6 +12,6 @@ export async function readEvidenceData<T>(file: string): Promise<T> {
 
 /** The map's data is one library's: every other library answers as if the map did not exist. */
 export async function hasEvidenceMap() {
-	const [config, meta] = await Promise.all([getLibraryConfig(), readEvidenceData<{ library: string }>("meta.json")]);
-	return libraryHost(config.identity.baseUrl) === meta.library;
+	const [config, meta] = await Promise.all([getLibraryConfig(), readEvidenceData<{ host: string }>("meta.json")]);
+	return libraryHost(config.identity.baseUrl) === meta.host;
 }

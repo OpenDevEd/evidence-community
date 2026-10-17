@@ -349,8 +349,8 @@ fs.writeFileSync(`${OUT}/titles.json`, JSON.stringify(titles));
 fs.writeFileSync(`${OUT}/dois.json`, JSON.stringify(dois));
 fs.writeFileSync(`${OUT}/chains.json`, JSON.stringify(chains));
 // The record page reads this at build time, so its counts are there in the first paint: next to the app, not in public/.
-fs.writeFileSync(new URL("../../src/components/pages/evidence/records.json", import.meta.url), JSON.stringify({ library: LIBRARY, records }));
+fs.writeFileSync(new URL("../../src/components/pages/evidence/records.json", import.meta.url), JSON.stringify({ host: LIBRARY, records }));
 fs.writeFileSync(`${OUT}/places-raw.json`, JSON.stringify(places));
-fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ library: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, verdicts: verdictCounts, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
+fs.writeFileSync(`${OUT}/meta.json`, JSON.stringify({ host: LIBRARY, linked: L, library: L2, points: N, citations: E, space: SPACE, quant: QUANT, verdicts: verdictCounts, layout, bundles, evidenceLinks: evidenceLinks.length / 3, built: new Date().toISOString() }));
 for (const f of fs.readdirSync(OUT)) log(f, (fs.statSync(`${OUT}/${f}`).size / 1e6).toFixed(2), "MB");
 log("regions", places.filter((p) => p.level === 1).slice(0, 10).map((p) => `${p.terms.slice(0, 3).join("/")} (${p.size})`).join(" | "));

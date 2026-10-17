@@ -26,12 +26,14 @@ export default function EvidenceMap({ chains, verdictCounts }: { chains: ChainEn
 	const [verdicts, setVerdicts] = useState<ReadonlySet<number>>(new Set());
 	// Text typed into the search that has not run yet: the results on screen are already the last search's.
 	const [typing, setTyping] = useState(false);
+	// Made here, so the React Compiler keeps it the same from render to render: the search box restarts its wait when it changes.
+	const onTyped = (text: string | null) => setTyping(text !== null);
 	const address = useAddress();
 	const { loaded, more, graph, failed } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
 	const { results, lit, litCount } = useLighting(filters, loaded, verdicts);
 	const shown = useGraphFollows(graph, now, more, lit);
-	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, setTyping, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts });
+	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts });
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden outline-none" style={{ background: STAGE[theme].background }}>
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} />
@@ -90,16 +92,16 @@ function useGraphFollows(graph: EvidenceGraph | null, now: ReturnType<typeof use
 }
 
 type PanelInputs = {
-	filters: ReturnType<typeof useFiltersContext>; results: ReturnType<typeof useLighting>["results"]; litCount: Lit | undefined; typing: boolean; setTyping: (typing: boolean) => void;
+	filters: ReturnType<typeof useFiltersContext>; results: ReturnType<typeof useLighting>["results"]; litCount: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void;
 	loaded: Loaded | null; more: More | null; chains: ChainEntry[]; now: ReturnType<typeof useOpened>; graph: EvidenceGraph | null; shown: Selection | null;
 	verdictCounts: Record<string, number>; verdicts: ReadonlySet<number>; setVerdicts: (next: ReadonlySet<number>) => void;
 };
 
 /** What the side panels and the phone's sheet are given: the lists, the opened paper, the check switches and the checked graph. */
-function panelProps({ filters, results, litCount, typing, setTyping, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts }: PanelInputs) {
+function panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, verdictCounts, verdicts, setVerdicts }: PanelInputs) {
 	const onHover = (i: number | null, label?: Label) => graph?.hoverHost(i ?? undefined, label);
 	return {
-		lists: { filters, results, lit: litCount, typing, onTyped: (text: string | null) => setTyping(text !== null), loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
+		lists: { filters, results, lit: litCount, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
 		paper: { selection: shown, opening: now.target !== null && !shown, loaded, more, onOpen: now.open, onClose: now.close, onHover },
 		checks: { counts: verdictCounts, selected: verdicts, onChange: setVerdicts },
 		checked: { count: Object.values(verdictCounts).reduce((sum, n) => sum + n, 0), open: now.target === CHECKED, onOpen: now.openChecked },

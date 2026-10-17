@@ -73,7 +73,13 @@ export function useEvidenceGraph(theme: Theme, stage: RefObject<HTMLDivElement |
 				onSelect: (index) => select(index),
 				visibleArea: (withPaper) => visibleArea(stage.current, withPaper),
 			});
-			made.ready.then(() => { if (alive) setGraph(made); });
+			made.ready.then(() => { if (alive) setGraph(made); }, (error: unknown) => {
+				// The graphics card refused after all: said, rather than a map that never appears.
+				console.error("Evidence map: the map could not be drawn", error);
+				made?.destroy();
+				made = null;
+				if (alive) setFailed(true);
+			});
 		};
 		const rest = () => client.more().then((m) => { if (!alive) return; setMore(m); made?.setMore(m); }, (error: Error) => console.error("Evidence map: labels and chains did not load", error.message));
 		client.loaded.then((data) => {
