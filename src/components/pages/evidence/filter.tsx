@@ -37,7 +37,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 	return (
 		<Select selectionMode="multiple" value={[...selected]} onChange={(keys) => onChange(new Set(keys.map(Number)))} placeholder={placeholder} className="min-w-0 flex-1">
 			<Label className="sr-only">{label}</Label>
-			<Button className="flex h-12 w-full items-center gap-2 rounded-2xl border-small border-black/10 bg-white px-3 text-left outline-none transition-colors hover:bg-black/[0.04] data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:border-white/10 dark:bg-secondary dark:hover:bg-white/[0.04]">
+			<Button className="flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]">
 				<span className="min-w-0 flex-1">
 					<span aria-hidden className={twMerge("block text-xs leading-4", muted)}>{label}</span>
 					<SelectValue className="block truncate text-sm font-medium leading-5">

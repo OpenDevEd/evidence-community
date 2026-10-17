@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useState, type KeyboardEvent } from "react";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import type { ChainEntry } from "./data";
@@ -22,7 +23,7 @@ type Tab = "paper" | "results";
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
 		<div data-evidence-top className="fixed inset-x-3 top-20 z-10 space-y-2 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
-			<div className={twMerge(PANEL, "p-1.5")}><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={filters.queryParams.search} /></div>
+			<div className={twMerge(PANEL, "p-1.5")}><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} /></div>
 			<div className={twMerge(PANEL, "p-1.5", checks.types.size + checks.verdicts.size === 0 && "[@media(max-width:1279px)_and_(orientation:landscape)_and_(max-height:600px)]:hidden")}><MapFilter {...checks} /></div>
 		</div>
 	);

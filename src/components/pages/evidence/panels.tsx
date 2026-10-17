@@ -5,6 +5,7 @@ import type { ReactNode, Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
@@ -22,7 +23,7 @@ export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loade
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
 				<div className="p-2">
-					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} />
+					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
 				</div>
 				<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
 					<MapFilter {...checks} />
