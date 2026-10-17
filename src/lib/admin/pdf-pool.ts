@@ -19,7 +19,8 @@ type Slot = { worker: Worker; job: Job | null; timer?: NodeJS.Timeout };
 const slots: Slot[] = [];
 const waiting: Job[] = [];
 
-const poolSize = () => Math.min(MAX_WORKERS, Math.max(1, availableParallelism() - 1));
+/** How many PDFs this process reads at once: one per spare core, up to eight. */
+export const pdfWorkerCount = () => Math.min(MAX_WORKERS, Math.max(1, availableParallelism() - 1));
 
 /** Starts a worker that stays handled for its whole life, busy or idle. */
 function startSlot(): Slot {
@@ -76,7 +77,7 @@ function assign(slot: Slot, job: Job) {
 /** A free worker, or a new one while the pool has room. */
 function freeSlot() {
 	const idle = slots.find((candidate) => !candidate.job);
-	if (idle || slots.length >= poolSize()) return idle ?? null;
+	if (idle || slots.length >= pdfWorkerCount()) return idle ?? null;
 	try {
 		return startSlot();
 	} catch (error) {

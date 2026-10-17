@@ -111,6 +111,27 @@ describe("Zotero source configuration", () => {
 		).rejects.toBeInstanceOf(ZoteroApiError);
 	});
 
+	it("pauses every request of the client when Zotero asks one to wait", async () => {
+		let answered = 0;
+		const delays: number[] = [];
+		const access = () => new Response(JSON.stringify({ access: { groups: { all: { library: true } } }, userID: 123 }));
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: async () => (answered++ === 0 ? new Response("slow down", { status: 429, headers: { "retry-after": "2" } }) : access()),
+			requestTimeoutMs: 1_000,
+			sleep: async (milliseconds) => {
+				delays.push(milliseconds);
+			},
+		});
+		const scope = { externalScopeKey: "999", kind: "group" } as const;
+		await client.verifyKeyAccess(scope);
+		// Another request, as a second import lane would send, waits out the same pause.
+		await client.verifyKeyAccess(scope);
+		expect(delays).toHaveLength(2);
+		for (const delay of delays) expect(delay).toBeGreaterThan(1_900);
+	});
+
 	it("backs off on transient API errors when Retry-After is absent", async () => {
 		let attempts = 0;
 		const delays: number[] = [];

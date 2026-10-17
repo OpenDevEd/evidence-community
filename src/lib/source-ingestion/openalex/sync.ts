@@ -1,3 +1,4 @@
+import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { itemSourceLink } from "@opendeved/evidence-library-core";
@@ -329,31 +330,12 @@ async function processAttachments(
 	items: SourceItemUpsert[],
 	processor: RecordProcessor,
 ) {
-	let next = 0;
-	let failed = false;
-	const worker = async () => {
-		while (!failed && next < items.length) {
-			const index = next++;
-			if (!items[index]!.file?.url) continue;
-			await context.heartbeat();
-			items[index] = await processor(
-				items[index]!,
-				context.sourceConnection.key,
-			);
-		}
-	};
-	// After a failure, start no more PDFs but let running ones finish before
-	// the run gives up its lease.
-	const results = await Promise.allSettled(
-		Array.from({ length: PDF_CONCURRENCY }, () =>
-			worker().catch((error: unknown) => {
-				failed = true;
-				throw error;
-			}),
-		),
-	);
-	const rejected = results.find((result) => result.status === "rejected");
-	if (rejected) throw rejected.reason;
+	const withPdf = items.flatMap((item, index) => (item.file?.url ? [index] : []));
+	// After a failure no new PDF starts, and running ones finish before the run gives up its lease.
+	await mapWithConcurrency(withPdf, PDF_CONCURRENCY, async (index) => {
+		await context.heartbeat();
+		items[index] = await processor(items[index]!, context.sourceConnection.key);
+	});
 }
 
 /** Splits a page into writes under the batch limit, keeping record order. */

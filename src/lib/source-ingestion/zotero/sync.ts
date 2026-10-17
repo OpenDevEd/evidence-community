@@ -14,6 +14,8 @@ import type { SourceRunProgress } from "../adapter";
 import type { SourceCredentialResolver } from "../credentials";
 import type { SourceIngestionBatch } from "../batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
+import { mapWithConcurrency } from "@/lib/map-with-concurrency";
+import { pdfWorkerCount } from "@/lib/admin/pdf-pool";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { ZOTERO_OBJECT_REQUEST_SIZE, type ZoteroApiClient } from "./client";
 import {
@@ -55,6 +57,9 @@ type SyncZoteroSourceOptions = {
 	sourceConnectionKey: string;
 	sleep?: (milliseconds: number) => Promise<void>;
 };
+
+// Zotero's API takes several requests at once and says when to back off; four keep a read well under its limits.
+const ZOTERO_READ_CONCURRENCY = 4;
 
 type ManifestEntry =
 	| {
@@ -197,8 +202,10 @@ async function fetchRecords<T extends { key: string; version: number }>(
 	into: Map<string, T>,
 ) {
 	let settled = true;
-	for (const keyChunk of chunkValues(keys, ZOTERO_OBJECT_REQUEST_SIZE)) {
-		const response = await fetchChunk(keyChunk);
+	const keyChunks = chunkValues(keys, ZOTERO_OBJECT_REQUEST_SIZE);
+	const responses = await mapWithConcurrency(keyChunks, ZOTERO_READ_CONCURRENCY, fetchChunk);
+	for (const [index, keyChunk] of keyChunks.entries()) {
+		const response = responses[index]!;
 		if (response.libraryVersion !== targetVersion) settled = false;
 		const returned = new Map(
 			response.data.map((record) => [record.key, record]),
@@ -240,8 +247,10 @@ type SnapshotReader = {
 /** Reads the items a read must hold though Zotero didn't change them, unless it already holds or deletes them. */
 async function readAlso(reader: SnapshotReader, itemsByKey: Map<string, ZoteroItemResponse>, deletedItemKeys: ReadonlySet<string>) {
 	const unread = (reader.alsoReadItemKeys ?? []).filter((key) => !itemsByKey.has(key) && !deletedItemKeys.has(key));
-	for (const keyChunk of chunkValues(unread, ZOTERO_OBJECT_REQUEST_SIZE))
-		for (const record of (await reader.client.items(reader.prefix, keyChunk)).data) itemsByKey.set(record.key, record);
+	const responses = await mapWithConcurrency(chunkValues(unread, ZOTERO_OBJECT_REQUEST_SIZE), ZOTERO_READ_CONCURRENCY, (keyChunk) =>
+		reader.client.items(reader.prefix, keyChunk),
+	);
+	for (const response of responses) for (const record of response.data) itemsByKey.set(record.key, record);
 }
 
 /**
@@ -451,43 +460,37 @@ async function mapManifestEntries(
 	excludedCollectionKeys: ReadonlySet<string> = new Set(),
 	attachmentContext?: ZoteroAttachmentProcessorContext,
 ) {
-	const items: SourceIngestionBatch["items"] = [];
-	const collections: SourceIngestionBatch["collections"] = [];
-	for (const entry of entries) {
-		if (entry.entity === "collection") {
-			collections.push(
-				entry.operation === "upsert"
-					? mapZoteroCollection(entry.response)
-					: {
-							operation: "delete",
-							sourceRecordKey: entry.sourceRecordKey,
-							remoteVersion: entry.remoteVersion,
-							raw: entry.response
-								? (entry.response as never)
-								: { deleted: true },
-						},
-			);
-			continue;
-		}
-		items.push(
-			entry.operation === "upsert"
-				? await mapZoteroItem(
-						entry.response,
-						attachmentProcessor,
-						excludedCollectionKeys,
-						attachmentContext,
-					)
-				: {
-						operation: "delete",
-						sourceRecordKey: entry.sourceRecordKey,
-						remoteVersion: entry.remoteVersion,
-						raw: entry.response
-							? (entry.response as never)
-							: { deleted: true },
-					},
-		);
+	// Several entries at once, as OpenAlex's PDFs are: as many as the PDF pool reads at once, so no downloaded PDF
+	// waits in memory for a worker. Every file comes from Zotero, one host, so the plain pool fits, not per-host lanes.
+	const mapped = await mapWithConcurrency(entries, pdfWorkerCount(), (entry) =>
+		mapManifestEntry(entry, attachmentProcessor, excludedCollectionKeys, attachmentContext),
+	);
+	return {
+		collections: mapped.flatMap((entry) => (entry.entity === "collection" ? [entry.record] : [])),
+		items: mapped.flatMap((entry) => (entry.entity === "item" ? [entry.record] : [])),
+	};
+}
+
+async function mapManifestEntry(
+	entry: ManifestEntry,
+	attachmentProcessor?: ZoteroAttachmentProcessor,
+	excludedCollectionKeys: ReadonlySet<string> = new Set(),
+	attachmentContext?: ZoteroAttachmentProcessorContext,
+) {
+	if (entry.operation === "delete") {
+		const record = {
+			operation: "delete" as const,
+			sourceRecordKey: entry.sourceRecordKey,
+			remoteVersion: entry.remoteVersion,
+			raw: entry.response ? (entry.response as never) : { deleted: true },
+		};
+		return { entity: entry.entity, record };
 	}
-	return { collections, items };
+	if (entry.entity === "collection") return { entity: "collection" as const, record: mapZoteroCollection(entry.response) };
+	return {
+		entity: "item" as const,
+		record: await mapZoteroItem(entry.response, attachmentProcessor, excludedCollectionKeys, attachmentContext),
+	};
 }
 
 async function loadLocalSourceState(
