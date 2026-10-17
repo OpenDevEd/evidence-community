@@ -94,7 +94,7 @@ function headerClassName(styleVariant: NavbarStyleVariant, floatsOverPage: boole
  */
 function showsNavbarSearch(pathname: string, enabled: boolean) {
 	const path = normalizePathname(pathname);
-	const ownsSearch = path === "/lib" || path.startsWith("/map") || path.startsWith("/profile");
+	const ownsSearch = path === "/lib" || path.startsWith("/map") || path.startsWith("/evidence") || path.startsWith("/profile");
 	return enabled && !ownsSearch && !pageRunsUnderHeader(pathname);
 }
 

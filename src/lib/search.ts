@@ -393,6 +393,25 @@ export async function getPublicItems(
 	};
 }
 
+/** The keys of the first `limit` records a public search finds, best first, and how many it finds in all. */
+export async function getPublicItemKeys(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	limit: number,
+): Promise<{ keys: string[]; total: number }> {
+	const libraryConfig = await getLibraryConfig();
+	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
+	const { search, sortOption, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes, limit);
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const result = await index.search(search, {
+		limit,
+		attributesToSearchOn,
+		attributesToRetrieve: ["key"],
+		...(sortOption ? { sort: sortOption } : {}),
+		filter: finalFilters,
+	});
+	return { keys: result.hits.map((hit) => String(hit.key)), total: result.estimatedTotalHits ?? result.hits.length };
+}
+
 /** What keeps a search to public records: no excluded type, nothing deleted, nothing hidden. */
 export const publicRecordFilters = (hiddenTags: readonly string[]) =>
 	buildSearchFilters({ author: "", collections: [], country: [], hiddenTags, institution: [], range: null, scope: "" });

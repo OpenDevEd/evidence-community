@@ -44,6 +44,7 @@ import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
+import { EvidenceVerdict, useEvidenceRecord, VisualizeButton, type EvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { OpenAccessLabel } from "./OpenAccessLabel";
 
 export function AddButton({
@@ -120,7 +121,9 @@ function CitationCounts({
 		source: openAlexTotals(itemData), resourceHref,
 		there: (list) => { const path = openScholarList(itemData, list)?.path; return path ? openScholar(path) : undefined; },
 	};
-	const counts = [referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
+	// A meta-analysis whose analysed studies are known counts those, not every work it cites (the evidence map).
+	const evidence = useEvidenceRecord(itemData?.key);
+	const counts = [evidence?.analysed ? analysedRow(context, evidence) : referenceRow(context), citationRow(context)].filter((count) => count.held > 0 || (count.total ?? 0) > 0);
 	if (counts.length === 0) return null;
 
 	return (
@@ -147,6 +150,18 @@ function referenceRow({ t, key, links, source, resourceHref, there }: CountConte
 		words: (held, total) => total === null ? t("referencesHeldOnly", { held }) : t("referencesHeld", { held, total }),
 	};
 }
+/** A meta-analysis's analysed studies: how many the library holds of all it analysed, opening its chain on the evidence map. */
+function analysedRow({ key }: CountContext, evidence: EvidenceRecord): CountRow {
+	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
+	return {
+		id: "analysed", icon: ArrowUpRight01Icon, tone: "reference", colour: "text-violet-700 dark:text-violet-300",
+		held: evidence.analysedHere ?? 0, total: evidence.analysed ?? null,
+		// Both numbers open the chain: it lists every study it analysed, the ones outside the library too.
+		here: `/evidence?paper=${key}`, there: `/evidence?paper=${key}`, thereInside: true,
+		label: (count) => (count === 1 ? "analysed study" : "analysed studies"),
+		words: (held, total) => `${held} of the ${total ?? held} studies it analysed are in this library; it also cites ${others} other works`,
+	};
+}
 function citationRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
 	return {
 		id: "citations", icon: ArrowDownLeft01Icon, tone: "library", colour: "text-accent",
@@ -159,7 +174,7 @@ function citationRow({ t, key, links, source, resourceHref, there }: CountContex
 
 type CountRow = {
 	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
-	here: string; there: string | null | undefined; label: (count: number) => string; words: (held: number, total: number | null) => string;
+	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
 // A narrow card drops the words; the tooltip and screen readers still get them.
 const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
@@ -187,7 +202,13 @@ function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count
 	const text = all.toLocaleString(locale);
 	return <>
 		<span className="opacity-60">{of}</span>
-		{count.there ? <a href={count.there} target="_blank" rel="noreferrer" aria-label={`${text} ${count.label(all)}, ${onOpenAlex(text)}`} className={COUNT_NUMBER}>{text}</a> : <span className="font-semibold tabular-nums">{text}</span>}
+		{count.there && count.thereInside ? (
+			<Link href={count.there} aria-label={`${text} ${count.label(all)}`} className={COUNT_NUMBER}>{text}</Link>
+		) : count.there ? (
+			<a href={count.there} target="_blank" rel="noreferrer" aria-label={`${text} ${count.label(all)}, ${onOpenAlex(text)}`} className={COUNT_NUMBER}>{text}</a>
+		) : (
+			<span className="font-semibold tabular-nums">{text}</span>
+		)}
 	</>;
 }
 
@@ -311,6 +332,7 @@ function ResourceInteractions({
 							revalidateResults={revalidateResults}
 						/>
 						<AskAboutButton item={itemData} />
+						<VisualizeButton item={itemData} compact />
 						<CitationControl item={itemData} />
 						<CopyButton
 							itemData={itemData}
@@ -384,17 +406,7 @@ function ResourcePublishedDate({
 	);
 }
 
-function ResourceArticle({
-	titleId,
-	finalItemData,
-	finalIsLoading,
-	gapMapHref,
-	abstract,
-	abstractText,
-	t,
-	tNav,
-	format,
-}: {
+type ArticleProps = {
 	titleId: string;
 	finalItemData: Item | ListItem | undefined;
 	finalIsLoading: boolean;
@@ -404,97 +416,103 @@ function ResourceArticle({
 	t: ReturnType<typeof useTranslations<"ui">>;
 	tNav: ReturnType<typeof useTranslations<"nav">>;
 	format: ReturnType<typeof useFormatter>;
-}) {
-	const { content } = useLibraryConfig();
+};
 
+/**
+ * What the record is and, where it has been checked, how it held up: read first, above the title. A library with AI types its
+ * records, so a card still loading there keeps the line's place.
+ */
+function ResourceFacts({ item, isLoading }: { item: Item | ListItem | undefined; isLoading: boolean }) {
+	const typesRecords = useLibraryConfig().ai.providers.some((provider) => provider.enabled);
+	const record = useEvidenceRecord(item?.key);
+	if (isLoading && typesRecords) return <Skeleton isLoaded={false} className="-mb-2 h-7 w-40 rounded-2xl" />;
+	const reading = item?.reading;
+	if (!record?.verdict && !reading) return null;
+	return (
+		<div className="-mb-2 flex h-7 items-center gap-3 text-sm">
+			{reading && <StudyTypeLabel reading={reading} />}
+			<EvidenceVerdict item={item} insideLink />
+		</div>
+	);
+}
+
+/** The record's date, when it has one a reader can read. */
+function ResourceDate({ item, format }: { item: Item | ListItem | undefined; format: ArticleProps["format"] }) {
+	const value = item?.datePublished;
+	if (!value || isNaN(new Date(value).getTime())) return null;
+	return (
+		<>
+			<ResourcePublishedDate value={value} format={format} />
+			<ResourceDivider />
+		</>
+	);
+}
+
+/** The record's in-progress, internal and retracted marks. */
+function ResourceFlags({ item, t }: { item: Item | ListItem | undefined; t: ArticleProps["t"] }) {
+	const { content } = useLibraryConfig();
+	return (
+		<>
+			{hasAnyTag(item?.tags, content.tags.comingSoon) && (
+				<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
+					{t("inProgress")}
+				</span>
+			)}
+			{hasAnyTag(item?.tags, content.tags.internal) && (
+				<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
+					{t("internal")}
+				</span>
+			)}
+			{hasTag(item?.tags, "Retracted") && (
+				<span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-danger bg-danger/10 px-4 py-1 font-medium text-danger @[720px]:w-auto">
+					<HugeiconsIcon icon={Alert02Icon} className="size-4" />
+					Retracted publication
+				</span>
+			)}
+		</>
+	);
+}
+
+/** Who wrote it, when, and whether it can be read, with the gap map it belongs to and its marks. */
+function ResourceByline({ titleId, finalItemData, gapMapHref, t, tNav, format }: ArticleProps) {
+	return (
+		<div className="flex w-full gap-1 items-center flex-wrap text-black/70 dark:text-white/70">
+			{gapMapHref && (
+				<span className="inline-flex items-center gap-1.5 text-accent font-medium">
+					<HugeiconsIcon icon={MapsIcon} className="size-3.5 shrink-0" />
+					<span id={`${titleId}-gap-map`}>{tNav("gapMap")}</span>
+				</span>
+			)}
+			<ResourceAuthors itemData={finalItemData} />
+			<ResourceDivider />
+			<ResourceDate item={finalItemData} format={format} />
+			<OpenAccessLabel openAccess={finalItemData?.openAccess} />
+			<ResourceFlags item={finalItemData} t={t} />
+		</div>
+	);
+}
+
+function ResourceAbstract({ finalItemData, finalIsLoading, abstract, abstractText }: ArticleProps) {
+	if (!abstract || !(abstractText || !finalItemData)) return null;
+	return (
+		<Skeleton isLoaded={!finalIsLoading} className={twMerge("w-full min-h-0 rounded-2xl ", !finalItemData ? "min-h-20" : "min-h-0")}>
+			<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">{abstractText}</p>
+		</Skeleton>
+	);
+}
+
+function ResourceArticle(props: ArticleProps) {
+	const { titleId, finalItemData, finalIsLoading } = props;
 	return (
 		<article className="flex flex-col gap-4">
-			<Skeleton
-				isLoaded={!finalIsLoading}
-				className="w-full min-h-8 rounded-2xl"
-			>
+			<ResourceFacts item={finalItemData} isLoading={finalIsLoading} />
+			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
 				<ResourceTitle id={titleId} item={finalItemData} />
 			</Skeleton>
-			<Skeleton
-				isLoaded={!finalIsLoading}
-				className="w-full min-h-8 rounded-2xl"
-			>
-				<div className="flex w-full gap-1 items-center flex-wrap">
-					{gapMapHref && (
-						<span className="inline-flex items-center gap-1.5 text-accent font-medium">
-							<HugeiconsIcon
-								icon={MapsIcon}
-								className="size-3.5 shrink-0"
-							/>
-							<span id={`${titleId}-gap-map`}>
-								{tNav("gapMap")}
-							</span>
-						</span>
-					)}
-					<ResourceAuthors itemData={finalItemData} />
-					<ResourceDivider />
-					{finalItemData?.datePublished &&
-						!isNaN(
-							new Date(finalItemData.datePublished).getTime(),
-						) && (
-							<>
-								<ResourcePublishedDate
-									value={finalItemData.datePublished}
-									format={format}
-								/>
-								<ResourceDivider />
-							</>
-						)}
-					{finalItemData?.reading && (
-						<>
-							<StudyTypeLabel reading={finalItemData.reading} />
-							<ResourceDivider />
-						</>
-					)}
-					<OpenAccessLabel
-						openAccess={finalItemData?.openAccess}
-						className="text-lg"
-					/>
-
-					{hasAnyTag(
-						finalItemData?.tags,
-						content.tags.comingSoon,
-					) && (
-						<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
-							{t("inProgress")}
-						</span>
-					)}
-
-					{hasAnyTag(finalItemData?.tags, content.tags.internal) && (
-						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
-							{t("internal")}
-						</span>
-					)}
-
-					{hasTag(finalItemData?.tags, "Retracted") && (
-						<span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-danger bg-danger/10 px-4 py-1 font-medium text-danger @[720px]:w-auto">
-							<HugeiconsIcon
-								icon={Alert02Icon}
-								className="size-4"
-							/>
-							Retracted publication
-						</span>
-					)}
-				</div>
+			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
+				<ResourceByline {...props} />
 			</Skeleton>
-			{abstract && (abstractText || !finalItemData) && (
-				<Skeleton
-					isLoaded={!finalIsLoading}
-					className={twMerge(
-						"w-full min-h-0 rounded-2xl ",
-						!finalItemData ? "min-h-20" : "min-h-0",
-					)}
-				>
-					<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
-						{abstractText}
-					</p>
-				</Skeleton>
-			)}
+			<ResourceAbstract {...props} />
 		</article>
 	);
 }
@@ -603,7 +621,7 @@ export default function Resource({
 					target="_blank"
 					rel="noopener noreferrer"
 					className={twMerge(
-						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						CARD_LINK,
 						!finalItemData?.key && "!pointer-events-none",
 						!finalIsLoading && !finalItemData?.key && "no-data",
 						!finalIsLoading && finalItemData?.key && "has-data",
@@ -618,7 +636,7 @@ export default function Resource({
 					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					{...itemLink}
 					className={twMerge(
-						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						CARD_LINK,
 						!finalItemData?.key && "!pointer-events-none",
 						!finalIsLoading && !finalItemData?.key && "no-data",
 						!finalIsLoading && finalItemData?.key && "has-data",
@@ -638,6 +656,12 @@ export default function Resource({
 		</ResourceWrapper>
 	);
 }
+
+/**
+ * The card's link. Its hover tints the card rather than darkening everything in it, so a rating keeps its colours, and it
+ * stays off while the pointer is on the rating, which is a control of its own.
+ */
+const CARD_LINK = "p-4 @[720px]:p-6 flex-1 rounded-t-xl transition-colors [&:hover:not(:has([data-evidence-chip]:hover))]:bg-black/[0.06] dark:[&:hover:not(:has([data-evidence-chip]:hover))]:bg-black/25";
 
 function ResourceWrapper({
 	as,

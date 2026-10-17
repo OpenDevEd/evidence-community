@@ -64,7 +64,7 @@ export function getUnlocalizedPathname(pathname: string) {
  */
 export function pageRunsUnderHeader(pathname: string): boolean {
 	const path = getUnlocalizedPathname(normalizePathname(pathname));
-	return path === "/" || path.includes("/map");
+	return path === "/" || path.includes("/map") || path.includes("/evidence");
 }
 
 /**
@@ -82,6 +82,7 @@ const RESERVED_ROUTE_SEGMENTS = new Set([
 	"citation",
 	"contact",
 	"cookie-policy",
+	"evidence",
 	"gapmaps",
 	// Where a reader's collection invitation email links.
 	"invitations",
