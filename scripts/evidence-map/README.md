@@ -6,7 +6,7 @@ whose address matches the data's (`aied.openscholar.ai`) shows the map, its butt
 
 1. `node scripts/evidence-map/tunnel.mjs`: read-only access to AIED's database on `localhost:55446` and its search on
    `localhost:7716`. It finds AIED's search server again after a redeploy. Stop it by its PID when done.
-2. `node scripts/evidence-map/export.cjs` (with `config/library.local.json` pointing at those ports): exports the graph,
+2. `node scripts/evidence-map/export.mjs` (with `config/library.local.json` pointing at those ports): exports the graph,
    only records a reader can find, to `/tmp/evidence-data/aied-{nodes,edges,meta,doi}.csv`. Topic names come from
    `aied-topics.csv`.
 3. `node --max-old-space-size=12288 scripts/evidence-map/build.mjs public/evidence-data/aied "<citation-map.json>"`:

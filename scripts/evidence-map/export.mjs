@@ -1,7 +1,9 @@
 // Read-only re-export of AIED's graph for the evidence map, the same queries as scripts/evidence-map/export-*.sql.
-const { Client } = require("pg");
-const fs = require("fs");
-const c = require(process.cwd() + "/config/library.local.json");
+import fs from "node:fs";
+import pg from "pg";
+
+const { Client } = pg;
+const c = JSON.parse(fs.readFileSync(`${process.cwd()}/config/library.local.json`, "utf8"));
 const url = JSON.stringify(c.services).match(/postgres(ql)?:\/\/[^"]+/)[0];
 const inner = (file) => fs.readFileSync(file, "utf8").trim().replace(/^COPY \(/, "").replace(/\) TO STDOUT WITH \(FORMAT csv\);$/, "");
 const cell = (v) => { const s = v === null || v === undefined ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
