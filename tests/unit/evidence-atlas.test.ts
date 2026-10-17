@@ -48,6 +48,11 @@ describe("a paper's chain", () => {
 		expect(chainOf(atlas, 0)?.layers).toEqual([[0], [2], [3]]);
 	});
 
+	it("holds every study a large meta-analysis analysed, so its count is the real one", () => {
+		const big: Atlas = { points: columns([{ kind: kind("meta") }, ...Array.from({ length: 120 }, () => ({ kind: kind("primary") }))]), ...analysed(Array.from({ length: 120 }, (_, k) => [0, k + 1])) };
+		expect(chainOf(big, 0)?.layers[0]).toHaveLength(120);
+	});
+
 	it("has nothing for a paper without such a link", () => {
 		const alone: Atlas = { points: columns([{ kind: kind("primary") }, { kind: kind("primary") }]), ...analysed([]) };
 		expect(chainOf(alone, 0)).toBeNull();

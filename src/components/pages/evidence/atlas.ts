@@ -99,8 +99,7 @@ export function sortLinks(triples: Uint32Array) {
 	return { analyses, analysedBy, citesOther };
 }
 
-/** Most papers a column of a chain shows; the most severe verdicts come first, then the most cited. */
-const LAYER_MAX = 90;
+/** A column of a chain puts the most severe verdicts first, then the most cited. */
 const severity = (p: Columns, i: number) => {
 	const v = p.verdict[i];
 	if (v === 0) return 0;
@@ -122,7 +121,7 @@ function linksAmong(members: Set<number>, analyses: Map<number, number[]>): [num
 export function chainOf({ points: p, analyses, analysedBy, citesOther }: Atlas, index: number): Chain | null {
 	if (!analyses || !analysedBy) return null;
 	const seen = new Set([index]);
-	const take = (list: number[]) => [...new Set(list)].sort(byConcern(p)).filter((i) => !seen.has(i) && seen.add(i)).slice(0, LAYER_MAX);
+	const take = (list: number[]) => [...new Set(list)].sort(byConcern(p)).filter((i) => !seen.has(i) && seen.add(i));
 	const up1 = take(analysedBy.get(index) ?? []);
 	const up2 = take(up1.flatMap((i) => analysedBy.get(i) ?? []));
 	const down1 = take(analyses.get(index) ?? []);
