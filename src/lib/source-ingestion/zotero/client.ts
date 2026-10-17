@@ -96,9 +96,18 @@ export class ZoteroApiClient {
 				new Promise((resolve) => setTimeout(resolve, milliseconds)));
 	}
 
+	/** Waits out the client's pause; another request can lengthen it while this one waits, so it checks again. */
 	private async waitForBackoff() {
-		const delay = this.backoffUntil - Date.now();
-		if (delay > 0) await this.sleep(delay);
+		for (let waited = 0; this.backoffUntil > waited; ) {
+			waited = this.backoffUntil;
+			const delay = waited - Date.now();
+			if (delay > 0) await this.sleep(delay);
+		}
+	}
+
+	/** Pauses every request this client makes, not just the one Zotero answered. */
+	private holdOff(milliseconds: number) {
+		this.backoffUntil = Math.max(this.backoffUntil, Date.now() + milliseconds);
 	}
 
 	private async request(
@@ -164,19 +173,16 @@ export class ZoteroApiClient {
 			}
 
 			const backoff = Number(response.headers.get("backoff"));
-			if (Number.isFinite(backoff) && backoff > 0) {
-				this.backoffUntil = Math.max(
-					this.backoffUntil,
-					Date.now() + Math.min(backoff * 1_000, 60_000),
-				);
-			}
+			if (Number.isFinite(backoff) && backoff > 0) this.holdOff(Math.min(backoff * 1_000, 60_000));
 
 			if (
 				(response.status === 429 || response.status >= 500) &&
 				attempt < 3
 			) {
 				await response.body?.cancel();
-				await this.sleep(retryDelay(response, attempt));
+				// A 429 or a Retry-After asks the client to wait, so the requests running beside this one wait too.
+				if (response.status === 429 || response.headers.has("retry-after")) this.holdOff(retryDelay(response, attempt));
+				else await this.sleep(retryDelay(response, attempt));
 				continue;
 			}
 			if (
