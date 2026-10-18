@@ -40,15 +40,9 @@ function Leave({ back, onClose }: { back?: string; onClose: () => void }) {
 	return back ? <BackButton to={back} onBack={onClose} /> : <CloseButton onClose={onClose} />;
 }
 
-/** A heading over lists: in the side panel the lists scroll under it; in a phone's sheet, which has little height, all scroll. */
-function Scrolling({ heading, lists, scrollAll }: { heading: ReactNode; lists: ReactNode; scrollAll?: boolean }) {
-	if (scrollAll) return <div className="min-h-0 flex-1 overflow-y-auto pb-3">{heading}<div className={DIVIDER}>{lists}</div></div>;
-	return (
-		<>
-			{heading}
-			<div className={twMerge("min-h-0 flex-1 overflow-y-auto pb-3", DIVIDER)}>{lists}</div>
-		</>
-	);
+/** A heading over lists, scrolling with them as one. */
+function Scrolling({ heading, lists }: { heading: ReactNode; lists: ReactNode }) {
+	return <div className="min-h-0 flex-1 overflow-y-auto pb-3">{heading}<div className={DIVIDER}>{lists}</div></div>;
 }
 
 /** Who, when and where, or, for a library record the search did not return, that it couldn't be loaded. */
@@ -92,20 +86,20 @@ function PaperHeading({ index, record, loaded, more, onClose, back }: { index: n
 }
 
 /** The opened paper: its heading, then its chain or its citations. */
-function PaperBody({ selection, record, loaded, more, onOpen, onClose, onHover, scrollAll, back }: Opened & { record: ListItem | null | undefined; onClose: () => void; scrollAll?: boolean; back?: string }) {
-	if (selection.index === CHECKED) return <CheckedBody selection={selection} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} scrollAll={scrollAll} back={back} />;
+function PaperBody({ selection, record, loaded, more, onOpen, onClose, onHover, back }: Opened & { record: ListItem | null | undefined; onClose: () => void; back?: string }) {
+	if (selection.index === CHECKED) return <CheckedBody selection={selection} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} back={back} />;
 	const opened = { selection, loaded, more, onOpen, onHover };
-	return <Scrolling heading={<PaperHeading index={selection.index} record={record} loaded={loaded} more={more} onClose={onClose} back={back} />} lists={selection.chain ? <ChainDetail {...opened} /> : <Around {...opened} />} scrollAll={scrollAll} />;
+	return <Scrolling heading={<PaperHeading index={selection.index} record={record} loaded={loaded} more={more} onClose={onClose} back={back} />} lists={selection.chain ? <ChainDetail {...opened} /> : <Around {...opened} />} />;
 }
 
 /** The class a kept paper wears while the next one opens. */
 const STALE = "pointer-events-none opacity-50 transition-opacity";
 
 /** The paper the panel or sheet shows, dimmed and out of reach while the next one opens. */
-export function OpenedPaper({ shown, stale, loaded, more, onOpen, onClose, onHover, scrollAll, tab, back }: { shown: { selection: Selection; record: ListItem | null | undefined }; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onClose: () => void; onHover: OnHover; scrollAll?: boolean; tab?: { id: string; labelledBy?: string }; back?: string }) {
+export function OpenedPaper({ shown, stale, loaded, more, onOpen, onClose, onHover, tab, back }: { shown: { selection: Selection; record: ListItem | null | undefined }; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onClose: () => void; onHover: OnHover; tab?: { id: string; labelledBy?: string }; back?: string }) {
 	return (
 		<div id={tab?.id} role={tab?.labelledBy ? "tabpanel" : undefined} aria-labelledby={tab?.labelledBy} aria-busy={stale || undefined} inert={stale} className={twMerge("flex min-h-0 flex-1 flex-col", stale && STALE)}>
-			<PaperBody selection={shown.selection} record={shown.record} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} scrollAll={scrollAll} back={back} />
+			<PaperBody selection={shown.selection} record={shown.record} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} back={back} />
 		</div>
 	);
 }
@@ -155,7 +149,7 @@ function joinedLine(joined: number, checked: number, unchecked: number) {
 }
 
 /** The whole graph of checked papers: its three columns, what the line colours mean, and every paper in it. */
-function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, scrollAll, back }: Opened & { onClose: () => void; scrollAll?: boolean; back?: string }) {
+function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }: Opened & { onClose: () => void; back?: string }) {
 	const layers = selection.chain?.layers ?? [];
 	const members = layers.flat();
 	const records = useLines(members, more);
@@ -177,7 +171,7 @@ function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, scroll
 			{layers.map(column)}
 		</>
 	);
-	return <Scrolling heading={<CheckedHeading onClose={onClose} back={back} />} lists={lists} scrollAll={scrollAll} />;
+	return <Scrolling heading={<CheckedHeading onClose={onClose} back={back} />} lists={lists} />;
 }
 
 /** A paper's chain as lists: the studies it analyses with their checks, what those analyse, and what analyses it. */

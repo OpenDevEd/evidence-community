@@ -87,19 +87,19 @@ export function EvidenceIntro({ papers, reviews, checked, titled = true }: { pap
 	);
 }
 
-/** The meta-analyses and reviews a reader starts from, the most worrying checks first, a page at a time. */
+/** The meta-analyses and reviews a reader starts from, the most worrying checks first, a page at a time; all of it scrolls. */
 export function Chains({ chains, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
 	const [page, setPage] = useState(1);
 	const pages = Math.max(1, Math.ceil(chains.length / PAGE));
 	return (
-		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="flex min-h-0 flex-1 flex-col">
+		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="min-h-0 flex-1 overflow-y-auto">
 			{heading && (
 				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 					Starting points
 					<span className={twMerge("text-xs font-medium tabular-nums", muted)}>{chains.length}</span>
 				</h2>
 			)}
-			<ol className="min-h-0 flex-1 overflow-y-auto px-2">
+			<ol className="px-2">
 				{chains.slice((page - 1) * PAGE, page * PAGE).map((chain) => (
 					<Row key={chain.index} index={chain.index} verdict={chain.verdict} label={chain} outside={chain.outside} note={chain.analyses ? undefined : "Not analysed yet"} onOpen={() => onOpenKey(chain.paper)} onHover={onHover} selected={selected === chain.index} />
 				))}
@@ -148,13 +148,13 @@ export function ResultList({ filters, results, lit, typing, more, loaded, onOpen
 	// not this search's.
 	const stale = typing || Boolean(results?.isLoading);
 	return (
-		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="flex min-h-0 flex-1 flex-col">
+		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="min-h-0 flex-1 overflow-y-auto">
 			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-1 pt-1 text-sm font-semibold">
 				Results
 				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", stale && "opacity-50")}>{(data?.totalItems ?? 0).toLocaleString("en-GB")}</span>
 			</h2>
 			<p className={twMerge("min-h-4 px-5 pb-2 text-xs", muted)}>{litLine(lit)}</p>
-			<ol inert={stale} className={twMerge("min-h-0 flex-1 overflow-y-auto px-2 transition-opacity", stale && "opacity-50")}>
+			<ol inert={stale} className={twMerge("px-2 transition-opacity", stale && "opacity-50")}>
 				{((data?.items ?? []) as ListItem[]).map((item) => <ResultRow key={item.key} item={item} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />)}
 			</ol>
 			<Pages total={Math.min(data?.totalPages ?? 1, 50)} page={filters.queryParams.page || 1} onChange={filters.handlePageChange} label="Pages of results" />

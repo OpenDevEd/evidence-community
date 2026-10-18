@@ -1,9 +1,12 @@
 "use client";
 
-import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
-import type { ReactNode } from "react";
+import { ArrowDown01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useState, type ReactNode } from "react";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
+import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded } from "./client";
 import { aroundOf, FLAG, KINDS, VERDICTS } from "./data";
@@ -118,6 +121,40 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Chec
 				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} />
 				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} />
 			</div>
+		</div>
+	);
+}
+
+/** The button at the end of the search that shows or hides the filter's fields, with how many choices are on. */
+function FilterToggle({ open, on, onPress }: { open: boolean; on: number; onPress: () => void }) {
+	return (
+		<button type="button" aria-expanded={open} aria-controls="evidence-filter" aria-label={on ? `Filter, ${on} on` : "Filter"} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", on ? "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white" : "bg-default-100 hover:bg-default-200 dark:bg-secondary dark:hover:bg-white/[4%]", open && !on && "bg-default-200 dark:bg-white/[6%]")}>
+			<HugeiconsIcon icon={FilterHorizontalIcon} size={20} aria-hidden />
+			{on ? <span aria-hidden className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-white tabular-nums">{on}</span> : null}
+		</button>
+	);
+}
+
+/**
+ * The search and, folded under it until asked for, the filter's fields: one row, where it used to take four. Opening and folding
+ * the fields slides them open and shut.
+ */
+export function SearchRow({ search, onSearch, onTyped, checks }: { search: string; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
+	const [open, setOpen] = useState(false);
+	const still = useReducedMotion();
+	return (
+		<div>
+			<div className="flex items-center gap-2">
+				<div className="min-w-0 flex-1"><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={search} classNames={filledInputSlots} /></div>
+				<FilterToggle open={open} on={checks.types.size + checks.verdicts.size} onPress={() => setOpen(!open)} />
+			</div>
+			<AnimatePresence initial={false}>
+				{open && (
+					<motion.div id="evidence-filter" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
+						<div className="pb-1 pt-2"><MapFilter {...checks} /></div>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

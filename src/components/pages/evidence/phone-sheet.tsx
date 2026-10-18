@@ -3,28 +3,22 @@
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons";
 import { motion, useReducedMotion } from "framer-motion";
 import { useState, type KeyboardEvent } from "react";
-import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { filledInputSlots } from "@/components/nextui/field-styles";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import type { ChainEntry } from "./data";
 import type { Selection } from "./graph";
-import { MapFilter, type Checks } from "./filter";
+import { SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
 import { OpenedPaper } from "./paper";
 import { usePaper } from "./records";
 
 type Tab = "paper" | "results";
-/**
- * The search and the checks, at the top of the screen. A phone on its side keeps its little height for the map: no filter,
- * unless it is on, which stays there to be turned off.
- */
+/** The search, with the filter folded into its button, at the top of the screen: one row, so the map keeps its height. */
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
-		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 space-y-2 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
-			<div className={twMerge(PANEL, "p-1.5")}><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} /></div>
-			<div className={twMerge(PANEL, "p-1.5", checks.types.size + checks.verdicts.size === 0 && "[@media(max-width:1279px)_and_(orientation:landscape)_and_(max-height:600px)]:hidden")}><MapFilter {...checks} /></div>
+		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
+			<div className={twMerge(PANEL, "p-1.5")}><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /></div>
 		</div>
 	);
 }
@@ -131,7 +125,7 @@ export function PhoneSheet(props: SheetProps) {
 			<TopBar filters={props.filters} onSearch={front("results", props.filters.handleSearchChange)} onTyped={props.onTyped} checks={props.checks} />
 			<motion.div data-evidence-sheet layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, heightOf(content, open))}>
 				{both && <SheetTabs tab={tab} onTab={setTab} />}
-				{content === "paper" && paper && <OpenedPaper {...paper} stale={stale} onOpen={front("paper", props.onOpen)} onClose={props.onClose} onHover={props.onHover} scrollAll tab={{ id: "evidence-sheet-panel", labelledBy: both ? "evidence-tab-paper" : undefined }} />}
+				{content === "paper" && paper && <OpenedPaper {...paper} stale={stale} onOpen={front("paper", props.onOpen)} onClose={props.onClose} onHover={props.onHover} tab={{ id: "evidence-sheet-panel", labelledBy: both ? "evidence-tab-paper" : undefined }} />}
 				{content === "results" && <SheetResults props={props} inTab={Boolean(paper)} onOpenKey={front("paper", props.onOpenKey)} />}
 				{content === "chains" && <FoldedChains open={open} onOpen={setOpen} papers={props.papers} chains={props.chains} checked={props.checked} selected={props.selected} onOpenKey={props.onOpenKey} onHover={props.onHover} />}
 			</motion.div>
