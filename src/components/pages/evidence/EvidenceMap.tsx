@@ -41,8 +41,8 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 	const { lists, paper, checks, checked } = panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	// The opened paper as both layouts show it, slid over their list with a back arrow to it.
 	const opened = { ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) };
-	// A new search goes back from an opened paper to its results.
-	const onSearch = (text: string) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); };
+	// A new search goes back from an opened paper to its results, even one whose point the map has not found yet.
+	const onSearch = (text: string) => { filters.handleSearchChange(text); if (address.paper || address.view) now.showAll(); };
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">

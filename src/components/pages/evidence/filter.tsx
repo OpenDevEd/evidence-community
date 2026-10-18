@@ -2,7 +2,7 @@
 
 import { ArrowDown01Icon, Cancel01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -127,9 +127,9 @@ function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Checks) {
 /** The filter button's look: in the accent with something chosen, pressed in while its fields are open, else raised. */
 const toggleLook = (open: boolean, on: number) => (on ? "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white" : open ? "bg-white/70 shadow-[0_1px_2px_rgb(0_0_0/0.08)] dark:bg-white/[6%]" : "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:bg-white/70 dark:bg-secondary-400 dark:hover:bg-white/[6%]");
 
-function FilterToggle({ open, on, onPress }: { open: boolean; on: number; onPress: () => void }) {
+function FilterToggle({ open, on, onPress, controls }: { open: boolean; on: number; onPress: () => void; controls: string }) {
 	return (
-		<button type="button" aria-expanded={open} aria-controls="evidence-filter" aria-label={on ? `Filter, ${on} on` : "Filter"} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", toggleLook(open, on))}>
+		<button type="button" aria-expanded={open} aria-controls={controls} aria-label={on ? `Filter, ${on} on` : "Filter"} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", toggleLook(open, on))}>
 			<HugeiconsIcon icon={FilterHorizontalIcon} size={20} aria-hidden />
 			{on ? <span aria-hidden className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-white tabular-nums">{on}</span> : null}
 		</button>
@@ -143,15 +143,17 @@ function FilterToggle({ open, on, onPress }: { open: boolean; on: number; onPres
 export function SearchRow({ search, onSearch, onTyped, checks }: { search: string; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	const [open, setOpen] = useState(false);
 	const still = useReducedMotion();
+	// The wide panel and the phone's top bar each have a search row, one hidden: each button names its own fields.
+	const fields = useId();
 	return (
 		<div>
 			<div className="flex items-center gap-2">
 				<div className="min-w-0 flex-1"><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={search} classNames={RAISED_INPUT} /></div>
-				<FilterToggle open={open} on={checks.types.size + checks.verdicts.size} onPress={() => setOpen(!open)} />
+				<FilterToggle open={open} on={checks.types.size + checks.verdicts.size} onPress={() => setOpen(!open)} controls={fields} />
 			</div>
 			<AnimatePresence initial={false}>
 				{open && (
-					<motion.div id="evidence-filter" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
+					<motion.div id={fields} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
 						<div className="pb-1 pt-2"><MapFilter {...checks} /></div>
 					</motion.div>
 				)}

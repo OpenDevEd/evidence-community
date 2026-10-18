@@ -22,9 +22,9 @@ export type OnHover = (index: number | null, label?: Label) => void;
 /**
  * What the map lights, as the panel lists it: under which heading, its papers in order, the first ones' lines as the search sent
  * them, whether that is all of them yet, and
- * whether the answer on screen is the last search's. `id` changes with the search and the filter.
+ * whether the answer on screen is the last search's, or the search failed. `id` changes with the search and the filter.
  */
-export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; lines: Map<number, Label>; complete: boolean; loading: boolean };
+export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; lines: Map<number, Label>; complete: boolean; loading: boolean; failed: boolean };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -108,14 +108,16 @@ export function Chains({ chains, selected, onOpenKey, onHover, heading = true }:
 	);
 }
 
-function Pages({ total, page, onChange, label }: { total: number; page: number; onChange: (page: number) => void; label: string }) {
+function Pages({ total, page, onChange, label, stale }: { total: number; page: number; onChange: (page: number) => void; label: string; stale?: boolean }) {
 	if (total <= 1) return null;
-	return <div className="flex justify-center px-3 py-2"><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
+	return <div inert={stale} className={twMerge("flex justify-center px-3 py-2 transition-opacity", stale && "opacity-50")}><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
 }
 
 /** What the map lights, a search's results or the filter's papers, a page at a time; all of it scrolls. Each opens on the map. */
 export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
-	const [page, setPage] = useState(1);
+	const [chosen, setPage] = useState(1);
+	// A list that shrinks under the page a reader is on (the next search's answer) shows its last page, not an empty one.
+	const pages = Math.max(1, Math.ceil(found.order.length / PAGE)), page = Math.min(chosen, pages);
 	const shown = found.order.slice((page - 1) * PAGE, page * PAGE);
 	// The next page's lines are fetched while this one is read, so turning the page shows it whole.
 	useLines(unnamed(found.order.slice(page * PAGE, (page + 1) * PAGE), found.lines, more), more);
@@ -128,8 +130,9 @@ export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { f
 				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
 			</h2>
 			{loaded && more ? <ResultRows indices={shown} lines={found.lines} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
-			{!stale && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
-			<Pages total={Math.ceil(found.order.length / PAGE)} page={page} onChange={setPage} label="Pages of results" />
+			{found.failed && <p role="status" className="px-5 text-sm text-danger">The search didn&apos;t answer. Try again in a moment.</p>}
+			{!stale && !found.failed && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
+			<Pages total={pages} page={page} onChange={setPage} label="Pages of results" stale={stale} />
 		</section>
 	);
 }

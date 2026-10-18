@@ -115,20 +115,32 @@ function searchQuery(params: ReturnType<typeof useFiltersContext>["queryParams"]
  * A search's answer: how many records it finds, how many of those were looked at, the map's points among them in its order, and
  * the first ones' lines as [point, who, year, title].
  */
-type Hits = { total: number; found: number; order: number[]; lines: [number, string, number | null, string | null][] };
-const hitsOf = (url: string) => fetch(url).then((r) => r.json() as Promise<Hits>);
+type Hits = { total: number; found: number; order: number[]; lines: [number, string, number | null, string | null][]; url: string };
+/** An answer, with the request it answers: one kept from the last search is told apart from this search's. */
+const hitsOf = async (url: string) => {
+	const response = await fetch(url);
+	if (!response.ok) throw new Error(`Search answered ${response.status}`);
+	return { ...(await response.json()), url } as Hits;
+};
 const once = { revalidateOnFocus: false };
 
 /**
  * Every record on the map the search finds lights up and is listed, not only a page of them. Two requests start together: the
  * first 5,000, which come quickly, and every one, which a broad search takes a second or more to rank. The first is shown until
- * every one is in; when it already holds them all, the second is not waited for.
+ * every one is in; when it already holds them all, the second is not waited for. Until one of this search's answers is in, the
+ * last search's stays on screen, dimmed and out of reach; if both fail, the search says so rather than bring the last one back.
  */
 function useSearchHits(query: string) {
-	const first = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=5000` : null, hitsOf, { ...once, keepPreviousData: true });
-	const all = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=${ALL}` : null, hitsOf, once);
-	return { hits: newest(first.data, all.data), loading: first.isLoading && all.isLoading };
+	const first = useSWR<Hits>(hitsUrl(query, 5000), hitsOf, { ...once, keepPreviousData: true });
+	const all = useSWR<Hits>(hitsUrl(query, ALL), hitsOf, once);
+	const current = answerTo(all.data, hitsUrl(query, ALL)) ?? answerTo(first.data, hitsUrl(query, 5000));
+	const failed = !current && Boolean(first.error && all.error);
+	return { hits: current ?? (failed ? undefined : first.data), loading: !current && !failed, failed };
 }
+
+const hitsUrl = (query: string, limit: number) => (query ? `/api/evidence/hits${query}&limit=${limit}` : null);
+/** The answer, if it is to this request and not one kept from the last search. */
+const answerTo = (hits: Hits | undefined, url: string | null) => (hits && hits.url === url ? hits : undefined);
 
 /**
  * The papers outside the library a search finds: the library's search cannot see them, so their names on the map are searched
@@ -151,8 +163,6 @@ const nameOf = (more: More, i: number) => { const label = more.labels.get(i); re
 /** Every hit: more than any search here finds (the route's own limit). */
 const ALL = 300_000;
 
-/** The fullest answer for the current search: every hit once it is in, the first ones until then. */
-const newest = (first: Hits | undefined, all: Hits | undefined) => all ?? first;
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
 const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
@@ -165,7 +175,7 @@ const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: Readon
  */
 export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, more: More | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
 	const query = searchQuery(filters.queryParams), search = filters.queryParams.search;
-	const { hits, loading } = useSearchHits(query);
+	const { hits, loading, failed } = useSearchHits(query);
 	const outside = useMemo(() => (query ? outsideMatches(loaded, more, search) : []), [query, loaded, more, search]);
 	const checksOn = types.size + verdicts.size > 0;
 	const lit = useMemo(() => {
@@ -177,7 +187,7 @@ export function useLighting(filters: ReturnType<typeof useFiltersContext>, loade
 	const id = `${search}|${[...types]}|${[...verdicts]}`;
 	const lines = useMemo(() => new Map((hits?.lines ?? []).map(([i, who, year, title]) => [i, { who, year, title: title ?? undefined }])), [hits]);
 	const found: Found | undefined = query
-		? { id, title: "Results", order: lit ?? [], lines, complete: Boolean(hits && hits.found >= hits.total), loading: loading || !lit }
-		: lit ? { id, title: "Filtered", order: lit, lines, complete: true, loading: false } : undefined;
+		? { id, title: "Results", order: lit ?? [], lines, complete: Boolean(hits && hits.found >= hits.total), loading: loading || (!lit && !failed), failed }
+		: lit ? { id, title: "Filtered", order: lit, lines, complete: true, loading: false, failed: false } : undefined;
 	return { found, lit };
 }
