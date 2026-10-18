@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowUpRight01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import type { ListItem } from "@/app/api/item/types";
@@ -17,13 +17,7 @@ import { KIND_LABEL } from "./verdicts";
 
 type Opened = { selection: Selection; loaded: Loaded; more: More; onOpen: (index: number) => void; onHover: OnHover };
 
-const CLOSE = "-mr-2 -mt-1 grid size-8 place-items-center rounded-lg outline-none hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10";
 const DIVIDER = "border-t border-black/[0.06] dark:border-white/[0.08]";
-
-/** As the library's other close buttons: a name and no tooltip, which would flash as the panel it explains goes. */
-function CloseButton({ onClose }: { onClose: () => void }) {
-	return <button type="button" aria-label="Close" onClick={onClose} className={CLOSE}><HugeiconsIcon icon={Cancel01Icon} size={16} /></button>;
-}
 
 /** Back to the list the paper was opened from, named, at the head of the panel the paper took over. */
 function BackButton({ to, onBack }: { to: string; onBack: () => void }) {
@@ -33,11 +27,6 @@ function BackButton({ to, onBack }: { to: string; onBack: () => void }) {
 			{to}
 		</button>
 	);
-}
-
-/** The way out of an opened paper: back to its list where the paper took the list's place, else a close button. */
-function Leave({ back, onClose }: { back?: string; onClose: () => void }) {
-	return back ? <BackButton to={back} onBack={onClose} /> : <CloseButton onClose={onClose} />;
 }
 
 /** A heading over lists, scrolling with them as one. */
@@ -61,20 +50,17 @@ function PaperLink({ itemKey, doi }: { itemKey: string | null; doi: string | und
 }
 
 /** The opened paper's heading: what it is, its check, its title, who wrote it, and where to read it. */
-function PaperHeading({ index, record, loaded, more, onClose, back }: { index: number; record: ListItem | null | undefined; loaded: Loaded; more: More; onClose: () => void; back?: string }) {
+function PaperHeading({ index, record, loaded, more, onClose, back }: { index: number; record: ListItem | null | undefined; loaded: Loaded; more: More; onClose: () => void; back: string }) {
 	const key = more.keyOf(index), label = more.labels.get(index);
 	// A library record the search no longer returns (unpublished, hidden, or the search unreachable): no link to a page that fails.
 	const missing = Boolean(key && record === null);
 	const kind = KIND_LABEL[KINDS[loaded.points.kind[index]]];
 	return (
 		<>
-			{back && <div className="px-5 pt-3"><Leave back={back} onClose={onClose} /></div>}
-			<div className={twMerge("flex items-start gap-2 px-5", back ? "pt-2" : "pt-4")}>
-				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-					{kind && <span className="rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-semibold dark:bg-white/10">{kind}</span>}
-					<VerdictChip verdict={loaded.points.verdict[index]} />
-				</div>
-				{!back && <CloseButton onClose={onClose} />}
+			<div className="px-5 pt-3"><BackButton to={back} onBack={onClose} /></div>
+			<div className="flex flex-wrap items-center gap-2 px-5 pt-2">
+				{kind && <span className="rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-semibold dark:bg-white/10">{kind}</span>}
+				<VerdictChip verdict={loaded.points.verdict[index]} />
 			</div>
 			<div className="px-5 pb-3 pt-3">
 				<h2 className="text-base font-semibold leading-snug">{record?.title || label?.title || " "}</h2>
@@ -86,7 +72,7 @@ function PaperHeading({ index, record, loaded, more, onClose, back }: { index: n
 }
 
 /** The opened paper: its heading, then its chain or its citations. */
-function PaperBody({ selection, record, loaded, more, onOpen, onClose, onHover, back }: Opened & { record: ListItem | null | undefined; onClose: () => void; back?: string }) {
+function PaperBody({ selection, record, loaded, more, onOpen, onClose, onHover, back }: Opened & { record: ListItem | null | undefined; onClose: () => void; back: string }) {
 	if (selection.index === CHECKED) return <CheckedBody selection={selection} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} back={back} />;
 	const opened = { selection, loaded, more, onOpen, onHover };
 	return <Scrolling heading={<PaperHeading index={selection.index} record={record} loaded={loaded} more={more} onClose={onClose} back={back} />} lists={selection.chain ? <ChainDetail {...opened} /> : <Around {...opened} />} />;
@@ -96,9 +82,9 @@ function PaperBody({ selection, record, loaded, more, onOpen, onClose, onHover, 
 const STALE = "pointer-events-none opacity-50 transition-opacity";
 
 /** The paper the panel or sheet shows, dimmed and out of reach while the next one opens. */
-export function OpenedPaper({ shown, stale, loaded, more, onOpen, onClose, onHover, tab, back }: { shown: { selection: Selection; record: ListItem | null | undefined }; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onClose: () => void; onHover: OnHover; tab?: { id: string; labelledBy?: string }; back?: string }) {
+export function OpenedPaper({ shown, stale, loaded, more, onOpen, onClose, onHover, back }: { shown: { selection: Selection; record: ListItem | null | undefined }; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onClose: () => void; onHover: OnHover; back: string }) {
 	return (
-		<div id={tab?.id} role={tab?.labelledBy ? "tabpanel" : undefined} aria-labelledby={tab?.labelledBy} aria-busy={stale || undefined} inert={stale} className={twMerge("flex min-h-0 flex-1 flex-col", stale && STALE)}>
+		<div aria-busy={stale || undefined} inert={stale} className={twMerge("flex min-h-0 flex-1 flex-col", stale && STALE)}>
 			<PaperBody selection={shown.selection} record={shown.record} loaded={loaded} more={more} onOpen={onOpen} onClose={onClose} onHover={onHover} back={back} />
 		</div>
 	);
@@ -122,14 +108,11 @@ function checkedByLevel(loaded: Loaded) {
 	return byLevel;
 }
 
-function CheckedHeading({ onClose, back }: { onClose: () => void; back?: string }) {
+function CheckedHeading({ onClose, back }: { onClose: () => void; back: string }) {
 	return (
-		<div className={twMerge("px-5 pb-3", back ? "pt-3" : "pt-4")}>
-			{back && <Leave back={back} onClose={onClose} />}
-			<div className={twMerge("flex items-start gap-2", back && "pt-2")}>
-				<h2 className="min-w-0 flex-1 text-base font-semibold leading-snug">Appraised papers</h2>
-				{!back && <CloseButton onClose={onClose} />}
-			</div>
+		<div className="px-5 pb-3 pt-3">
+			<BackButton to={back} onBack={onClose} />
+			<h2 className="pt-2 text-base font-semibold leading-snug">Appraised papers</h2>
 			<p className={twMerge("mt-1 text-xs", muted)}>Every checked paper joined to another, from the studies on the left to the reviews of reviews on the right.</p>
 			<ul className="mt-3 space-y-1.5 text-xs">
 				{LINE_KEY.map(({ verdict, label }) => (
@@ -149,7 +132,7 @@ function joinedLine(joined: number, checked: number, unchecked: number) {
 }
 
 /** The whole graph of checked papers: its three columns, what the line colours mean, and every paper in it. */
-function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }: Opened & { onClose: () => void; back?: string }) {
+function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }: Opened & { onClose: () => void; back: string }) {
 	const layers = selection.chain?.layers ?? [];
 	const members = layers.flat();
 	const records = useLines(members, more);

@@ -23,7 +23,8 @@ function narrowArea(withPaper: boolean, width: number, height: number): Area {
 	const top = document.querySelector<HTMLElement>("[data-evidence-top]"), sheet = document.querySelector<HTMLElement>("[data-evidence-sheet]");
 	const below = top ? top.offsetTop + top.offsetHeight + 8 : 11.5 * rem();
 	if (width > height) return { left: 8, right: width - Math.min(26 * rem(), width * 0.55) - 8, top: below, bottom: height - 8 };
-	const sheetHeight = Math.max(sheet?.offsetHeight ?? 0, withPaper ? height * 0.5 : 0);
+	// Folded down to its bar, the sheet leaves the map the screen, a paper open or not.
+	const sheetHeight = sheet?.dataset.folded !== undefined ? sheet.offsetHeight : Math.max(sheet?.offsetHeight ?? 0, withPaper ? height * 0.5 : 0);
 	return { left: 8, right: width - 8, top: below, bottom: height - sheetHeight - 8 };
 }
 

@@ -34,13 +34,13 @@ function useStep(key: string, depth: number) {
 	return seen.step;
 }
 
-type Navigated = { selection: Selection | null; opening: boolean; deep: boolean; back: string; onOpen: (index: number) => void; onClose: () => void };
+export type Navigated = { selection: Selection | null; opening: boolean; deep: boolean; back: string; onOpen: (index: number) => void; onClose: () => void };
 
 /**
  * The panel under its search, a stack as a phone's screens are: the starting points or the search's results, and over them, slid in
  * from the right, the opened paper or the appraised papers. Back slides it away again, to the list as it was left.
  */
-function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
+export function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
 	const { shown, stale } = usePaper(opened.selection, more, opened.opening);
 	const still = useReducedMotion();
 	const ready = shown && loaded && more ? { shown, loaded, more } : null;

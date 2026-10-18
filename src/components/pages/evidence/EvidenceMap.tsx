@@ -39,12 +39,16 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 	const highlighted = highlightedNow({ checkCounts, types, verdicts, lit, shown });
 	useRefitOnNotice(graph, highlighted !== null);
 	const { lists, paper, checks, checked } = panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
+	// The opened paper as both layouts show it, slid over their list with a back arrow to it.
+	const opened = { ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) };
+	// A new search goes back from an opened paper to its results.
+	const onSearch = (text: string) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); };
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
-			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) }} smallLayout={smallLayout} />
-			<PhoneSheet {...lists} {...paper} papers={papers} checked={checked} checks={checks} />
+			<SearchPanel ref={searchPanel} {...lists} onSearch={onSearch} papers={papers} checked={checked} checks={checks} opened={opened} smallLayout={smallLayout} />
+			<PhoneSheet {...lists} onSearch={onSearch} papers={papers} checked={checked} checks={checks} opened={opened} target={now.target} focus={focus} onRefit={() => graph?.refit()} />
 			<Controls graph={graph} />
 			<MapStatus focus={focus} highlighted={highlighted} types={types} verdicts={verdicts} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
