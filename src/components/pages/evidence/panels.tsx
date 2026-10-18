@@ -73,7 +73,7 @@ function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opene
 export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
 	const list = (
 		<>
-			<div className="px-2 pb-2">
+			<div className="px-3 pb-1">
 				<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
 			</div>
 			<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
