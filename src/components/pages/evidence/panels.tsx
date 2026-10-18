@@ -55,12 +55,12 @@ function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opene
 	const transition = still ? { duration: 0 } : PUSH;
 	return (
 		<div className="relative min-h-0 flex-1 overflow-hidden">
-			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
+			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col pt-3">
 				{list}
 			</motion.div>
 			<AnimatePresence initial={false} custom={step}>
 				{ready && (
-					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
+					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white pt-3 shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
 						<OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />
 					</motion.div>
 				)}
