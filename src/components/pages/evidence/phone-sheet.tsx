@@ -19,7 +19,7 @@ function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSe
 		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
 			<div className={twMerge(PANEL, "relative")}>
 				{/* The band's grey laid over the panel, as on the wide panel, so the raised fields stand out in dark mode too. */}
-				<div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} raised /></div>
+				<div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /></div>
 				<ClearChip {...checks} />
 			</div>
 		</div>
@@ -50,7 +50,8 @@ function SheetBar({ name, open, onFold }: { name: string; open: boolean; onFold:
  * being opened (from the address, before the map fits it beside the sheet), a search or the filter.
  */
 function useSheetOpen(target: number | null, found: Found | undefined) {
-	const [open, setOpen] = useState(false);
+	// An address that opens a paper, or the appraised papers, opens the sheet from the first frame.
+	const [open, setOpen] = useState(target !== null || Boolean(found));
 	const cause = `${target ?? ""}|${found?.id ?? ""}`;
 	const [seen, setSeen] = useState(cause);
 	if (cause !== seen) {

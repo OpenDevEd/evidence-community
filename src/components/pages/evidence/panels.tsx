@@ -79,7 +79,7 @@ export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, lo
 				<EvidenceIntro papers={papers} reviews={chains.length} checked={checked} />
 				{/* Its own band, between the head's grey and the views' white: it stays whichever view is under it. */}
 				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
-					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} raised />
+					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} />
 					<ClearChip {...checks} />
 				</div>
 				<Stack list={list} opened={opened} loaded={loaded} more={more} onHover={onHover} />

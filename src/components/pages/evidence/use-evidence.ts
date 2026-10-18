@@ -135,17 +135,18 @@ function useSearchHits(query: string) {
  * here, every word of the search somewhere in the authors or the title.
  */
 function outsideMatches(loaded: Loaded | null, more: More | null, text: string) {
-	const words = text.toLowerCase().replace(/["()]/g, " ").split(/\s+/).filter((word) => word && !["and", "or", "not"].includes(word));
+	const words = wordsOf(text);
 	if (!loaded || !more || !words.length) return [];
-	const found: number[] = [];
-	for (let i = 0; i < loaded.points.count; i++) {
-		if (!(loaded.points.flags[i] & FLAG.outside)) continue;
-		const label = more.labels.get(i);
-		const name = `${label?.who ?? ""} ${label?.title ?? ""}`.toLowerCase();
-		if (words.every((word) => name.includes(word))) found.push(i);
-	}
-	return found;
+	const { flags } = loaded.points;
+	return Array.from(flags.keys()).filter((i) => flags[i] & FLAG.outside && words.every((word) => nameOf(more, i).includes(word)));
 }
+
+/** A search's words, lower case, without its quotes, brackets and boolean operators. */
+const wordsOf = (text: string) => text.toLowerCase().replace(/["()]/g, " ").split(/\s+/).filter((word) => word && !OPERATORS.has(word));
+const OPERATORS = new Set(["and", "or", "not"]);
+
+/** A paper's authors and title from the map's labels, lower case, as a search's words are matched against them. */
+const nameOf = (more: More, i: number) => { const label = more.labels.get(i); return `${label?.who ?? ""} ${label?.title ?? ""}`.toLowerCase(); };
 
 /** Every hit: more than any search here finds (the route's own limit). */
 const ALL = 300_000;
