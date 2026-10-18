@@ -28,7 +28,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
 /** Back to the list the paper was opened from, named, at the head of the panel the paper took over. */
 function BackButton({ to, onBack }: { to: string; onBack: () => void }) {
 	return (
-		<button type="button" onClick={onBack} className="-ml-2 inline-flex h-8 items-center gap-1 rounded-lg pl-1 pr-2.5 text-sm font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent dark:text-white dark:hover:bg-white/10">
+		<button type="button" onClick={onBack} className="-ml-2 inline-flex h-8 items-center gap-1 rounded-lg pl-2 pr-2.5 text-sm font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent dark:text-white dark:hover:bg-white/10">
 			<HugeiconsIcon icon={ArrowLeft01Icon} size={18} aria-hidden />
 			{to}
 		</button>
@@ -74,7 +74,7 @@ function PaperHeading({ index, record, loaded, more, onClose, back }: { index: n
 	const kind = KIND_LABEL[KINDS[loaded.points.kind[index]]];
 	return (
 		<>
-			{back && <div className="px-5 pt-3"><Leave back={back} onClose={onClose} /></div>}
+			{back && <div className="px-5"><Leave back={back} onClose={onClose} /></div>}
 			<div className={twMerge("flex items-start gap-2 px-5", back ? "pt-2" : "pt-4")}>
 				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
 					{kind && <span className="rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-semibold dark:bg-white/10">{kind}</span>}
@@ -130,7 +130,7 @@ function checkedByLevel(loaded: Loaded) {
 
 function CheckedHeading({ onClose, back }: { onClose: () => void; back?: string }) {
 	return (
-		<div className={twMerge("px-5 pb-3", back ? "pt-3" : "pt-4")}>
+		<div className={twMerge("px-5 pb-3", !back && "pt-4")}>
 			{back && <Leave back={back} onClose={onClose} />}
 			<div className={twMerge("flex items-start gap-2", back && "pt-2")}>
 				<h2 className="min-w-0 flex-1 text-base font-semibold leading-snug">Appraised papers</h2>
