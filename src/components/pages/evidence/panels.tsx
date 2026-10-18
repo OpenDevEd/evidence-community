@@ -8,13 +8,13 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import { CHECKED, KINDS, VERDICTS, type ChainEntry, type Label } from "./data";
+import { CHECKED, KINDS, labelOfRecord, VERDICTS, type ChainEntry, type Label } from "./data";
 import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
 import { ClearChip, SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
-import { labelOfRecord, usePaper, useRecord } from "./records";
+import { usePaper, useRecord } from "./records";
 import { VerdictChip, VerdictIcon } from "./verdict-chip";
 import { KIND_LABEL, KIND_PLURAL, VERDICT } from "./verdicts";
 

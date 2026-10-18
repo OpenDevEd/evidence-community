@@ -20,10 +20,11 @@ const ROW = "flex w-full min-w-0 items-start gap-2.5 rounded-xl px-3 py-2 text-l
 export type Filters = ReturnType<typeof useFiltersContext>;
 export type OnHover = (index: number | null, label?: Label) => void;
 /**
- * What the map lights, as the panel lists it: under which heading, its papers in order, whether that is all of them yet, and
+ * What the map lights, as the panel lists it: under which heading, its papers in order, the first ones' lines as the search sent
+ * them, whether that is all of them yet, and
  * whether the answer on screen is the last search's. `id` changes with the search and the filter.
  */
-export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; complete: boolean; loading: boolean };
+export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; lines: Map<number, Label>; complete: boolean; loading: boolean };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -116,6 +117,8 @@ function Pages({ total, page, onChange, label }: { total: number; page: number; 
 export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
 	const [page, setPage] = useState(1);
 	const shown = found.order.slice((page - 1) * PAGE, page * PAGE);
+	// The next page's lines are fetched while this one is read, so turning the page shows it whole.
+	useLines(unnamed(found.order.slice(page * PAGE, (page + 1) * PAGE), found.lines, more), more);
 	// From the first key typed until the next search's answer arrives, the last one stays in view, dimmed and out of reach.
 	const stale = typing || found.loading;
 	return (
@@ -124,18 +127,21 @@ export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { f
 				{found.title}
 				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
 			</h2>
-			{loaded && more ? <ResultRows indices={shown} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
+			{loaded && more ? <ResultRows indices={shown} lines={found.lines} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
 			{!stale && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
 			<Pages total={Math.ceil(found.order.length / PAGE)} page={page} onChange={setPage} label="Pages of results" />
 		</section>
 	);
 }
 
-function ResultRows({ indices, stale, loaded, more, onOpen, onHover }: { indices: number[]; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onHover: OnHover }) {
-	const records = useLines(indices, more);
+/** The papers of these whose line neither the map's labels nor the search's answer give: their records are looked up. */
+const unnamed = (indices: number[], lines: Map<number, Label>, more: More | null) => (more ? indices.filter((i) => !more.labels.get(i)?.title && !lines.has(i)) : []);
+
+function ResultRows({ indices, lines, stale, loaded, more, onOpen, onHover }: { indices: number[]; lines: Map<number, Label>; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onHover: OnHover }) {
+	const records = useLines(unnamed(indices, lines, more), more);
 	return (
 		<ol inert={stale} className={twMerge("px-2 transition-opacity", stale && "opacity-50")}>
-			{indices.map((i) => <PaperRow key={i} index={i} label={lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}
+			{indices.map((i) => <PaperRow key={i} index={i} label={(!more.labels.get(i)?.title && lines.get(i)) || lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}
 		</ol>
 	);
 }

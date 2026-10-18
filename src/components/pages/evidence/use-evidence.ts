@@ -111,19 +111,23 @@ function searchQuery(params: ReturnType<typeof useFiltersContext>["queryParams"]
 	return [...query.keys()].some((key) => key !== "scope") ? `?${query}` : "";
 }
 
-/** A search's answer: how many records it finds, how many of those were looked at, and the map's points among them in its order. */
-type Hits = { total: number; found: number; order: number[] };
+/**
+ * A search's answer: how many records it finds, how many of those were looked at, the map's points among them in its order, and
+ * the first ones' lines as [point, who, year, title].
+ */
+type Hits = { total: number; found: number; order: number[]; lines: [number, string, number | null, string | null][] };
 const hitsOf = (url: string) => fetch(url).then((r) => r.json() as Promise<Hits>);
 const once = { revalidateOnFocus: false };
 
 /**
- * Every record on the map the search finds lights up and is listed, not only a page of them. The first 5,000 come at once; when
- * it finds more, all of them follow from a second, slower request.
+ * Every record on the map the search finds lights up and is listed, not only a page of them. Two requests start together: the
+ * first 5,000, which come quickly, and every one, which a broad search takes a second or more to rank. The first is shown until
+ * every one is in; when it already holds them all, the second is not waited for.
  */
 function useSearchHits(query: string) {
 	const first = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=5000` : null, hitsOf, { ...once, keepPreviousData: true });
-	const all = useSWR<Hits>(restOf(query, first.data), hitsOf, once);
-	return { hits: newest(first.data, all.data), loading: first.isLoading };
+	const all = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=${ALL}` : null, hitsOf, once);
+	return { hits: newest(first.data, all.data), loading: first.isLoading && all.isLoading };
 }
 
 /**
@@ -143,14 +147,11 @@ function outsideMatches(loaded: Loaded | null, more: More | null, text: string) 
 	return found;
 }
 
-/** The request for every hit, when the first answer found fewer than the search has. */
-function restOf(query: string, first: Hits | undefined) {
-	if (!query || !first || first.total <= first.found) return null;
-	return `/api/evidence/hits${query}&limit=${first.total}`;
-}
+/** Every hit: more than any search here finds (the route's own limit). */
+const ALL = 300_000;
 
 /** The fullest answer for the current search: every hit once it is in, the first ones until then. */
-const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.total === first?.total ? all : first);
+const newest = (first: Hits | undefined, all: Hits | undefined) => all ?? first;
 
 /** The papers of a check switched on: those whose verdict is one of the switches. */
 const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
@@ -173,8 +174,9 @@ export function useLighting(filters: ReturnType<typeof useFiltersContext>, loade
 	}, [loaded, hits, outside, query, checksOn, types, verdicts]);
 	// A new search or filter starts its list from the first page.
 	const id = `${search}|${[...types]}|${[...verdicts]}`;
+	const lines = useMemo(() => new Map((hits?.lines ?? []).map(([i, who, year, title]) => [i, { who, year, title: title ?? undefined }])), [hits]);
 	const found: Found | undefined = query
-		? { id, title: "Results", order: lit ?? [], complete: Boolean(hits && hits.found >= hits.total), loading: loading || !lit }
-		: lit ? { id, title: "Filtered", order: lit, complete: true, loading: false } : undefined;
+		? { id, title: "Results", order: lit ?? [], lines, complete: Boolean(hits && hits.found >= hits.total), loading: loading || !lit }
+		: lit ? { id, title: "Filtered", order: lit, lines, complete: true, loading: false } : undefined;
 	return { found, lit };
 }

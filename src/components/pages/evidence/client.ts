@@ -97,12 +97,13 @@ function more(message: Extract<FromWorker, { type: "more" }>): More {
 	for (const [index, who, year] of message.labels) labels.set(index, { who, year });
 	for (const [index, title] of message.titles) { const label = labels.get(index); if (label) label.title = title; }
 	const keys = message.keys, count = keys.length / 8;
-	// Built the first time a key is looked up (a search, an address with a paper in it), not while the page settles.
+	// Built once the page is idle, not while it settles, nor on the click that first opens a record (about 15 ms of work).
 	let byKey: Map<string, number> | null = null;
 	const indexOf = (key: string) => {
 		if (!byKey) { byKey = new Map(); for (let i = 0; i < count; i++) byKey.set(keys.slice(i * 8, i * 8 + 8), i); }
 		return byKey.get(key);
 	};
+	(globalThis.requestIdleCallback ?? ((run: () => void) => setTimeout(run, 500)))(() => indexOf(""));
 	return { labels, keyOf: (index) => (index >= 0 && index < count ? keys.slice(index * 8, index * 8 + 8) : null), indexOf, doiOf: new Map(message.dois) };
 }
 

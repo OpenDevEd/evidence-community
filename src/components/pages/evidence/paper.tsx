@@ -7,11 +7,11 @@ import type { ListItem } from "@/app/api/item/types";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import { CHECKED, FLAG, KINDS, levelOf, type Label } from "./data";
+import { CHECKED, FLAG, KINDS, levelOf, whoOf, yearOf, type Label } from "./data";
 import type { Selection } from "./graph";
 import { muted, PANEL, PaperRow, Section, VerdictMeter, type OnHover } from "./lists";
 import { css, edgeColour } from "./palette";
-import { lineOf, useLines, usePaper, whoOf, yearOf } from "./records";
+import { lineOf, useLines, usePaper } from "./records";
 import { VerdictChip } from "./verdict-chip";
 import { KIND_LABEL } from "./verdicts";
 

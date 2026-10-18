@@ -14,7 +14,7 @@ import type { Found } from "./lists";
 import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
-import { useOpenedName } from "./records";
+import { preloadRecord, useOpenedName } from "./records";
 import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
 
 /**
@@ -128,7 +128,11 @@ type PanelInputs = {
 
 /** What the side panels and the phone's sheet are given: the lists, the opened paper, the check switches and the checked graph. */
 function panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
-	const onHover = (i: number | null, label?: Label) => graph?.hoverHost(i ?? undefined, label);
+	const onHover = (i: number | null, label?: Label) => {
+		graph?.hoverHost(i ?? undefined, label);
+		// A paper pointed at in a list is likely the next opened: its record is fetched now.
+		if (i !== null) preloadRecord(more?.keyOf(i));
+	};
 	return {
 		lists: { filters, found, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
 		paper: { selection: shown, opening: now.target !== null && !shown, loaded, more, onOpen: now.open, onClose: now.close, onHover },

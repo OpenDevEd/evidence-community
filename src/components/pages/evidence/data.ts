@@ -1,3 +1,5 @@
+import type { ListItem } from "@/app/api/item/types";
+
 /** Where the map's data lives: AIED's citation graph and the evidence checks, built offline into binary columns (scripts/evidence-map). */
 export const EVIDENCE_DATA = "/evidence-data/aied";
 
@@ -88,3 +90,17 @@ export function levelOf(kind: number) {
 	const name = KINDS[kind];
 	return name === "secondOrder" || name === "critique" ? 3 : name === "meta" || name === "review" ? 2 : 1;
 }
+
+/** A record's first author's last name, with "et al." when there are more. */
+export function whoOf(item: ListItem | null | undefined) {
+	const creators = item?.creators ?? [];
+	const first = creators[0];
+	if (!first) return null;
+	const name = first.lastName || (first.name ?? "").split(" ").at(-1) || "";
+	return creators.length > 1 ? `${name} et al.` : name;
+}
+
+export const yearOf = (item: ListItem | null | undefined) => Number(String(item?.date ?? "").match(/\d{4}/)?.[0]) || null;
+
+/** A record's line in a list: who, when and its title. */
+export const labelOfRecord = (record: ListItem): Label => ({ who: whoOf(record) ?? "Unknown author", year: yearOf(record), title: record.title || undefined });

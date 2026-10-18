@@ -1,23 +1,9 @@
 import { useMemo, useState } from "react";
-import useSWR from "swr";
+import useSWR, { preload } from "swr";
 import type { ListItem } from "@/app/api/item/types";
 import type { More } from "./client";
-import type { Label } from "./data";
+import { labelOfRecord, yearOf, type Label } from "./data";
 import type { Selection } from "./graph";
-
-/** A record's first author's last name, with "et al." when there are more. */
-export function whoOf(item: ListItem | null | undefined) {
-	const creators = item?.creators ?? [];
-	const first = creators[0];
-	if (!first) return null;
-	const name = first.lastName || (first.name ?? "").split(" ").at(-1) || "";
-	return creators.length > 1 ? `${name} et al.` : name;
-}
-
-export const yearOf = (item: ListItem | null | undefined) => Number(String(item?.date ?? "").match(/\d{4}/)?.[0]) || null;
-
-/** A record's line in a list: who, when and its title. */
-export const labelOfRecord = (record: ListItem): Label => ({ who: whoOf(record) ?? "Unknown author", year: yearOf(record), title: record.title || undefined });
 
 const batch = async (keys: string[]): Promise<ListItem[]> => {
 	const response = await fetch("/api/items/batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keys, page: 1, perPage: keys.length }) });
@@ -25,10 +11,15 @@ const batch = async (keys: string[]): Promise<ListItem[]> => {
 };
 const kept = { revalidateOnFocus: false, dedupingInterval: 600_000 };
 
+const recordOf = async ([, key]: [string, string]) => (await batch([key]))[0] ?? null;
+
 /** A library record's card, from the library's search index; null when the search does not return it. */
 export function useRecord(key: string | null) {
-	return useSWR<ListItem | null>(key ? ["evidence-record", key] : null, async () => (await batch([key!]))[0] ?? null, kept);
+	return useSWR<ListItem | null>(key ? ["evidence-record", key] : null, recordOf, kept);
 }
+
+/** Starts fetching a record a reader is pointing at, so opening it does not wait for it. */
+export const preloadRecord = (key: string | null | undefined) => void (key && preload(["evidence-record", key], recordOf));
 
 /** Records for papers a list shows without a title of their own: one request for the lot. */
 function useRecords(keys: string[]) {
@@ -45,8 +36,8 @@ export function lineOf(index: number, more: More, records: Map<string, ListItem>
 }
 
 /** The records for these papers' lines, looked up for the ones the labels file gives no title. */
-export function useLines(indices: number[], more: More) {
-	return useRecords(indices.filter((i) => !more.labels.get(i)?.title).flatMap((i) => more.keyOf(i) ?? []));
+export function useLines(indices: number[], more: More | null) {
+	return useRecords(more ? indices.filter((i) => !more.labels.get(i)?.title).flatMap((i) => more.keyOf(i) ?? []) : []);
 }
 
 /** The opened paper's name for the map, from its record, when the labels file has none: it names only papers cited often. */
