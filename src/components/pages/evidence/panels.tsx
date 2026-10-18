@@ -6,7 +6,7 @@ import { useState, type ReactNode, type Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { filledInputSlots } from "@/components/nextui/field-styles";
+import { filledFieldSurface, filledInputSlots } from "@/components/nextui/field-styles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
@@ -18,6 +18,9 @@ import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Fil
 import { OpenedPaper } from "./paper";
 import { labelOfRecord, usePaper, useRecord } from "./records";
 import { VerdictChip } from "./verdict-chip";
+
+/** The search at the filter fields' 40 px height. */
+const COMPACT_FIELD = { input: `${filledInputSlots.input} text-sm`, inputWrapper: `h-10 min-h-10 lg:h-10 lg:min-h-10 rounded-xl ${filledFieldSurface}` };
 
 /** Where a pane sits: the list under it, out to the left and faded; on screen; or past the panel's right edge, not in yet. */
 const PANE = {
@@ -74,7 +77,7 @@ export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loade
 	const list = (
 		<>
 			<div className="px-3 pb-1">
-				<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
+				<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={COMPACT_FIELD} />
 			</div>
 			<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
 				<MapFilter {...checks} />

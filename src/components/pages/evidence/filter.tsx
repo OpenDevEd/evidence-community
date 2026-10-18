@@ -60,7 +60,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 	return (
 		<Select selectionMode="multiple" value={[...selected]} onChange={(keys) => onChange(new Set(keys.map(Number)))} placeholder={placeholder} className="min-w-0 flex-1">
 			<Label className="sr-only">{label}</Label>
-			<Button className={twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
+			<Button className={twMerge("flex h-10 w-full items-center gap-2 rounded-xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
 				<span className="min-w-0 flex-1">
 					<span aria-hidden className={twMerge("block text-xs leading-4", on ? "opacity-80" : muted)}>{label}</span>
 					<SelectValue className={twMerge("block truncate text-sm font-medium leading-5", !on && muted)}>
