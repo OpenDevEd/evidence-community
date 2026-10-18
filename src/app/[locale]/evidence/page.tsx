@@ -16,6 +16,6 @@ export default async function EvidencePage() {
 	// The map's first frame needs these three files: they start downloading with the page, before the script that reads them.
 	for (const file of ["meta.json", "places.json", "points.bin.gz"]) preload(`${EVIDENCE_DATA}/${file}`, { as: "fetch", crossOrigin: "anonymous" });
 	// The chains list and the switches' counts are in the page itself, so the panels are whole from the first frame.
-	const [chains, meta] = await Promise.all([readEvidenceData<ChainEntry[]>("chains.json"), readEvidenceData<{ checks: CheckCounts }>("meta.json")]);
-	return <EvidenceMap chains={chains} checkCounts={meta.checks} />;
+	const [chains, meta] = await Promise.all([readEvidenceData<ChainEntry[]>("chains.json"), readEvidenceData<{ checks: CheckCounts; library: number }>("meta.json")]);
+	return <EvidenceMap chains={chains} checkCounts={meta.checks} papers={meta.library} />;
 }

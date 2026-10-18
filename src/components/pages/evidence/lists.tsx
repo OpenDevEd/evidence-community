@@ -67,39 +67,43 @@ export function PaperRow({ index, label, loaded, onOpen, onHover, selected }: { 
 
 const PAGE = 8;
 
-/** The button that opens the whole graph of checked papers, at the head of the chains list. */
-function CheckedButton({ checked }: { checked: Checked }) {
+/**
+ * What the page shows, at the head of its panel: its name, how many papers and reviews the map holds, and the button that brings
+ * every appraised paper to the front. Under the phone's sheet heading it goes untitled.
+ */
+export function EvidenceIntro({ papers, reviews, checked, titled = true }: { papers: number; reviews: number; checked: Checked; titled?: boolean }) {
+	const stat = (count: number, name: string) => <span><span className="font-semibold tabular-nums text-foreground dark:text-white">{count.toLocaleString("en-GB")}</span> {name}</span>;
 	return (
-		<div className="px-2 pb-1">
-			<button type="button" aria-pressed={checked.open} onClick={checked.onOpen} className={twMerge(ROW, "items-center", checked.open && "bg-accent/10 dark:bg-accent/15")}>
-				<HugeiconsIcon icon={FlowchartIcon} size={16} aria-hidden className="shrink-0 text-accent" />
-				<span className="min-w-0 flex-1 text-sm font-semibold">All checked papers</span>
-				<span className={twMerge("text-xs tabular-nums", muted)}>{checked.count}</span>
+		<div className={twMerge("px-4 pb-3", titled && "pt-4")}>
+			{titled && <h1 className="mb-1 font-heading text-lg font-semibold leading-tight tracking-tight">Visualise evidence chains</h1>}
+			<p className={twMerge("flex gap-3 text-xs", muted)}>{stat(papers, "papers")}{stat(reviews, "reviews")}</p>
+			<button type="button" aria-pressed={checked.open} onClick={checked.onOpen} className={twMerge("mt-3 flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", checked.open ? "bg-accent text-white" : "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white dark:hover:bg-accent/25")}>
+				<HugeiconsIcon icon={FlowchartIcon} size={16} aria-hidden className="shrink-0" />
+				<span className="min-w-0 flex-1 truncate text-left">Preview appraised papers</span>
+				<span className={twMerge("rounded-md px-1.5 py-0.5 text-xs tabular-nums", checked.open ? "bg-white/20" : "bg-accent/10 dark:bg-white/15")}>{checked.count}</span>
 			</button>
 		</div>
 	);
 }
 
-/** The meta-analyses and reviews of the evidence map, the most worrying checks first, a page at a time. */
-export function Chains({ chains, checked, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; checked: Checked; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
+/** The meta-analyses and reviews a reader starts from, the most worrying checks first, a page at a time. */
+export function Chains({ chains, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
 	const [page, setPage] = useState(1);
 	const pages = Math.max(1, Math.ceil(chains.length / PAGE));
 	return (
-		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Evidence chains"} className="flex min-h-0 flex-1 flex-col">
+		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="flex min-h-0 flex-1 flex-col">
 			{heading && (
-				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-1 pt-1 text-sm font-semibold">
-					Evidence chains
+				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
+					Starting points
 					<span className={twMerge("text-xs font-medium tabular-nums", muted)}>{chains.length}</span>
 				</h2>
 			)}
-			<p className={twMerge("px-5 pb-2 text-xs", muted)}>Meta-analyses and reviews. Open one to see the studies it analysed and their checks.</p>
-			<CheckedButton checked={checked} />
 			<ol className="min-h-0 flex-1 overflow-y-auto px-2">
 				{chains.slice((page - 1) * PAGE, page * PAGE).map((chain) => (
 					<Row key={chain.index} index={chain.index} verdict={chain.verdict} label={chain} outside={chain.outside} note={chain.analyses ? undefined : "Not analysed yet"} onOpen={() => onOpenKey(chain.paper)} onHover={onHover} selected={selected === chain.index} />
 				))}
 			</ol>
-			<Pages total={pages} page={page} onChange={setPage} label="Pages of evidence chains" />
+			<Pages total={pages} page={page} onChange={setPage} label="Pages of starting points" />
 		</section>
 	);
 }

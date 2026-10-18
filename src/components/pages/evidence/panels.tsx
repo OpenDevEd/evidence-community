@@ -2,7 +2,7 @@
 
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
-import type { ReactNode, Ref } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
 import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -10,32 +10,87 @@ import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import type { ChainEntry, Label } from "./data";
-import type { EvidenceGraph } from "./graph";
+import { CHECKED, type ChainEntry, type Label } from "./data";
+import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
 import { MapFilter, type Checks } from "./filter";
-import { Chains, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
-import { labelOfRecord, useRecord } from "./records";
+import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { OpenedPaper } from "./paper";
+import { labelOfRecord, usePaper, useRecord } from "./records";
 import { VerdictChip } from "./verdict-chip";
 
-/** From 1,280 px wide: the search, the checks and the lists in a panel down the left. */
-export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loaded, more, chains, checked, checks, selected, onOpenKey, onHover, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; smallLayout: boolean }) {
+/** Where a pane sits: the list under it, out to the left and faded; on screen; or past the panel's right edge, not in yet. */
+const PANE = {
+	enter: (step: number) => (step > 0 ? { x: "100%", opacity: 1, zIndex: 2 } : step < 0 ? { x: "-25%", opacity: 0, zIndex: 1 } : { x: 0, opacity: 0, zIndex: 2 }),
+	center: { x: 0, opacity: 1 },
+	exit: (step: number) => (step > 0 ? { x: "-25%", opacity: 0, zIndex: 1 } : step < 0 ? { x: "100%", opacity: 1, zIndex: 2 } : { x: 0, opacity: 0, zIndex: 1 }),
+};
+/** As a screen pushed on a phone: quick out of the start, long and soft into place. */
+const PUSH = { duration: 0.42, ease: [0.32, 0.72, 0, 1] as const };
+
+/** Which way the panel moved to this pane: deeper (1), back out (-1), or across to one as deep (0). */
+function useStep(key: string, depth: number) {
+	const [seen, setSeen] = useState({ key, depth, step: 0 });
+	if (seen.key !== key) setSeen({ key, depth, step: Math.sign(depth - seen.depth) });
+	return seen.step;
+}
+
+type Navigated = { selection: Selection | null; opening: boolean; deep: boolean; back: string; onOpen: (index: number) => void; onClose: () => void };
+
+/**
+ * The panel under its head, a stack as a phone's screens are: the search, the checks and the starting points or the search's
+ * results, and over them, slid in
+ * from the right, the opened paper or the appraised papers. Back slides it away again, to the list as it was left.
+ */
+function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
+	const { shown, stale } = usePaper(opened.selection, more, opened.opening);
+	const still = useReducedMotion();
+	const ready = shown && loaded && more ? { shown, loaded, more } : null;
+	const key = ready ? String(ready.shown.selection.index) : "list";
+	const depth = !ready ? 0 : ready.shown.selection.index !== CHECKED && opened.deep ? 2 : 1;
+	const step = useStep(key, depth);
+	const transition = still ? { duration: 0 } : PUSH;
+	return (
+		<div className="relative min-h-0 flex-1 overflow-hidden">
+			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
+				{list}
+			</motion.div>
+			<AnimatePresence initial={false} custom={step}>
+				{ready && (
+					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
+						<OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</div>
+	);
+}
+
+/**
+ * From 1,280 px wide, a panel down the left: what the page is, with the appraised papers' button; the search and the checks;
+ * then the starting points or the search's results. An opened paper takes the place of all three.
+ */
+export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
+	const list = (
+		<>
+			<div className="px-2 pb-2">
+				<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
+			</div>
+			<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
+				<MapFilter {...checks} />
+			</div>
+			<div className="flex min-h-0 flex-1 flex-col pt-2">
+				{results
+					? <ResultList filters={filters} results={results} lit={lit} typing={typing} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />
+					: <Chains chains={chains} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />}
+			</div>
+		</>
+	);
 	return (
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
-				<div className="p-2">
-					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
-				</div>
-				<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
-					<MapFilter {...checks} />
-				</div>
-				<div className="flex min-h-0 flex-1 flex-col pt-2">
-					{results ? (
-						<ResultList filters={filters} results={results} lit={lit} typing={typing} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />
-					) : (
-						<Chains chains={chains} checked={checked} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />
-					)}
-				</div>
+				<EvidenceIntro papers={papers} reviews={chains.length} checked={checked} />
+				<Stack list={list} opened={opened} loaded={loaded} more={more} onHover={onHover} />
 			</div>
 		</div>
 	);

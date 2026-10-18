@@ -12,7 +12,6 @@ import { nameOf } from "./overlay";
 import { checkedCount, highlightedNow, type CheckCounts } from "./filter";
 import type { Lit } from "./lists";
 import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
-import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
 import { useOpenedName } from "./records";
@@ -22,8 +21,8 @@ import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evid
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
  * on top, coloured by their checks. Search lights papers up; opening one moves its chain into columns in front of the map.
  */
-export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntry[]; checkCounts: CheckCounts }) {
-	const { theme, smallLayout, stage, labels, searchPanel, paperPanel } = usePageLook();
+export default function EvidenceMap({ chains, checkCounts, papers }: { chains: ChainEntry[]; checkCounts: CheckCounts; papers: number }) {
+	const { theme, smallLayout, stage, labels, searchPanel } = usePageLook();
 	const filters = useFiltersContext();
 	const [types, setTypes] = useState<ReadonlySet<number>>(new Set());
 	const [verdicts, setVerdicts] = useState<ReadonlySet<number>>(new Set());
@@ -44,9 +43,8 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
-			<SearchPanel ref={searchPanel} {...lists} checked={checked} checks={checks} smallLayout={smallLayout} />
-			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
-			<PhoneSheet {...lists} {...paper} checked={checked} checks={checks} />
+			<SearchPanel ref={searchPanel} {...lists} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, Boolean(results)) }} smallLayout={smallLayout} />
+			<PhoneSheet {...lists} {...paper} papers={papers} checked={checked} checks={checks} />
 			<Controls graph={graph} />
 			<MapStatus focus={focus} highlighted={highlighted} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
@@ -61,9 +59,12 @@ function usePageLook() {
 	const smallLayout = useLibraryConfig().theme.layout === "small";
 	// Hooks as statements: the React Compiler caches an object built from its inputs, and a hook inside it would then be skipped.
 	const stage = useRef<HTMLDivElement>(null), labels = useRef<HTMLCanvasElement>(null);
-	const searchPanel = useRef<HTMLDivElement>(null), paperPanel = useRef<HTMLDivElement>(null);
-	return { theme, smallLayout, stage, labels, searchPanel, paperPanel };
+	const searchPanel = useRef<HTMLDivElement>(null);
+	return { theme, smallLayout, stage, labels, searchPanel };
 }
+
+/** Where closing the opened paper goes back to, by name: the appraised papers it was opened from, the results, or the starting points. */
+const backTo = ({ paper, view }: ReturnType<typeof useAddress>, results: boolean) => (paper && view ? "Appraised papers" : results ? "Results" : "Starting points");
 
 /** Where cosmos.gl draws the map, with the canvas for its names over it; it fades in once drawn, or says it cannot be. */
 function Stage({ stage, labels, drawn, failed, incomplete }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean; incomplete: boolean }) {
@@ -106,7 +107,7 @@ function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: Retu
 function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null, more: More | null) {
 	const opened = useOpenedName(now.index, more);
 	if (!shown) return null;
-	if (now.target === CHECKED) return "All checked papers";
+	if (now.target === CHECKED) return "Appraised papers";
 	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
 	return label ? nameOf(label) : null;
 }

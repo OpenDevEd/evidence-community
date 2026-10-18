@@ -11,7 +11,7 @@ import type { Loaded, More } from "./client";
 import type { ChainEntry } from "./data";
 import type { Selection } from "./graph";
 import { MapFilter, type Checks } from "./filter";
-import { Chains, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
 import { OpenedPaper } from "./paper";
 import { usePaper } from "./records";
 
@@ -53,16 +53,20 @@ function SheetTabs({ tab, onTab }: { tab: Tab; onTab: (tab: Tab) => void }) {
 	);
 }
 
-/** The chains list, folded to its heading until opened; down the side of a screen lying on its side, always open. */
-function FoldedChains({ open, onOpen, ...chains }: { open: boolean; onOpen: (open: boolean) => void; chains: ChainEntry[]; checked: Checked; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover }) {
+/**
+ * The starting points, folded to their heading until opened, with what the page is and the appraised papers' button over them;
+ * down the side of a screen lying on its side, always open.
+ */
+function FoldedChains({ open, onOpen, papers, ...chains }: { open: boolean; onOpen: (open: boolean) => void; papers: number; chains: ChainEntry[]; checked: Checked; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover }) {
 	return (
 		<>
 			<button type="button" aria-expanded={open} onClick={() => onOpen(!open)} className="flex h-14 shrink-0 items-center justify-between px-5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent">
-				Evidence chains
+				Starting points
 				<HugeiconsIcon icon={ArrowUp01Icon} size={16} aria-hidden className={twMerge("transition-transform motion-reduce:transition-none", open && "rotate-180")} />
 			</button>
 			<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>
-				<Chains {...chains} checked={{ ...chains.checked, onOpen: () => { onOpen(false); chains.checked.onOpen(); } }} onOpenKey={(paper) => { onOpen(false); chains.onOpenKey(paper); }} heading={false} />
+				<EvidenceIntro titled={false} papers={papers} reviews={chains.chains.length} checked={{ ...chains.checked, onOpen: () => { onOpen(false); chains.checked.onOpen(); } }} />
+				<Chains {...chains} onOpenKey={(paper) => { onOpen(false); chains.onOpenKey(paper); }} heading={false} />
 			</div>
 		</>
 	);
@@ -86,7 +90,7 @@ function useSheetTab(selection: Selection | null) {
 	return [tab, setTab] as const;
 }
 
-type SheetProps = { selection: Selection | null; opening: boolean; loaded: Loaded | null; more: More | null; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; chains: ChainEntry[]; checked: Checked; checks: Checks; selected: number | null; onOpen: (index: number) => void; onOpenKey: (key: string) => void; onClose: () => void; onHover: OnHover };
+type SheetProps = { selection: Selection | null; opening: boolean; loaded: Loaded | null; more: More | null; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpen: (index: number) => void; onOpenKey: (key: string) => void; onClose: () => void; onHover: OnHover };
 
 /** What the sheet holds: with a paper and results both, the chosen tab; else whichever there is; else the chains list. */
 function contentOf(paper: boolean, results: boolean, tab: Tab) {
@@ -129,7 +133,7 @@ export function PhoneSheet(props: SheetProps) {
 				{both && <SheetTabs tab={tab} onTab={setTab} />}
 				{content === "paper" && paper && <OpenedPaper {...paper} stale={stale} onOpen={front("paper", props.onOpen)} onClose={props.onClose} onHover={props.onHover} scrollAll tab={{ id: "evidence-sheet-panel", labelledBy: both ? "evidence-tab-paper" : undefined }} />}
 				{content === "results" && <SheetResults props={props} inTab={Boolean(paper)} onOpenKey={front("paper", props.onOpenKey)} />}
-				{content === "chains" && <FoldedChains open={open} onOpen={setOpen} chains={props.chains} checked={props.checked} selected={props.selected} onOpenKey={props.onOpenKey} onHover={props.onHover} />}
+				{content === "chains" && <FoldedChains open={open} onOpen={setOpen} papers={props.papers} chains={props.chains} checked={props.checked} selected={props.selected} onOpenKey={props.onOpenKey} onHover={props.onHover} />}
 			</motion.div>
 		</>
 	);
