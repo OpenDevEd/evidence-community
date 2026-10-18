@@ -410,6 +410,8 @@ export class EvidenceGraph {
 	/** Puts these lines in at once; long ones fade, as the overview's lines between regions should, unless `fadeLong` is false. */
 	private writeLinks([pairs, colours, widths, styles]: Links, fadeLong = true) {
 		this.graph.setConfigPartial(fadeLong ? { linkVisibilityDistanceRange: [40, 900], linkVisibilityMinTransparency: 0.35 } : { linkVisibilityDistanceRange: [40, 100_000], linkVisibilityMinTransparency: 1 });
+		// Close in, a citation's bend grows with its length on screen: a gentler one keeps a busy paper's lines a fan, not loops.
+		this.graph.setConfigPartial({ curvedLinkControlPointDistance: this.mode === "nearby" ? 0.15 : 0.35 });
 		this.graph.setLinks(pairs);
 		this.graph.setLinkColors(colours);
 		this.graph.setLinkWidths(widths);
