@@ -75,8 +75,9 @@ export function SearchPanel({ ref, filters, onSearch, results, lit, typing, onTy
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
 				<EvidenceIntro papers={papers} reviews={chains.length} checked={checked} />
-				<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.08]">
-					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} />
+				{/* Its own band, between the head's grey and the views' white: it stays whichever view is under it. */}
+				<div className="border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
+					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} raised />
 				</div>
 				<Stack list={list} opened={opened} loaded={loaded} more={more} onHover={onHover} />
 			</div>
