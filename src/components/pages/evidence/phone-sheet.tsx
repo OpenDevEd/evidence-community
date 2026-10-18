@@ -12,14 +12,22 @@ import { ClearChip, SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { Stack, type Navigated } from "./panels";
 
-/** The search, with the filter folded into its button, at the top of the screen: one row, so the map keeps its height. */
+/** The search, with the filter folded into its button, at the top of the screen: one row, so the map keeps its height. On the
+ * wide panel's search band grey, its fields raised in white. */
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
 		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
-			<div className={twMerge(PANEL, "relative p-1.5")}><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /><ClearChip {...checks} /></div>
+			<div className={twMerge(PANEL, "relative")}>
+				{/* The band's grey laid over the panel, as on the wide panel, so the raised fields stand out in dark mode too. */}
+				<div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} raised /></div>
+				<ClearChip {...checks} />
+			</div>
 		</div>
 	);
 }
+
+/** The sheet's bar, in the wide panel's head grey, so it reads apart from what it holds. */
+const BAR = "h-14 shrink-0 items-center truncate border-b border-black/[0.06] bg-[#e8eaef] px-5 text-sm font-semibold dark:border-white/[0.08] dark:bg-black/25";
 
 /**
  * The sheet's bar: the name of what it shows, and the chevron that folds it down to this bar so the map has the screen, or opens
@@ -28,8 +36,8 @@ function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSe
 function SheetBar({ name, open, onFold }: { name: string; open: boolean; onFold: () => void }) {
 	return (
 		<>
-			<h2 className="hidden h-14 shrink-0 items-center truncate px-5 text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:flex">{name}</h2>
-			<button type="button" aria-expanded={open} onClick={onFold} className="flex h-14 shrink-0 items-center justify-between gap-3 px-5 text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
+			<h2 className={twMerge(BAR, "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>{name}</h2>
+			<button type="button" aria-expanded={open} onClick={onFold} className={twMerge(BAR, "flex justify-between gap-3 outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden")}>
 				<span className="truncate">{name}</span>
 				<HugeiconsIcon icon={ArrowUp01Icon} size={16} aria-hidden className={twMerge("shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
 			</button>
