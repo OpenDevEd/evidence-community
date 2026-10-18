@@ -43,7 +43,7 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
-			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, Boolean(found)) }} smallLayout={smallLayout} />
+			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) }} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} papers={papers} checked={checked} checks={checks} />
 			<Controls graph={graph} />
 			<MapStatus focus={focus} highlighted={highlighted} types={types} verdicts={verdicts} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
@@ -63,8 +63,8 @@ function usePageLook() {
 	return { theme, smallLayout, stage, labels, searchPanel };
 }
 
-/** Where closing the opened paper goes back to, by name: the appraised papers it was opened from, the results, or the starting points. */
-const backTo = ({ paper, view }: ReturnType<typeof useAddress>, results: boolean) => (paper && view ? "Appraised papers" : results ? "Results" : "Starting points");
+/** Where closing the opened paper goes back to, by name: the appraised papers it was opened from, the results or the filter's papers, or the starting points. */
+const backTo = ({ paper, view }: ReturnType<typeof useAddress>, list: Found["title"] | undefined) => (paper && view ? "Appraised papers" : list ?? "Starting points");
 
 /** Where cosmos.gl draws the map, with the canvas for its names over it; it fades in once drawn, or says it cannot be. */
 function Stage({ stage, labels, drawn, failed, incomplete }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean; incomplete: boolean }) {

@@ -8,8 +8,6 @@ import { readPublicRequest } from "@/lib/public-query";
 
 /** Most records one answer lights up: more than any search here finds. */
 const MOST = 300_000;
-/** Most results the panel lists, in the search's order: fifty pages of eight. */
-const LISTED = 400;
 
 /** Every record key's point on the map, read once from the built data in public/. */
 let points: Promise<{ count: number; byKey: Map<string, number> }> | null = null;
@@ -25,9 +23,9 @@ function mapPoints() {
 }
 
 /**
- * What a search finds on the evidence map: one bit per point, set for every record on it the library's search finds, and the
- * first of those points in the search's order, for the panel to list. Records the map does not draw are left out. However many
- * it finds, the answer is a few kilobytes. `limit` asks for the first few thousand quickly; a second request fetches all of them.
+ * What a search finds on the evidence map: the point of every record on it the library's search finds, in the search's order,
+ * which the map lights and the panel lists. Records the map does not draw are left out. `limit` asks for the first few thousand
+ * quickly; a second request fetches all of them.
  */
 export async function GET(request: NextRequest) {
 	// Answered per request: which library is asking is only known at run time.
@@ -38,15 +36,7 @@ export async function GET(request: NextRequest) {
 	url.searchParams.delete("limit");
 	const query = await readPublicRequest(new NextRequest(url), { paged: false, perPage: false, includeHeavyFields: false });
 	if (query instanceof NextResponse) return query;
-	const [{ keys, total }, { count, byKey }] = await Promise.all([getPublicItemKeys(query.params, limit), mapPoints()]);
-	const bits = new Uint8Array(Math.ceil(count / 8));
-	const order: number[] = [];
-	let lit = 0;
-	for (const key of keys) {
-		const i = byKey.get(key);
-		if (i === undefined) continue;
-		bits[i >> 3] |= 1 << (i & 7);
-		if (lit++ < LISTED) order.push(i);
-	}
-	return NextResponse.json({ total, found: keys.length, lit, order, bits: Buffer.from(bits).toString("base64") });
+	const [{ keys, total }, { byKey }] = await Promise.all([getPublicItemKeys(query.params, limit), mapPoints()]);
+	const order = keys.flatMap((key) => byKey.get(key) ?? []);
+	return NextResponse.json({ total, found: keys.length, order });
 }

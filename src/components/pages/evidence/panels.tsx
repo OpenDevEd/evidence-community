@@ -71,7 +71,7 @@ function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opene
 export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; onSearch: (text: string) => void; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
 	// A new search starts its results from their first page.
 	const list = found
-		? <ResultList key={filters.queryParams.search} found={found} typing={typing} more={more} loaded={loaded} onOpen={opened.onOpen} onHover={onHover} />
+		? <ResultList key={found.id} found={found} typing={typing} more={more} loaded={loaded} onOpen={opened.onOpen} onHover={onHover} />
 		: <Chains chains={chains} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />;
 	return (
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>

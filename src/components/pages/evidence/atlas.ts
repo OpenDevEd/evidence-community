@@ -105,7 +105,7 @@ const severity = (p: Columns, i: number) => {
 	if (v === 0) return 0;
 	return v >= 5 ? 20 + v : 10 + v;
 };
-const byConcern = (p: Columns) => (a: number, b: number) => severity(p, b) - severity(p, a) || p.cites[b] - p.cites[a];
+export const byConcern = (p: Columns) => (a: number, b: number) => severity(p, b) - severity(p, a) || p.cites[b] - p.cites[a];
 
 /** Every "analyses" link between two of these papers, from the one analysing. */
 function linksAmong(members: Set<number>, analyses: Map<number, number[]>): [number, number][] {

@@ -20,10 +20,10 @@ const ROW = "flex w-full min-w-0 items-start gap-2.5 rounded-xl px-3 py-2 text-l
 export type Filters = ReturnType<typeof useFiltersContext>;
 export type OnHover = (index: number | null, label?: Label) => void;
 /**
- * What a search found on the map: its papers in order (the first 400 the library's search finds, then those outside the library),
- * how many it finds on the map in all, whether that count is final, and whether the answer on screen is the last search's.
+ * What the map lights, as the panel lists it: under which heading, its papers in order, whether that is all of them yet, and
+ * whether the answer on screen is the last search's. `id` changes with the search and the filter.
  */
-export type Found = { order: number[]; count: number; complete: boolean; loading: boolean };
+export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; complete: boolean; loading: boolean };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -112,7 +112,7 @@ function Pages({ total, page, onChange, label }: { total: number; page: number; 
 	return <div className="flex justify-center px-3 py-2"><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
 }
 
-/** The search's results, all of them on the map, a page at a time; all of it scrolls. Each opens on the map. */
+/** What the map lights, a search's results or the filter's papers, a page at a time; all of it scrolls. Each opens on the map. */
 export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
 	const [page, setPage] = useState(1);
 	const shown = found.order.slice((page - 1) * PAGE, page * PAGE);
@@ -121,11 +121,11 @@ export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { f
 	return (
 		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="min-h-0 flex-1 overflow-y-auto pt-2">
 			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
-				Results
-				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.count.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
+				{found.title}
+				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
 			</h2>
 			{loaded && more ? <ResultRows indices={shown} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
-			{!stale && found.count === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this search.</p>}
+			{!stale && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
 			<Pages total={Math.ceil(found.order.length / PAGE)} page={page} onChange={setPage} label="Pages of results" />
 		</section>
 	);

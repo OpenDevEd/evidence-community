@@ -99,7 +99,7 @@ const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden round
 function SheetResults({ props, found, inTab, onOpen }: { props: SheetProps; found: Found; inTab: boolean; onOpen: (index: number) => void }) {
 	return (
 		<div id="evidence-sheet-panel" role={inTab ? "tabpanel" : undefined} aria-labelledby={inTab ? "evidence-tab-results" : undefined} className="flex min-h-0 flex-1 flex-col">
-			<ResultList key={props.filters.queryParams.search} found={found} typing={props.typing} more={props.more} loaded={props.loaded} onOpen={onOpen} onHover={props.onHover} />
+			<ResultList key={found.id} found={found} typing={props.typing} more={props.more} loaded={props.loaded} onOpen={onOpen} onHover={props.onHover} />
 		</div>
 	);
 }

@@ -4,6 +4,7 @@ import useSWR from "swr";
 import type { useFiltersContext } from "@/context/FiltersProvider";
 import { resultParams, serializeSearchParams } from "@/lib/searchParams";
 import { evidenceClient, type Loaded, type More } from "./client";
+import { byConcern } from "./atlas";
 import { CHECKED, FLAG, type Theme } from "./data";
 import { matchesChecks } from "./filter";
 import { EvidenceGraph } from "./graph";
@@ -104,34 +105,24 @@ export function useEvidenceGraph(theme: Theme, stage: RefObject<HTMLDivElement |
 	return { loaded, more, graph, failed, incomplete };
 }
 
-/** The points a search lit: the set bits of its answer. */
-function pointsOf(base64: string) {
-	const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-	const out: number[] = [];
-	bytes.forEach((byte, b) => { for (let k = 0; k < 8; k++) if (byte & (1 << k)) out.push(b * 8 + k); });
-	return out;
-}
-
 /** The search in the address, or "" without one: the scope every search carries is not a filter of its own. */
 function searchQuery(params: ReturnType<typeof useFiltersContext>["queryParams"]) {
 	const query = new URLSearchParams(serializeSearchParams(resultParams(params)));
 	return [...query.keys()].some((key) => key !== "scope") ? `?${query}` : "";
 }
 
-/** A search's answer: how many records it finds, how many of those were looked at, how many are on the map, the first of them in
- * the search's order, and one bit per point. */
-type Hits = { total: number; found: number; lit: number; order: number[]; bits: string };
-const bitsOf = (url: string) => fetch(url).then((r) => r.json() as Promise<Hits>);
+/** A search's answer: how many records it finds, how many of those were looked at, and the map's points among them in its order. */
+type Hits = { total: number; found: number; order: number[] };
+const hitsOf = (url: string) => fetch(url).then((r) => r.json() as Promise<Hits>);
 const once = { revalidateOnFocus: false };
 
 /**
- * Every record the search finds lights up, not only its page of results. The first 5,000 light up at once; when it finds
- * more, all of them follow from a second, slower request. Each answer is one bit per point on the map, so even every paper in
- * the library is a few kilobytes.
+ * Every record on the map the search finds lights up and is listed, not only a page of them. The first 5,000 come at once; when
+ * it finds more, all of them follow from a second, slower request.
  */
 function useSearchHits(query: string) {
-	const first = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=5000` : null, bitsOf, { ...once, keepPreviousData: true });
-	const all = useSWR<Hits>(restOf(query, first.data), bitsOf, once);
+	const first = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=5000` : null, hitsOf, { ...once, keepPreviousData: true });
+	const all = useSWR<Hits>(restOf(query, first.data), hitsOf, once);
 	return { hits: newest(first.data, all.data), loading: first.isLoading };
 }
 
@@ -164,30 +155,26 @@ const newest = (first: Hits | undefined, all: Hits | undefined) => (all && all.t
 /** The papers of a check switched on: those whose verdict is one of the switches. */
 const withChecks = (loaded: Loaded, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) => Array.from(loaded.points.verdict.keys()).filter(matchesChecks(loaded, types, verdicts));
 
-/** What lights up: the search's papers, the checks' papers, or the papers both light. Nothing lit lights everything. */
-function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
-	if (!fromSearch || !fromVerdicts) return fromSearch ?? fromVerdicts ?? undefined;
-	const set = new Set(fromVerdicts);
-	return fromSearch.filter((i) => set.has(i));
-}
-
 /**
- * What a search finds, only ever on the map: its papers for the panel's list, in the search's order with the papers outside the
- * library after them, and what the search and the checks light on the map. With the filter on, both keep only what it keeps.
+ * What the map lights and the panel lists, one list in one order. With a search, the map's papers it finds in its order, those
+ * outside the library after them; with the filter on, only what the filter keeps. With the filter alone, the papers it keeps,
+ * the most severe checks first, then the most cited. With neither, nothing: the map is lit throughout and the panel lists the
+ * starting points.
  */
 export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, more: More | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
-	const query = searchQuery(filters.queryParams);
+	const query = searchQuery(filters.queryParams), search = filters.queryParams.search;
 	const { hits, loading } = useSearchHits(query);
-	const outside = useMemo(() => (query ? outsideMatches(loaded, more, filters.queryParams.search) : []), [query, loaded, more, filters.queryParams.search]);
+	const outside = useMemo(() => (query ? outsideMatches(loaded, more, search) : []), [query, loaded, more, search]);
 	const checksOn = types.size + verdicts.size > 0;
 	const lit = useMemo(() => {
 		if (!loaded) return undefined;
-		return litPoints(query && hits ? [...pointsOf(hits.bits), ...outside] : null, checksOn ? withChecks(loaded, types, verdicts) : null);
+		if (query) return hits ? [...hits.order, ...outside].filter(checksOn ? matchesChecks(loaded, types, verdicts) : () => true) : undefined;
+		return checksOn ? withChecks(loaded, types, verdicts).sort(byConcern(loaded.points)) : undefined;
 	}, [loaded, hits, outside, query, checksOn, types, verdicts]);
-	if (!query) return { found: undefined, lit };
-	const keep = loaded && checksOn ? matchesChecks(loaded, types, verdicts) : () => true;
-	const found: Found = hits
-		? { order: [...hits.order, ...outside].filter(keep), count: checksOn ? (lit?.length ?? 0) : hits.lit + outside.length, complete: hits.found >= hits.total, loading }
-		: { order: [], count: 0, complete: false, loading: true };
+	// A new search or filter starts its list from the first page.
+	const id = `${search}|${[...types]}|${[...verdicts]}`;
+	const found: Found | undefined = query
+		? { id, title: "Results", order: lit ?? [], complete: Boolean(hits && hits.found >= hits.total), loading: loading || !lit }
+		: lit ? { id, title: "Filtered", order: lit, complete: true, loading: false } : undefined;
 	return { found, lit };
 }
