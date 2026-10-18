@@ -1,16 +1,14 @@
 import { parseAsString, parseAsStringLiteral, useQueryState } from "nuqs";
 import { useEffect, useEffectEvent, useMemo, useState, type RefObject } from "react";
 import useSWR from "swr";
-import type { ItemsGetResponse } from "@/app/api/items/types";
 import type { useFiltersContext } from "@/context/FiltersProvider";
-import { listingParams, resultParams, serializeSearchParams } from "@/lib/searchParams";
-import { buildItemsQuery, fetcher } from "@/lib/utils";
+import { resultParams, serializeSearchParams } from "@/lib/searchParams";
 import { evidenceClient, type Loaded, type More } from "./client";
-import { CHECKED, type Theme } from "./data";
+import { CHECKED, FLAG, type Theme } from "./data";
 import { matchesChecks } from "./filter";
 import { EvidenceGraph } from "./graph";
 import { setHover } from "./hover";
-import type { Lit } from "./lists";
+import type { Found } from "./lists";
 import { visibleArea } from "./visible-area";
 
 /** A paper in the address: a library record by its key, or a paper outside the library by its DOI. */
@@ -120,7 +118,9 @@ function searchQuery(params: ReturnType<typeof useFiltersContext>["queryParams"]
 	return [...query.keys()].some((key) => key !== "scope") ? `?${query}` : "";
 }
 
-type Hits = { total: number; found: number; lit: number; bits: string };
+/** A search's answer: how many records it finds, how many of those were looked at, how many are on the map, the first of them in
+ * the search's order, and one bit per point. */
+type Hits = { total: number; found: number; lit: number; order: number[]; bits: string };
 const bitsOf = (url: string) => fetch(url).then((r) => r.json() as Promise<Hits>);
 const once = { revalidateOnFocus: false };
 
@@ -132,7 +132,24 @@ const once = { revalidateOnFocus: false };
 function useSearchHits(query: string) {
 	const first = useSWR<Hits>(query ? `/api/evidence/hits${query}&limit=5000` : null, bitsOf, { ...once, keepPreviousData: true });
 	const all = useSWR<Hits>(restOf(query, first.data), bitsOf, once);
-	return newest(first.data, all.data);
+	return { hits: newest(first.data, all.data), loading: first.isLoading };
+}
+
+/**
+ * The papers outside the library a search finds: the library's search cannot see them, so their names on the map are searched
+ * here, every word of the search somewhere in the authors or the title.
+ */
+function outsideMatches(loaded: Loaded | null, more: More | null, text: string) {
+	const words = text.toLowerCase().replace(/["()]/g, " ").split(/\s+/).filter((word) => word && !["and", "or", "not"].includes(word));
+	if (!loaded || !more || !words.length) return [];
+	const found: number[] = [];
+	for (let i = 0; i < loaded.points.count; i++) {
+		if (!(loaded.points.flags[i] & FLAG.outside)) continue;
+		const label = more.labels.get(i);
+		const name = `${label?.who ?? ""} ${label?.title ?? ""}`.toLowerCase();
+		if (words.every((word) => name.includes(word))) found.push(i);
+	}
+	return found;
 }
 
 /** The request for every hit, when the first answer found fewer than the search has. */
@@ -154,18 +171,23 @@ function litPoints(fromSearch: number[] | null, fromVerdicts: number[] | null) {
 	return fromSearch.filter((i) => set.has(i));
 }
 
-/** The search's page of results, how much of it is lit, and what the search and the checks light on the map. */
-export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
+/**
+ * What a search finds, only ever on the map: its papers for the panel's list, in the search's order with the papers outside the
+ * library after them, and what the search and the checks light on the map. With the filter on, both keep only what it keeps.
+ */
+export function useLighting(filters: ReturnType<typeof useFiltersContext>, loaded: Loaded | null, more: More | null, types: ReadonlySet<number>, verdicts: ReadonlySet<number>) {
 	const query = searchQuery(filters.queryParams);
-	// The list's page of results is fetched only while there is a search: without one the panel lists the evidence chains.
-	const results = useSWR<ItemsGetResponse>(query ? buildItemsQuery(listingParams(filters.queryParams), "/items") : null, fetcher, { ...once, keepPreviousData: true });
-	const hits = useSearchHits(query);
+	const { hits, loading } = useSearchHits(query);
+	const outside = useMemo(() => (query ? outsideMatches(loaded, more, filters.queryParams.search) : []), [query, loaded, more, filters.queryParams.search]);
+	const checksOn = types.size + verdicts.size > 0;
 	const lit = useMemo(() => {
 		if (!loaded) return undefined;
-		return litPoints(query && hits ? pointsOf(hits.bits) : null, types.size || verdicts.size ? withChecks(loaded, types, verdicts) : null);
-	}, [loaded, hits, query, types, verdicts]);
-	// With the filter on, the results lit on the map are those the filter keeps too.
-	const filtered = (types.size || verdicts.size) && lit;
-	const litCount: Lit | undefined = query && hits ? { total: hits.total, lit: filtered ? filtered.length : hits.lit, complete: hits.found >= hits.total } : undefined;
-	return { results: query ? results : undefined, lit, litCount };
+		return litPoints(query && hits ? [...pointsOf(hits.bits), ...outside] : null, checksOn ? withChecks(loaded, types, verdicts) : null);
+	}, [loaded, hits, outside, query, checksOn, types, verdicts]);
+	if (!query) return { found: undefined, lit };
+	const keep = loaded && checksOn ? matchesChecks(loaded, types, verdicts) : () => true;
+	const found: Found = hits
+		? { order: [...hits.order, ...outside].filter(keep), count: checksOn ? (lit?.length ?? 0) : hits.lit + outside.length, complete: hits.found >= hits.total, loading }
+		: { order: [], count: 0, complete: false, loading: true };
+	return { found, lit };
 }

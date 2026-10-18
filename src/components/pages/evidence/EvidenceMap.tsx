@@ -10,7 +10,7 @@ import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
 import { nameOf } from "./overlay";
 import { checkedCount, highlightedNow, type CheckCounts } from "./filter";
-import type { Lit } from "./lists";
+import type { Found } from "./lists";
 import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
@@ -33,17 +33,17 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 	const address = useAddress();
 	const { loaded, more, graph, failed, incomplete } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
-	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
+	const { found, lit } = useLighting(filters, loaded, more, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const focus = useFocusName(now, shown, more);
 	const highlighted = highlightedNow({ checkCounts, types, verdicts, lit, shown });
 	useRefitOnNotice(graph, highlighted !== null);
-	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
+	const { lists, paper, checks, checked } = panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
-			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, Boolean(results)) }} smallLayout={smallLayout} />
+			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, Boolean(found)) }} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} papers={papers} checked={checked} checks={checks} />
 			<Controls graph={graph} />
 			<MapStatus focus={focus} highlighted={highlighted} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
@@ -121,16 +121,16 @@ function useRefitOnNotice(graph: EvidenceGraph | null, filterOn: boolean) {
 }
 
 type PanelInputs = {
-	filters: ReturnType<typeof useFiltersContext>; results: ReturnType<typeof useLighting>["results"]; litCount: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void;
+	filters: ReturnType<typeof useFiltersContext>; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void;
 	loaded: Loaded | null; more: More | null; chains: ChainEntry[]; now: ReturnType<typeof useOpened>; graph: EvidenceGraph | null; shown: Selection | null;
 	checkCounts: CheckCounts; types: ReadonlySet<number>; setTypes: (next: ReadonlySet<number>) => void; verdicts: ReadonlySet<number>; setVerdicts: (next: ReadonlySet<number>) => void;
 };
 
 /** What the side panels and the phone's sheet are given: the lists, the opened paper, the check switches and the checked graph. */
-function panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
+function panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
 	const onHover = (i: number | null, label?: Label) => graph?.hoverHost(i ?? undefined, label);
 	return {
-		lists: { filters, results, lit: litCount, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
+		lists: { filters, found, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
 		paper: { selection: shown, opening: now.target !== null && !shown, loaded, more, onOpen: now.open, onClose: now.close, onHover },
 		checks: { counts: checkCounts, types, verdicts, onTypes: setTypes, onVerdicts: setVerdicts },
 		checked: { count: checkedCount(checkCounts), open: now.target === CHECKED, onOpen: now.openChecked },

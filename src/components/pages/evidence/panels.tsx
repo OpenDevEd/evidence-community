@@ -12,7 +12,7 @@ import { CHECKED, type ChainEntry, type Label } from "./data";
 import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
 import { SearchRow, type Checks } from "./filter";
-import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
 import { labelOfRecord, usePaper, useRecord } from "./records";
 import { VerdictChip } from "./verdict-chip";
@@ -49,12 +49,12 @@ function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opene
 	const transition = still ? { duration: 0 } : PUSH;
 	return (
 		<div className="relative min-h-0 flex-1 overflow-hidden">
-			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col pt-2">
+			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
 				{list}
 			</motion.div>
 			<AnimatePresence initial={false} custom={step}>
 				{ready && (
-					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white pt-3 shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
+					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
 						<OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />
 					</motion.div>
 				)}
@@ -67,9 +67,10 @@ function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opene
  * From 1,280 px wide, a panel down the left: what the page is, with the appraised papers' button; the search and the checks;
  * then the starting points or the search's results, which an opened paper takes the place of. A new search goes back to its results.
  */
-export function SearchPanel({ ref, filters, onSearch, results, lit, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; onSearch: (text: string) => void; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
-	const list = results
-		? <ResultList filters={filters} results={results} lit={lit} typing={typing} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />
+export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; onSearch: (text: string) => void; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
+	// A new search starts its results from their first page.
+	const list = found
+		? <ResultList key={filters.queryParams.search} found={found} typing={typing} more={more} loaded={loaded} onOpen={opened.onOpen} onHover={onHover} />
 		: <Chains chains={chains} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />;
 	return (
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>

@@ -102,6 +102,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange, raised 
  * other dropdown as it is.
  */
 export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts, raised }: Checks & { raised?: boolean }) {
+	const still = useReducedMotion();
 	const inTypes = (kind: number) => !types.size || types.has(kind);
 	const inChecks = (verdict: number) => !verdicts.size || verdicts.has(verdict);
 	const typeOptions = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]).map((name) => {
@@ -113,18 +114,20 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts, raised
 		return { key: verdict, name: VERDICT[name].label, count: countWhere(counts, inTypes, (v) => v === verdict), icon: <VerdictIcon verdict={verdict} size={14} /> };
 	});
 	return (
-		<div className="space-y-1.5 xl:space-y-0">
-			{/* From 1,280 px wide the notice over the map says the filter is on and clears it: no heading for it in the panel. */}
-			<div className="flex h-7 items-center justify-between pl-1 xl:hidden">
-				<span className="text-xs font-semibold">Filter the map</span>
-				{/* Kept in place while hidden, so the heading never changes height. */}
-				<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className={twMerge("rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent", !types.size && !verdicts.size && "invisible")}>Clear</button>
-			</div>
+		<div className="space-y-2">
 			{/* Side by side below 1,280 px, where the top bar must stay short for the map; an option too long for its list wraps. */}
 			<div className="flex gap-2 xl:flex-col">
 				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} raised={raised} />
 				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} raised={raised} />
 			</div>
+			{/* Only with something chosen: it opens and shuts its own room, so nothing under it jumps. */}
+			<AnimatePresence initial={false}>
+				{types.size + verdicts.size > 0 && (
+					<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.2, ease: [0.32, 0.72, 0, 1] }} className="-mt-2 flex justify-end overflow-hidden">
+						<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className="m-0.5 mt-2.5 rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent dark:text-white">Clear filters</button>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

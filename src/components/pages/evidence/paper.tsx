@@ -68,7 +68,7 @@ function PaperHeading({ index, record, loaded, more, onClose, back }: { index: n
 	const kind = KIND_LABEL[KINDS[loaded.points.kind[index]]];
 	return (
 		<>
-			{back && <div className="px-5"><Leave back={back} onClose={onClose} /></div>}
+			{back && <div className="px-5 pt-3"><Leave back={back} onClose={onClose} /></div>}
 			<div className={twMerge("flex items-start gap-2 px-5", back ? "pt-2" : "pt-4")}>
 				<div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
 					{kind && <span className="rounded-lg bg-black/[0.05] px-2 py-1 text-xs font-semibold dark:bg-white/10">{kind}</span>}
@@ -124,7 +124,7 @@ function checkedByLevel(loaded: Loaded) {
 
 function CheckedHeading({ onClose, back }: { onClose: () => void; back?: string }) {
 	return (
-		<div className={twMerge("px-5 pb-3", !back && "pt-4")}>
+		<div className={twMerge("px-5 pb-3", back ? "pt-3" : "pt-4")}>
 			{back && <Leave back={back} onClose={onClose} />}
 			<div className={twMerge("flex items-start gap-2", back && "pt-2")}>
 				<h2 className="min-w-0 flex-1 text-base font-semibold leading-snug">Appraised papers</h2>

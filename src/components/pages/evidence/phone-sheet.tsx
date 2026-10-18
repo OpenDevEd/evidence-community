@@ -9,7 +9,7 @@ import type { Loaded, More } from "./client";
 import type { ChainEntry } from "./data";
 import type { Selection } from "./graph";
 import { SearchRow, type Checks } from "./filter";
-import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
+import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
 import { usePaper } from "./records";
 
@@ -84,7 +84,7 @@ function useSheetTab(selection: Selection | null) {
 	return [tab, setTab] as const;
 }
 
-type SheetProps = { selection: Selection | null; opening: boolean; loaded: Loaded | null; more: More | null; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpen: (index: number) => void; onOpenKey: (key: string) => void; onClose: () => void; onHover: OnHover };
+type SheetProps = { selection: Selection | null; opening: boolean; loaded: Loaded | null; more: More | null; filters: Filters; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpen: (index: number) => void; onOpenKey: (key: string) => void; onClose: () => void; onHover: OnHover };
 
 /** What the sheet holds: with a paper and results both, the chosen tab; else whichever there is; else the chains list. */
 function contentOf(paper: boolean, results: boolean, tab: Tab) {
@@ -96,10 +96,10 @@ function contentOf(paper: boolean, results: boolean, tab: Tab) {
 const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)] xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[min(26rem,55%)] [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-r-none [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-bl-none";
 
 /** The search's results in the sheet, a tab of it when a paper is open too. */
-function SheetResults({ props, inTab, onOpenKey }: { props: SheetProps; inTab: boolean; onOpenKey: (key: string) => void }) {
+function SheetResults({ props, found, inTab, onOpen }: { props: SheetProps; found: Found; inTab: boolean; onOpen: (index: number) => void }) {
 	return (
-		<div id="evidence-sheet-panel" role={inTab ? "tabpanel" : undefined} aria-labelledby={inTab ? "evidence-tab-results" : undefined} className="flex min-h-0 flex-1 flex-col pt-2">
-			<ResultList filters={props.filters} results={props.results} lit={props.lit} typing={props.typing} more={props.more} loaded={props.loaded} onOpenKey={onOpenKey} onHover={props.onHover} />
+		<div id="evidence-sheet-panel" role={inTab ? "tabpanel" : undefined} aria-labelledby={inTab ? "evidence-tab-results" : undefined} className="flex min-h-0 flex-1 flex-col">
+			<ResultList key={props.filters.queryParams.search} found={found} typing={props.typing} more={props.more} loaded={props.loaded} onOpen={onOpen} onHover={props.onHover} />
 		</div>
 	);
 }
@@ -110,14 +110,14 @@ function SheetResults({ props, inTab, onOpenKey }: { props: SheetProps; inTab: b
  * side, so the map keeps its height. With a paper open and a search typed, two tabs switch between them.
  */
 export function PhoneSheet(props: SheetProps) {
-	const { loaded, more, results } = props;
+	const { loaded, more, found } = props;
 	const [open, setOpen] = useState(false);
 	const [tab, setTab] = useSheetTab(props.selection);
 	const { shown, stale } = usePaper(props.selection, more, props.opening);
 	const still = useReducedMotion();
 	const paper = shown && loaded && more ? { shown, loaded, more } : null;
-	const content = contentOf(Boolean(paper), Boolean(results), tab);
-	const both = Boolean(paper && results);
+	const content = contentOf(Boolean(paper), Boolean(found), tab);
+	const both = Boolean(paper && found);
 	// Opening a paper from the results brings the paper forward, even the one already open; a search brings the results.
 	const front = <T,>(to: Tab, then: (value: T) => void) => (value: T) => { setTab(to); then(value); };
 	return (
@@ -126,7 +126,7 @@ export function PhoneSheet(props: SheetProps) {
 			<motion.div data-evidence-sheet layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, heightOf(content, open))}>
 				{both && <SheetTabs tab={tab} onTab={setTab} />}
 				{content === "paper" && paper && <OpenedPaper {...paper} stale={stale} onOpen={front("paper", props.onOpen)} onClose={props.onClose} onHover={props.onHover} tab={{ id: "evidence-sheet-panel", labelledBy: both ? "evidence-tab-paper" : undefined }} />}
-				{content === "results" && <SheetResults props={props} inTab={Boolean(paper)} onOpenKey={front("paper", props.onOpenKey)} />}
+				{content === "results" && found && <SheetResults props={props} found={found} inTab={Boolean(paper)} onOpen={front("paper", props.onOpen)} />}
 				{content === "chains" && <FoldedChains open={open} onOpen={setOpen} papers={props.papers} chains={props.chains} checked={props.checked} selected={props.selected} onOpenKey={props.onOpenKey} onHover={props.onHover} />}
 			</motion.div>
 		</>

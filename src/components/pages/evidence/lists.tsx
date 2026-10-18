@@ -1,11 +1,7 @@
 "use client";
 
-import { ArrowUpRight01Icon, FlowchartIcon } from "@hugeicons/core-free-icons";
-import Link from "next/link";
+import { FlowchartIcon } from "@hugeicons/core-free-icons";
 import { useState, type ReactNode } from "react";
-import type { SWRResponse } from "swr";
-import type { ListItem } from "@/app/api/item/types";
-import type { ItemsGetResponse } from "@/app/api/items/types";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Pagination } from "@/components/nextui/Pagination";
 import type { useFiltersContext } from "@/context/FiltersProvider";
@@ -13,7 +9,7 @@ import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import { FLAG, VERDICTS, type ChainEntry, type Label } from "./data";
 import { css, verdictDot } from "./palette";
-import { labelOfRecord } from "./records";
+import { lineOf, useLines } from "./records";
 import { VerdictIcon } from "./verdict-chip";
 import { VERDICT, VERDICT_ORDER } from "./verdicts";
 
@@ -22,10 +18,12 @@ export const muted = "text-black/55 dark:text-white/55";
 const ROW = "flex w-full min-w-0 items-start gap-2.5 rounded-xl px-3 py-2 text-left outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/[0.06]";
 
 export type Filters = ReturnType<typeof useFiltersContext>;
-export type Results = SWRResponse<ItemsGetResponse>;
 export type OnHover = (index: number | null, label?: Label) => void;
-/** What the search lights up on the map: how many it found, how many of those are on the map, and whether that is all of them. */
-export type Lit = { total: number; lit: number; complete: boolean };
+/**
+ * What a search found on the map: its papers in order (the first 400 the library's search finds, then those outside the library),
+ * how many it finds on the map in all, whether that count is final, and whether the answer on screen is the last search's.
+ */
+export type Found = { order: number[]; count: number; complete: boolean; loading: boolean };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -92,7 +90,7 @@ export function Chains({ chains, selected, onOpenKey, onHover, heading = true }:
 	const [page, setPage] = useState(1);
 	const pages = Math.max(1, Math.ceil(chains.length / PAGE));
 	return (
-		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="min-h-0 flex-1 overflow-y-auto">
+		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="min-h-0 flex-1 overflow-y-auto pt-2">
 			{heading && (
 				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 					Starting points
@@ -114,51 +112,31 @@ function Pages({ total, page, onChange, label }: { total: number; page: number; 
 	return <div className="flex justify-center px-3 py-2"><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
 }
 
-/** How much of the search is lit on the map, said under the results' heading. */
-function litLine(lit: Lit | undefined) {
-	if (!lit) return " ";
-	const count = lit.lit.toLocaleString("en-GB");
-	return lit.complete ? `${count} of them are on the map, lit.` : `${count} lit so far; the rest are on their way.`;
-}
-
-/** A result that is not on the map: it opens the record instead. */
-function OffMapRow({ item }: { item: ListItem }) {
-	const label = labelOfRecord(item);
+/** The search's results, all of them on the map, a page at a time; all of it scrolls. Each opens on the map. */
+export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
+	const [page, setPage] = useState(1);
+	const shown = found.order.slice((page - 1) * PAGE, page * PAGE);
+	// From the first key typed until the next search's answer arrives, the last one stays in view, dimmed and out of reach.
+	const stale = typing || found.loading;
 	return (
-		<li>
-			<Link href={`/lib/${item.key}`} className={ROW}>
-				<span className="mt-0.5 flex w-4 justify-center"><HugeiconsIcon icon={ArrowUpRight01Icon} size={14} aria-hidden className={muted} /></span>
-				<RowText who={label.who} year={label.year} title={label.title ?? "Untitled"} aside={["Not on the map"]} />
-			</Link>
-		</li>
+		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="min-h-0 flex-1 overflow-y-auto pt-2">
+			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
+				Results
+				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.count.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
+			</h2>
+			{loaded && more ? <ResultRows indices={shown} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
+			{!stale && found.count === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this search.</p>}
+			<Pages total={Math.ceil(found.order.length / PAGE)} page={page} onChange={setPage} label="Pages of results" />
+		</section>
 	);
 }
 
-/** The search's results, a page at a time; every result also lights up on the map. */
-/** A result on the map opens on the map; one that is not opens its record. */
-function ResultRow({ item, more, loaded, onOpenKey, onHover }: { item: ListItem; more: More | null; loaded: Loaded | null; onOpenKey: (key: string) => void; onHover: OnHover }) {
-	const index = more?.indexOf(item.key);
-	if (index === undefined || !loaded) return <OffMapRow item={item} />;
-	return <PaperRow index={index} label={{ ...labelOfRecord(item), title: item.title || "Untitled" }} loaded={loaded} onOpen={() => onOpenKey(item.key)} onHover={onHover} />;
-}
-
-export function ResultList({ filters, results, lit, typing, more, loaded, onOpenKey, onHover }: { filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; more: More | null; loaded: Loaded | null; onOpenKey: (key: string) => void; onHover: OnHover }) {
-	const data = results?.data;
-	// From the first key typed until the next search's page arrives, the last one stays in view, dimmed and out of reach: it is
-	// not this search's.
-	const stale = typing || Boolean(results?.isLoading);
+function ResultRows({ indices, stale, loaded, more, onOpen, onHover }: { indices: number[]; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onHover: OnHover }) {
+	const records = useLines(indices, more);
 	return (
-		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="min-h-0 flex-1 overflow-y-auto">
-			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-1 pt-1 text-sm font-semibold">
-				Results
-				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", stale && "opacity-50")}>{(data?.totalItems ?? 0).toLocaleString("en-GB")}</span>
-			</h2>
-			<p className={twMerge("min-h-4 px-5 pb-2 text-xs", muted)}>{litLine(lit)}</p>
-			<ol inert={stale} className={twMerge("px-2 transition-opacity", stale && "opacity-50")}>
-				{((data?.items ?? []) as ListItem[]).map((item) => <ResultRow key={item.key} item={item} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />)}
-			</ol>
-			<Pages total={Math.min(data?.totalPages ?? 1, 50)} page={filters.queryParams.page || 1} onChange={filters.handlePageChange} label="Pages of results" />
-		</section>
+		<ol inert={stale} className={twMerge("px-2 transition-opacity", stale && "opacity-50")}>
+			{indices.map((i) => <PaperRow key={i} index={i} label={lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}
+		</ol>
 	);
 }
 
