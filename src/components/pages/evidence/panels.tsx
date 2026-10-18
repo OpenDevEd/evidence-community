@@ -108,10 +108,15 @@ function Notice({ children, action, onPress, kind }: { children: ReactNode; acti
 	return (
 		// One line, 2.75 rem high: the map is fitted below the notices by that height. It slides down into place and back up.
 		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm")}>
-			<span>{children}</span>
+			<span className="flex items-center gap-2">{children}</span>
 			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
 		</motion.div>
 	);
+}
+
+/** What a notice is about, in a small accent chip before its subject. */
+function NoticeChip({ children }: { children: ReactNode }) {
+	return <span className="rounded-lg bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent dark:bg-accent/25 dark:text-white">{children}</span>;
 }
 
 /** A paper address that is not on the map: said plainly, with the way back. */
@@ -133,10 +138,10 @@ export function MapStatus({ focus, highlighted, onShowAll, onClearFilter }: { fo
 	return (
 		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
 			<AnimatePresence>
-				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front</Notice>}
+				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><NoticeChip>Selected</NoticeChip><strong className="font-semibold">{focus}</strong></Notice>}
 				{highlighted !== null && (
 					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
-						<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+						<NoticeChip>Filtered</NoticeChip><strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong>
 					</Notice>
 				)}
 			</AnimatePresence>
