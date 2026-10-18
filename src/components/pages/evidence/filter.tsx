@@ -106,8 +106,9 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Chec
 		return { key: verdict, name: VERDICT[name].label, count: countWhere(counts, inTypes, (v) => v === verdict), icon: <VerdictIcon verdict={verdict} size={14} /> };
 	});
 	return (
-		<div className="space-y-1.5">
-			<div className="flex h-7 items-center justify-between pl-1">
+		<div className="space-y-1.5 xl:space-y-0">
+			{/* From 1,280 px wide the notice over the map says the filter is on and clears it: no heading for it in the panel. */}
+			<div className="flex h-7 items-center justify-between pl-1 xl:hidden">
 				<span className="text-xs font-semibold">Filter the map</span>
 				{/* Kept in place while hidden, so the heading never changes height. */}
 				<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className={twMerge("rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent", !types.size && !verdicts.size && "invisible")}>Clear</button>
