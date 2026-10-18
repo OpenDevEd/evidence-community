@@ -8,14 +8,15 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import { CHECKED, type ChainEntry, type Label } from "./data";
+import { CHECKED, KINDS, VERDICTS, type ChainEntry, type Label } from "./data";
 import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
 import { ClearChip, SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
 import { labelOfRecord, usePaper, useRecord } from "./records";
-import { VerdictChip } from "./verdict-chip";
+import { VerdictChip, VerdictIcon } from "./verdict-chip";
+import { KIND_LABEL, KIND_PLURAL, VERDICT } from "./verdicts";
 
 /** Where a pane sits: the list under it, out to the left and faded; on screen; or past the panel's right edge, not in yet. */
 const PANE = {
@@ -119,6 +120,34 @@ function NoticeChip({ children }: { children: ReactNode }) {
 	return <span className="rounded-lg bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent dark:bg-accent/25 dark:text-white">{children}</span>;
 }
 
+/** Names joined as a reader says them: "a", "a or b"; more than two only counted, as "3 types". */
+const either = (names: string[], many: string) => (names.length > 2 ? `${names.length} ${many}` : names.join(" or "));
+
+/**
+ * What the filter keeps, said: how many, of which types, and with which checks, each check with its icon. Up to two types and
+ * two checks are named; past that they are counted, and the checks shown by their icons alone.
+ */
+function FilterSummary({ count, types, verdicts }: { count: number; types: ReadonlySet<number>; verdicts: ReadonlySet<number> }) {
+	const kinds = [...types].map((kind) => KINDS[kind] as keyof typeof KIND_PLURAL);
+	const named = count === 1 ? kinds.map((kind) => KIND_LABEL[kind]!.toLowerCase()) : kinds.map((kind) => KIND_PLURAL[kind].toLowerCase());
+	const noun = kinds.length > 2 ? `${count === 1 ? "paper" : "papers"} of ${kinds.length} types` : named.length ? either(named, "types") : count === 1 ? "paper" : "papers";
+	const checks = [...verdicts].sort((a, b) => b - a);
+	return (
+		<span className="flex items-center gap-1.5">
+			<strong className="font-semibold tabular-nums">{count.toLocaleString("en-GB")} {noun}</strong>
+			{checks.length > 0 && <span className={muted}>checked as</span>}
+			{checks.length > 2
+				? <span className="flex items-center gap-1" aria-label={checks.map((v) => VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).join(", ")}>{checks.map((v) => <VerdictIcon key={v} verdict={v} size={14} />)}</span>
+				: checks.map((v, k) => (
+					<span key={v} className="flex items-center gap-1.5">
+						{k > 0 && <span className={muted}>or</span>}
+						<span className="flex items-center gap-1"><VerdictIcon verdict={v} size={14} />{VERDICT[VERDICTS[v] as keyof typeof VERDICT].label.toLowerCase()}</span>
+					</span>
+				))}
+		</span>
+	);
+}
+
 /** A paper address that is not on the map: said plainly, with the way back. */
 export function Missing({ onClear }: { onClear: () => void }) {
 	return (
@@ -134,14 +163,14 @@ export function Missing({ onClear }: { onClear: () => void }) {
  * paper) brought to the front, and the filter highlighting some papers, one under the other. Each says how to undo it; the map
  * is fitted below them.
  */
-export function MapStatus({ focus, highlighted, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; onShowAll: () => void; onClearFilter: () => void }) {
+export function MapStatus({ focus, highlighted, types, verdicts, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; onShowAll: () => void; onClearFilter: () => void }) {
 	return (
 		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
 			<AnimatePresence>
 				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><NoticeChip>Selected</NoticeChip><strong className="font-semibold">{focus}</strong></Notice>}
 				{highlighted !== null && (
 					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
-						<NoticeChip>Filtered</NoticeChip><strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong>
+						<NoticeChip>Filtered</NoticeChip><FilterSummary count={highlighted} types={types} verdicts={verdicts} />
 					</Notice>
 				)}
 			</AnimatePresence>

@@ -46,7 +46,7 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 			<SearchPanel ref={searchPanel} {...lists} onSearch={(text) => { filters.handleSearchChange(text); if (now.target !== null) now.showAll(); }} papers={papers} checked={checked} checks={checks} opened={{ ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, Boolean(found)) }} smallLayout={smallLayout} />
 			<PhoneSheet {...lists} {...paper} papers={papers} checked={checked} checks={checks} />
 			<Controls graph={graph} />
-			<MapStatus focus={focus} highlighted={highlighted} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
+			<MapStatus focus={focus} highlighted={highlighted} types={types} verdicts={verdicts} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
 			<HoverCard selected={now.index} loaded={loaded} more={more} />
 		</main>
