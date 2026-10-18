@@ -8,7 +8,7 @@ import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import type { ChainEntry } from "./data";
 import type { Selection } from "./graph";
-import { SearchRow, type Checks } from "./filter";
+import { ClearChip, SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
 import { usePaper } from "./records";
@@ -18,7 +18,7 @@ type Tab = "paper" | "results";
 function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	return (
 		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
-			<div className={twMerge(PANEL, "p-1.5")}><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /></div>
+			<div className={twMerge(PANEL, "relative p-1.5")}><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /><ClearChip {...checks} /></div>
 		</div>
 	);
 }

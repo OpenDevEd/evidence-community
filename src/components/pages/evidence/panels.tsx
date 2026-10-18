@@ -11,7 +11,7 @@ import type { Loaded, More } from "./client";
 import { CHECKED, type ChainEntry, type Label } from "./data";
 import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
-import { SearchRow, type Checks } from "./filter";
+import { ClearChip, SearchRow, type Checks } from "./filter";
 import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
 import { OpenedPaper } from "./paper";
 import { labelOfRecord, usePaper, useRecord } from "./records";
@@ -77,8 +77,9 @@ export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, lo
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
 				<EvidenceIntro papers={papers} reviews={chains.length} checked={checked} />
 				{/* Its own band, between the head's grey and the views' white: it stays whichever view is under it. */}
-				<div className="border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
+				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
 					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} raised />
+					<ClearChip {...checks} />
 				</div>
 				<Stack list={list} opened={opened} loaded={loaded} more={more} onHover={onHover} />
 			</div>

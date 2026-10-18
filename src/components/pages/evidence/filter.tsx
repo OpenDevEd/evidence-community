@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDown01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, Cancel01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState, type ReactNode } from "react";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
@@ -102,7 +102,6 @@ function FilterSelect({ label, placeholder, options, selected, onChange, raised 
  * other dropdown as it is.
  */
 export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts, raised }: Checks & { raised?: boolean }) {
-	const still = useReducedMotion();
 	const inTypes = (kind: number) => !types.size || types.has(kind);
 	const inChecks = (verdict: number) => !verdicts.size || verdicts.has(verdict);
 	const typeOptions = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]).map((name) => {
@@ -120,14 +119,6 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts, raised
 				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} raised={raised} />
 				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} raised={raised} />
 			</div>
-			{/* Only with something chosen: it opens and shuts its own room, so nothing under it jumps. */}
-			<AnimatePresence initial={false}>
-				{types.size + verdicts.size > 0 && (
-					<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.2, ease: [0.32, 0.72, 0, 1] }} className="-mt-2 flex justify-end overflow-hidden">
-						<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className="m-0.5 mt-2.5 rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent dark:text-white">Clear filters</button>
-					</motion.div>
-				)}
-			</AnimatePresence>
 		</div>
 	);
 }
@@ -163,5 +154,28 @@ export function SearchRow({ search, onSearch, onTyped, checks, raised }: { raise
 				)}
 			</AnimatePresence>
 		</div>
+	);
+}
+
+/**
+ * Clear filters, a chip floating on the lower edge of the search's band, half over the view under it: there only with something
+ * chosen, and taking no room, so nothing moves as it comes and goes. Its band is `relative`.
+ */
+export function ClearChip({ types, verdicts, onTypes, onVerdicts }: Checks) {
+	const still = useReducedMotion();
+	// It drops out from behind the band's edge with a little spring, and tucks back up behind it.
+	const hidden = { opacity: 0, y: still ? 0 : -8, scale: still ? 1 : 0.7 };
+	const transition = still ? { duration: 0 } : { type: "spring" as const, stiffness: 520, damping: 26, mass: 0.6, opacity: { duration: 0.15 } };
+	return (
+		<AnimatePresence>
+			{types.size + verdicts.size > 0 && (
+				<div className="absolute inset-x-0 bottom-0 z-10 flex translate-y-1/2 justify-center">
+					<motion.button type="button" initial={hidden} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ ...hidden, transition: { duration: still ? 0 : 0.14, ease: [0.4, 0, 1, 1] } }} transition={transition} whileTap={still ? undefined : { scale: 0.92 }} onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className="inline-flex h-6 items-center gap-1 rounded-full bg-white pl-1.5 pr-2.5 text-[11px] font-semibold text-accent shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] outline-none ring-1 ring-black/[0.06] hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-accent dark:bg-secondary-400 dark:text-white dark:ring-white/10">
+						<HugeiconsIcon icon={Cancel01Icon} size={12} aria-hidden />
+						Clear filters
+					</motion.button>
+				</div>
+			)}
+		</AnimatePresence>
 	);
 }
