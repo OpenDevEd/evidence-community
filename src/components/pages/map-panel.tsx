@@ -106,7 +106,7 @@ function CountryList({ rows, measure, tint, hovered, onHover, onSelect, heading 
 									<span className="block h-full rounded-full" style={{ width: `${row.value === null ? 0 : Math.max(2, (100 * row.value) / top)}%`, background: tint(row.value) }} />
 								</span>
 							</span>
-							<span className={twMerge("shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums", row.value === null && twMerge("text-xs font-medium", muted))}>
+							<span className={twMerge("min-w-[4.5rem] shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums", row.value === null && twMerge("text-xs font-medium", muted))}>
 								{row.value === null ? "No census" : measure === "people" ? rate(row.value) : count(row.value)}
 							</span>
 						</button>
