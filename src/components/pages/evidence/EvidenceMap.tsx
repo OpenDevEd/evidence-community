@@ -10,20 +10,19 @@ import { evidenceClient, type Loaded, type More } from "./client";
 import type { EvidenceGraph, Selection } from "./graph";
 import { nameOf } from "./overlay";
 import { checkedCount, highlightedNow, type CheckCounts } from "./filter";
-import type { Lit } from "./lists";
+import type { Found } from "./lists";
 import { Controls, HoverCard, MapStatus, Missing, SearchPanel } from "./panels";
-import { PaperPanel } from "./paper";
 import { STAGE } from "./palette";
 import { PhoneSheet } from "./phone-sheet";
-import { useOpenedName } from "./records";
+import { preloadRecord, useOpenedName } from "./records";
 import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evidence";
 
 /**
  * The evidence map: every paper in the library placed by who cites whom, the evidence map's meta-analyses and their studies
  * on top, coloured by their checks. Search lights papers up; opening one moves its chain into columns in front of the map.
  */
-export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntry[]; checkCounts: CheckCounts }) {
-	const { theme, smallLayout, stage, labels, searchPanel, paperPanel } = usePageLook();
+export default function EvidenceMap({ chains, checkCounts, papers }: { chains: ChainEntry[]; checkCounts: CheckCounts; papers: number }) {
+	const { theme, smallLayout, stage, labels, searchPanel } = usePageLook();
 	const filters = useFiltersContext();
 	const [types, setTypes] = useState<ReadonlySet<number>>(new Set());
 	const [verdicts, setVerdicts] = useState<ReadonlySet<number>>(new Set());
@@ -34,21 +33,24 @@ export default function EvidenceMap({ chains, checkCounts }: { chains: ChainEntr
 	const address = useAddress();
 	const { loaded, more, graph, failed, incomplete } = useEvidenceGraph(theme, stage, labels, address);
 	const now = useOpened(address, more);
-	const { results, lit, litCount } = useLighting(filters, loaded, types, verdicts);
+	const { found, lit } = useLighting(filters, loaded, more, types, verdicts);
 	const shown = useGraphFollows(graph, failed, now, more, lit);
 	const focus = useFocusName(now, shown, more);
 	const highlighted = highlightedNow({ checkCounts, types, verdicts, lit, shown });
 	useRefitOnNotice(graph, highlighted !== null);
-	const { lists, paper, checks, checked } = panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
+	const { lists, paper, checks, checked } = panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
+	// The opened paper as both layouts show it, slid over their list with a back arrow to it.
+	const opened = { ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) };
+	// A new search goes back from an opened paper to its results, even one whose point the map has not found yet.
+	const onSearch = (text: string) => { filters.handleSearchChange(text); if (address.paper || address.view) now.showAll(); };
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
 	return (
 		<main id="main-content" tabIndex={-1} className="relative h-dvh w-full overflow-hidden bg-[#f5f6f8] outline-none dark:bg-[#0b0e14]">
 			<Stage stage={stage} labels={labels} drawn={Boolean(graph)} failed={failed} incomplete={incomplete} />
-			<SearchPanel ref={searchPanel} {...lists} checked={checked} checks={checks} smallLayout={smallLayout} />
-			<PaperPanel ref={paperPanel} {...paper} smallLayout={smallLayout} />
-			<PhoneSheet {...lists} {...paper} checked={checked} checks={checks} />
+			<SearchPanel ref={searchPanel} {...lists} onSearch={onSearch} papers={papers} checked={checked} checks={checks} opened={opened} smallLayout={smallLayout} />
+			<PhoneSheet {...lists} onSearch={onSearch} papers={papers} checked={checked} checks={checks} opened={opened} target={now.target} focus={focus} onRefit={() => graph?.refit()} />
 			<Controls graph={graph} />
-			<MapStatus focus={focus} highlighted={highlighted} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
+			<MapStatus focus={focus} highlighted={highlighted} types={types} verdicts={verdicts} onShowAll={now.showAll} onClearFilter={() => { setTypes(new Set()); setVerdicts(new Set()); }} />
 			{now.missing && <Missing onClear={now.clear} />}
 			<HoverCard selected={now.index} loaded={loaded} more={more} />
 		</main>
@@ -61,9 +63,12 @@ function usePageLook() {
 	const smallLayout = useLibraryConfig().theme.layout === "small";
 	// Hooks as statements: the React Compiler caches an object built from its inputs, and a hook inside it would then be skipped.
 	const stage = useRef<HTMLDivElement>(null), labels = useRef<HTMLCanvasElement>(null);
-	const searchPanel = useRef<HTMLDivElement>(null), paperPanel = useRef<HTMLDivElement>(null);
-	return { theme, smallLayout, stage, labels, searchPanel, paperPanel };
+	const searchPanel = useRef<HTMLDivElement>(null);
+	return { theme, smallLayout, stage, labels, searchPanel };
 }
+
+/** Where closing the opened paper goes back to, by name: the appraised papers it was opened from, the results or the filter's papers, or the starting points. */
+const backTo = ({ paper, view }: ReturnType<typeof useAddress>, list: Found["title"] | undefined) => (paper && view ? "Appraised papers" : list ?? "Starting points");
 
 /** Where cosmos.gl draws the map, with the canvas for its names over it; it fades in once drawn, or says it cannot be. */
 function Stage({ stage, labels, drawn, failed, incomplete }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean; incomplete: boolean }) {
@@ -106,7 +111,7 @@ function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: Retu
 function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null, more: More | null) {
 	const opened = useOpenedName(now.index, more);
 	if (!shown) return null;
-	if (now.target === CHECKED) return "All checked papers";
+	if (now.target === CHECKED) return "Appraised papers";
 	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
 	return label ? nameOf(label) : null;
 }
@@ -120,16 +125,20 @@ function useRefitOnNotice(graph: EvidenceGraph | null, filterOn: boolean) {
 }
 
 type PanelInputs = {
-	filters: ReturnType<typeof useFiltersContext>; results: ReturnType<typeof useLighting>["results"]; litCount: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void;
+	filters: ReturnType<typeof useFiltersContext>; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void;
 	loaded: Loaded | null; more: More | null; chains: ChainEntry[]; now: ReturnType<typeof useOpened>; graph: EvidenceGraph | null; shown: Selection | null;
 	checkCounts: CheckCounts; types: ReadonlySet<number>; setTypes: (next: ReadonlySet<number>) => void; verdicts: ReadonlySet<number>; setVerdicts: (next: ReadonlySet<number>) => void;
 };
 
 /** What the side panels and the phone's sheet are given: the lists, the opened paper, the check switches and the checked graph. */
-function panelProps({ filters, results, litCount, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
-	const onHover = (i: number | null, label?: Label) => graph?.hoverHost(i ?? undefined, label);
+function panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts }: PanelInputs) {
+	const onHover = (i: number | null, label?: Label) => {
+		graph?.hoverHost(i ?? undefined, label);
+		// A paper pointed at in a list is likely the next opened: its record is fetched now.
+		if (i !== null) preloadRecord(more?.keyOf(i));
+	};
 	return {
-		lists: { filters, results, lit: litCount, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
+		lists: { filters, found, typing, onTyped, loaded, more, chains, selected: now.index, onOpenKey: now.openKey, onHover },
 		paper: { selection: shown, opening: now.target !== null && !shown, loaded, more, onOpen: now.open, onClose: now.close, onHover },
 		checks: { counts: checkCounts, types, verdicts, onTypes: setTypes, onVerdicts: setVerdicts },
 		checked: { count: checkedCount(checkCounts), open: now.target === CHECKED, onOpen: now.openChecked },

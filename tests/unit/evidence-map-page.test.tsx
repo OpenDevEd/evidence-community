@@ -58,7 +58,7 @@ async function open(address: string, wait = 20) {
 		root.render(
 			<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
 				<NuqsTestingAdapter searchParams={address} onUrlUpdate={(event: UrlUpdateEvent) => updates.push(event.searchParams)}>
-					<EvidenceMap chains={[]} checkCounts={{ 1: { 0: 1, 7: 1 }, 3: { 3: 1 } }} />
+					<EvidenceMap chains={[]} checkCounts={{ 1: { 0: 1, 7: 1 }, 3: { 3: 1 } }} papers={4} />
 				</NuqsTestingAdapter>
 			</SWRConfig>,
 		);
@@ -67,19 +67,20 @@ async function open(address: string, wait = 20) {
 }
 
 const panel = () => container.querySelector<HTMLElement>('[role="region"][aria-label="Paper"]');
-const close = () => act(async () => panel()!.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
+// An opened paper's back arrow, named for where it goes.
+const back = (to: string) => act(async () => [...panel()!.querySelectorAll("button")].find((button) => button.textContent === to)!.click());
 
 describe("the evidence map's page", () => {
-	it("closes back one step: from a paper opened from the checked papers to them, then to the map", async () => {
+	it("goes back one step: from a paper opened from the appraised papers to them, then to the starting points", async () => {
 		await open("?view=checked&paper=CCCCCCCC");
 		expect(panel()?.textContent).toContain("Record CCCCCCCC");
-		await close();
+		await back("Appraised papers");
 		expect(updates.at(-1)?.get("paper")).toBeNull();
 		expect(updates.at(-1)?.get("view")).toBe("checked");
 
 		await open("?view=checked");
-		expect(panel()?.textContent).toContain("All checked papers");
-		await close();
+		expect(panel()?.querySelector("h2")?.textContent).toBe("Appraised papers");
+		await back("Starting points");
 		expect(updates.at(-1)?.get("view")).toBeNull();
 	});
 

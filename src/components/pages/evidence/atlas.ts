@@ -105,7 +105,7 @@ const severity = (p: Columns, i: number) => {
 	if (v === 0) return 0;
 	return v >= 5 ? 20 + v : 10 + v;
 };
-const byConcern = (p: Columns) => (a: number, b: number) => severity(p, b) - severity(p, a) || p.cites[b] - p.cites[a];
+export const byConcern = (p: Columns) => (a: number, b: number) => severity(p, b) - severity(p, a) || p.cites[b] - p.cites[a];
 
 /** Every "analyses" link between two of these papers, from the one analysing. */
 function linksAmong(members: Set<number>, analyses: Map<number, number[]>): [number, number][] {
@@ -186,14 +186,26 @@ function addRow(pairs: number[], i: number, { cites, citedBy }: { cites: Rows; c
 }
 
 /** The more lines in view, the fainter each: thousands overlapping read as a haze, not a dark mesh; a few hundred as lines. */
-function lineColour(count: number, theme: Theme): RGBA {
-	return inkAt(theme, Math.max(0.05, Math.min(0.28, 4 / Math.sqrt(Math.max(1, count)))) * (theme === "dark" ? 1.3 : 1));
+const lineStrength = (count: number, theme: Theme) => Math.max(0.05, Math.min(0.28, 4 / Math.sqrt(Math.max(1, count)))) * (theme === "dark" ? 1.3 : 1);
+/** A line leading off screen, against one between two papers in view: it still says where a paper connects, without crossing the view. */
+const OFF_SCREEN_STRENGTH = 0.3;
+
+/**
+ * A citation's colour: its citing paper's region, as network maps colour an edge by its source, so the lines read as part of
+ * their cluster rather than a grey mesh over it; ink for a paper in no region. Region colours are lighter than ink, so drawn a
+ * little stronger.
+ */
+function lineColour(p: Columns, from: number, strength: number, theme: Theme): RGBA {
+	if (p.region[from] === 65535) return inkAt(theme, strength);
+	const [r, g, b] = regionDot(p.region[from], theme);
+	return [r, g, b, Math.min(0.6, strength * 1.6)];
 }
 
 /**
  * The citations to draw for the part of the map in view: among the 2,500 most cited records in view, every citation from one
- * to another. Close in, with few papers in view, their citations off screen too: most of them lead there, and still say where
- * each paper connects. Further out those would bundle into dark streaks towards the few papers everyone cites.
+ * to another, each in its citing paper's region colour. Close in, with few papers in view, their citations off screen too,
+ * fainter: most of them lead there, and still say where each paper connects. Further out those would bundle into dark streaks
+ * towards the few papers everyone cites.
  */
 export function visibleLinks({ points: p, cites, citedBy }: Atlas, rect: [number, number, number, number], theme: Theme) {
 	if (!cites || !citedBy) return { pairs: new Float32Array(), colours: new Float32Array() };
@@ -202,7 +214,10 @@ export function visibleLinks({ points: p, cites, citedBy }: Atlas, rect: [number
 	for (const i of drawn) chosen[i] = 1;
 	const pairs: number[] = [], offScreen = inView.length <= OFF_SCREEN_FROM;
 	for (const i of drawn) addRow(pairs, i, { cites, citedBy }, chosen, offScreen);
-	const count = pairs.length / 2, colours = new Float32Array(count * 4), colour = lineColour(count, theme);
-	for (let k = 0; k < count; k++) colours.set(colour, k * 4);
+	const count = pairs.length / 2, colours = new Float32Array(count * 4), strength = lineStrength(count, theme);
+	for (let k = 0; k < count; k++) {
+		const [from, to] = [pairs[2 * k], pairs[2 * k + 1]];
+		colours.set(lineColour(p, from, chosen[from] && chosen[to] ? strength : strength * OFF_SCREEN_STRENGTH, theme), k * 4);
+	}
 	return { pairs: new Float32Array(pairs), colours };
 }

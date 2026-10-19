@@ -4,14 +4,14 @@ export type Area = { left: number; right: number; top: number; bottom: number };
 const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
 /**
- * Wide: the search panel on the left, the paper's on the right, and the notices over the map under the header, each 2.75 rem high
+ * Wide: the panel on the left, which an opened paper takes over, and the notices over the map under the header, each 2.75 rem high
  * with 0.5 rem below it: the one that says what is in front whenever a paper is open (counted, as it is not on the page yet while
  * the paper opens), and the filter's while it is on.
  */
 function wideArea(withPaper: boolean, width: number, height: number): Area {
 	const r = rem();
 	const notices = Number(withPaper) + Number(Boolean(document.querySelector("[data-evidence-notice=filter]")));
-	return { left: 24 * r, right: withPaper ? width - 27 * r : width, top: (7 + notices * 3.25) * r, bottom: height - r };
+	return { left: 24 * r, right: width, top: (7 + notices * 3.25) * r, bottom: height - r };
 }
 
 /**
@@ -23,7 +23,8 @@ function narrowArea(withPaper: boolean, width: number, height: number): Area {
 	const top = document.querySelector<HTMLElement>("[data-evidence-top]"), sheet = document.querySelector<HTMLElement>("[data-evidence-sheet]");
 	const below = top ? top.offsetTop + top.offsetHeight + 8 : 11.5 * rem();
 	if (width > height) return { left: 8, right: width - Math.min(26 * rem(), width * 0.55) - 8, top: below, bottom: height - 8 };
-	const sheetHeight = Math.max(sheet?.offsetHeight ?? 0, withPaper ? height * 0.5 : 0);
+	// Folded down to its bar, the sheet leaves the map the screen, a paper open or not.
+	const sheetHeight = sheet?.dataset.folded !== undefined ? sheet.offsetHeight : Math.max(sheet?.offsetHeight ?? 0, withPaper ? height * 0.5 : 0);
 	return { left: 8, right: width - 8, top: below, bottom: height - sheetHeight - 8 };
 }
 

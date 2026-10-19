@@ -1,11 +1,7 @@
 "use client";
 
-import { ArrowUpRight01Icon, FlowchartIcon } from "@hugeicons/core-free-icons";
-import Link from "next/link";
+import { FlowchartIcon } from "@hugeicons/core-free-icons";
 import { useState, type ReactNode } from "react";
-import type { SWRResponse } from "swr";
-import type { ListItem } from "@/app/api/item/types";
-import type { ItemsGetResponse } from "@/app/api/items/types";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Pagination } from "@/components/nextui/Pagination";
 import type { useFiltersContext } from "@/context/FiltersProvider";
@@ -13,7 +9,7 @@ import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
 import { FLAG, VERDICTS, type ChainEntry, type Label } from "./data";
 import { css, verdictDot } from "./palette";
-import { labelOfRecord } from "./records";
+import { lineOf, useLines } from "./records";
 import { VerdictIcon } from "./verdict-chip";
 import { VERDICT, VERDICT_ORDER } from "./verdicts";
 
@@ -22,10 +18,13 @@ export const muted = "text-black/55 dark:text-white/55";
 const ROW = "flex w-full min-w-0 items-start gap-2.5 rounded-xl px-3 py-2 text-left outline-none transition-colors hover:bg-black/[0.04] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/[0.06]";
 
 export type Filters = ReturnType<typeof useFiltersContext>;
-export type Results = SWRResponse<ItemsGetResponse>;
 export type OnHover = (index: number | null, label?: Label) => void;
-/** What the search lights up on the map: how many it found, how many of those are on the map, and whether that is all of them. */
-export type Lit = { total: number; lit: number; complete: boolean };
+/**
+ * What the map lights, as the panel lists it: under which heading, its papers in order, the first ones' lines as the search sent
+ * them, whether that is all of them yet, and
+ * whether the answer on screen is the last search's, or the search failed. `id` changes with the search and the filter.
+ */
+export type Found = { id: string; title: "Results" | "Filtered"; order: number[]; lines: Map<number, Label>; complete: boolean; loading: boolean; failed: boolean };
 /** The whole graph of checked papers: how many there are, whether it is open, and how to open it. */
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
@@ -67,93 +66,86 @@ export function PaperRow({ index, label, loaded, onOpen, onHover, selected }: { 
 
 const PAGE = 8;
 
-/** The button that opens the whole graph of checked papers, at the head of the chains list. */
-function CheckedButton({ checked }: { checked: Checked }) {
+/**
+ * What the page shows, at the head of its panel: its name, how many papers and reviews the map holds, and the button that brings
+ * every appraised paper to the front, on a grey of its own so it reads apart from the panel under it. Under the phone's sheet
+ * heading it goes untitled, on the sheet's white.
+ */
+export function EvidenceIntro({ papers, reviews, checked, titled = true }: { papers: number; reviews: number; checked: Checked; titled?: boolean }) {
+	const stat = (count: number, name: string) => <span><span className="font-semibold tabular-nums text-foreground dark:text-white">{count.toLocaleString("en-GB")}</span> {name}</span>;
 	return (
-		<div className="px-2 pb-1">
-			<button type="button" aria-pressed={checked.open} onClick={checked.onOpen} className={twMerge(ROW, "items-center", checked.open && "bg-accent/10 dark:bg-accent/15")}>
-				<HugeiconsIcon icon={FlowchartIcon} size={16} aria-hidden className="shrink-0 text-accent" />
-				<span className="min-w-0 flex-1 text-sm font-semibold">All checked papers</span>
-				<span className={twMerge("text-xs tabular-nums", muted)}>{checked.count}</span>
+		<div className={twMerge("px-3 pb-2", !titled && "pt-3", titled && "border-b border-black/[0.06] bg-[#e8eaef] pb-3 pt-3 dark:border-white/[0.08] dark:bg-black/25")}>
+			{titled && <h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">Visualise evidence chains</h1>}
+			<p className={twMerge("flex gap-3 px-1 text-xs", muted)}>{stat(papers, "papers")}{stat(reviews, "reviews")}</p>
+			<button type="button" aria-pressed={checked.open} onClick={checked.onOpen} className={twMerge("mt-2.5 flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", checked.open ? "bg-accent text-white" : titled ? "bg-white text-accent shadow-[0_1px_2px_rgb(0_0_0/0.06)] hover:bg-accent/5 dark:bg-secondary-400 dark:text-white dark:hover:bg-white/10" : "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white dark:hover:bg-accent/25")}>
+				<HugeiconsIcon icon={FlowchartIcon} size={16} aria-hidden className="shrink-0" />
+				<span className="min-w-0 flex-1 truncate text-left">Preview appraised papers</span>
+				<span className={twMerge("rounded-md px-1.5 py-0.5 text-xs tabular-nums", checked.open ? "bg-white/20" : "bg-accent/10 dark:bg-white/15")}>{checked.count}</span>
 			</button>
 		</div>
 	);
 }
 
-/** The meta-analyses and reviews of the evidence map, the most worrying checks first, a page at a time. */
-export function Chains({ chains, checked, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; checked: Checked; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
+/** The meta-analyses and reviews a reader starts from, the most worrying checks first, a page at a time; all of it scrolls. */
+export function Chains({ chains, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
 	const [page, setPage] = useState(1);
 	const pages = Math.max(1, Math.ceil(chains.length / PAGE));
 	return (
-		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Evidence chains"} className="flex min-h-0 flex-1 flex-col">
+		<section aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className="min-h-0 flex-1 overflow-y-auto pt-2">
 			{heading && (
-				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-1 pt-1 text-sm font-semibold">
-					Evidence chains
+				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
+					Starting points
 					<span className={twMerge("text-xs font-medium tabular-nums", muted)}>{chains.length}</span>
 				</h2>
 			)}
-			<p className={twMerge("px-5 pb-2 text-xs", muted)}>Meta-analyses and reviews. Open one to see the studies it analysed and their checks.</p>
-			<CheckedButton checked={checked} />
-			<ol className="min-h-0 flex-1 overflow-y-auto px-2">
+			<ol className="px-2">
 				{chains.slice((page - 1) * PAGE, page * PAGE).map((chain) => (
 					<Row key={chain.index} index={chain.index} verdict={chain.verdict} label={chain} outside={chain.outside} note={chain.analyses ? undefined : "Not analysed yet"} onOpen={() => onOpenKey(chain.paper)} onHover={onHover} selected={selected === chain.index} />
 				))}
 			</ol>
-			<Pages total={pages} page={page} onChange={setPage} label="Pages of evidence chains" />
+			<Pages total={pages} page={page} onChange={setPage} label="Pages of starting points" />
 		</section>
 	);
 }
 
-function Pages({ total, page, onChange, label }: { total: number; page: number; onChange: (page: number) => void; label: string }) {
+function Pages({ total, page, onChange, label, stale }: { total: number; page: number; onChange: (page: number) => void; label: string; stale?: boolean }) {
 	if (total <= 1) return null;
-	return <div className="flex justify-center px-3 py-2"><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
+	return <div inert={stale} className={twMerge("flex justify-center px-3 py-2 transition-opacity", stale && "opacity-50")}><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
 }
 
-/** How much of the search is lit on the map, said under the results' heading. */
-function litLine(lit: Lit | undefined) {
-	if (!lit) return " ";
-	const count = lit.lit.toLocaleString("en-GB");
-	return lit.complete ? `${count} of them are on the map, lit.` : `${count} lit so far; the rest are on their way.`;
-}
-
-/** A result that is not on the map: it opens the record instead. */
-function OffMapRow({ item }: { item: ListItem }) {
-	const label = labelOfRecord(item);
+/** What the map lights, a search's results or the filter's papers, a page at a time; all of it scrolls. Each opens on the map. */
+export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
+	const [chosen, setPage] = useState(1);
+	// A list that shrinks under the page a reader is on (the next search's answer) shows its last page, not an empty one.
+	const pages = Math.max(1, Math.ceil(found.order.length / PAGE)), page = Math.min(chosen, pages);
+	const shown = found.order.slice((page - 1) * PAGE, page * PAGE);
+	// The next page's lines are fetched while this one is read, so turning the page shows it whole.
+	useLines(unnamed(found.order.slice(page * PAGE, (page + 1) * PAGE), found.lines, more), more);
+	// From the first key typed until the next search's answer arrives, the last one stays in view, dimmed and out of reach.
+	const stale = typing || found.loading;
 	return (
-		<li>
-			<Link href={`/lib/${item.key}`} className={ROW}>
-				<span className="mt-0.5 flex w-4 justify-center"><HugeiconsIcon icon={ArrowUpRight01Icon} size={14} aria-hidden className={muted} /></span>
-				<RowText who={label.who} year={label.year} title={label.title ?? "Untitled"} aside={["Not on the map"]} />
-			</Link>
-		</li>
+		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="min-h-0 flex-1 overflow-y-auto pt-2">
+			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
+				{found.title}
+				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
+			</h2>
+			{loaded && more ? <ResultRows indices={shown} lines={found.lines} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} /> : null}
+			{found.failed && <p role="status" className="px-5 text-sm text-danger">The search didn&apos;t answer. Try again in a moment.</p>}
+			{!stale && !found.failed && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
+			<Pages total={pages} page={page} onChange={setPage} label="Pages of results" stale={stale} />
+		</section>
 	);
 }
 
-/** The search's results, a page at a time; every result also lights up on the map. */
-/** A result on the map opens on the map; one that is not opens its record. */
-function ResultRow({ item, more, loaded, onOpenKey, onHover }: { item: ListItem; more: More | null; loaded: Loaded | null; onOpenKey: (key: string) => void; onHover: OnHover }) {
-	const index = more?.indexOf(item.key);
-	if (index === undefined || !loaded) return <OffMapRow item={item} />;
-	return <PaperRow index={index} label={{ ...labelOfRecord(item), title: item.title || "Untitled" }} loaded={loaded} onOpen={() => onOpenKey(item.key)} onHover={onHover} />;
-}
+/** The papers of these whose line neither the map's labels nor the search's answer give: their records are looked up. */
+const unnamed = (indices: number[], lines: Map<number, Label>, more: More | null) => (more ? indices.filter((i) => !more.labels.get(i)?.title && !lines.has(i)) : []);
 
-export function ResultList({ filters, results, lit, typing, more, loaded, onOpenKey, onHover }: { filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; more: More | null; loaded: Loaded | null; onOpenKey: (key: string) => void; onHover: OnHover }) {
-	const data = results?.data;
-	// From the first key typed until the next search's page arrives, the last one stays in view, dimmed and out of reach: it is
-	// not this search's.
-	const stale = typing || Boolean(results?.isLoading);
+function ResultRows({ indices, lines, stale, loaded, more, onOpen, onHover }: { indices: number[]; lines: Map<number, Label>; stale: boolean; loaded: Loaded; more: More; onOpen: (index: number) => void; onHover: OnHover }) {
+	const records = useLines(unnamed(indices, lines, more), more);
 	return (
-		<section aria-labelledby="evidence-results" aria-busy={stale || undefined} className="flex min-h-0 flex-1 flex-col">
-			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-1 pt-1 text-sm font-semibold">
-				Results
-				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", stale && "opacity-50")}>{(data?.totalItems ?? 0).toLocaleString("en-GB")}</span>
-			</h2>
-			<p className={twMerge("min-h-4 px-5 pb-2 text-xs", muted)}>{litLine(lit)}</p>
-			<ol inert={stale} className={twMerge("min-h-0 flex-1 overflow-y-auto px-2 transition-opacity", stale && "opacity-50")}>
-				{((data?.items ?? []) as ListItem[]).map((item) => <ResultRow key={item.key} item={item} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />)}
-			</ol>
-			<Pages total={Math.min(data?.totalPages ?? 1, 50)} page={filters.queryParams.page || 1} onChange={filters.handlePageChange} label="Pages of results" />
-		</section>
+		<ol inert={stale} className={twMerge("px-2 transition-opacity", stale && "opacity-50")}>
+			{indices.map((i) => <PaperRow key={i} index={i} label={(!more.labels.get(i)?.title && lines.get(i)) || lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}
+		</ol>
 	);
 }
 

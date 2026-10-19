@@ -2,40 +2,87 @@
 
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
-import type { ReactNode, Ref } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import type { ListItem } from "@/app/api/item/types";
-import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { filledInputSlots } from "@/components/nextui/field-styles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
-import type { ChainEntry, Label } from "./data";
-import type { EvidenceGraph } from "./graph";
+import { CHECKED, KINDS, labelOfRecord, VERDICTS, type ChainEntry, type Label } from "./data";
+import type { EvidenceGraph, Selection } from "./graph";
 import { useHover, type Hover } from "./hover";
-import { MapFilter, type Checks } from "./filter";
-import { Chains, muted, PANEL, ResultList, type Checked, type Filters, type Lit, type OnHover, type Results } from "./lists";
-import { labelOfRecord, useRecord } from "./records";
-import { VerdictChip } from "./verdict-chip";
+import { ClearChip, SearchRow, type Checks } from "./filter";
+import { Chains, EvidenceIntro, muted, PANEL, ResultList, type Checked, type Filters, type Found, type OnHover } from "./lists";
+import { OpenedPaper } from "./paper";
+import { usePaper, useRecord } from "./records";
+import { VerdictChip, VerdictIcon } from "./verdict-chip";
+import { KIND_LABEL, KIND_PLURAL, VERDICT } from "./verdicts";
 
-/** From 1,280 px wide: the search, the checks and the lists in a panel down the left. */
-export function SearchPanel({ ref, filters, results, lit, typing, onTyped, loaded, more, chains, checked, checks, selected, onOpenKey, onHover, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; results: Results | undefined; lit: Lit | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; smallLayout: boolean }) {
+/** Where a pane sits: the list under it, out to the left and faded; on screen; or past the panel's right edge, not in yet. */
+const PANE = {
+	enter: (step: number) => (step > 0 ? { x: "100%", opacity: 1, zIndex: 2 } : step < 0 ? { x: "-25%", opacity: 0, zIndex: 1 } : { x: 0, opacity: 0, zIndex: 2 }),
+	center: { x: 0, opacity: 1 },
+	exit: (step: number) => (step > 0 ? { x: "-25%", opacity: 0, zIndex: 1 } : step < 0 ? { x: "100%", opacity: 1, zIndex: 2 } : { x: 0, opacity: 0, zIndex: 1 }),
+};
+/** As a screen pushed on a phone: quick out of the start, long and soft into place. */
+const PUSH = { duration: 0.42, ease: [0.32, 0.72, 0, 1] as const };
+
+/** Which way the panel moved to this pane: deeper (1), back out (-1), or across to one as deep (0). */
+function useStep(key: string, depth: number) {
+	const [seen, setSeen] = useState({ key, depth, step: 0 });
+	if (seen.key !== key) setSeen({ key, depth, step: Math.sign(depth - seen.depth) });
+	return seen.step;
+}
+
+export type Navigated = { selection: Selection | null; opening: boolean; deep: boolean; back: string; onOpen: (index: number) => void; onClose: () => void };
+
+/**
+ * The panel under its search, a stack as a phone's screens are: the starting points or the search's results, and over them, slid in
+ * from the right, the opened paper or the appraised papers. Back slides it away again, to the list as it was left.
+ */
+export function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
+	const { shown, stale } = usePaper(opened.selection, more, opened.opening);
+	const still = useReducedMotion();
+	const ready = shown && loaded && more ? { shown, loaded, more } : null;
+	const key = ready ? String(ready.shown.selection.index) : "list";
+	const depth = !ready ? 0 : ready.shown.selection.index !== CHECKED && opened.deep ? 2 : 1;
+	const step = useStep(key, depth);
+	const transition = still ? { duration: 0 } : PUSH;
+	return (
+		<div className="relative min-h-0 flex-1 overflow-hidden">
+			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
+				{list}
+			</motion.div>
+			<AnimatePresence initial={false} custom={step}>
+				{ready && (
+					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
+						<OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</div>
+	);
+}
+
+/**
+ * From 1,280 px wide, a panel down the left: what the page is, with the appraised papers' button; the search and the checks;
+ * then the starting points or the search's results, which an opened paper takes the place of. A new search goes back to its results.
+ */
+export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, loaded, more, chains, papers, checked, checks, selected, onOpenKey, onHover, opened, smallLayout }: { ref: Ref<HTMLDivElement>; filters: Filters; onSearch: (text: string) => void; found: Found | undefined; typing: boolean; onTyped: (text: string | null) => void; loaded: Loaded | null; more: More | null; chains: ChainEntry[]; papers: number; checked: Checked; checks: Checks; selected: number | null; onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; smallLayout: boolean }) {
+	// A new search starts its results from their first page.
+	const list = found
+		? <ResultList key={found.id} found={found} typing={typing} more={more} loaded={loaded} onOpen={opened.onOpen} onHover={onHover} />
+		: <Chains chains={chains} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />;
 	return (
 		<div ref={ref} className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
-				<div className="p-2">
-					<SearchBar handleSearchChange={filters.handleSearchChange} onTyped={onTyped} search={filters.queryParams.search} classNames={filledInputSlots} />
+				<EvidenceIntro papers={papers} reviews={chains.length} checked={checked} />
+				{/* Its own band, between the head's grey and the views' white: it stays whichever view is under it. */}
+				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
+					<SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} />
+					<ClearChip {...checks} />
 				</div>
-				<div className="border-b border-black/[0.06] px-3 pb-3 dark:border-white/[0.08]">
-					<MapFilter {...checks} />
-				</div>
-				<div className="flex min-h-0 flex-1 flex-col pt-2">
-					{results ? (
-						<ResultList filters={filters} results={results} lit={lit} typing={typing} more={more} loaded={loaded} onOpenKey={onOpenKey} onHover={onHover} />
-					) : (
-						<Chains chains={chains} checked={checked} selected={selected} onOpenKey={onOpenKey} onHover={onHover} />
-					)}
-				</div>
+				<Stack list={list} opened={opened} loaded={loaded} more={more} onHover={onHover} />
 			</div>
 		</div>
 	);
@@ -62,9 +109,42 @@ function Notice({ children, action, onPress, kind }: { children: ReactNode; acti
 	return (
 		// One line, 2.75 rem high: the map is fitted below the notices by that height. It slides down into place and back up.
 		<motion.div role="status" data-evidence-notice={leaving ? undefined : kind} initial={hidden} animate={{ opacity: 1, y: 0 }} exit={hidden} transition={{ duration: still ? 0 : 0.25, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, "flex h-11 items-center gap-3 whitespace-nowrap pl-4 pr-2 text-sm")}>
-			<span>{children}</span>
+			<span className="flex items-center gap-2">{children}</span>
 			<button type="button" onClick={onPress} className="shrink-0 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none hover:bg-black/[0.09] focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10 dark:hover:bg-white/15">{action}</button>
 		</motion.div>
+	);
+}
+
+/** What a notice is about, in a small accent chip before its subject. */
+function NoticeChip({ children }: { children: ReactNode }) {
+	return <span className="rounded-lg bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent dark:bg-accent/25 dark:text-white">{children}</span>;
+}
+
+/** Names joined as a reader says them: "a", "a or b"; more than two only counted, as "3 types". */
+const either = (names: string[], many: string) => (names.length > 2 ? `${names.length} ${many}` : names.join(" or "));
+
+/**
+ * What the filter keeps, said: how many, of which types, and with which checks, each check with its icon. Up to two types and
+ * two checks are named; past that they are counted, and the checks shown by their icons alone.
+ */
+function FilterSummary({ count, types, verdicts }: { count: number; types: ReadonlySet<number>; verdicts: ReadonlySet<number> }) {
+	const kinds = [...types].map((kind) => KINDS[kind] as keyof typeof KIND_PLURAL);
+	const named = count === 1 ? kinds.map((kind) => KIND_LABEL[kind]!.toLowerCase()) : kinds.map((kind) => KIND_PLURAL[kind].toLowerCase());
+	const noun = kinds.length > 2 ? `${count === 1 ? "paper" : "papers"} of ${kinds.length} types` : named.length ? either(named, "types") : count === 1 ? "paper" : "papers";
+	const checks = [...verdicts].sort((a, b) => b - a);
+	return (
+		<span className="flex items-center gap-1.5">
+			<strong className="font-semibold tabular-nums">{count.toLocaleString("en-GB")} {noun}</strong>
+			{checks.length > 0 && <span className={muted}>checked as</span>}
+			{checks.length > 2
+				? <span className="flex items-center gap-1" aria-label={checks.map((v) => VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).join(", ")}>{checks.map((v) => <VerdictIcon key={v} verdict={v} size={14} />)}</span>
+				: checks.map((v, k) => (
+					<span key={v} className="flex items-center gap-1.5">
+						{k > 0 && <span className={muted}>or</span>}
+						<span className="flex items-center gap-1"><VerdictIcon verdict={v} size={14} />{VERDICT[VERDICTS[v] as keyof typeof VERDICT].label.toLowerCase()}</span>
+					</span>
+				))}
+		</span>
 	);
 }
 
@@ -83,14 +163,14 @@ export function Missing({ onClear }: { onClear: () => void }) {
  * paper) brought to the front, and the filter highlighting some papers, one under the other. Each says how to undo it; the map
  * is fitted below them.
  */
-export function MapStatus({ focus, highlighted, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; onShowAll: () => void; onClearFilter: () => void }) {
+export function MapStatus({ focus, highlighted, types, verdicts, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; onShowAll: () => void; onClearFilter: () => void }) {
 	return (
 		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
 			<AnimatePresence>
-				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><strong className="font-semibold">{focus}</strong> in front</Notice>}
+				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><NoticeChip>Selected</NoticeChip><strong className="font-semibold">{focus}</strong></Notice>}
 				{highlighted !== null && (
 					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
-						<strong className="font-semibold tabular-nums">{highlighted.toLocaleString("en-GB")} {highlighted === 1 ? "paper" : "papers"}</strong> highlighted by the filter
+						<NoticeChip>Filtered</NoticeChip><FilterSummary count={highlighted} types={types} verdicts={verdicts} />
 					</Notice>
 				)}
 			</AnimatePresence>

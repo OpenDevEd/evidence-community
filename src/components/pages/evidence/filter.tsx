@@ -1,9 +1,12 @@
 "use client";
 
-import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
-import type { ReactNode } from "react";
+import { ArrowDown01Icon, Cancel01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useId, useState, type ReactNode } from "react";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
+import { SearchBar } from "@/components/features/SearchBar";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { filledInputSlots } from "@/components/nextui/field-styles";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded } from "./client";
 import { aroundOf, FLAG, KINDS, VERDICTS } from "./data";
@@ -50,6 +53,10 @@ export function highlightedNow({ checkCounts, types, verdicts, lit, shown }: { c
 
 type Option = { key: number; name: string; count: number; icon?: ReactNode };
 
+/** The filter's fields and the search, raised in white off the tinted band the search sits on, where grey fields would melt into it. */
+const RAISED = "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hovered]:bg-white/70 dark:bg-secondary-400 dark:data-[hovered]:bg-white/[6%]";
+const RAISED_INPUT = { input: filledInputSlots.input, inputWrapper: "bg-white border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hover]:bg-white/70 group-data-[focus]:bg-white dark:bg-secondary-400 dark:data-[hover]:bg-white/[6%] dark:group-data-[focus]:bg-secondary-400 data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus" };
+
 /**
  * One of the filter's dropdowns: any number of its options, each with how many papers it would highlight. Escape closes it and
  * keeps what is chosen, where a list on its own would clear it. The list is as wide as its field.
@@ -60,7 +67,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 	return (
 		<Select selectionMode="multiple" value={[...selected]} onChange={(keys) => onChange(new Set(keys.map(Number)))} placeholder={placeholder} className="min-w-0 flex-1">
 			<Label className="sr-only">{label}</Label>
-			<Button className={twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
+			<Button className={twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", RAISED, on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
 				<span className="min-w-0 flex-1">
 					<span aria-hidden className={twMerge("block text-xs leading-4", on ? "opacity-80" : muted)}>{label}</span>
 					<SelectValue className={twMerge("block truncate text-sm font-medium leading-5", !on && muted)}>
@@ -94,7 +101,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
  * dropdown any option chosen counts; with both, a paper must match each. An option's count is what it would highlight with the
  * other dropdown as it is.
  */
-export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Checks) {
+function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Checks) {
 	const inTypes = (kind: number) => !types.size || types.has(kind);
 	const inChecks = (verdict: number) => !verdicts.size || verdicts.has(verdict);
 	const typeOptions = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]).map((name) => {
@@ -106,17 +113,75 @@ export function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Chec
 		return { key: verdict, name: VERDICT[name].label, count: countWhere(counts, inTypes, (v) => v === verdict), icon: <VerdictIcon verdict={verdict} size={14} /> };
 	});
 	return (
-		<div className="space-y-1.5">
-			<div className="flex h-7 items-center justify-between pl-1">
-				<span className="text-xs font-semibold">Filter the map</span>
-				{/* Kept in place while hidden, so the heading never changes height. */}
-				<button type="button" onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className={twMerge("rounded-lg px-2 py-1 text-xs font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent", !types.size && !verdicts.size && "invisible")}>Clear</button>
-			</div>
+		<div className="space-y-2">
 			{/* Side by side below 1,280 px, where the top bar must stay short for the map; an option too long for its list wraps. */}
 			<div className="flex gap-2 xl:flex-col">
 				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} />
 				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} />
 			</div>
 		</div>
+	);
+}
+
+/** The button at the end of the search that shows or hides the filter's fields, with how many choices are on. */
+/** The filter button's look: in the accent with something chosen, pressed in while its fields are open, else raised. */
+const toggleLook = (open: boolean, on: number) => (on ? "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white" : open ? "bg-white/70 shadow-[0_1px_2px_rgb(0_0_0/0.08)] dark:bg-white/[6%]" : "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:bg-white/70 dark:bg-secondary-400 dark:hover:bg-white/[6%]");
+
+function FilterToggle({ open, on, onPress, controls }: { open: boolean; on: number; onPress: () => void; controls: string }) {
+	return (
+		<button type="button" aria-expanded={open} aria-controls={controls} aria-label={on ? `Filter, ${on} on` : "Filter"} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", toggleLook(open, on))}>
+			<HugeiconsIcon icon={FilterHorizontalIcon} size={20} aria-hidden />
+			{on ? <span aria-hidden className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-white tabular-nums">{on}</span> : null}
+		</button>
+	);
+}
+
+/**
+ * The search and, folded under it until asked for, the filter's fields: one row, where it used to take four. Opening and folding
+ * the fields slides them open and shut.
+ */
+export function SearchRow({ search, onSearch, onTyped, checks, onResized }: { onResized?: () => void; search: string; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
+	const [open, setOpen] = useState(false);
+	const still = useReducedMotion();
+	// The wide panel and the phone's top bar each have a search row, one hidden: each button names its own fields.
+	const fields = useId();
+	return (
+		<div>
+			<div className="flex items-center gap-2">
+				<div className="min-w-0 flex-1"><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={search} classNames={RAISED_INPUT} /></div>
+				<FilterToggle open={open} on={checks.types.size + checks.verdicts.size} onPress={() => setOpen(!open)} controls={fields} />
+			</div>
+			{/* Where the row's height bounds the map (the phone's top bar), the map is fitted again once the fields have opened or shut. */}
+			<AnimatePresence initial={false} onExitComplete={onResized}>
+				{open && (
+					<motion.div id={fields} onAnimationComplete={onResized} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
+						<div className="pb-1 pt-2"><MapFilter {...checks} /></div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</div>
+	);
+}
+
+/**
+ * Clear filters, a chip floating on the lower edge of the search's band, half over the view under it: there only with something
+ * chosen, and taking no room, so nothing moves as it comes and goes. Its band is `relative`.
+ */
+export function ClearChip({ types, verdicts, onTypes, onVerdicts }: Checks) {
+	const still = useReducedMotion();
+	// It drops out from behind the band's edge with a little spring, and tucks back up behind it.
+	const hidden = { opacity: 0, y: still ? 0 : -8, scale: still ? 1 : 0.7 };
+	const transition = still ? { duration: 0 } : { type: "spring" as const, stiffness: 520, damping: 26, mass: 0.6, opacity: { duration: 0.15 } };
+	return (
+		<AnimatePresence>
+			{types.size + verdicts.size > 0 && (
+				<div className="absolute inset-x-0 bottom-0 z-10 flex translate-y-1/2 justify-center">
+					<motion.button type="button" initial={hidden} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ ...hidden, transition: { duration: still ? 0 : 0.14, ease: [0.4, 0, 1, 1] } }} transition={transition} whileTap={still ? undefined : { scale: 0.92 }} onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className="inline-flex h-6 items-center gap-1 rounded-full bg-white pl-1.5 pr-2.5 text-[11px] font-semibold text-accent shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] outline-none ring-1 ring-black/[0.06] hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-accent dark:bg-secondary-400 dark:text-white dark:ring-white/10">
+						<HugeiconsIcon icon={Cancel01Icon} size={12} aria-hidden />
+						Clear filters
+					</motion.button>
+				</div>
+			)}
+		</AnimatePresence>
 	);
 }
