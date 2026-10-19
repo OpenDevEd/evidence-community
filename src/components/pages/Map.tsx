@@ -5,7 +5,8 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, zoomTransform, type ZoomTransform } from "d3-zoom";
 import { feature } from "topojson-client";
 import { flushSync } from "react-dom";
-import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
+import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef, memo } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -14,8 +15,12 @@ import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
+import ItemsList from "../features/items/ItemsList";
+import { Card } from "@/components/nextui/Card";
+import { BREAKPOINTS } from "@/../design-tokens";
 import { PANEL } from "./evidence/lists";
-import { countryRows, MapPanel, MapSheet, perMillion, useMeasure, useValueFormat, type Measure } from "./map-panel";
+import { BackButton } from "./evidence/paper";
+import { countryRows, MapPanel, MapSheet, perMillion, SIDE_WIDTH, useMeasure, useValueFormat, type Measure } from "./map-panel";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -63,6 +68,81 @@ function MouseTooltip({
 	);
 }
 
+/**
+ * The chosen countries' records, the library's full results, as before. From 1,280 px wide in a panel on the right, beside the
+ * countries' panel. Below, over the countries' sheet from under the search, with the back arrow to the countries; it takes the
+ * focus there, as it covers what had it.
+ */
+function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
+	const isCountrySelected = props.queryParams.country.length > 0;
+	const { theme } = useLibraryConfig();
+	const t = useTranslations("ui");
+	const wide = useBreakpoint("xl");
+	const still = useReducedMotion();
+	const panelRef = useRef<HTMLDivElement>(null);
+
+	const previousFocus = useRef<HTMLElement | SVGElement | null>(null);
+	useEffect(() => {
+		const panel = panelRef.current;
+		if (!isCountrySelected) {
+			if (panel?.contains(document.activeElement)) {
+				previousFocus.current?.focus({ preventScroll: true });
+			}
+			previousFocus.current = null;
+			return;
+		}
+		// The responsive hook initially returns its server value during hydration.
+		const isWideNow = window.matchMedia(`(min-width: ${BREAKPOINTS.xl})`).matches;
+		if (isWideNow || panel?.contains(document.activeElement)) return;
+		const activeElement = document.activeElement;
+		if (
+			activeElement instanceof HTMLElement ||
+			activeElement instanceof SVGElement
+		) {
+			previousFocus.current = activeElement;
+		}
+		panel?.focus({ preventScroll: true });
+	}, [isCountrySelected, wide]);
+
+	const away = wide ? { opacity: 0, x: 100 } : { y: "100%" };
+	return (
+		<AnimatePresence>
+			{isCountrySelected && (
+				<motion.div
+					ref={panelRef}
+					role="region"
+					aria-label={t("resultsLabel")}
+					tabIndex={-1}
+					className={twMerge(
+						"fixed inset-x-0 bottom-0 top-[10.25rem] z-30 outline-none [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
+						SIDE_WIDTH,
+						theme.layout === "small" && "xl:pt-[7.5rem]",
+					)}
+					initial={away}
+					animate={{ opacity: 1, x: 0, y: 0 }}
+					exit={away}
+					transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+				>
+					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
+						<div className="flex h-14 shrink-0 items-center border-b border-black/[0.06] bg-[#e8eaef] px-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
+							<BackButton to="Countries" onBack={props.handleCountriesClear} />
+						</div>
+						<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:rounded-2xl">
+							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
+								<ItemsList props={props} contentId="map-results" />
+							</Card>
+						</div>
+					</div>
+				</motion.div>
+			)}
+		</AnimatePresence>
+	);
+}
+
+const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
+	return prevProps.props === nextProps.props;
+});
+
 type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string };
 /** The outlines the globe draws: the countries, and Antarctica, which has no records and isn't in the countries file. */
 type World = { countries: Feature[]; antarctica: Feature[] };
@@ -84,6 +164,8 @@ const SPHERE = { type: "Sphere" as const };
 const LAND = { type: "MultiPoint" as const, coordinates: [[0, 80], [0, -62]] };
 /** The panel down the left, with its margin, from 1,280 px wide. */
 const PANEL_WIDTH = 24 * 16;
+/** The results panel on the right, with its margin, from 1,280 px wide. */
+const RESULTS_WIDTH = 33 * 16;
 /** How far, at least, the map starts zoomed in on the library's countries on a wide screen. */
 const START_ZOOM = 1.8;
 /** How far past the screen's edges the map is drawn on a wide screen, so sliding it towards a chosen country never shows its edge. */
@@ -151,9 +233,10 @@ function coverY(projection: ReturnType<typeof geoEqualEarth>, frame: Frame, y: n
 	return Math.min(frame.pad - top, Math.max(frame.height + frame.pad - bottom, y));
 }
 
-/** The slide that puts a point at screen position `x` in the middle of the space beside the panel, no further than the map is drawn past the screen. */
+/** The slide that puts a point at screen position `x` in the gap between the panel and the results (only from 1,280 px wide, where
+ * the panel is, are the results beside the map), no further than the map is drawn past the screen. */
 function slideFrom(frame: Frame, x: number) {
-	const gap = (frame.listWidth + frame.width) / 2;
+	const gap = (frame.listWidth + frame.width - (frame.listWidth ? RESULTS_WIDTH : 0)) / 2;
 	return Math.max(-frame.pad, Math.min(frame.pad, gap - x));
 }
 
@@ -424,8 +507,9 @@ function facetOf(props: ReturnType<typeof useItemsList>, initial?: Record<string
 
 
 /** The counts the map colours by: with a country chosen the search counts only its records, so the counts from before it was chosen are kept. */
-function useKeptFacet(facet: Record<string, number>, choosing: boolean) {
-	const [kept, setKept] = useState(facet);
+function useKeptFacet(facet: Record<string, number>, choosing: boolean, initial?: Record<string, number>) {
+	// An address that already chooses a country starts from the server's counts, which keep every country.
+	const [kept, setKept] = useState(() => (choosing ? initial ?? facet : facet));
 	if (!choosing && kept !== facet) setKept(facet);
 	return choosing ? kept : facet;
 }
@@ -444,7 +528,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	});
 	const [measure, setMeasure] = useMeasure();
 	const chosen = props.queryParams.country;
-	const facet = useKeptFacet(facetOf(props, counts), chosen.length > 0);
+	const facet = useKeptFacet(facetOf(props, counts), chosen.length > 0, counts);
 	const rows = countryRows(facet, measure);
 	const max = scaleTop(rows, measure);
 	const size = useWindowSize();
@@ -455,7 +539,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	const view = useMemo(() => mapView(size.width, size.height, isDesktop, listWidth, focus), [size.width, size.height, isDesktop, listWidth, focus]);
 	const zoomerRef = useRef<Zoomer | null>(null);
 
-	// Choosing a country slides the map sideways so it sits in the middle of the space beside the panel, as its records slide in.
+	// Choosing a country slides the map sideways so it sits in the gap between the two panels, in step with the results sliding in.
 	const [slide, setSlide] = useState<Slide | null>(null);
 	const offset = offsetOf(view, chosen, slide, places);
 	const selectCountry = (code: string) => {
@@ -487,7 +571,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		}
 	}, [props.queryParams.country]);
 
-	const panel = { props, rows, facet, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const panel = { props, rows, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -500,6 +584,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			/>
 			<MapPanel {...panel} />
 			<MapSheet {...panel} />
+			<MemoizedItemView props={props} />
 			<ZoomControls zoomerRef={zoomerRef} />
 			<Suspense fallback={null}>
 				<Globe

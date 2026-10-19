@@ -29,7 +29,7 @@ export type Found = { id: string; title: "Results" | "Filtered"; order: number[]
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
 /** Who and when, with a note at the end, over the title: a row's text. */
-export function RowText({ who, year, title, aside }: { who: string; year: number | null | undefined; title: string | undefined; aside: string[] }) {
+function RowText({ who, year, title, aside }: { who: string; year: number | null | undefined; title: string | undefined; aside: string[] }) {
 	return (
 		<span className="min-w-0 flex-1">
 			<span className="flex items-baseline gap-2 text-xs">

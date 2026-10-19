@@ -49,7 +49,7 @@ export function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode
 }
 
 /** A list with panes slid over it from the right, as a phone's screens are: `paneKey` names the pane on top and `depth` how deep it is. */
-export function SlideStack({ list, pane, paneKey, depth, label }: { list: ReactNode; pane: ReactNode; paneKey: string; depth: number; label: string }) {
+function SlideStack({ list, pane, paneKey, depth, label }: { list: ReactNode; pane: ReactNode; paneKey: string; depth: number; label: string }) {
 	const still = useReducedMotion();
 	const step = useStep(paneKey, depth);
 	const transition = still ? { duration: 0 } : PUSH;

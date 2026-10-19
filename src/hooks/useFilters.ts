@@ -248,6 +248,11 @@ export function useFilters() {
 		[params.study, setParams],
 	);
 
+	/** Drops every chosen country and keeps the other filters. */
+	const handleCountriesClear = useCallback(() => {
+		setParams({ country: [] });
+	}, [setParams]);
+
 	const handleClearFilters = useCallback(() => {
 		setParams({
 			author: "",
@@ -326,6 +331,7 @@ export function useFilters() {
 		handleAuthorSelect,
 		handleInstitutionSelect,
 		handleCountrySelect,
+		handleCountriesClear,
 		handleTopicsChange,
 		handleTypeSelect,
 		handleStudySelect,
