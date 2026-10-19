@@ -69,12 +69,13 @@ function MouseTooltip({
 }
 
 /**
- * The chosen countries' records, the library's full results, as before. From 1,280 px wide in a panel on the right, beside the
+ * The chosen countries' records, or a search's, the library's full results, as before. From 1,280 px wide in a panel on the right, beside the
  * countries' panel. Below, over the countries' sheet from under the search, with the back arrow to the countries; it takes the
  * focus there, as it covers what had it.
  */
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
-	const isCountrySelected = props.queryParams.country.length > 0;
+	// A search opens the results as choosing a country does.
+	const isCountrySelected = props.queryParams.country.length > 0 || Boolean(props.queryParams.search);
 	const { theme } = useLibraryConfig();
 	const t = useTranslations("ui");
 	const wide = useBreakpoint("xl");
@@ -125,7 +126,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
 						<div className="flex h-14 shrink-0 items-center border-b border-black/[0.06] bg-[#e8eaef] px-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
-							<BackButton to="Countries" onBack={props.handleCountriesClear} />
+							<BackButton to="Countries" onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						</div>
 						<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:rounded-2xl">
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
@@ -560,8 +561,8 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	};
 
 	useEffect(() => {
-		const country = props.queryParams.country;
-		if (country.length === 0) {
+		// With the results closed, they open next time on their first page in the default order.
+		if (props.queryParams.country.length === 0 && !props.queryParams.search) {
 			if (props.queryParams.sort) {
 				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
 			}
@@ -569,7 +570,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 				props.handlePageChange(1);
 			}
 		}
-	}, [props.queryParams.country]);
+	}, [props.queryParams.country, props.queryParams.search]);
 
 	const panel = { props, rows, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
