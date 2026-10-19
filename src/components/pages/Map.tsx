@@ -8,7 +8,7 @@ import { flushSync } from "react-dom";
 import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef, memo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { ArrowUp01Icon, CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
@@ -17,7 +17,6 @@ import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
-import { BREAKPOINTS } from "@/../design-tokens";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
 import { countryRows, MapPanel, MapSheet, perMillion, SIDE_WIDTH, useMeasure, useValueFormat, type Measure } from "./map-panel";
@@ -68,54 +67,55 @@ function MouseTooltip({
 	);
 }
 
+/** What the results sheet's bar calls them: the chosen country, how many are chosen, or a search's results. */
+function resultsName(chosen: string[]) {
+	if (chosen.length > 1) return `${chosen.length} countries`;
+	const code = chosen[0]?.split(" > ").at(-1);
+	return code ? COUNTRIES[code] ?? code : "Results";
+}
+
 /**
- * The chosen countries' records, or a search's, the library's full results, as before. From 1,280 px wide in a panel on the right, beside the
- * countries' panel. Below, over the countries' sheet from under the search, with the back arrow to the countries; it takes the
- * focus there, as it covers what had it.
+ * Whether the results sheet is open below 1,280 px: open when results first show and whenever the chosen countries change, and
+ * otherwise as the reader left it, so folding it to watch the map while typing keeps it folded.
+ */
+function useResultsOpen(shown: boolean, chosen: string[]) {
+	const [open, setOpen] = useState(true);
+	const cause = chosen.join("|");
+	const [seen, setSeen] = useState(cause);
+	if (cause !== seen) {
+		setSeen(cause);
+		if (chosen.length && !open) setOpen(true);
+	}
+	// Closed results open again from the start next time.
+	if (!shown && !open) setOpen(true);
+	return [open, setOpen] as const;
+}
+
+/**
+ * The chosen countries' records, or a search's: the library's full results, as before. From 1,280 px wide in a panel on the right,
+ * beside the countries' panel. Below, a sheet over the countries' sheet, with the back arrow to the countries: it folds to its bar
+ * so the map shows with the search still on, and lying on its side it takes the right side.
  */
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	// A search opens the results as choosing a country does.
-	const isCountrySelected = props.queryParams.country.length > 0 || Boolean(props.queryParams.search);
+	const shown = props.queryParams.country.length > 0 || Boolean(props.queryParams.search);
+	const [open, setOpen] = useResultsOpen(shown, props.queryParams.country);
 	const { theme } = useLibraryConfig();
 	const t = useTranslations("ui");
 	const wide = useBreakpoint("xl");
 	const still = useReducedMotion();
-	const panelRef = useRef<HTMLDivElement>(null);
-
-	const previousFocus = useRef<HTMLElement | SVGElement | null>(null);
-	useEffect(() => {
-		const panel = panelRef.current;
-		if (!isCountrySelected) {
-			if (panel?.contains(document.activeElement)) {
-				previousFocus.current?.focus({ preventScroll: true });
-			}
-			previousFocus.current = null;
-			return;
-		}
-		// The responsive hook initially returns its server value during hydration.
-		const isWideNow = window.matchMedia(`(min-width: ${BREAKPOINTS.xl})`).matches;
-		if (isWideNow || panel?.contains(document.activeElement)) return;
-		const activeElement = document.activeElement;
-		if (
-			activeElement instanceof HTMLElement ||
-			activeElement instanceof SVGElement
-		) {
-			previousFocus.current = activeElement;
-		}
-		panel?.focus({ preventScroll: true });
-	}, [isCountrySelected, wide]);
-
+	const name = resultsName(props.queryParams.country);
 	const away = wide ? { opacity: 0, x: 100 } : { y: "100%" };
 	return (
 		<AnimatePresence>
-			{isCountrySelected && (
+			{shown && (
 				<motion.div
-					ref={panelRef}
 					role="region"
 					aria-label={t("resultsLabel")}
-					tabIndex={-1}
+					layout={!still && !wide}
 					className={twMerge(
-						"fixed inset-x-0 bottom-0 top-[10.25rem] z-30 outline-none [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
+						"fixed inset-x-0 bottom-0 z-30 [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:h-auto xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
+						open ? "h-[50dvh]" : "h-14",
 						SIDE_WIDTH,
 						theme.layout === "small" && "xl:pt-[7.5rem]",
 					)}
@@ -125,10 +125,15 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 					transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<div className="flex h-14 shrink-0 items-center border-b border-black/[0.06] bg-[#e8eaef] px-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
+						<div className="flex h-14 shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#e8eaef] pl-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
 							<BackButton to="Countries" onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
+							<h2 className="hidden min-w-0 flex-1 truncate pr-5 text-right text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:block">{name}</h2>
+							<button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex h-full min-w-0 flex-1 items-center justify-end gap-3 pr-5 text-sm font-semibold outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
+								<span className="truncate">{name}</span>
+								<HugeiconsIcon icon={ArrowUp01Icon} size={16} aria-hidden className={twMerge("shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+							</button>
 						</div>
-						<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:rounded-2xl">
+						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
 							</Card>
