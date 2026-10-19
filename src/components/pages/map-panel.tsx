@@ -87,7 +87,7 @@ function CountryList({ rows, measure, tint, hovered, onHover, onSelect, heading 
 	// The bars are each country's true share of the top one; only the map's colour is capped.
 	const top = rows[0]?.value || 1;
 	return (
-		<section ref={boxRef} aria-labelledby={heading ? "map-countries" : undefined} aria-label={heading ? undefined : "Countries"} className={fittedBox(fit.ready)}>
+		<section ref={boxRef} aria-labelledby={heading ? "map-countries" : undefined} aria-label={heading ? undefined : "Countries"} className={fittedBox(fit.ready, fit.fits)}>
 			{heading && (
 				<h2 id="map-countries" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 					Countries

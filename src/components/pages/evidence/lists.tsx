@@ -81,7 +81,7 @@ export const FITTED_ROWS = "[&>li]:flex [&>li]:h-[var(--row)] [&>li]:items-cente
  */
 export function useFittedPages<T>(items: T[], rowHeight: number) {
 	const box = useRef<HTMLElement>(null), list = useRef<HTMLOListElement>(null);
-	const [fitted, setFitted] = useState<{ size: number; row: number } | null>(null);
+	const [fitted, setFitted] = useState<{ size: number; row: number; fits: boolean } | null>(null);
 	const [first, setFirst] = useState(0);
 	useEffect(() => {
 		const element = box.current!, rows = list.current!;
@@ -89,11 +89,11 @@ export function useFittedPages<T>(items: T[], rowHeight: number) {
 			// A folded sheet has no height: its page size stays as it was.
 			if (!element.clientHeight) return;
 			const room = element.clientHeight - rows.offsetTop - PAGES_HEIGHT;
-			const size = Math.max(3, Math.floor(room / rowHeight));
+			const whole = Math.floor(room / rowHeight), size = Math.max(3, whole), fits = whole >= 3;
 			// The space under the last whole row is shared out between the rows, so the page numbers sit on the box's foot.
 			// Rounded down to the 1/64 px browsers lay out in, so the rows' sum never passes the room by a fraction.
 			const row = Math.max(rowHeight, Math.floor((room / size) * 64) / 64);
-			setFitted((was) => (was?.size === size && was.row === row ? was : { size, row }));
+			setFitted((was) => (was?.size === size && was.row === row && was.fits === fits ? was : { size, row, fits }));
 		});
 		observer.observe(element);
 		// What sits above the list (a heading whose font arrives late) moves it down without resizing the box.
@@ -103,11 +103,15 @@ export function useFittedPages<T>(items: T[], rowHeight: number) {
 	const per = fitted?.size ?? 8;
 	const pages = Math.max(1, Math.ceil(items.length / per));
 	const page = Math.min(Math.floor(first / per) + 1, pages);
-	return { boxRef: box, listRef: list, ready: fitted !== null, rowStyle: { "--row": `${fitted?.row ?? rowHeight}px` } as React.CSSProperties, page, pages, per, shown: items.slice((page - 1) * per, page * per), setPage: (next: number) => setFirst((next - 1) * per) };
+	return { boxRef: box, listRef: list, ready: fitted !== null, fits: fitted?.fits ?? true, rowStyle: { "--row": `${fitted?.row ?? rowHeight}px` } as React.CSSProperties, page, pages, per, shown: items.slice((page - 1) * per, page * per), setPage: (next: number) => setFirst((next - 1) * per) };
 }
 
-/** A paged list's box: positioned, so its list's `offsetTop` is measured from it, and faded in once its page size is known. */
-export const fittedBox = (ready: boolean) => twMerge("relative flex min-h-0 flex-1 flex-col overflow-y-auto pt-2 transition-opacity duration-200 motion-reduce:transition-none", ready ? "opacity-100" : "opacity-0");
+/**
+ * A paged list's box: positioned, so its list's `offsetTop` is measured from it, and faded in once its page size is known. A page
+ * sized to the box never scrolls: a browser's rounding can still leave it a fraction of a pixel over, which a classic scroll bar
+ * shows, so it is clipped. Only a box too short for three rows scrolls.
+ */
+export const fittedBox = (ready: boolean, fits: boolean) => twMerge("relative flex min-h-0 flex-1 flex-col pt-2 transition-opacity duration-200 motion-reduce:transition-none", fits ? "overflow-hidden" : "overflow-y-auto", ready ? "opacity-100" : "opacity-0");
 
 /**
  * What the page shows, at the head of its panel: its name, how many papers and reviews the map holds, and the button that brings
@@ -133,7 +137,7 @@ export function EvidenceIntro({ papers, reviews, checked, titled = true }: { pap
 export function Chains({ chains, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
 	const { boxRef, listRef, ...fit } = useFittedPages(chains, PAPER_ROW);
 	return (
-		<section ref={boxRef} aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className={fittedBox(fit.ready)}>
+		<section ref={boxRef} aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className={fittedBox(fit.ready, fit.fits)}>
 			{heading && (
 				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 					Starting points
@@ -158,13 +162,13 @@ export function Pages({ total, page, onChange, label, stale }: { total: number; 
 /** What the map lights, a search's results or the filter's papers, a page at a time; all of it scrolls. Each opens on the map. */
 export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
 	// A list that shrinks under the page a reader is on (the next search's answer) shows its last page, not an empty one.
-	const { boxRef, listRef, ready, rowStyle, page, pages, per, shown, setPage } = useFittedPages(found.order, PAPER_ROW);
+	const { boxRef, listRef, ready, fits, rowStyle, page, pages, per, shown, setPage } = useFittedPages(found.order, PAPER_ROW);
 	// The next page's lines are fetched while this one is read, so turning the page shows it whole.
 	useLines(unnamed(found.order.slice(page * per, (page + 1) * per), found.lines, more), more);
 	// From the first key typed until the next search's answer arrives, the last one stays in view, dimmed and out of reach.
 	const stale = typing || found.loading;
 	return (
-		<section ref={boxRef} aria-labelledby="evidence-results" aria-busy={stale || undefined} className={fittedBox(ready)}>
+		<section ref={boxRef} aria-labelledby="evidence-results" aria-busy={stale || undefined} className={fittedBox(ready, fits)}>
 			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 				{found.title}
 				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
