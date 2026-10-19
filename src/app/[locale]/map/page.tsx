@@ -27,8 +27,8 @@ export default async function MapPage({ searchParams }: Props) {
 	preload("/features.json", { as: "fetch", crossOrigin: "anonymous" });
 	preload("/antarctica.json", { as: "fetch", crossOrigin: "anonymous" });
 	const places = placesOf((await getWorldMap()).shapes);
-	// The whole library's counts place the map; the counts for the page's filters colour it and fill the list from the first frame.
-	const [library, filtered] = await Promise.all([countsOf({}), countsOf(loadSearchParams(await searchParams))]);
+	// The whole library's counts place the map; the counts for the page's filters, all countries kept, colour it and fill the list from the first frame.
+	const [library, filtered] = await Promise.all([countsOf({}), countsOf({ ...loadSearchParams(await searchParams), country: [] })]);
 	return <Map focus={library && middleOf(places, library)} places={places} counts={filtered} />;
 }
 

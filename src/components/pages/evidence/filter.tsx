@@ -55,7 +55,7 @@ type Option = { key: number; name: string; count: number; icon?: ReactNode };
 
 /** The filter's fields and the search, raised in white off the tinted band the search sits on, where grey fields would melt into it. */
 const RAISED = "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hovered]:bg-white/70 dark:bg-secondary-400 dark:data-[hovered]:bg-white/[6%]";
-const RAISED_INPUT = { input: filledInputSlots.input, inputWrapper: "bg-white border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hover]:bg-white/70 group-data-[focus]:bg-white dark:bg-secondary-400 dark:data-[hover]:bg-white/[6%] dark:group-data-[focus]:bg-secondary-400 data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus" };
+export const RAISED_INPUT = { input: filledInputSlots.input, inputWrapper: "bg-white border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hover]:bg-white/70 group-data-[focus]:bg-white dark:bg-secondary-400 dark:data-[hover]:bg-white/[6%] dark:group-data-[focus]:bg-secondary-400 data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus" };
 
 /**
  * One of the filter's dropdowns: any number of its options, each with how many papers it would highlight. Escape closes it and

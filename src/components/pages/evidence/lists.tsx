@@ -29,7 +29,7 @@ export type Found = { id: string; title: "Results" | "Filtered"; order: number[]
 export type Checked = { count: number; open: boolean; onOpen: () => void };
 
 /** Who and when, with a note at the end, over the title: a row's text. */
-function RowText({ who, year, title, aside }: { who: string; year: number | null | undefined; title: string | undefined; aside: string[] }) {
+export function RowText({ who, year, title, aside }: { who: string; year: number | null | undefined; title: string | undefined; aside: string[] }) {
 	return (
 		<span className="min-w-0 flex-1">
 			<span className="flex items-baseline gap-2 text-xs">
@@ -108,7 +108,7 @@ export function Chains({ chains, selected, onOpenKey, onHover, heading = true }:
 	);
 }
 
-function Pages({ total, page, onChange, label, stale }: { total: number; page: number; onChange: (page: number) => void; label: string; stale?: boolean }) {
+export function Pages({ total, page, onChange, label, stale }: { total: number; page: number; onChange: (page: number) => void; label: string; stale?: boolean }) {
 	if (total <= 1) return null;
 	return <div inert={stale} className={twMerge("flex justify-center px-3 py-2 transition-opacity", stale && "opacity-50")}><Pagination aria-label={label} size="sm" showControls siblings={0} total={total} page={page} onChange={onChange} /></div>;
 }

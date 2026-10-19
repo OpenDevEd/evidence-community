@@ -5,24 +5,20 @@ import { select } from "d3-selection";
 import { zoom, zoomIdentity, zoomTransform, type ZoomTransform } from "d3-zoom";
 import { feature } from "topojson-client";
 import { flushSync } from "react-dom";
-import { Fragment, ReactNode, Suspense, use, useEffect, useMemo, useState, useRef, memo } from "react";
-import { useFormatter, useTranslations } from "next-intl";
+import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef } from "react";
+import { useTranslations } from "next-intl";
+import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { Skeleton } from "@/components/nextui/Skeleton";
-import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
-import ItemsList from "../features/items/ItemsList";
-import { AnimatePresence, motion } from "framer-motion";
-import { Card } from "@/components/nextui/Card";
-import { SearchBar } from "@/components/features/SearchBar";
-import { filledInputSlots } from "@/components/nextui/field-styles";
+import { PANEL } from "./evidence/lists";
+import { countryRows, MapPanel, MapSheet, perMillion, useMeasure, useValueFormat, type Measure } from "./map-panel";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
-import { BREAKPOINTS } from "@/../design-tokens";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 function MouseTooltip({
@@ -67,110 +63,38 @@ function MouseTooltip({
 	);
 }
 
-function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
-	const isCountrySelected = props.queryParams.country.length > 0;
-	const { theme } = useLibraryConfig();
-	const t = useTranslations("ui");
-	const isDesktop = useBreakpoint("md");
-	const panelRef = useRef<HTMLDivElement>(null);
-
-	const previousFocus = useRef<HTMLElement | SVGElement | null>(null);
-	useEffect(() => {
-		const panel = panelRef.current;
-		if (!isCountrySelected) {
-			if (panel?.contains(document.activeElement)) {
-				previousFocus.current?.focus({ preventScroll: true });
-			}
-			previousFocus.current = null;
-			return;
-		}
-		// The responsive hook initially returns its server value during hydration.
-		const isDesktopNow = window.matchMedia(`(min-width: ${BREAKPOINTS.md})`).matches;
-		if (isDesktopNow || panel?.contains(document.activeElement)) return;
-		const activeElement = document.activeElement;
-		if (
-			activeElement instanceof HTMLElement ||
-			activeElement instanceof SVGElement
-		) {
-			previousFocus.current = activeElement;
-		}
-		panel?.focus({ preventScroll: true });
-	}, [isCountrySelected, isDesktop]);
-
-	return (
-		<AnimatePresence>
-			{isCountrySelected && (
-				<motion.div
-					ref={panelRef}
-					role="region"
-					aria-label={t("resultsLabel")}
-					tabIndex={-1}
-					className={twMerge(
-						"fixed right-0 inset-y-0 top-36 z-20 outline-none w-full md:w-auto md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4",
-						theme.layout === "small" && "md:pt-[calc(7.5rem)]",
-					)}
-					initial={{ opacity: 0, x: 100 }}
-					animate={{ opacity: 1, x: 0 }}
-					exit={{ opacity: 0, x: 100 }}
-					transition={{ duration: 0.3 }}
-				>
-					<div className="w-full md:w-[32rem] h-full rounded-2xl overflow-y-scroll overflow-x-hidden no-scrollbar">
-						<Card color="card" className="p-4 min-h-full">
-							<ItemsList props={props} contentId="map-results" />
-						</Card>
-					</div>
-				</motion.div>
-			)}
-		</AnimatePresence>
-	);
-}
-
-const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
-	return prevProps.props === nextProps.props;
-});
-
-type CountryRow = { code: string; name: string; count: number };
 type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string };
 /** The outlines the globe draws: the countries, and Antarctica, which has no records and isn't in the countries file. */
 type World = { countries: Feature[]; antarctica: Feature[] };
 /** A country on the map: `location` is its place in the region filter, when it has one. */
-type Country = { code?: string; location?: string; name: string; count: number; selected: boolean };
+type Country = { code?: string; location?: string; name: string; count: number; value: number | null; selected: boolean };
 type Anchor = { x: number; y: number } | null;
 /** Each country's place on the globe, by code. */
 type Places = Record<string, [number, number]>;
 /** The slide a click gave the map, for the country it chose. */
 type Slide = { location: string; x: number };
 
-/** A country's colour: the accent mixed into the land by the square root of its share of the busiest, so small counts still show. */
-function tint(count: number, max: number) {
-	return count ? `color-mix(in oklab, rgb(var(--color-accent-500)) ${Math.round(100 * (0.25 + 0.75 * Math.sqrt(count / max)))}%, var(--map-land))` : "var(--map-land)";
+/** A country's colour: the accent mixed into the land by the square root of its share of the highest value, so small values still show. */
+function tint(value: number | null, max: number) {
+	return value ? `color-mix(in oklab, rgb(var(--color-accent-500)) ${Math.round(100 * (0.25 + 0.75 * Math.sqrt(Math.min(1, value / max))))}%, var(--map-land))` : "var(--map-land)";
 }
 
 const SPHERE = { type: "Sphere" as const };
 /** Where the land reaches, north and south. A phone fits this to its height, so the sea runs past every edge of the screen. */
 const LAND = { type: "MultiPoint" as const, coordinates: [[0, 80], [0, -62]] };
-const PANEL_WIDTH = 22 * 16;
-/** The results panel on the right, with its margin. */
-const RESULTS_WIDTH = 33 * 16;
+/** The panel down the left, with its margin, from 1,280 px wide. */
+const PANEL_WIDTH = 24 * 16;
 /** How far, at least, the map starts zoomed in on the library's countries on a wide screen. */
 const START_ZOOM = 1.8;
 /** How far past the screen's edges the map is drawn on a wide screen, so sliding it towards a chosen country never shows its edge. */
 const PAD = 600;
 
-function countryRows(facet: Record<string, number>) {
-	return Object.entries(facet).flatMap(rowOf).sort((a, b) => b.count - a.count);
-}
-
-/** Only countries the region filter knows can be chosen, so only they are listed. */
-function rowOf([code, count]: [string, number]): CountryRow[] {
-	return COUNTRY_PARAMS[code] && count ? [{ code, name: COUNTRIES[code] ?? code, count: Number(count) }] : [];
-}
-
-function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[]): Country {
+function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure): Country {
 	const code = A3ToA2[geo.id] as string | undefined;
-	if (!code) return { name: geo.properties.name, count: 0, selected: false };
+	if (!code) return { name: geo.properties.name, count: 0, value: null, selected: false };
 	const location = COUNTRY_PARAMS[code] as string | undefined;
-	return { code, location, name: nameOf(code, geo), count: facet[code] ?? 0, selected: chosen.includes(location ?? "") };
+	const count = facet[code] ?? 0;
+	return { code, location, name: nameOf(code, geo), count, value: measure === "people" ? perMillion(code, count) : count, selected: chosen.includes(location ?? "") };
 }
 
 function nameOf(code: string, geo: Feature) {
@@ -227,9 +151,9 @@ function coverY(projection: ReturnType<typeof geoEqualEarth>, frame: Frame, y: n
 	return Math.min(frame.pad - top, Math.max(frame.height + frame.pad - bottom, y));
 }
 
-/** The slide that puts a point at screen position `x` in the gap between the list and the results, no further than the map is drawn past the screen. */
+/** The slide that puts a point at screen position `x` in the middle of the space beside the panel, no further than the map is drawn past the screen. */
 function slideFrom(frame: Frame, x: number) {
-	const gap = (frame.listWidth + frame.width - RESULTS_WIDTH) / 2;
+	const gap = (frame.listWidth + frame.width) / 2;
 	return Math.max(-frame.pad, Math.min(frame.pad, gap - x));
 }
 
@@ -278,7 +202,7 @@ const LIFTED = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 
 const CHOSEN = { fill: "color-mix(in oklab, rgb(var(--color-accent-500)), black 22%)", stroke: "white", strokeWidth: line(2) };
 
 function shapeStyle(country: Country, hovered: string | null, max: number): React.CSSProperties {
-	const rest = { fill: tint(country.count, max), stroke: "var(--map-sea)", strokeWidth: line(0.6) };
+	const rest = { fill: tint(country.value, max), stroke: "var(--map-sea)", strokeWidth: line(0.6) };
 	return country.selected || hovered === country.code ? activeStyle(country, rest) : rest;
 }
 
@@ -296,19 +220,20 @@ function isPress(event: React.KeyboardEvent) {
 	return event.key === "Enter" || event.key === " ";
 }
 
+/** The country pointed at: its flag and name, its records for each million people where its population is known, and its records. */
 function CountryTip({ country }: { country: Country }) {
-	const t = useTranslations("ui");
+	const { rate, count } = useValueFormat();
+	const people = country.code ? perMillion(country.code, country.count) : null;
+	const number = "font-semibold tabular-nums text-black dark:text-white";
 	return (
 		<div className="flex flex-col gap-0.5 px-1 py-0.5">
 			<div className="flex items-center gap-2 text-sm font-semibold">
 				{country.code && <CountryFlag countryCode={country.code} className="h-3 w-[1.125rem] rounded-[2px]" />}
 				{country.name}
 			</div>
-			<div className="text-xs text-black/60 dark:text-white/60">
-				{t.rich("resourcesCount", {
-					count: country.count,
-					number: (value) => <strong className="font-semibold text-black dark:text-white">{value}</strong>,
-				})}
+			<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
+				{people !== null && country.count > 0 && <span><strong className={number}>{rate(people)}</strong> per million people</span>}
+				<span><strong className={number}>{count(country.count)}</strong> records</span>
 			</div>
 		</div>
 	);
@@ -366,6 +291,11 @@ async function jsonOf(response: Response) {
 	return response.json();
 }
 
+/** How long a zoom button's glide takes, in milliseconds. */
+const GLIDE = 320;
+/** The zoom buttons' way into d3-zoom, set while the globe is on the page. */
+type Zoomer = { zoomBy: (k: number) => void; reset: () => void };
+
 const GRATICULE = geoGraticule().step([15, 15])();
 
 /** How a gesture moves the drawn map, from the zoom the SVG was drawn at (`from`) to where the gesture is now (`to`). */
@@ -385,8 +315,10 @@ function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof
  * Zooming and panning move the drawn map as one composited layer with a CSS transform, so Firefox redraws nothing while a gesture runs;
  * when it ends, the zoom is committed to the SVG and the outlines are redrawn sharp at the new scale. Nothing here is blurred or
  * transitioned: Firefox redraws a blur, or a fading fill, across the whole globe on every frame, which kept a core or more busy. */
-function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; world: World; offset: number; inert: boolean; renderCountry: (geo: Feature, d: string) => ReactNode }) {
+function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode }) {
 	const stage = useRef<HTMLDivElement>(null);
+	// The buttons zoom about the middle of the space beside the panel, in the stage's own coordinates, wherever the map is slid.
+	const middle = useEffectEvent((): [number, number] => [(view.frame.listWidth + view.frame.width) / 2 + view.frame.pad - offset, view.frame.height / 2 + view.frame.pad]);
 	const layer = useRef<HTMLDivElement>(null);
 	const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
 	const { pad, width, height } = view.frame;
@@ -406,28 +338,49 @@ function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; 
 		const behaviour = zoom<HTMLDivElement, unknown>()
 			.scaleExtent([view.minZoom, 12])
 			.duration(0)
-			.on("start", () => {
+			.on("start", (event: { sourceEvent: unknown }) => {
 				active += 1;
+				// A reader's own gesture moves the map at once, even over a button's glide.
+				if (event.sourceEvent) moving.style.transition = "";
 				moving.style.willChange = "transform";
 			})
 			.on("zoom", (event: { transform: ZoomTransform }) => {
 				moving.style.transform = cssTransform(committed, event.transform);
 			})
 			.on("end", (event: { transform: ZoomTransform }) => {
-				active -= 1;
-				committed = event.transform;
-				flushSync(() => setTransform(committed));
-				moving.style.transform = "";
-				if (!active) moving.style.willChange = "";
+				const commit = () => {
+					active -= 1;
+					committed = event.transform;
+					flushSync(() => setTransform(committed));
+					moving.style.transition = "";
+					moving.style.transform = "";
+					if (!active) moving.style.willChange = "";
+				};
+				if (!moving.style.transition) return commit();
+				// A button's zoom glides the layer there first, then draws the outlines sharp at the new zoom. A glide that goes
+				// nowhere never ends, so the commit also runs after the glide's length.
+				let done = false;
+				const once = () => { if (!done) { done = true; commit(); } };
+				moving.addEventListener("transitionend", once, { once: true });
+				setTimeout(once, GLIDE + 50);
 			});
 		select(element).call(behaviour);
+		const glide = (move: () => void) => {
+			if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) moving.style.transition = `transform ${GLIDE}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+			move();
+		};
+		zoomerRef.current = {
+			zoomBy: (k) => glide(() => behaviour.scaleBy(select(element), k, middle())),
+			reset: () => glide(() => behaviour.transform(select(element), zoomIdentity)),
+		};
 		return () => {
+			zoomerRef.current = null;
 			select(element).on(".zoom", null);
 		};
-	}, [view.minZoom]);
+	}, [view.minZoom, view.frame, zoomerRef]);
 
 	return (
-		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }} inert={inert}>
+		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }}>
 			<div ref={layer} className="size-full origin-top-left animate-fade-in motion-reduce:animate-none" style={{ "--map-k": transform.k } as React.CSSProperties}>
 				{/* Not clipped to its box: while a gesture moves the layer, the geography beyond the box slides into view instead of blank space. */}
 				<svg width={width + 2 * pad} height={height + 2 * pad} overflow="visible" className="block">
@@ -454,76 +407,28 @@ function GlobeView({ view, world, offset, inert, renderCountry }: { view: View; 
 	);
 }
 
+/** The value that takes the full colour. Per person, a few small states (Monaco: 16 records, 38,000 people) sit far above the rest,
+ * so the top 5% share the full colour and the others spread over the whole ramp. Records keep the busiest country as the top. */
+function scaleTop(rows: { value: number | null }[], measure: Measure) {
+	const values = rows.flatMap((row) => (row.value ? [row.value] : []));
+	if (!values.length) return 1;
+	return measure === "people" ? values[Math.floor(values.length * 0.05)] : values[0];
+}
+
+const NO_COUNTS: Record<string, number> = {};
+
 /** The countries' record counts: the shared filters' facets once they arrive, and until then the counts the server sent with the page. */
 function facetOf(props: ReturnType<typeof useItemsList>, initial?: Record<string, number>) {
-	return (props.facetDistribution?.country_uncategorized ?? initial ?? {}) as Record<string, number>;
+	return (props.facetDistribution?.country_uncategorized ?? initial ?? NO_COUNTS) as Record<string, number>;
 }
 
 
-function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
-	return (
-		<div className="fixed top-20 md:bottom-0 md:top-auto left-0 z-10">
-			<div className="w-screen md:w-[42rem] md:p-4">
-				<div className="bg-white dark:bg-secondary-400 md:rounded-2xl flex gap-4 p-2 shadow-[0_-10px_10px_0_theme(colors.accent.500)] md:shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)]">
-					<SearchBar
-						handleSearchChange={props.handleSearchChange}
-						search={props.queryParams.search}
-						classNames={filledInputSlots}
-					/>
-				</div>
-			</div>
-		</div>
-	);
+/** The counts the map colours by: with a country chosen the search counts only its records, so the counts from before it was chosen are kept. */
+function useKeptFacet(facet: Record<string, number>, choosing: boolean) {
+	const [kept, setKept] = useState(facet);
+	if (!choosing && kept !== facet) setKept(facet);
+	return choosing ? kept : facet;
 }
-
-/** The library's countries, largest first, in the space above the search bar. The list doubles as the map's key: each bar has its country's colour. */
-function CountryPanel({ props, rows, counted, max, hovered, onHover, onSelect }: { props: ReturnType<typeof useItemsList>; rows: CountryRow[]; /** False until the counts are in: the page is drawn before its data. */ counted: boolean; max: number; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void }) {
-	const t = useTranslations("ui");
-	const format = useFormatter();
-	const { theme } = useLibraryConfig();
-	return (
-		<div className={twMerge("fixed inset-y-0 left-0 z-10 pointer-events-none hidden w-[calc(22rem+1rem)] pb-24 pl-4 pt-[calc(7.5rem-1.5rem)] lg:block", theme.layout === "small" && "pt-[7.5rem]")}>
-			<div className="pointer-events-auto flex h-full flex-col rounded-2xl bg-white pt-2 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] dark:bg-secondary-400">
-				<h2 className="flex items-baseline justify-between px-5 pb-1 pt-2 text-base font-semibold">
-					{t("countries")}
-					{counted ? (
-						<span className="text-sm font-medium tabular-nums text-black/50 dark:text-white/50">{rows.length}</span>
-					) : (
-						<Skeleton className="h-4 w-5 self-center rounded" />
-					)}
-				</h2>
-				<ol className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 [scrollbar-gutter:stable]" onPointerLeave={() => onHover(null)}>
-					{rows.map((row) => {
-						const selected = props.queryParams.country.includes(COUNTRY_PARAMS[row.code]);
-						return (
-							<li key={row.code}>
-								<button
-									type="button"
-									aria-pressed={selected}
-									onPointerEnter={() => onHover(row.code)}
-									onFocus={() => onHover(row.code)}
-									onBlur={() => onHover(null)}
-									onClick={() => onSelect(row.code)}
-									className={twMerge("flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", hovered === row.code && "bg-black/5 dark:bg-white/5", selected && "bg-accent/15 dark:bg-accent/20")}
-								>
-									<CountryFlag countryCode={row.code} className="h-3.5 w-5 shrink-0 rounded-[3px]" />
-									<span className="flex min-w-0 flex-1 flex-col gap-1.5">
-										<TruncatedText text={row.name} className={twMerge("text-sm", selected ? "font-semibold" : "font-medium")} />
-										<span aria-hidden className="block h-1 rounded-full bg-black/5 dark:bg-white/10">
-											<span className="block h-full rounded-full" style={{ width: `${Math.max(2, (100 * row.count) / max)}%`, background: tint(row.count, max) }} />
-										</span>
-									</span>
-									<span className="w-12 shrink-0 text-right text-sm font-semibold tabular-nums">{format.number(row.count)}</span>
-								</button>
-							</li>
-						);
-					})}
-				</ol>
-			</div>
-		</div>
-	);
-}
-
 
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
 export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
@@ -537,17 +442,20 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
-	const facet = facetOf(props, counts);
-	const rows = countryRows(facet);
-	const maxItems = Math.max(1, ...rows.map((row) => row.count));
+	const [measure, setMeasure] = useMeasure();
+	const chosen = props.queryParams.country;
+	const facet = useKeptFacet(facetOf(props, counts), chosen.length > 0);
+	const rows = countryRows(facet, measure);
+	const max = scaleTop(rows, measure);
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
-	// The country list shows only where it and the results fit side by side.
-	const listWidth = useBreakpoint("lg") ? PANEL_WIDTH + 16 : 0;
+	const smallLayout = useLibraryConfig().theme.layout === "small";
+	// The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list.
+	const listWidth = useBreakpoint("xl") ? PANEL_WIDTH : 0;
 	const view = useMemo(() => mapView(size.width, size.height, isDesktop, listWidth, focus), [size.width, size.height, isDesktop, listWidth, focus]);
-	const chosen = props.queryParams.country;
+	const zoomerRef = useRef<Zoomer | null>(null);
 
-	// Choosing a country slides the map sideways so it sits in the gap between the two panels, in step with the results sliding in.
+	// Choosing a country slides the map sideways so it sits in the middle of the space beside the panel, as its records slide in.
 	const [slide, setSlide] = useState<Slide | null>(null);
 	const offset = offsetOf(view, chosen, slide, places);
 	const selectCountry = (code: string) => {
@@ -579,6 +487,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		}
 	}, [props.queryParams.country]);
 
+	const panel = { props, rows, facet, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -589,20 +498,37 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 				content={tooltipContent}
 				anchor={tooltipAnchor}
 			/>
-			<Search props={props} />
-			<CountryPanel props={props} rows={rows} counted={Boolean(counts ?? props.facetDistribution)} max={maxItems} hovered={hovered} onHover={setHovered} onSelect={selectCountry} />
-			<MemoizedItemView props={props} />
+			<MapPanel {...panel} />
+			<MapSheet {...panel} />
+			<ZoomControls zoomerRef={zoomerRef} />
 			<Suspense fallback={null}>
 				<Globe
 					view={view}
 					offset={offset}
-					inert={!isDesktop && chosen.length > 0}
+					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen);
-						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, maxItems)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
+						const country = countryOf(geo, facet, chosen, measure);
+						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
 				/>
 			</Suspense>
 		</main>
+	);
+}
+
+/** Zoom, from 1,280 px wide: at the map's bottom left, beside the panel, as on the evidence map. */
+function ZoomControls({ zoomerRef }: { zoomerRef: React.RefObject<Zoomer | null> }) {
+	const button = "grid size-9 place-items-center rounded-xl outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10";
+	const controls = [
+		{ label: "Zoom in", icon: PlusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1.6) },
+		{ label: "Zoom out", icon: MinusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1 / 1.6) },
+		{ label: "Show the library's countries", icon: CenterFocusIcon, act: (zoomer: Zoomer) => zoomer.reset() },
+	];
+	return (
+		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+0.5rem)] z-10 hidden flex-col gap-0.5 p-1 xl:flex")}>
+			{controls.map(({ label, icon, act }) => (
+				<Tooltip key={label} content={label} placement="right"><button type="button" aria-label={label} onClick={() => { if (zoomerRef.current) act(zoomerRef.current); }} className={button}><HugeiconsIcon icon={icon} size={16} /></button></Tooltip>
+			))}
+		</div>
 	);
 }

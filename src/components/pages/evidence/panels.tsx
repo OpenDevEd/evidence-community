@@ -42,21 +42,27 @@ export type Navigated = { selection: Selection | null; opening: boolean; deep: b
  */
 export function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
 	const { shown, stale } = usePaper(opened.selection, more, opened.opening);
-	const still = useReducedMotion();
 	const ready = shown && loaded && more ? { shown, loaded, more } : null;
 	const key = ready ? String(ready.shown.selection.index) : "list";
 	const depth = !ready ? 0 : ready.shown.selection.index !== CHECKED && opened.deep ? 2 : 1;
-	const step = useStep(key, depth);
+	return <SlideStack list={list} paneKey={key} depth={depth} label="Paper" pane={ready && <OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />} />;
+}
+
+/** A list with panes slid over it from the right, as a phone's screens are: `paneKey` names the pane on top and `depth` how deep it is. */
+export function SlideStack({ list, pane, paneKey, depth, label }: { list: ReactNode; pane: ReactNode; paneKey: string; depth: number; label: string }) {
+	const still = useReducedMotion();
+	const step = useStep(paneKey, depth);
 	const transition = still ? { duration: 0 } : PUSH;
+	const on = Boolean(pane);
 	return (
 		<div className="relative min-h-0 flex-1 overflow-hidden">
-			<motion.div inert={Boolean(ready)} aria-hidden={ready ? true : undefined} initial={false} animate={ready ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
+			<motion.div inert={on} aria-hidden={on ? true : undefined} initial={false} animate={on ? { x: "-25%", opacity: 0 } : { x: 0, opacity: 1 }} transition={transition} className="absolute inset-0 flex flex-col">
 				{list}
 			</motion.div>
 			<AnimatePresence initial={false} custom={step}>
-				{ready && (
-					<motion.div key={key} role="region" aria-label="Paper" custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
-						<OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />
+				{on && (
+					<motion.div key={paneKey} role="region" aria-label={label} custom={step} variants={PANE} initial="enter" animate="center" exit="exit" transition={transition} className="absolute inset-0 flex flex-col bg-white shadow-[-16px_0_32px_-24px_rgb(0_0_0/0.35)] dark:bg-secondary-400">
+						{pane}
 					</motion.div>
 				)}
 			</AnimatePresence>
