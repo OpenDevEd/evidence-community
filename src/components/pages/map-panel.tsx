@@ -18,7 +18,7 @@ import Link from "next/link";
 import type { ListItem } from "@/app/api/item/types";
 import { RAISED_INPUT } from "./evidence/filter";
 import { labelOfRecord } from "./evidence/data";
-import { muted, PANEL, Pages, RowText } from "./evidence/lists";
+import { FITTED_ROWS, fittedBox, muted, PANEL, Pages, RowText, useFittedPages } from "./evidence/lists";
 import { SlideStack } from "./evidence/panels";
 import { BackButton } from "./evidence/paper";
 import { SHEET, SheetBar } from "./evidence/phone-sheet";
@@ -74,30 +74,31 @@ function MapIntro({ countries, measure, onMeasure, titled = true }: { countries:
 	);
 }
 
-const PAGE = 10;
+/** A country row's height: name over its bar. */
+const COUNTRY_ROW = 48;
 
 /**
  * The library's countries by the chosen measure, a page at a time. The list is the map's key: each bar has its country's colour.
  * Pointing at a row lifts its country on the map; choosing one opens its records.
  */
 function CountryList({ rows, measure, tint, hovered, onHover, onSelect, heading = true }: { rows: CountryRow[]; measure: Measure; tint: (value: number | null) => string; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void; heading?: boolean }) {
-	const [page, setPage] = useState(1);
+	const { boxRef, listRef, ...fit } = useFittedPages(rows, COUNTRY_ROW);
 	const { rate, count } = useValueFormat();
 	// The bars are each country's true share of the top one; only the map's colour is capped.
 	const top = rows[0]?.value || 1;
 	return (
-		<section aria-labelledby={heading ? "map-countries" : undefined} aria-label={heading ? undefined : "Countries"} className="min-h-0 flex-1 overflow-y-auto pt-2">
+		<section ref={boxRef} aria-labelledby={heading ? "map-countries" : undefined} aria-label={heading ? undefined : "Countries"} className={fittedBox(fit.ready)}>
 			{heading && (
 				<h2 id="map-countries" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
 					Countries
 					<span className={twMerge("text-xs font-medium", muted)}>{UNIT[measure]}</span>
 				</h2>
 			)}
-			<ol className="px-2" onPointerLeave={() => onHover(null)}>
-				{rows.slice((page - 1) * PAGE, page * PAGE).map((row, k) => (
+			<ol ref={listRef} style={fit.rowStyle} className={twMerge("px-2", FITTED_ROWS)} onPointerLeave={() => onHover(null)}>
+				{fit.shown.map((row, k) => (
 					<li key={row.code}>
-						<button type="button" onPointerEnter={() => onHover(row.code)} onFocus={() => onHover(row.code)} onBlur={() => onHover(null)} onClick={() => onSelect(row.code)} className={twMerge("flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", hovered === row.code && "bg-black/[0.04] dark:bg-white/[0.06]")}>
-							<span className={twMerge("w-5 shrink-0 text-right text-xs tabular-nums", muted)}>{(page - 1) * PAGE + k + 1}</span>
+						<button type="button" onPointerEnter={() => onHover(row.code)} onFocus={() => onHover(row.code)} onBlur={() => onHover(null)} onClick={() => onSelect(row.code)} className={twMerge("flex h-12 w-full min-w-0 items-center gap-3 rounded-xl px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", hovered === row.code && "bg-black/[0.04] dark:bg-white/[0.06]")}>
+							<span className={twMerge("w-5 shrink-0 text-right text-xs tabular-nums", muted)}>{(fit.page - 1) * fit.per + k + 1}</span>
 							<CountryFlag countryCode={row.code} className="h-3.5 w-5 shrink-0 rounded-[3px]" />
 							<span className="flex min-w-0 flex-1 flex-col gap-1.5">
 								<TruncatedText text={row.name} className="text-sm font-medium" />
@@ -105,14 +106,14 @@ function CountryList({ rows, measure, tint, hovered, onHover, onSelect, heading 
 									<span className="block h-full rounded-full" style={{ width: `${row.value === null ? 0 : Math.max(2, (100 * row.value) / top)}%`, background: tint(row.value) }} />
 								</span>
 							</span>
-							<span className={twMerge("w-14 shrink-0 text-right text-sm font-semibold tabular-nums", row.value === null && twMerge("text-xs font-medium", muted))}>
+							<span className={twMerge("shrink-0 whitespace-nowrap text-right text-sm font-semibold tabular-nums", row.value === null && twMerge("text-xs font-medium", muted))}>
 								{row.value === null ? "No census" : measure === "people" ? rate(row.value) : count(row.value)}
 							</span>
 						</button>
 					</li>
 				))}
 			</ol>
-			<Pages total={Math.ceil(rows.length / PAGE)} page={page} onChange={setPage} label="Pages of countries" />
+			<Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label="Pages of countries" />
 		</section>
 	);
 }
