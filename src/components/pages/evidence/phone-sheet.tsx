@@ -2,8 +2,7 @@
 
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons";
 import { motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
-import { flushSync } from "react-dom";
+import { useEffect, useEffectEvent, useState } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { twMerge } from "@/lib/tw-merge";
 import type { Loaded, More } from "./client";
@@ -14,12 +13,12 @@ import { Stack, type Navigated } from "./panels";
 
 /** The search, with the filter folded into its button, at the top of the screen: one row, so the map keeps its height. On the
  * wide panel's search band grey, its fields raised in white. */
-function TopBar({ filters, onSearch, onTyped, checks }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
+function TopBar({ filters, onSearch, onTyped, checks, onResized }: { filters: Filters; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks; onResized: () => void }) {
 	return (
 		<div data-evidence-top className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(26rem,55%)-1.5rem)]">
 			<div className={twMerge(PANEL, "relative")}>
 				{/* The band's grey laid over the panel, as on the wide panel, so the raised fields stand out in dark mode too. */}
-				<div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} /></div>
+				<div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRow search={filters.queryParams.search} onSearch={onSearch} onTyped={onTyped} checks={checks} onResized={onResized} /></div>
 				<ClearChip {...checks} />
 			</div>
 		</div>
@@ -78,8 +77,11 @@ export function PhoneSheet(props: SheetProps) {
 	const { found, loaded, more } = props;
 	const [open, setOpen] = useSheetOpen(props.target, found);
 	const still = useReducedMotion();
-	// The sheet's new height is in the page before the map is fitted into the room it leaves.
-	const fold = () => { flushSync(() => setOpen(!open)); props.onRefit(); };
+	// Folded or opened, by the reader or by a paper or search opening it, the map (an outside system) is fitted again into the
+	// room the sheet leaves, once its new height is in the page.
+	const refit = useEffectEvent(() => props.onRefit());
+	useEffect(() => { refit(); }, [open]);
+	const fold = () => setOpen(!open);
 	const list = found
 		? <ResultList key={found.id} found={found} typing={props.typing} more={more} loaded={loaded} onOpen={props.opened.onOpen} onHover={props.onHover} />
 		: (
@@ -90,7 +92,7 @@ export function PhoneSheet(props: SheetProps) {
 		);
 	return (
 		<>
-			<TopBar filters={props.filters} onSearch={props.onSearch} onTyped={props.onTyped} checks={props.checks} />
+			<TopBar filters={props.filters} onSearch={props.onSearch} onTyped={props.onTyped} checks={props.checks} onResized={props.onRefit} />
 			<motion.div data-evidence-sheet data-folded={open ? undefined : ""} layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, open ? "h-[50dvh]" : "h-14")}>
 				<SheetBar name={props.focus ?? found?.title ?? "Starting points"} open={open} onFold={fold} />
 				<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>

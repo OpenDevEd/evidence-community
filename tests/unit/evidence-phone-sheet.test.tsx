@@ -59,6 +59,7 @@ describe("the phone's sheet", () => {
 		const onRefit = vi.fn(() => foldedWhenFitted.push(sheet().hasAttribute("data-folded")));
 		await show(0, onRefit);
 		expect(bar().getAttribute("aria-expanded")).toBe("true");
+		foldedWhenFitted.length = 0;
 		await act(async () => bar().click());
 		expect(foldedWhenFitted).toEqual([true]);
 	});

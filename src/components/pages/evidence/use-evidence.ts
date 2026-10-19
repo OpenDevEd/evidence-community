@@ -150,7 +150,9 @@ function outsideMatches(loaded: Loaded | null, more: More | null, text: string) 
 	const words = wordsOf(text);
 	if (!loaded || !more || !words.length) return [];
 	const { flags } = loaded.points;
-	return Array.from(flags.keys()).filter((i) => flags[i] & FLAG.outside && words.every((word) => nameOf(more, i).includes(word)));
+	// Methods references and strays are not drawn on the map, so they are never results either.
+	const shown = (i: number) => (flags[i] & (FLAG.outside | FLAG.methods | FLAG.stray)) === FLAG.outside;
+	return Array.from(flags.keys()).filter((i) => shown(i) && words.every((word) => nameOf(more, i).includes(word)));
 }
 
 /** Whether a search is only words: no filter of the library's beside them (its scope is not one). */
@@ -183,16 +185,15 @@ export function useLighting(filters: ReturnType<typeof useFiltersContext>, loade
 	// are matched only by a search that is its words alone.
 	const outside = useMemo(() => (wordsAlone(query) ? outsideMatches(loaded, more, search) : []), [query, loaded, more, search]);
 	const checksOn = types.size + verdicts.size > 0;
-	const lit = useMemo(() => {
-		if (!loaded) return undefined;
-		if (query) return hits ? [...hits.order, ...outside].filter(checksOn ? matchesChecks(loaded, types, verdicts) : () => true) : undefined;
-		return checksOn ? withChecks(loaded, types, verdicts).sort(byConcern(loaded.points)) : undefined;
-	}, [loaded, hits, outside, query, checksOn, types, verdicts]);
+	const searched = useMemo(() => (loaded && query && hits ? [...hits.order, ...outside].filter(checksOn ? matchesChecks(loaded, types, verdicts) : () => true) : undefined), [loaded, hits, outside, query, checksOn, types, verdicts]);
+	const checked = useMemo(() => (loaded && checksOn ? withChecks(loaded, types, verdicts).sort(byConcern(loaded.points)) : undefined), [loaded, checksOn, types, verdicts]);
+	// Until a search answers, or if it fails, the map keeps what the filter lights rather than lighting everything.
+	const lit = searched ?? checked;
 	// A new search, any of its filters, or the map's filter starts the list from the first page.
 	const id = `${query}|${[...types]}|${[...verdicts]}`;
 	const lines = useMemo(() => new Map((hits?.lines ?? []).map(([i, who, year, title]) => [i, { who, year, title: title ?? undefined }])), [hits]);
 	const found: Found | undefined = query
-		? { id, title: "Results", order: lit ?? [], lines, complete: Boolean(hits && hits.found >= hits.total), loading: loading || (!lit && !failed), failed }
+		? { id, title: "Results", order: searched ?? [], lines, complete: Boolean(hits && hits.found >= hits.total), loading: loading || (!searched && !failed), failed }
 		: lit ? { id, title: "Filtered", order: lit, lines, complete: true, loading: false, failed: false } : undefined;
 	return { found, lit };
 }

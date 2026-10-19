@@ -140,7 +140,7 @@ function FilterToggle({ open, on, onPress, controls }: { open: boolean; on: numb
  * The search and, folded under it until asked for, the filter's fields: one row, where it used to take four. Opening and folding
  * the fields slides them open and shut.
  */
-export function SearchRow({ search, onSearch, onTyped, checks }: { search: string; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
+export function SearchRow({ search, onSearch, onTyped, checks, onResized }: { onResized?: () => void; search: string; onSearch: (text: string) => void; onTyped: (text: string | null) => void; checks: Checks }) {
 	const [open, setOpen] = useState(false);
 	const still = useReducedMotion();
 	// The wide panel and the phone's top bar each have a search row, one hidden: each button names its own fields.
@@ -151,9 +151,10 @@ export function SearchRow({ search, onSearch, onTyped, checks }: { search: strin
 				<div className="min-w-0 flex-1"><SearchBar handleSearchChange={onSearch} onTyped={onTyped} search={search} classNames={RAISED_INPUT} /></div>
 				<FilterToggle open={open} on={checks.types.size + checks.verdicts.size} onPress={() => setOpen(!open)} controls={fields} />
 			</div>
-			<AnimatePresence initial={false}>
+			{/* Where the row's height bounds the map (the phone's top bar), the map is fitted again once the fields have opened or shut. */}
+			<AnimatePresence initial={false} onExitComplete={onResized}>
 				{open && (
-					<motion.div id={fields} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
+					<motion.div id={fields} onAnimationComplete={onResized} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: still ? 0 : 0.28, ease: [0.32, 0.72, 0, 1] }} className="-mx-1 overflow-hidden px-1">
 						<div className="pb-1 pt-2"><MapFilter {...checks} /></div>
 					</motion.div>
 				)}
