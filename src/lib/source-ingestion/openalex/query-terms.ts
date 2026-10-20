@@ -23,21 +23,64 @@ function searches(parts: string[], index: number) {
 	return parts[index]!.toLowerCase() === "has" && field !== undefined && field !== "(" && !field.startsWith('"') && !OPERATORS.has(field.toLowerCase());
 }
 
+/** What an OpenAlex source asks: one OQL query, or a search and a filter. */
+type OpenAlexQuery = { oql?: string; search?: string; filter?: string };
+
 /**
- * What OQL searches each count once across the queries, as a reader would count them: the words and phrases its
- * `<field> has ...` clauses look for, and the OpenAlex topics it names.
+ * The search texts a filter carries (`<field>.search`, `.search.exact` or `.search.no_stem`, each `|` alternative on
+ * its own), and the topics it names. OpenAlex reads filter names and values in any case.
  */
-export function queryTerms(queries: readonly string[]) {
-	const terms = new Set<string>();
-	const topics = new Set<string>();
-	for (const oql of queries) {
-		const parts = tokens(oql);
-		for (const [index, part] of parts.entries()) {
-			if (TOPIC.test(part)) topics.add(part);
-			if (searches(parts, index)) for (const term of clauseTerms(parts, index + 1)) terms.add(term);
-		}
-	}
-	return { terms: terms.size, topics: topics.size };
+function filterParts(filter: string) {
+	const entries = filter.match(/[a-z_.]+:(?:"[^"]*"|[^,"])*/giu) ?? [];
+	const valueOf = (entry: string) => entry.slice(entry.indexOf(":") + 1);
+	const nameOf = (entry: string) => entry.slice(0, entry.indexOf(":")).toLowerCase();
+	const searches = entries.filter((entry) => /\.search(?:\.exact|\.no_stem)?$/u.test(nameOf(entry))).flatMap((entry) => alternatives(valueOf(entry)));
+	const topics = entries.filter((entry) => nameOf(entry) === "topics.id").flatMap((entry) => valueOf(entry).split("|").map((topic) => topic.toUpperCase()));
+	return { searches, topics };
+}
+
+/** A filter value's `|` alternatives, leaving any `|` inside a quoted phrase alone, each without a negating `!`. */
+function alternatives(value: string) {
+	return (value.match(/(?:"[^"]*"|[^|"])+/gu) ?? []).map((alternative) => alternative.replace(/^!/u, ""));
+}
+
+/** A search text's own operators; `stemmed` and `where` belong to OQL and are words here. */
+const SEARCH_OPERATORS = new Set(["and", "or", "not"]);
+
+/** Every word and phrase a search text looks for, without its brackets, operators and proximity (`~5`, `~5~`). */
+function searchTerms(text: string) {
+	return tokens(text)
+		.filter((token) => token !== "(" && token !== ")" && !/^~\d+~?$/u.test(token))
+		.map((token) => token.replace(/^"|"$/gu, "").trim().toLowerCase())
+		.filter((term) => term && !SEARCH_OPERATORS.has(term));
+}
+
+/** The words and phrases an OQL query's `<field> has ...` clauses look for, and the topics it names. */
+function oqlTerms(oql: string) {
+	const parts = tokens(oql);
+	return {
+		terms: parts.flatMap((_, index) => (searches(parts, index) ? clauseTerms(parts, index + 1) : [])),
+		topics: parts.filter((part) => TOPIC.test(part)),
+	};
+}
+
+/** The words and phrases a search and its filter look for, and the topics the filter names. */
+function searchAndFilterTerms(query: OpenAlexQuery) {
+	const filter = filterParts(query.filter ?? "");
+	const texts = [...(query.search ? [query.search] : []), ...filter.searches];
+	return { terms: texts.flatMap(searchTerms), topics: filter.topics.filter((topic) => TOPIC.test(topic)) };
+}
+
+/**
+ * What the sources search for, each counted once across them, as a reader would count them: the words and phrases
+ * an OQL query's `<field> has ...` clauses or a search text look for, and the OpenAlex topics either names.
+ */
+export function queryTerms(queries: readonly OpenAlexQuery[]) {
+	const read = queries.map((query) => (query.oql ? oqlTerms(query.oql) : searchAndFilterTerms(query)));
+	return {
+		terms: new Set(read.flatMap((query) => query.terms)).size,
+		topics: new Set(read.flatMap((query) => query.topics)).size,
+	};
 }
 
 /** The words and phrases one `has` clause looks for, without its brackets and operators. */
