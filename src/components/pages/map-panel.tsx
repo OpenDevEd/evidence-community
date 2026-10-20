@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { COUNTRY_PARAMS } from "@/constants/misc";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { twMerge } from "@/lib/tw-merge";
+import { buildFacetsQuery } from "@/lib/utils";
 import { RAISED_INPUT, SELECT_ITEM, SELECT_POPOVER, SELECT_TRIGGER } from "./evidence/filter";
 import { COUNTRY_MODES, MEASURES, type CountryMode, type CountryRow, type Measure } from "./map-measure";
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
@@ -123,21 +124,40 @@ export function TipFigures({ total, count, perMillion }: { total: number | undef
 
 /** The page's head, in the panel's darkest grey: what it is, how many countries (or institutions), and what their colours count.
  * Institutions are counted in records only, so they have no measure to choose. */
-function MapIntro({ countries, institutions, measure, onMeasure, titled = true }: { countries: number; institutions?: number; measure: Measure; onMeasure: (next: Measure) => void; titled?: boolean }) {
+function MapIntro({ countries, institutions, measure, onMeasure, titled = true }: { countries: number; /** In the institutions' mode, how many, or null until they arrive. */ institutions?: number | null; measure: Measure; onMeasure: (next: Measure) => void; titled?: boolean }) {
 	const t = useTranslations("ui");
 	const number = (value: React.ReactNode) => <span className="font-semibold tabular-nums text-foreground dark:text-white">{value}</span>;
-	if (institutions !== undefined && !titled) return null;
+	const tabs = <MeasureTabs shown={institutions === undefined} measure={measure} onMeasure={onMeasure} className={titled ? "pt-2.5" : "p-3"} />;
+	// In the phone's sheet the head is only the tabs, so it folds away with them.
+	if (!titled) return tabs;
 	return (
-		<div className={twMerge("px-3 pb-3 pt-3", titled && "border-b border-black/[0.06] bg-[#e8eaef] dark:border-white/[0.08] dark:bg-black/25")}>
-			{titled && <h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">{institutions === undefined ? t("mapTitle") : t("mapInstitutionsTitle")}</h1>}
-			{titled && <p className={twMerge("px-1 text-xs", muted)}>{institutions === undefined ? t.rich("mapCountryCount", { count: countries, number }) : t.rich("mapInstitutionCount", { count: institutions, countries, number })}</p>}
-			{institutions === undefined && (
-				<Tabs aria-label={t("mapColourBy")} selectedKey={measure} onSelectionChange={(key) => onMeasure(key as Measure)} classNames={{ base: "mt-2.5", tabList: "w-full md:w-full", tab: "flex-1 md:flex-1" }}>
-					<Tab key="people" title={t("mapPerMillion")} />
-					<Tab key="records" title={t("mapTotal")} />
-				</Tabs>
-			)}
+		<div className="border-b border-black/[0.06] bg-[#e8eaef] px-3 pb-3 pt-3 dark:border-white/[0.08] dark:bg-black/25">
+			<h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">{institutions === undefined ? t("mapTitle") : t("mapInstitutionsTitle")}</h1>
+			{/* Until the institutions arrive the line keeps its height and says nothing, rather than "0 institutions". */}
+			<p className={twMerge("px-1 text-xs", muted)}>{institutions === undefined ? t.rich("mapCountryCount", { count: countries, number }) : institutions === null ? "\u00a0" : t.rich("mapInstitutionCount", { count: institutions, countries, number })}</p>
+			{tabs}
 		</div>
+	);
+}
+
+/** The measure's tabs. They fold away when the map counts institutions, which have no measure to choose, and unfold when it
+ * counts countries again, so the list below glides instead of jumping. */
+function MeasureTabs({ shown, measure, onMeasure, className }: { shown: boolean; measure: Measure; onMeasure: (next: Measure) => void; className: string }) {
+	const t = useTranslations("ui");
+	const still = useReducedMotion();
+	return (
+		<AnimatePresence initial={false}>
+			{shown && (
+				<motion.div key="measure" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden">
+					<div className={className}>
+						<Tabs aria-label={t("mapColourBy")} selectedKey={measure} onSelectionChange={(key) => onMeasure(key as Measure)} classNames={{ tabList: "w-full md:w-full", tab: "flex-1 md:flex-1" }}>
+							<Tab key="people" title={t("mapPerMillion")} />
+							<Tab key="records" title={t("mapTotal")} />
+						</Tabs>
+					</div>
+				</motion.div>
+			)}
+		</AnimatePresence>
 	);
 }
 
@@ -198,8 +218,8 @@ function CountriesHeading({ measure }: { measure: Measure }) {
  * The library's countries by the chosen measure, a page at a time. The list is the map's key: each bar has its country's colour.
  * Pointing at a row lifts its country on the map; choosing one shows its records, and a chosen one stays marked.
  */
-function CountryList({ rows, chosen, stale, measure, tint, hovered, onHover, onSelect, heading = true }: RowEvents & { rows: CountryRow[]; chosen: string[]; /** The counts are the last search's until the new ones arrive: dimmed and out of reach. */ stale: boolean; measure: Measure; tint: (value: number | null) => string; hovered: string | null; heading?: boolean }) {
-	const { boxRef, listRef, ...fit } = useFittedPages(rows, COUNTRY_ROW);
+function CountryList({ rows, chosen, stale, measure, tint, hovered, onHover, onSelect, heading = true, resetOn }: RowEvents & { /** The search and filters the rows come from: a new one starts at page one. */ resetOn: string; rows: CountryRow[]; chosen: string[]; /** The counts are the last search's until the new ones arrive: dimmed and out of reach. */ stale: boolean; measure: Measure; tint: (value: number | null) => string; hovered: string | null; heading?: boolean }) {
+	const { boxRef, listRef, ...fit } = useFittedPages(rows, COUNTRY_ROW, resetOn);
 	const t = useTranslations("ui");
 	// Under its heading it is named by it; in the phone's sheet, whose bar says it, by its own label.
 	const named = heading ? { "aria-labelledby": "map-countries" } : { "aria-label": t("countries") };
@@ -220,7 +240,7 @@ function CountryList({ rows, chosen, stale, measure, tint, hovered, onHover, onS
 }
 
 /** The institutions' mode: the circles' list, and how pointing at and choosing one reaches the map. */
-export type InstitutionsPanel = { points: InstitutionPoint[]; chosen: string[]; stale: boolean; hovered: string | null; onHover: (key: string | null) => void; onSelect: (point: InstitutionPoint) => void };
+export type InstitutionsPanel = { points: InstitutionPoint[]; /** The counts and places have arrived. */ ready: boolean; chosen: string[]; stale: boolean; hovered: string | null; onHover: (key: string | null) => void; onSelect: (point: InstitutionPoint) => void };
 
 export type PanelProps = { institutions?: InstitutionsPanel; props: Props; /** The places chosen in the map's mode. */ chosen: string[]; mode: CountryMode; onMode: (next: CountryMode) => void; rows: CountryRow[]; /** The counts are the last filters' until the new ones arrive. */ stale: boolean; measure: Measure; onMeasure: (next: Measure) => void; tint: (value: number | null) => string; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void; smallLayout: boolean };
 
@@ -229,14 +249,17 @@ function Search({ props }: { props: Props }) {
 	return <SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search} classNames={RAISED_INPUT} />;
 }
 
+/** The search and filters the panel's rows come from. */
+const rowsOf = (p: PanelProps) => buildFacetsQuery(p.props.queryParams);
+
 /** From 1,280 px wide, one panel down the left, as on the evidence map: the head, the search band, then the countries. */
 export function MapPanel(p: PanelProps) {
 	return (
 		<div className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", p.smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
-				<MapIntro countries={p.rows.length} institutions={p.institutions?.points.length} measure={p.measure} onMeasure={p.onMeasure} />
+				<MapIntro countries={p.rows.length} institutions={p.institutions && (p.institutions.ready ? p.institutions.points.length : null)} measure={p.measure} onMeasure={p.onMeasure} />
 				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10"><SearchRows p={p} /></div>
-				{p.institutions ? <InstitutionList {...p.institutions} /> : <CountryList rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} />}
+				{p.institutions ? <InstitutionList {...p.institutions} resetOn={rowsOf(p)} /> : <CountryList resetOn={rowsOf(p)} rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} />}
 			</div>
 		</div>
 	);
@@ -259,8 +282,8 @@ export function MapSheet(p: PanelProps) {
 			<motion.div layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, SIDE_WIDTH, open ? "h-[50dvh]" : "h-[calc(3.5rem+env(safe-area-inset-bottom))]")}>
 				<SheetBar name={p.institutions ? t("institutions") : t("countries")} open={open} onFold={() => setOpen(!open)} />
 				<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>
-					<MapIntro titled={false} countries={p.rows.length} institutions={p.institutions?.points.length} measure={p.measure} onMeasure={p.onMeasure} />
-					{p.institutions ? <InstitutionList {...p.institutions} heading={false} /> : <CountryList rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={false} />}
+					<MapIntro titled={false} countries={p.rows.length} institutions={p.institutions && (p.institutions.ready ? p.institutions.points.length : null)} measure={p.measure} onMeasure={p.onMeasure} />
+					{p.institutions ? <InstitutionList {...p.institutions} resetOn={rowsOf(p)} heading={false} /> : <CountryList resetOn={rowsOf(p)} rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={false} />}
 				</div>
 			</motion.div>
 		</>

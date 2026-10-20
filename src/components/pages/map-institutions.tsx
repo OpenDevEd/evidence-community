@@ -36,7 +36,8 @@ export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["qu
 			})
 			.sort((a, b) => b.count - a.count);
 	}, [facets, places, totals]);
-	return { points, stale: isValidating && Boolean(facets) };
+	// Until both the counts and the places have arrived there is nothing to show yet, not an empty list.
+	return { points, ready: Boolean(facets && places), stale: isValidating && Boolean(facets) };
 }
 
 /** Institutions in the library's accent, darker than the deepest country so they read over it; a chosen one darker still. */
@@ -130,8 +131,8 @@ function InstitutionRow({ point, rank, top, selected, lifted, onHover, onSelect 
 }
 
 /** The institutions by their records, a page at a time; pointing at one lifts its circle, choosing one shows its records. */
-export function InstitutionList({ points, chosen, stale, hovered, onHover, onSelect, heading = true }: { points: InstitutionPoint[]; chosen: string[]; stale: boolean; hovered: string | null; onHover: (key: string | null) => void; onSelect: (point: InstitutionPoint) => void; heading?: boolean }) {
-	const { boxRef, listRef, ...fit } = useFittedPages(points, ROW);
+export function InstitutionList({ points, ready, chosen, stale, hovered, onHover, onSelect, heading = true, resetOn }: { /** The search and filters the rows come from: a new one starts at page one. */ resetOn: string; points: InstitutionPoint[]; ready: boolean; chosen: string[]; stale: boolean; hovered: string | null; onHover: (key: string | null) => void; onSelect: (point: InstitutionPoint) => void; heading?: boolean }) {
+	const { boxRef, listRef, ...fit } = useFittedPages(points, ROW, resetOn);
 	const t = useTranslations("ui");
 	return (
 		<section ref={boxRef} aria-label={t("institutions")} className={fittedBox(fit.ready, fit.fits)}>
@@ -148,8 +149,8 @@ export function InstitutionList({ points, chosen, stale, hovered, onHover, onSel
 					</li>
 				))}
 			</ol>
-			{!points.length && <p className={twMerge("px-5 text-sm", muted)}>{t("noDataAvailable")}</p>}
-			<Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label={t("institutions")} stale={stale} />
+			{ready && !points.length && <p className={twMerge("px-5 text-sm", muted)}>{t("noDataAvailable")}</p>}
+			{ready && <Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label={t("institutions")} stale={stale} />}
 		</section>
 	);
 }

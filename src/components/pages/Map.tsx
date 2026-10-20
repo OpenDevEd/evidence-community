@@ -720,7 +720,7 @@ export default function Map({ focus, places, counts, pending = false }: { focus?
 			handleInstitutionSelect(point.name);
 		},
 	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect]);
-	const institutionPanel = byInstitution ? { points: institutions.points, chosen: props.queryParams.institution, stale: institutions.stale, hovered: hoveredInstitution, onHover: setHoveredInstitution, onSelect: dotEvents.onSelect } : undefined;
+	const institutionPanel = byInstitution ? { points: institutions.points, ready: institutions.ready, chosen: props.queryParams.institution, stale: institutions.stale, hovered: hoveredInstitution, onHover: setHoveredInstitution, onSelect: dotEvents.onSelect } : undefined;
 
 	const panel = { institutions: institutionPanel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (

@@ -78,12 +78,18 @@ export const FITTED_ROWS = "[&>li]:flex [&>li]:h-[var(--row)] [&>li]:items-cente
  * fit between the list's top and the page numbers, so the numbers sit at the box's foot under a full page on any screen. The
  * server can't know the height, so no row is drawn until the first measure (rows at a guessed height would move), and the list
  * fades in once. The page kept is the
- * one holding the first row shown, so a new size keeps the reader's place.
+ * one holding the first row shown, so a new size keeps the reader's place. A new `resetOn` (the search and filters the rows come
+ * from) starts again from the first page, as the rows are other ones.
  */
-export function useFittedPages<T>(items: T[], rowHeight: number) {
+export function useFittedPages<T>(items: T[], rowHeight: number, resetOn?: string) {
 	const box = useRef<HTMLElement>(null), list = useRef<HTMLOListElement>(null);
 	const [fitted, setFitted] = useState<{ size: number; row: number; fits: boolean } | null>(null);
 	const [first, setFirst] = useState(0);
+	const [rowsOf, setRowsOf] = useState(resetOn);
+	if (resetOn !== rowsOf) {
+		setRowsOf(resetOn);
+		setFirst(0);
+	}
 	useEffect(() => {
 		const element = box.current!, rows = list.current!;
 		const observer = new ResizeObserver(() => {
