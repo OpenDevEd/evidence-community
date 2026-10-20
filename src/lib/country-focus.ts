@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { COUNTRIES } from "@/constants/misc";
-import { COUNTRY_ALIASES } from "@/constants/country-aliases";
+import { COUNTRY_ALIASES, NOT_COUNTRY_PHRASES } from "@/constants/country-aliases";
 import { abstractPlainText } from "@/lib/abstract-text";
 
 function normalizeCountryText(text: string) {
@@ -88,6 +88,10 @@ const countryPattern = new RegExp(
 	`(?:^|[^\\p{L}\\p{N}])(${alternatives})(?=$|[^\\p{L}\\p{N}])`,
 	"giu",
 );
+const notCountryPattern = new RegExp(
+	`(?<![\\p{L}\\p{N}])(?:${NOT_COUNTRY_PHRASES.join("|")})(?![\\p{L}\\p{N}])`,
+	"giu",
+);
 
 export function resolveCountryFocus({
 	title,
@@ -101,7 +105,8 @@ export function resolveCountryFocus({
 	if (countryFocus) return [...new Set(countryFocus)].sort();
 	const text = [title, abstractNote]
 		.map((value) => normalizeCountryText(abstractPlainText(value)))
-		.join("\n");
+		.join("\n")
+		.replace(notCountryPattern, " ");
 	// Do not infer arbitrary ISO codes: "us", "in" and "to" are ordinary words.
 	return [
 		...new Set(

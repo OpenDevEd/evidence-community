@@ -98,6 +98,26 @@ describe("country focus", () => {
 			expect(resolveCountryFocus({ title })).toEqual(countries);
 		},
 	);
+	// Phrases that put Luxembourg, Jersey, Niger or the US at the top of a library's map without being about them.
+	it.each([
+		["Harmonized microdata from the Luxembourg Income Study for 30 countries", []],
+		["Proceedings. Riga, Latvia: Baltija Publishing", []],
+		["Flood risk in New Jersey and British Columbia", []],
+		["Farmers in the Niger Delta and Niger State, Nigeria", ["NG"]],
+		["Guinea savannah maize near the Gulf of Guinea", []],
+		["Monsoon rainfall over the Indian Ocean", []],
+		["A Siamese network scores essays from Mechanical Turk workers", []],
+		["Holland's RIASEC theory among Scots pine foresters", []],
+		["Made possible by the United States Agency for International Development in Kenya", ["KE"]],
+		["Teaching Chinese as a second language in Thai Nguyen, Vietnam", ["VN"]],
+		["Latin American and Central African countries", []],
+		["Students polish their essays with AI", []],
+		["Rural American Indian students", ["US"]],
+		["Essay scoring in Brazilian Portuguese", ["BR"]],
+		["Polish teachers and schools in Luxembourg", ["LU", "PL"]],
+	])("does not read a country into a phrase that names something else: %s", (title, countries) => {
+		expect(resolveCountryFocus({ title })).toEqual(countries);
+	});
 	it("keeps the title and abstract from becoming one country name", () => {
 		expect(
 			resolveCountryFocus({
