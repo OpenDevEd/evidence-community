@@ -254,7 +254,7 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 .nf-links, .nf-step, .nf-name { display: none !important; }
 ${rules.join("\n")}`;
 	}
-	// Without a measurement the fixed xl and 2xl breakpoints decide. The name shows only with the widest of several
+	// Without a measurement the fixed xl and 2xl breakpoints decide. The header's name shows only with the widest of several
 	// arrangements, from 2xl: the short one, or the full one when it has none (the last name the logo draws).
 	const queries = Array.from({ length: stepCount }, (_, step) =>
 				// The narrowest step takes the links' breakpoint, even when it is the only one.
@@ -270,7 +270,7 @@ ${rules.join("\n")}`;
 	.nf-step { display: none !important; }
 	.nf-step-${step} { display: flex !important; }
 	.nf-links { display: flex !important; }
-	.nf-compact { display: none !important; }${step === 0 && stepCount > 1 ? "\n\t.nf-name:last-child { display: inline !important; }" : ""}
+	.nf-compact { display: none !important; }${step === 0 && stepCount > 1 ? "\n\t.navbar-bar .nf-name:last-child { display: inline !important; }" : ""}
 }`,
 		);
 	return `
