@@ -16,6 +16,7 @@ import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import useSWR from "swr";
 import type { FacetsGetResponse } from "@/app/api/facets/types";
 import { buildFacetsQuery, fetcher } from "@/lib/utils";
+import { RESULT_PARAMS } from "@/lib/searchParams";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
@@ -23,12 +24,13 @@ import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
 import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type CountryRow, type Measure } from "./map-measure";
-import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
+import { MapPanel, MapSheet, SIDE_WIDTH, TipFigures, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
 import { DOT, InstitutionDots, InstitutionMarks, InstitutionTip, useInstitutionPoints, type DotEvents } from "./map-institutions";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 
 function MouseTooltip({
 	content,
@@ -171,7 +173,7 @@ function useCountryTooltip() {
 }
 
 /** Where choosing a country in this mode puts it: the country focus filter, or the authors' countries. */
-const choosePlace = (props: ReturnType<typeof useItemsList>, mode: CountryMode) => (mode === "authors" ? props.handleAuthorCountrySelect : props.handleCountrySelect);
+const choosePlace = (props: ReturnType<typeof useItemsList>, mode: CountryMode) => (mode === "focus" ? props.handleCountrySelect : props.handleAuthorCountrySelect);
 
 /** With the results closed, they open next time on their first page in the default order. */
 function useFreshResults(props: ReturnType<typeof useItemsList>) {
@@ -247,7 +249,7 @@ type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: s
 /** The outlines the globe draws: the countries, and Antarctica, which has no records and isn't in the countries file. */
 type World = { countries: Feature[]; antarctica: Feature[] };
 /** A country on the map: `location` is its place in the region filter, when it has one. */
-type Country = { code?: string; location?: string; name: string; count: number; value: number | null; selected: boolean };
+type Country = { code?: string; location?: string; name: string; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; value: number | null; selected: boolean };
 type Anchor = { x: number; y: number } | null;
 /** Each country's place on the globe, by code. */
 type Places = Record<string, [number, number]>;
@@ -271,10 +273,10 @@ const START_ZOOM = 1.8;
 /** How far past the screen's edges the map is drawn on a wide screen, so sliding it towards a chosen country never shows its edge. */
 const PAD = 600;
 
-function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure): Country {
+function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure, totals?: Record<string, number>): Country {
 	const code = A3ToA2[geo.id] as string | undefined;
 	if (!code) return { name: geo.properties.name, count: 0, value: null, selected: false };
-	return placedCountry(code, geo, facet[code] ?? 0, chosen, measure);
+	return { ...placedCountry(code, geo, facet[code] ?? 0, chosen, measure), total: totals && (totals[code] ?? 0) };
 }
 
 /** A country the library knows by code: where the region filter puts it, its records, its value, and whether it is chosen. */
@@ -414,7 +416,7 @@ function isPress(event: React.KeyboardEvent) {
 	return event.key === "Enter" || event.key === " ";
 }
 
-/** The country pointed at: its flag and name, then its numbers. */
+/** The country pointed at: its flag and name, then its figures in the whole library and, while the map is narrowed, now. */
 function CountryTip({ country }: { country: Country }) {
 	return (
 		<div className="flex flex-col gap-0.5 px-1 py-0.5">
@@ -422,21 +424,7 @@ function CountryTip({ country }: { country: Country }) {
 				{country.code && <CountryFlag countryCode={country.code} className="h-3 w-[1.125rem] rounded-[2px]" />}
 				{country.name}
 			</div>
-			<TipCounts code={country.code} count={country.count} />
-		</div>
-	);
-}
-
-/** Its records for each million people, where its population is known and it has records, and its records. */
-function TipCounts({ code, count }: { code?: string; count: number }) {
-	const { rate } = useValueFormat();
-	const t = useTranslations("ui");
-	const people = perPerson(code, count);
-	const number = (value: ReactNode) => <strong className="font-semibold tabular-nums text-black dark:text-white">{value}</strong>;
-	return (
-		<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
-			{people !== null && <span>{t.rich("mapPerMillionValue", { value: rate(people), number })}</span>}
-			<span>{t.rich("resourcesCount", { count, number })}</span>
+			<TipFigures total={country.total} count={country.count} perMillion={(count) => perPerson(country.code, count)} />
 		</div>
 	);
 }
@@ -647,6 +635,11 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
+/** The whole library's counts, with no filter at all, for the tooltips' first line. With none on the page this is the same request. */
+function useLibraryCounts() {
+	return useSWR<FacetsGetResponse>(buildFacetsQuery({}), fetcher, COUNTS_OPTIONS).data;
+}
+
 /** The counts the answer gives for the mode, or the server's, or none. */
 const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initial?: Record<string, number>) =>
 	(data?.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? initial ?? NO_COUNTS) as Record<string, number>;
@@ -668,7 +661,12 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	const shade: Measure = byInstitution ? "records" : measure;
 	const rows = countryRows(facet, shade);
 	const max = scaleTop(rows, shade);
-	const institutions = useInstitutionPoints(props.queryParams, byInstitution);
+	const library = useLibraryCounts();
+	// A search, a filter or a chosen place narrows the map: the tooltips then give the whole library's figures first.
+	// The scope always has a value, and alone narrows nothing.
+	const narrowed = RESULT_PARAMS.some((key) => key !== "scope" && props.queryParams[key].length > 0);
+	const totals = narrowed && library ? countsIn(library, mode) : undefined;
+	const institutions = useInstitutionPoints(props.queryParams, byInstitution, narrowed ? (library?.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined) : undefined);
 	const [hoveredInstitution, setHoveredInstitution] = useState<string | null>(null);
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
@@ -744,7 +742,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 					offset={offset}
 					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen, shade);
+						const country = countryOf(geo, facet, chosen, shade, totals);
 						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
 					overlay={byInstitution && view ? (

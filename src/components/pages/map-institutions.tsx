@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, type ReactNode } from "react";
+import { memo, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import type { GeoProjection } from "d3-geo";
@@ -13,17 +13,17 @@ import { buildFacetsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { FITTED_ROWS, fittedBox, muted, Pages, useFittedPages } from "./evidence/lists";
-import { useValueFormat } from "./map-panel";
+import { TipFigures, useValueFormat } from "./map-panel";
 
 /** An institution on the map: its name as the records spell it, its records under the page's filters, and where it is. */
-export type InstitutionPoint = { key: string; name: string; count: number; longitude: number; latitude: number; city: string; country: string };
+export type InstitutionPoint = { key: string; name: string; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; longitude: number; latitude: number; city: string; country: string };
 type Places = Record<string, [number, number, string, string]>;
 
 const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
 /** The institutions' record counts under the page's filters, chosen institutions included, so choosing one shows it and the
  * institutions its records share authors with. Joined with where each one is. */
-export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["queryParams"], enabled: boolean) {
+export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["queryParams"], enabled: boolean, totals?: Record<string, number>) {
 	const { data: facets, isValidating } = useSWR<FacetsGetResponse>(enabled ? buildFacetsQuery(params) : null, fetcher, ONCE);
 	const { data: places } = useSWR<Places>(enabled ? "/institution-locations" : null, fetcher, ONCE);
 	const points = useMemo(() => {
@@ -32,10 +32,10 @@ export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["qu
 			.flatMap(([name, count]): InstitutionPoint[] => {
 				const key = institutionNameKey(name);
 				const place = places?.[key];
-				return place ? [{ key, name, count: Number(count), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }] : [];
+				return place ? [{ key, name, count: Number(count), total: totals && (totals[name] ?? 0), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }] : [];
 			})
 			.sort((a, b) => b.count - a.count);
-	}, [facets, places]);
+	}, [facets, places, totals]);
 	return { points, stale: isValidating && Boolean(facets) };
 }
 
@@ -95,20 +95,16 @@ export function InstitutionMarks({ points, projection, chosen, hovered }: { poin
 	);
 }
 
-/** The institution pointed at: its flag and name, where it is, and its records. */
+/** The institution pointed at: its flag and name, where it is, and its figures in the whole library and, while the map is narrowed, now. */
 export function InstitutionTip({ point }: { point: InstitutionPoint }) {
-	const t = useTranslations("ui");
-	const number = (value: ReactNode) => <strong className="font-semibold tabular-nums text-black dark:text-white">{value}</strong>;
 	return (
 		<div className="flex max-w-72 flex-col gap-0.5 px-1 py-0.5">
 			<div className="flex items-center gap-2 text-sm font-semibold">
 				<CountryFlag countryCode={point.country} className="h-3 w-[1.125rem] shrink-0 rounded-[2px]" />
 				<span className="min-w-0">{point.name}</span>
 			</div>
-			<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
-				<span>{[point.city, COUNTRIES[point.country]].filter(Boolean).join(", ")}</span>
-				<span>{t.rich("resourcesCount", { count: point.count, number })}</span>
-			</div>
+			<div className="text-xs text-black/60 dark:text-white/60">{[point.city, COUNTRIES[point.country]].filter(Boolean).join(", ")}</div>
+			<TipFigures total={point.total} count={point.count} />
 		</div>
 	);
 }
