@@ -66,6 +66,15 @@ type Section = {
 	items: Option[];
 };
 
+/** The country, city and location of an institution chosen from OpenAlex. */
+const fromOpenAlex = (match: OpenAlexInstitution): InstitutionCountry => ({
+	countryCode: match.countryCode,
+	openalexId: match.id,
+	city: match.city || null,
+	latitude: match.latitude,
+	longitude: match.longitude,
+});
+
 const place = (match: Pick<OpenAlexInstitution, "city" | "countryCode">) =>
 	[match.city, match.countryCode && countryFocusNames[match.countryCode]]
 		.filter(Boolean)
@@ -281,11 +290,7 @@ export function InstitutionInput({
 	const choose = (option: Option) => {
 		add(option.name, option.key);
 		if (option.match?.countryCode)
-			void countries.save(option.name, {
-				countryCode: option.match.countryCode,
-				openalexId: option.match.id,
-				city: option.match.city || null,
-			});
+			void countries.save(option.name, fromOpenAlex(option.match));
 	};
 	return (
 		<div className="space-y-2" data-field-kind="institution-list">
@@ -745,13 +750,7 @@ function CountryChooser({
 					<button
 						key={match.id}
 						type="button"
-						onClick={() =>
-							onChoose({
-								countryCode: match.countryCode,
-								openalexId: match.id,
-								city: match.city || null,
-							})
-						}
+						onClick={() => onChoose(fromOpenAlex(match))}
 						className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-black/[0.05] dark:hover:bg-white/[0.06]"
 					>
 						<CountryFlag
@@ -803,6 +802,8 @@ function CountryChooser({
 							countryCode: String(key),
 							openalexId: null,
 							city: null,
+							latitude: null,
+							longitude: null,
 						});
 				}}
 			>

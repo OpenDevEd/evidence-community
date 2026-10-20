@@ -99,6 +99,17 @@ export const openAlexPageSchema = z
 
 export type OpenAlexPage = z.infer<typeof openAlexPageSchema>;
 
+export const openAlexInstitutionLocationsSchema = z
+	.object({
+		results: z.array(
+			z.object({
+				id: z.string(),
+				geo: z.object({ latitude: z.number().min(-90).max(90).nullish(), longitude: z.number().min(-180).max(180).nullish() }).loose().nullish(),
+			}).loose(),
+		).max(OPENALEX_MAX_PAGE_SIZE),
+	})
+	.loose();
+
 export const openAlexGroupsSchema = z
 	.object({
 		group_by: z.array(z.object({ key: z.string(), count: z.number().int().nonnegative() }).loose()),

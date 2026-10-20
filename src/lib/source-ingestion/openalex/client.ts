@@ -3,6 +3,7 @@ import { readBoundedResponse } from "../read-bounded-response";
 import {
 	OPENALEX_MAX_PAGE_SIZE,
 	openAlexGroupsSchema,
+	openAlexInstitutionLocationsSchema,
 	openAlexPageSchema,
 	openAlexQuerySchema,
 	type OpenAlexPage,
@@ -225,6 +226,24 @@ export class OpenAlexClient {
 			cursor = page.results.length > 0 ? page.meta.next_cursor : null;
 		}
 		return open;
+	}
+
+	/**
+	 * Where OpenAlex places each institution, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` ids such as "I40120149". An
+	 * institution OpenAlex does not know, or places nowhere, is left out.
+	 */
+	async institutionLocations(ids: readonly string[]) {
+		if (!ids.length || ids.length > OPENALEX_MAX_IDS_PER_FILTER) {
+			throw new Error(`An OpenAlex institution filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} ids`);
+		}
+		const url = new URL("https://api.openalex.org/institutions");
+		url.searchParams.set("filter", `openalex:${ids.join("|")}`);
+		url.searchParams.set("select", "id,geo");
+		url.searchParams.set("per_page", String(OPENALEX_MAX_IDS_PER_FILTER));
+		url.searchParams.set("api_key", this.options.apiKey);
+		const { results } = openAlexInstitutionLocationsSchema.parse(await this.read(url, undefined));
+		return new Map(results.flatMap(({ id, geo }) =>
+			geo?.latitude == null || geo.longitude == null ? [] : [[id.split("/").pop()!, { latitude: geo.latitude, longitude: geo.longitude }] as const]));
 	}
 
 	/**

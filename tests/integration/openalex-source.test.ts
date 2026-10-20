@@ -74,6 +74,10 @@ const work = (
 	topics: [{ id: "https://openalex.org/T10", score: 0.7 }],
 });
 
+/** A fake OpenAlex for tests about works: the import's closing institution lookup finds nothing. */
+const worksOnly = (request: typeof fetch): typeof fetch => async (input, init) =>
+	new URL(String(input)).pathname === "/institutions" ? Response.json({ meta: { count: 0 }, results: [] }) : request(input, init);
+
 it("resumes after a failed page and shares identities across concurrent searches without flattening affiliations", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const manual = await createNativeItemDraft(db, {
@@ -102,7 +106,7 @@ it("resumes after a failed page and shares identities across concurrent searches
 					credentialResolver: async () => "test-key",
 					heartbeat: async () => {},
 				},
-				{ fetch: request, sleep: async () => {} },
+				{ fetch: worksOnly(request), sleep: async () => {} },
 			);
 		};
 		await expect(
@@ -443,7 +447,7 @@ it("processes up to 48 PDFs at once, four per host, and writes a large page in o
 			},
 			{
 				attachmentProcessor: processor,
-				fetch: async (url) => {
+				fetch: worksOnly(async (url) => {
 					pageSizes.push(new URL(String(url)).searchParams.get("per_page"));
 					return Response.json({
 						meta: { count: ids.length, next_cursor: null },
@@ -452,7 +456,7 @@ it("processes up to 48 PDFs at once, four per host, and writes a large page in o
 							best_oa_location: { is_oa: true, pdf_url: pdfUrl(id), license: "cc-by" },
 						})),
 					});
-				},
+				}),
 			},
 		);
 
@@ -540,14 +544,14 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 				},
 				{
 					attachmentProcessor: processor,
-					fetch: async (url) => {
+					fetch: worksOnly(async (url) => {
 						const perPage = new URL(String(url)).searchParams.get("per_page");
 						pageSizes.push(perPage);
 						// OpenAlex added W4 between the records stage and the PDF stage.
 						const pdfStage = pageSizes.length > 1 || !failHeartbeat;
 						const page = pdfStage ? [...results, withPdf(4)] : results;
 						return Response.json({ meta: { count: page.length, next_cursor: null }, results: page });
-					},
+					}),
 				},
 			);
 		};
@@ -598,11 +602,11 @@ it("restarts a PDF stage from the records when it must scan in full, and tags wo
 				{
 					attachmentProcessor: processor,
 					sleep: async () => {},
-					fetch: async (input) => {
+					fetch: worksOnly(async (input) => {
 						const url = new URL(String(input));
 						requests.push({ perPage: url.searchParams.get("per_page"), cursor: url.searchParams.get("cursor") });
 						return respond(url);
-					},
+					}),
 				},
 			);
 		const page = (ids: number[]) => Response.json({ meta: { count: ids.length, next_cursor: null }, results: ids.map((id) => work(id)) });
@@ -869,6 +873,42 @@ it("writes a page whose works carry more institution facts than one batch takes"
 		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-affiliations"));
 		// A scan that was not sliced saves no slice key, so an older release can still read its cursor.
 		expect(saved!.syncCursor).not.toHaveProperty("slices");
+	});
+}, 120_000);
+
+it("locates the institutions an import meets for the first time, leaving hand-set countries and known locations alone", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-locations", provider: "openalex", scopeKind: "query", config: settings });
+		await db.insert(institutionCountry).values([
+			{ nameKey: "coast college", countryCode: "TZ" },
+			{ nameKey: "makerere university", countryCode: "UG", openalexId: "I30", latitude: 0.3, longitude: 32.6 },
+		]);
+		const asked: string[] = [];
+		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-locations"));
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} },
+			{
+				fetch: async (input) => {
+					const url = new URL(String(input));
+					if (url.pathname !== "/institutions") return Response.json({ meta: { count: 1, next_cursor: null }, results: [work(1)] });
+					asked.push(url.searchParams.get("filter")!);
+					return Response.json({
+						meta: { count: 2 },
+						results: [
+							{ id: "https://openalex.org/I10", geo: { city: "Nairobi", latitude: -1.28, longitude: 36.82 } },
+							{ id: "https://openalex.org/I30", geo: { city: "Kampala", latitude: 9, longitude: 9 } },
+						],
+					});
+				},
+			},
+		);
+		expect(asked).toEqual(["openalex:I10"]);
+		const rows = await db.select().from(institutionCountry);
+		expect(rows.map(({ nameKey, latitude, longitude }) => ({ nameKey, latitude, longitude })).sort((a, b) => a.nameKey.localeCompare(b.nameKey))).toEqual([
+			{ nameKey: "coast college", latitude: null, longitude: null },
+			{ nameKey: "makerere university", latitude: 0.3, longitude: 32.6 },
+			{ nameKey: "university of nairobi", latitude: -1.28, longitude: 36.82 },
+		]);
 	});
 }, 120_000);
 
