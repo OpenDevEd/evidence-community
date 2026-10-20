@@ -5,6 +5,7 @@ import { itemSourceValue, sourceTopicAssignment } from "@/db/schema/topics";
 import { sourceOverridesByItem } from "@/lib/admin/source-fields";
 import { importedTopics, effectiveSourceTopics } from "@/lib/topics/assignments";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
+import { reindexAuthorsAt } from "@/lib/admin/institution-countries";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import { LIBRARY_OWNED_PAYLOAD_FIELDS } from "@/lib/admin/item-fields";
 import { preserveCreatorProfileLinks } from "@/lib/admin/creator-profile-links";
@@ -1053,8 +1054,11 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		if (batch.institutionCountries.length) {
 			const rows = new Map(batch.institutionCountries.map(({ name, ...facts }) => [institutionNameKey(name), facts]));
 			// Four parameters a fact: one statement would pass PostgreSQL's limit of 65,535 near 16,000 facts.
+			const namesByKey = new Map(batch.institutionCountries.map(({ name }) => [institutionNameKey(name), name]));
 			for (const chunk of chunkValues([...rows], RELATION_CHUNK_SIZE)) {
-				await transaction.insert(institutionCountry).values(chunk.map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing();
+				const added = await transaction.insert(institutionCountry).values(chunk.map(([nameKey, facts]) => ({ nameKey, ...facts }))).onConflictDoNothing().returning({ nameKey: institutionCountry.nameKey });
+				// A country known for the first time also places records already here with an author at that institution.
+				if (added.length) await reindexAuthorsAt(transaction, added.map(({ nameKey }) => namesByKey.get(nameKey)!), { folded: false });
 			}
 		}
 

@@ -340,6 +340,7 @@ describe("the chat beside the search results", () => {
 		const context = {
 			search: "",
 			country: ["KE"],
+			author_country: [],
 			collections: ["SACU3G3A"],
 			range: "2024-2026",
 			scope: "title",

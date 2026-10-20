@@ -37,6 +37,7 @@ describe("the library result set the assistant can see", () => {
 			range: "2019-2024",
 			institution: ["EdTech Hub"],
 			country: [],
+			author_country: [],
 			author: "",
 			collections: [],
 			topics: [],
