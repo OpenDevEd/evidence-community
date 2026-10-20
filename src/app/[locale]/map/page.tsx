@@ -29,7 +29,7 @@ export default async function MapPage({ searchParams }: Props) {
 	preload("/antarctica.json", { as: "fetch", crossOrigin: "anonymous" });
 	const places = placesOf((await getWorldMap()).shapes);
 	const params = await searchParams;
-	const mode: CountryMode = params.by === "authors" ? "authors" : "focus";
+	const mode: CountryMode = params.by === "authors" || params.by === "institutions" ? params.by : "focus";
 	// The whole library's counts place the map; the counts for the page's filters, every country of the mode kept, colour it and fill the list from the first frame.
 	const [library, filtered] = await Promise.all([countsOf({}, mode), countsOf({ ...loadSearchParams(params), [modeParam(mode)]: [] }, mode)]);
 	return <Map focus={library && middleOf(places, library)} places={places} counts={filtered} />;

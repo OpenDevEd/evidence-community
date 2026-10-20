@@ -236,9 +236,9 @@ export function useFilters() {
 		[params.study, setParams],
 	);
 
-	/** Drops every chosen country, of either kind, and keeps the other filters. */
+	/** Drops every place chosen on the map, countries of either kind and institutions, and keeps the other filters. */
 	const handleCountriesClear = useCallback(() => {
-		setParams({ country: [], author_country: [] });
+		setParams({ country: [], author_country: [], institution: [] });
 	}, [setParams]);
 
 	const handleClearFilters = useCallback(() => {

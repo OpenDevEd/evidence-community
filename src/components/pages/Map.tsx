@@ -24,6 +24,7 @@ import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
 import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type Measure } from "./map-measure";
 import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
+import { InstitutionDots, InstitutionLegend, InstitutionTip, stepTint, useInstitutionPoints, type InstitutionPoint } from "./map-institutions";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -71,9 +72,10 @@ function MouseTooltip({
 	);
 }
 
-/** What the results sheet's bar calls them: the chosen country, how many are chosen, or a search's results. */
-function resultsName(chosen: string[], t: ReturnType<typeof useTranslations<"ui">>) {
-	if (chosen.length > 1) return t("mapChosenCount", { count: chosen.length });
+/** What the results sheet's bar calls them: the chosen institution, the chosen country, how many are chosen, or a search's results. */
+function resultsName(chosen: string[], t: ReturnType<typeof useTranslations<"ui">>, institutions: string[] = []) {
+	if (institutions.length === 1 && !chosen.length) return institutions[0];
+	if (chosen.length + institutions.length > 1) return t("mapChosenCount", { count: chosen.length + institutions.length });
 	const code = chosen[0]?.split(" > ").at(-1);
 	return code ? COUNTRIES[code] ?? code : t("resultsLabel");
 }
@@ -147,8 +149,8 @@ function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolea
 	);
 }
 
-/** A search opens the results as choosing a country does. */
-const resultsShown = ({ country, author_country, search }: { country: string[]; author_country: string[]; search: string }) => country.length + author_country.length > 0 || Boolean(search);
+/** A search opens the results as choosing a country or an institution does. */
+const resultsShown = ({ country, author_country, institution, search }: { country: string[]; author_country: string[]; institution: string[]; search: string }) => country.length + author_country.length + institution.length > 0 || Boolean(search);
 
 /** The country under the pointer or the keyboard: its tooltip, where it shows, and which country is lifted. */
 function useCountryTooltip() {
@@ -165,7 +167,7 @@ function useCountryTooltip() {
 		setTooltipContent(null);
 		setHovered(null);
 	};
-	return { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry };
+	return { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor };
 }
 
 /** Where choosing a country in this mode puts it: the country focus filter, or the authors' countries. */
@@ -182,7 +184,7 @@ function useFreshResults(props: ReturnType<typeof useItemsList>) {
 				props.handlePageChange(1);
 			}
 		}
-	}, [props.queryParams.country, props.queryParams.author_country, props.queryParams.search]);
+	}, [props.queryParams.country, props.queryParams.author_country, props.queryParams.institution, props.queryParams.search]);
 }
 
 /** The places chosen in either mode. */
@@ -208,7 +210,7 @@ function resultsClass(open: boolean, small: boolean) {
  */
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const shown = resultsShown(props.queryParams);
-	const [open, setOpen] = useResultsOpen(shown, chosenPlaces(props.queryParams));
+	const [open, setOpen] = useResultsOpen(shown, [...chosenPlaces(props.queryParams), ...props.queryParams.institution]);
 	const small = useLibraryConfig().theme.layout === "small";
 	const t = useTranslations("ui");
 	const motionProps = resultsMotion(useBreakpoint("xl"), useReducedMotion());
@@ -224,7 +226,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 					className={resultsClass(open, small)}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<ResultsBar name={resultsName(chosenPlaces(props.queryParams), t)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
+						<ResultsBar name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
@@ -515,7 +517,7 @@ function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof
  * Zooming and panning move the drawn map as one composited layer with a CSS transform, so Firefox redraws nothing while a gesture runs;
  * when it ends, the zoom is committed to the SVG and the outlines are redrawn sharp at the new scale. Nothing here is blurred or
  * transitioned: Firefox redraws a blur, or a fading fill, across the whole globe on every frame, which kept a core or more busy. */
-function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode }) {
+function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode; /** Drawn over the countries, such as the institutions' circles. */ overlay?: ReactNode }) {
 	const stage = useRef<HTMLDivElement>(null);
 	// The buttons zoom about the middle of the space beside the panel, in the stage's own coordinates, wherever the map is slid.
 	const middle = useEffectEvent((): [number, number] => [(view.frame.listWidth + view.frame.width) / 2 + view.frame.pad - offset, view.frame.height / 2 + view.frame.pad]);
@@ -620,6 +622,7 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 						</g>
 						{world.countries.map((geo, index) => <Fragment key={index}>{renderCountry(geo, drawn.countries[index])}</Fragment>)}
 						<path aria-hidden d={drawn.sea} fill="none" stroke="var(--map-sea-rim)" style={{ strokeWidth: line(1) }} />
+						{overlay}
 					</g>
 				</svg>
 			</div>
@@ -650,7 +653,7 @@ const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initia
 
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
 export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
-	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry } = useCountryTooltip();
+	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor } = useCountryTooltip();
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
 		disableViewSwitch: true,
@@ -660,8 +663,12 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	const [mode, setMode] = useCountryMode();
 	const chosen = props.queryParams[modeParam(mode)];
 	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
-	const rows = countryRows(facet, measure);
+	const byInstitution = mode === "institutions";
+	// Institutions shade their countries by records, in steps, as Björn's map does.
+	const rows = countryRows(facet, byInstitution ? "records" : measure);
 	const max = scaleTop(rows, measure);
+	const institutions = useInstitutionPoints(props.queryParams, byInstitution);
+	const [hoveredInstitution, setHoveredInstitution] = useState<string | null>(null);
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
 	const smallLayout = useLibraryConfig().theme.layout === "small";
@@ -694,7 +701,24 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	};
 	useFreshResults(props);
 
-	const panel = { props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const showInstitution = useEffectEvent((point: InstitutionPoint) => {
+		setTooltipAnchor(null);
+		setTooltipContent(<InstitutionTip point={point} />);
+		setHoveredInstitution(point.key);
+	});
+	const hideInstitution = useEffectEvent(() => {
+		setTooltipContent(null);
+		setHoveredInstitution(null);
+	});
+	const selectInstitution = useEffectEvent((point: InstitutionPoint) => {
+		hideCountry();
+		props.handleInstitutionSelect(point.name);
+	});
+	// Stable for the memoised circles, so pointing at one doesn't redraw thousands.
+	const dotEvents = useMemo(() => ({ onShow: (point: InstitutionPoint) => showInstitution(point), onHide: () => hideInstitution(), onSelect: (point: InstitutionPoint) => selectInstitution(point) }), []);
+	const institutionPanel = byInstitution ? { points: institutions.points, chosen: props.queryParams.institution, stale: institutions.stale, hovered: hoveredInstitution, onHover: setHoveredInstitution, onSelect: dotEvents.onSelect } : undefined;
+
+	const panel = { institutions: institutionPanel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -709,15 +733,18 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			<MapSheet {...panel} />
 			<MemoizedItemView props={props} />
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
+			{byInstitution && <InstitutionLegend />}
 			<Suspense fallback={null}>
 				<Globe
 					view={view}
 					offset={offset}
 					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen, measure);
-						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
+						const country = countryOf(geo, facet, chosen, byInstitution ? "records" : measure);
+						const style = shapeStyle(country, hovered, max);
+						return <CountryShape d={d} country={country} style={byInstitution && style.stroke === "var(--map-sea)" ? { ...style, fill: stepTint(country.count) } : style} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
+					overlay={byInstitution && view ? <InstitutionDots points={institutions.points} projection={view.projection} chosen={props.queryParams.institution} hovered={hoveredInstitution} {...dotEvents} /> : null}
 				/>
 			</Suspense>
 		</main>
