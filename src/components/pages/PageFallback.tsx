@@ -66,7 +66,7 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	newlib: (id) => id && <ItemLoading />,
 	citation: (id) => id && <CitationLoading />,
 	statistics: () => <StatisticsPage />,
-	map: () => <Map places={{}} />,
+	map: () => <Map places={{}} pending />,
 	privacy: () => <PolicyLayoutPlaceholder {...POLICY_PAGES.privacy} />,
 	terms: () => <PolicyLayoutPlaceholder {...POLICY_PAGES.terms} />,
 	"cookie-policy": () => <PolicyLayoutPlaceholder {...POLICY_PAGES["cookie-policy"]} />,

@@ -5,12 +5,13 @@ import POPULATION from "@/constants/population.json";
 export const MEASURES = ["people", "records"] as const;
 export type Measure = (typeof MEASURES)[number];
 
-/** What places a record on the map: where it is about (its country focus), or where its authors work. */
-export const COUNTRY_MODES = ["focus", "authors"] as const;
+/** What places a record on the map: where it is about (its country focus), where its authors work, or the authors' institutions
+ * themselves, over their countries. */
+export const COUNTRY_MODES = ["focus", "authors", "institutions"] as const;
 export type CountryMode = (typeof COUNTRY_MODES)[number];
-/** The search field a mode counts, and the address list choosing a country goes into. */
-export const modeField = (mode: CountryMode) => (mode === "authors" ? "authorCountry" : "country");
-export const modeParam = (mode: CountryMode) => (mode === "authors" ? "author_country" : "country");
+/** The search field a mode counts, and the address list choosing a country goes into. Institutions shade the authors' countries. */
+export const modeField = (mode: CountryMode) => (mode === "focus" ? "country" : "authorCountry");
+export const modeParam = (mode: CountryMode) => (mode === "focus" ? "country" : "author_country");
 
 const PEOPLE = POPULATION as Record<string, number>;
 
@@ -40,3 +41,23 @@ export function scaleTop(rows: { value: number | null }[], measure: Measure) {
 	if (!values.length) return 1;
 	return measure === "people" ? values[Math.floor(values.length * 0.05)] : values[0];
 }
+
+/** Whether the library offers a mode: the institutions' only where its institution filter isn't hidden, as the institutions are
+ * counted and chosen through it. */
+const offered = (mode: CountryMode, institutions: boolean) => institutions || mode !== "institutions";
+
+/** The mode the address asks for, where the library offers it: Country Focus otherwise. */
+export const modeOf = (by: unknown, institutions: boolean): CountryMode => COUNTRY_MODES.find((mode) => mode === by && offered(mode, institutions)) ?? "focus";
+
+/** The modes the library offers. */
+export const modesOf = (institutions: boolean) => COUNTRY_MODES.filter((mode) => offered(mode, institutions));
+
+/** What colours the countries: in the institutions' mode their records, as the circles already stand for institutions. */
+export const shadeOf = (mode: CountryMode, measure: Measure): Measure => (mode === "institutions" ? "records" : measure);
+
+/** What the panel lists in a mode: institutions in the institutions' mode, else countries. */
+export const listOf = (mode: CountryMode) => (mode === "institutions" ? "institutions" : "countries");
+
+/** A place's records in the whole library while the map is narrowed (`totals` given). Nothing where the library's counts don't
+ * have it: an institution past the facets' limit, which isn't none. */
+export const totalIn = (totals: Record<string, number> | undefined, key: string) => totals?.[key];

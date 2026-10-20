@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { countryRows, scaleTop } from "@/components/pages/map-measure";
+import { countryRows, modeOf, modesOf, scaleTop } from "@/components/pages/map-measure";
 
 // Kenya 241 records in 57.5 million people, Monaco 16 in 38,341, China 9,010 in 1.41 billion; Anguilla has no population figure.
 const FACET = { KE: 241, MC: 16, CN: 9010, AI: 5, ZZ: 3 };
@@ -22,4 +22,13 @@ it("tops the per-person colour at the 95th percentile so one tiny state doesn't 
 	expect(scaleTop(values, "people")).toBe(380);
 	expect(scaleTop(values, "records")).toBe(400);
 	expect(scaleTop([{ value: null }], "people")).toBe(1);
+});
+
+it("offers the institutions' mode only where the library's institution filter isn't hidden, and falls back to Country Focus", () => {
+	expect(modesOf(true)).toEqual(["focus", "authors", "institutions"]);
+	expect(modesOf(false)).toEqual(["focus", "authors"]);
+	expect(modeOf("institutions", true)).toBe("institutions");
+	expect(modeOf("institutions", false)).toBe("focus");
+	expect(modeOf("authors", false)).toBe("authors");
+	expect(modeOf(undefined, true)).toBe("focus");
 });

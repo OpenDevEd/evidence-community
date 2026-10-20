@@ -73,22 +73,32 @@ const FIXED_ROWS = "[&>li>button]:h-[4.625rem]";
 /** A fitted list's rows each take `--row`, their own height plus a share of the space left under the last whole row, centred in it. */
 export const FITTED_ROWS = "[&>li]:flex [&>li]:h-[var(--row)] [&>li]:items-center";
 
+/** How long a list's box must keep its size before the list is first fitted to it, in milliseconds: longer than a frame. */
+const SETTLE_MS = 80;
+
 /**
  * A list in pages as tall as its box: the box's height (a ResizeObserver, the outside system) sets how many rows of `rowHeight`
  * fit between the list's top and the page numbers, so the numbers sit at the box's foot under a full page on any screen. The
  * server can't know the height, so no row is drawn until the first measure (rows at a guessed height would move), and the list
  * fades in once. The page kept is the
- * one holding the first row shown, so a new size keeps the reader's place.
+ * one holding the first row shown, so a new size keeps the reader's place. A new `resetOn` (the search and filters the rows come
+ * from) starts again from the first page, as the rows are other ones.
  */
-export function useFittedPages<T>(items: T[], rowHeight: number) {
+export function useFittedPages<T>(items: T[], rowHeight: number, resetOn?: string) {
 	const box = useRef<HTMLElement>(null), list = useRef<HTMLOListElement>(null);
 	const [fitted, setFitted] = useState<{ size: number; row: number; fits: boolean } | null>(null);
 	const [first, setFirst] = useState(0);
+	const [rowsOf, setRowsOf] = useState(resetOn);
+	if (resetOn !== rowsOf) {
+		setRowsOf(resetOn);
+		setFirst(0);
+	}
 	useEffect(() => {
 		const element = box.current!, rows = list.current!;
-		const observer = new ResizeObserver(() => {
-			// A folded sheet has no height: its page size stays as it was.
-			if (!element.clientHeight) return;
+		let settling: ReturnType<typeof setTimeout> | undefined;
+		let measured = false;
+		const fit = () => {
+			measured = true;
 			// The rows and page numbers are sized in rem: a reader's larger text makes them taller.
 			const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
 			const height = rowHeight * rem, room = element.clientHeight - rows.offsetTop - PAGES_HEIGHT * rem;
@@ -97,11 +107,23 @@ export function useFittedPages<T>(items: T[], rowHeight: number) {
 			// Rounded down to the 1/64 px browsers lay out in, so the rows' sum never passes the room by a fraction.
 			const row = Math.max(height, Math.floor((room / size) * 64) / 64);
 			setFitted((was) => (was?.size === size && was.row === row && was.fits === fits ? was : { size, row, fits }));
+		};
+		const observer = new ResizeObserver(() => {
+			// A folded sheet has no height: its page size stays as it was.
+			if (!element.clientHeight) return;
+			// The first fit waits until the box stops changing size, as when the panel above it unfolds while the list arrives:
+			// fitted at once, a row would show for a frame and go. The list fades in when fitted, so it fades in at its final size.
+			clearTimeout(settling);
+			if (measured) fit();
+			else settling = setTimeout(fit, SETTLE_MS);
 		});
 		observer.observe(element);
 		// What sits above the list (a heading whose font arrives late) moves it down without resizing the box.
 		for (const above of element.children) if (above !== rows && above.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING) observer.observe(above);
-		return () => observer.disconnect();
+		return () => {
+			clearTimeout(settling);
+			observer.disconnect();
+		};
 	}, [rowHeight]);
 	const per = fitted?.size ?? 8;
 	const pages = Math.max(1, Math.ceil(items.length / per));

@@ -16,18 +16,23 @@ import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import useSWR from "swr";
 import type { FacetsGetResponse } from "@/app/api/facets/types";
 import { buildFacetsQuery, fetcher } from "@/lib/utils";
+import { RESULT_PARAMS } from "@/lib/searchParams";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type Measure } from "./map-measure";
-import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
+import { countryRows, listOf, measureOf, modeField, modeOf, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure } from "./map-panel";
+import { TipFigures, useValueFormat } from "./map-figures";
+import { DOT, useInstitutionLayer } from "./map-institutions";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
+import { everyRecordScope, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
 
 function MouseTooltip({
 	content,
@@ -71,11 +76,20 @@ function MouseTooltip({
 	);
 }
 
-/** What the results sheet's bar calls them: the chosen country, how many are chosen, or a search's results. */
-function resultsName(chosen: string[], t: ReturnType<typeof useTranslations<"ui">>) {
+/** A chosen place's name: its country's, by the code that ends it. */
+const placeName = (place: string) => {
+	const code = place.split(" > ").at(-1)!;
+	return COUNTRIES[code] ?? code;
+};
+
+/** The chosen institutions, one for all the spellings of each. */
+const institutionsOf = (names: string[]) => names.filter((name, index) => names.findIndex((other) => institutionNameKey(other) === institutionNameKey(name)) === index);
+
+/** What the results sheet's bar calls them: the chosen institution or country, how many are chosen, or a search's results. */
+function resultsName(places: string[], t: ReturnType<typeof useTranslations<"ui">>, institutions: string[] = []) {
+	const chosen = [...institutionsOf(institutions), ...places.map(placeName)];
 	if (chosen.length > 1) return t("mapChosenCount", { count: chosen.length });
-	const code = chosen[0]?.split(" > ").at(-1);
-	return code ? COUNTRIES[code] ?? code : t("resultsLabel");
+	return chosen[0] ?? t("resultsLabel");
 }
 
 /**
@@ -130,13 +144,14 @@ function resultsMotion(wide: boolean, still: boolean | null) {
 	return { initial: away, exit: away, animate: { opacity: 1, x: 0, y: 0 }, transition, layout: !still && !wide };
 }
 
-/** The sheet's bar: back to the countries, then what the results are of, which folds the sheet (lying on its side, just the name). */
-function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolean; onFold: () => void; onBack: () => void }) {
+/** The sheet's bar: back to the list (`list`, the countries or the institutions), then what the results are of, which folds the
+ * sheet (lying on its side, just the name). */
+function ResultsBar({ name, list, open, onFold, onBack }: { name: string; list: "countries" | "institutions"; open: boolean; onFold: () => void; onBack: () => void }) {
 	const t = useTranslations("ui");
 	const label = t("resultsLabel");
 	return (
 		<div className="flex h-14 shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#e8eaef] pl-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
-			<BackButton to={t("countries")} onBack={onBack} />
+			<BackButton to={t(list)} onBack={onBack} />
 			<h2 className="hidden min-w-0 flex-1 truncate pr-5 text-right text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:block">{name}</h2>
 			{/* Named apart from the country's own button on the map, with what it shows in its name. */}
 			<button type="button" aria-expanded={open} aria-label={name === label ? name : `${label}: ${name}`} onClick={onFold} className="flex h-full min-w-0 flex-1 items-center justify-end gap-3 pr-5 text-sm font-semibold outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
@@ -147,8 +162,8 @@ function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolea
 	);
 }
 
-/** A search opens the results as choosing a country does. */
-const resultsShown = ({ country, author_country, search }: { country: string[]; author_country: string[]; search: string }) => country.length + author_country.length > 0 || Boolean(search);
+/** A search opens the results as choosing a country or an institution does. */
+const resultsShown = ({ country, author_country, institution, search }: { country: string[]; author_country: string[]; institution: string[]; search: string }) => country.length + author_country.length + institution.length > 0 || Boolean(search);
 
 /** The country under the pointer or the keyboard: its tooltip, where it shows, and which country is lifted. */
 function useCountryTooltip() {
@@ -165,11 +180,11 @@ function useCountryTooltip() {
 		setTooltipContent(null);
 		setHovered(null);
 	};
-	return { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry };
+	return { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor };
 }
 
 /** Where choosing a country in this mode puts it: the country focus filter, or the authors' countries. */
-const choosePlace = (props: ReturnType<typeof useItemsList>, mode: CountryMode) => (mode === "authors" ? props.handleAuthorCountrySelect : props.handleCountrySelect);
+const choosePlace = (props: ReturnType<typeof useItemsList>, mode: CountryMode) => (mode === "focus" ? props.handleCountrySelect : props.handleAuthorCountrySelect);
 
 /** With the results closed, they open next time on their first page in the default order. */
 function useFreshResults(props: ReturnType<typeof useItemsList>) {
@@ -182,7 +197,7 @@ function useFreshResults(props: ReturnType<typeof useItemsList>) {
 				props.handlePageChange(1);
 			}
 		}
-	}, [props.queryParams.country, props.queryParams.author_country, props.queryParams.search]);
+	}, [props.queryParams.country, props.queryParams.author_country, props.queryParams.institution, props.queryParams.search]);
 }
 
 /** The places chosen in either mode. */
@@ -206,9 +221,9 @@ function resultsClass(open: boolean, small: boolean) {
  * beside the countries' panel. Below, a sheet over the countries' sheet, with the back arrow to the countries: it folds to its bar
  * so the map shows with the search still on, and lying on its side it takes the right side.
  */
-function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
+function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; list: "countries" | "institutions" }) {
 	const shown = resultsShown(props.queryParams);
-	const [open, setOpen] = useResultsOpen(shown, chosenPlaces(props.queryParams));
+	const [open, setOpen] = useResultsOpen(shown, [...chosenPlaces(props.queryParams), ...props.queryParams.institution]);
 	const small = useLibraryConfig().theme.layout === "small";
 	const t = useTranslations("ui");
 	const motionProps = resultsMotion(useBreakpoint("xl"), useReducedMotion());
@@ -224,7 +239,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 					className={resultsClass(open, small)}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<ResultsBar name={resultsName(chosenPlaces(props.queryParams), t)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
+						<ResultsBar list={list} name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
@@ -238,14 +253,14 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 }
 
 const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
-	return prevProps.props === nextProps.props;
+	return prevProps.props === nextProps.props && prevProps.list === nextProps.list;
 });
 
 type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string };
 /** The outlines the globe draws: the countries, and Antarctica, which has no records and isn't in the countries file. */
 type World = { countries: Feature[]; antarctica: Feature[] };
 /** A country on the map: `location` is its place in the region filter, when it has one. */
-type Country = { code?: string; location?: string; name: string; count: number; value: number | null; selected: boolean };
+type Country = { code?: string; location?: string; name: string; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; value: number | null; selected: boolean };
 type Anchor = { x: number; y: number } | null;
 /** Each country's place on the globe, by code. */
 type Places = Record<string, [number, number]>;
@@ -269,10 +284,10 @@ const START_ZOOM = 1.8;
 /** How far past the screen's edges the map is drawn on a wide screen, so sliding it towards a chosen country never shows its edge. */
 const PAD = 600;
 
-function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure): Country {
+function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure, totals?: Record<string, number>): Country {
 	const code = A3ToA2[geo.id] as string | undefined;
 	if (!code) return { name: geo.properties.name, count: 0, value: null, selected: false };
-	return placedCountry(code, geo, facet[code] ?? 0, chosen, measure);
+	return { ...placedCountry(code, geo, facet[code] ?? 0, chosen, measure), total: totalIn(totals, code) };
 }
 
 /** A country the library knows by code: where the region filter puts it, its records, its value, and whether it is chosen. */
@@ -374,6 +389,24 @@ function placedSlide(view: View, place?: [number, number]) {
 	return point ? slideFrom(view.frame, point[0] - view.frame.pad) : 0;
 }
 
+/** The map's mode in the address, where the library offers it: Country Focus otherwise. */
+function useOfferedMode() {
+	const [by, setMode] = useCountryMode();
+	const institutions = useLibraryConfig().filters.institution.mode !== "hidden";
+	return [modeOf(by, institutions), setMode] as const;
+}
+
+/** The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list. */
+function useListWidth() {
+	return useBreakpoint("xl") ? PANEL_WIDTH : 0;
+}
+
+/** The slide back to where the last chosen country started, none with no country chosen (the map isn't slid then). */
+function slideBack(chosen: string[]): Slide | null {
+	const last = chosen.at(-1);
+	return last ? { location: last, x: 0 } : null;
+}
+
 /** A keyboard user's tooltip sits over the country, kept inside the screen. */
 function anchorOf(element: Element): Anchor {
 	const bounds = element.getBoundingClientRect();
@@ -412,7 +445,7 @@ function isPress(event: React.KeyboardEvent) {
 	return event.key === "Enter" || event.key === " ";
 }
 
-/** The country pointed at: its flag and name, then its numbers. */
+/** The country pointed at: its flag and name, then its figures in the whole library and, while the map is narrowed, now. */
 function CountryTip({ country }: { country: Country }) {
 	return (
 		<div className="flex flex-col gap-0.5 px-1 py-0.5">
@@ -420,21 +453,7 @@ function CountryTip({ country }: { country: Country }) {
 				{country.code && <CountryFlag countryCode={country.code} className="h-3 w-[1.125rem] rounded-[2px]" />}
 				{country.name}
 			</div>
-			<TipCounts code={country.code} count={country.count} />
-		</div>
-	);
-}
-
-/** Its records for each million people, where its population is known and it has records, and its records. */
-function TipCounts({ code, count }: { code?: string; count: number }) {
-	const { rate } = useValueFormat();
-	const t = useTranslations("ui");
-	const people = perPerson(code, count);
-	const number = (value: ReactNode) => <strong className="font-semibold tabular-nums text-black dark:text-white">{value}</strong>;
-	return (
-		<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
-			{people !== null && <span>{t.rich("mapPerMillionValue", { value: rate(people), number })}</span>}
-			<span>{t.rich("resourcesCount", { count, number })}</span>
+			<TipFigures total={country.total} count={country.count} perMillion={(count) => perPerson(country.code, count)} />
 		</div>
 	);
 }
@@ -504,9 +523,10 @@ function cssTransform(from: ZoomTransform, to: ZoomTransform) {
 	return `translate(${to.x - scale * from.x}px, ${to.y - scale * from.y}px) scale(${scale})`;
 }
 
-/** The globe, once its outlines have arrived. Until then the page shows nothing here, and the globe fades in whole when they do. */
-function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof GlobeView>[0], "view" | "world">) {
-	if (!view) return null;
+/** The globe, once its outlines have arrived. Until then the page shows nothing here, and the globe fades in whole when they do.
+ * `hidden` in the page's placeholder: without the library's countries the globe would open on the whole world, then jump. */
+function Globe({ view, hidden, ...rest }: { view: View | null; hidden?: boolean } & Omit<Parameters<typeof GlobeView>[0], "view" | "world">) {
+	if (!view || hidden) return null;
 	const loaded = use(loadWorld());
 	return loaded && <GlobeView view={view} world={loaded} {...rest} />;
 }
@@ -515,7 +535,7 @@ function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof
  * Zooming and panning move the drawn map as one composited layer with a CSS transform, so Firefox redraws nothing while a gesture runs;
  * when it ends, the zoom is committed to the SVG and the outlines are redrawn sharp at the new scale. Nothing here is blurred or
  * transitioned: Firefox redraws a blur, or a fading fill, across the whole globe on every frame, which kept a core or more busy. */
-function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode }) {
+function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode; /** Drawn over the countries in the globe's projection, such as the institutions' circles. */ overlay: (projection: View["projection"]) => ReactNode }) {
 	const stage = useRef<HTMLDivElement>(null);
 	// The buttons zoom about the middle of the space beside the panel, in the stage's own coordinates, wherever the map is slid.
 	const middle = useEffectEvent((): [number, number] => [(view.frame.listWidth + view.frame.width) / 2 + view.frame.pad - offset, view.frame.height / 2 + view.frame.pad]);
@@ -620,6 +640,7 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 						</g>
 						{world.countries.map((geo, index) => <Fragment key={index}>{renderCountry(geo, drawn.countries[index])}</Fragment>)}
 						<path aria-hidden d={drawn.sea} fill="none" stroke="var(--map-sea-rim)" style={{ strokeWidth: line(1) }} />
+						{overlay(view.projection)}
 					</g>
 				</svg>
 			</div>
@@ -631,12 +652,12 @@ const NO_COUNTS: Record<string, number> = {};
 const COUNTS_OPTIONS = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
 /**
- * The countries' record counts the map colours and ranks by: the page's filters with every country of the map's mode kept, as
- * choosing a country would otherwise leave only its own. A filter on the other kind of country still narrows them. With none chosen this is the shared filters' own request. Until it answers, the counts the
- * server sent with the page; while a new one is on its way, the last ones, marked as stale.
+ * The countries' record counts the map colours and ranks by: the page's own filters, chosen countries included, so choosing a
+ * country shows it and the other countries its records name, where they collaborate. It is the shared filters' own request.
+ * Until it answers, the counts the server sent with the page; while a new one is on its way, the last ones, marked as stale.
  */
 function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode, initial?: Record<string, number>) {
-	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, [modeParam(mode)]: [] }), fetcher, COUNTS_OPTIONS);
+	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery(params), fetcher, COUNTS_OPTIONS);
 	// The server counted for the mode the page opened in.
 	const [firstMode] = useState(mode);
 	const facet = countsIn(data, mode, mode === firstMode ? initial : undefined);
@@ -644,29 +665,52 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
+/** Whether a search, a filter, a chosen place or the Documents scope narrows the map. The other scopes only choose which fields a
+ * search reads, so alone they narrow nothing; so does Documents where it is the only scope. */
+const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
+	(everyRecordScope(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+
+/** The whole library: no filter, and a scope that reads every record. */
+const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(search) ?? "" });
+
+/**
+ * The whole library's counts, for the tooltips' first line: its countries in the mode and its institutions. Only while the map is
+ * narrowed.
+ */
+function useLibraryTotals(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode) {
+	const { search } = useLibraryConfig();
+	const library = useSWR<FacetsGetResponse>(buildFacetsQuery(wholeLibrary(search)), fetcher, COUNTS_OPTIONS).data;
+	if (!narrows(params, search) || !library) return {};
+	return { countries: countsIn(library, mode), institutions: library.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined };
+}
+
 /** The counts the answer gives for the mode, or the server's, or none. */
 const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initial?: Record<string, number>) =>
 	(data?.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? initial ?? NO_COUNTS) as Record<string, number>;
 
-/** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
-export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
-	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry } = useCountryTooltip();
+/** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame.
+ * `pending` is the page's placeholder while the server reads them: it draws no globe, which without the library's countries would
+ * open on the whole world and then jump to them when the page replaces it. */
+export default function Map({ focus, places, counts, pending }: { focus?: [number, number]; places: Places; counts?: Record<string, number>; pending?: boolean }) {
+	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor } = useCountryTooltip();
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
 	const [measure, setMeasure] = useMeasure();
-	const [mode, setMode] = useCountryMode();
+	const [mode, setMode] = useOfferedMode();
 	const chosen = props.queryParams[modeParam(mode)];
 	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
-	const rows = countryRows(facet, measure);
-	const max = scaleTop(rows, measure);
+	const shade = shadeOf(mode, measure);
+	const rows = countryRows(facet, shade);
+	const max = scaleTop(rows, shade);
+	const totals = useLibraryTotals(props.queryParams, mode);
+	const layer = useInstitutionLayer({ props, enabled: mode === "institutions", totals: totals.institutions, setTooltipContent, setTooltipAnchor });
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
 	const smallLayout = useLibraryConfig().theme.layout === "small";
-	// The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list.
-	const listWidth = useBreakpoint("xl") ? PANEL_WIDTH : 0;
+	const listWidth = useListWidth();
 	const view = useMemo(() => mapView(size.width, size.height, isDesktop, listWidth, focus), [size.width, size.height, isDesktop, listWidth, focus]);
 	const zoomerRef = useRef<Zoomer | null>(null);
 
@@ -674,10 +718,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	const [slide, setSlide] = useState<Slide | null>(null);
 	const offset = offsetOf(view, chosen, slide, places);
 	// Back to the library's countries: the slide to the chosen country goes too.
-	const resetSlide = () => {
-		const last = chosen.at(-1);
-		if (last) setSlide({ location: last, x: 0 });
-	};
+	const resetSlide = () => setSlide(slideBack(chosen));
 	const selectCountry = (code: string) => {
 		const location = COUNTRY_PARAMS[code];
 		if (!location) return;
@@ -694,7 +735,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	};
 	useFreshResults(props);
 
-	const panel = { props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const panel = { institutions: layer.panel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -707,20 +748,66 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			/>
 			<MapPanel {...panel} />
 			<MapSheet {...panel} />
-			<MemoizedItemView props={props} />
+			<MemoizedItemView props={props} list={listOf(mode)} />
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
+			<MapLegend rows={rows} measure={shade} max={max} institutions={mode === "institutions"} />
 			<Suspense fallback={null}>
 				<Globe
+					hidden={pending}
 					view={view}
 					offset={offset}
 					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen, measure);
+						const country = countryOf(geo, facet, chosen, shade, totals.countries);
 						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
+					overlay={layer.overlay}
 				/>
 			</Suspense>
 		</main>
+	);
+}
+
+/** What the key's scale counts, by the measure the countries are coloured by. */
+const LEGEND_TITLE = { people: "mapResourcesPerMillion", records: "mapResourcesPerCountry" } as const;
+
+/**
+ * The key to the countries' colours, beside the zoom buttons from 1,280 px wide: the tint's scale, and the circles in the
+ * institutions' mode. Nothing while no country has a value.
+ */
+function MapLegend({ rows, measure, max, institutions }: { rows: CountryRow[]; measure: Measure; max: number; institutions: boolean }) {
+	const t = useTranslations("ui");
+	const values = rows.flatMap((row) => (row.value ? [row.value] : []));
+	if (!values.length) return null;
+	return (
+		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+3.75rem)] z-10 hidden w-52 px-3 py-2.5 text-xs leading-5 xl:block")}>
+			<LegendScale values={values} measure={measure} max={max} />
+			{institutions && (
+				<p className="mt-1.5 flex items-center gap-2">
+					<span className="size-2.5 rounded-full" style={{ background: DOT }} />
+					{t("institutions")}
+				</p>
+			)}
+		</div>
+	);
+}
+
+/** The tint from the lowest value to the one that takes the full colour. Per person a few small states go past it, so it reads "and more". */
+function LegendScale({ values, measure, max }: { values: number[]; measure: Measure; max: number }) {
+	const t = useTranslations("ui");
+	const format = useValueFormat()[measure === "people" ? "rate" : "count"];
+	const low = Math.min(...values);
+	const stops = [low, ...[0.1, 0.3, 0.6, 1].map((share) => share * max)].map((value) => tint(value, max));
+	const top = format(max);
+	return (
+		<>
+			<p className="mb-1.5 font-semibold">{t(LEGEND_TITLE[measure])}</p>
+			<span aria-hidden className="block h-2 rounded-full" style={{ background: `linear-gradient(to right, ${stops.join(", ")})` }} />
+			<p className="mt-0.5 flex justify-between tabular-nums text-black/55 dark:text-white/55">
+				<span>{format(low)}</span>
+				<span>{Math.max(...values) > max ? t("mapAndMore", { value: top }) : top}</span>
+			</p>
+		</>
 	);
 }
 
