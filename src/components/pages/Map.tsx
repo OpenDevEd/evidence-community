@@ -178,18 +178,16 @@ function CloseResults({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const { search } = useLibraryConfig();
 	const label = t("mapClearResults");
 	return (
-		<Tooltip content={label} placement="bottom">
-			<Button
-				isIconOnly
-				aria-label={label}
-				className="hidden h-full !p-0 xl:flex"
-				// The search field drops what was typed and is still waiting to run, or it would open the results again.
-				data-drops-typed-search
-				onPress={() => clearResults(props, search)}
-			>
-				<HugeiconsIcon icon={Cancel01Icon} className="size-6" />
-			</Button>
-		</Tooltip>
+		<Button
+			isIconOnly
+			aria-label={label}
+			className="hidden h-full !p-0 xl:flex"
+			// The search field drops what was typed and is still waiting to run, or it would open the results again.
+			data-drops-typed-search
+			onPress={() => clearResults(props, search)}
+		>
+			<HugeiconsIcon icon={Cancel01Icon} className="size-6" />
+		</Button>
 	);
 }
 
