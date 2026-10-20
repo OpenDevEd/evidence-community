@@ -14,7 +14,8 @@ import {
 	type SourceItemUpsert,
 } from "../batch-schema";
 import { writeSourceIngestionBatch } from "../transactional-writer";
-import { OpenAlexApiError, OpenAlexClient } from "./client";
+import { failureText, OpenAlexApiError, OpenAlexClient } from "./client";
+import { locateInstitutions } from "./institution-locations";
 import { findDuplicateRecords, skipRepeats, storedWorks } from "./duplicates";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
@@ -1114,6 +1115,22 @@ export async function syncOpenAlexSource(
 	return syncOpenAlexWorks(context, queryStream(config), options);
 }
 
+/**
+ * Looks up the location of each institution met for the first time, once the import is complete. A failure leaves them
+ * for the next run and does not fail this one, whose records are all in.
+ */
+async function placeInstitutions(scan: Scan) {
+	try {
+		const placed = await locateInstitutions(scan.context.database, (ids) => scan.client.institutionLocations(ids), scan.context.heartbeat);
+		if (placed.unlocated) console.info("OpenAlex institutions located", { source: scan.context.sourceConnection.key, ...placed });
+	} catch (error) {
+		console.warn("OpenAlex institutions could not be located; the next run tries again", {
+			source: scan.context.sourceConnection.key,
+			error: failureText(error),
+		});
+	}
+}
+
 /** Imports a stream's works: records first, then their PDFs when the source adds them. */
 export async function syncOpenAlexWorks(
 	context: SourceAdapterContext,
@@ -1143,6 +1160,7 @@ export async function syncOpenAlexWorks(
 				: scan.cursor.reconciledAt,
 	};
 	await writeBatch(context, scan.expectedCursor, cursor, { items: [] }, cursor.stage);
+	await placeInstitutions(scan);
 	return {
 		records: cursor.imported,
 		pages: scan.pages,

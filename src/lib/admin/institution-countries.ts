@@ -21,6 +21,9 @@ export type InstitutionCountry = {
 	countryCode: string;
 	openalexId: string | null;
 	city: string | null;
+	/** Where OpenAlex places the institution; null for a country chosen by hand. */
+	latitude: number | null;
+	longitude: number | null;
 };
 /** Keyed by `institutionNameKey`. A name with no known country is absent. */
 export type InstitutionCountries = Record<string, InstitutionCountry>;
@@ -38,6 +41,8 @@ export type OpenAlexInstitution = {
 	name: string;
 	countryCode: string;
 	city: string;
+	latitude: number | null;
+	longitude: number | null;
 };
 
 const nameSchema = z.string().trim().min(1).max(500);
@@ -59,8 +64,15 @@ export const institutionCountryInputSchema = z
 			.nullable()
 			.default(null),
 		city: z.string().trim().max(200).nullable().default(null),
+		latitude: z.number().min(-90).max(90).nullable().default(null),
+		longitude: z.number().min(-180).max(180).nullable().default(null),
 	})
-	.strict();
+	.strict()
+	// A location is OpenAlex's, so it comes with an OpenAlex id, both coordinates at once.
+	.refine(
+		(input) => (input.latitude === null) === (input.longitude === null) && (input.latitude === null || input.openalexId !== null),
+		"Send both coordinates of an OpenAlex institution, or neither.",
+	);
 export const openAlexInstitutionQuerySchema = z.string().trim().min(3).max(200);
 
 export async function readInstitutionCountries(
@@ -74,9 +86,9 @@ export async function readInstitutionCountries(
 		.from(institutionCountry)
 		.where(inArray(institutionCountry.nameKey, keys));
 	return Object.fromEntries(
-		rows.map(({ nameKey, countryCode, openalexId, city }) => [
+		rows.map(({ nameKey, countryCode, openalexId, city, latitude, longitude }) => [
 			nameKey,
-			{ countryCode, openalexId, city },
+			{ countryCode, openalexId, city, latitude, longitude },
 		]),
 	);
 }
@@ -203,7 +215,13 @@ export async function searchOpenAlexInstitutions(
 					id: z.string(),
 					display_name: z.string(),
 					country_code: z.string().nullable(),
-					geo: z.object({ city: z.string().nullable() }).nullable(),
+					geo: z
+						.object({
+							city: z.string().nullable(),
+							latitude: z.number().min(-90).max(90).nullish(),
+							longitude: z.number().min(-180).max(180).nullish(),
+						})
+						.nullable(),
 				}),
 			),
 		})
@@ -223,6 +241,9 @@ export async function searchOpenAlexInstitutions(
 					? row.country_code
 					: "",
 			city: row.geo?.city ?? "",
+			...(row.geo?.latitude != null && row.geo.longitude != null
+				? { latitude: row.geo.latitude, longitude: row.geo.longitude }
+				: { latitude: null, longitude: null }),
 		}))
 		.sort((left, right) => ids.indexOf(left.id) - ids.indexOf(right.id));
 }

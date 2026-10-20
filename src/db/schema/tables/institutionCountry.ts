@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { doublePrecision, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
  * The country of an institution name, set once for the whole library. Records
@@ -12,6 +12,10 @@ export const institutionCountry = pgTable("institutionCountry", {
 	// editor chose it by hand.
 	openalexId: text("openalexId"),
 	city: text("city"),
+	// Where OpenAlex places the institution, set for one with an `openalexId`
+	// once looked up. Both or neither.
+	latitude: doublePrecision("latitude"),
+	longitude: doublePrecision("longitude"),
 	updatedAt: timestamp("updatedAt", { withTimezone: true })
 		.notNull()
 		.defaultNow(),

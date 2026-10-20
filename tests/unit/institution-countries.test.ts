@@ -26,7 +26,7 @@ describe("searchOpenAlexInstitutions", () => {
 								id: "https://openalex.org/I1",
 								display_name: "University of Nairobi",
 								country_code: "KE",
-								geo: { city: "Nairobi" },
+								geo: { city: "Nairobi", latitude: -1.28, longitude: 36.82 },
 							},
 							{
 								id: "https://openalex.org/I2",
@@ -40,12 +40,14 @@ describe("searchOpenAlexInstitutions", () => {
 		vi.stubGlobal("fetch", fetcher);
 
 		expect(await searchOpenAlexInstitutions("nai")).toEqual([
-			{ id: "I2", name: "Somewhere", countryCode: "", city: "" },
+			{ id: "I2", name: "Somewhere", countryCode: "", city: "", latitude: null, longitude: null },
 			{
 				id: "I1",
 				name: "University of Nairobi",
 				countryCode: "KE",
 				city: "Nairobi",
+				latitude: -1.28,
+				longitude: 36.82,
 			},
 		]);
 		expect(String(fetcher.mock.calls[1]?.[0])).toContain(
@@ -74,6 +76,8 @@ describe("institutionCountryInputSchema", () => {
 			countryCode: "GB",
 			openalexId: null,
 			city: null,
+			latitude: null,
+			longitude: null,
 		});
 		expect(
 			institutionCountryInputSchema.safeParse({
@@ -86,6 +90,22 @@ describe("institutionCountryInputSchema", () => {
 				name: "EdTech Hub",
 				countryCode: "GB",
 				openalexId: "https://openalex.org/I1",
+			}).success,
+		).toBe(false);
+		expect(
+			institutionCountryInputSchema.safeParse({
+				name: "EdTech Hub",
+				countryCode: "GB",
+				openalexId: "I1",
+				latitude: 51.5,
+			}).success,
+		).toBe(false);
+		expect(
+			institutionCountryInputSchema.safeParse({
+				name: "EdTech Hub",
+				countryCode: "GB",
+				latitude: 51.5,
+				longitude: -0.1,
 			}).success,
 		).toBe(false);
 	});

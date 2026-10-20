@@ -11,7 +11,7 @@ import { generateSearchProjectionPlans } from "../../src/lib/search-index/projec
 import { writeSourceIngestionBatch } from "../../src/lib/source-ingestion/transactional-writer";
 
 const config = libraryConfigSchema.parse(maximalLibraryConfig);
-const country = (name: string, countryCode: string) => ({ name, countryCode, openalexId: null, city: null });
+const country = (name: string, countryCode: string) => ({ name, countryCode, openalexId: null, city: null, latitude: null, longitude: null });
 
 it("indexes where a record's authors work, and searches the record again when one of their institutions changes country", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
