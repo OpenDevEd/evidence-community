@@ -3,7 +3,6 @@ import { itemSourceLink, openAlexQueryApproval } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { saveSourceScreening } from "@/lib/readings/screening";
-import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 import { sourceConnection } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
@@ -185,7 +184,7 @@ async function reconcileInTransaction(
 		.from(sourceConnection)
 		.where(ne(sourceConnection.provider, "native"));
 	const toggled = toggledRemoval(current, saved);
-	await requeueRecordsOfToggledWorkSources(transaction, toggled);
+	await requeueRecordsOfToggledSources(transaction, toggled);
 	// A removed source stops holding its records for screening too, and holds them again when it returns.
 	await saveSourceScreening(transaction, sources, toggled.map((row) => row.key));
 	return saved;
@@ -201,14 +200,15 @@ function toggledRemoval(
 }
 
 /**
- * A removed OpenAlex source's copies of its works stop counting for the open-access label, and count again when the
- * source returns, so the records it holds are searched again either way.
+ * A removed source stops holding its records, so readers no longer find them under it, and a removed OpenAlex source's
+ * copies of its works stop counting for the open-access label. Both come back when the source returns, so the records
+ * it holds are searched again either way.
  */
-async function requeueRecordsOfToggledWorkSources(
+async function requeueRecordsOfToggledSources(
 	transaction: DatabaseTransaction,
-	toggledSources: readonly { key: string; provider: string }[],
+	toggledSources: readonly { key: string }[],
 ) {
-	const toggled = toggledSources.filter((row) => isOpenAlexWorkProvider(row.provider)).map((row) => row.key);
+	const toggled = toggledSources.map((row) => row.key);
 	if (toggled.length === 0) return;
 	const records = await transaction
 		.selectDistinct({ itemKey: item.key, revision: item.revision })

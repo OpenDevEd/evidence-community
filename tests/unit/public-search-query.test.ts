@@ -108,6 +108,24 @@ describe("a request to a public list endpoint", () => {
 	});
 });
 
+describe("the sources filter", () => {
+	const server = libraryConfigSchema.parse(cloneLibraryConfig(maximalLibraryConfig));
+	const second = { ...server.sources[0]!, key: "zotero-second", groupId: "7743475" };
+
+	it("is not offered by a library with one source, which it would not narrow", () => {
+		expect(named("sources=zotero-maximal")).toEqual(["sources"]);
+		expect(resolveSearchQuery({ sources: ["zotero-maximal"] }, server).params.sources).toEqual([]);
+	});
+
+	it("takes any of a library's sources once it has two", () => {
+		const two = { ...server, sources: [...server.sources, second] };
+		const resolved = resolveSearchQuery({ sources: ["zotero-maximal", "zotero-second"] }, two);
+		expect(resolved.issues).toEqual([]);
+		expect(resolved.params.sources).toEqual(["zotero-maximal", "zotero-second"]);
+		expect(projectPublicLibraryConfig(two).filters.sources.enabled).toBe(true);
+	});
+});
+
 describe("the answer to a request an endpoint cannot honour", () => {
 	it("is a 400 that lists every problem and is never cached", async () => {
 		const answer = await readPublicRequest(

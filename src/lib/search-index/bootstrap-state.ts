@@ -66,7 +66,7 @@ export async function setSearchIndexRebuildPending(
  * format), so every library rebuilds once when it runs the new code. Without
  * it, records keep what an older runtime stored until they are edited.
  */
-const SEARCH_PROJECTION_VERSION = 9;
+const SEARCH_PROJECTION_VERSION = 10;
 
 /** Persist the configuration used by the projection; a failed rebuild stays pending. */
 export async function prepareSearchProjection(database: Database, topicsEnabled: boolean, fullTextSearch: boolean, hiddenTags: readonly string[]) {

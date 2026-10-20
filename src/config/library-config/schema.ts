@@ -994,6 +994,14 @@ const filtersSchema = z
 			})
 			.strict()
 			.prefault({}),
+		/** Which of the library's sources found a record. Offered once the library has two sources or more. */
+		sources: z
+			.object({
+				enabled: z.boolean().default(true),
+				label: singleLineStringSchema(60).default("sources"),
+			})
+			.strict()
+			.prefault({}),
 		collectionsExpanded: z.boolean().default(true),
 		/**
 		 * Where a study type the AI is uncertain of shows: marked uncertain beside its type, or apart as an Uncertain type

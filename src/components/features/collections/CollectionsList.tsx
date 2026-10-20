@@ -61,6 +61,9 @@ import { useFiltersContext } from "@/context/FiltersProvider";
 import { ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
 import { SIDEBAR_GREY } from "./SidebarCard";
 import { FacetOption, ShareRing } from "./FacetOption";
+import { useOfferedSources, useSourcesLabel } from "./sources";
+import { SOURCES_FIELD } from "@/lib/search-filter-constants";
+import type { PublicSource } from "@/app/api/sources/types";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -296,8 +299,8 @@ function SectionTitle({ name, count, total, childCount, childCountKey }: { name:
 	);
 }
 
-/** How a section says how many of its children have results: collections, or a topic domain's fields. */
-type ChildCountKey = "collectionCount" | "fieldCount";
+/** How a section says how many of its children have results: collections, a topic domain's fields, or sources. */
+type ChildCountKey = "collectionCount" | "fieldCount" | "sourceCount";
 
 export function InnerCollectionList({
 	data,
@@ -592,6 +595,30 @@ function TopicFilter({
 	);
 }
 
+/** A tree of named nodes shaped as the collection tree the accordion reads: each root is a section. */
+function asCollectionTree(nodes: readonly Pick<TopicTreeNode, "id" | "name" | "parent">[]) {
+	const children = new Map<string | null, (typeof nodes)[number][]>();
+	for (const node of nodes) children.set(node.parent, [...(children.get(node.parent) ?? []), node]);
+	const flat: Collection[] = [];
+	// Topics and sources have no other collection fields.
+	const toCollection = (node: (typeof nodes)[number], level: number, root: string): Collection => {
+		const shaped = {
+			key: node.id,
+			name: node.name,
+			parentCollection: node.parent,
+			level,
+			originalFacet: root,
+			children: (children.get(node.id) ?? []).map((child) => toCollection(child, level + 1, root)),
+		} as unknown as Collection;
+		flat.push(shaped);
+		return shaped;
+	};
+	return {
+		hierarchy: (children.get(null) ?? []).map((root) => toCollection(root, 0, root.id)),
+		collections: flat,
+	};
+}
+
 /**
  * Topics in the collections' place, for a library without collections: each domain is a section and its fields,
  * subfields and topics open under it, through the same tree and counts the collections use.
@@ -609,28 +636,7 @@ function TopicTree({
 }) {
 	const tree = useTopicTree();
 	const nodes = useMemo(() => tree.data?.nodes ?? [], [tree.data]);
-	const { hierarchy, collections } = useMemo(() => {
-		const children = new Map<string | null, TopicTreeNode[]>();
-		for (const node of nodes) children.set(node.parent, [...(children.get(node.parent) ?? []), node]);
-		const flat: Collection[] = [];
-		// Shaped as the collection tree the accordion reads; topics have no other collection fields.
-		const toCollection = (node: TopicTreeNode, level: number, root: string): Collection => {
-			const shaped = {
-				key: node.id,
-				name: node.name,
-				parentCollection: node.parent,
-				level,
-				originalFacet: root,
-				children: (children.get(node.id) ?? []).map((child) => toCollection(child, level + 1, root)),
-			} as unknown as Collection;
-			flat.push(shaped);
-			return shaped;
-		};
-		return {
-			hierarchy: (children.get(null) ?? []).map((root) => toCollection(root, 0, root.id)),
-			collections: flat,
-		};
-	}, [nodes]);
+	const { hierarchy, collections } = useMemo(() => asCollectionTree(nodes), [nodes]);
 
 	if (tree.error) return <TopicsFailed onRetry={() => void tree.mutate()} />;
 	// Nothing until the catalog arrives, rather than a moment of "no topics".
@@ -646,6 +652,57 @@ function TopicTree({
 			hierarchy={hierarchy}
 			total={total}
 			childCountKey="fieldCount"
+		/>
+	);
+}
+
+/** The sources' section in a tree: it heads the library's sources and is never chosen itself. */
+const SOURCES_SECTION = "#sources";
+
+/**
+ * The library's sources in the collections' place, for a library without collections: one section under the name the
+ * library gives its sources, each source a choice in it with how many results it holds.
+ */
+function SourceTree({ sources, total }: { sources: PublicSource[]; total: number }) {
+	const label = useSourcesLabel();
+	const { facetDistribution, queryParams, handleSourceSelect } = useFiltersContext();
+	const { hierarchy, collections } = useMemo(
+		() => asCollectionTree([
+			{ id: SOURCES_SECTION, name: label, parent: null },
+			...sources.map((source) => ({ id: source.key, name: source.name, parent: SOURCES_SECTION })),
+		]),
+		[label, sources],
+	);
+	return (
+		<InnerCollectionList
+			data={{ collections }}
+			// A record can be in several sources, so the section stands for all the results rather than a sum.
+			facetDistribution={{ collectionsAncestry: { ...facetDistribution?.[SOURCES_FIELD], [SOURCES_SECTION]: total } }}
+			handleCheckboxChange={handleSourceSelect}
+			handleCountrySelect={() => undefined}
+			selectedCollections={queryParams.sources}
+			hierarchy={hierarchy}
+			total={total}
+			childCountKey="sourceCount"
+		/>
+	);
+}
+
+/** The library's sources among the other filters, when collections hold the place under them. */
+function SourceFilter({ sources }: { sources: PublicSource[] }) {
+	const label = useSourcesLabel();
+	const { facetDistribution, queryParams, handleSourceSelect } = useFiltersContext();
+	const total = useFacetTotal(SOURCES_FIELD);
+	return (
+		<FacetPicker
+			total={total}
+			label={label}
+			placeholder={label}
+			selectedKey={queryParams.sources}
+			onSelectionChange={handleSourceSelect}
+			facetDistribution={facetDistribution}
+			facetName={SOURCES_FIELD}
+			list={sources.map((source) => ({ key: source.key, label: source.name, isSelected: queryParams.sources.includes(source.key) }))}
 		/>
 	);
 }
@@ -711,40 +768,50 @@ function PlaceFilters({ queryParams, onCountry, facetDistribution, total }: { qu
 	);
 }
 
+/** What takes the place under the filter card: the collections, else the sources, else the topics. */
+type TreeSlot = "collections" | "sources" | "topics" | null;
+
+function treeSlot(collections: boolean, sources: boolean, topics: boolean): TreeSlot {
+	if (collections) return "collections";
+	if (sources) return "sources";
+	return topics ? "topics" : null;
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
 	handleInstitutionSelect,
 	handleTopicsChange,
 	facetDistribution,
-	topicsAsTree,
+	slot,
+	sources,
 }: {
 	queryParams: inferParserType<typeof searchParamsLoader>;
 	handleCountrySelect: (country: string) => void;
 	handleInstitutionSelect: (institution: string) => void;
 	handleTopicsChange: (topics: string[]) => void;
 	facetDistribution: FacetDistribution | undefined;
-	/** The topics are a tree below the filters instead of a picker among them. */
-	topicsAsTree: boolean;
+	/** What is a tree below the filters; the sources and topics that are not are pickers among them. */
+	slot: TreeSlot;
+	sources: PublicSource[];
 }) {
 	const { filters, topics } = useLibraryConfig();
-	const topicPicker = topics.enabled && !topicsAsTree;
+	const sourcePicker = sources.length > 0 && slot !== "sources";
+	const topicPicker = topics.enabled && slot !== "topics";
 	const isInstitutionEnabled = filters.institution.mode !== "hidden";
 	const total = useFacetTotal("*");
 	// Topics are counted without the topic filter, so their shares are out of the results without it.
 	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
-	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
-
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
+		sourcePicker,
 		topicPicker,
 	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
-	const sidebar = useTranslations("sidebar");
 
 	const [institutions] = useFacetList(
 		facetDistribution!,
@@ -794,6 +861,7 @@ function FiltersList({
 			<>
 				{institutionFilter}
 				{placeFilters}
+				{sourcePicker ? <SourceFilter sources={sources} /> : null}
 				{topicPicker ? (
 					<TopicFilter
 						total={topicTotal}
@@ -810,10 +878,18 @@ function FiltersList({
 		handleTopicsChange,
 		institutionFilter,
 		queryParams.topics,
+		sourcePicker,
+		sources,
 		topicPicker,
 		topicTotal,
 	]);
 
+	return enabledCount > 1 ? <MoreFilters>{moreFilters}</MoreFilters> : moreFilters;
+}
+/** The filters in the grey card, under a heading that folds them away; it stays as the reader left it. */
+function MoreFilters({ children }: { children: ReactNode }) {
+	const t = useTranslations("ui");
+	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
 	const [moreFiltersMoving, setMoreFiltersMoving] = useState(false);
 	const setIsMoreFiltersOpen = (value: boolean) => {
@@ -823,82 +899,66 @@ function FiltersList({
 		}));
 	};
 
-	return enabledCount > 1 ? (
-		<>
-			<div
-				className="flex flex-col"
-				role="region"
-				aria-label={t("moreFilters")}
-			>
-				<div className="flex justify-between items-center gap-4 pt-4">
-					<h4
-						className="text-lg font-medium text-black/80 dark:text-white/80 flex"
-						id="more-filters-heading"
-					>
-						{t("moreFilters")}
-					</h4>
-					<Button
-						isIconOnly
-						variant="light"
-						size="sm"
-						radius="full"
-						className={twMerge(
-							"text-black/80 dark:text-white/80",
-							isMoreFiltersOpen && "rotate-180",
-						)}
-						onClick={() => setIsMoreFiltersOpen(!isMoreFiltersOpen)}
-						aria-expanded={isMoreFiltersOpen}
-						aria-controls="more-filters-content"
+	return (
+		<div
+			className="flex flex-col"
+			role="region"
+			aria-label={t("moreFilters")}
+		>
+			<div className="flex justify-between items-center gap-4 pt-4">
+				<h4
+					className="text-lg font-medium text-black/80 dark:text-white/80 flex"
+					id="more-filters-heading"
+				>
+					{t("moreFilters")}
+				</h4>
+				<Button
+					isIconOnly
+					variant="light"
+					size="sm"
+					radius="full"
+					className={twMerge(
+						"text-black/80 dark:text-white/80",
+						isMoreFiltersOpen && "rotate-180",
+					)}
+					onClick={() => setIsMoreFiltersOpen(!isMoreFiltersOpen)}
+					aria-expanded={isMoreFiltersOpen}
+					aria-controls="more-filters-content"
+					aria-labelledby="more-filters-heading"
+				>
+					<HugeiconsIcon
+						icon={ArrowDown01Icon}
+						aria-hidden="true"
+					/>
+					<span className="sr-only">
+						{isMoreFiltersOpen
+							? t("collapseFilters")
+							: t("expandFilters")}
+					</span>
+				</Button>
+			</div>
+			<AnimatePresence initial={false}>
+				{isMoreFiltersOpen && (
+					// Clipped only while it opens or closes: open, the fields' focus outlines and glow reach past its edges.
+					<motion.div
+						initial={{ height: 0 }}
+						animate={{ height: "auto" }}
+						// A closing section keeps the props it had, so its clip is part of the exit itself.
+						exit={{ height: 0, overflow: "hidden" }}
+						onAnimationStart={() => setMoreFiltersMoving(true)}
+						onAnimationComplete={() => setMoreFiltersMoving(false)}
+						className={twMerge("flex flex-col gap-4", moreFiltersMoving && "overflow-hidden")}
+						id="more-filters-content"
+						role="region"
 						aria-labelledby="more-filters-heading"
 					>
-						<HugeiconsIcon
-							icon={ArrowDown01Icon}
-							aria-hidden="true"
-						/>
-						<span className="sr-only">
-							{isMoreFiltersOpen
-								? t("collapseFilters")
-								: t("expandFilters")}
-						</span>
-					</Button>
-				</div>
-				<AnimatePresence initial={false}>
-					{isMoreFiltersOpen && (
-						// Clipped only while it opens or closes: open, the fields' focus outlines and glow reach past its edges.
-						<motion.div
-							initial={{ height: 0 }}
-							animate={{ height: "auto" }}
-							// A closing section keeps the props it had, so its clip is part of the exit itself.
-							exit={{ height: 0, overflow: "hidden" }}
-							onAnimationStart={() => setMoreFiltersMoving(true)}
-							onAnimationComplete={() => setMoreFiltersMoving(false)}
-							className={twMerge("flex flex-col gap-4", moreFiltersMoving && "overflow-hidden")}
-							id="more-filters-content"
-							role="region"
-							aria-labelledby="more-filters-heading"
-						>
-							<div className="flex flex-col gap-4 pt-4">
-								{moreFilters}
-							</div>
-						</motion.div>
-					)}
-				</AnimatePresence>
-			</div>
-			{/* <Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
-				<AccordionItem
-					key={"More Filters"}
-					title={t("moreFilters")}
-					classNames={{
-						content: "p-0 flex flex-col gap-4 pt-4",
-						trigger: "pb-0 pt-2",
-					}}
-				>
-					{moreFilters}
-				</AccordionItem>
-			</Accordion> */}
-		</>
-	) : (
-		moreFilters
+						<div className="flex flex-col gap-4 pt-4">
+							{children}
+						</div>
+					</motion.div>
+				)}
+			</AnimatePresence>
+		</div>
 	);
 }
 
@@ -906,11 +966,12 @@ function FiltersList({
 export const LibraryHighlightsSlot = createContext<ReactNode>(null);
 
 /** The grey filter card: the year picker and the filter dropdowns. */
-function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, topicsAsTree, roundFoot }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; topicsAsTree: boolean; roundFoot: boolean }) {
+function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, slot, sources }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; slot: TreeSlot; sources: PublicSource[] }) {
 	const { filters } = useLibraryConfig();
 	const years = useMemo(() => Object.keys(facetDistribution?.year ?? {}).sort((left, right) => Number(right) - Number(left)), [facetDistribution]);
 	return (
-		<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, roundFoot && "rounded-b-2xl")}>
+		// Nothing hangs under it when there is no tree, so it rounds its own foot.
+		<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, !slot && "rounded-b-2xl")}>
 			{filters.years.enabled && <YearFilter key={range} range={range} onRangeChange={onRangeChange} years={years} counts={facetDistribution?.year} />}
 			<FiltersList
 				queryParams={queryParams}
@@ -918,7 +979,8 @@ function FilterCard({ facetDistribution, range, onRangeChange, queryParams, hand
 				handleInstitutionSelect={handleInstitutionSelect}
 				handleTopicsChange={handleTopicsChange}
 				facetDistribution={facetDistribution}
-				topicsAsTree={topicsAsTree}
+				slot={slot}
+				sources={sources}
 			/>
 		</section>
 	);
@@ -979,6 +1041,29 @@ function TopicTreeSection({ counts, onChange, selected }: { counts: Record<strin
 			<TopicTree total={total} counts={counts} onChange={onChange} selected={selected} />
 		</section>
 	);
+}
+
+/** The tree under the filter card, whichever holds the place. */
+function SlotTree({ slot, sources, handleTopicsChange, queryParams, ...collections }: Omit<React.ComponentProps<typeof CollectionsTreeSection>, "facetDistribution"> & {
+	slot: TreeSlot;
+	sources: PublicSource[];
+	facetDistribution: FacetDistribution | undefined;
+	handleTopicsChange: (topics: string[]) => void;
+	queryParams: inferParserType<typeof searchParamsLoader>;
+}) {
+	const sourcesTotal = useFacetTotal(SOURCES_FIELD);
+	if (slot === "collections") return <CollectionsTreeSection {...collections} />;
+	if (slot === "sources") {
+		return (
+			<section className="w-full">
+				<SourceTree sources={sources} total={sourcesTotal} />
+			</section>
+		);
+	}
+	if (slot === "topics") {
+		return <TopicTreeSection counts={collections.facetDistribution?.topicAncestors} onChange={handleTopicsChange} selected={queryParams.topics} />;
+	}
+	return null;
 }
 
 /** The cards under the filters: what the results are made of. In the Explore sheet they run edge to edge, as the filter card does. */
@@ -1043,7 +1128,8 @@ export default function CollectionsList({
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const { topics } = useLibraryConfig();
-	const topicsAsTree = topics.enabled && !isCollectionsEnabled;
+	const sources = useOfferedSources();
+	const slot = treeSlot(isCollectionsEnabled, Boolean(sources?.length), topics.enabled);
 	return (
 		<aside
 			id="collections"
@@ -1058,7 +1144,8 @@ export default function CollectionsList({
 			<Skeleton
 				data-collections={isCollectionsEnabled}
 				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
-				isLoaded={!!data && !!facetDistribution}
+				// The sources' names decide what takes the place under the filters, so it waits for them too.
+				isLoaded={!!data && !!facetDistribution && !!sources}
 			>
 				<FeaturedInstitution chosen={queryParams.institution} onSelect={handleInstitutionSelect} isModal={isModal} />
 				<FilterCard
@@ -1069,27 +1156,21 @@ export default function CollectionsList({
 					handleCountrySelect={handleCountrySelect}
 					handleInstitutionSelect={handleInstitutionSelect}
 					handleTopicsChange={handleTopicsChange}
-					topicsAsTree={topicsAsTree}
-					// Nothing hangs under it when there is no tree, so it rounds its own foot.
-					roundFoot={!isCollectionsEnabled && !topicsAsTree}
+					slot={slot}
+					sources={sources ?? []}
 				/>
-				{isCollectionsEnabled && (
-					<CollectionsTreeSection
-						data={data}
-						facetDistribution={facetDistribution}
-						handleCheckboxChange={handleCheckboxChange}
-						handleCountrySelect={handleCountrySelect}
-						selectedCollections={selectedCollections}
-						hierarchy={hierarchy}
-					/>
-				)}
-				{topicsAsTree && (
-					<TopicTreeSection
-						counts={facetDistribution?.topicAncestors}
-						onChange={handleTopicsChange}
-						selected={queryParams.topics}
-					/>
-				)}
+				<SlotTree
+					slot={slot}
+					sources={sources ?? []}
+					data={data}
+					facetDistribution={facetDistribution}
+					handleCheckboxChange={handleCheckboxChange}
+					handleCountrySelect={handleCountrySelect}
+					handleTopicsChange={handleTopicsChange}
+					selectedCollections={selectedCollections}
+					hierarchy={hierarchy}
+					queryParams={queryParams}
+				/>
 				<SidebarCards
 					facetDistribution={facetDistribution}
 					range={range}

@@ -25,6 +25,15 @@ type IdentityTable = typeof itemIdentity | typeof collectionIdentity;
 
 const MAX_IDENTITY_ALLOCATION_ATTEMPTS = 100;
 
+/** A batch's record keys; a batch that names a record twice is refused. */
+function uniqueRecordKeys(sourceRecordKeys: string[]) {
+	const unique = [...new Set(sourceRecordKeys)];
+	if (unique.length !== sourceRecordKeys.length) {
+		throw new Error("Source record keys must be unique within a batch");
+	}
+	return unique;
+}
+
 async function reserveRecordIdentities(
 	db: Executor,
 	table: IdentityTable,
@@ -36,10 +45,7 @@ async function reserveRecordIdentities(
 		sourceRecordKeys: string[];
 	},
 ) {
-	const uniqueSourceRecordKeys = [...new Set(sourceRecordKeys)];
-	if (uniqueSourceRecordKeys.length !== sourceRecordKeys.length) {
-		throw new Error("Source record keys must be unique within a batch");
-	}
+	const uniqueSourceRecordKeys = uniqueRecordKeys(sourceRecordKeys);
 	if (uniqueSourceRecordKeys.length === 0) {
 		return new Map<string, string>();
 	}
@@ -142,15 +148,14 @@ export async function reserveItemSourceLinks(
 		sourceRecordKeys: string[];
 	},
 ) {
-	const uniqueSourceRecordKeys = [...new Set(sourceRecordKeys)];
-	if (uniqueSourceRecordKeys.length !== sourceRecordKeys.length) {
-		throw new Error("Source record keys must be unique within a batch");
-	}
+	const uniqueSourceRecordKeys = uniqueRecordKeys(sourceRecordKeys);
 	if (uniqueSourceRecordKeys.length === 0) {
-		return new Map<string, string>();
+		return { keys: new Map<string, string>(), joined: new Set<string>() };
 	}
 
 	const result = new Map<string, string>();
+	// Records already here that this source now holds too: another OpenAlex source brought them first.
+	const joined = new Set<string>();
 	const loadLinks = async () => {
 		const rows = await db
 			.select({
@@ -187,9 +192,11 @@ export async function reserveItemSourceLinks(
 				inArray(itemIdentity.sourceRecordKey, uniqueSourceRecordKeys),
 			));
 		if (shared.length) {
-			await db.insert(itemSourceLink)
+			const added = await db.insert(itemSourceLink)
 				.values(shared.map((row) => ({ ...row, sourceConnectionKey })))
-				.onConflictDoNothing();
+				.onConflictDoNothing()
+				.returning({ itemKey: itemSourceLink.itemKey });
+			for (const row of added) joined.add(row.itemKey);
 		}
 	}
 	await loadLinks();
@@ -252,7 +259,7 @@ export async function reserveItemSourceLinks(
 			`Failed to reserve source links for: ${unresolved.join(", ")}`,
 		);
 	}
-	return result;
+	return { keys: result, joined };
 }
 
 export async function reserveCollectionIdentities(

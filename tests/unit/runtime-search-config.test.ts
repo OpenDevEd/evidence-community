@@ -69,13 +69,14 @@ describe("runtime search configuration", () => {
 						mode: "hidden",
 						label: "Institutions",
 					},
+					sources: { enabled: false, label: "sources" },
 				},
 				false,
 			),
 		).toEqual(["collectionsAncestry", "itemType", "studyType", "hasPdf", "year"]);
 		expect(
-			getRuntimeSearchFacets(config.search, config.filters, true),
-		).toContain("topicAncestors");
+			getRuntimeSearchFacets(config.search, { ...config.filters, sources: { enabled: true, label: "sources" } }, true),
+		).toEqual(expect.arrayContaining(["topicAncestors", "sources"]));
 	});
 
 	it("accepts any four-digit year when the year filter is enabled", () => {

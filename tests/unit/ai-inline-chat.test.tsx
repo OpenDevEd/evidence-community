@@ -348,6 +348,7 @@ describe("the chat beside the search results", () => {
 			institution: [],
 			sort: "relevance",
 			topics: [],
+			sources: [],
 			type: [],
 			study: [],
 			readerList: null,

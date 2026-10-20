@@ -1068,7 +1068,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				(record) => record.sourceRecordKey,
 			),
 		});
-		const itemKeys = await reserveItemSourceLinks(transaction, {
+		const { keys: itemKeys, joined: joinedItemKeys } = await reserveItemSourceLinks(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
 			sourceRecordKeys: itemUpserts.map(
 				(record) => record.sourceRecordKey,
@@ -2531,6 +2531,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const openAccessChangedItemKeys = batchItemKeys.filter(
 			(key) => openAccessBefore(key, null) !== openAccessAfter(key, null),
 		);
+		// Readers filter by the sources that hold a record, so a record this source took up, let go or took back is
+		// indexed again.
+		const sourcesChangedItemKeys = batch.items.flatMap((record) => {
+			const itemKey = itemKeys.get(record.sourceRecordKey);
+			if (!itemKey) return [];
+			const link = sourceLinkByItemKey.get(itemKey);
+			const heldBefore = !joinedItemKeys.has(itemKey) && Boolean(link && !link.remoteDeleted);
+			return heldBefore === (record.operation !== "delete") ? [] : [itemKey];
+		});
 		await updateCollectionSourceLinkVersions(
 			transaction,
 			batch.sourceConnectionKey,
@@ -2599,9 +2608,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			.filter((key) => !directlyChangedItemKeys.has(key) && !affectedParentKeys.has(key));
 		const depositedLinkedKeys = await publicationTargetedKeys(transaction, linkedKeys);
 		for (const key of depositedLinkedKeys) affectedParentKeys.add(key);
+		// Which sources hold a record is part of neither the record nor its deposits, so it is only searched again.
 		const leasedLinkedKeys = await requeueLinkedRecords(
 			transaction,
-			linkedKeys.filter((key) => !depositedLinkedKeys.has(key)),
+			[...linkedKeys.filter((key) => !depositedLinkedKeys.has(key)), ...sourcesChangedItemKeys],
 			new Set([...directlyChangedItemKeys, ...affectedParentKeys]),
 			now,
 			batch.sourceSyncRunId ?? null,

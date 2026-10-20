@@ -32,6 +32,7 @@ import {
 	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
 	PDF_PRESENCE_ATTRIBUTE,
 	SEARCH_RESULT_LIMIT,
+	SOURCES_FIELD,
 } from "@/lib/search-filter-constants";
 
 import {
@@ -1130,6 +1131,7 @@ export async function ensureSearchIndex(
 					collectionsAncestry: "count",
 					country: "count",
 					authorCountry: "count",
+					[SOURCES_FIELD]: "count",
 					topicAncestors: "count",
 					studyType: "count",
 					studyTypeShown: "count",
@@ -1166,6 +1168,7 @@ export async function ensureSearchIndex(
 						"key",
 						"provider",
 						"sourceConnectionKey",
+						SOURCES_FIELD,
 						FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
 						PDF_PRESENCE_ATTRIBUTE,
 					],

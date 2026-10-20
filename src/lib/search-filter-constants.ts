@@ -8,6 +8,9 @@ export const FULL_TEXT_PDF_FILTER = `${FULL_TEXT_PDF_PRESENCE_ATTRIBUTE} EXISTS`
 /** True when a record has a public PDF, stored or linked, with or without extracted text. */
 export const PDF_PRESENCE_ATTRIBUTE = "hasPdf";
 
+/** The sources that still hold a record, by key, which readers filter by. */
+export const SOURCES_FIELD = "sources";
+
 /** Meilisearch filter for records with a PDF the AI can read. */
 export const PDF_FILTER = `${PDF_PRESENCE_ATTRIBUTE} = true`;
 
