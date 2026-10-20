@@ -17,6 +17,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import useSWR from "swr";
 import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
 import { toggleTopicSelection, topicAncestry } from "@/lib/topics/selection";
+import { useSourcesLabel } from "@/components/features/collections/sources";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -104,6 +105,7 @@ export function getFilterChipState(
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
 		topicFilters.length +
+		(queryParams.sources?.length || 0) +
 		(queryParams.author ? 1 : 0) +
 		(queryParams.type?.length || 0) +
 		(queryParams.study?.length || 0) +
@@ -199,6 +201,35 @@ function TopicChips({
 	});
 }
 
+/** One chip per chosen source, named as the library names it; they wait for the names rather than show keys. */
+function SourceChips() {
+	const t = useTranslations("ui");
+	const label = useSourcesLabel();
+	const { sources, queryParams, handleSourceSelect } = useFiltersContext();
+	if (!sources) return null;
+	const nameOf = new Map(sources.map((source) => [source.key, source.name]));
+	return queryParams.sources.map((key) => (
+		<motion.div
+			key={`source-${key}`}
+			initial={{ opacity: 0, y: 10 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: -10 }}
+			transition={{ duration: 0.2 }}
+		>
+			<Chip
+				group={label}
+				// A source the library no longer has, from a saved link say, still gets a chip so it can be removed.
+				title={nameOf.get(key) ?? t("unknownSource")}
+				callback={() => handleSourceSelect(key)}
+				classNames={{
+					button: "bg-secondary dark:bg-secondary/70",
+					title: "text-white dark:text-white",
+				}}
+			/>
+		</motion.div>
+	));
+}
+
 export function FilterChips() {
 	// Reads the shared, app-level filter state so the navbar chips and the
 	// library chips are the exact same resident instance (no remount flash).
@@ -236,6 +267,7 @@ export function FilterChips() {
 							/>
 						</Suspense>
 					) : null}
+					<SourceChips />
 					{itemsContext.queryParams?.range && (
 						<motion.div
 							key={"year-" + itemsContext.queryParams.range}

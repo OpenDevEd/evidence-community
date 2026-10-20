@@ -1068,7 +1068,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				(record) => record.sourceRecordKey,
 			),
 		});
-		const itemKeys = await reserveItemSourceLinks(transaction, {
+		const { keys: itemKeys, joined: joinedItemKeys } = await reserveItemSourceLinks(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
 			sourceRecordKeys: itemUpserts.map(
 				(record) => record.sourceRecordKey,
@@ -2531,6 +2531,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const openAccessChangedItemKeys = batchItemKeys.filter(
 			(key) => openAccessBefore(key, null) !== openAccessAfter(key, null),
 		);
+		// Readers filter by the sources that hold a record, so a record this source took up, let go or took back is
+		// indexed again.
+		const sourcesChangedItemKeys = batch.items.flatMap((record) => {
+			const itemKey = itemKeys.get(record.sourceRecordKey);
+			if (!itemKey) return [];
+			const link = sourceLinkByItemKey.get(itemKey);
+			const heldBefore = !joinedItemKeys.has(itemKey) && Boolean(link && !link.remoteDeleted);
+			return heldBefore === (record.operation !== "delete") ? [] : [itemKey];
+		});
 		await updateCollectionSourceLinkVersions(
 			transaction,
 			batch.sourceConnectionKey,
@@ -2590,6 +2599,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		}
 		for (const key of citationMetricChangedItemKeys) affectedParentKeys.add(key);
 		for (const key of openAccessChangedItemKeys) affectedParentKeys.add(key);
+		for (const key of sourcesChangedItemKeys) affectedParentKeys.add(key);
 		// A new link changes both records' public pages but neither record, so
 		// records outside this batch are queued for search again instead of
 		// taking a new revision. In a large import that is thousands of records

@@ -10,6 +10,7 @@ import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
 
 import {
@@ -393,6 +394,14 @@ async function applyItemWritebackLinkPlan(
 				sourceConnectionKey,
 			);
 		}
+	}
+	if (plan.insert.length > 0) {
+		// The record is in a new source now, which readers filter by, so it is searched again.
+		const [record] = await transaction
+			.select({ itemKey: item.key, revision: item.revision })
+			.from(item)
+			.where(eq(item.key, itemKey));
+		if (record) await enqueueItemSearchReprojections(transaction, [record], new Date());
 	}
 	if (plan.enable.length > 0) {
 		// A source that already holds a copy must be checked for changes made

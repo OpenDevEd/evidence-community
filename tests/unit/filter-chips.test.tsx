@@ -21,6 +21,7 @@ const libraryState = vi.hoisted(() => ({ topicsEnabled: true }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		topics: { enabled: libraryState.topicsEnabled },
+		filters: { sources: { enabled: true, label: "Searches" } },
 	}),
 }));
 
@@ -35,6 +36,8 @@ const filters = {
 	} as Record<string, unknown>,
 	selectedCollections: [] as string[],
 	collectionsData: undefined,
+	sources: [{ key: "openalex-climate", name: "Climate" }],
+	handleSourceSelect: vi.fn(),
 	handleClearFilters: vi.fn(),
 	handleRangeChange: vi.fn(),
 	handleAuthorSelect: vi.fn(),
@@ -62,6 +65,7 @@ describe("the chips showing which filters are on", () => {
 			collections: [],
 			institution: [],
 			topics: [],
+			sources: [],
 			type: [],
 			study: [],
 			author: "",
@@ -150,6 +154,20 @@ describe("the chips showing which filters are on", () => {
 		});
 
 		expect(filters.handleRangeChange).toHaveBeenCalledWith(null, null);
+	});
+
+	it("names a chosen source as the library names it, and takes it off", async () => {
+		filters.queryParams.sources = ["openalex-climate"];
+		await render();
+
+		expect(clearButton()).not.toBeNull();
+		expect(container.textContent).toContain("Climate");
+		expect(container.textContent).not.toContain("openalex-climate");
+		await act(async () => {
+			container.querySelector("button")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+
+		expect(filters.handleSourceSelect).toHaveBeenCalledWith("openalex-climate");
 	});
 
 	it("clears every filter at once", async () => {

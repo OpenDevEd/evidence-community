@@ -115,6 +115,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			Boolean(config.topics?.enabled),
 			"topic",
 		),
+		sources: resolveOffered(params.sources, config.filters.sources.enabled, "source"),
 	};
 	return {
 		params: {
@@ -126,6 +127,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			country: resolved.country.value,
 			author_country: resolved.author_country.value,
 			topics: resolved.topics.value,
+			sources: resolved.sources.value,
 			// A page that cannot hold a result opens on the first.
 			page:
 				Number.isInteger(page) && page >= 1 && page <= lastReachablePage(perPage)

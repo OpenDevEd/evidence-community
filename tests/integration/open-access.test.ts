@@ -217,10 +217,10 @@ it("labels a record from its newest OpenAlex work, else from OpenAlex's answer f
 		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: true });
 
 		// A source taken out of the library stops counting, and one put back counts again; its records are searched again
-		// both times.
+		// both times. Taking every source out searches every record they held again, this one among them.
 		await markSearched(db);
 		await reconcileConfiguredSources(db, []);
-		expect(await queuedForSearch(db)).toEqual([fromOpenAlex]);
+		expect(await queuedForSearch(db)).toContain(fromOpenAlex);
 		expect(await openAccessOf(db, [fromOpenAlex])).toEqual({ [fromOpenAlex]: null });
 		await markSearched(db);
 		const { sources } = libraryConfigSchema.parse({

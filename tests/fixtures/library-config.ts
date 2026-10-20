@@ -235,6 +235,10 @@ export const maximalLibraryConfig = {
 			label: "institutions",
 			featuredValue: "Institution One",
 		},
+		sources: {
+			enabled: true,
+			label: "Searches",
+		},
 		collectionsExpanded: false,
 		years: {
 			enabled: true,

@@ -28,7 +28,7 @@ import { searchParamsLoader } from "./searchParams";
 import { resolveSearchQuery } from "./search-query";
 import { formatRange } from "./utils";
 import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
-import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
+import { FULL_TEXT_PDF_FILTER, SOURCES_FIELD } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { filterPublicAttachments, itemPageAttachments } from "./attachment-visibility";
@@ -179,6 +179,8 @@ type SearchFilterInput = {
 	study?: readonly string[];
 	/** The field study types are filtered by, as the library's settings choose. */
 	studyField?: string;
+	/** The library's sources, any of them. */
+	sources?: readonly string[];
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -205,6 +207,7 @@ function buildSearchFilters({
 	type = [],
 	study = [],
 	studyField = "studyType",
+	sources = [],
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -216,6 +219,7 @@ function buildSearchFilters({
 		author ? meilisearchEquals("fullNames", author) : null,
 		type.length ? meilisearchIn("itemType", type) : null,
 		study.length ? meilisearchIn(studyField, study) : null,
+		sources.length ? meilisearchIn(SOURCES_FIELD, sources) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
@@ -235,7 +239,7 @@ export function resolveSearchRequest(
 	perPage: number = ITEMS_PER_PAGE,
 ) {
 	const {
-		params: { page: pageNum, scope, institution, country, author_country, range, topics },
+		params: { page: pageNum, scope, institution, country, author_country, range, topics, sources },
 	} = resolveSearchQuery(searchParams, libraryConfig, perPage);
 	const search = searchParams.search || "";
 	const facetFilters = buildSearchFilters({
@@ -250,6 +254,7 @@ export function resolveSearchRequest(
 		institution,
 		range,
 		scope,
+		sources,
 	});
 	// A topic the library does not have matches nothing, as an unknown type
 	// does. Left out of the filter, it would match everything.
@@ -463,10 +468,12 @@ export async function getPublicFacets(
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 
 	// A chosen year range or item type still shows the other years and types, so each is counted without its own filter.
+	// Sources are too, and always out of the results some source holds: records made here belong to none.
 	const ownFilters = [
 		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
 		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
 		{ facet: studyTypeFacet(libraryConfig.filters), active: Boolean(searchParams.study?.length), without: { study: [] } },
+		{ facet: SOURCES_FIELD, active: libraryConfig.sources.length > 1, without: { sources: [] }, also: [`${SOURCES_FIELD} IS NOT EMPTY`] },
 	].filter(({ facet, active }) => active && facets.includes(facet));
 
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([
@@ -478,10 +485,10 @@ export async function getPublicFacets(
 				offset: 0, limit: 0, attributesToSearchOn, facets: ["topicAncestors"], filter: facetFilters,
 			})
 			: null,
-		...ownFilters.map(({ facet, without }) =>
+		...ownFilters.map(({ facet, without, also = [] }) =>
 			index.search(search, {
 				offset: 0, limit: 0, attributesToSearchOn, facets: [facet],
-				filter: resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters,
+				filter: [...resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters, ...also],
 			}),
 		),
 	]);

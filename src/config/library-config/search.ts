@@ -3,7 +3,7 @@ import {
 	type PlatformSearchScope,
 } from "./catalogs";
 import { INSTITUTION_FILTER_FIELD } from "./institutions";
-import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
 import type { LibraryPublicConfig } from "./schema";
 
 export type RuntimeSearch = Omit<LibraryPublicConfig["search"], "embeddings">;
@@ -70,6 +70,9 @@ export function getRuntimeSearchFacets(
 	}
 	if (filters.institution.mode !== "hidden") {
 		facets.push(INSTITUTION_FILTER_FIELD);
+	}
+	if (filters.sources.enabled) {
+		facets.push(SOURCES_FIELD);
 	}
 	if (filters.years.enabled) {
 		facets.push("year");

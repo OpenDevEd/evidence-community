@@ -10,6 +10,7 @@ import {
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
 import { FacetsGetResponse } from "@/app/api/facets/types";
+import type { SourcesGetResponse } from "@/app/api/sources/types";
 import { CollectionNoteGetResponse } from "@/app/api/collections/[id]/note/types";
 import {
 	buildHierarchy,
@@ -202,6 +203,17 @@ export function useFilters() {
 		[setParams],
 	);
 
+	const handleSourceSelect = useCallback(
+		(source: string) =>
+			setParams({
+				sources: params.sources.includes(source)
+					? params.sources.filter((value) => value !== source)
+					: [...params.sources, source],
+				page: 1,
+			}),
+		[params.sources, setParams],
+	);
+
 	const handleTypeSelect = useCallback(
 		(type: string) =>
 			setParams({
@@ -238,6 +250,7 @@ export function useFilters() {
 			collections: [],
 			range: "",
 			topics: [],
+			sources: [],
 			type: [],
 			study: [],
 		});
@@ -255,6 +268,12 @@ export function useFilters() {
 		isLoading: isCollectionsLoading,
 	} = useSWR<CollectionsGetResponse>(
 		admin ? null : "/collections",
+		fetcher,
+		SWR_OPTIONS,
+	);
+
+	const { data: sourcesData, error: sourcesError } = useSWR<SourcesGetResponse>(
+		!admin && filters.sources.enabled ? "/sources" : null,
 		fetcher,
 		SWR_OPTIONS,
 	);
@@ -311,11 +330,14 @@ export function useFilters() {
 		handleAuthorCountrySelect,
 		handleCountriesClear,
 		handleTopicsChange,
+		handleSourceSelect,
 		handleTypeSelect,
 		handleStudySelect,
 		handleClearFilters,
 		handleCheckboxChange,
 		collectionsData,
+		// Undefined while the names load; a library whose names can't load offers no source filter.
+		sources: sourcesData?.sources ?? (sourcesError ? [] : undefined),
 		collectionsError,
 		isCollectionsLoading,
 		hierarchy,

@@ -31,11 +31,12 @@ import type { StudyTypeKey } from "@/lib/readings/study-types";
 import { chunkValues } from "@/lib/chunk-values";
 import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
+import { readItemSources } from "./item-sources";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
 import { filterPublicAttachments } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
-import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
 import type { Item } from "@/app/api/item/types";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
@@ -442,10 +443,11 @@ async function buildSearchProjectionPlanForKeys(
 		database,
 		institutionRows.filter((row) => row.source === "author"),
 	);
-	const [linksByItem, citationMetricsByItem, openAccessOf] = await Promise.all([
+	const [linksByItem, citationMetricsByItem, openAccessOf, sourcesOf] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
 		readOpenAccess(database, activeParentKeys),
+		readItemSources(database, activeParentKeys),
 	]);
 	const childrenByParent = new Map<string, ItemRow[]>();
 	for (const child of children) {
@@ -584,6 +586,7 @@ async function buildSearchProjectionPlanForKeys(
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,
 				sourceRecordKey: parent.sourceRecordKey,
+				[SOURCES_FIELD]: sourcesOf(parent.key),
 				tags: uniqueSorted(tagsByItem.get(parent.key) ?? []),
 			} satisfies ItemSearchDocument;
 		},

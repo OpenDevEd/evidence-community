@@ -6,6 +6,7 @@ import { outbox } from "@opendeved/evidence-library-core";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
+import { getPublicSources } from "./sources/data";
 import { cacheLife, cacheTag } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -61,6 +62,21 @@ export async function getCachedCollections(config?: LibraryServerConfig) {
 	}
 
 	return result.collections;
+}
+
+// --- Sources ---
+
+async function _getSourcesCached(_configRevision: string, config: LibraryServerConfig) {
+	"use cache";
+	// A Zotero group renamed at Zotero shows within five minutes; a source renamed in the configuration at once.
+	cacheLife({ revalidate: 300 });
+	cacheTag("sources");
+	return getPublicSources(config);
+}
+
+export async function getCachedSources(config?: LibraryServerConfig) {
+	const libraryConfig = config ?? (await getLibraryConfig());
+	return _getSourcesCached(libraryConfig.revision, libraryConfig);
 }
 
 // Share the database read within one render, without keeping an older public revision.

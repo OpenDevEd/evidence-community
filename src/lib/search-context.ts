@@ -36,6 +36,8 @@ export const librarySearchContextSchema = z
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
 		topics: filterValuesSchema,
+		/** The library's sources, any of them, by key. */
+		sources: filterValuesSchema.default([]),
 		/** Item types, any of them. */
 		type: filterValuesSchema.default([]),
 		/** Study types, any of them, as Jev read each record. */
@@ -92,6 +94,7 @@ export function normalizeLibrarySearchContext(
 		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
 		collections: filterValues(value.collections),
 		topics: filterValues(value.topics),
+		sources: filterValues(value.sources),
 		type: filterValues(value.type),
 		study: filterValues(value.study),
 		readerList: value.readerList ?? null,
@@ -112,6 +115,7 @@ export function librarySearchContextSummary(
 		author: context.author || undefined,
 		collections: context.collections,
 		topics: context.topics,
+		sources: context.sources,
 		itemTypes: context.type,
 		studyTypes: context.study,
 		readerList: context.readerList
