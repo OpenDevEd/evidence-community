@@ -19,7 +19,7 @@ import { TipFigures, useValueFormat } from "./map-figures";
 import { totalIn } from "./map-measure";
 
 /** An institution on the map: its name as the records spell it, its records under the page's filters, and where it is. */
-export type InstitutionPoint = { key: string; name: string; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; longitude: number; latitude: number; city: string; country: string };
+export type InstitutionPoint = { key: string; name: string; /** Every spelling the records use, the most used first. */ names: string[]; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; longitude: number; latitude: number; city: string; country: string };
 type Places = Record<string, [number, number, string, string]>;
 
 const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
@@ -30,19 +30,37 @@ const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnRec
  * every facets request carries this facet. */
 const institutionCounts = (facets: FacetsGetResponse | undefined) => (facets?.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>;
 
-/** An institution the facets count, where its place is known; none where it isn't. */
-function pointOf(name: string, count: number, places: Places | undefined, totals: Record<string, number> | undefined): InstitutionPoint[] {
+type Spellings = { key: string; names: string[]; count: number; place: Places[string] };
+
+/** Adds one spelling the facets count to its institution, where the institution's place is known. Records may spell one name
+ * in more than one way (case, accents); it is one circle, its spellings' records added up. */
+function addSpelling(groups: Map<string, Spellings>, name: string, count: number, places: Places | undefined) {
 	const key = institutionNameKey(name);
 	const place = places?.[key];
-	if (!place) return [];
-	return [{ key, name, count, total: totalIn(totals, name), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }];
+	if (!place) return;
+	const group = groups.get(key) ?? { key, names: [], count: 0, place };
+	group.names.push(name);
+	group.count += count;
+	groups.set(key, group);
 }
 
-/** The placed institutions, most records first. */
-const pointsOf = (facets: FacetsGetResponse | undefined, places: Places | undefined, totals: Record<string, number> | undefined) =>
-	Object.entries(institutionCounts(facets))
-		.flatMap(([name, count]) => pointOf(name, Number(count), places, totals))
+/** An institution's records in the whole library, all its spellings together; nothing where the library's counts have none of them. */
+function totalOf(names: string[], totals: Record<string, number> | undefined) {
+	const counted = names.map((name) => totalIn(totals, name)).filter((count) => count !== undefined);
+	return counted.length ? counted.reduce((sum, count) => sum + count, 0) : undefined;
+}
+
+/** The placed institutions, most records first. The facets list the most used spelling first, so it names the circle. */
+export function pointsOf(facets: FacetsGetResponse | undefined, places: Places | undefined, totals: Record<string, number> | undefined): InstitutionPoint[] {
+	const groups = new Map<string, Spellings>();
+	for (const [name, count] of Object.entries(institutionCounts(facets))) addSpelling(groups, name, Number(count), places);
+	return [...groups.values()]
+		.map(({ key, names, count, place }) => ({ key, name: names[0], names, count, total: totalOf(names, totals), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }))
 		.sort((a, b) => b.count - a.count);
+}
+
+/** Whether any spelling of the institution is chosen. */
+const isChosen = (point: InstitutionPoint, chosen: string[]) => point.names.some((name) => chosen.includes(name));
 
 /** The institutions' record counts under the page's filters, chosen institutions included, so choosing one shows it and the
  * institutions its records share authors with. Joined with where each one is. */
@@ -101,7 +119,7 @@ const InstitutionDots = memo(function InstitutionDots({ points, projection, even
 
 /** The chosen institutions and the one pointed at, darker and outlined, over the rest. */
 function InstitutionMarks({ points, projection, chosen, hovered }: { points: InstitutionPoint[]; projection: GeoProjection; chosen: string[]; hovered: string | null }) {
-	const marked = points.filter((point) => chosen.includes(point.name) || point.key === hovered);
+	const marked = points.filter((point) => isChosen(point, chosen) || point.key === hovered);
 	return (
 		<g aria-hidden className="pointer-events-none">
 			{marked.map((point) => {
@@ -178,7 +196,7 @@ export function InstitutionList({ points, ready, chosen, stale, hovered, onHover
 			<ol ref={listRef} inert={stale} style={fit.rowStyle} className={twMerge("px-2 transition-opacity", FITTED_ROWS, stale && "opacity-50")} onPointerLeave={() => onHover(null)}>
 				{fit.shown.map((point, k) => (
 					<li key={point.key}>
-						<InstitutionRow point={point} rank={(fit.page - 1) * fit.per + k + 1} top={topCount(points)} selected={chosen.includes(point.name)} lifted={hovered === point.key} onHover={onHover} onSelect={onSelect} />
+						<InstitutionRow point={point} rank={(fit.page - 1) * fit.per + k + 1} top={topCount(points)} selected={isChosen(point, chosen)} lifted={hovered === point.key} onHover={onHover} onSelect={onSelect} />
 					</li>
 				))}
 			</ol>
@@ -206,7 +224,7 @@ type LayerOptions = {
 export function useInstitutionLayer({ props, enabled, totals, setTooltipContent, setTooltipAnchor }: LayerOptions) {
 	const institutions = useInstitutionPoints(props.queryParams, enabled, totals);
 	const [hovered, setHovered] = useState<string | null>(null);
-	const { handleInstitutionSelect } = props;
+	const { handleInstitutionToggle } = props;
 	// Stable until an institution is chosen, so pointing at a circle doesn't draw thousands again.
 	const events = useMemo<DotEvents>(() => ({
 		onShow: (point) => {
@@ -221,9 +239,9 @@ export function useInstitutionLayer({ props, enabled, totals, setTooltipContent,
 		onSelect: (point) => {
 			setTooltipContent(null);
 			setHovered(null);
-			handleInstitutionSelect(point.name);
+			handleInstitutionToggle(point.names);
 		},
-	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect]);
+	}), [setTooltipAnchor, setTooltipContent, handleInstitutionToggle]);
 	if (!enabled) return { overlay: NO_OVERLAY };
 	const chosen = props.queryParams.institution;
 	return {

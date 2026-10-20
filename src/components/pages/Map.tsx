@@ -23,7 +23,7 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, modeField, modeOf, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { countryRows, listOf, measureOf, modeField, modeOf, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
 import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure } from "./map-panel";
 import { TipFigures, useValueFormat } from "./map-figures";
 import { DOT, useInstitutionLayer } from "./map-institutions";
@@ -31,7 +31,7 @@ import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
 import { getRuntimeSearchScopeOptions, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
 
 function MouseTooltip({
@@ -82,9 +82,12 @@ const placeName = (place: string) => {
 	return COUNTRIES[code] ?? code;
 };
 
+/** The chosen institutions, one for all the spellings of each. */
+const institutionsOf = (names: string[]) => names.filter((name, index) => names.findIndex((other) => institutionNameKey(other) === institutionNameKey(name)) === index);
+
 /** What the results sheet's bar calls them: the chosen institution or country, how many are chosen, or a search's results. */
 function resultsName(places: string[], t: ReturnType<typeof useTranslations<"ui">>, institutions: string[] = []) {
-	const chosen = [...institutions, ...places.map(placeName)];
+	const chosen = [...institutionsOf(institutions), ...places.map(placeName)];
 	if (chosen.length > 1) return t("mapChosenCount", { count: chosen.length });
 	return chosen[0] ?? t("resultsLabel");
 }
@@ -141,13 +144,14 @@ function resultsMotion(wide: boolean, still: boolean | null) {
 	return { initial: away, exit: away, animate: { opacity: 1, x: 0, y: 0 }, transition, layout: !still && !wide };
 }
 
-/** The sheet's bar: back to the countries, then what the results are of, which folds the sheet (lying on its side, just the name). */
-function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolean; onFold: () => void; onBack: () => void }) {
+/** The sheet's bar: back to the list (`list`, the countries or the institutions), then what the results are of, which folds the
+ * sheet (lying on its side, just the name). */
+function ResultsBar({ name, list, open, onFold, onBack }: { name: string; list: "countries" | "institutions"; open: boolean; onFold: () => void; onBack: () => void }) {
 	const t = useTranslations("ui");
 	const label = t("resultsLabel");
 	return (
 		<div className="flex h-14 shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#e8eaef] pl-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
-			<BackButton to={t("countries")} onBack={onBack} />
+			<BackButton to={t(list)} onBack={onBack} />
 			<h2 className="hidden min-w-0 flex-1 truncate pr-5 text-right text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:block">{name}</h2>
 			{/* Named apart from the country's own button on the map, with what it shows in its name. */}
 			<button type="button" aria-expanded={open} aria-label={name === label ? name : `${label}: ${name}`} onClick={onFold} className="flex h-full min-w-0 flex-1 items-center justify-end gap-3 pr-5 text-sm font-semibold outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
@@ -217,7 +221,7 @@ function resultsClass(open: boolean, small: boolean) {
  * beside the countries' panel. Below, a sheet over the countries' sheet, with the back arrow to the countries: it folds to its bar
  * so the map shows with the search still on, and lying on its side it takes the right side.
  */
-function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
+function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; list: "countries" | "institutions" }) {
 	const shown = resultsShown(props.queryParams);
 	const [open, setOpen] = useResultsOpen(shown, [...chosenPlaces(props.queryParams), ...props.queryParams.institution]);
 	const small = useLibraryConfig().theme.layout === "small";
@@ -235,7 +239,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 					className={resultsClass(open, small)}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<ResultsBar name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
+						<ResultsBar list={list} name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
@@ -249,7 +253,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 }
 
 const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
-	return prevProps.props === nextProps.props;
+	return prevProps.props === nextProps.props && prevProps.list === nextProps.list;
 });
 
 type Feature = GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon, { name: string }> & { id: string };
@@ -661,13 +665,17 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
-/** Whether a search, a filter, a chosen place or the Documents scope (records with a PDF's text only) narrows the map. The other
- * scopes only choose which fields a search reads, so alone they narrow nothing. */
-const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
-	resolveRuntimeSearchScope(params.scope, search) === "documents" || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+/** A scope that reads every record: any but Documents (records with a PDF's text only). None where the library offers only Documents,
+ * which is then the whole library as its readers see it. */
+const everyRecord = (search: RuntimeSearch) => getRuntimeSearchScopeOptions(search).find((option) => option.key !== "documents")?.key;
 
-/** The whole library: no filter, and a scope other than Documents where the library offers one. */
-const wholeLibrary = (search: RuntimeSearch) => ({ scope: getRuntimeSearchScopeOptions(search).find((option) => option.key !== "documents")?.key ?? "" });
+/** Whether a search, a filter, a chosen place or the Documents scope narrows the map. The other scopes only choose which fields a
+ * search reads, so alone they narrow nothing; so does Documents where it is the only scope. */
+const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
+	(everyRecord(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+
+/** The whole library: no filter, and a scope that reads every record. */
+const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecord(search) ?? "" });
 
 /**
  * The whole library's counts, for the tooltips' first line: its countries in the mode and its institutions. Only while the map is
@@ -744,7 +752,7 @@ export default function Map({ focus, places, counts, pending }: { focus?: [numbe
 			/>
 			<MapPanel {...panel} />
 			<MapSheet {...panel} />
-			<MemoizedItemView props={props} />
+			<MemoizedItemView props={props} list={listOf(mode)} />
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
 			<MapLegend rows={rows} measure={shade} max={max} institutions={mode === "institutions"} />
 			<Suspense fallback={null}>

@@ -55,6 +55,9 @@ export const modesOf = (institutions: boolean) => COUNTRY_MODES.filter((mode) =>
 /** What colours the countries: in the institutions' mode their records, as the circles already stand for institutions. */
 export const shadeOf = (mode: CountryMode, measure: Measure): Measure => (mode === "institutions" ? "records" : measure);
 
+/** What the panel lists in a mode: institutions in the institutions' mode, else countries. */
+export const listOf = (mode: CountryMode) => (mode === "institutions" ? "institutions" : "countries");
+
 /** A place's records in the whole library while the map is narrowed (`totals` given). Nothing where the library's counts don't
  * have it: an institution past the facets' limit, which isn't none. */
 export const totalIn = (totals: Record<string, number> | undefined, key: string) => totals?.[key];
