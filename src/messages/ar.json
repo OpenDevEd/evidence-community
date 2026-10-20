@@ -324,6 +324,7 @@
     "authorCountries": "بلدان المؤلفين",
     "authorInstitutions": "مؤسسات المؤلفين",
     "mapPapersBy": "عرض الأوراق حسب",
+    "mapClearResults": "مسح البحث وعوامل التصفية",
     "mapModeFocusHint": "البلدان التي تدرسها الورقة",
     "mapModeAuthorsHint": "أماكن عمل مؤلفيها",
     "mapModeInstitutionsHint": "كل مؤسسة يعمل فيها مؤلفوها",

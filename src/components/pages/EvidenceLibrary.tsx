@@ -93,6 +93,7 @@ function LibraryFilters({
 function SearchTabContent({
 	askAI,
 	header,
+	headless,
 	itemsContext,
 	extraFilters,
 	countLabel,
@@ -103,6 +104,8 @@ function SearchTabContent({
 	showHeader,
 }: {
 	header: ReactNode;
+	/** Something above the list draws its heading, sort and search options, as the map's results panel does. */
+	headless?: boolean;
 	itemsContext: ReturnType<typeof useItemsList>;
 	extraFilters: ReactNode;
 	countLabel: ReactNode;
@@ -136,60 +139,64 @@ function SearchTabContent({
 
 	return (
 		<div className="flex flex-col gap-4">
-			{/* Header with title and explore button */}
-			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
-				<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
-					<SkipLink href="#collections">
-						{t("goToFilters")}
-					</SkipLink>
-					<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{header || (showHeader && t("searchTitle"))}
-					</h1>
-					{/* Explore browses the library's filters, which a reader's list does not have. */}
-					{!itemsContext.userData && (
-						<>
-							<Button
-								startContent={
-									<HugeiconsIcon icon={CompassIcon} className="size-6 shrink-0" />
-								}
-								className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
-								onPress={onExploreOpen}
-							>
-								{t("explore")}
-							</Button>
-							<ExploreModal
-								isOpen={isExploreOpen}
-								onOpenChange={onExploreOpenChange}
+			{!headless && (
+				<>
+				{/* Header with title and explore button */}
+				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
+					<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
+						<SkipLink href="#collections">
+							{t("goToFilters")}
+						</SkipLink>
+						<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
+							{header || (showHeader && t("searchTitle"))}
+						</h1>
+						{/* Explore browses the library's filters, which a reader's list does not have. */}
+						{!itemsContext.userData && (
+							<>
+								<Button
+									startContent={
+										<HugeiconsIcon icon={CompassIcon} className="size-6 shrink-0" />
+									}
+									className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
+									onPress={onExploreOpen}
+								>
+									{t("explore")}
+								</Button>
+								<ExploreModal
+									isOpen={isExploreOpen}
+									onOpenChange={onExploreOpenChange}
+								/>
+							</>
+						)}
+					</div>
+					<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
+						<Button
+							className="h-full font-medium text-base !p-0"
+							isIconOnly
+							onPress={onHelpOpen}
+							aria-label={t("helpAriaLabel")}
+						>
+							<HugeiconsIcon
+								icon={HelpCircleIcon}
+								aria-label={t("helpIconAriaLabel")}
+								className="size-6"
 							/>
-						</>
-					)}
-				</div>
-				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
-					<Button
-						className="h-full font-medium text-base !p-0"
-						isIconOnly
-						onPress={onHelpOpen}
-						aria-label={t("helpAriaLabel")}
-					>
-						<HugeiconsIcon
-							icon={HelpCircleIcon}
-							aria-label={t("helpIconAriaLabel")}
-							className="size-6"
+						</Button>
+						<HelpModal
+							isOpen={isHelpOpen}
+							onOpenChange={onHelpOpenChange}
 						/>
-					</Button>
-					<HelpModal
-						isOpen={isHelpOpen}
-						onOpenChange={onHelpOpenChange}
-					/>
-					<SortComponent itemsContext={itemsContext} />
+						<SortComponent itemsContext={itemsContext} />
+					</div>
 				</div>
-			</div>
 
-			<LibraryFilters
-				askAI={askAI}
-				extraFilters={extraFilters}
-				itemsContext={itemsContext}
-			/>
+				<LibraryFilters
+					askAI={askAI}
+					extraFilters={extraFilters}
+					itemsContext={itemsContext}
+				/>
+				</>
+			)}
 
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
@@ -323,6 +330,7 @@ export function ContentInteractions({
 	countLabel,
 	extraFilters,
 	header,
+	headless,
 }: {
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
@@ -331,6 +339,8 @@ export function ContentInteractions({
 	countLabel: ReactNode;
 	extraFilters: ReactNode;
 	header?: ReactNode;
+	/** Something above the list draws its heading, sort and search options, as the map's results panel does. */
+	headless?: boolean;
 }) {
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
@@ -358,6 +368,7 @@ export function ContentInteractions({
 			/>
 			<SearchTabContent
 				header={header}
+				headless={headless}
 				itemsContext={itemsContext}
 				extraFilters={extraFilters}
 				countLabel={countLabel}

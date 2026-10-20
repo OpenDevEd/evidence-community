@@ -30,10 +30,13 @@ export default function ItemsList({
 	props,
 	contentId,
 	header,
+	headless,
 }: {
 	contentId?: string;
 	/** The list's heading, in place of the library's own. */
 	header?: ReactNode;
+	/** Something above the list draws its heading, sort and search options, as the map's results panel does. */
+	headless?: boolean;
 	userData?: any;
 	extraFilters?: ReactNode;
 	props: ReturnType<typeof useItemsList>;
@@ -47,6 +50,7 @@ export default function ItemsList({
 			<ResourcesView
 				contentId={contentId}
 				header={header}
+				headless={headless}
 				extraFilters={extraFilters}
 				{...(!userData
 					? {}

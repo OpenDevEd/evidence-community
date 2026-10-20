@@ -17,6 +17,7 @@ import {
 import {
 	ReactNode,
 	type ComponentProps,
+	type ContextType,
 	use,
 	useId,
 	useContext,
@@ -818,17 +819,24 @@ function ResourcesViewFrame({
 	);
 }
 
+/** What the library's own search asks, for its chat; nothing on a reader's list. */
+function librarySearchContext(itemsContext: ContextType<typeof ItemsContext>) {
+	return itemsContext.userData ? undefined : normalizeLibrarySearchContext(itemsContext.queryParams);
+}
+
 export function ResourcesView({
 	contentId = "main-content",
 	extraFilters,
 	params,
 	countLabel,
 	header,
+	headless,
 }: {
 	extraFilters: ReactNode;
 	params?: Record<string, any>;
 	countLabel?: ReactNode;
 	header?: ReactNode;
+	headless?: boolean;
 	contentId?: string;
 }) {
 	const idPrefix = useId();
@@ -850,9 +858,7 @@ export function ResourcesView({
 		engaged,
 		isRTL,
 	);
-	const searchContext = itemsContext.userData
-		? undefined
-		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	const searchContext = librarySearchContext(itemsContext);
 	useResultsAnalytics(itemsContext);
 	const resultAbstract = engaged ? engagedAbstract : abstract;
 	const resultView = engaged ? "list" : view;
@@ -888,6 +894,7 @@ export function ResourcesView({
 				}}
 				normalProps={{
 					header,
+					headless,
 					abstract,
 					onAbstractChange: setAbstract,
 					view,

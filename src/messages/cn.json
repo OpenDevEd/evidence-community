@@ -324,6 +324,7 @@
     "authorCountries": "作者国家",
     "authorInstitutions": "作者机构",
     "mapPapersBy": "论文分布依据",
+    "mapClearResults": "清除搜索和筛选条件",
     "mapModeFocusHint": "论文研究的国家/地区",
     "mapModeAuthorsHint": "作者的工作地点",
     "mapModeInstitutionsHint": "作者所在的每个机构",

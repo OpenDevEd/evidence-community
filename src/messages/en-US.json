@@ -324,6 +324,7 @@
     "authorCountries": "Author Countries",
     "authorInstitutions": "Author Institutions",
     "mapPapersBy": "Map papers by",
+    "mapClearResults": "Clear the search and filters",
     "mapModeFocusHint": "The countries a paper studies",
     "mapModeAuthorsHint": "Where its authors work",
     "mapModeInstitutionsHint": "Each institution its authors work at",

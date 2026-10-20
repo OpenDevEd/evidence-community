@@ -8,7 +8,10 @@ import { flushSync } from "react-dom";
 import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef, memo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { ArrowUp01Icon, CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { ArrowUp01Icon, Cancel01Icon, CenterFocusIcon, HelpCircleIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import HelpModal from "@/components/features/modals/HelpModal";
+import { ScopeComponent, SortComponent } from "@/components/features/resources/LibrarySearchSelects";
+import { Button } from "@/components/nextui/Button";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
@@ -144,6 +147,59 @@ function resultsMotion(wide: boolean, still: boolean | null) {
 	return { initial: away, exit: away, animate: { opacity: 1, x: 0, y: 0 }, transition, layout: !still && !wide };
 }
 
+/**
+ * The results' head and band, in the greys of the panel on the left: help, the sort and the button that closes them, then the
+ * search options. No title: the panel on the left and the chips under the count say what the results are of.
+ */
+function ResultsHead({ props }: { props: ReturnType<typeof useItemsList> }) {
+	const t = useTranslations("ui");
+	const [helpOpen, setHelpOpen] = useState(false);
+	return (
+		<>
+			<div className="flex items-center gap-3 border-b border-black/[0.06] bg-[#e8eaef] p-3 dark:border-white/[0.08] dark:bg-black/25 [&>*]:h-12">
+				<Button isIconOnly aria-label={t("helpAriaLabel")} className="h-full shrink-0 !p-0" onPress={() => setHelpOpen(true)}>
+					<HugeiconsIcon icon={HelpCircleIcon} className="size-6" />
+				</Button>
+				<HelpModal isOpen={helpOpen} onOpenChange={setHelpOpen} />
+				<SortComponent itemsContext={props} />
+				<CloseResults props={props} />
+			</div>
+			<div className="border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10">
+				<ScopeComponent itemsContext={props} />
+			</div>
+		</>
+	);
+}
+
+/** From 1,280 px wide, where the results are a panel beside the map: clears the search and every filter, which closes the panel and
+ * puts the map back to the whole library. Below that the sheet's back arrow closes it. */
+function CloseResults({ props }: { props: ReturnType<typeof useItemsList> }) {
+	const t = useTranslations("ui");
+	const { search } = useLibraryConfig();
+	const label = t("mapClearResults");
+	return (
+		<Button
+			isIconOnly
+			aria-label={label}
+			className="hidden h-full !p-0 xl:flex"
+			// The search field drops what was typed and is still waiting to run, or it would open the results again.
+			data-drops-typed-search
+			onPress={() => clearResults(props, search)}
+		>
+			<HugeiconsIcon icon={Cancel01Icon} className="size-6" />
+		</Button>
+	);
+}
+
+/** Clears the search and every filter, and the Documents scope where the library reads every record another way: alone it
+ * still narrows the map to records with a PDF's text. */
+function clearResults(props: ReturnType<typeof useItemsList>, search: RuntimeSearch) {
+	props.handleClearFilters();
+	props.handleSearchChange("");
+	const every = everyRecordScope(search);
+	if (every && resolveRuntimeSearchScope(props.queryParams.scope, search) === "documents") props.handleScopeChange(new Set([every]));
+}
+
 /** The sheet's bar: back to the list (`list`, the countries or the institutions), then what the results are of, which folds the
  * sheet (lying on its side, just the name). */
 function ResultsBar({ name, list, open, onFold, onBack }: { name: string; list: "countries" | "institutions"; open: boolean; onFold: () => void; onBack: () => void }) {
@@ -238,12 +294,16 @@ function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; lis
 					{...motionProps}
 					className={resultsClass(open, small)}
 				>
-					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
+					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl")}>
 						<ResultsBar list={list} name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
-						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
-							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
-								<ItemsList props={props} contentId="map-results" />
-							</Card>
+						<div className={twMerge("min-h-0 flex-1 flex-col overflow-hidden xl:flex xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:flex", open ? "flex" : "hidden")}>
+							{/* The head stays put while the results scroll under it, as the countries' panel does. */}
+							<ResultsHead props={props} />
+							<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar">
+								<Card color="card" className="min-h-full rounded-none p-4 shadow-none">
+									<ItemsList props={props} contentId="map-results" headless />
+								</Card>
+							</div>
 						</div>
 					</div>
 				</motion.div>

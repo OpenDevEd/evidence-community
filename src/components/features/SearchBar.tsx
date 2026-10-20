@@ -22,6 +22,16 @@ type Draft = { sourceSearch: string; value: string };
  * (a result followed straight after typing) never runs, since it would write the next page's address. It stops being
  * what was typed, and a page kept for Back shows the search it has again, not the words that never ran.
  */
+/** Whether a click follows a link in this tab to another page. */
+function leavesPage(event: MouseEvent) {
+	const link = (event.target as Element | null)?.closest?.("a[href]");
+	if (!link || !followsInThisTab(event) || link.getAttribute("target") === "_blank") return false;
+	return !link.getAttribute("href")?.startsWith("#");
+}
+
+/** Whether a click is on a control that clears the search itself. */
+const dropsTypedSearch = (event: MouseEvent) => Boolean((event.target as Element | null)?.closest?.("[data-drops-typed-search]"));
+
 function useWaitingSearch(
 	handleSearchChange: (search: string) => void,
 	setDraft: (update: (draft: Draft) => Draft) => void,
@@ -41,18 +51,20 @@ function useWaitingSearch(
 		[cancel, onTyped, setDraft],
 	);
 	// The document's clicks: a link followed in this tab straight after typing leaves the page, and the waiting search
-	// must not write this page's address under that navigation. Listened to in capture, before the link navigates.
+	// must not write this page's address under that navigation. A control that clears the search itself (the map's close
+	// button, marked `data-drops-typed-search`) drops it too, and the field shows the search as it is. Listened to in
+	// capture, before the link navigates or the control acts.
 	useEffect(() => {
 		const leave = (event: MouseEvent) => {
-			const link = (event.target as Element | null)?.closest?.("a[href]");
-			if (!link || !followsInThisTab(event) || link.getAttribute("target") === "_blank") return;
-			if (link.getAttribute("href")?.startsWith("#")) return;
+			const clears = dropsTypedSearch(event);
+			if (!clears && !leavesPage(event)) return;
 			cancel();
 			onTyped?.(null);
+			if (clears) setDraft((draft) => ({ ...draft, value: draft.sourceSearch }));
 		};
 		document.addEventListener("click", leave, true);
 		return () => document.removeEventListener("click", leave, true);
-	}, [cancel, onTyped]);
+	}, [cancel, onTyped, setDraft]);
 	const take = (text: string) => {
 		setDraft((draft) => ({ ...draft, value: text }));
 		onTyped?.(text);

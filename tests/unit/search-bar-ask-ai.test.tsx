@@ -230,6 +230,33 @@ describe("asking the assistant from the search field", () => {
 		}
 	});
 
+	// The map's close button clears the search itself: words still waiting to run must not open the results again.
+	it("drops a waiting search and what it held when a control that clears the search is clicked", async () => {
+		vi.useFakeTimers();
+		try {
+			const handleSearchChange = vi.fn();
+			await act(async () => {
+				root.render(
+					<>
+						<SearchBar handleSearchChange={handleSearchChange} search="" />
+						<button type="button" data-drops-typed-search>
+							close
+						</button>
+					</>,
+				);
+			});
+			await type("school meals");
+			await act(async () => {
+				container.querySelector("button[data-drops-typed-search]")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+				vi.advanceTimersByTime(1000);
+			});
+			expect(handleSearchChange).not.toHaveBeenCalled();
+			expect(field().value).toBe("");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	// The server draws the field before the page is interactive, and a reader can type into it then. Those words stay
 	// once React takes the page over and draws it again, and they wait to be searched like any typing.
 	it("keeps words typed before the page was interactive", async () => {
