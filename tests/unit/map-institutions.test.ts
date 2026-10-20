@@ -13,7 +13,7 @@ it("makes one circle of an institution its records spell more than one way, addi
 	]);
 });
 
-it("gives each institution's whole-library records, all its spellings together, and nothing where the library's counts lack it", () => {
-	const points = pointsOf(facets({ "Ministry of Health": 1, "Ministry Of Health": 1, "Makerere University": 2 }), PLACES, { "Ministry of Health": 20, "Ministry Of Health": 5 });
+it("gives each institution's whole-library records, every spelling the library uses, also one the filters leave out, and nothing where the library's counts lack it", () => {
+	const points = pointsOf(facets({ "Ministry of Health": 1, "Makerere University": 2 }), PLACES, { "Ministry of Health": 20, "Ministry Of Health": 5 });
 	expect(Object.fromEntries(points.map((point) => [point.key, point.total]))).toEqual({ "ministry of health": 25, "makerere university": undefined });
 });

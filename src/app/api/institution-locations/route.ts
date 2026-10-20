@@ -2,6 +2,8 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { connection, NextResponse } from "next/server";
 
 import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
+import { everyRecordScope } from "@/config/library-config/search";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
 import type { Database } from "@/db/database-schema";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
@@ -12,19 +14,18 @@ import { getPublicFacets } from "@/lib/search";
 
 type Location = [longitude: number, latitude: number, city: string, country: string];
 
-/** The institutions the public search counts, as its records spell them: nothing from a draft or a hidden record. */
+/** The institutions the public search counts in the whole library, folded: nothing from a draft or a hidden record. */
 async function publicInstitutions() {
-	const facets = await getPublicFacets({});
-	return Object.keys(facets.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {});
+	const { search } = await getLibraryConfig();
+	const facets = await getPublicFacets({ scope: everyRecordScope(search) ?? "" });
+	return new Set(Object.keys(facets.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}).map(institutionNameKey));
 }
 
-/** Which of these names some author works at, folded: an institution only a record names (a report's publisher) is no author's. */
-async function authorKeys(database: Database, names: string[]) {
-	const rows = await database
-		.selectDistinct({ name: itemInstitution.institutionName })
-		.from(itemInstitution)
-		.where(and(eq(itemInstitution.source, "author"), inArray(itemInstitution.institutionName, names)));
-	return [...new Set(rows.map((row) => institutionNameKey(row.name)))];
+/** The institutions some author works at, folded, however each record spells them: an institution only a record names (a
+ * report's publisher) is no author's. */
+async function authorInstitutions(database: Database) {
+	const rows = await database.selectDistinct({ name: itemInstitution.institutionName }).from(itemInstitution).where(eq(itemInstitution.source, "author"));
+	return new Set(rows.map((row) => institutionNameKey(row.name)));
 }
 
 /** Where each of these institutions is, for those OpenAlex placed. */
@@ -44,7 +45,8 @@ async function locationsOf(database: Database, keys: string[]): Promise<[string,
 export async function GET() {
 	await connection();
 	const database = await getDatabase();
+	const [publicKeys, authorKeys] = await Promise.all([publicInstitutions(), authorInstitutions(database)]);
 	const located: [string, Location][] = [];
-	for (const names of chunkValues(await publicInstitutions(), 1_000)) located.push(...(await locationsOf(database, await authorKeys(database, names))));
+	for (const keys of chunkValues([...publicKeys].filter((key) => authorKeys.has(key)), 1_000)) located.push(...(await locationsOf(database, keys)));
 	return NextResponse.json(Object.fromEntries(located), { headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL } });
 }

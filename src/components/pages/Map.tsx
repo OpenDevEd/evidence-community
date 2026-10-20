@@ -32,7 +32,7 @@ import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
-import { getRuntimeSearchScopeOptions, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
+import { everyRecordScope, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
 
 function MouseTooltip({
 	content,
@@ -665,17 +665,13 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
-/** A scope that reads every record: any but Documents (records with a PDF's text only). None where the library offers only Documents,
- * which is then the whole library as its readers see it. */
-const everyRecord = (search: RuntimeSearch) => getRuntimeSearchScopeOptions(search).find((option) => option.key !== "documents")?.key;
-
 /** Whether a search, a filter, a chosen place or the Documents scope narrows the map. The other scopes only choose which fields a
  * search reads, so alone they narrow nothing; so does Documents where it is the only scope. */
 const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
-	(everyRecord(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+	(everyRecordScope(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
 
 /** The whole library: no filter, and a scope that reads every record. */
-const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecord(search) ?? "" });
+const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(search) ?? "" });
 
 /**
  * The whole library's counts, for the tooltips' first line: its countries in the mode and its institutions. Only while the map is

@@ -17,6 +17,12 @@ export function getRuntimeSearchScopeOptions(search: RuntimeSearch) {
 	);
 }
 
+/** A scope that reads every record: any but Documents (records with a PDF's text only). None where the library offers only
+ * Documents, which is then the whole library as its readers see it. */
+export function everyRecordScope(search: RuntimeSearch) {
+	return getRuntimeSearchScopeOptions(search).find((option) => option.key !== "documents")?.key;
+}
+
 export function resolveRuntimeSearchScope(
 	requestedScope: string | null | undefined,
 	search: RuntimeSearch,

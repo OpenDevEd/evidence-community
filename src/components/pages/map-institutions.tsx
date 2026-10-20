@@ -44,20 +44,28 @@ function addSpelling(groups: Map<string, Spellings>, name: string, count: number
 	groups.set(key, group);
 }
 
-/** An institution's records in the whole library, all its spellings together; nothing where the library's counts have none of them. */
-function totalOf(names: string[], totals: Record<string, number> | undefined) {
-	const counted = names.map((name) => totalIn(totals, name)).filter((count) => count !== undefined);
-	return counted.length ? counted.reduce((sum, count) => sum + count, 0) : undefined;
+/** The whole library's records by folded institution name, every spelling the library uses added up, also those the page's
+ * filters leave out. */
+function foldedTotals(totals: Record<string, number> | undefined) {
+	if (!totals) return undefined;
+	const folded: Record<string, number> = {};
+	for (const [name, count] of Object.entries(totals)) folded[institutionNameKey(name)] = (folded[institutionNameKey(name)] ?? 0) + count;
+	return folded;
 }
 
 /** The placed institutions, most records first. The facets list the most used spelling first, so it names the circle. */
 export function pointsOf(facets: FacetsGetResponse | undefined, places: Places | undefined, totals: Record<string, number> | undefined): InstitutionPoint[] {
 	const groups = new Map<string, Spellings>();
 	for (const [name, count] of Object.entries(institutionCounts(facets))) addSpelling(groups, name, Number(count), places);
+	const library = foldedTotals(totals);
 	return [...groups.values()]
-		.map(({ key, names, count, place }) => ({ key, name: names[0], names, count, total: totalOf(names, totals), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }))
+		.map(({ key, names, count, place }) => ({ key, name: names[0], names, count, total: totalIn(library, key), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }))
 		.sort((a, b) => b.count - a.count);
 }
+
+/** The spelling choosing an institution's circle toggles: the one chosen, else the most used. One, as the search requires every
+ * institution chosen: two spellings would ask for records naming both. */
+const chosenSpelling = (point: InstitutionPoint, chosen: string[]) => point.names.find((name) => chosen.includes(name)) ?? point.name;
 
 /** Whether any spelling of the institution is chosen. */
 const isChosen = (point: InstitutionPoint, chosen: string[]) => point.names.some((name) => chosen.includes(name));
@@ -224,7 +232,8 @@ type LayerOptions = {
 export function useInstitutionLayer({ props, enabled, totals, setTooltipContent, setTooltipAnchor }: LayerOptions) {
 	const institutions = useInstitutionPoints(props.queryParams, enabled, totals);
 	const [hovered, setHovered] = useState<string | null>(null);
-	const { handleInstitutionToggle } = props;
+	const { handleInstitutionSelect } = props;
+	const chosen = props.queryParams.institution;
 	// Stable until an institution is chosen, so pointing at a circle doesn't draw thousands again.
 	const events = useMemo<DotEvents>(() => ({
 		onShow: (point) => {
@@ -239,11 +248,10 @@ export function useInstitutionLayer({ props, enabled, totals, setTooltipContent,
 		onSelect: (point) => {
 			setTooltipContent(null);
 			setHovered(null);
-			handleInstitutionToggle(point.names);
+			handleInstitutionSelect(chosenSpelling(point, chosen));
 		},
-	}), [setTooltipAnchor, setTooltipContent, handleInstitutionToggle]);
+	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect, chosen]);
 	if (!enabled) return { overlay: NO_OVERLAY };
-	const chosen = props.queryParams.institution;
 	return {
 		panel: { ...institutions, chosen, hovered, onHover: setHovered, onSelect: events.onSelect },
 		overlay: (projection: GeoProjection) => (

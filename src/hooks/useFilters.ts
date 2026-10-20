@@ -188,12 +188,6 @@ export function useFilters() {
 		[params.institution, setParams],
 	);
 
-	/** The map's circle for one institution, whose records may spell it more than one way: chooses every spelling, or unchooses them all. */
-	const handleInstitutionToggle = useCallback(
-		(names: string[]) => setParams({ institution: toggledNames(params.institution, names) }),
-		[params.institution, setParams],
-	);
-
 	const handleCountrySelect = useCallback(
 		(country: string | string[]) => setParams({ country: toggledPlaces(params.country, country) }),
 		[params.country, setParams],
@@ -332,7 +326,6 @@ export function useFilters() {
 		handleCollectionSelect,
 		handleAuthorSelect,
 		handleInstitutionSelect,
-		handleInstitutionToggle,
 		handleCountrySelect,
 		handleAuthorCountrySelect,
 		handleCountriesClear,
@@ -354,12 +347,6 @@ export function useFilters() {
 		noteData,
 		isNoteLoading,
 	};
-}
-
-/** Every one of `names` added, or, if any is chosen already, every one taken away. */
-function toggledNames(current: string[], names: string[]) {
-	if (names.some((name) => current.includes(name))) return current.filter((chosen) => !names.includes(chosen));
-	return [...new Set([...current, ...names])];
 }
 
 /**
