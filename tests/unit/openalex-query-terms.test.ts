@@ -17,4 +17,11 @@ describe("counting what an OpenAlex search looks for", () => {
 		const oql = { oql: `works where title has (poverty or "wealth gap")` };
 		expect(queryTerms([classic, oql])).toEqual({ terms: 5, topics: 2 });
 	});
+
+	it("reads filters as OpenAlex does: any case, no_stem searches, alternatives split by | and proximity left out", () => {
+		const query = {
+			filter: `TITLE.SEARCH:poverty|wages,abstract.search.no_stem:"climate change"~5 OR inequality,Topics.Id:t10001|T10002`,
+		};
+		expect(queryTerms([query])).toEqual({ terms: 4, topics: 2 });
+	});
 });

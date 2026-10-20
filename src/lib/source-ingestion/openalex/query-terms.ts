@@ -26,18 +26,28 @@ function searches(parts: string[], index: number) {
 /** What an OpenAlex source asks: one OQL query, or a search and a filter. */
 type OpenAlexQuery = { oql?: string; search?: string; filter?: string };
 
-/** The search texts a filter carries (`<field>.search:` and `.search.exact:`), and the topics it names. */
+/**
+ * The search texts a filter carries (`<field>.search`, `.search.exact` or `.search.no_stem`, each `|` alternative on
+ * its own), and the topics it names. OpenAlex reads filter names and values in any case.
+ */
 function filterParts(filter: string) {
-	const entries = filter.match(/[a-z_.]+:(?:"[^"]*"|[^,"])*/gu) ?? [];
-	const searches = entries.flatMap((entry) => (/^[a-z_.]+\.search(?:\.exact)?:/u.test(entry) ? [entry.slice(entry.indexOf(":") + 1)] : []));
-	const topics = entries.flatMap((entry) => (entry.startsWith("topics.id:") ? entry.slice("topics.id:".length).split("|") : []));
+	const entries = filter.match(/[a-z_.]+:(?:"[^"]*"|[^,"])*/giu) ?? [];
+	const valueOf = (entry: string) => entry.slice(entry.indexOf(":") + 1);
+	const nameOf = (entry: string) => entry.slice(0, entry.indexOf(":")).toLowerCase();
+	const searches = entries.filter((entry) => /\.search(?:\.exact|\.no_stem)?$/u.test(nameOf(entry))).flatMap((entry) => alternatives(valueOf(entry)));
+	const topics = entries.filter((entry) => nameOf(entry) === "topics.id").flatMap((entry) => valueOf(entry).split("|").map((topic) => topic.toUpperCase()));
 	return { searches, topics };
 }
 
-/** Every word and phrase a search text looks for, without its brackets and operators. */
+/** A filter value's `|` alternatives, leaving any `|` inside a quoted phrase alone. */
+function alternatives(value: string) {
+	return value.match(/(?:"[^"]*"|[^|"])+/gu) ?? [];
+}
+
+/** Every word and phrase a search text looks for, without its brackets, operators and proximity (`~5`). */
 function searchTerms(text: string) {
 	return tokens(text)
-		.filter((token) => token !== "(" && token !== ")")
+		.filter((token) => token !== "(" && token !== ")" && !/^~\d+$/u.test(token))
 		.map((token) => token.replace(/^"|"$/gu, "").trim().toLowerCase())
 		.filter((term) => term && !OPERATORS.has(term));
 }
