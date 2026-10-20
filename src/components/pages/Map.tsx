@@ -644,8 +644,10 @@ function useLibraryCounts() {
 const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initial?: Record<string, number>) =>
 	(data?.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? initial ?? NO_COUNTS) as Record<string, number>;
 
-/** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
-export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
+/** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame.
+ * `pending` is the page's placeholder while the server reads them: it draws no globe, which without the library's countries would
+ * open on the whole world and then jump to them when the page replaces it. */
+export default function Map({ focus, places, counts, pending = false }: { focus?: [number, number]; places: Places; counts?: Record<string, number>; pending?: boolean }) {
 	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor } = useCountryTooltip();
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
@@ -737,7 +739,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
 			<MapLegend rows={rows} measure={shade} max={max} institutions={byInstitution} />
 			<Suspense fallback={null}>
-				<Globe
+				{!pending && <Globe
 					view={view}
 					offset={offset}
 					zoomerRef={zoomerRef}
@@ -751,7 +753,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 							<InstitutionMarks points={institutions.points} projection={view.projection} chosen={props.queryParams.institution} hovered={hoveredInstitution} />
 						</>
 					) : null}
-				/>
+				/>}
 			</Suspense>
 		</main>
 	);
