@@ -23,7 +23,7 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { countryRows, measureOf, modeField, modeOf, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
 import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure } from "./map-panel";
 import { TipFigures, useValueFormat } from "./map-figures";
 import { DOT, useInstitutionLayer } from "./map-institutions";
@@ -32,6 +32,7 @@ import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
+import { getRuntimeSearchScopeOptions, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
 
 function MouseTooltip({
 	content,
@@ -384,6 +385,13 @@ function placedSlide(view: View, place?: [number, number]) {
 	return point ? slideFrom(view.frame, point[0] - view.frame.pad) : 0;
 }
 
+/** The map's mode in the address, where the library offers it: Country Focus otherwise. */
+function useOfferedMode() {
+	const [by, setMode] = useCountryMode();
+	const institutions = useLibraryConfig().filters.institution.mode !== "hidden";
+	return [modeOf(by, institutions), setMode] as const;
+}
+
 /** The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list. */
 function useListWidth() {
 	return useBreakpoint("xl") ? PANEL_WIDTH : 0;
@@ -653,14 +661,22 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
+/** Whether a search, a filter, a chosen place or the Documents scope (records with a PDF's text only) narrows the map. The other
+ * scopes only choose which fields a search reads, so alone they narrow nothing. */
+const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
+	resolveRuntimeSearchScope(params.scope, search) === "documents" || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+
+/** The whole library: no filter, and a scope other than Documents where the library offers one. */
+const wholeLibrary = (search: RuntimeSearch) => ({ scope: getRuntimeSearchScopeOptions(search).find((option) => option.key !== "documents")?.key ?? "" });
+
 /**
- * The whole library's counts, with no filter at all, for the tooltips' first line: its countries in the mode and its institutions.
- * Only while a search, a filter or a chosen place narrows the map (the scope always has a value, and alone narrows nothing).
+ * The whole library's counts, for the tooltips' first line: its countries in the mode and its institutions. Only while the map is
+ * narrowed.
  */
 function useLibraryTotals(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode) {
-	const library = useSWR<FacetsGetResponse>(buildFacetsQuery({}), fetcher, COUNTS_OPTIONS).data;
-	const narrowed = RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
-	if (!narrowed || !library) return {};
+	const { search } = useLibraryConfig();
+	const library = useSWR<FacetsGetResponse>(buildFacetsQuery(wholeLibrary(search)), fetcher, COUNTS_OPTIONS).data;
+	if (!narrows(params, search) || !library) return {};
 	return { countries: countsIn(library, mode), institutions: library.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined };
 }
 
@@ -679,7 +695,7 @@ export default function Map({ focus, places, counts, pending }: { focus?: [numbe
 		interactionsStyle: "one-line",
 	});
 	const [measure, setMeasure] = useMeasure();
-	const [mode, setMode] = useCountryMode();
+	const [mode, setMode] = useOfferedMode();
 	const chosen = props.queryParams[modeParam(mode)];
 	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
 	const shade = shadeOf(mode, measure);

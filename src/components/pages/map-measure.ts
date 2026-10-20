@@ -42,11 +42,19 @@ export function scaleTop(rows: { value: number | null }[], measure: Measure) {
 	return measure === "people" ? values[Math.floor(values.length * 0.05)] : values[0];
 }
 
-/** The mode the address asks for: Country Focus unless it names another. */
-export const modeOf = (by: unknown): CountryMode => COUNTRY_MODES.find((mode) => mode === by) ?? "focus";
+/** Whether the library offers a mode: the institutions' only where its institution filter isn't hidden, as the institutions are
+ * counted and chosen through it. */
+const offered = (mode: CountryMode, institutions: boolean) => institutions || mode !== "institutions";
+
+/** The mode the address asks for, where the library offers it: Country Focus otherwise. */
+export const modeOf = (by: unknown, institutions: boolean): CountryMode => COUNTRY_MODES.find((mode) => mode === by && offered(mode, institutions)) ?? "focus";
+
+/** The modes the library offers. */
+export const modesOf = (institutions: boolean) => COUNTRY_MODES.filter((mode) => offered(mode, institutions));
 
 /** What colours the countries: in the institutions' mode their records, as the circles already stand for institutions. */
 export const shadeOf = (mode: CountryMode, measure: Measure): Measure => (mode === "institutions" ? "records" : measure);
 
-/** A place's records in the whole library while the map is narrowed (`totals` given), none it doesn't have; nothing otherwise. */
-export const totalIn = (totals: Record<string, number> | undefined, key: string) => (totals ? (totals[key] ?? 0) : undefined);
+/** A place's records in the whole library while the map is narrowed (`totals` given). Nothing where the library's counts don't
+ * have it: an institution past the facets' limit, which isn't none. */
+export const totalIn = (totals: Record<string, number> | undefined, key: string) => totals?.[key];

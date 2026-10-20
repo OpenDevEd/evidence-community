@@ -13,7 +13,8 @@ import type { useItemsList } from "@/hooks/useItemsList";
 import { twMerge } from "@/lib/tw-merge";
 import { buildFacetsQuery } from "@/lib/utils";
 import { RAISED_INPUT, SELECT_ITEM, SELECT_POPOVER, SELECT_TRIGGER } from "./evidence/filter";
-import { COUNTRY_MODES, MEASURES, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { COUNTRY_MODES, MEASURES, modesOf, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue, Text } from "react-aria-components";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -35,13 +36,17 @@ export function useCountryMode() {
 }
 
 /** The map's mode, a dropdown under the search with the evidence map's look: country focus, or the authors' countries. */
+/** Each mode's name and what it puts on the map. */
+const MODE_TEXT = {
+	focus: { name: "countryFilter", hint: "mapModeFocusHint" },
+	authors: { name: "authorCountries", hint: "mapModeAuthorsHint" },
+	institutions: { name: "authorInstitutions", hint: "mapModeInstitutionsHint" },
+} as const;
+
 function ModeSelect({ mode, onMode }: { mode: CountryMode; onMode: (next: CountryMode) => void }) {
 	const t = useTranslations("ui");
-	const options = [
-		{ id: "focus", name: t("countryFilter"), hint: t("mapModeFocusHint") },
-		{ id: "authors", name: t("authorCountries"), hint: t("mapModeAuthorsHint") },
-		{ id: "institutions", name: t("authorInstitutions"), hint: t("mapModeInstitutionsHint") },
-	] as const;
+	const institutions = useLibraryConfig().filters.institution.mode !== "hidden";
+	const options = modesOf(institutions).map((id) => ({ id, name: t(MODE_TEXT[id].name), hint: t(MODE_TEXT[id].hint) }));
 	return (
 		<Select value={mode} onChange={(key) => onMode(key as CountryMode)} className="min-w-0">
 			<Label className="sr-only">{t("mapPapersBy")}</Label>

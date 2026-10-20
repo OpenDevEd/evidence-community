@@ -24,7 +24,10 @@ type Places = Record<string, [number, number, string, string]>;
 
 const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
-/** The institutions the facets count, by name. */
+/** The institutions the facets count, by name.
+ * ponytail: the search index gives at most 10,000 values a facet (`maxValuesPerFacet`), so a library with more institutions than
+ * that leaves its least-cited ones off the unfiltered map; a narrower search shows them. Raise the index's limit if that matters:
+ * every facets request carries this facet. */
 const institutionCounts = (facets: FacetsGetResponse | undefined) => (facets?.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>;
 
 /** An institution the facets count, where its place is known; none where it isn't. */
