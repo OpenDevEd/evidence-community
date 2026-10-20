@@ -24,4 +24,12 @@ describe("counting what an OpenAlex search looks for", () => {
 		};
 		expect(queryTerms([query])).toEqual({ terms: 4, topics: 2 });
 	});
+
+	it("counts a negated filter's phrase once, and a two-phrase proximity as its two phrases", () => {
+		const query = {
+			filter: `title.search:!"climate change",abstract.search:"machine learning"~5~"neural network"`,
+			search: "stemmed cells",
+		};
+		expect(queryTerms([query])).toEqual({ terms: 5, topics: 0 });
+	});
 });

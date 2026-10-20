@@ -39,17 +39,20 @@ function filterParts(filter: string) {
 	return { searches, topics };
 }
 
-/** A filter value's `|` alternatives, leaving any `|` inside a quoted phrase alone. */
+/** A filter value's `|` alternatives, leaving any `|` inside a quoted phrase alone, each without a negating `!`. */
 function alternatives(value: string) {
-	return value.match(/(?:"[^"]*"|[^|"])+/gu) ?? [];
+	return (value.match(/(?:"[^"]*"|[^|"])+/gu) ?? []).map((alternative) => alternative.replace(/^!/u, ""));
 }
 
-/** Every word and phrase a search text looks for, without its brackets, operators and proximity (`~5`). */
+/** A search text's own operators; `stemmed` and `where` belong to OQL and are words here. */
+const SEARCH_OPERATORS = new Set(["and", "or", "not"]);
+
+/** Every word and phrase a search text looks for, without its brackets, operators and proximity (`~5`, `~5~`). */
 function searchTerms(text: string) {
 	return tokens(text)
-		.filter((token) => token !== "(" && token !== ")" && !/^~\d+$/u.test(token))
+		.filter((token) => token !== "(" && token !== ")" && !/^~\d+~?$/u.test(token))
 		.map((token) => token.replace(/^"|"$/gu, "").trim().toLowerCase())
-		.filter((term) => term && !OPERATORS.has(term));
+		.filter((term) => term && !SEARCH_OPERATORS.has(term));
 }
 
 /** The words and phrases an OQL query's `<field> has ...` clauses look for, and the topics it names. */
