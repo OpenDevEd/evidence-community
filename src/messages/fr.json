@@ -319,6 +319,7 @@
     "avgPerItemColumn": "Moy/Élément",
     "languageDistribution": "Répartition des langues",
     "countries": "Pays",
+    "authorCountries": "Pays des auteurs",
     "mapTitle": "Recherche par pays",
     "mapCountryCount": "<number>{count}</number> pays",
     "mapColourBy": "Colorer les pays selon",

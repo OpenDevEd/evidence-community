@@ -319,6 +319,7 @@
     "avgPerItemColumn": "Avg/Item",
     "languageDistribution": "Language Distribution",
     "countries": "Countries",
+    "authorCountries": "Author Countries",
     "mapTitle": "Research by country",
     "mapCountryCount": "<number>{count}</number> {count, plural, one {country} other {countries}}",
     "mapColourBy": "Colour countries by",

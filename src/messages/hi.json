@@ -319,6 +319,7 @@
     "avgPerItemColumn": "औसत/आइटम",
     "languageDistribution": "भाषा वितरण",
     "countries": "देश",
+    "authorCountries": "लेखक देश",
     "mapTitle": "देश के अनुसार शोध",
     "mapCountryCount": "<number>{count}</number> देश",
     "mapColourBy": "देशों का रंग इसके अनुसार",

@@ -1129,6 +1129,7 @@ export async function ensureSearchIndex(
 				sortFacetValuesBy: {
 					collectionsAncestry: "count",
 					country: "count",
+					authorCountry: "count",
 					topicAncestors: "count",
 					studyType: "count",
 					studyTypeShown: "count",
@@ -1157,6 +1158,7 @@ export async function ensureSearchIndex(
 						"tags",
 						INSTITUTION_FILTER_FIELD,
 						"country",
+						"authorCountry",
 						"fullNames",
 						"collections",
 						"collectionsAncestry",

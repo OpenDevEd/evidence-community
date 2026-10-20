@@ -128,6 +128,7 @@ async function searchIndex(
 		const {
 			attributesToSearchOn,
 			country,
+			authorCountry,
 			finalFilters: baseFilters,
 			limitNum,
 			pageNum,
@@ -191,7 +192,7 @@ async function searchIndex(
 			facetDistribution: publicFacetDistribution(
 				searchResults.facetDistribution,
 				facets,
-				country,
+				{ country, author_country: authorCountry },
 			),
 		};
 	};

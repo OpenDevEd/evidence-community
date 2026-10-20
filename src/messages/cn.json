@@ -319,6 +319,7 @@
     "avgPerItemColumn": "平均/项目",
     "languageDistribution": "语言分布",
     "countries": "国家",
+    "authorCountries": "作者国家",
     "mapTitle": "按国家/地区浏览研究",
     "mapCountryCount": "<number>{count}</number> 个国家/地区",
     "mapColourBy": "国家颜色依据",

@@ -5,14 +5,20 @@ import { inferParserType } from "nuqs/server";
 export const countryFacetOptions: {
 	key: string;
 	label: string;
-	action: "handleCountrySelect";
-	queryParam: keyof inferParserType<typeof searchParamsLoader>;
+	action: "handleCountrySelect" | "handleAuthorCountrySelect";
+	queryParam: "country" | "author_country";
 }[] = [
 	{
 		key: "country",
 		label: "countryFilter",
 		action: "handleCountrySelect",
 		queryParam: "country",
+	},
+	{
+		key: "authorCountry",
+		label: "authorCountries",
+		action: "handleAuthorCountrySelect",
+		queryParam: "author_country",
 	},
 ];
 

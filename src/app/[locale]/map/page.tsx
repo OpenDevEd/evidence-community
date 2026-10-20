@@ -9,6 +9,7 @@ import { geoEqualEarth } from "d3-geo";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { preload } from "react-dom";
+import { modeField, type CountryMode } from "@/components/pages/map-measure";
 
 type Places = Record<string, [number, number]>;
 type Counts = Record<string, number>;
@@ -27,8 +28,10 @@ export default async function MapPage({ searchParams }: Props) {
 	preload("/features.json", { as: "fetch", crossOrigin: "anonymous" });
 	preload("/antarctica.json", { as: "fetch", crossOrigin: "anonymous" });
 	const places = placesOf((await getWorldMap()).shapes);
+	const params = await searchParams;
+	const mode: CountryMode = params.by === "authors" ? "authors" : "focus";
 	// The whole library's counts place the map; the counts for the page's filters, all countries kept, colour it and fill the list from the first frame.
-	const [library, filtered] = await Promise.all([countsOf({}), countsOf({ ...loadSearchParams(await searchParams), country: [] })]);
+	const [library, filtered] = await Promise.all([countsOf({}, mode), countsOf({ ...loadSearchParams(params), country: [], author_country: [] }, mode)]);
 	return <Map focus={library && middleOf(places, library)} places={places} counts={filtered} />;
 }
 
@@ -38,11 +41,11 @@ function placesOf(shapes: MapShape[]): Places {
 	return Object.fromEntries(shapes.map((shape) => [shape.code, projection.invert!([shape.x, shape.y]) as [number, number]]));
 }
 
-/** Records per country code for these filters. Without them the map still works: it opens on the whole globe, and the browser fetches the counts. */
-async function countsOf(params: Parameters<typeof getPublicFacets>[0]): Promise<Counts | undefined> {
+/** Records per country code for these filters, by the map's mode. Without them the map still works: it opens on the whole globe, and the browser fetches the counts. */
+async function countsOf(params: Parameters<typeof getPublicFacets>[0], mode: CountryMode): Promise<Counts | undefined> {
 	try {
 		const facets = await getPublicFacets(params);
-		return (facets.facetDistribution?.country_uncategorized ?? {}) as Counts;
+		return (facets.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? {}) as Counts;
 	} catch (error) {
 		console.error("Map page: the library's country counts could not be read", error);
 		return undefined;

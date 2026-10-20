@@ -1,8 +1,13 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { institutionNameKey } from "@/config/library-config/institutions";
 import type { Database } from "@/db/database-schema";
+import type { DatabaseTransaction } from "@/db/cancellable-transaction";
+import { item } from "@/db/schema/tables/item";
+import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
+import { institutionKeySql } from "@/lib/institution-country-sql";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { countryFocusNames } from "@/lib/country-focus";
 
@@ -104,19 +109,40 @@ export async function saveInstitutionCountry(
 ) {
 	const { name, ...country } = input;
 	const row = { ...country, updatedAt: new Date() };
-	await database
-		.insert(institutionCountry)
-		.values({ nameKey: institutionNameKey(name), ...row })
-		.onConflictDoUpdate({ target: institutionCountry.nameKey, set: row });
+	const nameKey = institutionNameKey(name);
+	await database.transaction(async (transaction) => {
+		await transaction
+			.insert(institutionCountry)
+			.values({ nameKey, ...row })
+			.onConflictDoUpdate({ target: institutionCountry.nameKey, set: row });
+		await reindexAuthorsAt(transaction, nameKey);
+	});
 }
 
 export async function removeInstitutionCountry(
 	database: Database,
 	name: string,
 ) {
-	await database
-		.delete(institutionCountry)
-		.where(eq(institutionCountry.nameKey, institutionNameKey(name)));
+	const nameKey = institutionNameKey(name);
+	await database.transaction(async (transaction) => {
+		await transaction
+			.delete(institutionCountry)
+			.where(eq(institutionCountry.nameKey, nameKey));
+		await reindexAuthorsAt(transaction, nameKey);
+	});
+}
+
+/**
+ * Search counts and filters records by their authors' affiliation countries, so every record with an author at this
+ * institution is searched again with its new country, in the same transaction as the change.
+ */
+async function reindexAuthorsAt(transaction: DatabaseTransaction, nameKey: string) {
+	const records = await transaction
+		.selectDistinct({ itemKey: item.key, revision: item.revision })
+		.from(itemInstitution)
+		.innerJoin(item, eq(item.key, itemInstitution.itemKey))
+		.where(and(eq(itemInstitution.source, "author"), sql`${institutionKeySql(sql`${itemInstitution.institutionName}`)} = ${nameKey}`));
+	await enqueueItemSearchReprojections(transaction, records, new Date());
 }
 
 async function openAlexJson(path: string, signal?: AbortSignal) {

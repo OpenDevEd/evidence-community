@@ -8,7 +8,7 @@ import { institutionCountry } from "@/db/schema/tables/institutionCountry";
  * dotted capital I, for one), so such a name finds no country here. Store the
  * key beside each affiliation if that ever matters.
  */
-function institutionKeySql(name: SQL) {
+export function institutionKeySql(name: SQL) {
 	return sql`lower(btrim(normalize(${name}, NFC)))`;
 }
 

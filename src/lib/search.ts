@@ -167,6 +167,8 @@ type SearchFilterInput = {
 	author: string;
 	collections: string[];
 	country: string[];
+	/** Countries of the authors' affiliations. */
+	authorCountry?: string[];
 	hiddenTags: readonly string[];
 	institution: string[];
 	range: string | null;
@@ -195,6 +197,7 @@ function buildSearchFilters({
 	author,
 	collections,
 	country,
+	authorCountry = [],
 	hiddenTags,
 	institution,
 	range,
@@ -209,7 +212,7 @@ function buildSearchFilters({
 		...institution.map((value) =>
 			meilisearchEquals(INSTITUTION_FILTER_FIELD, value),
 		),
-		...createCountryFilters(country),
+		...createCountryFilters(country, authorCountry),
 		author ? meilisearchEquals("fullNames", author) : null,
 		type.length ? meilisearchIn("itemType", type) : null,
 		study.length ? meilisearchIn(studyField, study) : null,
@@ -232,7 +235,7 @@ export function resolveSearchRequest(
 	perPage: number = ITEMS_PER_PAGE,
 ) {
 	const {
-		params: { page: pageNum, scope, institution, country, range, topics },
+		params: { page: pageNum, scope, institution, country, author_country, range, topics },
 	} = resolveSearchQuery(searchParams, libraryConfig, perPage);
 	const search = searchParams.search || "";
 	const facetFilters = buildSearchFilters({
@@ -242,6 +245,7 @@ export function resolveSearchRequest(
 		study: searchParams.study ?? [],
 		studyField: studyTypeFacet(libraryConfig.filters),
 		country,
+		authorCountry: author_country,
 		hiddenTags: libraryConfig.content.tags.hidden,
 		institution,
 		range,
@@ -276,6 +280,7 @@ export function resolveSearchRequest(
 		facetFilters,
 		attributesToSearchOn,
 		country,
+		authorCountry: author_country,
 	};
 }
 
@@ -446,7 +451,7 @@ export async function getPublicFacets(
 		searchParams,
 		libraryConfig,
 	);
-	const { search, finalFilters, facetFilters, attributesToSearchOn, country } =
+	const { search, finalFilters, facetFilters, attributesToSearchOn, country, authorCountry } =
 		resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
 	const facets = getRuntimeSearchFacets(
@@ -496,7 +501,7 @@ export async function getPublicFacets(
 		facetDistribution: publicFacetDistribution(
 			searchResults.facetDistribution,
 			facets,
-			country,
+			{ country, author_country: authorCountry },
 		),
 		totals,
 	};
@@ -506,7 +511,7 @@ export async function getPublicFacets(
 export function publicFacetDistribution(
 	distribution: FacetDistribution | undefined,
 	facets: readonly string[],
-	country: string[],
+	chosen: { country: string[]; author_country: string[] },
 ) {
 	return addRegionsToFacetDistribution(
 		Object.assign(
@@ -519,7 +524,7 @@ export function publicFacetDistribution(
 					return acc;
 				}, {} as FacetDistribution),
 		),
-		{ country },
+		chosen,
 	);
 }
 

@@ -319,6 +319,7 @@
     "avgPerItemColumn": "Ø/Artikel",
     "languageDistribution": "Sprachverteilung",
     "countries": "Länder",
+    "authorCountries": "Autorenländer",
     "mapTitle": "Forschung nach Land",
     "mapCountryCount": "<number>{count}</number> {count, plural, one {Land} other {Länder}}",
     "mapColourBy": "Länder einfärben nach",

@@ -31,6 +31,10 @@ export const searchParamsLoader = {
 	country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
+	/** Countries of the authors' affiliations, as the country filter's places are written. */
+	author_country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
 	topics: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
@@ -53,7 +57,7 @@ export const serializeSearchParams = createSerializer(searchParamsLoader);
 export const loadSearchParams = createLoader(searchParamsLoader);
 
 type SearchParams = inferParserType<typeof searchParamsLoader>;
-export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author", "collections", "topics", "type", "study"] as const;
+export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author_country", "author", "collections", "topics", "type", "study"] as const;
 
 /** The params that decide which results a search returns, so a cache keyed on them ignores page, order and where the reader came from. */
 export function resultParams(params: SearchParams) {
