@@ -227,11 +227,12 @@ export default function NavbarSearch() {
 		[filters, params, search, topics],
 	);
 
-	// How many library filters (collections / institutions / author / countries)
+	// How many library filters (collections / institutions / sources / author / countries)
 	// are active — drives whether the filter-chips row appears.
 	const activeFilterCount =
 		(runtimeParams.collections?.length || 0) +
 		(runtimeParams.institution?.length || 0) +
+		(runtimeParams.sources?.length || 0) +
 		(runtimeParams.author ? 1 : 0) +
 		(runtimeParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(

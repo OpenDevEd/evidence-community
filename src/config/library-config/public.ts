@@ -7,6 +7,7 @@ import { getEnabledGapMaps } from "./gap-maps";
 import { getRuntimePagePath } from "./links";
 import { getRuntimePageAvailability } from "./pages";
 import { sourcePublishTags } from "@/lib/tags";
+import { offersSources } from "@/lib/search-query";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -43,7 +44,7 @@ export function projectPublicLibraryConfig(
 		legal: config.legal,
 		localization: config.localization,
 		search: projectPublicSearch(config.search),
-		filters: config.filters,
+		filters: { ...config.filters, sources: { ...config.filters.sources, enabled: offersSources(config) } },
 		topics: config.topics,
 		content: config.content,
 		citations: {

@@ -30,6 +30,7 @@ import {
 import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { publishedAdminItemPayload } from "@/lib/admin/item-draft-patch";
@@ -934,6 +935,19 @@ function validateResult(result: SourceWritebackResult) {
 	}
 }
 
+
+/** Locks the job and confirms this worker still holds its lease, so a result is never written for a job another took. */
+async function holdLease(transaction: Pick<Database, "select">, jobId: number, workerId: string) {
+	const [currentJob] = await transaction
+		.select()
+		.from(sourceWritebackJob)
+		.where(eq(sourceWritebackJob.id, jobId))
+		.for("update")
+		.limit(1);
+	if (!currentJob || currentJob.leaseOwner !== workerId || currentJob.processedAt || currentJob.deadLetteredAt) {
+		throw new SourceWritebackLeaseLostError(jobId);
+	}
+}
 async function acknowledgeJob(
 	options: SourceWritebackConsumerOptions,
 	job: ClaimedJob,
@@ -944,20 +958,7 @@ async function acknowledgeJob(
 	if (job.collectionKey !== null) {
 		await options.database.transaction(async (transaction) => {
 			await lockCollectionMutation(transaction, job.collectionKey);
-			const [currentJob] = await transaction
-				.select()
-				.from(sourceWritebackJob)
-				.where(eq(sourceWritebackJob.id, job.id))
-				.for("update")
-				.limit(1);
-			if (
-				!currentJob ||
-				currentJob.leaseOwner !== workerId ||
-				currentJob.processedAt ||
-				currentJob.deadLetteredAt
-			) {
-				throw new SourceWritebackLeaseLostError(job.id);
-			}
+			await holdLease(transaction, job.id, workerId);
 			const [currentCollection] = await transaction
 				.select({ revision: collection.revision })
 				.from(collection)
@@ -1067,22 +1068,9 @@ async function acknowledgeJob(
 	const itemKey = job.itemKey;
 	await options.database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		const [currentJob] = await transaction
-			.select()
-			.from(sourceWritebackJob)
-			.where(eq(sourceWritebackJob.id, job.id))
-			.for("update")
-			.limit(1);
-		if (
-			!currentJob ||
-			currentJob.leaseOwner !== workerId ||
-			currentJob.processedAt ||
-			currentJob.deadLetteredAt
-		) {
-			throw new SourceWritebackLeaseLostError(job.id);
-		}
+		await holdLease(transaction, job.id, workerId);
 		const [currentItem] = await transaction
-			.select({ revision: item.revision })
+			.select({ revision: item.revision, parentItem: item.parentItem })
 			.from(item)
 			.where(eq(item.key, itemKey))
 			.for("update")
@@ -1130,6 +1118,10 @@ async function acknowledgeJob(
 					),
 				),
 			);
+		// A record a source holds again, or no longer holds, is filtered by its sources, so it is searched again.
+		if (!currentItem.parentItem && currentLink.remoteDeleted !== (job.operation === "delete")) {
+			await enqueueItemSearchReprojections(transaction, [{ itemKey, revision: currentItem.revision }], completedAt);
+		}
 		if (result.snapshot) {
 			await transaction
 				.insert(sourceSnapshot)

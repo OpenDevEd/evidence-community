@@ -75,7 +75,7 @@ describe("runtime search configuration", () => {
 			),
 		).toEqual(["collectionsAncestry", "itemType", "studyType", "hasPdf", "year"]);
 		expect(
-			getRuntimeSearchFacets(config.search, config.filters, true),
+			getRuntimeSearchFacets(config.search, { ...config.filters, sources: { enabled: true, label: "sources" } }, true),
 		).toEqual(expect.arrayContaining(["topicAncestors", "sources"]));
 	});
 

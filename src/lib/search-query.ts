@@ -17,6 +17,8 @@ export type SearchQueryConfig = {
 	filters: LibraryPublicConfig["filters"];
 	search: RuntimeSearch;
 	topics?: { enabled: boolean };
+	/** The server's configuration lists its sources; the public one has already turned the filter off below two. */
+	sources?: readonly unknown[];
 };
 type SearchParams = Partial<inferParserType<typeof searchParamsLoader>>;
 /** What the library runs for one param, and what was wrong with what it was given. */
@@ -64,6 +66,10 @@ function resolveOffered(
 		...(values?.length ? { issue: `This library has no ${filter} filter.` } : {}),
 	};
 }
+
+/** Readers filter by sources when the library turns it on and has two or more: one source would filter nothing. */
+export const offersSources = (config: Pick<SearchQueryConfig, "filters" | "sources">) =>
+	config.filters.sources.enabled && (config.sources === undefined || config.sources.length > 1);
 
 /** A country code, or a continent or region as the country filter lists it. */
 const isKnownPlace = (place: string) =>
@@ -115,7 +121,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			Boolean(config.topics?.enabled),
 			"topic",
 		),
-		sources: resolveOffered(params.sources, config.filters.sources.enabled, "source"),
+		sources: resolveOffered(params.sources, offersSources(config), "source"),
 	};
 	return {
 		params: {

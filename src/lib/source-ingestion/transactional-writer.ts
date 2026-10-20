@@ -2599,7 +2599,6 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		}
 		for (const key of citationMetricChangedItemKeys) affectedParentKeys.add(key);
 		for (const key of openAccessChangedItemKeys) affectedParentKeys.add(key);
-		for (const key of sourcesChangedItemKeys) affectedParentKeys.add(key);
 		// A new link changes both records' public pages but neither record, so
 		// records outside this batch are queued for search again instead of
 		// taking a new revision. In a large import that is thousands of records
@@ -2609,9 +2608,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			.filter((key) => !directlyChangedItemKeys.has(key) && !affectedParentKeys.has(key));
 		const depositedLinkedKeys = await publicationTargetedKeys(transaction, linkedKeys);
 		for (const key of depositedLinkedKeys) affectedParentKeys.add(key);
+		// Which sources hold a record is part of neither the record nor its deposits, so it is only searched again.
 		const leasedLinkedKeys = await requeueLinkedRecords(
 			transaction,
-			linkedKeys.filter((key) => !depositedLinkedKeys.has(key)),
+			[...linkedKeys.filter((key) => !depositedLinkedKeys.has(key)), ...sourcesChangedItemKeys],
 			new Set([...directlyChangedItemKeys, ...affectedParentKeys]),
 			now,
 			batch.sourceSyncRunId ?? null,

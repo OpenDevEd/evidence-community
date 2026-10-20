@@ -25,7 +25,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
-import { resolveSearchQuery } from "./search-query";
+import { offersSources, resolveSearchQuery } from "./search-query";
 import { formatRange } from "./utils";
 import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
 import { FULL_TEXT_PDF_FILTER, SOURCES_FIELD } from "./search-filter-constants";
@@ -473,7 +473,7 @@ export async function getPublicFacets(
 		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
 		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
 		{ facet: studyTypeFacet(libraryConfig.filters), active: Boolean(searchParams.study?.length), without: { study: [] } },
-		{ facet: SOURCES_FIELD, active: libraryConfig.sources.length > 1, without: { sources: [] }, also: [`${SOURCES_FIELD} IS NOT EMPTY`] },
+		{ facet: SOURCES_FIELD, active: offersSources(libraryConfig), without: { sources: [] }, also: [`${SOURCES_FIELD} IS NOT EMPTY`] },
 	].filter(({ facet, active }) => active && facets.includes(facet));
 
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([

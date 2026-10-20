@@ -49,11 +49,15 @@ it("indexes every source that holds a record, and searches it again when a sourc
 		const key = await recordKey();
 		expect(await sourcesOf(key)).toEqual(["oa-core"]);
 
-		// The second search finds the same work, unchanged: one record, now in both sources.
+		// The second search finds the same work, unchanged: one record, now in both sources. The record itself is the
+		// same, so it keeps its revision and its deposits are left alone.
 		await markSearched(key);
+		const revision = async () => (await db.select({ revision: item.revision }).from(item).where(eq(item.key, key)))[0]!.revision;
+		const before = await revision();
 		await run("oa-housing", [work]);
 		expect(await recordKey()).toBe(key);
 		expect(await searchedAgain(key)).toBe(true);
+		expect(await revision()).toBe(before);
 		expect(await sourcesOf(key)).toEqual(["oa-core", "oa-housing"]);
 
 		// The second search's weekly full scan no longer finds it: the record stays, held by the first alone.
