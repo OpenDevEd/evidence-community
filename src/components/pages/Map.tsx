@@ -175,6 +175,7 @@ function ResultsHead({ props }: { props: ReturnType<typeof useItemsList> }) {
  * puts the map back to the whole library. Below that the sheet's back arrow closes it. */
 function CloseResults({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const t = useTranslations("ui");
+	const { search } = useLibraryConfig();
 	const label = t("mapClearResults");
 	return (
 		<Tooltip content={label} placement="bottom">
@@ -182,15 +183,23 @@ function CloseResults({ props }: { props: ReturnType<typeof useItemsList> }) {
 				isIconOnly
 				aria-label={label}
 				className="hidden h-full !p-0 xl:flex"
-				onPress={() => {
-					props.handleClearFilters();
-					props.handleSearchChange("");
-				}}
+				// The search field drops what was typed and is still waiting to run, or it would open the results again.
+				data-drops-typed-search
+				onPress={() => clearResults(props, search)}
 			>
 				<HugeiconsIcon icon={Cancel01Icon} className="size-6" />
 			</Button>
 		</Tooltip>
 	);
+}
+
+/** Clears the search and every filter, and the Documents scope where the library reads every record another way: alone it
+ * still narrows the map to records with a PDF's text. */
+function clearResults(props: ReturnType<typeof useItemsList>, search: RuntimeSearch) {
+	props.handleClearFilters();
+	props.handleSearchChange("");
+	const every = everyRecordScope(search);
+	if (every && resolveRuntimeSearchScope(props.queryParams.scope, search) === "documents") props.handleScopeChange(new Set([every]));
 }
 
 /** The sheet's bar: back to the list (`list`, the countries or the institutions), then what the results are of, which folds the
@@ -289,11 +298,14 @@ function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; lis
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl")}>
 						<ResultsBar list={list} name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
-						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
+						<div className={twMerge("min-h-0 flex-1 flex-col overflow-hidden xl:flex xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:flex", open ? "flex" : "hidden")}>
+							{/* The head stays put while the results scroll under it, as the countries' panel does. */}
 							<ResultsHead props={props} />
-							<Card color="card" className="min-h-full rounded-none p-4 shadow-none">
-								<ItemsList props={props} contentId="map-results" headless />
-							</Card>
+							<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar">
+								<Card color="card" className="min-h-full rounded-none p-4 shadow-none">
+									<ItemsList props={props} contentId="map-results" headless />
+								</Card>
+							</div>
 						</div>
 					</div>
 				</motion.div>
