@@ -1053,6 +1053,9 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await expect(skipLink).toBeFocused();
 		await skipLink.press("Enter");
 		await expect(page.locator("#page-content")).toBeFocused();
+		// The panel reads from the top: what the colours count, then the search.
+		await page.keyboard.press("Tab");
+		await expect(page.getByRole("tab", { name: "Per million people", exact: true })).toBeFocused();
 		await page.keyboard.press("Tab");
 		await expect(page.getByRole("textbox", { name: "Search", exact: true })).toBeFocused();
 		await country.focus();
@@ -1074,9 +1077,9 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await page.setViewportSize({ width: 390, height: 844 });
 		await country.focus();
 		await country.press("Enter");
-		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
-		await country.focus();
-		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeFocused();
+		// On a phone the results open as a sheet beside the map without taking the focus, so the reader keeps their place.
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeVisible();
+		await expect(country).toBeFocused();
 		const clearFilters = page.getByRole("button", { name: "Clear all filters", exact: true });
 		await clearFilters.focus();
 		await page.setViewportSize({ width: 1280, height: 900 });
@@ -1086,6 +1089,12 @@ test("only opens the country map when its page is enabled", async ({ page }) => 
 		await clearFilters.press("Enter");
 		await expect(page).toHaveURL(url => !url.searchParams.has("country"));
 		await expect(country).toBeFocused();
+		// Typing a search opens the results as choosing a country does, and the typing stays in the search.
+		const search = page.getByRole("textbox", { name: "Search", exact: true });
+		await search.fill("a");
+		await search.press("Enter");
+		await expect(page.getByRole("region", { name: "Results", exact: true })).toBeVisible();
+		await expect(search).toBeFocused();
 		expect(errors).toEqual([]);
 	} else {
 		// A streamed Next.js notFound() can report React's recoverable Suspense

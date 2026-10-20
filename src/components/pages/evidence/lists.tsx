@@ -76,7 +76,8 @@ export const FITTED_ROWS = "[&>li]:flex [&>li]:h-[var(--row)] [&>li]:items-cente
 /**
  * A list in pages as tall as its box: the box's height (a ResizeObserver, the outside system) sets how many rows of `rowHeight`
  * fit between the list's top and the page numbers, so the numbers sit at the box's foot under a full page on any screen. The
- * server can't know the height, so `ready` is false until the first measure and the list fades in once. The page kept is the
+ * server can't know the height, so no row is drawn until the first measure (rows at a guessed height would move), and the list
+ * fades in once. The page kept is the
  * one holding the first row shown, so a new size keeps the reader's place.
  */
 export function useFittedPages<T>(items: T[], rowHeight: number) {
@@ -103,7 +104,7 @@ export function useFittedPages<T>(items: T[], rowHeight: number) {
 	const per = fitted?.size ?? 8;
 	const pages = Math.max(1, Math.ceil(items.length / per));
 	const page = Math.min(Math.floor(first / per) + 1, pages);
-	return { boxRef: box, listRef: list, ready: fitted !== null, fits: fitted?.fits ?? true, rowStyle: { "--row": `${fitted?.row ?? rowHeight}px` } as React.CSSProperties, page, pages, per, shown: items.slice((page - 1) * per, page * per), setPage: (next: number) => setFirst((next - 1) * per) };
+	return { boxRef: box, listRef: list, ready: fitted !== null, fits: fitted?.fits ?? true, rowStyle: { "--row": `${fitted?.row ?? rowHeight}px` } as React.CSSProperties, page, pages, per, shown: fitted ? items.slice((page - 1) * per, page * per) : [], setPage: (next: number) => setFirst((next - 1) * per) };
 }
 
 /**

@@ -19,7 +19,8 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, MapPanel, MapSheet, perMillion, SIDE_WIDTH, useMeasure, useValueFormat, type Measure } from "./map-panel";
+import { countryRows, measureOf, perPerson, scaleTop, type Measure } from "./map-measure";
+import { MapPanel, MapSheet, SIDE_WIDTH, useMeasure, useValueFormat } from "./map-panel";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -68,10 +69,10 @@ function MouseTooltip({
 }
 
 /** What the results sheet's bar calls them: the chosen country, how many are chosen, or a search's results. */
-function resultsName(chosen: string[]) {
-	if (chosen.length > 1) return `${chosen.length} countries`;
+function resultsName(chosen: string[], t: ReturnType<typeof useTranslations<"ui">>) {
+	if (chosen.length > 1) return t("mapChosenCount", { count: chosen.length });
 	const code = chosen[0]?.split(" > ").at(-1);
-	return code ? COUNTRIES[code] ?? code : "Results";
+	return code ? COUNTRIES[code] ?? code : t("resultsLabel");
 }
 
 /**
@@ -80,15 +81,81 @@ function resultsName(chosen: string[]) {
  */
 function useResultsOpen(shown: boolean, chosen: string[]) {
 	const [open, setOpen] = useState(true);
-	const cause = chosen.join("|");
+	// What opens it: the results showing, and each change of the chosen countries. Typing a search doesn't.
+	const cause = shown ? chosen.join("|") : null;
 	const [seen, setSeen] = useState(cause);
 	if (cause !== seen) {
 		setSeen(cause);
-		if (chosen.length && !open) setOpen(true);
+		setOpen(true);
 	}
-	// Closed results open again from the start next time.
-	if (!shown && !open) setOpen(true);
 	return [open, setOpen] as const;
+}
+
+/** What has the focus, if it can be given it back. */
+function focusedElement() {
+	const active = document.activeElement;
+	return active instanceof HTMLElement || active instanceof SVGElement ? active : null;
+}
+
+/** Gives the focus back to `opener` if the closing results hold it. */
+function giveFocusBack(panel: HTMLElement | null, opener: HTMLElement | SVGElement | null) {
+	if (panel?.contains(document.activeElement)) opener?.focus({ preventScroll: true });
+}
+
+/**
+ * Focus is the outside system here. The results never take it, so typing carries on in the search; they keep what had it when
+ * they opened, and give it back if they close while holding it (Clear all filters inside them). Returns the panel's ref.
+ */
+function useResultsFocus(shown: boolean) {
+	const panelRef = useRef<HTMLDivElement>(null);
+	const opener = useRef<HTMLElement | SVGElement | null>(null);
+	useEffect(() => {
+		if (shown) {
+			opener.current ??= focusedElement();
+			return;
+		}
+		giveFocusBack(panelRef.current, opener.current);
+		opener.current = null;
+	}, [shown]);
+	return panelRef;
+}
+
+/** The results slide in from the right beside the wide panels, and up from the bottom as a sheet; a sheet's height changes glide. */
+function resultsMotion(wide: boolean, still: boolean | null) {
+	const away = wide ? { opacity: 0, x: 100 } : { y: "100%" };
+	const transition = still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const };
+	return { initial: away, exit: away, animate: { opacity: 1, x: 0, y: 0 }, transition, layout: !still && !wide };
+}
+
+/** The sheet's bar: back to the countries, then what the results are of, which folds the sheet (lying on its side, just the name). */
+function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolean; onFold: () => void; onBack: () => void }) {
+	const t = useTranslations("ui");
+	const label = t("resultsLabel");
+	return (
+		<div className="flex h-14 shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#e8eaef] pl-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
+			<BackButton to={t("countries")} onBack={onBack} />
+			<h2 className="hidden min-w-0 flex-1 truncate pr-5 text-right text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:block">{name}</h2>
+			{/* Named apart from the country's own button on the map, with what it shows in its name. */}
+			<button type="button" aria-expanded={open} aria-label={name === label ? name : `${label}: ${name}`} onClick={onFold} className="flex h-full min-w-0 flex-1 items-center justify-end gap-3 pr-5 text-sm font-semibold outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
+				<span className="truncate">{name}</span>
+				<HugeiconsIcon icon={ArrowUp01Icon} size={16} aria-hidden className={twMerge("shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
+			</button>
+		</div>
+	);
+}
+
+/** A search opens the results as choosing a country does. */
+const resultsShown = ({ country, search }: { country: string[]; search: string }) => country.length > 0 || Boolean(search);
+
+/** Where the results sit: a panel on the right from 1,280 px wide, below the header's height when the library's header is small;
+ * below that a sheet along the bottom, half the screen or folded to its bar, or down the right side lying down. */
+function resultsClass(open: boolean, small: boolean) {
+	return twMerge(
+		"fixed inset-x-0 bottom-0 z-30 [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:h-auto xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
+		open ? "h-[50dvh]" : "h-14",
+		SIDE_WIDTH,
+		small && "xl:pt-[7.5rem]",
+	);
 }
 
 /**
@@ -97,42 +164,24 @@ function useResultsOpen(shown: boolean, chosen: string[]) {
  * so the map shows with the search still on, and lying on its side it takes the right side.
  */
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
-	// A search opens the results as choosing a country does.
-	const shown = props.queryParams.country.length > 0 || Boolean(props.queryParams.search);
+	const shown = resultsShown(props.queryParams);
 	const [open, setOpen] = useResultsOpen(shown, props.queryParams.country);
-	const { theme } = useLibraryConfig();
+	const small = useLibraryConfig().theme.layout === "small";
 	const t = useTranslations("ui");
-	const wide = useBreakpoint("xl");
-	const still = useReducedMotion();
-	const name = resultsName(props.queryParams.country);
-	const away = wide ? { opacity: 0, x: 100 } : { y: "100%" };
+	const motionProps = resultsMotion(useBreakpoint("xl"), useReducedMotion());
+	const panelRef = useResultsFocus(shown);
 	return (
 		<AnimatePresence>
 			{shown && (
 				<motion.div
+					ref={panelRef}
 					role="region"
 					aria-label={t("resultsLabel")}
-					layout={!still && !wide}
-					className={twMerge(
-						"fixed inset-x-0 bottom-0 z-30 [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:h-auto xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
-						open ? "h-[50dvh]" : "h-14",
-						SIDE_WIDTH,
-						theme.layout === "small" && "xl:pt-[7.5rem]",
-					)}
-					initial={away}
-					animate={{ opacity: 1, x: 0, y: 0 }}
-					exit={away}
-					transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+					{...motionProps}
+					className={resultsClass(open, small)}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<div className="flex h-14 shrink-0 items-center gap-2 border-b border-black/[0.06] bg-[#e8eaef] pl-5 dark:border-white/[0.08] dark:bg-black/25 xl:hidden">
-							<BackButton to="Countries" onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
-							<h2 className="hidden min-w-0 flex-1 truncate pr-5 text-right text-sm font-semibold [@media(max-width:1279px)_and_(orientation:landscape)]:block">{name}</h2>
-							<button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex h-full min-w-0 flex-1 items-center justify-end gap-3 pr-5 text-sm font-semibold outline-none hover:bg-[#e1e4ea] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-black/30 [@media(max-width:1279px)_and_(orientation:landscape)]:hidden">
-								<span className="truncate">{name}</span>
-								<HugeiconsIcon icon={ArrowUp01Icon} size={16} aria-hidden className={twMerge("shrink-0 transition-transform motion-reduce:transition-none", open && "rotate-180")} />
-							</button>
-						</div>
+						<ResultsBar name={resultsName(props.queryParams.country, t)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
@@ -180,9 +229,13 @@ const PAD = 600;
 function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure): Country {
 	const code = A3ToA2[geo.id] as string | undefined;
 	if (!code) return { name: geo.properties.name, count: 0, value: null, selected: false };
+	return placedCountry(code, geo, facet[code] ?? 0, chosen, measure);
+}
+
+/** A country the library knows by code: where the region filter puts it, its records, its value, and whether it is chosen. */
+function placedCountry(code: string, geo: Feature, count: number, chosen: string[], measure: Measure): Country {
 	const location = COUNTRY_PARAMS[code] as string | undefined;
-	const count = facet[code] ?? 0;
-	return { code, location, name: nameOf(code, geo), count, value: measure === "people" ? perMillion(code, count) : count, selected: chosen.includes(location ?? "") };
+	return { code, location, name: nameOf(code, geo), count, value: measureOf(code, count, measure), selected: chosen.includes(location as string) };
 }
 
 function nameOf(code: string, geo: Feature) {
@@ -309,21 +362,29 @@ function isPress(event: React.KeyboardEvent) {
 	return event.key === "Enter" || event.key === " ";
 }
 
-/** The country pointed at: its flag and name, its records for each million people where its population is known, and its records. */
+/** The country pointed at: its flag and name, then its numbers. */
 function CountryTip({ country }: { country: Country }) {
-	const { rate, count } = useValueFormat();
-	const people = country.code ? perMillion(country.code, country.count) : null;
-	const number = "font-semibold tabular-nums text-black dark:text-white";
 	return (
 		<div className="flex flex-col gap-0.5 px-1 py-0.5">
 			<div className="flex items-center gap-2 text-sm font-semibold">
 				{country.code && <CountryFlag countryCode={country.code} className="h-3 w-[1.125rem] rounded-[2px]" />}
 				{country.name}
 			</div>
-			<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
-				{people !== null && country.count > 0 && <span><strong className={number}>{rate(people)}</strong> per million people</span>}
-				<span><strong className={number}>{count(country.count)}</strong> records</span>
-			</div>
+			<TipCounts code={country.code} count={country.count} />
+		</div>
+	);
+}
+
+/** Its records for each million people, where its population is known and it has records, and its records. */
+function TipCounts({ code, count }: { code?: string; count: number }) {
+	const { rate } = useValueFormat();
+	const t = useTranslations("ui");
+	const people = perPerson(code, count);
+	const number = (value: ReactNode) => <strong className="font-semibold tabular-nums text-black dark:text-white">{value}</strong>;
+	return (
+		<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
+			{people !== null && <span>{t.rich("mapPerMillionValue", { value: rate(people), number })}</span>}
+			<span>{t.rich("resourcesCount", { count, number })}</span>
 		</div>
 	);
 }
@@ -411,6 +472,11 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 	const layer = useRef<HTMLDivElement>(null);
 	const [transform, setTransform] = useState<ZoomTransform>(zoomIdentity);
 	const { pad, width, height } = view.frame;
+	// While the map slides to a chosen country the pointer stays still and countries pass under it: it is ignored until the
+	// slide ends, so no tooltip flicks from one to the next.
+	const still = useReducedMotion();
+	const [settledAt, setSettledAt] = useState(offset);
+	const sliding = !still && settledAt !== offset;
 	const drawn = useMemo(() => {
 		const draw = geoPath(view.projection);
 		return { sea: draw(SPHERE) ?? "", graticule: draw(GRATICULE) ?? "", antarctica: world.antarctica.map((geo) => draw(geo) ?? ""), countries: world.countries.map((geo) => draw(geo) ?? "") };
@@ -469,7 +535,7 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 	}, [view.minZoom, view.frame, zoomerRef]);
 
 	return (
-		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)` }}>
+		<div ref={stage} className="absolute transition-transform duration-500 ease-out motion-reduce:transition-none" style={{ left: -pad, top: -pad, width: width + 2 * pad, height: height + 2 * pad, transform: `translateX(${offset}px)`, pointerEvents: sliding ? "none" : undefined }} onTransitionEnd={(event) => { if (event.target === event.currentTarget) setSettledAt(offset); }}>
 			<div ref={layer} className="size-full origin-top-left animate-fade-in motion-reduce:animate-none" style={{ "--map-k": transform.k } as React.CSSProperties}>
 				{/* Not clipped to its box: while a gesture moves the layer, the geography beyond the box slides into view instead of blank space. */}
 				<svg width={width + 2 * pad} height={height + 2 * pad} overflow="visible" className="block">
@@ -494,14 +560,6 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 			</div>
 		</div>
 	);
-}
-
-/** The value that takes the full colour. Per person, a few small states (Monaco: 16 records, 38,000 people) sit far above the rest,
- * so the top 5% share the full colour and the others spread over the whole ramp. Records keep the busiest country as the top. */
-function scaleTop(rows: { value: number | null }[], measure: Measure) {
-	const values = rows.flatMap((row) => (row.value ? [row.value] : []));
-	if (!values.length) return 1;
-	return measure === "people" ? values[Math.floor(values.length * 0.05)] : values[0];
 }
 
 const NO_COUNTS: Record<string, number> = {};
@@ -552,6 +610,8 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		const location = COUNTRY_PARAMS[code];
 		if (!location) return;
 		if (view && !chosen.includes(location)) setSlide({ location, x: slideTo(code, offset, view.frame) });
+		// The tooltip closes on the click, as the map moves the country away from under the pointer.
+		hideCountry();
 		props.handleCountrySelect(location);
 	};
 	const showCountry = (country: Country, anchor: Anchor) => {
@@ -609,11 +669,12 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 
 /** Zoom, from 1,280 px wide: at the map's bottom left, beside the panel, as on the evidence map. */
 function ZoomControls({ zoomerRef }: { zoomerRef: React.RefObject<Zoomer | null> }) {
+	const t = useTranslations("ui");
 	const button = "grid size-9 place-items-center rounded-xl outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10";
 	const controls = [
-		{ label: "Zoom in", icon: PlusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1.6) },
-		{ label: "Zoom out", icon: MinusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1 / 1.6) },
-		{ label: "Show the library's countries", icon: CenterFocusIcon, act: (zoomer: Zoomer) => zoomer.reset() },
+		{ label: t("mapZoomIn"), icon: PlusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1.6) },
+		{ label: t("mapZoomOut"), icon: MinusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1 / 1.6) },
+		{ label: t("mapShowCountries"), icon: CenterFocusIcon, act: (zoomer: Zoomer) => zoomer.reset() },
 	];
 	return (
 		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+0.5rem)] z-10 hidden flex-col gap-0.5 p-1 xl:flex")}>

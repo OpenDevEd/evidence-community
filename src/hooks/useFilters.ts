@@ -266,7 +266,7 @@ export function useFilters() {
 		});
 	}, [setParams]);
 
-	const { data: facetsData } = useSWR<FacetsGetResponse>(
+	const { data: facetsData, isValidating: isFacetsFetching } = useSWR<FacetsGetResponse>(
 		filterSurfaceEnabled ? buildFacetsQuery(runtimeParams) : null,
 		fetcher,
 		SWR_OPTIONS,
@@ -343,6 +343,8 @@ export function useFilters() {
 		hierarchy,
 		selectedCollections,
 		facetDistribution: facetsData?.facetDistribution,
+		/** True while the counts for the current filters are on their way: the ones shown are the last filters'. */
+		isFacetsFetching,
 		facetTotals: facetsData?.totals,
 		noteData,
 		isNoteLoading,
