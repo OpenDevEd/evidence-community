@@ -54,6 +54,50 @@ describe("header widths", () => {
 	});
 });
 
+describe("the name beside the logo", () => {
+	const named = (name: string, shortName: string) => ({
+		...withFeatures({ themeSwitcher: true, languageSwitcher: false, readerAccounts: true }),
+		identity: { ...base.identity, name, shortName },
+	});
+
+	it("shows the full name while every action fits, the short one while they fold, then the logo alone, and on a phone the name that fits", () => {
+		const { steps, arrangements } = navbarWidths(named("Vocational Training", "TVET"), measure, labels, 120, measure);
+		expect(arrangements.map(({ step, name }) => [step, name])).toEqual([
+			[0, "full"],
+			[0, "short"],
+			[1, "short"],
+			[1, "none"],
+			["compact", "full"],
+			["compact", "short"],
+		]);
+		// A name takes the gap after the logo and its own width.
+		expect(arrangements[0]!.width).toBe(steps[0]! + 12 + "Vocational Training".length * 10);
+		expect(arrangements[1]!.width).toBe(steps[0]! + 12 + "TVET".length * 10);
+		// Each arrangement needs less room than the one before, and a phone's never as much as the links inline.
+		const widths = arrangements.map(({ width }) => width);
+		expect(widths).toEqual([...widths].sort((a, b) => b - a));
+		expect(widths.at(-2)).toBeLessThan(steps.at(-1)!);
+	});
+
+	it("keeps the full name as the actions fold when the short name is the same, and leaves out a phone name wider than the links", () => {
+		const { steps, arrangements } = navbarWidths(named("A".repeat(100), "A".repeat(100)), measure, labels, 120, measure);
+		expect(arrangements.map(({ step, name }) => [step, name])).toEqual([
+			[0, "full"],
+			[0, "full"],
+			[1, "full"],
+			[1, "none"],
+		]);
+		expect(arrangements.every((arrangement) => arrangement.step !== "compact" || arrangement.width < steps.at(-1)!)).toBe(true);
+	});
+
+	it("hides both names until an arrangement shows one", () => {
+		const css = navbarFitCss(navbarWidths(named("Wealth Inequality and Social Mobility", "Wealth Inequality"), measure, labels, 120, measure), 2);
+		expect(css).toContain(".nf-links, .nf-step, .nf-name { display: none !important; }");
+		expect(css).toContain(".nf-name-full { display: inline !important; }");
+		expect(css).toContain(".nf-name-short { display: inline !important; }");
+	});
+});
+
 describe("loading the body font", () => {
 	it("tries a failed load again a minute later, not on every page in between", async () => {
 		vi.useFakeTimers();
