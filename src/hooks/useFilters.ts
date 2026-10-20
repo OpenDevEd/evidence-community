@@ -188,37 +188,13 @@ export function useFilters() {
 	);
 
 	const handleCountrySelect = useCallback(
-		(country: string | string[]) => {
-			const currentValues = params.country;
-			if (Array.isArray(country)) {
-				const lastOne = country[country.length - 1];
-				if (currentValues.includes(lastOne)) {
-					setParams({
-						country: currentValues.filter(
-							(c) => c !== lastOne && !c.startsWith(lastOne),
-						),
-					});
-				} else {
-					setParams({
-						country: Array.from(
-							new Set([...currentValues, ...country]),
-						),
-					});
-				}
-			} else if (currentValues.includes(country)) {
-				setParams({
-					country: currentValues.filter((c) => {
-						const sameCountry = c === country;
-						const isDescendant =
-							!sameCountry && c.startsWith(country);
-						return !sameCountry && !isDescendant;
-					}),
-				});
-			} else {
-				setParams({ country: [...currentValues, country] });
-			}
-		},
+		(country: string | string[]) => setParams({ country: toggledPlaces(params.country, country) }),
 		[params.country, setParams],
+	);
+
+	const handleAuthorCountrySelect = useCallback(
+		(country: string | string[]) => setParams({ author_country: toggledPlaces(params.author_country, country) }),
+		[params.author_country, setParams],
 	);
 
 	const handleTopicsChange = useCallback(
@@ -248,9 +224,9 @@ export function useFilters() {
 		[params.study, setParams],
 	);
 
-	/** Drops every chosen country and keeps the other filters. */
+	/** Drops every chosen country, of either kind, and keeps the other filters. */
 	const handleCountriesClear = useCallback(() => {
-		setParams({ country: [] });
+		setParams({ country: [], author_country: [] });
 	}, [setParams]);
 
 	const handleClearFilters = useCallback(() => {
@@ -258,6 +234,7 @@ export function useFilters() {
 			author: "",
 			institution: [],
 			country: [],
+			author_country: [],
 			collections: [],
 			range: "",
 			topics: [],
@@ -331,6 +308,7 @@ export function useFilters() {
 		handleAuthorSelect,
 		handleInstitutionSelect,
 		handleCountrySelect,
+		handleAuthorCountrySelect,
 		handleCountriesClear,
 		handleTopicsChange,
 		handleTypeSelect,
@@ -347,4 +325,14 @@ export function useFilters() {
 		noteData,
 		isNoteLoading,
 	};
+}
+
+/**
+ * The places chosen after choosing `place`: a chosen place is dropped with the places inside it, any other added. A list
+ * (a place with the region path leading to it) is judged by its last place, and adds the whole path.
+ */
+function toggledPlaces(current: string[], place: string | string[]) {
+	const last = Array.isArray(place) ? place[place.length - 1] : place;
+	if (current.includes(last)) return current.filter((chosen) => chosen !== last && !chosen.startsWith(last));
+	return [...new Set([...current, ...(Array.isArray(place) ? place : [place])])];
 }

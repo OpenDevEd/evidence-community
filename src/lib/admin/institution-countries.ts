@@ -1,8 +1,14 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { chunkValues } from "@/lib/chunk-values";
 import { z } from "zod";
 
 import { institutionNameKey } from "@/config/library-config/institutions";
 import type { Database } from "@/db/database-schema";
+import type { DatabaseTransaction } from "@/db/cancellable-transaction";
+import { item } from "@/db/schema/tables/item";
+import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
+import { institutionKeySql } from "@/lib/institution-country-sql";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { countryFocusNames } from "@/lib/country-focus";
 
@@ -104,19 +110,52 @@ export async function saveInstitutionCountry(
 ) {
 	const { name, ...country } = input;
 	const row = { ...country, updatedAt: new Date() };
-	await database
-		.insert(institutionCountry)
-		.values({ nameKey: institutionNameKey(name), ...row })
-		.onConflictDoUpdate({ target: institutionCountry.nameKey, set: row });
+	const nameKey = institutionNameKey(name);
+	await database.transaction(async (transaction) => {
+		await transaction
+			.insert(institutionCountry)
+			.values({ nameKey, ...row })
+			.onConflictDoUpdate({ target: institutionCountry.nameKey, set: row });
+		await reindexAuthorsAt(transaction, [name]);
+	});
 }
 
 export async function removeInstitutionCountry(
 	database: Database,
 	name: string,
 ) {
-	await database
-		.delete(institutionCountry)
-		.where(eq(institutionCountry.nameKey, institutionNameKey(name)));
+	const nameKey = institutionNameKey(name);
+	await database.transaction(async (transaction) => {
+		await transaction
+			.delete(institutionCountry)
+			.where(eq(institutionCountry.nameKey, nameKey));
+		await reindexAuthorsAt(transaction, [name]);
+	});
+}
+
+/**
+ * Search counts and filters records by their authors' affiliation countries, so every record with an author at these
+ * institutions is searched again with its new country, in the same transaction as the change. Records are found by the
+ * name as written and by its SQL fold, then kept only where JavaScript folds the name the same way: the two folds differ
+ * on a few letters (a dotted capital I), and the search document uses JavaScript's.
+ */
+export async function reindexAuthorsAt(transaction: DatabaseTransaction, names: readonly string[], { folded = true } = {}) {
+	const keys = new Set(names.map(institutionNameKey));
+	for (const chunk of chunkValues([...new Set(names)], 500)) {
+		const rows = await transaction
+			.selectDistinct({ itemKey: item.key, revision: item.revision, institutionName: itemInstitution.institutionName })
+			.from(itemInstitution)
+			.innerJoin(item, eq(item.key, itemInstitution.itemKey))
+			.where(and(
+				eq(itemInstitution.source, "author"),
+				// The fold can't use the name index, so an import, whose names are spelled as its records spell them, skips it.
+				folded
+					? or(inArray(itemInstitution.institutionName, chunk), inArray(institutionKeySql(sql`${itemInstitution.institutionName}`), chunk.map(institutionNameKey)))
+					: inArray(itemInstitution.institutionName, chunk),
+			));
+		const records = new Map(rows.filter((row) => keys.has(institutionNameKey(row.institutionName))).map((row) => [row.itemKey, { itemKey: row.itemKey, revision: row.revision }]));
+		await enqueueItemSearchReprojections(transaction, [...records.values()], new Date());
+	}
 }
 
 async function openAlexJson(path: string, signal?: AbortSignal) {

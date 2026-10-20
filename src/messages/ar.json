@@ -319,6 +319,7 @@
     "avgPerItemColumn": "متوسط/عنصر",
     "languageDistribution": "توزيع اللغة",
     "countries": "الدول",
+    "authorCountries": "بلدان المؤلفين",
     "mapTitle": "الأبحاث حسب البلد",
     "mapCountryCount": "<number>{count}</number> {count, plural, one {بلد} other {بلدان}}",
     "mapColourBy": "تلوين البلدان حسب",

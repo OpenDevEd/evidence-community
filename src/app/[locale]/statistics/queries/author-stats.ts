@@ -8,7 +8,7 @@ import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 import {
 	affiliationCountryJoin,
 	institutionCountryCode,
-} from "./institution-country-sql";
+} from "@/lib/institution-country-sql";
 
 export type AuthorCountryStats = {
 	countryCode: string;

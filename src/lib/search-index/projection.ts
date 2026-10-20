@@ -16,6 +16,7 @@ import {
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemInstitution } from "@/db/schema/tables/itemInstitution";
+import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import {
 	INSTITUTION_FILTER_FIELD,
 	institutionNameKey,
@@ -195,6 +196,31 @@ function institutionNamesByItem(
 			row.institutionName,
 		]);
 	return (itemKey: string) => names.get(itemKey) ?? [];
+}
+
+/**
+ * The countries of each record's authors' affiliations, as two-letter codes: an affiliation's country is the one the
+ * library holds for its institution name (from OpenAlex, or set by an editor). A name with no known country adds none.
+ */
+async function authorCountriesByItem(
+	database: SearchProjectionDatabase,
+	rows: readonly { itemKey: string; institutionName: string }[],
+) {
+	const keys = [...new Set(rows.map((row) => institutionNameKey(row.institutionName)))];
+	const known = new Map<string, string>();
+	for (const chunk of chunkValues(keys, 1_000)) {
+		const found = await database
+			.select({ nameKey: institutionCountry.nameKey, countryCode: institutionCountry.countryCode })
+			.from(institutionCountry)
+			.where(inArray(institutionCountry.nameKey, chunk));
+		for (const row of found) known.set(row.nameKey, row.countryCode);
+	}
+	const countries = new Map<string, Set<string>>();
+	for (const row of rows) {
+		const code = known.get(institutionNameKey(row.institutionName));
+		if (code) countries.set(row.itemKey, (countries.get(row.itemKey) ?? new Set()).add(code));
+	}
+	return (itemKey: string) => [...(countries.get(itemKey) ?? [])].sort();
 }
 
 function cleanRow(row: ItemRow) {
@@ -412,6 +438,10 @@ async function buildSearchProjectionPlanForKeys(
 		institutionRows.filter((row) => row.source === "record"),
 	);
 	const connectedInstitutionsOf = institutionNamesByItem(institutionRows);
+	const authorCountriesOf = await authorCountriesByItem(
+		database,
+		institutionRows.filter((row) => row.source === "author"),
+	);
 	const [linksByItem, citationMetricsByItem, openAccessOf] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
@@ -526,6 +556,7 @@ async function buildSearchProjectionPlanForKeys(
 					collectionsByKey,
 				),
 				country: resolveCountryFocus(parent),
+				authorCountry: authorCountriesOf(parent.key),
 				deleted: parent.deleted ?? 0,
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,

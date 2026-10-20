@@ -184,7 +184,7 @@ function captureExportResults(items: ReturnType<typeof useItemsList>): { context
 	// Select fields without repairing malformed values: the export endpoint must refuse them.
 	return { context: {
 		search: params.search, scope: params.scope, sort: params.sort, range: params.range,
-		institution: params.institution, country: params.country, author: params.author,
+		institution: params.institution, country: params.country, author_country: params.author_country, author: params.author,
 		collections: params.collections, topics: params.topics, type: params.type, study: params.study,
 		readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
 	}, count: items.itemsData.totalItems };

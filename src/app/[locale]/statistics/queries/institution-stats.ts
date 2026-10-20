@@ -5,7 +5,7 @@ import { sql, desc, type SQL } from "drizzle-orm";
 import {
 	institutionCountryCode,
 	institutionCountryJoin,
-} from "./institution-country-sql";
+} from "@/lib/institution-country-sql";
 import { calculateHIndex, visibleItem, yearOf } from "./utils";
 import { citationCountForItem, type CitationMeasure } from "./citation-measure";
 

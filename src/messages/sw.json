@@ -320,6 +320,7 @@
     "avgPerItemColumn": "Avg/Kipengee",
     "languageDistribution": "Usambazaji wa Lugha",
     "countries": "Nchi",
+    "authorCountries": "Nchi za Waandishi",
     "mapTitle": "Utafiti kwa nchi",
     "mapCountryCount": "<number>{count}</number> nchi",
     "mapColourBy": "Paka nchi rangi kwa",

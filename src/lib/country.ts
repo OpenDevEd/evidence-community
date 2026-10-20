@@ -2,14 +2,13 @@ import { COUNTRY_HIERARCHY, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { meilisearchEquals } from "@/lib/meilisearch-filter";
 
+/** Adds the continents and regions to each country facet, the country focus and the authors' countries, keeping the chosen places. */
 export function addRegionsToFacetDistribution(
 	facetDistribution: FacetDistribution,
-	queryParams: { country: string[] },
+	queryParams: { country: string[]; author_country: string[] },
 ) {
-	if (facetDistribution && facetDistribution["country"]) {
-		addHierarchyToFacet(facetDistribution, "country", queryParams.country);
-	}
-
+	if (facetDistribution?.country) addHierarchyToFacet(facetDistribution, "country", queryParams.country);
+	if (facetDistribution?.authorCountry) addHierarchyToFacet(facetDistribution, "authorCountry", queryParams.author_country);
 	return facetDistribution;
 }
 
@@ -331,11 +330,7 @@ export function buildHierarchicalFilters(
 
 export function createCountryFilters(
 	countrySelections: string[] = [],
+	authorCountrySelections: string[] = [],
 ): string[] {
-	const filters: string[] = [];
-
-	const countryFilter = buildCountryFilters(countrySelections);
-	if (countryFilter) filters.push(countryFilter);
-
-	return filters;
+	return [buildCountryFilters(countrySelections), buildHierarchicalFilters(authorCountrySelections, "authorCountry")].filter((filter): filter is string => filter !== null);
 }

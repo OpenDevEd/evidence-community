@@ -22,8 +22,8 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, perPerson, scaleTop, type Measure } from "./map-measure";
-import { MapPanel, MapSheet, SIDE_WIDTH, useMeasure, useValueFormat } from "./map-panel";
+import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type Measure } from "./map-measure";
+import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -148,7 +148,45 @@ function ResultsBar({ name, open, onFold, onBack }: { name: string; open: boolea
 }
 
 /** A search opens the results as choosing a country does. */
-const resultsShown = ({ country, search }: { country: string[]; search: string }) => country.length > 0 || Boolean(search);
+const resultsShown = ({ country, author_country, search }: { country: string[]; author_country: string[]; search: string }) => country.length + author_country.length > 0 || Boolean(search);
+
+/** The country under the pointer or the keyboard: its tooltip, where it shows, and which country is lifted. */
+function useCountryTooltip() {
+	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(null);
+	const [tooltipAnchor, setTooltipAnchor] = useState<Anchor>(null);
+	const [hovered, setHovered] = useState<string | null>(null);
+	const showCountry = (country: Country, anchor: Anchor) => {
+		setTooltipAnchor(anchor);
+		setTooltipContent(<CountryTip country={country} />);
+		setHovered(country.code ?? null);
+	};
+	const hideCountry = () => {
+		setTooltipAnchor(null);
+		setTooltipContent(null);
+		setHovered(null);
+	};
+	return { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry };
+}
+
+/** Where choosing a country in this mode puts it: the country focus filter, or the authors' countries. */
+const choosePlace = (props: ReturnType<typeof useItemsList>, mode: CountryMode) => (mode === "authors" ? props.handleAuthorCountrySelect : props.handleCountrySelect);
+
+/** With the results closed, they open next time on their first page in the default order. */
+function useFreshResults(props: ReturnType<typeof useItemsList>) {
+	useEffect(() => {
+		if (!resultsShown(props.queryParams)) {
+			if (props.queryParams.sort) {
+				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
+			}
+			if (props.queryParams.page) {
+				props.handlePageChange(1);
+			}
+		}
+	}, [props.queryParams.country, props.queryParams.author_country, props.queryParams.search]);
+}
+
+/** The places chosen in either mode. */
+const chosenPlaces = ({ country, author_country }: { country: string[]; author_country: string[] }) => [...country, ...author_country];
 
 /** Where the results sit: a panel on the right from 1,280 px wide, below the header's height when the library's header is small;
  * below that a sheet along the bottom, half the screen or folded to its bar, or down the right side lying down. */
@@ -170,7 +208,7 @@ function resultsClass(open: boolean, small: boolean) {
  */
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const shown = resultsShown(props.queryParams);
-	const [open, setOpen] = useResultsOpen(shown, props.queryParams.country);
+	const [open, setOpen] = useResultsOpen(shown, chosenPlaces(props.queryParams));
 	const small = useLibraryConfig().theme.layout === "small";
 	const t = useTranslations("ui");
 	const motionProps = resultsMotion(useBreakpoint("xl"), useReducedMotion());
@@ -186,7 +224,7 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 					className={resultsClass(open, small)}
 				>
 					<div className={twMerge(PANEL, "flex h-full w-full flex-col overflow-hidden rounded-b-none xl:w-[32rem] xl:rounded-2xl xl:bg-transparent xl:shadow-none xl:dark:bg-transparent")}>
-						<ResultsBar name={resultsName(props.queryParams.country, t)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
+						<ResultsBar name={resultsName(chosenPlaces(props.queryParams), t)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
 								<ItemsList props={props} contentId="map-results" />
@@ -593,36 +631,35 @@ const NO_COUNTS: Record<string, number> = {};
 const COUNTS_OPTIONS = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
 /**
- * The countries' record counts the map colours and ranks by: the page's filters with every country kept, as choosing a country
- * would otherwise leave only its own. With none chosen this is the shared filters' own request. Until it answers, the counts the
+ * The countries' record counts the map colours and ranks by: the page's filters with every country of the map's mode kept, as
+ * choosing a country would otherwise leave only its own. A filter on the other kind of country still narrows them. With none chosen this is the shared filters' own request. Until it answers, the counts the
  * server sent with the page; while a new one is on its way, the last ones, marked as stale.
  */
-function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], initial?: Record<string, number>) {
-	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, country: [] }), fetcher, COUNTS_OPTIONS);
-	const facet = countsIn(data, initial);
+function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode, initial?: Record<string, number>) {
+	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, [modeParam(mode)]: [] }), fetcher, COUNTS_OPTIONS);
+	// The server counted for the mode the page opened in.
+	const [firstMode] = useState(mode);
+	const facet = countsIn(data, mode, mode === firstMode ? initial : undefined);
 	// Nothing shown yet is nothing stale.
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
-/** The counts the answer gives, or the server's, or none. */
-const countsIn = (data: FacetsGetResponse | undefined, initial?: Record<string, number>) =>
-	(data?.facetDistribution?.country_uncategorized ?? initial ?? NO_COUNTS) as Record<string, number>;
+/** The counts the answer gives for the mode, or the server's, or none. */
+const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initial?: Record<string, number>) =>
+	(data?.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? initial ?? NO_COUNTS) as Record<string, number>;
 
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
 export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
-	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
-		null,
-	);
-	const [tooltipAnchor, setTooltipAnchor] = useState<Anchor>(null);
-	const [hovered, setHovered] = useState<string | null>(null);
+	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry } = useCountryTooltip();
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
 	const [measure, setMeasure] = useMeasure();
-	const chosen = props.queryParams.country;
-	const { facet, stale } = useCountryCounts(props.queryParams, counts);
+	const [mode, setMode] = useCountryMode();
+	const chosen = props.queryParams[modeParam(mode)];
+	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
 	const rows = countryRows(facet, measure);
 	const max = scaleTop(rows, measure);
 	const size = useWindowSize();
@@ -647,32 +684,17 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		if (view && !chosen.includes(location)) setSlide({ location, x: slideTo(code, offset, view.frame) });
 		// The tooltip closes on the click, as the map moves the country away from under the pointer.
 		hideCountry();
-		props.handleCountrySelect(location);
+		choosePlace(props, mode)(location);
 	};
-	const showCountry = (country: Country, anchor: Anchor) => {
-		setTooltipAnchor(anchor);
-		setTooltipContent(<CountryTip country={country} />);
-		setHovered(country.code ?? null);
+	// Another mode counts other places: what was chosen in the last one goes, so the results never stay filtered by it unseen.
+	const changeMode = (next: CountryMode) => {
+		props.handleCountriesClear();
+		setSlide(null);
+		void setMode(next);
 	};
-	const hideCountry = () => {
-		setTooltipAnchor(null);
-		setTooltipContent(null);
-		setHovered(null);
-	};
+	useFreshResults(props);
 
-	useEffect(() => {
-		// With the results closed, they open next time on their first page in the default order.
-		if (props.queryParams.country.length === 0 && !props.queryParams.search) {
-			if (props.queryParams.sort) {
-				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
-			}
-			if (props.queryParams.page) {
-				props.handlePageChange(1);
-			}
-		}
-	}, [props.queryParams.country, props.queryParams.search]);
-
-	const panel = { props, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const panel = { props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"

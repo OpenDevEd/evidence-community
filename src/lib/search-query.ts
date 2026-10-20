@@ -76,13 +76,14 @@ export const lastReachablePage = (perPage: number) =>
 function resolveCountry(
 	places: string[] | undefined,
 	offered: boolean,
+	name = "country",
 ): Resolved<string[]> {
-	const filter = resolveOffered(places, offered, "country");
+	const filter = resolveOffered(places, offered, name);
 	const unknown = filter.value.filter((place) => !isKnownPlace(place));
 	if (unknown.length === 0) return filter;
 	return {
 		value: filter.value.filter(isKnownPlace),
-		issue: `country takes two-letter codes such as QA, or a region as the library lists it. Unknown: ${unknown.join(", ")}.`,
+		issue: `${name} takes two-letter codes such as QA, or a region as the library lists it. Unknown: ${unknown.join(", ")}.`,
 	};
 }
 
@@ -107,6 +108,8 @@ export function resolveSearchQuery<P extends SearchParams>(
 			"institution",
 		),
 		country: resolveCountry(params.country, config.search.country),
+		// The authors' countries are offered wherever the country focus is.
+		author_country: resolveCountry(params.author_country, config.search.country, "author_country"),
 		topics: resolveOffered(
 			params.topics,
 			Boolean(config.topics?.enabled),
@@ -121,6 +124,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			range: resolved.range.value,
 			institution: resolved.institution.value,
 			country: resolved.country.value,
+			author_country: resolved.author_country.value,
 			topics: resolved.topics.value,
 			// A page that cannot hold a result opens on the first.
 			page:

@@ -75,7 +75,8 @@ export function getRuntimeSearchFacets(
 		facets.push("year");
 	}
 	if (search.country) {
-		facets.push("country");
+		// Where a record is about, and where its authors work.
+		facets.push("country", "authorCountry");
 	}
 	return facets;
 }

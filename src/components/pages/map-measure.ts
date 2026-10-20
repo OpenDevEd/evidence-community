@@ -5,6 +5,13 @@ import POPULATION from "@/constants/population.json";
 export const MEASURES = ["people", "records"] as const;
 export type Measure = (typeof MEASURES)[number];
 
+/** What places a record on the map: where it is about (its country focus), or where its authors work. */
+export const COUNTRY_MODES = ["focus", "authors"] as const;
+export type CountryMode = (typeof COUNTRY_MODES)[number];
+/** The search field a mode counts, and the address list choosing a country goes into. */
+export const modeField = (mode: CountryMode) => (mode === "authors" ? "authorCountry" : "country");
+export const modeParam = (mode: CountryMode) => (mode === "authors" ? "author_country" : "country");
+
 const PEOPLE = POPULATION as Record<string, number>;
 
 /** A country in the list: its records, and the value it is ranked and coloured by, none where its population is not known. */

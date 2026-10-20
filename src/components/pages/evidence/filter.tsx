@@ -57,6 +57,12 @@ type Option = { key: number; name: string; count: number; icon?: ReactNode };
 const RAISED = "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hovered]:bg-white/70 dark:bg-secondary-400 dark:data-[hovered]:bg-white/[6%]";
 export const RAISED_INPUT = { input: filledInputSlots.input, inputWrapper: "bg-white border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] data-[hover]:bg-white/70 group-data-[focus]:bg-white dark:bg-secondary-400 dark:data-[hover]:bg-white/[6%] dark:group-data-[focus]:bg-secondary-400 data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus" };
 
+/** A dropdown's field: raised in white off the band, its label over its value. */
+export const SELECT_TRIGGER = twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", RAISED);
+/** A dropdown's list, as wide as its field. */
+export const SELECT_POPOVER = "w-[var(--trigger-width)] rounded-2xl border-small border-black/10 bg-white p-1 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] outline-none data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150 dark:border-white/10 dark:bg-secondary";
+export const SELECT_ITEM = "flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-sm outline-none data-[focused]:bg-black/[0.05] dark:data-[focused]:bg-white/10";
+
 /**
  * One of the filter's dropdowns: any number of its options, each with how many papers it would highlight. Escape closes it and
  * keeps what is chosen, where a list on its own would clear it. The list is as wide as its field.
@@ -67,7 +73,7 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 	return (
 		<Select selectionMode="multiple" value={[...selected]} onChange={(keys) => onChange(new Set(keys.map(Number)))} placeholder={placeholder} className="min-w-0 flex-1">
 			<Label className="sr-only">{label}</Label>
-			<Button className={twMerge("flex h-12 w-full items-center gap-2 rounded-2xl bg-default-100 px-3 text-left outline-none transition-colors data-[hovered]:bg-default-200 data-[focus-visible]:ring-2 data-[focus-visible]:ring-accent dark:bg-secondary dark:data-[hovered]:bg-white/[4%]", RAISED, on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
+			<Button className={twMerge(SELECT_TRIGGER, on && "bg-accent/10 text-accent ring-1 ring-inset ring-accent/40 data-[hovered]:bg-accent/15 dark:bg-accent/20 dark:text-white dark:ring-accent/60 dark:data-[hovered]:bg-accent/25")}>
 				<span className="min-w-0 flex-1">
 					<span aria-hidden className={twMerge("block text-xs leading-4", on ? "opacity-80" : muted)}>{label}</span>
 					<SelectValue className={twMerge("block truncate text-sm font-medium leading-5", !on && muted)}>
@@ -76,10 +82,10 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
 				</span>
 				<HugeiconsIcon icon={ArrowDown01Icon} size={16} aria-hidden className={on ? undefined : muted} />
 			</Button>
-			<Popover offset={6} className="w-[var(--trigger-width)] rounded-2xl border-small border-black/10 bg-white p-1 shadow-[0_12px_40px_-12px_rgb(0_0_0/0.25)] outline-none data-[entering]:animate-in data-[entering]:fade-in data-[entering]:duration-150 dark:border-white/10 dark:bg-secondary">
+			<Popover offset={6} className={SELECT_POPOVER}>
 				<ListBox escapeKeyBehavior="none" items={options} className="max-h-80 overflow-y-auto outline-none">
 					{(option) => (
-						<ListBoxItem id={option.key} textValue={option.name} className="flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 text-sm outline-none data-[focused]:bg-black/[0.05] dark:data-[focused]:bg-white/10">
+						<ListBoxItem id={option.key} textValue={option.name} className={SELECT_ITEM}>
 							{({ isSelected }) => (
 								<>
 									{option.icon}

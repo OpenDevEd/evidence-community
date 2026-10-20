@@ -319,6 +319,7 @@
     "avgPerItemColumn": "Média/Item",
     "languageDistribution": "Distribuição de Idiomas",
     "countries": "Países",
+    "authorCountries": "Países dos Autores",
     "mapTitle": "Pesquisa por país",
     "mapCountryCount": "<number>{count}</number> {count, plural, one {país} other {países}}",
     "mapColourBy": "Colorir países por",

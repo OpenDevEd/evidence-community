@@ -650,6 +650,67 @@ function TopicTree({
 	);
 }
 
+/**
+ * A filter by place: continents and regions that open to their countries, each with how many results it has. `facet` is
+ * the counted field (the country focus, or the authors' countries) and `queryParam` the address list it chooses into.
+ */
+function PlaceFilter({ facet, queryParam, label, placeholder, queryParams, onSelect, facetDistribution, total }: { facet: "country" | "authorCountry"; queryParam: "country" | "author_country"; label: string; placeholder: string; queryParams: inferParserType<typeof searchParamsLoader>; onSelect: (country: string) => void; facetDistribution: FacetDistribution | undefined; total: number | undefined }) {
+	const sidebar = useTranslations("sidebar");
+	const [countries] = useFacetList(
+		facetDistribution!,
+		facet,
+		(country) => CountryParser(queryParams, country, false, queryParam, onSelect),
+		(a, b) => a.localeCompare(b),
+	);
+	// A region's count would add up its countries, counting a publication about two of them twice, so a region says
+	// how many of its countries have results instead.
+	const countriesWithNotes = useMemo(
+		() =>
+			countries.map((item) => {
+				if (!item.hideCount || item.key.split(" > ").length > 2) return item;
+				const found = Object.entries(facetDistribution?.[facet] ?? {}).filter(
+					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
+				).length;
+				return { ...item, note: sidebar("countryCount", { count: found }), noteCount: found, emphasis: !item.key.includes(" > ") };
+			}),
+		[countries, facet, facetDistribution, sidebar],
+	);
+	const [uncategorized] = useFacetList(
+		facetDistribution!,
+		`${facet}_uncategorized`,
+		(country) => CountryParser(queryParams, country, true, queryParam, onSelect),
+		(a, b) => a.localeCompare(b),
+	);
+	return (
+		<FacetPicker
+			total={total}
+			label={label}
+			placeholder={placeholder}
+			selectedKey={queryParams[queryParam]}
+			onSelectionChange={onSelect}
+			facetDistribution={facetDistribution}
+			list={countriesWithNotes}
+			facetName={facet}
+			searchList={uncategorized.map((item) => ({ ...item, hide: false }))}
+		/>
+	);
+}
+
+/** The place filters, where the library offers them: where records are about (country focus), and where their authors work. */
+function PlaceFilters({ queryParams, onCountry, facetDistribution, total }: { queryParams: inferParserType<typeof searchParamsLoader>; onCountry: (country: string) => void; facetDistribution: FacetDistribution | undefined; total: number | undefined }) {
+	const t = useTranslations("ui");
+	const { handleAuthorCountrySelect } = useFiltersContext();
+	const enabled = useLibraryFeature("countryFocus");
+	if (!enabled) return null;
+	const shared = { queryParams, facetDistribution, total, placeholder: t("countryFilterDescription") };
+	return (
+		<>
+			<PlaceFilter facet="country" queryParam="country" label={t("countryFilter")} onSelect={onCountry} {...shared} />
+			<PlaceFilter facet="authorCountry" queryParam="author_country" label={t("authorCountries")} onSelect={handleAuthorCountrySelect} {...shared} />
+		</>
+	);
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
@@ -700,76 +761,7 @@ function FiltersList({
 		t,
 	);
 
-	const [countries] = useFacetList(
-		facetDistribution!,
-		"country",
-		(country) =>
-			CountryParser(
-				queryParams,
-				country,
-				false,
-				"country",
-				handleCountrySelect,
-			),
-		(a, b) => a.localeCompare(b),
-	);
-	// A region's count would add up its countries, counting a publication about two of them twice, so a region says
-	// how many of its countries have results instead.
-	const countriesWithNotes = useMemo(
-		() =>
-			countries.map((item) => {
-				if (!item.hideCount || item.key.split(" > ").length > 2) return item;
-				const found = Object.entries(facetDistribution?.country ?? {}).filter(
-					([path, count]) => count > 0 && path.startsWith(`${item.key} > `) && /^[A-Z]{2}$/.test(path.split(" > ").pop() ?? ""),
-				).length;
-				return { ...item, note: sidebar("countryCount", { count: found }), noteCount: found, emphasis: !item.key.includes(" > ") };
-			}),
-		[countries, facetDistribution, sidebar],
-	);
-	const [countries_uncategorized] = useFacetList(
-		facetDistribution!,
-		"country_uncategorized",
-		(country) =>
-			CountryParser(
-				queryParams,
-				country,
-				true,
-				"country",
-				handleCountrySelect,
-			),
-		(a, b) => a.localeCompare(b),
-	);
-
-	const countryFocusFilter = useMemo(() => {
-		return (
-			isCountryFocusEnabled && (
-				<FacetPicker
-					key={"country-focus-filter"}
-					total={total}
-					label={t("countryFilter")}
-					placeholder={t("countryFilterDescription")}
-					selectedKey={queryParams.country}
-					onSelectionChange={handleCountrySelect}
-					facetDistribution={facetDistribution}
-					list={countriesWithNotes}
-					facetName="country"
-					searchList={countries_uncategorized.map((item) => ({
-						...item,
-						hide: false,
-					}))}
-				/>
-			)
-		);
-	}, [
-		isCountryFocusEnabled,
-		t,
-		queryParams.country,
-		handleCountrySelect,
-		facetDistribution,
-		countriesWithNotes,
-		countries_uncategorized,
-		total,
-	]);
+	const placeFilters = <PlaceFilters queryParams={queryParams} onCountry={handleCountrySelect} facetDistribution={facetDistribution} total={total} />;
 
 	const institutionFilter = useMemo(() => {
 		return (
@@ -801,7 +793,7 @@ function FiltersList({
 		return (
 			<>
 				{institutionFilter}
-				{countryFocusFilter}
+				{placeFilters}
 				{topicPicker ? (
 					<TopicFilter
 						total={topicTotal}
@@ -813,7 +805,7 @@ function FiltersList({
 			</>
 		);
 	}, [
-		countryFocusFilter,
+		placeFilters,
 		facetDistribution?.topicAncestors,
 		handleTopicsChange,
 		institutionFilter,

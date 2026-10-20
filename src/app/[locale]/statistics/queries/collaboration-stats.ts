@@ -6,7 +6,7 @@ import { COUNTRIES } from "@/constants/misc";
 import {
 	affiliationCountryJoin,
 	institutionCountryCode,
-} from "./institution-country-sql";
+} from "@/lib/institution-country-sql";
 
 export type CollaborationStats = {
 	totalItems: number;
