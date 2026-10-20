@@ -324,6 +324,7 @@
     "authorCountries": "Pays des auteurs",
     "authorInstitutions": "Institutions des auteurs",
     "mapPapersBy": "Placer les articles selon",
+    "mapClearResults": "Effacer la recherche et les filtres",
     "mapModeFocusHint": "Les pays qu'étudie un article",
     "mapModeAuthorsHint": "Où travaillent ses auteurs",
     "mapModeInstitutionsHint": "Chaque institution où travaillent ses auteurs",
