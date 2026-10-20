@@ -54,6 +54,69 @@ describe("header widths", () => {
 	});
 });
 
+describe("the name beside the logo", () => {
+	const named = (name: string, shortName: string) => ({
+		...withFeatures({ themeSwitcher: true, languageSwitcher: false, readerAccounts: true }),
+		identity: { ...base.identity, name, shortName },
+	});
+
+	it("shows the full name while every action fits, the short one while they fold, then the logo alone, and on a phone the name that fits", () => {
+		const { steps, arrangements } = navbarWidths(named("Vocational Training", "TVET"), measure, labels, 120, measure);
+		expect(arrangements.map(({ step, name }) => [step, name])).toEqual([
+			[0, "full"],
+			[0, "short"],
+			[1, "short"],
+			[1, "none"],
+			// Beside the sign-in icon below 640px, then beside its label from 640px, where the full name still fits.
+			["compact", "full"],
+			["compact", "short"],
+			["compact", "full"],
+		]);
+		// A name takes the gap after the logo and its own width.
+		expect(arrangements[0]!.width).toBe(steps[0]! + 12 + "Vocational Training".length * 10);
+		expect(arrangements[1]!.width).toBe(steps[0]! + 12 + "TVET".length * 10);
+		// With the links inline each arrangement needs less room than the one before, and a phone's never as much.
+		const inline = arrangements.filter(({ step }) => step !== "compact").map(({ width }) => width);
+		expect(inline).toEqual([...inline].sort((a, b) => b - a));
+		expect(arrangements.filter(({ step }) => step === "compact").every(({ width }) => width < steps.at(-1)!)).toBe(true);
+	});
+
+	it("from 640px, where the sign-in shows its label, shows only the name that still fits beside it", () => {
+		const { arrangements } = navbarWidths(named("A".repeat(28), "AB"), measure, labels, 120, measure);
+		const phone = arrangements.filter(({ step }) => step === "compact").map(({ width, name }) => [width, name]);
+		// Phone bar: logo 120, two gaps, the 32px menu, a gap and the 40px icon, and 8 to spare; a name adds 12 and its letters.
+		const icon = 8 + 120 + 24 + 24 + 32 + 24 + 40;
+		// The full name beside the labelled sign-in would need more room than the links inline, so the short name stays.
+		expect(phone).toEqual([
+			[icon + 12 + 280, "full"],
+			[icon + 12 + 20, "short"],
+			[608, "short"],
+		]);
+	});
+
+	it("keeps the full name as the actions fold when the short name is the same, and leaves out a phone name wider than the links", () => {
+		const { steps, arrangements } = navbarWidths(named("A".repeat(100), "A".repeat(100)), measure, labels, 120, measure);
+		expect(arrangements.map(({ step, name }) => [step, name])).toEqual([
+			[0, "full"],
+			[0, "full"],
+			[1, "full"],
+			[1, "none"],
+			// No name fits beside the labelled sign-in at 640px.
+			["compact", "none"],
+		]);
+		expect(arrangements.every((arrangement) => arrangement.step !== "compact" || arrangement.width < steps.at(-1)!)).toBe(true);
+	});
+});
+
+describe("a short name no narrower than the full one", () => {
+	it("is never shown in its place", () => {
+		const config = { ...withFeatures({ themeSwitcher: true, languageSwitcher: false, readerAccounts: true }), identity: { ...base.identity, name: "IOE", shortName: "Institute" } };
+		const { arrangements } = navbarWidths(config, measure, labels, 120, measure);
+		expect(arrangements.some(({ name }) => name === "short")).toBe(false);
+		expect(arrangements[0]).toMatchObject({ step: 0, name: "full" });
+	});
+});
+
 describe("loading the body font", () => {
 	it("tries a failed load again a minute later, not on every page in between", async () => {
 		vi.useFakeTimers();
@@ -62,11 +125,11 @@ describe("loading the body font", () => {
 		vi.stubGlobal("fetch", fetch);
 		const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, theme: { ...maximalLibraryConfig.theme, fonts: { ...maximalLibraryConfig.theme.fonts, body: { source: "google", family: "Poppins" } } } });
 		try {
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
 			expect(fetch).toHaveBeenCalledTimes(1);
 			await vi.advanceTimersByTimeAsync(60_000);
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
 			expect(fetch).toHaveBeenCalledTimes(2);
 		} finally {
 			vi.unstubAllGlobals();
