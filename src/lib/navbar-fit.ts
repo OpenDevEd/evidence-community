@@ -17,7 +17,7 @@ import { navbarActionSteps, navbarSettings, type NavbarActionSlot } from "@/lib/
  * many long links folds earlier. The numbers become container queries on the
  * bar.
  */
-export type NavbarFit = { steps: number[]; arrangements: Arrangement[] };
+export type NavbarFit = { steps: number[]; arrangements: Arrangement[]; /** The logo's width at the header's height. */ logo: number };
 
 /** Which name shows beside the logo: the library's full name, its short name, or none. */
 type NameShown = "full" | "short" | "none";
@@ -35,6 +35,7 @@ const LINK_ICON_GAP = 8; // gap-2
 const LINK_FONT = { size: 18, weight: 500 }; // text-lg font-medium
 const SUBMENU_TRIGGER = 8 + 40; // gap-2, then the chevron button
 const MENU_BUTTON = 20; // the ☰ trigger, a size-5 icon with no padding
+const PHONE_MENU_BUTTON = 32; // the same trigger on a phone, with its padding
 const SETTINGS_BUTTON = 20; // the settings trigger, likewise
 const THEME_BUTTON = 20; // the light or dark button, likewise
 const AVATAR = 40; // md avatar
@@ -155,9 +156,10 @@ export function navbarWidths(
 	});
 	const steps = actions.map((width) => Math.ceil(base + width));
 	const name = nameWidths(config, measureName);
-	// On a phone the bar holds the logo, the sign-in icon or avatar (both a 40px circle), and the menu button.
-	const compact = SAFETY + logo + GAP + MENU_BUTTON + (readerAccounts ? GAP + AVATAR : 0);
-	return { steps, arrangements: arrangementsOf(steps, name, compact) };
+	// On a phone the bar holds the logo, the empty links slot (no width, but a gap), the sign-in icon or avatar (both a 40px
+	// circle) and the menu button with its padding.
+	const compact = SAFETY + logo + GAP + GAP + PHONE_MENU_BUTTON + (readerAccounts ? GAP + AVATAR : 0);
+	return { steps, arrangements: arrangementsOf(steps, name, compact), logo };
 }
 
 /** The widths the full and the short name take beside the logo, the short one only where it differs. */
@@ -216,8 +218,11 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 			.map((arrangement) => `@container navbar (min-width: ${arrangement.width}px) {
 	${arrangementCss(arrangement)}
 }`);
+		// The logo's box holds its own width while the picture loads, so the name and links beside it never move when it lands.
+		// It is drawn 36px tall below 1,280px and 40px from there, as LIBRARY_LOGO_SIZES.header says.
 		return `
-.navbar-bar { container: navbar / inline-size; }
+.navbar-bar { container: navbar / inline-size; --nf-logo-width: ${Math.ceil(fit.logo * 0.9)}px; }
+@media (min-width: 1280px) { .navbar-bar { --nf-logo-width: ${Math.ceil(fit.logo)}px; } }
 .nf-links, .nf-step, .nf-name { display: none !important; }
 ${rules.join("\n")}`;
 	}

@@ -49,10 +49,11 @@ export function Logo({ interactive = true }: LogoProps) {
 			<LibraryLogo
 				className={twMerge(
 					"pointer-events-none",
-					// While the picture is on its way the box holds the widest
-					// a logo may be, so the bar does not jump when it lands.
-					// Once it is there the box is only as wide as the logo.
-					isLoaded ? "w-auto" : "w-logo-header",
+					// While the picture is on its way the box holds the logo's
+					// width as the server measured it (navbar-fit), or the widest a
+					// logo may be without a measurement, so the name and links
+					// beside it don't move when it lands.
+					isLoaded ? "w-auto" : "w-[var(--nf-logo-width,12rem)]",
 				)}
 				place="header"
 				onSettled={onLogoSettled}
