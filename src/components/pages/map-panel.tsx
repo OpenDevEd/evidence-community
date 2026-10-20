@@ -153,7 +153,7 @@ export function MapSheet(p: PanelProps) {
 			<div className="fixed inset-x-3 top-[5.75rem] z-10 xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:right-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[calc(100%-min(32rem,55%)-1.5rem)]">
 				<div className={twMerge(PANEL, "relative")}><div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><Search props={p.props} /></div></div>
 			</div>
-			<motion.div layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, SIDE_WIDTH, open ? "h-[50dvh]" : "h-14")}>
+			<motion.div layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, SIDE_WIDTH, open ? "h-[50dvh]" : "h-[calc(3.5rem+env(safe-area-inset-bottom))]")}>
 				<SheetBar name={t("countries")} open={open} onFold={() => setOpen(!open)} />
 				<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>
 					<MapIntro titled={false} countries={p.rows.length} measure={p.measure} onMeasure={p.onMeasure} />

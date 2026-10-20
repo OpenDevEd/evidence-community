@@ -155,7 +155,9 @@ const resultsShown = ({ country, search }: { country: string[]; search: string }
 function resultsClass(open: boolean, small: boolean) {
 	return twMerge(
 		"fixed inset-x-0 bottom-0 z-30 [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto xl:inset-y-0 xl:left-auto xl:right-0 xl:top-0 xl:h-auto xl:pb-4 xl:pr-4 xl:pt-[calc(7.5rem-1.5rem)]",
-		open ? "h-[50dvh]" : "h-14",
+		// The phone's home indicator keeps its own room under the bar.
+		"pb-[env(safe-area-inset-bottom)]",
+		open ? "h-[50dvh]" : "h-[calc(3.5rem+env(safe-area-inset-bottom))]",
 		SIDE_WIDTH,
 		small && "xl:pt-[7.5rem]",
 	);
@@ -486,7 +488,9 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 	// slide ends, so no tooltip flicks from one to the next.
 	const still = useReducedMotion();
 	const [settledAt, setSettledAt] = useState(offset);
-	const sliding = !still && settledAt !== offset;
+	// Without motion there is no slide to wait for: it has settled already, also if motion comes back later.
+	if (still && settledAt !== offset) setSettledAt(offset);
+	const sliding = settledAt !== offset;
 	const drawn = useMemo(() => {
 		const draw = geoPath(view.projection);
 		return { sea: draw(SPHERE) ?? "", graticule: draw(GRATICULE) ?? "", antarctica: world.antarctica.map((geo) => draw(geo) ?? ""), countries: world.countries.map((geo) => draw(geo) ?? "") };
@@ -501,12 +505,12 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 		let committed = zoomTransform(element);
 		let active = 0;
 		// A button's glide whose redraw is still to come: a new gesture redraws it first, so it starts from where the glide went.
-		let pending: (() => void) | null = null;
+		let pending: ((sync: boolean) => void) | null = null;
 		const behaviour = zoom<HTMLDivElement, unknown>()
 			.scaleExtent([view.minZoom, 12])
 			.duration(0)
 			.on("start", (event: { sourceEvent: unknown }) => {
-				pending?.();
+				pending?.(true);
 				active += 1;
 				// A reader's own gesture moves the map at once, even over a button's glide.
 				if (event.sourceEvent) moving.style.transition = "";
@@ -516,10 +520,12 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 				moving.style.transform = cssTransform(committed, event.transform);
 			})
 			.on("end", (event: { transform: ZoomTransform }) => {
-				const commit = () => {
+				// Redrawn at once mid-page, so the next frame is sharp; on the effect's cleanup, where React can't render at once, later.
+				const commit = (sync = true) => {
 					active -= 1;
 					committed = event.transform;
-					flushSync(() => setTransform(committed));
+					if (sync) flushSync(() => setTransform(committed));
+					else setTransform(committed);
 					moving.style.transition = "";
 					moving.style.transform = "";
 					if (!active) moving.style.willChange = "";
@@ -527,16 +533,16 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 				if (!moving.style.transition) return commit();
 				// A button's zoom glides the layer there first, then draws the outlines sharp at the new zoom. A glide that goes
 				// nowhere never ends, so the commit also runs after the glide's length.
-				let done = false;
-				const once = () => {
-					if (done) return;
-					done = true;
+				const ended = () => once(true);
+				const timer = setTimeout(ended, GLIDE + 50);
+				const once = (sync: boolean) => {
 					pending = null;
-					commit();
+					clearTimeout(timer);
+					moving.removeEventListener("transitionend", ended);
+					commit(sync);
 				};
 				pending = once;
-				moving.addEventListener("transitionend", once, { once: true });
-				setTimeout(once, GLIDE + 50);
+				moving.addEventListener("transitionend", ended, { once: true });
 			});
 		select(element).call(behaviour);
 		const glide = (move: () => void) => {
@@ -548,6 +554,8 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 			reset: () => glide(() => behaviour.transform(select(element), zoomIdentity)),
 		};
 		return () => {
+			// A glide still on its way when the map is set up again is finished now, so it can't land on the new one.
+			pending?.(false);
 			zoomerRef.current = null;
 			select(element).on(".zoom", null);
 		};
