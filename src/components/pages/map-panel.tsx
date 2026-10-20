@@ -14,7 +14,7 @@ import { twMerge } from "@/lib/tw-merge";
 import { RAISED_INPUT, SELECT_ITEM, SELECT_POPOVER, SELECT_TRIGGER } from "./evidence/filter";
 import { COUNTRY_MODES, MEASURES, type CountryMode, type CountryRow, type Measure } from "./map-measure";
 import { ArrowDown01Icon, Tick02Icon } from "@hugeicons/core-free-icons";
-import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue } from "react-aria-components";
+import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue, Text } from "react-aria-components";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { FITTED_ROWS, fittedBox, muted, PANEL, Pages, useFittedPages } from "./evidence/lists";
 import { SHEET, SheetBar } from "./evidence/phone-sheet";
@@ -35,14 +35,19 @@ export function useCountryMode() {
 /** The map's mode, a dropdown under the search with the evidence map's look: country focus, or the authors' countries. */
 function ModeSelect({ mode, onMode }: { mode: CountryMode; onMode: (next: CountryMode) => void }) {
 	const t = useTranslations("ui");
-	const options = [{ id: "focus", name: t("countryFilter") }, { id: "authors", name: t("authorCountries") }, { id: "institutions", name: t("authorInstitutions") }] as const;
+	const options = [
+		{ id: "focus", name: t("countryFilter"), hint: t("mapModeFocusHint") },
+		{ id: "authors", name: t("authorCountries"), hint: t("mapModeAuthorsHint") },
+		{ id: "institutions", name: t("authorInstitutions"), hint: t("mapModeInstitutionsHint") },
+	] as const;
 	return (
 		<Select value={mode} onChange={(key) => onMode(key as CountryMode)} className="min-w-0">
-			<Label className="sr-only">{t("countries")}</Label>
+			<Label className="sr-only">{t("mapPapersBy")}</Label>
 			<Button className={SELECT_TRIGGER}>
 				<span className="min-w-0 flex-1">
-					<span aria-hidden className={twMerge("block text-xs leading-4", muted)}>{t("countries")}</span>
-					<SelectValue className="block truncate text-sm font-medium leading-5" />
+					<span aria-hidden className={twMerge("block text-xs leading-4", muted)}>{t("mapPapersBy")}</span>
+					{/* The field shows the choice's name; its line of explanation is for the list. */}
+					<SelectValue className="block truncate text-sm font-medium leading-5">{({ selectedText }) => selectedText}</SelectValue>
 				</span>
 				<HugeiconsIcon icon={ArrowDown01Icon} size={16} aria-hidden className={muted} />
 			</Button>
@@ -52,7 +57,10 @@ function ModeSelect({ mode, onMode }: { mode: CountryMode; onMode: (next: Countr
 						<ListBoxItem id={option.id} textValue={option.name} className={SELECT_ITEM}>
 							{({ isSelected }) => (
 								<>
-									<span className="min-w-0 flex-1 font-medium leading-snug">{option.name}</span>
+									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+										<Text slot="label" className="font-medium leading-snug">{option.name}</Text>
+										<Text slot="description" className={twMerge("text-xs leading-4", muted)}>{option.hint}</Text>
+									</span>
 									<HugeiconsIcon icon={Tick02Icon} size={16} aria-hidden className={twMerge("text-accent", !isSelected && "invisible")} />
 								</>
 							)}
