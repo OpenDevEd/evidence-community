@@ -250,7 +250,7 @@ async function pipelineFigures(home: LibraryHomeConfig | undefined, now: Date): 
 			? db.select({ count: count() }).from(sourceRecordAlias).where(and(inArray(sourceRecordAlias.sourceConnectionKey, keys), eq(sourceRecordAlias.kind, "duplicate-of")))
 			: [{ count: 0 }],
 	]);
-	const queries = sources.flatMap((source) => openAlexConnectionConfigSchema.safeParse(source.config).data?.approvedQuery.query.oql ?? []);
+	const queries = sources.flatMap((source) => openAlexConnectionConfigSchema.safeParse(source.config).data?.approvedQuery.query ?? []);
 	return { ...queryTerms(queries), added: added?.count ?? 0, merged: merged?.count ?? 0 };
 }
 
