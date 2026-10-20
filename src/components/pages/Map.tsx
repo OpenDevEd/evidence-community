@@ -8,7 +8,8 @@ import { flushSync } from "react-dom";
 import { Fragment, ReactNode, Suspense, use, useEffect, useEffectEvent, useMemo, useState, useRef, memo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import { ArrowUp01Icon, CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { ArrowUp01Icon, Cancel01Icon, CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
+import { Button } from "@/components/nextui/Button";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
@@ -144,6 +145,28 @@ function resultsMotion(wide: boolean, still: boolean | null) {
 	return { initial: away, exit: away, animate: { opacity: 1, x: 0, y: 0 }, transition, layout: !still && !wide };
 }
 
+/** From 1,280 px wide, where the results are a panel beside the map: clears the search and every filter, which closes the panel and
+ * puts the map back to the whole library. Below that the sheet's back arrow closes it. */
+function CloseResults({ props }: { props: ReturnType<typeof useItemsList> }) {
+	const t = useTranslations("ui");
+	const label = t("mapClearResults");
+	return (
+		<Tooltip content={label} placement="bottom">
+			<Button
+				isIconOnly
+				aria-label={label}
+				className="hidden h-full !p-0 xl:flex"
+				onPress={() => {
+					props.handleClearFilters();
+					props.handleSearchChange("");
+				}}
+			>
+				<HugeiconsIcon icon={Cancel01Icon} className="size-6" />
+			</Button>
+		</Tooltip>
+	);
+}
+
 /** The sheet's bar: back to the list (`list`, the countries or the institutions), then what the results are of, which folds the
  * sheet (lying on its side, just the name). */
 function ResultsBar({ name, list, open, onFold, onBack }: { name: string; list: "countries" | "institutions"; open: boolean; onFold: () => void; onBack: () => void }) {
@@ -242,7 +265,7 @@ function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; lis
 						<ResultsBar list={list} name={resultsName(chosenPlaces(props.queryParams), t, props.queryParams.institution)} open={open} onFold={() => setOpen(!open)} onBack={() => { props.handleCountriesClear(); props.handleSearchChange(""); }} />
 						<div className={twMerge("min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar xl:block xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:block", open ? "block" : "hidden")}>
 							<Card color="card" className="min-h-full rounded-none p-4 xl:rounded-2xl">
-								<ItemsList props={props} contentId="map-results" />
+								<ItemsList props={props} contentId="map-results" headerEnd={<CloseResults props={props} />} />
 							</Card>
 						</div>
 					</div>

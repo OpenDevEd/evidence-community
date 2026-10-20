@@ -93,6 +93,7 @@ function LibraryFilters({
 function SearchTabContent({
 	askAI,
 	header,
+	headerEnd,
 	itemsContext,
 	extraFilters,
 	countLabel,
@@ -103,6 +104,7 @@ function SearchTabContent({
 	showHeader,
 }: {
 	header: ReactNode;
+	headerEnd?: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
 	extraFilters: ReactNode;
 	countLabel: ReactNode;
@@ -182,6 +184,7 @@ function SearchTabContent({
 						onOpenChange={onHelpOpenChange}
 					/>
 					<SortComponent itemsContext={itemsContext} />
+					{headerEnd}
 				</div>
 			</div>
 
@@ -323,6 +326,7 @@ export function ContentInteractions({
 	countLabel,
 	extraFilters,
 	header,
+	headerEnd,
 }: {
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
@@ -331,6 +335,7 @@ export function ContentInteractions({
 	countLabel: ReactNode;
 	extraFilters: ReactNode;
 	header?: ReactNode;
+	headerEnd?: ReactNode;
 }) {
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
@@ -358,6 +363,7 @@ export function ContentInteractions({
 			/>
 			<SearchTabContent
 				header={header}
+				headerEnd={headerEnd}
 				itemsContext={itemsContext}
 				extraFilters={extraFilters}
 				countLabel={countLabel}
