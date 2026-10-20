@@ -115,6 +115,8 @@ describe("country focus", () => {
 		["Rural American Indian students", ["US"]],
 		["Essay scoring in Brazilian Portuguese", ["BR"]],
 		["Polish teachers and schools in Luxembourg", ["LU", "PL"]],
+		["Biodiversity in the Papua New Guinea savannah", ["PG"]],
+		["Holland's education system", ["NL"]],
 	])("does not read a country into a phrase that names something else: %s", (title, countries) => {
 		expect(resolveCountryFocus({ title })).toEqual(countries);
 	});
@@ -125,6 +127,12 @@ describe("country focus", () => {
 				abstractNote: "Sudan is the focus.",
 			}),
 		).toEqual(["SD"]);
+		expect(
+			resolveCountryFocus({
+				title: "Income inequality in Luxembourg",
+				abstractNote: "Publications Office data were compared.",
+			}),
+		).toEqual(["LU"]);
 	});
 	it.each([
 		["Nauru", "NR"],
