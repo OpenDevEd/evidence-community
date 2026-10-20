@@ -22,9 +22,9 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type Measure } from "./map-measure";
+import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type CountryRow, type Measure } from "./map-measure";
 import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
-import { InstitutionDots, InstitutionLegend, InstitutionTip, stepTint, useInstitutionPoints, type InstitutionPoint } from "./map-institutions";
+import { DOT, InstitutionDots, InstitutionMarks, InstitutionTip, useInstitutionPoints, type DotEvents } from "./map-institutions";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -634,12 +634,12 @@ const NO_COUNTS: Record<string, number> = {};
 const COUNTS_OPTIONS = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
 /**
- * The countries' record counts the map colours and ranks by: the page's filters with every country of the map's mode kept, as
- * choosing a country would otherwise leave only its own. A filter on the other kind of country still narrows them. With none chosen this is the shared filters' own request. Until it answers, the counts the
- * server sent with the page; while a new one is on its way, the last ones, marked as stale.
+ * The countries' record counts the map colours and ranks by: the page's own filters, chosen countries included, so choosing a
+ * country shows it and the other countries its records name, where they collaborate. It is the shared filters' own request.
+ * Until it answers, the counts the server sent with the page; while a new one is on its way, the last ones, marked as stale.
  */
 function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode, initial?: Record<string, number>) {
-	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, [modeParam(mode)]: [] }), fetcher, COUNTS_OPTIONS);
+	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery(params), fetcher, COUNTS_OPTIONS);
 	// The server counted for the mode the page opened in.
 	const [firstMode] = useState(mode);
 	const facet = countsIn(data, mode, mode === firstMode ? initial : undefined);
@@ -664,9 +664,10 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	const chosen = props.queryParams[modeParam(mode)];
 	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
 	const byInstitution = mode === "institutions";
-	// Institutions shade their countries by records, in steps, as Björn's map does.
-	const rows = countryRows(facet, byInstitution ? "records" : measure);
-	const max = scaleTop(rows, measure);
+	// Institutions shade their countries by records: the circles already count institutions, not people.
+	const shade: Measure = byInstitution ? "records" : measure;
+	const rows = countryRows(facet, shade);
+	const max = scaleTop(rows, shade);
 	const institutions = useInstitutionPoints(props.queryParams, byInstitution);
 	const [hoveredInstitution, setHoveredInstitution] = useState<string | null>(null);
 	const size = useWindowSize();
@@ -701,21 +702,24 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	};
 	useFreshResults(props);
 
-	const showInstitution = useEffectEvent((point: InstitutionPoint) => {
-		setTooltipAnchor(null);
-		setTooltipContent(<InstitutionTip point={point} />);
-		setHoveredInstitution(point.key);
-	});
-	const hideInstitution = useEffectEvent(() => {
-		setTooltipContent(null);
-		setHoveredInstitution(null);
-	});
-	const selectInstitution = useEffectEvent((point: InstitutionPoint) => {
-		hideCountry();
-		props.handleInstitutionSelect(point.name);
-	});
-	// Stable for the memoised circles, so pointing at one doesn't redraw thousands.
-	const dotEvents = useMemo(() => ({ onShow: (point: InstitutionPoint) => showInstitution(point), onHide: () => hideInstitution(), onSelect: (point: InstitutionPoint) => selectInstitution(point) }), []);
+	const { handleInstitutionSelect } = props;
+	// Stable until an institution is chosen, so pointing at a circle doesn't draw thousands again.
+	const dotEvents = useMemo<DotEvents>(() => ({
+		onShow: (point) => {
+			setTooltipAnchor(null);
+			setTooltipContent(<InstitutionTip point={point} />);
+			setHoveredInstitution(point.key);
+		},
+		onHide: () => {
+			setTooltipContent(null);
+			setHoveredInstitution(null);
+		},
+		onSelect: (point) => {
+			setTooltipContent(null);
+			setHoveredInstitution(null);
+			handleInstitutionSelect(point.name);
+		},
+	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect]);
 	const institutionPanel = byInstitution ? { points: institutions.points, chosen: props.queryParams.institution, stale: institutions.stale, hovered: hoveredInstitution, onHover: setHoveredInstitution, onSelect: dotEvents.onSelect } : undefined;
 
 	const panel = { institutions: institutionPanel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
@@ -733,21 +737,55 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			<MapSheet {...panel} />
 			<MemoizedItemView props={props} />
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
-			{byInstitution && <InstitutionLegend />}
+			<MapLegend rows={rows} measure={shade} max={max} institutions={byInstitution} />
 			<Suspense fallback={null}>
 				<Globe
 					view={view}
 					offset={offset}
 					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen, byInstitution ? "records" : measure);
-						const style = shapeStyle(country, hovered, max);
-						return <CountryShape d={d} country={country} style={byInstitution && style.stroke === "var(--map-sea)" ? { ...style, fill: stepTint(country.count) } : style} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
+						const country = countryOf(geo, facet, chosen, shade);
+						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
-					overlay={byInstitution && view ? <InstitutionDots points={institutions.points} projection={view.projection} chosen={props.queryParams.institution} hovered={hoveredInstitution} {...dotEvents} /> : null}
+					overlay={byInstitution && view ? (
+						<>
+							<InstitutionDots points={institutions.points} projection={view.projection} events={dotEvents} />
+							<InstitutionMarks points={institutions.points} projection={view.projection} chosen={props.queryParams.institution} hovered={hoveredInstitution} />
+						</>
+					) : null}
 				/>
 			</Suspense>
 		</main>
+	);
+}
+
+/**
+ * The key to the countries' colours, beside the zoom buttons from 1,280 px wide: the tint from the lowest value to the one that
+ * takes the full colour (per person, a few small states go past it, so it reads "and more"), and the circles in the institutions' mode.
+ */
+function MapLegend({ rows, measure, max, institutions }: { rows: CountryRow[]; measure: Measure; max: number; institutions: boolean }) {
+	const t = useTranslations("ui");
+	const { rate, count } = useValueFormat();
+	const values = rows.flatMap((row) => (row.value ? [row.value] : []));
+	if (!values.length) return null;
+	const low = Math.min(...values);
+	const format = measure === "people" ? rate : count;
+	const stops = [low, ...[0.1, 0.3, 0.6, 1].map((share) => share * max)].map((value) => tint(value, max));
+	return (
+		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+3.75rem)] z-10 hidden w-52 px-3 py-2.5 text-xs leading-5 xl:block")}>
+			<p className="mb-1.5 font-semibold">{measure === "people" ? t("mapResourcesPerMillion") : t("mapResourcesPerCountry")}</p>
+			<span aria-hidden className="block h-2 rounded-full" style={{ background: `linear-gradient(to right, ${stops.join(", ")})` }} />
+			<p className="mt-0.5 flex justify-between tabular-nums text-black/55 dark:text-white/55">
+				<span>{format(low)}</span>
+				<span>{Math.max(...values) > max ? t("mapAndMore", { value: format(max) }) : format(max)}</span>
+			</p>
+			{institutions && (
+				<p className="mt-1.5 flex items-center gap-2">
+					<span className="size-2.5 rounded-full" style={{ background: DOT }} />
+					{t("institutions")}
+				</p>
+			)}
+		</div>
 	);
 }
 

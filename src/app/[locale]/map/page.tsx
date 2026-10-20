@@ -9,7 +9,7 @@ import { geoEqualEarth } from "d3-geo";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { preload } from "react-dom";
-import { modeField, modeParam, type CountryMode } from "@/components/pages/map-measure";
+import { modeField, type CountryMode } from "@/components/pages/map-measure";
 
 type Places = Record<string, [number, number]>;
 type Counts = Record<string, number>;
@@ -30,8 +30,8 @@ export default async function MapPage({ searchParams }: Props) {
 	const places = placesOf((await getWorldMap()).shapes);
 	const params = await searchParams;
 	const mode: CountryMode = params.by === "authors" || params.by === "institutions" ? params.by : "focus";
-	// The whole library's counts place the map; the counts for the page's filters, every country of the mode kept, colour it and fill the list from the first frame.
-	const [library, filtered] = await Promise.all([countsOf({}, mode), countsOf({ ...loadSearchParams(params), [modeParam(mode)]: [] }, mode)]);
+	// The whole library's counts place the map; the counts for the page's filters, chosen countries included, colour it and fill the list from the first frame.
+	const [library, filtered] = await Promise.all([countsOf({}, mode), countsOf(loadSearchParams(params), mode)]);
 	return <Map focus={library && middleOf(places, library)} places={places} counts={filtered} />;
 }
 

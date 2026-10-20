@@ -12,7 +12,7 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { buildFacetsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 import type { useItemsList } from "@/hooks/useItemsList";
-import { FITTED_ROWS, fittedBox, muted, PANEL, Pages, useFittedPages } from "./evidence/lists";
+import { FITTED_ROWS, fittedBox, muted, Pages, useFittedPages } from "./evidence/lists";
 import { useValueFormat } from "./map-panel";
 
 /** An institution on the map: its name as the records spell it, its records under the page's filters, and where it is. */
@@ -21,9 +21,10 @@ type Places = Record<string, [number, number, string, string]>;
 
 const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
-/** The institutions' record counts under the page's filters, every chosen institution kept, joined with where each one is. */
+/** The institutions' record counts under the page's filters, chosen institutions included, so choosing one shows it and the
+ * institutions its records share authors with. Joined with where each one is. */
 export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["queryParams"], enabled: boolean) {
-	const { data: facets, isValidating } = useSWR<FacetsGetResponse>(enabled ? buildFacetsQuery({ ...params, institution: [] }) : null, fetcher, ONCE);
+	const { data: facets, isValidating } = useSWR<FacetsGetResponse>(enabled ? buildFacetsQuery(params) : null, fetcher, ONCE);
 	const { data: places } = useSWR<Places>(enabled ? "/institution-locations" : null, fetcher, ONCE);
 	const points = useMemo(() => {
 		const counts = (facets?.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>;
@@ -38,56 +39,61 @@ export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["qu
 	return { points, stale: isValidating && Boolean(facets) };
 }
 
-/** The colours of the institutions' map: countries in Björn's orange steps by their records, institutions in purple. */
-const STEPS: [number, string][] = [[1000, "#993404"], [200, "#d95f0e"], [50, "#fe9929"], [10, "#fec44f"], [1, "#fee391"]];
-export const DOT = "#8e3b8e";
-const DOT_CHOSEN = "#5a1f5a";
-
-/** A country's colour by its records: the first step it reaches, the land's own colour without any. */
-export const stepTint = (count: number) => STEPS.find(([least]) => count >= least)?.[1] ?? "var(--map-land)";
+/** Institutions in the library's accent, darker than the deepest country so they read over it; a chosen one darker still. */
+export const DOT = "color-mix(in oklab, rgb(var(--color-accent-500)), black 38%)";
+const DOT_CHOSEN = "color-mix(in oklab, rgb(var(--color-accent-500)), black 62%)";
 
 /** A circle's radius on screen at the map's first zoom: its area follows the records. It grows at half the map's rate as it zooms in,
  * so a crowded city opens up. */
 const radiusOf = (count: number) => 1.5 + 1.1 * Math.sqrt(count);
 
-type DotsProps = {
-	points: InstitutionPoint[];
-	projection: GeoProjection;
-	chosen: string[];
-	hovered: string | null;
-	onShow: (point: InstitutionPoint) => void;
-	onHide: () => void;
-	onSelect: (point: InstitutionPoint) => void;
-};
+export type DotEvents = { onShow: (point: InstitutionPoint) => void; onHide: () => void; onSelect: (point: InstitutionPoint) => void };
 
-/** The institutions as circles, largest first so the small ones stay on top and can be pointed at. */
-export const InstitutionDots = memo(function InstitutionDots({ points, projection, chosen, hovered, onShow, onHide, onSelect }: DotsProps) {
+/** A circle's place and size: its area follows the records, and it grows at half the map's rate (`--map-k`). */
+const circleStyle = (point: InstitutionPoint, stroke: number) =>
+	({ r: `calc(${radiusOf(point.count)}px / sqrt(var(--map-k)))`, strokeWidth: `calc(${stroke}px / var(--map-k))` }) as React.CSSProperties;
+
+/** The institutions as circles, largest first so the small ones stay on top and can be pointed at. Drawn again only when the
+ * institutions or the projection change: pointing at one marks it in `InstitutionMarks` instead. */
+export const InstitutionDots = memo(function InstitutionDots({ points, projection, events }: { points: InstitutionPoint[]; projection: GeoProjection; events: DotEvents }) {
 	return (
 		<g>
 			{points.map((point) => {
 				const at = projection([point.longitude, point.latitude]);
 				if (!at) return null;
-				const lifted = chosen.includes(point.name) || hovered === point.key;
 				return (
 					<circle
 						key={point.key}
 						cx={at[0]}
 						cy={at[1]}
 						aria-hidden
-						onMouseEnter={() => onShow(point)}
-						onMouseLeave={onHide}
-						onClick={() => onSelect(point)}
+						onMouseEnter={() => events.onShow(point)}
+						onMouseLeave={events.onHide}
+						onClick={() => events.onSelect(point)}
 						className="cursor-pointer"
-						fill={lifted ? DOT_CHOSEN : DOT}
+						fill={DOT}
 						fillOpacity={0.8}
 						stroke="white"
-						style={{ r: `calc(${radiusOf(point.count)}px / sqrt(var(--map-k)))`, strokeWidth: `calc(${lifted ? 2 : 0.8}px / var(--map-k))` } as React.CSSProperties}
+						style={circleStyle(point, 0.8)}
 					/>
 				);
 			})}
 		</g>
 	);
 });
+
+/** The chosen institutions and the one pointed at, darker and outlined, over the rest. */
+export function InstitutionMarks({ points, projection, chosen, hovered }: { points: InstitutionPoint[]; projection: GeoProjection; chosen: string[]; hovered: string | null }) {
+	const marked = points.filter((point) => chosen.includes(point.name) || point.key === hovered);
+	return (
+		<g aria-hidden className="pointer-events-none">
+			{marked.map((point) => {
+				const at = projection([point.longitude, point.latitude]);
+				return at && <circle key={point.key} cx={at[0]} cy={at[1]} fill={DOT_CHOSEN} stroke="white" style={circleStyle(point, 2)} />;
+			})}
+		</g>
+	);
+}
 
 /** The institution pointed at: its flag and name, where it is, and its records. */
 export function InstitutionTip({ point }: { point: InstitutionPoint }) {
@@ -149,25 +155,5 @@ export function InstitutionList({ points, chosen, stale, hovered, onHover, onSel
 			{!points.length && <p className={twMerge("px-5 text-sm", muted)}>{t("noDataAvailable")}</p>}
 			<Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label={t("institutions")} stale={stale} />
 		</section>
-	);
-}
-
-/** What the colours and circles mean, beside the zoom buttons. */
-export function InstitutionLegend() {
-	const t = useTranslations("ui");
-	return (
-		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+3.75rem)] z-10 hidden px-3 py-2.5 text-xs leading-5 xl:block")}>
-			<p className="mb-1 font-semibold">{t("mapResourcesPerCountry")}</p>
-			{STEPS.map(([least, colour], index) => (
-				<p key={least} className="flex items-center gap-2">
-					<span className="h-2.5 w-3 rounded-[2px] border border-black/20" style={{ background: colour }} />
-					{index ? `${least.toLocaleString("en-GB")}–${(STEPS[index - 1][0] - 1).toLocaleString("en-GB")}` : t("mapOrMore", { count: least })}
-				</p>
-			))}
-			<p className="mt-1 flex items-center gap-2">
-				<span className="size-2.5 rounded-full" style={{ background: DOT }} />
-				{t("institutions")}
-			</p>
-		</div>
 	);
 }
