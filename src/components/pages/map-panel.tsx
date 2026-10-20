@@ -119,7 +119,7 @@ function CountryList({ rows, chosen, stale, measure, tint, hovered, onHover, onS
 	);
 }
 
-export type PanelProps = { props: Props; rows: CountryRow[]; measure: Measure; onMeasure: (next: Measure) => void; tint: (value: number | null) => string; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void; smallLayout: boolean };
+export type PanelProps = { props: Props; rows: CountryRow[]; /** The counts are the last filters' until the new ones arrive. */ stale: boolean; measure: Measure; onMeasure: (next: Measure) => void; tint: (value: number | null) => string; hovered: string | null; onHover: (code: string | null) => void; onSelect: (code: string) => void; smallLayout: boolean };
 
 /** The search, raised in white on the band's grey. */
 function Search({ props }: { props: Props }) {
@@ -133,7 +133,7 @@ export function MapPanel(p: PanelProps) {
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
 				<MapIntro countries={p.rows.length} measure={p.measure} onMeasure={p.onMeasure} />
 				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10"><Search props={p.props} /></div>
-				<CountryList rows={p.rows} chosen={p.props.queryParams.country} stale={Boolean(p.props.isFacetsFetching)} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} />
+				<CountryList rows={p.rows} chosen={p.props.queryParams.country} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} />
 			</div>
 		</div>
 	);
@@ -157,7 +157,7 @@ export function MapSheet(p: PanelProps) {
 				<SheetBar name={t("countries")} open={open} onFold={() => setOpen(!open)} />
 				<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>
 					<MapIntro titled={false} countries={p.rows.length} measure={p.measure} onMeasure={p.onMeasure} />
-					<CountryList rows={p.rows} chosen={p.props.queryParams.country} stale={Boolean(p.props.isFacetsFetching)} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={false} />
+					<CountryList rows={p.rows} chosen={p.props.queryParams.country} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={false} />
 				</div>
 			</motion.div>
 		</>

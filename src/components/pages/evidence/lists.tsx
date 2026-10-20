@@ -64,9 +64,9 @@ export function PaperRow({ index, label, loaded, onOpen, onHover, selected }: { 
 	return <Row index={index} verdict={loaded.points.verdict[index]} label={label} outside={Boolean(loaded.points.flags[index] & FLAG.outside)} onOpen={() => onOpen(index)} onHover={onHover} selected={selected} />;
 }
 
-/** The page numbers' height under a list: a small pagination, 32px, in the 10px of padding its focus rings reach into. */
+/** The page numbers' height under a list at 16px text: a small pagination, 32px, in the 10px of padding its focus rings reach into. */
 const PAGES_HEIGHT = 52;
-/** A paper row's height in a paged list: who and when, and two lines of title, so every page holds the same number. */
+/** A paper row's height in a paged list at 16px text: who and when, and two lines of title, so every page holds the same number. */
 const PAPER_ROW = 74;
 /** Paged lists' paper rows all take a paper row's height. */
 const FIXED_ROWS = "[&>li>button]:h-[4.625rem]";
@@ -89,11 +89,13 @@ export function useFittedPages<T>(items: T[], rowHeight: number) {
 		const observer = new ResizeObserver(() => {
 			// A folded sheet has no height: its page size stays as it was.
 			if (!element.clientHeight) return;
-			const room = element.clientHeight - rows.offsetTop - PAGES_HEIGHT;
-			const whole = Math.floor(room / rowHeight), size = Math.max(3, whole), fits = whole >= 3;
+			// The rows and page numbers are sized in rem: a reader's larger text makes them taller.
+			const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) / 16;
+			const height = rowHeight * rem, room = element.clientHeight - rows.offsetTop - PAGES_HEIGHT * rem;
+			const whole = Math.floor(room / height), size = Math.max(3, whole), fits = whole >= 3;
 			// The space under the last whole row is shared out between the rows, so the page numbers sit on the box's foot.
 			// Rounded down to the 1/64 px browsers lay out in, so the rows' sum never passes the room by a fraction.
-			const row = Math.max(rowHeight, Math.floor((room / size) * 64) / 64);
+			const row = Math.max(height, Math.floor((room / size) * 64) / 64);
 			setFitted((was) => (was?.size === size && was.row === row && was.fits === fits ? was : { size, row, fits }));
 		});
 		observer.observe(element);

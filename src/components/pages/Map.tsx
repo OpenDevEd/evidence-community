@@ -13,6 +13,9 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { CountryFlag } from "@/components/statistics/CountryFlag";
 import { useMouse, useWindowSize } from "@uidotdev/usehooks";
+import useSWR from "swr";
+import type { FacetsGetResponse } from "@/app/api/facets/types";
+import { buildFacetsQuery, fetcher } from "@/lib/utils";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
@@ -246,7 +249,13 @@ function nameOf(code: string, geo: Feature) {
  * below the 80px header, and the globe's flat top stays hidden under the search bar. */
 function frameOf(width: number, height: number, isDesktop: boolean, listWidth: number) {
 	const bottom = height - 96;
-	return isDesktop ? { width, height, bottom, listWidth, left: listWidth + 32, top: 120, pad: PAD } : { width, height, bottom, listWidth, left: 16, top: 40, pad: 0 };
+	const side = sideOf(width, height, listWidth);
+	return isDesktop ? { width, height, bottom, listWidth, side, left: listWidth + 32, top: 120, pad: PAD } : { width, height, bottom, listWidth, side, left: 16, top: 40, pad: 0 };
+}
+
+/** Below 1,280 px lying on its side, the sheet covers the right of the screen (as wide as `SIDE_WIDTH`), so the map centres left of it. */
+function sideOf(width: number, height: number, listWidth: number) {
+	return !listWidth && width > height ? Math.min(32 * 16, 0.55 * width) : 0;
 }
 type Frame = ReturnType<typeof frameOf>;
 type View = NonNullable<ReturnType<typeof mapView>>;
@@ -269,16 +278,17 @@ function phoneView(frame: Frame, focus?: [number, number]) {
 	const projection = globeFor(target).fitExtent([[frame.left, frame.top], [frame.left + 4 * (frame.bottom - frame.top), frame.bottom]], LAND);
 	const [x] = projection(target)!;
 	const [left, top] = projection.translate();
-	return { projection: projection.translate([left + frame.width / 2 - x, top]), minZoom: 1 };
+	return { projection: projection.translate([left + (frame.width - frame.side) / 2 - x, top]), minZoom: 1 };
 }
 
 /** A wide screen opens zoomed in on the library's countries, far enough in that the globe fills the screen from top to bottom,
  * with them in the middle of the space beside the list. Zooming out shows the whole globe there. */
 function desktopView(frame: Frame, focus?: [number, number]) {
-	const fitted = globeFor(focus).fitExtent([[frame.left, frame.top], [frame.width - 32, frame.bottom]], SPHERE);
+	const right = frame.width - 32 - frame.side;
+	const fitted = globeFor(focus).fitExtent([[frame.left, frame.top], [right, frame.bottom]], SPHERE);
 	const [[, sphereTop], [, sphereBottom]] = geoPath(fitted).bounds(SPHERE);
 	const zoom = focus ? Math.max(START_ZOOM, (frame.height + 48) / (sphereBottom - sphereTop)) : 1;
-	const middle: [number, number] = [(frame.left + frame.width - 32) / 2, (frame.top + frame.bottom) / 2];
+	const middle: [number, number] = [(frame.left + right) / 2, (frame.top + frame.bottom) / 2];
 	const projection = globeFor(focus).scale(fitted.scale() * zoom).translate([0, 0]);
 	const [x, y] = projection(focus ?? fitted.invert!(middle)!)!;
 	const shiftY = middle[1] + frame.pad - y;
@@ -295,7 +305,7 @@ function coverY(projection: ReturnType<typeof geoEqualEarth>, frame: Frame, y: n
 /** The slide that puts a point at screen position `x` in the gap between the panel and the results (only from 1,280 px wide, where
  * the panel is, are the results beside the map), no further than the map is drawn past the screen. */
 function slideFrom(frame: Frame, x: number) {
-	const gap = (frame.listWidth + frame.width - (frame.listWidth ? RESULTS_WIDTH : 0)) / 2;
+	const gap = (frame.listWidth + frame.width - (frame.listWidth ? RESULTS_WIDTH : frame.side)) / 2;
 	return Math.max(-frame.pad, Math.min(frame.pad, gap - x));
 }
 
@@ -490,10 +500,13 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 		// moves the layer from this, and a gesture's end redraws the SVG at the zoom as it is then.
 		let committed = zoomTransform(element);
 		let active = 0;
+		// A button's glide whose redraw is still to come: a new gesture redraws it first, so it starts from where the glide went.
+		let pending: (() => void) | null = null;
 		const behaviour = zoom<HTMLDivElement, unknown>()
 			.scaleExtent([view.minZoom, 12])
 			.duration(0)
 			.on("start", (event: { sourceEvent: unknown }) => {
+				pending?.();
 				active += 1;
 				// A reader's own gesture moves the map at once, even over a button's glide.
 				if (event.sourceEvent) moving.style.transition = "";
@@ -515,7 +528,13 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 				// A button's zoom glides the layer there first, then draws the outlines sharp at the new zoom. A glide that goes
 				// nowhere never ends, so the commit also runs after the glide's length.
 				let done = false;
-				const once = () => { if (!done) { done = true; commit(); } };
+				const once = () => {
+					if (done) return;
+					done = true;
+					pending = null;
+					commit();
+				};
+				pending = once;
 				moving.addEventListener("transitionend", once, { once: true });
 				setTimeout(once, GLIDE + 50);
 			});
@@ -563,20 +582,23 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry }: { view: Vi
 }
 
 const NO_COUNTS: Record<string, number> = {};
+const COUNTS_OPTIONS = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
-/** The countries' record counts: the shared filters' facets once they arrive, and until then the counts the server sent with the page. */
-function facetOf(props: ReturnType<typeof useItemsList>, initial?: Record<string, number>) {
-	return (props.facetDistribution?.country_uncategorized ?? initial ?? NO_COUNTS) as Record<string, number>;
+/**
+ * The countries' record counts the map colours and ranks by: the page's filters with every country kept, as choosing a country
+ * would otherwise leave only its own. With none chosen this is the shared filters' own request. Until it answers, the counts the
+ * server sent with the page; while a new one is on its way, the last ones, marked as stale.
+ */
+function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], initial?: Record<string, number>) {
+	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, country: [] }), fetcher, COUNTS_OPTIONS);
+	const facet = countsIn(data, initial);
+	// Nothing shown yet is nothing stale.
+	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
-
-/** The counts the map colours by: with a country chosen the search counts only its records, so the counts from before it was chosen are kept. */
-function useKeptFacet(facet: Record<string, number>, choosing: boolean, initial?: Record<string, number>) {
-	// An address that already chooses a country starts from the server's counts, which keep every country.
-	const [kept, setKept] = useState(() => (choosing ? initial ?? facet : facet));
-	if (!choosing && kept !== facet) setKept(facet);
-	return choosing ? kept : facet;
-}
+/** The counts the answer gives, or the server's, or none. */
+const countsIn = (data: FacetsGetResponse | undefined, initial?: Record<string, number>) =>
+	(data?.facetDistribution?.country_uncategorized ?? initial ?? NO_COUNTS) as Record<string, number>;
 
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame. */
 export default function Map({ focus, places, counts }: { focus?: [number, number]; places: Places; counts?: Record<string, number> }) {
@@ -592,7 +614,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	});
 	const [measure, setMeasure] = useMeasure();
 	const chosen = props.queryParams.country;
-	const facet = useKeptFacet(facetOf(props, counts), chosen.length > 0, counts);
+	const { facet, stale } = useCountryCounts(props.queryParams, counts);
 	const rows = countryRows(facet, measure);
 	const max = scaleTop(rows, measure);
 	const size = useWindowSize();
@@ -606,6 +628,11 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 	// Choosing a country slides the map sideways so it sits in the gap between the two panels, in step with the results sliding in.
 	const [slide, setSlide] = useState<Slide | null>(null);
 	const offset = offsetOf(view, chosen, slide, places);
+	// Back to the library's countries: the slide to the chosen country goes too.
+	const resetSlide = () => {
+		const last = chosen.at(-1);
+		if (last) setSlide({ location: last, x: 0 });
+	};
 	const selectCountry = (code: string) => {
 		const location = COUNTRY_PARAMS[code];
 		if (!location) return;
@@ -637,7 +664,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 		}
 	}, [props.queryParams.country, props.queryParams.search]);
 
-	const panel = { props, rows, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const panel = { props, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -651,7 +678,7 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 			<MapPanel {...panel} />
 			<MapSheet {...panel} />
 			<MemoizedItemView props={props} />
-			<ZoomControls zoomerRef={zoomerRef} />
+			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
 			<Suspense fallback={null}>
 				<Globe
 					view={view}
@@ -668,13 +695,13 @@ export default function Map({ focus, places, counts }: { focus?: [number, number
 }
 
 /** Zoom, from 1,280 px wide: at the map's bottom left, beside the panel, as on the evidence map. */
-function ZoomControls({ zoomerRef }: { zoomerRef: React.RefObject<Zoomer | null> }) {
+function ZoomControls({ zoomerRef, onReset }: { zoomerRef: React.RefObject<Zoomer | null>; onReset: () => void }) {
 	const t = useTranslations("ui");
 	const button = "grid size-9 place-items-center rounded-xl outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent dark:hover:bg-white/10";
 	const controls = [
 		{ label: t("mapZoomIn"), icon: PlusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1.6) },
 		{ label: t("mapZoomOut"), icon: MinusSignIcon, act: (zoomer: Zoomer) => zoomer.zoomBy(1 / 1.6) },
-		{ label: t("mapShowCountries"), icon: CenterFocusIcon, act: (zoomer: Zoomer) => zoomer.reset() },
+		{ label: t("mapShowCountries"), icon: CenterFocusIcon, act: (zoomer: Zoomer) => { zoomer.reset(); onReset(); } },
 	];
 	return (
 		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+0.5rem)] z-10 hidden flex-col gap-0.5 p-1 xl:flex")}>
