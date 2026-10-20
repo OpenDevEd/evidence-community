@@ -32,7 +32,7 @@ const BAR = "h-14 shrink-0 items-center truncate border-b border-black/[0.06] bg
  * The sheet's bar: the name of what it shows, and the chevron that folds it down to this bar so the map has the screen, or opens
  * it again. Lying on its side, where the sheet is always open, it is the name alone.
  */
-function SheetBar({ name, open, onFold }: { name: string; open: boolean; onFold: () => void }) {
+export function SheetBar({ name, open, onFold }: { name: string; open: boolean; onFold: () => void }) {
 	return (
 		<>
 			<h2 className={twMerge(BAR, "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>{name}</h2>
@@ -66,7 +66,7 @@ type SheetProps = {
 	onOpenKey: (key: string) => void; onHover: OnHover; opened: Navigated; target: number | null; focus: string | null; onRefit: () => void;
 };
 
-const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)] xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[min(26rem,55%)] [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-r-none [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-bl-none";
+export const SHEET = "fixed inset-x-0 bottom-0 z-20 flex flex-col overflow-hidden rounded-b-none pb-[env(safe-area-inset-bottom)] xl:hidden [@media(max-width:1279px)_and_(orientation:landscape)]:left-auto [@media(max-width:1279px)_and_(orientation:landscape)]:top-[5.75rem] [@media(max-width:1279px)_and_(orientation:landscape)]:h-auto [@media(max-width:1279px)_and_(orientation:landscape)]:w-[min(26rem,55%)] [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-r-none [@media(max-width:1279px)_and_(orientation:landscape)]:rounded-bl-none";
 
 /**
  * Below 1,280 px the map takes the screen. The search and the checks sit at the top. One sheet holds what the wide panel does,

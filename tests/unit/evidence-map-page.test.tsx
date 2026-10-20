@@ -7,6 +7,7 @@ import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Chain } from "@/components/pages/evidence/data";
+import { stubPanelLayout } from "./panel-layout";
 
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@/context/LibraryConfigProvider", () => ({ useLibraryConfig: () => ({ theme: { layout: "normal" }, identity: { baseUrl: "https://aied.openscholar.ai" } }) }));
@@ -41,6 +42,7 @@ beforeEach(() => {
 	root = createRoot(container);
 	updates = [];
 	vi.stubGlobal("requestIdleCallback", (run: () => void) => setTimeout(run, 0));
+	stubPanelLayout();
 	vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
 	// The library's search answers for every record but the fourth.
 	vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: { body?: string }) => {

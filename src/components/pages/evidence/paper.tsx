@@ -20,7 +20,7 @@ type Opened = { selection: Selection; loaded: Loaded; more: More; onOpen: (index
 const DIVIDER = "border-t border-black/[0.06] dark:border-white/[0.08]";
 
 /** Back to the list the paper was opened from, named, at the head of the panel the paper took over. */
-function BackButton({ to, onBack }: { to: string; onBack: () => void }) {
+export function BackButton({ to, onBack }: { to: string; onBack: () => void }) {
 	return (
 		<button type="button" onClick={onBack} className="-ml-2 inline-flex h-8 items-center gap-1 rounded-lg pl-2 pr-2.5 text-sm font-semibold text-accent outline-none hover:bg-accent/10 focus-visible:ring-2 focus-visible:ring-accent dark:text-white dark:hover:bg-white/10">
 			<HugeiconsIcon icon={ArrowLeft01Icon} size={18} aria-hidden />
