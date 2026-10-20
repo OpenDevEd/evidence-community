@@ -41,7 +41,7 @@ const AVATAR = 40; // md avatar
 const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
 const LOGO_HEIGHT = 40; // xl:h-10
 const LOGO_MAX_WIDTH = 192; // max-w-logo-header (12rem)
-const NAME_FONT = { size: 24, weight: 600 }; // the name beside the logo: text-2xl font-semibold
+const NAME_FONT = { size: 24, weight: 500 }; // the name beside the logo: text-2xl font-medium
 const NAME_GAP = 12; // gap-3 between the logo and its name
 /** Headroom for rounding and font rendering differences between browsers. */
 const SAFETY = 8;
