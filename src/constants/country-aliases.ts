@@ -69,7 +69,6 @@ export const COUNTRY_ALIASES: Readonly<Record<string, readonly string[]>> = {
 		"Cabo Verdeans",
 	],
 	KY: ["Caymanian", "Caymanians"],
-	CF: ["Central African", "Central Africans"],
 	TD: ["Chadian", "Chadians"],
 	CL: ["Chilean", "Chileans"],
 	CN: ["Chinese", "PRC", "People's Republic of China"],
@@ -130,7 +129,6 @@ export const COUNTRY_ALIASES: Readonly<Record<string, readonly string[]>> = {
 	FJ: ["Fijian", "Fijians"],
 	FI: ["Finnish", "Finn", "Finns"],
 	FR: ["French", "France métropolitaine"],
-	PF: ["Polynesian", "Polynesians"],
 	GA: ["Gabonese"],
 	GM: ["Gambian", "Gambians"],
 	GE: ["Georgian", "Georgians"],
@@ -352,7 +350,7 @@ export const COUNTRY_ALIASES: Readonly<Record<string, readonly string[]>> = {
 	TW: ["Taiwanese", "Republic of China"],
 	TJ: ["Tajikistani", "Tajik", "Tajiks"],
 	TZ: ["Tanzanian", "Tanzania, United Republic of", "Tanzanians"],
-	TH: ["Thai", "Siam", "Siamese", "Thais"],
+	TH: ["Thai", "Siam", "Thais"],
 	TL: ["East Timor", "East Timorese", "Timorese"],
 	TG: ["Togolese"],
 	TO: ["Tongan", "Tongans"],
@@ -437,3 +435,58 @@ export const COUNTRY_ALIASES: Readonly<Record<string, readonly string[]>> = {
 	AX: ["Aland Islander", "Aland Islanders"],
 	SX: ["St Maarten"],
 };
+
+// Phrases that contain a country name or demonym but name something else: a dataset, a place in another country, a
+// region, a species, a donor, a journal or a language. Automatic country focus skips them; other mentions still count.
+// Found in October 2026 by reading what tagged the top countries of every library. Each entry is a regular expression
+// over lowercased text without accents, where hyphens are spaces.
+export const NOT_COUNTRY_PHRASES: readonly string[] = [
+	// Datasets and publishers
+	"luxembourg (?:income|wealth) study",
+	"luxembourg\\W+publications office",
+	"publications office of the european union\\W+luxembourg",
+	"latvia\\W+baltija publishing",
+	// Places in another country, and regions
+	"british columbia",
+	"new (?:south wales|england|jersey|mexico)",
+	"gulf of (?:mexico|guinea)",
+	"niger (?:delta|state|river|basin)",
+	"guinea (?:savannah?|corn|fowl|pigs?|worm)",
+	"upper guinean|guinean zones?",
+	"sudan savannah?",
+	"lake chad|chad basin",
+	"indian (?:ocean|subcontinent)",
+	"(?<=american )indians?",
+	"persian gulf",
+	"(?:south|east) china sea|sea of japan",
+	"lao cai|thai (?:nguyen|binh)",
+	"georgia (?:state university|tech|institute of technology)|university of georgia|atlanta\\W+georgia",
+	"(?:latin|central|south|north|inter|pan) american",
+	// Things and people
+	"monaco editor",
+	"mechanical turk",
+	"scots pine",
+	"irish potato(?:es)?",
+	"holland's (?:theory|typology|riasec|model|hexagon|vocational|career|personality)|(?:john|teori|war child) holland|holland (?:code|et al)",
+	"panama papers|dutch disease|spanish flu|swiss re|swiss cheese|chile peppers?",
+	"chinese(?= university of hong kong)",
+	"azevedo montenegro",
+	"polish (?:the|their|your|my|our|his|her|its|up)",
+	"family reunion|reunion de|una reunion",
+	// Donors, funders' notices, journals and associations
+	"(?:united states|u\\.s\\.) agency for international development",
+	"(?:united states|u\\.s\\.) government|support of the american people",
+	"uk aid|irish aid|british council",
+	"swiss agency for development and cooperation",
+	"swedish international development (?:cooperation )?agency|danish international development agency",
+	"norwegian agency for development cooperation|norwegian refugee council",
+	"(?:japan|korea) international cooperation agency",
+	"canadian international development agency|australian agency for international development",
+	"(?:british|american|indian|chinese) journal of",
+	"american (?:psychological|educational research) association",
+	// Languages
+	"(?:chinese|french|spanish|german|russian|japanese|portuguese) as an? (?:foreign|second|additional) language",
+	"(?:french|spanish|portuguese|german) speaking",
+	"(?:in english and|available in) (?:french|spanish)|(?:french|spanish) version",
+	"(?<=brazilian )portuguese",
+];

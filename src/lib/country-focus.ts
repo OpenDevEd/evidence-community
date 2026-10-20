@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { COUNTRIES } from "@/constants/misc";
-import { COUNTRY_ALIASES } from "@/constants/country-aliases";
+import { COUNTRY_ALIASES, NOT_COUNTRY_PHRASES } from "@/constants/country-aliases";
 import { abstractPlainText } from "@/lib/abstract-text";
 
 function normalizeCountryText(text: string) {
@@ -83,9 +83,11 @@ const alternatives = [...codesByTerm.keys()]
 	.sort((a, b) => b.length - a.length)
 	.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
 	.join("|");
-// Longest names consume the phrase first: South Sudan does not also mean Sudan.
+// One pass from the left. Longest names consume the phrase first: South Sudan does not also mean Sudan. A phrase that
+// names something else wins over a country word at the same place ("Guinea savannah"), but not over a country name that
+// starts earlier ("Papua New Guinea savannah"). Only country names are captured.
 const countryPattern = new RegExp(
-	`(?:^|[^\\p{L}\\p{N}])(${alternatives})(?=$|[^\\p{L}\\p{N}])`,
+	`(?:^|[^\\p{L}\\p{N}])(?:${NOT_COUNTRY_PHRASES.join("|")}|(${alternatives}))(?=$|[^\\p{L}\\p{N}])`,
 	"giu",
 );
 
@@ -99,17 +101,14 @@ export function resolveCountryFocus({
 	countryFocus?: readonly string[] | null;
 }) {
 	if (countryFocus) return [...new Set(countryFocus)].sort();
-	const text = [title, abstractNote]
-		.map((value) => normalizeCountryText(abstractPlainText(value)))
-		.join("\n");
+	// Each field on its own, so no name or phrase runs from the title into the abstract.
 	// Do not infer arbitrary ISO codes: "us", "in" and "to" are ordinary words.
-	return [
-		...new Set(
-			[...text.matchAll(countryPattern)].map(
-				(match) => codesByTerm.get(match[1].toLowerCase())!,
-			),
-		),
-	].sort();
+	const codes = [title, abstractNote].flatMap((value) =>
+		[...normalizeCountryText(abstractPlainText(value)).matchAll(countryPattern)]
+			.filter((match) => match[1])
+			.map((match) => codesByTerm.get(match[1].toLowerCase())!),
+	);
+	return [...new Set(codes)].sort();
 }
 
 export function describeCountryFocus(value: unknown) {
