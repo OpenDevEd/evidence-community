@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import type { GeoProjection } from "d3-geo";
@@ -12,8 +12,11 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { buildFacetsQuery, fetcher } from "@/lib/utils";
 import { twMerge } from "@/lib/tw-merge";
 import type { useItemsList } from "@/hooks/useItemsList";
+
+type Props = ReturnType<typeof useItemsList>;
 import { FITTED_ROWS, fittedBox, muted, Pages, useFittedPages } from "./evidence/lists";
-import { TipFigures, useValueFormat } from "./map-panel";
+import { TipFigures, useValueFormat } from "./map-figures";
+import { totalIn } from "./map-measure";
 
 /** An institution on the map: its name as the records spell it, its records under the page's filters, and where it is. */
 export type InstitutionPoint = { key: string; name: string; count: number; /** Its records in the whole library, while the map is narrowed. */ total?: number; longitude: number; latitude: number; city: string; country: string };
@@ -21,23 +24,33 @@ type Places = Record<string, [number, number, string, string]>;
 
 const ONCE = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
+/** The institutions the facets count, by name. */
+const institutionCounts = (facets: FacetsGetResponse | undefined) => (facets?.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>;
+
+/** An institution the facets count, where its place is known; none where it isn't. */
+function pointOf(name: string, count: number, places: Places | undefined, totals: Record<string, number> | undefined): InstitutionPoint[] {
+	const key = institutionNameKey(name);
+	const place = places?.[key];
+	if (!place) return [];
+	return [{ key, name, count, total: totalIn(totals, name), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }];
+}
+
+/** The placed institutions, most records first. */
+const pointsOf = (facets: FacetsGetResponse | undefined, places: Places | undefined, totals: Record<string, number> | undefined) =>
+	Object.entries(institutionCounts(facets))
+		.flatMap(([name, count]) => pointOf(name, Number(count), places, totals))
+		.sort((a, b) => b.count - a.count);
+
 /** The institutions' record counts under the page's filters, chosen institutions included, so choosing one shows it and the
  * institutions its records share authors with. Joined with where each one is. */
-export function useInstitutionPoints(params: ReturnType<typeof useItemsList>["queryParams"], enabled: boolean, totals?: Record<string, number>) {
-	const { data: facets, isValidating } = useSWR<FacetsGetResponse>(enabled ? buildFacetsQuery(params) : null, fetcher, ONCE);
-	const { data: places } = useSWR<Places>(enabled ? "/institution-locations" : null, fetcher, ONCE);
-	const points = useMemo(() => {
-		const counts = (facets?.facetDistribution?.[INSTITUTION_FILTER_FIELD] ?? {}) as Record<string, number>;
-		return Object.entries(counts)
-			.flatMap(([name, count]): InstitutionPoint[] => {
-				const key = institutionNameKey(name);
-				const place = places?.[key];
-				return place ? [{ key, name, count: Number(count), total: totals && (totals[name] ?? 0), longitude: place[0], latitude: place[1], city: place[2], country: place[3] }] : [];
-			})
-			.sort((a, b) => b.count - a.count);
-	}, [facets, places, totals]);
+function useInstitutionPoints(params: Props["queryParams"], enabled: boolean, totals?: Record<string, number>) {
+	const keys = enabled ? [buildFacetsQuery(params), "/institution-locations"] : [null, null];
+	const { data: facets, isValidating } = useSWR<FacetsGetResponse>(keys[0], fetcher, ONCE);
+	const { data: places } = useSWR<Places>(keys[1], fetcher, ONCE);
+	const points = useMemo(() => pointsOf(facets, places, totals), [facets, places, totals]);
 	// Until both the counts and the places have arrived there is nothing to show yet, not an empty list.
-	return { points, ready: Boolean(facets && places), stale: isValidating && Boolean(facets) };
+	const ready = Boolean(facets) && Boolean(places);
+	return { points, ready, stale: ready && isValidating };
 }
 
 /** Institutions in the library's accent, darker than the deepest country so they read over it; a chosen one darker still. */
@@ -48,7 +61,7 @@ const DOT_CHOSEN = "color-mix(in oklab, rgb(var(--color-accent-500)), black 62%)
  * so a crowded city opens up. */
 const radiusOf = (count: number) => 1.5 + 1.1 * Math.sqrt(count);
 
-export type DotEvents = { onShow: (point: InstitutionPoint) => void; onHide: () => void; onSelect: (point: InstitutionPoint) => void };
+type DotEvents = { onShow: (point: InstitutionPoint) => void; onHide: () => void; onSelect: (point: InstitutionPoint) => void };
 
 /** A circle's place and size: its area follows the records, and it grows at half the map's rate (`--map-k`). */
 const circleStyle = (point: InstitutionPoint, stroke: number) =>
@@ -56,7 +69,7 @@ const circleStyle = (point: InstitutionPoint, stroke: number) =>
 
 /** The institutions as circles, largest first so the small ones stay on top and can be pointed at. Drawn again only when the
  * institutions or the projection change: pointing at one marks it in `InstitutionMarks` instead. */
-export const InstitutionDots = memo(function InstitutionDots({ points, projection, events }: { points: InstitutionPoint[]; projection: GeoProjection; events: DotEvents }) {
+const InstitutionDots = memo(function InstitutionDots({ points, projection, events }: { points: InstitutionPoint[]; projection: GeoProjection; events: DotEvents }) {
 	return (
 		<g>
 			{points.map((point) => {
@@ -84,7 +97,7 @@ export const InstitutionDots = memo(function InstitutionDots({ points, projectio
 });
 
 /** The chosen institutions and the one pointed at, darker and outlined, over the rest. */
-export function InstitutionMarks({ points, projection, chosen, hovered }: { points: InstitutionPoint[]; projection: GeoProjection; chosen: string[]; hovered: string | null }) {
+function InstitutionMarks({ points, projection, chosen, hovered }: { points: InstitutionPoint[]; projection: GeoProjection; chosen: string[]; hovered: string | null }) {
 	const marked = points.filter((point) => chosen.includes(point.name) || point.key === hovered);
 	return (
 		<g aria-hidden className="pointer-events-none">
@@ -97,7 +110,7 @@ export function InstitutionMarks({ points, projection, chosen, hovered }: { poin
 }
 
 /** The institution pointed at: its flag and name, where it is, and its figures in the whole library and, while the map is narrowed, now. */
-export function InstitutionTip({ point }: { point: InstitutionPoint }) {
+function InstitutionTip({ point }: { point: InstitutionPoint }) {
 	return (
 		<div className="flex max-w-72 flex-col gap-0.5 px-1 py-0.5">
 			<div className="flex items-center gap-2 text-sm font-semibold">
@@ -130,27 +143,93 @@ function InstitutionRow({ point, rank, top, selected, lifted, onHover, onSelect 
 	);
 }
 
+/** The list's heading: what it is, and what its numbers count. */
+function InstitutionsHeading() {
+	const t = useTranslations("ui");
+	return (
+		<h2 className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
+			{t("institutions")}
+			<span className={twMerge("text-xs font-medium", muted)}>{t("resources")}</span>
+		</h2>
+	);
+}
+
+/** Under the rows, once the institutions have arrived: that there are none, or the page numbers. */
+function InstitutionsFoot({ ready, empty, pages, page, onPage, stale }: { ready: boolean; empty: boolean; pages: number; page: number; onPage: (page: number) => void; stale: boolean }) {
+	const t = useTranslations("ui");
+	if (!ready) return null;
+	if (empty) return <p className={twMerge("px-5 text-sm", muted)}>{t("noDataAvailable")}</p>;
+	return <Pages total={pages} page={page} onChange={onPage} label={t("institutions")} stale={stale} />;
+}
+
+/** The busiest institution's records, which the bars are shares of. */
+const topCount = (points: InstitutionPoint[]) => points[0]?.count || 1;
+
 /** The institutions by their records, a page at a time; pointing at one lifts its circle, choosing one shows its records. */
 export function InstitutionList({ points, ready, chosen, stale, hovered, onHover, onSelect, heading = true, resetOn }: { /** The search and filters the rows come from: a new one starts at page one. */ resetOn: string; points: InstitutionPoint[]; ready: boolean; chosen: string[]; stale: boolean; hovered: string | null; onHover: (key: string | null) => void; onSelect: (point: InstitutionPoint) => void; heading?: boolean }) {
 	const { boxRef, listRef, ...fit } = useFittedPages(points, ROW, resetOn);
 	const t = useTranslations("ui");
 	return (
 		<section ref={boxRef} aria-label={t("institutions")} className={fittedBox(fit.ready, fit.fits)}>
-			{heading && (
-				<h2 className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
-					{t("institutions")}
-					<span className={twMerge("text-xs font-medium", muted)}>{t("resources")}</span>
-				</h2>
-			)}
+			{heading && <InstitutionsHeading />}
 			<ol ref={listRef} inert={stale} style={fit.rowStyle} className={twMerge("px-2 transition-opacity", FITTED_ROWS, stale && "opacity-50")} onPointerLeave={() => onHover(null)}>
 				{fit.shown.map((point, k) => (
 					<li key={point.key}>
-						<InstitutionRow point={point} rank={(fit.page - 1) * fit.per + k + 1} top={points[0]?.count || 1} selected={chosen.includes(point.name)} lifted={hovered === point.key} onHover={onHover} onSelect={onSelect} />
+						<InstitutionRow point={point} rank={(fit.page - 1) * fit.per + k + 1} top={topCount(points)} selected={chosen.includes(point.name)} lifted={hovered === point.key} onHover={onHover} onSelect={onSelect} />
 					</li>
 				))}
 			</ol>
-			{ready && !points.length && <p className={twMerge("px-5 text-sm", muted)}>{t("noDataAvailable")}</p>}
-			{ready && <Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label={t("institutions")} stale={stale} />}
+			<InstitutionsFoot ready={ready} empty={!points.length} pages={fit.pages} page={fit.page} onPage={fit.setPage} stale={stale} />
 		</section>
 	);
+}
+
+/** Nothing over the countries, outside the institutions' mode. */
+const NO_OVERLAY = () => null;
+
+type LayerOptions = {
+	props: Props;
+	enabled: boolean;
+	/** The institutions' records in the whole library, while the map is narrowed. */
+	totals: Record<string, number> | undefined;
+	setTooltipContent: (content: ReactNode) => void;
+	setTooltipAnchor: (anchor: null) => void;
+};
+
+/**
+ * The institutions' mode: the panel's list and the circles over the countries, which share what is pointed at and chosen.
+ * Pointing at a circle shows its tooltip; choosing one filters the results by it. Neither in the other modes.
+ */
+export function useInstitutionLayer({ props, enabled, totals, setTooltipContent, setTooltipAnchor }: LayerOptions) {
+	const institutions = useInstitutionPoints(props.queryParams, enabled, totals);
+	const [hovered, setHovered] = useState<string | null>(null);
+	const { handleInstitutionSelect } = props;
+	// Stable until an institution is chosen, so pointing at a circle doesn't draw thousands again.
+	const events = useMemo<DotEvents>(() => ({
+		onShow: (point) => {
+			setTooltipAnchor(null);
+			setTooltipContent(<InstitutionTip point={point} />);
+			setHovered(point.key);
+		},
+		onHide: () => {
+			setTooltipContent(null);
+			setHovered(null);
+		},
+		onSelect: (point) => {
+			setTooltipContent(null);
+			setHovered(null);
+			handleInstitutionSelect(point.name);
+		},
+	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect]);
+	if (!enabled) return { overlay: NO_OVERLAY };
+	const chosen = props.queryParams.institution;
+	return {
+		panel: { ...institutions, chosen, hovered, onHover: setHovered, onSelect: events.onSelect },
+		overlay: (projection: GeoProjection) => (
+			<>
+				<InstitutionDots points={institutions.points} projection={projection} events={events} />
+				<InstitutionMarks points={institutions.points} projection={projection} chosen={chosen} hovered={hovered} />
+			</>
+		),
+	};
 }

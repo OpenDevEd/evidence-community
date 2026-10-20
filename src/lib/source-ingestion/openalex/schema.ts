@@ -104,7 +104,7 @@ export const openAlexInstitutionLocationsSchema = z
 		results: z.array(
 			z.object({
 				id: z.string(),
-				geo: z.object({ latitude: z.number().min(-90).max(90).nullish(), longitude: z.number().min(-180).max(180).nullish() }).loose().nullish(),
+				geo: z.object({ city: z.string().nullish(), latitude: z.number().min(-90).max(90).nullish(), longitude: z.number().min(-180).max(180).nullish() }).loose().nullish(),
 			}).loose(),
 		).max(OPENALEX_MAX_PAGE_SIZE),
 	})

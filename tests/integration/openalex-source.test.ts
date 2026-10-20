@@ -876,12 +876,12 @@ it("writes a page whose works carry more institution facts than one batch takes"
 	});
 }, 120_000);
 
-it("locates the institutions an import meets for the first time, leaving hand-set countries and known locations alone", async () => {
+it("locates the institutions an import meets for the first time, with their city, leaving hand-set countries and known places alone", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		await db.insert(sourceConnection).values({ key: "oa-locations", provider: "openalex", scopeKind: "query", config: settings });
 		await db.insert(institutionCountry).values([
 			{ nameKey: "coast college", countryCode: "TZ" },
-			{ nameKey: "makerere university", countryCode: "UG", openalexId: "I30", latitude: 0.3, longitude: 32.6 },
+			{ nameKey: "makerere university", countryCode: "UG", openalexId: "I30", city: "Kampala", latitude: 0.3, longitude: 32.6 },
 		]);
 		const asked: string[] = [];
 		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-locations"));
@@ -904,10 +904,10 @@ it("locates the institutions an import meets for the first time, leaving hand-se
 		);
 		expect(asked).toEqual(["openalex:I10"]);
 		const rows = await db.select().from(institutionCountry);
-		expect(rows.map(({ nameKey, latitude, longitude }) => ({ nameKey, latitude, longitude })).sort((a, b) => a.nameKey.localeCompare(b.nameKey))).toEqual([
-			{ nameKey: "coast college", latitude: null, longitude: null },
-			{ nameKey: "makerere university", latitude: 0.3, longitude: 32.6 },
-			{ nameKey: "university of nairobi", latitude: -1.28, longitude: 36.82 },
+		expect(rows.map(({ nameKey, city, latitude, longitude }) => ({ nameKey, city, latitude, longitude })).sort((a, b) => a.nameKey.localeCompare(b.nameKey))).toEqual([
+			{ nameKey: "coast college", city: null, latitude: null, longitude: null },
+			{ nameKey: "makerere university", city: "Kampala", latitude: 0.3, longitude: 32.6 },
+			{ nameKey: "university of nairobi", city: "Nairobi", latitude: -1.28, longitude: 36.82 },
 		]);
 	});
 }, 120_000);

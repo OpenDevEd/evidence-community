@@ -23,9 +23,10 @@ import ItemsList from "../features/items/ItemsList";
 import { Card } from "@/components/nextui/Card";
 import { PANEL } from "./evidence/lists";
 import { BackButton } from "./evidence/paper";
-import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, type CountryMode, type CountryRow, type Measure } from "./map-measure";
-import { MapPanel, MapSheet, SIDE_WIDTH, TipFigures, useCountryMode, useMeasure, useValueFormat } from "./map-panel";
-import { DOT, InstitutionDots, InstitutionMarks, InstitutionTip, useInstitutionPoints, type DotEvents } from "./map-institutions";
+import { countryRows, measureOf, modeField, modeParam, perPerson, scaleTop, shadeOf, totalIn, type CountryMode, type CountryRow, type Measure } from "./map-measure";
+import { MapPanel, MapSheet, SIDE_WIDTH, useCountryMode, useMeasure } from "./map-panel";
+import { TipFigures, useValueFormat } from "./map-figures";
+import { DOT, useInstitutionLayer } from "./map-institutions";
 import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "@/lib/tw-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -74,12 +75,17 @@ function MouseTooltip({
 	);
 }
 
-/** What the results sheet's bar calls them: the chosen institution, the chosen country, how many are chosen, or a search's results. */
-function resultsName(chosen: string[], t: ReturnType<typeof useTranslations<"ui">>, institutions: string[] = []) {
-	if (institutions.length === 1 && !chosen.length) return institutions[0];
-	if (chosen.length + institutions.length > 1) return t("mapChosenCount", { count: chosen.length + institutions.length });
-	const code = chosen[0]?.split(" > ").at(-1);
-	return code ? COUNTRIES[code] ?? code : t("resultsLabel");
+/** A chosen place's name: its country's, by the code that ends it. */
+const placeName = (place: string) => {
+	const code = place.split(" > ").at(-1)!;
+	return COUNTRIES[code] ?? code;
+};
+
+/** What the results sheet's bar calls them: the chosen institution or country, how many are chosen, or a search's results. */
+function resultsName(places: string[], t: ReturnType<typeof useTranslations<"ui">>, institutions: string[] = []) {
+	const chosen = [...institutions, ...places.map(placeName)];
+	if (chosen.length > 1) return t("mapChosenCount", { count: chosen.length });
+	return chosen[0] ?? t("resultsLabel");
 }
 
 /**
@@ -276,7 +282,7 @@ const PAD = 600;
 function countryOf(geo: Feature, facet: Record<string, number>, chosen: string[], measure: Measure, totals?: Record<string, number>): Country {
 	const code = A3ToA2[geo.id] as string | undefined;
 	if (!code) return { name: geo.properties.name, count: 0, value: null, selected: false };
-	return { ...placedCountry(code, geo, facet[code] ?? 0, chosen, measure), total: totals && (totals[code] ?? 0) };
+	return { ...placedCountry(code, geo, facet[code] ?? 0, chosen, measure), total: totalIn(totals, code) };
 }
 
 /** A country the library knows by code: where the region filter puts it, its records, its value, and whether it is chosen. */
@@ -376,6 +382,17 @@ function slideFor(view: View, location: string, slide: Slide | null, places: Pla
 function placedSlide(view: View, place?: [number, number]) {
 	const point = place && view.projection(place);
 	return point ? slideFrom(view.frame, point[0] - view.frame.pad) : 0;
+}
+
+/** The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list. */
+function useListWidth() {
+	return useBreakpoint("xl") ? PANEL_WIDTH : 0;
+}
+
+/** The slide back to where the last chosen country started, none with no country chosen (the map isn't slid then). */
+function slideBack(chosen: string[]): Slide | null {
+	const last = chosen.at(-1);
+	return last ? { location: last, x: 0 } : null;
 }
 
 /** A keyboard user's tooltip sits over the country, kept inside the screen. */
@@ -494,9 +511,10 @@ function cssTransform(from: ZoomTransform, to: ZoomTransform) {
 	return `translate(${to.x - scale * from.x}px, ${to.y - scale * from.y}px) scale(${scale})`;
 }
 
-/** The globe, once its outlines have arrived. Until then the page shows nothing here, and the globe fades in whole when they do. */
-function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof GlobeView>[0], "view" | "world">) {
-	if (!view) return null;
+/** The globe, once its outlines have arrived. Until then the page shows nothing here, and the globe fades in whole when they do.
+ * `hidden` in the page's placeholder: without the library's countries the globe would open on the whole world, then jump. */
+function Globe({ view, hidden, ...rest }: { view: View | null; hidden?: boolean } & Omit<Parameters<typeof GlobeView>[0], "view" | "world">) {
+	if (!view || hidden) return null;
 	const loaded = use(loadWorld());
 	return loaded && <GlobeView view={view} world={loaded} {...rest} />;
 }
@@ -505,7 +523,7 @@ function Globe({ view, ...rest }: { view: View | null } & Omit<Parameters<typeof
  * Zooming and panning move the drawn map as one composited layer with a CSS transform, so Firefox redraws nothing while a gesture runs;
  * when it ends, the zoom is committed to the SVG and the outlines are redrawn sharp at the new scale. Nothing here is blurred or
  * transitioned: Firefox redraws a blur, or a fading fill, across the whole globe on every frame, which kept a core or more busy. */
-function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode; /** Drawn over the countries, such as the institutions' circles. */ overlay?: ReactNode }) {
+function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: { view: View; world: World; offset: number; zoomerRef: React.RefObject<Zoomer | null>; renderCountry: (geo: Feature, d: string) => ReactNode; /** Drawn over the countries in the globe's projection, such as the institutions' circles. */ overlay: (projection: View["projection"]) => ReactNode }) {
 	const stage = useRef<HTMLDivElement>(null);
 	// The buttons zoom about the middle of the space beside the panel, in the stage's own coordinates, wherever the map is slid.
 	const middle = useEffectEvent((): [number, number] => [(view.frame.listWidth + view.frame.width) / 2 + view.frame.pad - offset, view.frame.height / 2 + view.frame.pad]);
@@ -610,7 +628,7 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: {
 						</g>
 						{world.countries.map((geo, index) => <Fragment key={index}>{renderCountry(geo, drawn.countries[index])}</Fragment>)}
 						<path aria-hidden d={drawn.sea} fill="none" stroke="var(--map-sea-rim)" style={{ strokeWidth: line(1) }} />
-						{overlay}
+						{overlay(view.projection)}
 					</g>
 				</svg>
 			</div>
@@ -635,9 +653,15 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 	return { facet, stale: isValidating && facet !== NO_COUNTS };
 }
 
-/** The whole library's counts, with no filter at all, for the tooltips' first line. With none on the page this is the same request. */
-function useLibraryCounts() {
-	return useSWR<FacetsGetResponse>(buildFacetsQuery({}), fetcher, COUNTS_OPTIONS).data;
+/**
+ * The whole library's counts, with no filter at all, for the tooltips' first line: its countries in the mode and its institutions.
+ * Only while a search, a filter or a chosen place narrows the map (the scope always has a value, and alone narrows nothing).
+ */
+function useLibraryTotals(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode) {
+	const library = useSWR<FacetsGetResponse>(buildFacetsQuery({}), fetcher, COUNTS_OPTIONS).data;
+	const narrowed = RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+	if (!narrowed || !library) return {};
+	return { countries: countsIn(library, mode), institutions: library.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined };
 }
 
 /** The counts the answer gives for the mode, or the server's, or none. */
@@ -647,7 +671,7 @@ const countsIn = (data: FacetsGetResponse | undefined, mode: CountryMode, initia
 /** `counts` are the countries' record counts for the page's filters, so the list and the colours are there from the first frame.
  * `pending` is the page's placeholder while the server reads them: it draws no globe, which without the library's countries would
  * open on the whole world and then jump to them when the page replaces it. */
-export default function Map({ focus, places, counts, pending = false }: { focus?: [number, number]; places: Places; counts?: Record<string, number>; pending?: boolean }) {
+export default function Map({ focus, places, counts, pending }: { focus?: [number, number]; places: Places; counts?: Record<string, number>; pending?: boolean }) {
 	const { tooltipContent, tooltipAnchor, hovered, setHovered, showCountry, hideCountry, setTooltipContent, setTooltipAnchor } = useCountryTooltip();
 	const props = useItemsList(undefined, {
 		paginationSiblings: 1,
@@ -658,23 +682,15 @@ export default function Map({ focus, places, counts, pending = false }: { focus?
 	const [mode, setMode] = useCountryMode();
 	const chosen = props.queryParams[modeParam(mode)];
 	const { facet, stale } = useCountryCounts(props.queryParams, mode, counts);
-	const byInstitution = mode === "institutions";
-	// Institutions shade their countries by records: the circles already count institutions, not people.
-	const shade: Measure = byInstitution ? "records" : measure;
+	const shade = shadeOf(mode, measure);
 	const rows = countryRows(facet, shade);
 	const max = scaleTop(rows, shade);
-	const library = useLibraryCounts();
-	// A search, a filter or a chosen place narrows the map: the tooltips then give the whole library's figures first.
-	// The scope always has a value, and alone narrows nothing.
-	const narrowed = RESULT_PARAMS.some((key) => key !== "scope" && props.queryParams[key].length > 0);
-	const totals = narrowed && library ? countsIn(library, mode) : undefined;
-	const institutions = useInstitutionPoints(props.queryParams, byInstitution, narrowed ? (library?.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined) : undefined);
-	const [hoveredInstitution, setHoveredInstitution] = useState<string | null>(null);
+	const totals = useLibraryTotals(props.queryParams, mode);
+	const layer = useInstitutionLayer({ props, enabled: mode === "institutions", totals: totals.institutions, setTooltipContent, setTooltipAnchor });
 	const size = useWindowSize();
 	const isDesktop = useBreakpoint("md");
 	const smallLayout = useLibraryConfig().theme.layout === "small";
-	// The panel shows from 1,280 px wide; below that the map has the width and a sheet holds the list.
-	const listWidth = useBreakpoint("xl") ? PANEL_WIDTH : 0;
+	const listWidth = useListWidth();
 	const view = useMemo(() => mapView(size.width, size.height, isDesktop, listWidth, focus), [size.width, size.height, isDesktop, listWidth, focus]);
 	const zoomerRef = useRef<Zoomer | null>(null);
 
@@ -682,10 +698,7 @@ export default function Map({ focus, places, counts, pending = false }: { focus?
 	const [slide, setSlide] = useState<Slide | null>(null);
 	const offset = offsetOf(view, chosen, slide, places);
 	// Back to the library's countries: the slide to the chosen country goes too.
-	const resetSlide = () => {
-		const last = chosen.at(-1);
-		if (last) setSlide({ location: last, x: 0 });
-	};
+	const resetSlide = () => setSlide(slideBack(chosen));
 	const selectCountry = (code: string) => {
 		const location = COUNTRY_PARAMS[code];
 		if (!location) return;
@@ -702,27 +715,7 @@ export default function Map({ focus, places, counts, pending = false }: { focus?
 	};
 	useFreshResults(props);
 
-	const { handleInstitutionSelect } = props;
-	// Stable until an institution is chosen, so pointing at a circle doesn't draw thousands again.
-	const dotEvents = useMemo<DotEvents>(() => ({
-		onShow: (point) => {
-			setTooltipAnchor(null);
-			setTooltipContent(<InstitutionTip point={point} />);
-			setHoveredInstitution(point.key);
-		},
-		onHide: () => {
-			setTooltipContent(null);
-			setHoveredInstitution(null);
-		},
-		onSelect: (point) => {
-			setTooltipContent(null);
-			setHoveredInstitution(null);
-			handleInstitutionSelect(point.name);
-		},
-	}), [setTooltipAnchor, setTooltipContent, handleInstitutionSelect]);
-	const institutionPanel = byInstitution ? { points: institutions.points, ready: institutions.ready, chosen: props.queryParams.institution, stale: institutions.stale, hovered: hoveredInstitution, onHover: setHoveredInstitution, onSelect: dotEvents.onSelect } : undefined;
-
-	const panel = { institutions: institutionPanel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
+	const panel = { institutions: layer.panel, props, chosen, mode, onMode: changeMode, rows, stale, measure, onMeasure: (next: Measure) => void setMeasure(next), tint: (value: number | null) => tint(value, max), hovered, onHover: setHovered, onSelect: selectCountry, smallLayout };
 	return (
 		<main
 			id="main-content"
@@ -737,48 +730,38 @@ export default function Map({ focus, places, counts, pending = false }: { focus?
 			<MapSheet {...panel} />
 			<MemoizedItemView props={props} />
 			<ZoomControls zoomerRef={zoomerRef} onReset={resetSlide} />
-			<MapLegend rows={rows} measure={shade} max={max} institutions={byInstitution} />
+			<MapLegend rows={rows} measure={shade} max={max} institutions={mode === "institutions"} />
 			<Suspense fallback={null}>
-				{!pending && <Globe
+				<Globe
+					hidden={pending}
 					view={view}
 					offset={offset}
 					zoomerRef={zoomerRef}
 					renderCountry={(geo, d) => {
-						const country = countryOf(geo, facet, chosen, shade, totals);
+						const country = countryOf(geo, facet, chosen, shade, totals.countries);
 						return <CountryShape d={d} country={country} style={shapeStyle(country, hovered, max)} onSelect={selectCountry} onShow={showCountry} onHide={hideCountry} />;
 					}}
-					overlay={byInstitution && view ? (
-						<>
-							<InstitutionDots points={institutions.points} projection={view.projection} events={dotEvents} />
-							<InstitutionMarks points={institutions.points} projection={view.projection} chosen={props.queryParams.institution} hovered={hoveredInstitution} />
-						</>
-					) : null}
-				/>}
+					overlay={layer.overlay}
+				/>
 			</Suspense>
 		</main>
 	);
 }
 
+/** What the key's scale counts, by the measure the countries are coloured by. */
+const LEGEND_TITLE = { people: "mapResourcesPerMillion", records: "mapResourcesPerCountry" } as const;
+
 /**
- * The key to the countries' colours, beside the zoom buttons from 1,280 px wide: the tint from the lowest value to the one that
- * takes the full colour (per person, a few small states go past it, so it reads "and more"), and the circles in the institutions' mode.
+ * The key to the countries' colours, beside the zoom buttons from 1,280 px wide: the tint's scale, and the circles in the
+ * institutions' mode. Nothing while no country has a value.
  */
 function MapLegend({ rows, measure, max, institutions }: { rows: CountryRow[]; measure: Measure; max: number; institutions: boolean }) {
 	const t = useTranslations("ui");
-	const { rate, count } = useValueFormat();
 	const values = rows.flatMap((row) => (row.value ? [row.value] : []));
 	if (!values.length) return null;
-	const low = Math.min(...values);
-	const format = measure === "people" ? rate : count;
-	const stops = [low, ...[0.1, 0.3, 0.6, 1].map((share) => share * max)].map((value) => tint(value, max));
 	return (
 		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+3.75rem)] z-10 hidden w-52 px-3 py-2.5 text-xs leading-5 xl:block")}>
-			<p className="mb-1.5 font-semibold">{measure === "people" ? t("mapResourcesPerMillion") : t("mapResourcesPerCountry")}</p>
-			<span aria-hidden className="block h-2 rounded-full" style={{ background: `linear-gradient(to right, ${stops.join(", ")})` }} />
-			<p className="mt-0.5 flex justify-between tabular-nums text-black/55 dark:text-white/55">
-				<span>{format(low)}</span>
-				<span>{Math.max(...values) > max ? t("mapAndMore", { value: format(max) }) : format(max)}</span>
-			</p>
+			<LegendScale values={values} measure={measure} max={max} />
 			{institutions && (
 				<p className="mt-1.5 flex items-center gap-2">
 					<span className="size-2.5 rounded-full" style={{ background: DOT }} />
@@ -786,6 +769,25 @@ function MapLegend({ rows, measure, max, institutions }: { rows: CountryRow[]; m
 				</p>
 			)}
 		</div>
+	);
+}
+
+/** The tint from the lowest value to the one that takes the full colour. Per person a few small states go past it, so it reads "and more". */
+function LegendScale({ values, measure, max }: { values: number[]; measure: Measure; max: number }) {
+	const t = useTranslations("ui");
+	const format = useValueFormat()[measure === "people" ? "rate" : "count"];
+	const low = Math.min(...values);
+	const stops = [low, ...[0.1, 0.3, 0.6, 1].map((share) => share * max)].map((value) => tint(value, max));
+	const top = format(max);
+	return (
+		<>
+			<p className="mb-1.5 font-semibold">{t(LEGEND_TITLE[measure])}</p>
+			<span aria-hidden className="block h-2 rounded-full" style={{ background: `linear-gradient(to right, ${stops.join(", ")})` }} />
+			<p className="mt-0.5 flex justify-between tabular-nums text-black/55 dark:text-white/55">
+				<span>{format(low)}</span>
+				<span>{Math.max(...values) > max ? t("mapAndMore", { value: top }) : top}</span>
+			</p>
+		</>
 	);
 }
 

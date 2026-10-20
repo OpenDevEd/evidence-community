@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { parseAsStringLiteral, useQueryState } from "nuqs";
 import { useState } from "react";
 import { SearchBar } from "@/components/features/SearchBar";
@@ -19,6 +19,7 @@ import { Button, Label, ListBox, ListBoxItem, Popover, Select, SelectValue, Text
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { FITTED_ROWS, fittedBox, muted, PANEL, Pages, useFittedPages } from "./evidence/lists";
 import { SHEET, SheetBar } from "./evidence/phone-sheet";
+import { useValueFormat } from "./map-figures";
 import { InstitutionList, type InstitutionPoint } from "./map-institutions";
 
 type Props = ReturnType<typeof useItemsList>;
@@ -83,61 +84,39 @@ function SearchRows({ p }: { p: PanelProps }) {
 	);
 }
 
-/** A value as the list and the tooltip show it: whole records, or a rate to three figures. */
-export function useValueFormat() {
-	const format = useFormatter();
-	return {
-		rate: (value: number) => format.number(value, value >= 100 ? { maximumFractionDigits: 0 } : { maximumSignificantDigits: 3 }),
-		count: (value: number) => format.number(value),
-	};
-}
-
-
-/** One line of a tooltip's figures: what they count, when there are two lines, then the records for each million people (where
- * `perMillion` gives a rate) and the records. */
-function TipLine({ label, count, perMillion }: { label?: string; count: number; perMillion?: (count: number) => number | null }) {
-	const { rate } = useValueFormat();
-	const t = useTranslations("ui");
-	const people = perMillion?.(count) ?? null;
-	const number = (value: React.ReactNode) => <strong className="font-semibold tabular-nums text-black dark:text-white">{value}</strong>;
-	return (
-		<div className="flex gap-3 text-xs text-black/60 dark:text-white/60">
-			{label && <span className="w-[4.5rem] shrink-0">{label}</span>}
-			{people !== null && <span>{t.rich("mapPerMillionValue", { value: rate(people), number })}</span>}
-			<span>{t.rich("resourcesCount", { count, number })}</span>
-		</div>
-	);
-}
-
-/** A tooltip's figures: the whole library's (`total`, given only while a search, filter or chosen place narrows the map), then
- * the ones the map shows now. Without a total, one line. */
-export function TipFigures({ total, count, perMillion }: { total: number | undefined; count: number; perMillion?: (count: number) => number | null }) {
-	const t = useTranslations("ui");
-	if (total === undefined) return <TipLine count={count} perMillion={perMillion} />;
-	return (
-		<div className="flex flex-col gap-0.5">
-			<TipLine label={t("mapTipLibrary")} count={total} perMillion={perMillion} />
-			<TipLine label={t("mapTipFiltered")} count={count} perMillion={perMillion} />
-		</div>
-	);
-}
-
 /** The page's head, in the panel's darkest grey: what it is, how many countries (or institutions), and what their colours count.
  * Institutions are counted in records only, so they have no measure to choose. */
 function MapIntro({ countries, institutions, measure, onMeasure, titled = true }: { countries: number; /** In the institutions' mode, how many, or null until they arrive. */ institutions?: number | null; measure: Measure; onMeasure: (next: Measure) => void; titled?: boolean }) {
-	const t = useTranslations("ui");
-	const number = (value: React.ReactNode) => <span className="font-semibold tabular-nums text-foreground dark:text-white">{value}</span>;
 	const tabs = <MeasureTabs shown={institutions === undefined} measure={measure} onMeasure={onMeasure} className={titled ? "pt-2.5" : "p-3"} />;
 	// In the phone's sheet the head is only the tabs, so it folds away with them.
 	if (!titled) return tabs;
 	return (
 		<div className="border-b border-black/[0.06] bg-[#e8eaef] px-3 pb-3 pt-3 dark:border-white/[0.08] dark:bg-black/25">
-			<h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">{institutions === undefined ? t("mapTitle") : t("mapInstitutionsTitle")}</h1>
-			{/* Until the institutions arrive the line keeps its height and says nothing, rather than "0 institutions". */}
-			<p className={twMerge("px-1 text-xs", muted)}>{institutions === undefined ? t.rich("mapCountryCount", { count: countries, number }) : institutions === null ? "\u00a0" : t.rich("mapInstitutionCount", { count: institutions, countries, number })}</p>
+			<IntroHead countries={countries} institutions={institutions} />
 			{tabs}
 		</div>
 	);
+}
+
+/** The page's title and what it counts. */
+function IntroHead({ countries, institutions }: { countries: number; institutions?: number | null }) {
+	const t = useTranslations("ui");
+	return (
+		<>
+			<h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">{t(institutions === undefined ? "mapTitle" : "mapInstitutionsTitle")}</h1>
+			<p className={twMerge("px-1 text-xs", muted)}><IntroCount countries={countries} institutions={institutions} /></p>
+		</>
+	);
+}
+
+/** How many countries, or institutions in how many countries. Until the institutions arrive the line keeps its height and says
+ * nothing, rather than "0 institutions". */
+function IntroCount({ countries, institutions }: { countries: number; institutions?: number | null }) {
+	const t = useTranslations("ui");
+	const number = (value: React.ReactNode) => <span className="font-semibold tabular-nums text-foreground dark:text-white">{value}</span>;
+	if (institutions === undefined) return t.rich("mapCountryCount", { count: countries, number });
+	if (institutions === null) return "\u00a0";
+	return t.rich("mapInstitutionCount", { count: institutions, countries, number });
 }
 
 /** The measure's tabs. They fold away when the map counts institutions, which have no measure to choose, and unfold when it
@@ -249,17 +228,27 @@ function Search({ props }: { props: Props }) {
 	return <SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search} classNames={RAISED_INPUT} />;
 }
 
-/** The search and filters the panel's rows come from. */
-const rowsOf = (p: PanelProps) => buildFacetsQuery(p.props.queryParams);
+/** In the institutions' mode, how many institutions the head counts, or null until they arrive. Nothing in the countries' modes. */
+const institutionCount = (p: PanelProps) => p.institutions && (p.institutions.ready ? p.institutions.points.length : null);
+
+/** What the panel lists: the institutions in their mode, else the countries. */
+const listName = (p: PanelProps) => (p.institutions ? "institutions" : "countries");
+
+/** The panel's list. Either starts again at page one when the search and filters its rows come from change. */
+function PanelList({ p, heading = true }: { p: PanelProps; heading?: boolean }) {
+	const resetOn = buildFacetsQuery(p.props.queryParams);
+	if (p.institutions) return <InstitutionList {...p.institutions} resetOn={resetOn} heading={heading} />;
+	return <CountryList resetOn={resetOn} rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={heading} />;
+}
 
 /** From 1,280 px wide, one panel down the left, as on the evidence map: the head, the search band, then the countries. */
 export function MapPanel(p: PanelProps) {
 	return (
 		<div className={twMerge("pointer-events-none fixed inset-y-0 left-0 z-10 hidden w-[calc(23rem+1rem)] pb-4 pl-4 pt-[calc(7.5rem-1.5rem)] xl:block", p.smallLayout && "pt-[7.5rem]")}>
 			<div className={twMerge(PANEL, "pointer-events-auto flex h-full flex-col overflow-hidden")}>
-				<MapIntro countries={p.rows.length} institutions={p.institutions && (p.institutions.ready ? p.institutions.points.length : null)} measure={p.measure} onMeasure={p.onMeasure} />
+				<MapIntro countries={p.rows.length} institutions={institutionCount(p)} measure={p.measure} onMeasure={p.onMeasure} />
 				<div className="relative z-10 border-b border-black/[0.06] bg-[#f2f3f6] p-3 dark:border-white/[0.08] dark:bg-black/10"><SearchRows p={p} /></div>
-				{p.institutions ? <InstitutionList {...p.institutions} resetOn={rowsOf(p)} /> : <CountryList resetOn={rowsOf(p)} rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} />}
+				<PanelList p={p} />
 			</div>
 		</div>
 	);
@@ -280,10 +269,10 @@ export function MapSheet(p: PanelProps) {
 				<div className={twMerge(PANEL, "relative")}><div className="rounded-2xl bg-[#f2f3f6] p-2 dark:bg-black/10"><SearchRows p={p} /></div></div>
 			</div>
 			<motion.div layout={!still} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className={twMerge(PANEL, SHEET, SIDE_WIDTH, open ? "h-[50dvh]" : "h-[calc(3.5rem+env(safe-area-inset-bottom))]")}>
-				<SheetBar name={p.institutions ? t("institutions") : t("countries")} open={open} onFold={() => setOpen(!open)} />
+				<SheetBar name={t(listName(p))} open={open} onFold={() => setOpen(!open)} />
 				<div className={twMerge("min-h-0 flex-1 flex-col", open ? "flex" : "hidden [@media(max-width:1279px)_and_(orientation:landscape)]:flex")}>
-					<MapIntro titled={false} countries={p.rows.length} institutions={p.institutions && (p.institutions.ready ? p.institutions.points.length : null)} measure={p.measure} onMeasure={p.onMeasure} />
-					{p.institutions ? <InstitutionList {...p.institutions} resetOn={rowsOf(p)} heading={false} /> : <CountryList resetOn={rowsOf(p)} rows={p.rows} chosen={p.chosen} stale={p.stale} measure={p.measure} tint={p.tint} hovered={p.hovered} onHover={p.onHover} onSelect={p.onSelect} heading={false} />}
+					<MapIntro titled={false} countries={p.rows.length} institutions={institutionCount(p)} measure={p.measure} onMeasure={p.onMeasure} />
+					<PanelList p={p} heading={false} />
 				</div>
 			</motion.div>
 		</>

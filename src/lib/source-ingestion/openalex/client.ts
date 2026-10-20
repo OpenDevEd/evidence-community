@@ -229,8 +229,8 @@ export class OpenAlexClient {
 	}
 
 	/**
-	 * Where OpenAlex places each institution, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` ids such as "I40120149". An
-	 * institution OpenAlex does not know, or places nowhere, is left out.
+	 * Where OpenAlex places each institution, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` ids such as "I40120149": its coordinates
+	 * and city. An institution OpenAlex does not know, or places nowhere, is left out.
 	 */
 	async institutionLocations(ids: readonly string[]) {
 		if (!ids.length || ids.length > OPENALEX_MAX_IDS_PER_FILTER) {
@@ -243,7 +243,7 @@ export class OpenAlexClient {
 		url.searchParams.set("api_key", this.options.apiKey);
 		const { results } = openAlexInstitutionLocationsSchema.parse(await this.read(url, undefined));
 		return new Map(results.flatMap(({ id, geo }) =>
-			geo?.latitude == null || geo.longitude == null ? [] : [[id.split("/").pop()!, { latitude: geo.latitude, longitude: geo.longitude }] as const]));
+			geo?.latitude == null || geo.longitude == null ? [] : [[id.split("/").pop()!, { latitude: geo.latitude, longitude: geo.longitude, city: geo.city?.trim() || null }] as const]));
 	}
 
 	/**

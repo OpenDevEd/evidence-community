@@ -9,7 +9,7 @@ import { geoEqualEarth } from "d3-geo";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { preload } from "react-dom";
-import { modeField, type CountryMode } from "@/components/pages/map-measure";
+import { modeField, modeOf, type CountryMode } from "@/components/pages/map-measure";
 
 type Places = Record<string, [number, number]>;
 type Counts = Record<string, number>;
@@ -29,7 +29,7 @@ export default async function MapPage({ searchParams }: Props) {
 	preload("/antarctica.json", { as: "fetch", crossOrigin: "anonymous" });
 	const places = placesOf((await getWorldMap()).shapes);
 	const params = await searchParams;
-	const mode: CountryMode = params.by === "authors" || params.by === "institutions" ? params.by : "focus";
+	const mode = modeOf(params.by);
 	// The whole library's counts place the map; the counts for the page's filters, chosen countries included, colour it and fill the list from the first frame.
 	const [library, filtered] = await Promise.all([countsOf({}, mode), countsOf(loadSearchParams(params), mode)]);
 	return <Map focus={library && middleOf(places, library)} places={places} counts={filtered} />;
