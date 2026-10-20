@@ -631,12 +631,12 @@ const NO_COUNTS: Record<string, number> = {};
 const COUNTS_OPTIONS = { keepPreviousData: true, revalidateOnFocus: false, revalidateOnReconnect: false, revalidateIfStale: false };
 
 /**
- * The countries' record counts the map colours and ranks by: the page's filters with every country kept, as choosing a country
- * would otherwise leave only its own. With none chosen this is the shared filters' own request. Until it answers, the counts the
+ * The countries' record counts the map colours and ranks by: the page's filters with every country of the map's mode kept, as
+ * choosing a country would otherwise leave only its own. A filter on the other kind of country still narrows them. With none chosen this is the shared filters' own request. Until it answers, the counts the
  * server sent with the page; while a new one is on its way, the last ones, marked as stale.
  */
 function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode, initial?: Record<string, number>) {
-	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, country: [], author_country: [] }), fetcher, COUNTS_OPTIONS);
+	const { data, isValidating } = useSWR<FacetsGetResponse>(buildFacetsQuery({ ...params, [modeParam(mode)]: [] }), fetcher, COUNTS_OPTIONS);
 	// The server counted for the mode the page opened in.
 	const [firstMode] = useState(mode);
 	const facet = countsIn(data, mode, mode === firstMode ? initial : undefined);
