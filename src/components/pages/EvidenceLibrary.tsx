@@ -93,7 +93,7 @@ function LibraryFilters({
 function SearchTabContent({
 	askAI,
 	header,
-	headerEnd,
+	headless,
 	itemsContext,
 	extraFilters,
 	countLabel,
@@ -104,7 +104,8 @@ function SearchTabContent({
 	showHeader,
 }: {
 	header: ReactNode;
-	headerEnd?: ReactNode;
+	/** Something above the list draws its heading, sort and search options, as the map's results panel does. */
+	headless?: boolean;
 	itemsContext: ReturnType<typeof useItemsList>;
 	extraFilters: ReactNode;
 	countLabel: ReactNode;
@@ -130,6 +131,21 @@ function SearchTabContent({
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
 
+	const helpButton = (
+		<Button
+			className="h-full font-medium text-base !p-0"
+			isIconOnly
+			onPress={onHelpOpen}
+			aria-label={t("helpAriaLabel")}
+		>
+			<HugeiconsIcon
+				icon={HelpCircleIcon}
+				aria-label={t("helpIconAriaLabel")}
+				className="size-6"
+			/>
+		</Button>
+	);
+
 	const actuallyNoData =
 		(!itemsContext.isItemsLoading &&
 			itemsContext.itemsData &&
@@ -138,6 +154,8 @@ function SearchTabContent({
 
 	return (
 		<div className="flex flex-col gap-4">
+			{!headless && (
+				<>
 			{/* Header with title and explore button */}
 			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
 				<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
@@ -167,24 +185,12 @@ function SearchTabContent({
 					)}
 				</div>
 				<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
-					<Button
-						className="h-full font-medium text-base !p-0"
-						isIconOnly
-						onPress={onHelpOpen}
-						aria-label={t("helpAriaLabel")}
-					>
-						<HugeiconsIcon
-							icon={HelpCircleIcon}
-							aria-label={t("helpIconAriaLabel")}
-							className="size-6"
-						/>
-					</Button>
+					{helpButton}
 					<HelpModal
 						isOpen={isHelpOpen}
 						onOpenChange={onHelpOpenChange}
 					/>
 					<SortComponent itemsContext={itemsContext} />
-					{headerEnd}
 				</div>
 			</div>
 
@@ -193,6 +199,8 @@ function SearchTabContent({
 				extraFilters={extraFilters}
 				itemsContext={itemsContext}
 			/>
+				</>
+			)}
 
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
@@ -326,7 +334,7 @@ export function ContentInteractions({
 	countLabel,
 	extraFilters,
 	header,
-	headerEnd,
+	headless,
 }: {
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
@@ -335,7 +343,8 @@ export function ContentInteractions({
 	countLabel: ReactNode;
 	extraFilters: ReactNode;
 	header?: ReactNode;
-	headerEnd?: ReactNode;
+	/** Something above the list draws its heading, sort and search options, as the map's results panel does. */
+	headless?: boolean;
 }) {
 	const itemsContext = use(ItemsContext);
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
@@ -363,7 +372,7 @@ export function ContentInteractions({
 			/>
 			<SearchTabContent
 				header={header}
-				headerEnd={headerEnd}
+				headless={headless}
 				itemsContext={itemsContext}
 				extraFilters={extraFilters}
 				countLabel={countLabel}
