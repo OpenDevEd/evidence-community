@@ -100,5 +100,13 @@ describe("institutionCountryInputSchema", () => {
 				latitude: 51.5,
 			}).success,
 		).toBe(false);
+		expect(
+			institutionCountryInputSchema.safeParse({
+				name: "EdTech Hub",
+				countryCode: "GB",
+				latitude: 51.5,
+				longitude: -0.1,
+			}).success,
+		).toBe(false);
 	});
 });

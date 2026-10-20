@@ -68,7 +68,11 @@ export const institutionCountryInputSchema = z
 		longitude: z.number().min(-180).max(180).nullable().default(null),
 	})
 	.strict()
-	.refine((input) => (input.latitude === null) === (input.longitude === null), "Send both coordinates or neither.");
+	// A location is OpenAlex's, so it comes with an OpenAlex id, both coordinates at once.
+	.refine(
+		(input) => (input.latitude === null) === (input.longitude === null) && (input.latitude === null || input.openalexId !== null),
+		"Send both coordinates of an OpenAlex institution, or neither.",
+	);
 export const openAlexInstitutionQuerySchema = z.string().trim().min(3).max(200);
 
 export async function readInstitutionCountries(
