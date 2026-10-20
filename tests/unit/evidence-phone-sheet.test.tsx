@@ -6,6 +6,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { stubPanelLayout } from "./panel-layout";
 
 vi.mock("@/components/features/SearchBar", () => ({ SearchBar: () => <input aria-label="Search" /> }));
 
@@ -18,6 +19,7 @@ const more = { labels: new Map([[0, { who: "Song et al.", year: 2023, title: "Th
 
 let container: HTMLDivElement, root: Root;
 beforeEach(() => {
+	stubPanelLayout();
 	container = document.createElement("div");
 	document.body.append(container);
 	root = createRoot(container);
