@@ -17,7 +17,7 @@ import { navbarActionSteps, navbarSettings, type NavbarActionSlot } from "@/lib/
  * many long links folds earlier. The numbers become container queries on the
  * bar.
  */
-export type NavbarFit = { steps: number[]; arrangements: Arrangement[]; /** The logo's width at the header's height. */ logo: number };
+export type NavbarFit = { steps: number[]; arrangements: Arrangement[]; /** The logo's width at the header's height, before the cap. */ logo: number };
 
 /** Which name shows beside the logo: the library's full name, its short name, or none. */
 type NameShown = "full" | "short" | "none";
@@ -87,7 +87,7 @@ function loadGoogleFont(family: string, weight: number) {
 
 const logoCache = new Map<string, Promise<number>>();
 
-/** The logo's width at the header's height, as its image proportions give it. */
+/** The logo's width at the header's height, as its image proportions give it, before the header's 12rem cap. */
 function logoWidth(src: string | undefined) {
 	if (!src) return Promise.resolve(LOGO_MAX_WIDTH);
 	let pending = logoCache.get(src);
@@ -95,7 +95,7 @@ function logoWidth(src: string | undefined) {
 		pending = fetch(src, { signal: AbortSignal.timeout(5_000) })
 			.then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
 			.then((file) => loadImage(Buffer.from(file)))
-			.then((image) => Math.min(LOGO_MAX_WIDTH, (LOGO_HEIGHT * image.width) / image.height))
+			.then((image) => (LOGO_HEIGHT * image.width) / image.height)
 			.catch(() => LOGO_MAX_WIDTH);
 		logoCache.set(src, pending);
 	}
@@ -133,9 +133,10 @@ export function navbarWidths(
 	config: LibraryServerConfig,
 	measure: (value: string) => number,
 	labels: NavbarLabels,
-	logo: number,
+	logoWidth: number,
 	measureName: (value: string) => number = () => 0,
 ): NavbarFit {
+	const logo = Math.min(LOGO_MAX_WIDTH, logoWidth);
 	const items = getVisibleRuntimeLinks(config.navigation.links).map(
 		(link) =>
 			(link.icon ? LINK_ICON + LINK_ICON_GAP : 0) +
@@ -156,10 +157,14 @@ export function navbarWidths(
 	});
 	const steps = actions.map((width) => Math.ceil(base + width));
 	const name = nameWidths(config, measureName);
-	// On a phone the bar holds the logo, the empty links slot (no width, but a gap), the sign-in icon or avatar (both a 40px
-	// circle) and the menu button with its padding.
-	const compact = SAFETY + logo + GAP + GAP + PHONE_MENU_BUTTON + (readerAccounts ? GAP + AVATAR : 0);
-	return { steps, arrangements: arrangementsOf(steps, name, compact), logo };
+	// On a phone the bar holds the logo, the empty links slot (no width, but a gap), the sign-in or avatar and the menu button
+	// with its padding. The sign-in is a 40px circle like the avatar, and shows its label from 640px.
+	const phone = SAFETY + logo + GAP + GAP + PHONE_MENU_BUTTON;
+	const compact = {
+		icon: phone + (readerAccounts ? GAP + AVATAR : 0),
+		label: phone + (readerAccounts ? GAP + Math.max(AVATAR, SIGN_IN_CHROME + measure(labels.signIn)) : 0),
+	};
+	return { steps, arrangements: arrangementsOf(steps, name, compact), logo: logoWidth };
 }
 
 /** The widths the full and the short name take beside the logo, the short one only where it differs. */
@@ -174,7 +179,7 @@ function nameWidths(config: LibraryServerConfig, measureName: (value: string) =>
  * then the short name while the actions fold away, then the logo alone with the fewest actions. With the links in the phone
  * menu the bar has room again: the full name, else the short name, else the logo alone.
  */
-function arrangementsOf(steps: number[], name: { full: number; short: number | null }, compact: number): Arrangement[] {
+function arrangementsOf(steps: number[], name: { full: number; short: number | null }, compact: PhoneBar): Arrangement[] {
 	const last = steps.length - 1;
 	const short = name.short ?? name.full;
 	const inline: Arrangement[] = [
@@ -182,20 +187,29 @@ function arrangementsOf(steps: number[], name: { full: number; short: number | n
 		...steps.map((width, step): Arrangement => ({ width: Math.ceil(width + short), step, name: name.short === null ? "full" : "short" })),
 		{ width: steps[last], step: last, name: "none" },
 	];
-	const phone: Arrangement[] = [
-		{ width: Math.ceil(compact + name.full), step: "compact", name: "full" },
-		...(name.short === null ? [] : [{ width: Math.ceil(compact + name.short), step: "compact" as const, name: "short" as const }]),
-	];
+	const names: [NameShown, number][] = name.short === null ? [["full", name.full]] : [["full", name.full], ["short", name.short]];
 	// A phone arrangement only where the links don't fit, so one with a wider name never wins over the links inline.
-	return [...inline, ...phone.filter((arrangement) => arrangement.width < steps[last])];
+	return [...inline, ...phoneArrangements(compact, names).filter((arrangement) => arrangement.width < steps[last])];
 }
 
+/** The bar's width at 640px, less its 16px padding each side: from there the sign-in shows its label. */
+const SM_BAR = 640 - 2 * 16;
+/** The phone bar's width without a name: with the sign-in as an icon (below 640px) and with its label (from 640px). */
+type PhoneBar = { icon: number; label: number };
+
 /**
- * Which arrangement of the header shows, as CSS. Each measured width becomes a
- * container query on the bar; the widest that fits wins. Without a measurement
- * the fixed xl and 2xl breakpoints decide between the narrowest and the widest
- * arrangement.
+ * The phone bar's arrangements, each name (the full one first) where it fits beside the icon below 640px, then from 640px the
+ * name that fits beside the labelled sign-in, and wider names as the bar grows.
  */
+function phoneArrangements(bar: PhoneBar, names: [NameShown, number][]): Arrangement[] {
+	const phone = (width: number, name: NameShown): Arrangement => ({ width: Math.ceil(width), step: "compact", name });
+	const below = names.filter(([, width]) => bar.icon + width < SM_BAR).map(([name, width]) => phone(bar.icon + width, name));
+	const atLabel = names.find(([, width]) => bar.label + width <= SM_BAR)?.[0] ?? "none";
+	const from = bar.label === bar.icon ? [] : [phone(SM_BAR, atLabel)];
+	const above = names.filter(([, width]) => bar.label + width > SM_BAR).map(([name, width]) => phone(bar.label + width, name));
+	return [...below, ...from, ...above];
+}
+
 /** What one arrangement shows, as declarations inside its container query. */
 function arrangementCss({ step, name }: Arrangement) {
 	const actions =
@@ -210,6 +224,12 @@ function arrangementCss({ step, name }: Arrangement) {
 	${name === "none" ? "" : `.nf-name-${name} { display: inline !important; }`}`;
 }
 
+/**
+ * Which arrangement of the header shows, as CSS. Each measured width becomes a
+ * container query on the bar; the widest that fits wins. Without a measurement
+ * the fixed xl and 2xl breakpoints decide between the narrowest and the widest
+ * arrangement.
+ */
 export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 	if (fit) {
 		// Narrowest first, so a wider arrangement that also fits overrides it.
@@ -221,8 +241,8 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 		// The logo's box holds its own width while the picture loads, so the name and links beside it never move when it lands.
 		// It is drawn 36px tall below 1,280px and 40px from there, as LIBRARY_LOGO_SIZES.header says.
 		return `
-.navbar-bar { container: navbar / inline-size; --nf-logo-width: ${Math.ceil(fit.logo * 0.9)}px; }
-@media (min-width: 1280px) { .navbar-bar { --nf-logo-width: ${Math.ceil(fit.logo)}px; } }
+.navbar-bar { container: navbar / inline-size; --nf-logo-width: ${Math.ceil(Math.min(LOGO_MAX_WIDTH, fit.logo * 0.9))}px; }
+@media (min-width: 1280px) { .navbar-bar { --nf-logo-width: ${Math.ceil(Math.min(LOGO_MAX_WIDTH, fit.logo))}px; } }
 .nf-links, .nf-step, .nf-name { display: none !important; }
 ${rules.join("\n")}`;
 	}

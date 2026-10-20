@@ -67,16 +67,31 @@ describe("the name beside the logo", () => {
 			[0, "short"],
 			[1, "short"],
 			[1, "none"],
+			// Beside the sign-in icon below 640px, then beside its label from 640px, where the full name still fits.
 			["compact", "full"],
 			["compact", "short"],
+			["compact", "full"],
 		]);
 		// A name takes the gap after the logo and its own width.
 		expect(arrangements[0]!.width).toBe(steps[0]! + 12 + "Vocational Training".length * 10);
 		expect(arrangements[1]!.width).toBe(steps[0]! + 12 + "TVET".length * 10);
-		// Each arrangement needs less room than the one before, and a phone's never as much as the links inline.
-		const widths = arrangements.map(({ width }) => width);
-		expect(widths).toEqual([...widths].sort((a, b) => b - a));
-		expect(widths.at(-2)).toBeLessThan(steps.at(-1)!);
+		// With the links inline each arrangement needs less room than the one before, and a phone's never as much.
+		const inline = arrangements.filter(({ step }) => step !== "compact").map(({ width }) => width);
+		expect(inline).toEqual([...inline].sort((a, b) => b - a));
+		expect(arrangements.filter(({ step }) => step === "compact").every(({ width }) => width < steps.at(-1)!)).toBe(true);
+	});
+
+	it("from 640px, where the sign-in shows its label, shows only the name that still fits beside it", () => {
+		const { arrangements } = navbarWidths(named("A".repeat(28), "AB"), measure, labels, 120, measure);
+		const phone = arrangements.filter(({ step }) => step === "compact").map(({ width, name }) => [width, name]);
+		// Phone bar: logo 120, two gaps, the 32px menu, a gap and the 40px icon, and 8 to spare; a name adds 12 and its letters.
+		const icon = 8 + 120 + 24 + 24 + 32 + 24 + 40;
+		// The full name beside the labelled sign-in would need more room than the links inline, so the short name stays.
+		expect(phone).toEqual([
+			[icon + 12 + 280, "full"],
+			[icon + 12 + 20, "short"],
+			[608, "short"],
+		]);
 	});
 
 	it("keeps the full name as the actions fold when the short name is the same, and leaves out a phone name wider than the links", () => {
@@ -86,6 +101,8 @@ describe("the name beside the logo", () => {
 			[0, "full"],
 			[1, "full"],
 			[1, "none"],
+			// No name fits beside the labelled sign-in at 640px.
+			["compact", "none"],
 		]);
 		expect(arrangements.every((arrangement) => arrangement.step !== "compact" || arrangement.width < steps.at(-1)!)).toBe(true);
 	});
