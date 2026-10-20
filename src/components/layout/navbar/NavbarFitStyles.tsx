@@ -21,7 +21,7 @@ const FIRST_MEASUREMENT_WAIT_MS = 1_500;
  */
 export async function NavbarFitStyles({ config, locale }: { config: LibraryServerConfig; locale: string }) {
 	const fit = await Promise.race([
-		computeNavbarFit(config, locale, config.identity.assets.logoLight),
+		computeNavbarFit(config, locale, [config.identity.assets.logoLight, config.identity.assets.logoDark]),
 		new Promise<null>((resolve) => setTimeout(() => resolve(null), FIRST_MEASUREMENT_WAIT_MS)),
 	]);
 	const stepCount = navbarActionSteps(navbarSettings(config), isLibraryFeatureEnabled(config.features, "readerAccounts")).length;

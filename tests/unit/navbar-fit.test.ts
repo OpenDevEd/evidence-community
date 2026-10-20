@@ -106,12 +106,14 @@ describe("the name beside the logo", () => {
 		]);
 		expect(arrangements.every((arrangement) => arrangement.step !== "compact" || arrangement.width < steps.at(-1)!)).toBe(true);
 	});
+});
 
-	it("hides both names until an arrangement shows one", () => {
-		const css = navbarFitCss(navbarWidths(named("Wealth Inequality and Social Mobility", "Wealth Inequality"), measure, labels, 120, measure), 2);
-		expect(css).toContain(".nf-links, .nf-step, .nf-name { display: none !important; }");
-		expect(css).toContain(".nf-name-full { display: inline !important; }");
-		expect(css).toContain(".nf-name-short { display: inline !important; }");
+describe("a short name no narrower than the full one", () => {
+	it("is never shown in its place", () => {
+		const config = { ...withFeatures({ themeSwitcher: true, languageSwitcher: false, readerAccounts: true }), identity: { ...base.identity, name: "IOE", shortName: "Institute" } };
+		const { arrangements } = navbarWidths(config, measure, labels, 120, measure);
+		expect(arrangements.some(({ name }) => name === "short")).toBe(false);
+		expect(arrangements[0]).toMatchObject({ step: 0, name: "full" });
 	});
 });
 
@@ -123,11 +125,11 @@ describe("loading the body font", () => {
 		vi.stubGlobal("fetch", fetch);
 		const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, theme: { ...maximalLibraryConfig.theme, fonts: { ...maximalLibraryConfig.theme.fonts, body: { source: "google", family: "Poppins" } } } });
 		try {
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
 			expect(fetch).toHaveBeenCalledTimes(1);
 			await vi.advanceTimersByTimeAsync(60_000);
-			expect(await computeNavbarFit(config, "en-US", undefined)).toBeNull();
+			expect(await computeNavbarFit(config, "en-US", [])).toBeNull();
 			expect(fetch).toHaveBeenCalledTimes(2);
 		} finally {
 			vi.unstubAllGlobals();

@@ -102,6 +102,12 @@ function logoWidth(src: string | undefined) {
 	return pending;
 }
 
+/** The wider of the logos at the header's height; the cap's width without one. */
+async function widestLogo(srcs: readonly (string | undefined)[]) {
+	const widths = await Promise.all((srcs.length ? srcs : [undefined]).map(logoWidth));
+	return Math.max(...widths);
+}
+
 type NavbarLabels = {
 	/** A navigation link's label as the header shows it. */
 	link: (label: string) => string;
@@ -171,7 +177,9 @@ export function navbarWidths(
 function nameWidths(config: LibraryServerConfig, measureName: (value: string) => number) {
 	const { name, shortName } = config.identity;
 	const full = NAME_GAP + measureName(name);
-	return { full, short: shortName && shortName !== name ? NAME_GAP + measureName(shortName) : null };
+	// A short name no narrower than the full one would only ever stand in for it.
+	const short = shortName && shortName !== name ? NAME_GAP + measureName(shortName) : Infinity;
+	return { full, short: short < full ? short : null };
 }
 
 /**
@@ -246,7 +254,8 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 .nf-links, .nf-step, .nf-name { display: none !important; }
 ${rules.join("\n")}`;
 	}
-	// Without a measurement the fixed xl and 2xl breakpoints decide, with no name beside the logo.
+	// Without a measurement the fixed xl and 2xl breakpoints decide. The name shows only with the widest of several
+	// arrangements, from 2xl: the short one, or the full one when it has none (the last name the logo draws).
 	const queries = Array.from({ length: stepCount }, (_, step) =>
 				// The narrowest step takes the links' breakpoint, even when it is the only one.
 				step === stepCount - 1 ? "@media (min-width: 1280px)" : step === 0 ? "@media (min-width: 1536px)" : null,
@@ -261,7 +270,7 @@ ${rules.join("\n")}`;
 	.nf-step { display: none !important; }
 	.nf-step-${step} { display: flex !important; }
 	.nf-links { display: flex !important; }
-	.nf-compact { display: none !important; }
+	.nf-compact { display: none !important; }${step === 0 && stepCount > 1 ? "\n\t.nf-name:last-child { display: inline !important; }" : ""}
 }`,
 		);
 	return `
@@ -270,10 +279,11 @@ ${rules.join("\n")}`;
 ${rules.join("\n")}`;
 }
 
+/** `logoSrcs`: the light and dark logos. The bar keeps room for the wider, as either may show. */
 export async function computeNavbarFit(
 	config: LibraryServerConfig,
 	locale: string,
-	logoSrc: string | undefined,
+	logoSrcs: readonly (string | undefined)[],
 ): Promise<NavbarFit | null> {
 	const body = config.theme.fonts.body;
 	if (body.source !== "google") return null;
@@ -291,7 +301,7 @@ export async function computeNavbarFit(
 	const [t, ui, logo] = await Promise.all([
 		getTranslations({ locale, namespace: "nav" }),
 		getTranslations({ locale, namespace: "ui" }),
-		logoWidth(logoSrc),
+		widestLogo(logoSrcs),
 	]);
 	return navbarWidths(
 		config,
