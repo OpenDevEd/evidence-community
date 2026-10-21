@@ -47,7 +47,7 @@ export default function ResourceAuthors({
 		const authorText = formatAPAAuthor(itemData?.creators as Author[], t);
 
 		return (
-			(configuredInstitution || authorText) && <span className="max-w-80 truncate overflow-hidden flex items-center gap-2">
+			(configuredInstitution || authorText) && <span className="flex min-w-0 max-w-80 items-center gap-2">
 				{configuredInstitution?.logoUrl && (
 					<InstitutionLogo
 						alt={t("institutionLogoAlt", {
@@ -56,7 +56,8 @@ export default function ResourceAuthors({
 						logoUrl={configuredInstitution.logoUrl}
 					/>
 				)}
-				{authorText}
+				{/* The names themselves are cut with an ellipsis: a flex row clips its text without one. */}
+				<span className="truncate">{authorText}</span>
 			</span>
 		);
 	}

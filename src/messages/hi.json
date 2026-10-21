@@ -128,6 +128,7 @@
     "collectionVisibilityPublicDescription": "हर कोई इस संग्रह को देख सकता है",
     "goToFilters": "फ़िल्टर पर जाएं",
     "pdfPreviewAlt": " {filename} के लिए PDF पूर्वावलोकन",
+    "pdfCount": "{count} PDF",
     "document": "दस्तावेज़",
     "logoAlt": "{company} के लिए {theme} मोड में लोगो",
     "genericUser": "उपयोगकर्ता",

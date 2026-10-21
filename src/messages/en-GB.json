@@ -128,6 +128,7 @@
     "collectionVisibilityPublic": "Public",
     "collectionVisibilityPublicDescription": "Anyone can see this collection",
     "pdfPreviewAlt": "PDF preview for {filename}",
+    "pdfCount": "{count, plural, one {# PDF} other {# PDFs}}",
     "document": "document",
     "logoAlt": "Logo for {company} in {theme} mode",
     "genericUser": "User",

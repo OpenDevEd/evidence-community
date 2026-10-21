@@ -63,7 +63,7 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = PAGE_SIZES,
 }
 
 /** A sheet of paper with the title set at its head and a few lines of text, sized to whatever width it is drawn at. */
-function TitlePage({ title, className }: { title?: string; className?: string }) {
+export function TitlePage({ title, className }: { title?: string; className?: string }) {
 	return (
 		<div aria-hidden className={twMerge("@container relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-xl bg-[#fbf8f2] p-[10%] text-[#2b2521] ring-1 ring-inset ring-black/[0.06]", className)}>
 			<span className="h-[2.5cqw] w-1/4 shrink-0 rounded-full bg-accent" />

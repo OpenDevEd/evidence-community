@@ -61,6 +61,8 @@ export type ListAttachment = Pick<
 	| "contentType"
 	| "tags"
 	| "PDFCoverPageImage"
+	| "PDFCoverPageWidth"
+	| "PDFCoverPageHeight"
 	| "note"
 >;
 

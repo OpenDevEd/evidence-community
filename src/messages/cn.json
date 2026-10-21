@@ -128,6 +128,7 @@
     "collectionVisibilityPublicDescription": "任何人都可以查看此收藏集",
     "goToFilters": "转到过滤器",
     "pdfPreviewAlt": " {filename} 的 PDF 预览",
+    "pdfCount": "{count} 个 PDF",
     "document": "文件",
     "logoAlt": "{company} 的 {theme} 模式的徽标",
     "genericUser": "用户",
