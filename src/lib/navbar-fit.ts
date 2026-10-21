@@ -43,7 +43,7 @@ const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
 const LOGO_HEIGHT = 40; // xl:h-10
 const LOGO_MAX_WIDTH = 192; // max-w-logo-header (12rem)
 const NAME_FONT = { size: 24, weight: 500 }; // the name beside the logo: text-2xl font-medium
-const NAME_GAP = 12; // the pl-3 before the name, which sets it apart from the logo
+const NAME_GAP = 12; // the ps-3 before the name, which sets it apart from the logo
 /** Headroom for rounding and font rendering differences between browsers. */
 const SAFETY = 8;
 
