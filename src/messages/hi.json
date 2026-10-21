@@ -129,7 +129,7 @@
     "goToFilters": "फ़िल्टर पर जाएं",
     "pdfPreviewAlt": " {filename} के लिए PDF पूर्वावलोकन",
     "pdfCount": "{count} PDF",
-    "pdfOnline": "{site} पर PDF",
+    "pdfOnline": "{site} पर PDF खोलें",
     "document": "दस्तावेज़",
     "logoAlt": "{company} के लिए {theme} मोड में लोगो",
     "genericUser": "उपयोगकर्ता",

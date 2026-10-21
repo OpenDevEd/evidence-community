@@ -101,13 +101,23 @@ function siteOf(url: string) {
  * An outline of a page rather than a page, with no shadow, the open-elsewhere mark and the site's name, so it never passes for
  * a PDF the library holds. Its marks scale with its own width.
  */
-export function OnlinePdf({ url, className }: { url: string; className?: string }) {
+export function OnlinePdf({ url, onOpen, className }: { url: string; onOpen?: () => void; className?: string }) {
 	const t = useTranslations("ui");
 	const site = siteOf(url);
 	return (
-		<div role="img" aria-label={t("pdfOnline", { site })} className={twMerge("@container/pdf flex aspect-[3/4] w-full flex-col items-center justify-center gap-1.5 border border-dashed border-black/25 px-1.5 text-black/50 dark:border-white/25 dark:text-white/55", className)}>
+		<a
+			href={url}
+			target="_blank"
+			rel="noopener noreferrer"
+			onClick={onOpen}
+			aria-label={t("pdfOnline", { site })}
+			className={twMerge(
+				"@container/pdf flex aspect-[3/4] w-full flex-col items-center justify-center gap-1.5 border border-dashed border-black/25 px-1.5 text-black/50 outline-offset-2 transition-[color,border-color,transform] duration-200 hover:border-accent hover:text-accent focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none dark:border-white/25 dark:text-white/55 dark:hover:border-accent dark:hover:text-accent",
+				className,
+			)}
+		>
 			<HugeiconsIcon icon={LinkSquare01Icon} className="size-[30cqw] max-h-8 max-w-8 shrink-0" />
 			<span className="hidden w-full truncate text-center text-[11px] font-medium leading-tight @[72px]/pdf:block">{site}</span>
-		</div>
+		</a>
 	);
 }

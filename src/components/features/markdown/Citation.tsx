@@ -304,10 +304,13 @@ function PdfPreview({
 	return (
 		<div className="flex flex-col p-3">
 			<div className="flex gap-3">
-				<PdfCover
-					coverImage={attachment?.PDFCoverPageImage}
-					filename={attachmentName}
-				/>
+				{/* The cover opens the cited page, as Open Document does. */}
+				<a href={openHref} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-xl outline-offset-2 transition-transform focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none">
+					<PdfCover
+						coverImage={attachment?.PDFCoverPageImage}
+						filename={attachmentName}
+					/>
+				</a>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<p className="line-clamp-2 break-words text-sm font-semibold leading-snug text-black/80 dark:text-white/85">
 						{documentName}

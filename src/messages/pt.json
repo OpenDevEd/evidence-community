@@ -129,7 +129,7 @@
     "goToFilters": "Ir para filtros",
     "pdfPreviewAlt": "Visualização de PDF para {filename}",
     "pdfCount": "{count, plural, one {# PDF} other {# PDFs}}",
-    "pdfOnline": "PDF em {site}",
+    "pdfOnline": "Abrir o PDF em {site}",
     "document": "documento",
     "logoAlt": "Logotipo para {company} no modo {theme}",
     "genericUser": "Utilizador",

@@ -130,7 +130,7 @@
     "goToFilters": "Kuja kwenye vipengele",
     "pdfPreviewAlt": "Hakiki ya PDF ya {filename}",
     "pdfCount": "{count, plural, one {PDF #} other {PDF #}}",
-    "pdfOnline": "PDF kwenye {site}",
+    "pdfOnline": "Fungua PDF kwenye {site}",
     "document": "hati",
     "logoAlt": "Nembo kwa {company} katika hali ya {theme}",
     "genericUser": "Mtumiaji",
