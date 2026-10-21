@@ -19,7 +19,6 @@ const consentDecline =
 const recordKey =
 	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "AMBR3456";
 const hasNavbarSearch = process.env.PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH !== "false";
-const headerReservation = 192;
 const hasThemeSwitcher =
 	process.env.PLAYWRIGHT_EXPECTED_THEME_SWITCHER !== "false";
 
@@ -112,14 +111,11 @@ test.describe("on a phone", () => {
 	}
 });
 
-test("holds the widest a logo may be until the logo people see arrives", async ({
+test("holds the logo's own width until the logo people see arrives", async ({
 	page,
 }) => {
-	const shape = logoShapes[0];
-	const { hiddenUrl, release, routed, visibleUrl } = holdLogoFiles(
-		page,
-		shape,
-	);
+	await waitForLogoMeasurement(page);
+	const { hiddenUrl, release, routed, visibleUrl } = holdLogoFiles(page);
 
 	await routed;
 	await page.goto("/lib", { waitUntil: "domcontentloaded" });
@@ -130,7 +126,10 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 	const slotWidth = () =>
 		slot.evaluate((element) => element.getBoundingClientRect().width);
 
-	await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
+	// The server measured the library's logos, so before any picture arrives
+	// the box is already as wide as the logo will be.
+	const held = await slotWidth();
+	expect(held).toBeGreaterThan(0);
 
 	// The logo for the other colour scheme is never on screen. Its arrival
 	// must not make the header give up the room it is holding.
@@ -152,18 +151,30 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 				),
 			)
 			.toBeGreaterThan(0);
-		await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
+		await expect.poll(slotWidth).toBeCloseTo(held, 0);
 	}
 
+	// Once the picture is there the box is only as wide as the logo itself,
+	// which is the width it held.
 	release(visibleUrl);
-	await expectLogoFits(page, logoBoxes.header, shape, "loaded header");
-
-	// Once the picture is there the box is only as wide as the logo itself.
-	await expect.poll(slotWidth).toBeCloseTo(logoBoxes.header.height, 0);
+	expect(await loadedHeaderWidth(page)).toBeCloseTo(held, 0);
 });
 
-/** Holds each logo file until the test lets it through. */
-function holdLogoFiles(page: Page, shape: LogoShape) {
+/**
+ * The first page a server draws can come before it has measured the logos and
+ * the font. The loading tests are about the measured header, so they wait for it.
+ */
+async function waitForLogoMeasurement(page: Page) {
+	await expect
+		.poll(async () => (await page.request.get("/lib")).text())
+		.not.toContain('data-navbar-fit="fallback"');
+}
+
+/**
+ * Holds each logo file until the test lets it through, then lets the real file
+ * through: the server measured the real files, so the header is sized for them.
+ */
+function holdLogoFiles(page: Page) {
 	const visibleUrl =
 		process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ?? brandAssetUrls()[0];
 	const hiddenUrl =
@@ -183,10 +194,7 @@ function holdLogoFiles(page: Page, shape: LogoShape) {
 		(url) => heldFor(url) !== undefined,
 		async (handler) => {
 			await held.get(heldFor(new URL(handler.request().url()))!);
-			await handler.fulfill({
-				body: logoSvg(shape),
-				contentType: "image/svg+xml",
-			});
+			await handler.continue();
 		},
 	);
 
@@ -196,6 +204,26 @@ function holdLogoFiles(page: Page, shape: LogoShape) {
 		routed: route,
 		visibleUrl,
 	};
+}
+
+/** Waits for the header's picture on screen to arrive, and gives the width it is drawn at, which the box then has. */
+async function loadedHeaderWidth(page: Page) {
+	const image = page
+		.locator('[data-brand-logo-box="header"]')
+		.first()
+		.locator("img:visible");
+	await expect
+		.poll(() =>
+			image.evaluate((element: HTMLImageElement) =>
+				element.complete ? element.naturalWidth : 0,
+			),
+		)
+		.toBeGreaterThan(0);
+	const drawn = await image.evaluate(
+		(element) => element.getBoundingClientRect().width,
+	);
+	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(drawn, 0);
+	return drawn;
 }
 
 function headerBoxWidth(page: Page) {
@@ -290,29 +318,29 @@ async function settleFrames(page: Page, frames = SETTLE_FRAMES) {
 }
 
 test("holds the room once for each logo and never again", async ({ page }) => {
-	const shape = logoShapes[0];
-	const files = holdLogoFiles(page, shape);
+	const files = holdLogoFiles(page);
 	test.skip(
 		!hasThemeSwitcher || files.hiddenUrl === files.visibleUrl,
 		"This library cannot switch between light and dark logos",
 	);
 
+	await waitForLogoMeasurement(page);
 	await files.routed;
 	await page.goto("/lib", { waitUntil: "domcontentloaded" });
 	await declineCookies(page);
 
 	files.release(files.visibleUrl);
-	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
+	const first = await loadedHeaderWidth(page);
 
 	// The other colour scheme's picture has not arrived, so the header holds
-	// room for it rather than jumping when it lands.
+	// room for the wider of the two logos rather than jumping when it lands.
 	await switchColourScheme(page);
-	await expect
-		.poll(() => headerBoxWidth(page))
-		.toBeCloseTo(headerReservation, 0);
+	const held = await headerBoxWidth(page);
 
 	files.release(files.hiddenUrl);
-	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
+	const second = await loadedHeaderWidth(page);
+	const wider = Math.max(first, second);
+	expect(held).toBeCloseTo(wider, 0);
 
 	// Both pictures are here now. Switching either way must never put the
 	// held room back, in any frame the browser draws.
@@ -332,7 +360,7 @@ test("holds the room once for each logo and never again", async ({ page }) => {
 	);
 
 	expect(widths.length).toBeGreaterThanOrEqual(guaranteedReadings);
-	expect(Math.max(...widths)).toBeCloseTo(logoBoxes.header.height, 0);
+	expect(Math.max(...widths)).toBeCloseTo(wider, 0);
 });
 
 test("keeps a huge shadow and blur inside the logo box", async ({ page }) => {

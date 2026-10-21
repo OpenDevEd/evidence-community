@@ -21,7 +21,8 @@ interface LogoProps {
  */
 function LogoName() {
 	const { identity } = useLibraryConfig();
-	const name = "nf-name whitespace-nowrap text-2xl font-medium leading-tight tracking-tight text-black dark:text-white";
+	// Should the measured widths ever be off, the name gives way to the logo rather than squeezing it.
+	const name = "nf-name min-w-0 shrink-[1000] truncate text-2xl font-medium leading-tight tracking-tight text-black dark:text-white";
 	return (
 		<>
 			<span className={twMerge(name, "nf-name-full")}>{identity.name}</span>
