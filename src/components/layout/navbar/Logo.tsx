@@ -21,12 +21,18 @@ interface LogoProps {
  */
 function LogoName() {
 	const { identity } = useLibraryConfig();
-	const name = "nf-name whitespace-nowrap text-2xl font-medium leading-tight tracking-tight text-black dark:text-white";
+	// Should the measured widths ever be off, the name gives way to the logo rather than squeezing it, the gap before it too.
+	const name = "nf-name min-w-0 shrink-[1000] overflow-hidden";
+	const text = "block truncate ps-3 text-2xl font-medium leading-tight tracking-tight text-black dark:text-white";
 	return (
 		<>
-			<span className={twMerge(name, "nf-name-full")}>{identity.name}</span>
+			<span className={twMerge(name, "nf-name-full")}>
+				<span className={text}>{identity.name}</span>
+			</span>
 			{identity.shortName !== identity.name && (
-				<span aria-hidden className={twMerge(name, "nf-name-short")}>{identity.shortName}</span>
+				<span aria-hidden className={twMerge(name, "nf-name-short")}>
+					<span className={text}>{identity.shortName}</span>
+				</span>
 			)}
 		</>
 	);
@@ -74,10 +80,10 @@ export function Logo({ interactive = true }: LogoProps) {
 	);
 
 	return interactive ? (
-		<Link href={homeLink} className="group flex min-w-0 shrink items-center gap-3">
+		<Link href={homeLink} className="group flex min-w-0 shrink items-center">
 			{content}
 		</Link>
 	) : (
-		<div className="flex min-w-0 shrink items-center gap-3">{content}</div>
+		<div className="flex min-w-0 shrink items-center">{content}</div>
 	);
 }

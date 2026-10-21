@@ -43,7 +43,7 @@ const SIGN_IN_CHROME = 16 + 20 + 8 + 16; // px-4, icon, gap, px-4
 const LOGO_HEIGHT = 40; // xl:h-10
 const LOGO_MAX_WIDTH = 192; // max-w-logo-header (12rem)
 const NAME_FONT = { size: 24, weight: 500 }; // the name beside the logo: text-2xl font-medium
-const NAME_GAP = 12; // gap-3 between the logo and its name
+const NAME_GAP = 12; // the ps-3 before the name, which sets it apart from the logo
 /** Headroom for rounding and font rendering differences between browsers. */
 const SAFETY = 8;
 
@@ -219,6 +219,9 @@ function phoneArrangements(bar: PhoneBar, names: [NameShown, number][]): Arrange
 }
 
 /** What one arrangement shows, as declarations inside its container query. */
+/** A width as CSS, to the hundredth of a pixel: rounding to whole pixels would move the bar when the logo lands. */
+const pixels = (width: number) => `${Math.round(width * 100) / 100}px`;
+
 function arrangementCss({ step, name }: Arrangement) {
 	const actions =
 		step === "compact"
@@ -249,8 +252,8 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 		// The logo's box holds its own width while the picture loads, so the name and links beside it never move when it lands.
 		// It is drawn 36px tall below 1,280px and 40px from there, as LIBRARY_LOGO_SIZES.header says.
 		return `
-.navbar-bar { container: navbar / inline-size; --nf-logo-width: ${Math.ceil(Math.min(LOGO_MAX_WIDTH, fit.logo * 0.9))}px; }
-@media (min-width: 1280px) { .navbar-bar { --nf-logo-width: ${Math.ceil(Math.min(LOGO_MAX_WIDTH, fit.logo))}px; } }
+.navbar-bar { container: navbar / inline-size; --nf-logo-width: ${pixels(Math.min(LOGO_MAX_WIDTH, fit.logo * 0.9))}; }
+@media (min-width: 1280px) { .navbar-bar { --nf-logo-width: ${pixels(Math.min(LOGO_MAX_WIDTH, fit.logo))}; } }
 .nf-links, .nf-step, .nf-name { display: none !important; }
 ${rules.join("\n")}`;
 	}
