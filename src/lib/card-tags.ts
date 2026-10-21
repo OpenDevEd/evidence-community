@@ -50,15 +50,22 @@ export function cardTagsFor(
 						filter: filterBySource ? { sources: [source.key] } : null, ...lookOf(group, source.key),
 					}));
 			}
-			const parent = byKey.get(group.collection);
-			if (!parent) return [];
-			return (item.collectionsAncestry ?? []).flatMap((key) => {
+			// Subcollections of the same name under different parents are one tag: the first the record sits in opens it.
+			const parents = group.collections.flatMap((id) => byKey.get(id) ?? []);
+			if (parents.length === 0) return [];
+			const parentKeys = new Set(parents.map((parent) => parent.key));
+			const groupName = group.name || (parents[0].name ?? parents[0].key);
+			const tags = new Map<string, CardTag>();
+			for (const key of item.collectionsAncestry ?? []) {
 				const collection = byKey.get(key);
-				if (collection?.parentCollection !== parent.key) return [];
-				return [{
-					group: group.index, from: "collection", groupName: group.name || (parent.name ?? parent.key), name: collection.name ?? collection.key,
-					filter: { collections: [...(collection.ancestry ?? []), collection.key] }, ...lookOf(group, collection.key),
-				}];
-			});
+				if (!collection?.parentCollection || !parentKeys.has(collection.parentCollection)) continue;
+				const name = collection.name ?? collection.key;
+				if (tags.has(name)) continue;
+				tags.set(name, {
+					group: group.index, from: "collection", groupName, name,
+					filter: { collections: [...(collection.ancestry ?? []), collection.key] }, ...lookOf(group, name),
+				});
+			}
+			return [...tags.values()];
 		});
 }
