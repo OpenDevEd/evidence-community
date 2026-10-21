@@ -46,6 +46,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
 import { EvidenceVerdict, useEvidenceRecord, VisualizeButton, type EvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { OpenAccessLabel } from "./OpenAccessLabel";
+import { CardTags } from "./CardTags";
 
 export function AddButton({
 	itemData,
@@ -423,18 +424,32 @@ type ArticleProps = {
  * records, so a card still loading there keeps the line's place.
  */
 function ResourceFacts({ item, isLoading }: { item: Item | ListItem | undefined; isLoading: boolean }) {
-	const typesRecords = useLibraryConfig().ai.providers.some((provider) => provider.enabled);
+	const { ai, content } = useLibraryConfig();
+	const typesRecords = ai.providers.some((provider) => provider.enabled);
+	const tagsRecords = content.cardTags.some((group) => group.enabled);
 	const record = useEvidenceRecord(item?.key);
-	if (isLoading && typesRecords) return <Skeleton isLoaded={false} className="-mb-2 h-7 w-40 rounded-2xl" />;
+	if (isLoading && (typesRecords || tagsRecords)) {
+		return (
+			<div className={FACTS}>
+				{typesRecords && <Skeleton isLoaded={false} className="h-7 w-40 rounded-2xl" />}
+				{tagsRecords && <div className={twMerge("flex", TAGS_PLACE)}><Skeleton isLoaded={false} className="h-7 w-48 rounded-2xl" /></div>}
+			</div>
+		);
+	}
 	const reading = item?.reading;
-	if (!record?.verdict && !reading) return null;
+	if (!record?.verdict && !reading && !item?.cardTags?.length) return null;
 	return (
-		<div className="-mb-2 flex h-7 items-center gap-3 text-sm">
+		<div className={FACTS}>
 			{reading && <StudyTypeLabel reading={reading} />}
 			<EvidenceVerdict item={item} />
+			<CardTags tags={item?.cardTags} className={TAGS_PLACE} />
 		</div>
 	);
 }
+
+const FACTS = "-mb-2 flex min-h-7 flex-wrap items-center gap-x-3 gap-y-2 text-sm";
+/** A wide card sets the record's groups against its type; a narrow one gives them their own line. */
+const TAGS_PLACE = "basis-full @[720px]:ml-auto @[720px]:basis-auto @[720px]:justify-end";
 
 /** The record's date, when it has one a reader can read. */
 function ResourceDate({ item, format }: { item: Item | ListItem | undefined; format: ArticleProps["format"] }) {

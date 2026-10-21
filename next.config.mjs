@@ -5,6 +5,8 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
+	// ponytail: mock only, so two libraries' dev servers can run from one checkout.
+	distDir: process.env.NEXT_DIST_DIR || ".next",
 	allowedDevOrigins: ["127.0.0.1"],
 	cacheComponents: true,
 	// Cached item pages: about 8,000 records at roughly 12 KB each is 96 MB.

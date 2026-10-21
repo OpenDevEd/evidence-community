@@ -6,6 +6,7 @@ import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
 import type { PublicationIdentifierSummary } from "@/lib/publication/publication-display-adapter";
 import type { SourceCitationMetric } from "@/lib/links/citation-metrics";
+import type { CardTag } from "@/lib/card-tags";
 
 interface Institution {
 	id?: string;
@@ -36,6 +37,10 @@ export type Item = InferSelectModel<typeof item> & {
 	attachmentsData?: Item[];
 	collectionsData?: Collection[];
 	collectionsAncestry?: string[];
+	/** The keys of the library's sources that found the record. */
+	sources?: string[];
+	/** The groups the record's card names it a member of. */
+	cardTags?: CardTag[];
 	year?: string;
 	fullTextPDFs?: Array<{
 		key: string;

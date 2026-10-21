@@ -1056,6 +1056,19 @@ const contentSchema = z
 			.prefault({}),
 		// Which records say whether they are open access: `open` labels the open ones, `both` the closed ones too.
 		openAccessLabel: z.enum(OPEN_ACCESS_LABELS).default("open"),
+		/**
+		 * The groups a record's card names it a member of, in this order: the subcollections of a parent collection it
+		 * sits in, or the sources that found it. Each can be turned off without losing its place.
+		 */
+		cardTags: z
+			.array(
+				z.discriminatedUnion("from", [
+					z.strictObject({ from: z.literal("collection"), collection: idSchema, enabled: z.boolean().default(true) }),
+					z.strictObject({ from: z.literal("sources"), enabled: z.boolean().default(true) }),
+				]),
+			)
+			.max(20)
+			.default([]),
 	})
 	.strict()
 	.prefault({});

@@ -1,5 +1,6 @@
 import { publicTagRules, recordPublishTags, type PublicTagRules } from "./tags";
-import { getCachedCollections } from "@/app/api/cache";
+import { getCachedCollections, getCachedSources } from "@/app/api/cache";
+import { cardTagsFor } from "./card-tags";
 import { Collection } from "@/app/api/collections/types";
 import { ListItem } from "@/app/api/item/types";
 import {
@@ -71,6 +72,7 @@ export const LIST_ITEM_FIELDS = [...new Set([
 	"tags",
 	"collections",
 	"collectionsAncestry",
+	SOURCES_FIELD,
 	"topics",
 	"citationMetrics",
 	"openAccess",
@@ -148,10 +150,13 @@ export function toLightweightItem(item: ListItem, rules: PublicTagRules): ListIt
 	};
 }
 
-function applyCollectionsData(items: ListItem[], collections: Collection[]) {
+/** Each record's collections by name, and the groups its card names it a member of. */
+async function applyCollectionsData(items: ListItem[], collections: Collection[], config: LibraryServerConfig) {
 	const collectionMap = new Map(
 		collections.map((collection) => [collection.key, collection]),
 	);
+	const tagsBySource = config.content.cardTags.some((group) => group.enabled && group.from === "sources");
+	const cardTags = cardTagsFor(config, collections, tagsBySource ? await getCachedSources(config) : []);
 
 	for (const item of items) {
 		item.collectionsData = item.collectionsAncestry
@@ -160,6 +165,7 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 				(collectionData): collectionData is Collection =>
 					!!collectionData,
 			);
+		item.cardTags = cardTags(item);
 	}
 }
 
@@ -389,7 +395,7 @@ export async function getPublicItems(
 			: toLightweightItem(item, rules),
 	);
 
-	applyCollectionsData(items, collections as Collection[]);
+	await applyCollectionsData(items, collections as Collection[], libraryConfig);
 
 	const totalCount =
 		searchResults.estimatedTotalHits || searchResults.hits.length;
@@ -444,7 +450,7 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 		getCachedCollections(libraryConfig),
 	]);
 	const items = (searchResults.hits as ListItem[]).map((item) => toLightweightItem(item, publicTagRules(libraryConfig)));
-	applyCollectionsData(items, collections as Collection[]);
+	await applyCollectionsData(items, collections as Collection[], libraryConfig);
 	return items;
 }
 
