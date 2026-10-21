@@ -6,6 +6,9 @@ import { getImageProps } from "next/image";
 import { CoverImage, optimizedCover } from "./CoverImage";
 import { Skeleton } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
+import { useTranslations } from "next-intl";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { LinkSquare01Icon } from "@hugeicons/core-free-icons";
 import type { Item, ListItem } from "@/app/api/item/types";
 
 /**
@@ -63,7 +66,7 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = PAGE_SIZES,
 }
 
 /** A sheet of paper with the title set at its head and a few lines of text, sized to whatever width it is drawn at. */
-export function TitlePage({ title, className }: { title?: string; className?: string }) {
+function TitlePage({ title, className }: { title?: string; className?: string }) {
 	return (
 		<div aria-hidden className={twMerge("@container relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-xl bg-[#fbf8f2] p-[10%] text-[#2b2521] ring-1 ring-inset ring-black/[0.06]", className)}>
 			<span className="h-[2.5cqw] w-1/4 shrink-0 rounded-full bg-accent" />
@@ -73,6 +76,38 @@ export function TitlePage({ title, className }: { title?: string; className?: st
 					<span key={index} className="h-[2.2cqw] rounded-full bg-[#2b2521]/[0.09]" style={{ width: lineWidth }} />
 				))}
 			</span>
+		</div>
+	);
+}
+
+/**
+ * The site a linked PDF opens on, as a reader knows it: its main domain, "ucf.edu" for stars.library.ucf.edu, keeping a
+ * country's second level ("ox.ac.uk").
+ * ponytail: a short second-to-last label stands for the public suffix list; a site such as "abc.xy" keeps one label too few.
+ */
+function siteOf(url: string) {
+	let labels: string[];
+	try {
+		labels = new URL(url).hostname.split(".");
+	} catch {
+		return url;
+	}
+	const countrySecondLevel = labels.length > 2 && labels.at(-1)!.length === 2 && labels.at(-2)!.length <= 3;
+	return labels.slice(countrySecondLevel ? -3 : -2).join(".");
+}
+
+/**
+ * A PDF the library only links to: a reader opens it on the site that holds it, and the library can't show its first page.
+ * An outline of a page rather than a page, with no shadow, the open-elsewhere mark and the site's name, so it never passes for
+ * a PDF the library holds. Its marks scale with its own width.
+ */
+export function OnlinePdf({ url, className }: { url: string; className?: string }) {
+	const t = useTranslations("ui");
+	const site = siteOf(url);
+	return (
+		<div role="img" aria-label={t("pdfOnline", { site })} className={twMerge("@container/pdf flex aspect-[3/4] w-full flex-col items-center justify-center gap-1.5 border border-dashed border-black/25 px-1.5 text-black/50 dark:border-white/25 dark:text-white/55", className)}>
+			<HugeiconsIcon icon={LinkSquare01Icon} className="size-[30cqw] max-h-8 max-w-8 shrink-0" />
+			<span className="hidden w-full truncate text-center text-[11px] font-medium leading-tight @[72px]/pdf:block">{site}</span>
 		</div>
 	);
 }

@@ -527,7 +527,7 @@ function ResourceArticle(props: ArticleProps) {
 				</Skeleton>
 				<ResourceAbstract {...props} />
 			</div>
-			{pdfs.length > 0 && <ResourceCover pdfs={pdfs} title={finalItemData?.title} short={!abstract || !abstractText} />}
+			{pdfs.length > 0 && <ResourceCover pdfs={pdfs} short={!abstract || !abstractText} />}
 		</article>
 	);
 }

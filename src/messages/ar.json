@@ -129,6 +129,7 @@
     "goToFilters": "الذهاب إلى التصفيات",
     "pdfPreviewAlt": "معاينة PDF لـ {filename}",
     "pdfCount": "{count, plural, one {ملف PDF واحد} two {ملفا PDF} few {# ملفات PDF} many {# ملفًا PDF} other {# ملف PDF}}",
+    "pdfOnline": "ملف PDF على {site}",
     "document": "وثيقة",
     "logoAlt": "شعار لـ {company} في وضع {theme}",
     "genericUser": "مستخدم",

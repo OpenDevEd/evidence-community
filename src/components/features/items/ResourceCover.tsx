@@ -6,7 +6,7 @@ import type { Item, ListAttachment, ListItem } from "@/app/api/item/types";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { twMerge } from "@/lib/tw-merge";
 import { CoverImage } from "./CoverImage";
-import { TitlePage } from "./PdfCover";
+import { OnlinePdf } from "./PdfCover";
 
 /** The record's PDFs a reader can open, stored or linked, in the order the item page lists them. */
 export function resourcePdfs(item: Item | ListItem | undefined): ListAttachment[] {
@@ -45,23 +45,26 @@ const EDGE = "pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring
  * stack, with their count beneath. A PDF the library links to but never stored has no first page, so a plain title page
  * stands in. A record without a PDF has no cover.
  */
-export function ResourceCover({ pdfs, title, short }: { pdfs: ListAttachment[]; title: string | null | undefined; short: boolean }) {
+export function ResourceCover({ pdfs, short }: { pdfs: ListAttachment[]; short: boolean }) {
 	const t = useTranslations("ui");
-	const [first] = pdfs;
-	const ratio = first.PDFCoverPageWidth && first.PDFCoverPageHeight ? first.PDFCoverPageWidth / first.PDFCoverPageHeight : PORTRAIT;
+	// A PDF the library holds goes in front of one it only links to.
+	const front = pdfs.find((pdf) => pdf.PDFCoverPageImage) ?? pdfs[0];
+	const stored = front.PDFCoverPageImage;
+	const ratio = stored && front.PDFCoverPageWidth && front.PDFCoverPageHeight ? front.PDFCoverPageWidth / front.PDFCoverPageHeight : PORTRAIT;
 	const stacked = pdfs.length > 1;
 	return (
 		<div className={twMerge("flex flex-col items-center gap-3 [grid-area:cover]", COVER_WIDTH[short ? "short" : "full"])}>
-			<div className={twMerge("relative isolate", LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio)})` } as CSSProperties}>
+			{/* Only a page the library holds is a sheet of paper: it casts a shadow and lifts with the card. */}
+			<div className={twMerge("relative isolate", stored && LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio)})` } as CSSProperties}>
 				{stacked && <StackSheets more={pdfs.length - 1} />}
-				<div className={twMerge("relative overflow-hidden rounded-[3px] bg-[#f4f1ea] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED)} style={{ aspectRatio: first.PDFCoverPageImage ? ratio : PORTRAIT }}>
-					{first.PDFCoverPageImage ? (
-						<CoverPage src={first.PDFCoverPageImage} alt={t("pdfPreviewAlt", { filename: first.filename || first.title || t("document") })} />
-					) : (
-						<TitlePage title={title ?? undefined} className="rounded-none ring-0" />
-					)}
-					<span aria-hidden className={EDGE} />
-				</div>
+				{stored ? (
+					<div className={twMerge("relative overflow-hidden rounded-[3px] bg-[#f4f1ea] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED)} style={{ aspectRatio: ratio }}>
+						<CoverPage src={stored} alt={t("pdfPreviewAlt", { filename: front.filename || front.title || t("document") })} />
+						<span aria-hidden className={EDGE} />
+					</div>
+				) : (
+					<OnlinePdf url={front.url ?? ""} className="rounded-[3px] bg-white @[560px]:rounded-[5px] dark:bg-[#1c1c1c]" />
+				)}
 			</div>
 			{stacked && <span className="text-xs font-medium tabular-nums text-black/50 dark:text-white/50">{t("pdfCount", { count: pdfs.length })}</span>}
 		</div>

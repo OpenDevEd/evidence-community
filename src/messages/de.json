@@ -129,6 +129,7 @@
     "goToFilters": "Zu den Filtern gehen",
     "pdfPreviewAlt": "PDF-Vorschau für {filename}",
     "pdfCount": "{count, plural, one {# PDF} other {# PDFs}}",
+    "pdfOnline": "PDF auf {site}",
     "document": "Dokument",
     "logoAlt": "Logo für {company} im {theme} Modus",
     "genericUser": "Benutzer",

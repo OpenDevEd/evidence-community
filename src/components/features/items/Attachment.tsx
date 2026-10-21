@@ -1,12 +1,12 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
+import { Download01Icon, LinkSquare01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect, type RefObject } from "react";
 import { Item } from "@/app/api/item/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
-import { PdfCover } from "./PdfCover";
+import { OnlinePdf, PdfCover } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
@@ -169,7 +169,7 @@ function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
 					<Button
 						size="sm"
 						color="accent"
-						startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
+						startContent={<HugeiconsIcon icon={LinkSquare01Icon} className="size-5" />}
 						onPress={() => {
 							trackAttachment("open", "external");
 							window.open(pdfUrl, "_blank");
@@ -189,6 +189,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 	const { imageRef, parentRef, imageHeight, parentHeight } =
 		useCoverHeights(loaded);
 	const hasImage = data.PDFCoverPageImage;
+	// A PDF that opens on another site has no first page here, only the outline the result cards show for it.
+	const online = !hasImage && data.linkMode === "linked_url" && data.url;
 
 	return (
 		<Card
@@ -197,6 +199,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			className={twMerge(
 				"flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background",
 				hasImage && "md:relative md:overflow-visible",
+				online && "flex-row items-center",
 			)}
 			key={data.key}
 			color="card"
@@ -211,9 +214,10 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					onLoad={() => setLoaded(true)}
 				/>
 			)}
+			{online && <OnlinePdf url={online} className="w-16 shrink-0 rounded-md" />}
 			<div
 				className={twMerge(
-					"flex flex-col gap-2",
+					"flex min-w-0 flex-col gap-2",
 					hasImage
 						? "md:h-full md:ltr:ml-28 md:rtl:mr-28 lg:ltr:ml-52 lg:rtl:mr-52"
 						: "",
