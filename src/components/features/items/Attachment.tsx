@@ -193,14 +193,30 @@ function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
 }
 
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
+	// A PDF that opens on another site has no first page here; it gets the title page the result cards show for it.
+	if (!data.PDFCoverPageImage && data.linkMode === "linked_url" && data.url) return <OnlineAttachment data={data} item={item} url={data.url} />;
+	return <FileAttachment data={data} item={item} />;
+}
+
+function OnlineAttachment({ data, item, url }: { data: Item; item: Item; url: string }) {
+	const trackAttachment = useTrackAttachment(item.itemType);
+	return (
+		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
+			<OnlinePdf url={url} title={item.title ?? undefined} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md shadow-sm" />
+			<div className="flex min-w-0 flex-col gap-2">
+				<AttachmentDetails data={data} item={item} />
+			</div>
+		</Card>
+	);
+}
+
+function FileAttachment({ data, item }: { data: Item; item: Item }) {
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const { imageRef, parentRef, imageHeight, parentHeight } =
 		useCoverHeights(loaded);
 	const hasImage = data.PDFCoverPageImage;
 	const trackAttachment = useTrackAttachment(item.itemType);
-	// A PDF that opens on another site has no first page here, only the outline the result cards show for it.
-	const online = !hasImage && data.linkMode === "linked_url" && data.url;
 
 	return (
 		<Card
@@ -209,7 +225,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			className={twMerge(
 				"flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background",
 				hasImage && "md:relative md:overflow-visible",
-				online && "flex-row items-center",
 			)}
 			key={data.key}
 			color="card"
@@ -225,10 +240,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					onOpen={() => trackAttachment("view", "internal")}
 				/>
 			)}
-			{online && <OnlinePdf url={online} title={item.title ?? undefined} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md shadow-sm" />}
 			<div
 				className={twMerge(
-					"flex min-w-0 flex-col gap-2",
+					"flex flex-col gap-2",
 					hasImage
 						? "md:h-full md:ltr:ml-28 md:rtl:mr-28 lg:ltr:ml-52 lg:rtl:mr-52"
 						: "",
