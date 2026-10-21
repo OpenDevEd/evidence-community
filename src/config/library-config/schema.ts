@@ -1043,6 +1043,8 @@ function tagList(defaultValue: readonly string[], minimum = 0) {
 
 /** How a card tag looks: an icon the library offers or one of its own, and a colour. */
 const cardTagLook = { icon: iconReferenceSchema.optional(), color: colorSchema.optional() };
+/** What heads a set of tags where a card lists them all; without one, the parent collection's name or the sources' label. */
+const cardTagName = singleLineStringSchema(60).optional();
 const cardTagMembers = z.record(z.string().trim().min(1).max(200), z.strictObject(cardTagLook)).default({});
 
 const contentSchema = z
@@ -1068,8 +1070,8 @@ const contentSchema = z
 		cardTags: z
 			.array(
 				z.discriminatedUnion("from", [
-					z.strictObject({ from: z.literal("collection"), collection: idSchema, enabled: z.boolean().default(true), ...cardTagLook, members: cardTagMembers }),
-					z.strictObject({ from: z.literal("sources"), enabled: z.boolean().default(true), ...cardTagLook, members: cardTagMembers }),
+					z.strictObject({ from: z.literal("collection"), collection: idSchema, enabled: z.boolean().default(true), name: cardTagName, ...cardTagLook, members: cardTagMembers }),
+					z.strictObject({ from: z.literal("sources"), enabled: z.boolean().default(true), name: cardTagName, ...cardTagLook, members: cardTagMembers }),
 				]),
 			)
 			.max(20)

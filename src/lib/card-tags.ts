@@ -11,7 +11,7 @@ import { offersSources } from "./search-query";
 export type CardTag = {
 	group: number;
 	from: "collection" | "sources";
-	/** What the group is called: its parent collection's name, or what the library calls its sources. */
+	/** What the group is called: its own name, else its parent collection's, or what the library calls its sources. */
 	groupName: string;
 	name: string;
 	filter: { collections: string[] } | { sources: string[] } | null;
@@ -46,7 +46,7 @@ export function cardTagsFor(
 				return sources
 					.filter((source) => item.sources?.includes(source.key))
 					.map((source) => ({
-						group: group.index, from: "sources", groupName: config.filters.sources.label, name: source.name,
+						group: group.index, from: "sources", groupName: group.name || config.filters.sources.label, name: source.name,
 						filter: filterBySource ? { sources: [source.key] } : null, ...lookOf(group, source.key),
 					}));
 			}
@@ -56,7 +56,7 @@ export function cardTagsFor(
 				const collection = byKey.get(key);
 				if (collection?.parentCollection !== parent.key) return [];
 				return [{
-					group: group.index, from: "collection", groupName: parent.name ?? parent.key, name: collection.name ?? collection.key,
+					group: group.index, from: "collection", groupName: group.name || (parent.name ?? parent.key), name: collection.name ?? collection.key,
 					filter: { collections: [...(collection.ancestry ?? []), collection.key] }, ...lookOf(group, collection.key),
 				}];
 			});
