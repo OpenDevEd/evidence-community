@@ -304,8 +304,9 @@ function PdfPreview({
 	return (
 		<div className="flex flex-col p-3">
 			<div className="flex gap-3">
-				{/* The cover opens the cited page, as Open Document does. */}
-				<a href={openHref} target="_blank" rel="noopener noreferrer" className="shrink-0 rounded-xl outline-offset-2 transition-transform focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none">
+				{/* The cover opens the cited page too. The Open Document link beside it already names that, so the cover stays out
+				    of the tab order and of what a screen reader reads. */}
+				<a href={openHref} target="_blank" rel="noopener noreferrer" aria-hidden tabIndex={-1} className="shrink-0 rounded-xl outline-offset-2 transition-transform focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] motion-reduce:transition-none">
 					<PdfCover
 						coverImage={attachment?.PDFCoverPageImage}
 						filename={attachmentName}

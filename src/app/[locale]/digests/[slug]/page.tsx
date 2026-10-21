@@ -4,6 +4,8 @@ import { editionCardKeys, getDigestEdition, listEarlierDigests, pageNumber } fro
 import { readSubscription } from "@/lib/notifications/subscriptions";
 import { citedKeys } from "@/lib/notifications/digest-text";
 import { readPublicItems } from "@/lib/search-index/projection";
+import { toLightweightItem } from "@/lib/search";
+import { publicTagRules } from "@/lib/tags";
 import { readAuthorProfiles } from "@/lib/authors/catalog-server";
 import DigestPages, { type EditionCardsData } from "@/components/digests/DigestPages";
 import SubscriptionAction from "@/components/digests/SubscriptionAction";
@@ -30,7 +32,9 @@ async function readEditionCards(db: Database, config: LibraryServerConfig, keys:
   // The records the text cites come with the cards, so each citation link shows from the start whether its record is open access.
   const items = await readPublicItems(db, [...new Set([...keys, ...cited])], config);
   const onPage = new Set(keys);
-  const cards = items.filter(item => onPage.has(item.key)).map(({fullTextPDFs: _text, attachmentsData: _files, ...card}) => card);
+  // Each card keeps what a result card keeps of its files, so it shows its PDF's first page.
+  const rules = publicTagRules(config);
+  const cards = items.filter(item => onPage.has(item.key)).map(({fullTextPDFs: _text, ...card}) => toLightweightItem(card, rules));
   return {
     cards,
     cited: Object.fromEntries(items.map(item => [item.key, {openAccess: item.openAccess}])),
