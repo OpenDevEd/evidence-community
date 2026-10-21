@@ -225,7 +225,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					onOpen={() => trackAttachment("view", "internal")}
 				/>
 			)}
-			{online && <OnlinePdf url={online} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md" />}
+			{online && <OnlinePdf url={online} title={item.title ?? undefined} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md shadow-sm" />}
 			<div
 				className={twMerge(
 					"flex min-w-0 flex-col gap-2",

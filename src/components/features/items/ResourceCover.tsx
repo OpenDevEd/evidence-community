@@ -48,7 +48,7 @@ const EDGE = "pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring
  * stack, with their count beneath. A PDF the library links to but never stored has no first page, so a plain title page
  * stands in. A record without a PDF has no cover.
  */
-export function ResourceCover({ pdfs, short, parentType }: { pdfs: ListAttachment[]; short: boolean; parentType: string | undefined }) {
+export function ResourceCover({ pdfs, title, short, parentType }: { pdfs: ListAttachment[]; title: string | undefined; short: boolean; parentType: string | undefined }) {
 	const t = useTranslations("ui");
 	const track = useTrackAttachment(parentType);
 	// A PDF the library holds goes in front of one it only links to.
@@ -61,8 +61,7 @@ export function ResourceCover({ pdfs, short, parentType }: { pdfs: ListAttachmen
 	const open = () => track(opening.action, opening.source);
 	return (
 		<div className={twMerge("flex flex-col items-center gap-3 [grid-area:cover]", COVER_WIDTH[short ? "short" : "full"])}>
-			{/* Only a page the library holds is a sheet of paper: it casts a shadow and lifts with the card. */}
-			<div className={twMerge("relative isolate", stored && LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio)})` } as CSSProperties}>
+			<div className={twMerge("relative isolate", LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio)})` } as CSSProperties}>
 				{stacked && <StackSheets more={pdfs.length - 1} />}
 				{stored ? (
 					<a href={opening.href} target="_blank" rel="noopener noreferrer" onClick={open} className={twMerge("relative block overflow-hidden rounded-[3px] bg-[#f4f1ea] outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED, PRESS)} style={{ aspectRatio: ratio }}>
@@ -70,7 +69,7 @@ export function ResourceCover({ pdfs, short, parentType }: { pdfs: ListAttachmen
 						<span aria-hidden className={EDGE} />
 					</a>
 				) : (
-					<OnlinePdf url={front.url ?? ""} onOpen={open} className="rounded-[3px] bg-white @[560px]:rounded-[5px] dark:bg-[#1c1c1c]" />
+					<OnlinePdf url={front.url ?? ""} title={title} onOpen={open} className={twMerge("rounded-[3px] active:scale-[0.97] @[560px]:rounded-[5px]", SHADOW, SHADOW_LIFTED, PRESS)} />
 				)}
 			</div>
 			{stacked && <span className="text-xs font-medium tabular-nums text-black/50 dark:text-white/50">{t("pdfCount", { count: pdfs.length })}</span>}
