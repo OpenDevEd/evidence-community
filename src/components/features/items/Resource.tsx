@@ -514,13 +514,14 @@ function ResourceArticle(props: ArticleProps) {
 	const pdfs = resourcePdfs(finalItemData);
 	return (
 		<article className={pdfs.length ? WITH_COVER : "flex flex-col gap-4"}>
-			<div className="flex flex-col gap-4 [grid-area:head]">
+			{/* Without a cover the two halves are no boxes of their own, and the card is the plain column it always was. */}
+			<div className={pdfs.length ? "flex flex-col gap-4 [grid-area:head]" : "contents"}>
 				<ResourceFacts item={finalItemData} isLoading={finalIsLoading} />
 				<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
 					<ResourceTitle id={titleId} item={finalItemData} />
 				</Skeleton>
 			</div>
-			<div className="flex flex-col gap-4 [grid-area:body]">
+			<div className={pdfs.length ? "flex flex-col gap-4 [grid-area:body]" : "contents"}>
 				<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
 					<ResourceByline {...props} />
 				</Skeleton>
