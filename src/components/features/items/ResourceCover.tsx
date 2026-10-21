@@ -65,7 +65,8 @@ export function ResourceCover({ pdfs, title, short, parentType }: { pdfs: ListAt
 				{stacked && <StackSheets more={pdfs.length - 1} />}
 				{stored ? (
 					<a href={opening.href} target="_blank" rel="noopener noreferrer" onClick={open} className={twMerge("relative block overflow-hidden rounded-[3px] bg-[#f4f1ea] outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED, PRESS)} style={{ aspectRatio: ratio }}>
-						<CoverPage src={stored} alt={t("pdfPreviewAlt", { filename: front.filename || front.title || t("document") })} />
+						{/* Keyed by its image: a card the list reuses for another record starts the new page hidden and fades it in. */}
+						<CoverPage key={stored} src={stored} alt={t("pdfPreviewAlt", { filename: front.filename || front.title || t("document") })} />
 						<span aria-hidden className={EDGE} />
 					</a>
 				) : (
