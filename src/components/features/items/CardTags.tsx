@@ -41,7 +41,8 @@ function Tag({ tag, label, className }: { tag: CardTag; label: string; className
 export function CardTags({ tags, className }: { tags: CardTag[] | undefined; className?: string }) {
 	const t = useTranslations("ui");
 	if (!tags?.length) return null;
-	const label = (tag: CardTag) => localizeOrUseIfCapitalized(tag.groupName, t);
+	// What the library calls its sources may be a message key; a collection's name is its own.
+	const label = (tag: CardTag) => (tag.from === "sources" ? localizeOrUseIfCapitalized(tag.groupName, t) : tag.groupName);
 	const hidden = tags.length - SHOWN;
 	const last = tags[SHOWN - 1];
 	// Each group keeps its tags together, a wider gap from the next group's; the count of the rest closes the last one.
