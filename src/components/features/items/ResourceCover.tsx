@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { useTranslations } from "next-intl";
 import type { Item, ListAttachment, ListItem } from "@/app/api/item/types";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { twMerge } from "@/lib/tw-merge";
 import { CoverImage } from "./CoverImage";
-import { OnlinePdf } from "./PdfCover";
+import { OnlinePdf, TitlePage } from "./PdfCover";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { Files02Icon } from "@hugeicons/core-free-icons";
 import { pdfOpening, useTrackAttachment } from "./Attachment";
 
 /** The record's PDFs a reader can open, stored or linked, in the order the item page lists them. */
@@ -44,9 +46,17 @@ const SHADOW_LIFTED = `group-hover/card:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_18px
 const EDGE = "pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-black/[0.08] dark:ring-white/[0.1]";
 
 /**
- * The record's PDF as its first page, at the card's trailing edge: what a reader gets before they open it. Several PDFs
- * stack, with their count beneath. A PDF the library links to but never stored has no first page, so a plain title page
- * stands in. A record without a PDF has no cover.
+ * How far each PDF behind the front one sits: this share of the front page's width to the right and of its height up, and a
+ * little further when the card is under the pointer, as the pages of a fanned hand spread.
+ */
+const FAN = { x: 8, y: 5 };
+// Tailwind reads classes as written, so FAN's numbers are spelled out here too.
+const FANNED = `[transform:translate(calc(var(--depth)*8%),calc(var(--depth)*-5%))] group-hover/card:[transform:translate(calc(var(--depth)*11%),calc(var(--depth)*-7%))] transition-transform ${EASE}`;
+
+/**
+ * The record's PDF as its first page, at the card's trailing edge: what a reader gets before they open it. A record with
+ * several PDFs fans the first pages of the next two out behind it, and the front page carries the count. A PDF the library
+ * links to but never stored has no first page, so a title page stands in. A record without a PDF has no cover.
  */
 export function ResourceCover({ pdfs, title, short, parentType }: { pdfs: ListAttachment[]; title: string | undefined; short: boolean; parentType: string | undefined }) {
 	const t = useTranslations("ui");
@@ -55,59 +65,83 @@ export function ResourceCover({ pdfs, title, short, parentType }: { pdfs: ListAt
 	const front = pdfs.find((pdf) => pdf.PDFCoverPageImage) ?? pdfs[0];
 	const stored = front.PDFCoverPageImage;
 	const ratio = stored && front.PDFCoverPageWidth && front.PDFCoverPageHeight ? front.PDFCoverPageWidth / front.PDFCoverPageHeight : PORTRAIT;
-	const stacked = pdfs.length > 1;
+	const behind = pdfs.filter((pdf) => pdf !== front).slice(0, 2);
+	// The stack is wider than one page by its fan, so the front page keeps the size it has alone.
+	const share = 1 / (1 + (behind.length * FAN.x) / 100);
+	const page = { width: `${share * 100}%`, aspectRatio: stored ? ratio : PORTRAIT };
 	// The cover opens its PDF in a new tab, as the item page's View and Open Document do; the rest of the card opens the record.
 	const opening = pdfOpening(front);
 	const open = () => track(opening.action, opening.source);
 	return (
-		<div className={twMerge("flex flex-col items-center gap-3 [grid-area:cover]", COVER_WIDTH[short ? "short" : "full"])}>
-			<div className={twMerge("relative isolate", LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio)})` } as CSSProperties}>
-				{stacked && <StackSheets more={pdfs.length - 1} />}
+		<div className={twMerge("[grid-area:cover]", COVER_WIDTH[short ? "short" : "full"])}>
+			{/* The front page sits lower by the fan's height, so the pages behind it start at the top of the column. */}
+			<div className={twMerge("relative isolate", LIFT)} style={{ width: `calc(var(--cover) * ${widthShare(ratio) / share})`, paddingTop: `${(behind.length * FAN.y * share) / page.aspectRatio}%` } as CSSProperties}>
+				{behind.map((pdf, index) => <BehindPage key={pdf.key} pdf={pdf} title={title} depth={index + 1} style={page} />)}
 				{stored ? (
-					<a href={opening.href} target="_blank" rel="noopener noreferrer" onClick={open} className={twMerge("relative block overflow-hidden rounded-[3px] bg-[#f4f1ea] outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED, PRESS)} style={{ aspectRatio: ratio }}>
+					<a href={opening.href} target="_blank" rel="noopener noreferrer" onClick={open} className={twMerge("relative block overflow-hidden rounded-[3px] bg-[#f4f1ea] outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent active:scale-[0.97] @[560px]:rounded-[5px] dark:bg-white/[0.08]", SHADOW, SHADOW_LIFTED, PRESS)} style={page}>
 						{/* Keyed by its image: a card the list reuses for another record starts the new page hidden and fades it in. */}
 						<CoverPage key={stored} src={stored} alt={t("pdfPreviewAlt", { filename: front.filename || front.title || t("document") })} />
 						<span aria-hidden className={EDGE} />
 					</a>
 				) : (
-					<OnlinePdf url={front.url ?? ""} title={title} onOpen={open} className={twMerge("rounded-[3px] active:scale-[0.97] @[560px]:rounded-[5px]", SHADOW, SHADOW_LIFTED, PRESS)} />
+					<div style={page}>
+						<OnlinePdf url={front.url ?? ""} title={title} onOpen={open} className={twMerge("rounded-[3px] active:scale-[0.97] @[560px]:rounded-[5px]", SHADOW, SHADOW_LIFTED, PRESS)} />
+					</div>
+				)}
+				{behind.length > 0 && (
+					// How many PDFs, on the front page's corner, as a photo marks a set.
+					<span className="absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-black/60 py-1 pl-1.5 pr-2 text-[10px] font-semibold leading-none tabular-nums text-white backdrop-blur-md">
+						<HugeiconsIcon icon={Files02Icon} className="size-3 shrink-0" />
+						<span aria-hidden>{pdfs.length}</span>
+						<span className="sr-only">{t("pdfCount", { count: pdfs.length })}</span>
+					</span>
 				)}
 			</div>
-			{stacked && <span className="text-xs font-medium tabular-nums text-black/50 dark:text-white/50">{t("pdfCount", { count: pdfs.length })}</span>}
 		</div>
 	);
 }
 
-/** The page fades in over paper of its own size once it has loaded, so nothing moves. */
+/** A page that arrives within this long of being drawn simply appears, as an image the browser already holds does. */
+const QUICK_MS = 60;
+
+/**
+ * The page loads as any image does and is drawn as soon as the browser holds it. Only one still on its way when the card is
+ * drawn waits hidden over paper of its own size, and if it then takes longer than a few frames it fades in, so a reader looking
+ * at it never sees it pop.
+ */
 function CoverPage({ src, alt }: { src: string; alt: string }) {
-	const [loaded, setLoaded] = useState(false);
+	const [arrival, setArrival] = useState<"held" | "waiting" | "late">("held");
+	const drawnAt = useRef(0);
 	return (
 		<CoverImage
 			ref={(element) => {
-				// A page the browser already holds is complete as soon as it is attached: show it on the first paint.
-				if (element?.complete && element.naturalWidth > 0) setLoaded(true);
+				// Read once, when the page is attached and before it is painted.
+				if (!element || drawnAt.current) return;
+				drawnAt.current = performance.now();
+				if (!element.complete || element.naturalWidth === 0) setArrival("waiting");
 			}}
 			src={src}
 			alt={alt}
 			fill
+			loading="eager"
 			sizes="(min-width: 768px) 192px, 96px"
-			onLoad={() => setLoaded(true)}
-			className={twMerge("object-cover object-top transition-opacity duration-300 motion-reduce:transition-none dark:brightness-[0.94]", loaded ? "opacity-100" : "opacity-0")}
+			onLoad={() => setArrival((current) => (current === "waiting" && performance.now() - drawnAt.current > QUICK_MS ? "late" : "held"))}
+			className={twMerge(
+				"object-cover object-top dark:brightness-[0.94]",
+				arrival === "waiting" && "opacity-0",
+				arrival === "late" && "animate-[fade-in_300ms_ease-out] motion-reduce:animate-none",
+			)}
 		/>
 	);
 }
 
-/** The sheets of the record's other PDFs, peeking out under the first, as iOS stacks a group. */
-function StackSheets({ more }: { more: number }) {
-	const sheets = Math.min(more, 2);
+/** The first page of one of the record's other PDFs, fanned out behind the front one; the further back, the dimmer. */
+function BehindPage({ pdf, title, depth, style }: { pdf: ListAttachment; title: string | undefined; depth: number; style: CSSProperties }) {
 	return (
-		<>
-			{sheets > 1 && <span aria-hidden className={twMerge("absolute inset-x-[14%] -bottom-[9px] -z-20 h-1/2 rounded-[3px] bg-[#e9e5dc] @[560px]:rounded-[5px] dark:bg-[#2e2e2e]", SHADOW)}>
-				<span className={EDGE} />
-			</span>}
-			<span aria-hidden className={twMerge("absolute inset-x-[7%] -bottom-[5px] -z-10 h-1/2 rounded-[3px] bg-[#efebe3] @[560px]:rounded-[5px] dark:bg-[#3d3d3d]", SHADOW)}>
-				<span className={EDGE} />
-			</span>
-		</>
+		<span aria-hidden className={twMerge("absolute bottom-0 left-0 overflow-hidden rounded-[3px] bg-[#f4f1ea] @[560px]:rounded-[5px] dark:bg-[#2a2a2a]", SHADOW, FANNED)} style={{ ...style, zIndex: -depth, "--depth": depth } as CSSProperties}>
+			{pdf.PDFCoverPageImage ? <CoverPage key={pdf.PDFCoverPageImage} src={pdf.PDFCoverPageImage} alt="" /> : <TitlePage title={title} className="rounded-none" />}
+			<span className="absolute inset-0 bg-black" style={{ opacity: depth * 0.06 }} />
+			<span className={EDGE} />
+		</span>
 	);
 }
