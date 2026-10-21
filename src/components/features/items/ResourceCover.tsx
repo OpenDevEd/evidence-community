@@ -25,8 +25,8 @@ function widthShare(ratio: number) {
 	return ratio < 2 / 3 ? ratio * 1.5 : 1;
 }
 
-// The cover's width follows the card's: a chat answer or a phone, a grid card, a list card. Without the abstract the card is
-// shorter, and so is its cover.
+// The cover's width follows the card's: a chat answer or a phone, a grid card, a list card. A card without an abstract, hidden
+// or missing, is shorter, and so is its cover.
 const COVER_WIDTH = {
 	full: "[--cover:4rem] @[400px]:[--cover:5.5rem] @[560px]:[--cover:7rem] @[720px]:[--cover:8rem]",
 	short: "[--cover:3.25rem] @[400px]:[--cover:4.25rem] @[560px]:[--cover:5rem] @[720px]:[--cover:5.75rem]",

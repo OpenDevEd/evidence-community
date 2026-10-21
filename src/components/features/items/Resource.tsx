@@ -510,7 +510,7 @@ const WITH_COVER =
 	"grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_1fr] gap-x-4 gap-y-4 [grid-template-areas:'head_head'_'body_cover'] @[640px]:[grid-template-areas:'head_cover'_'body_cover'] @[720px]:gap-x-6";
 
 function ResourceArticle(props: ArticleProps) {
-	const { titleId, finalItemData, finalIsLoading, abstract } = props;
+	const { titleId, finalItemData, finalIsLoading, abstract, abstractText } = props;
 	const pdfs = resourcePdfs(finalItemData);
 	return (
 		<article className={pdfs.length ? WITH_COVER : "flex flex-col gap-4"}>
@@ -526,7 +526,7 @@ function ResourceArticle(props: ArticleProps) {
 				</Skeleton>
 				<ResourceAbstract {...props} />
 			</div>
-			{pdfs.length > 0 && <ResourceCover pdfs={pdfs} title={finalItemData?.title} short={!abstract} />}
+			{pdfs.length > 0 && <ResourceCover pdfs={pdfs} title={finalItemData?.title} short={!abstract || !abstractText} />}
 		</article>
 	);
 }
