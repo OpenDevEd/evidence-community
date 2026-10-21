@@ -77,6 +77,8 @@ export function itemPageAttachments(
 			contentType: attachment.contentType,
 			tags: attachment.tags,
 			PDFCoverPageImage: attachment.PDFCoverPageImage,
+			PDFCoverPageWidth: attachment.PDFCoverPageWidth,
+			PDFCoverPageHeight: attachment.PDFCoverPageHeight,
 			note: isPublishedNote(attachment, publishTags) ? attachment.note : null,
 		}));
 }

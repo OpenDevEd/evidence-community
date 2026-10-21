@@ -1,12 +1,12 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Download01Icon, ViewIcon } from "@hugeicons/core-free-icons";
+import { Download01Icon, LinkSquare01Icon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect, type RefObject } from "react";
-import { Item } from "@/app/api/item/types";
+import type { Item, ListAttachment } from "@/app/api/item/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
-import { PdfCover } from "./PdfCover";
+import { OnlinePdf, PdfCover } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
 import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
@@ -56,6 +56,21 @@ function useCoverHeights(loaded: boolean) {
 	return { imageRef, parentRef, imageHeight, parentHeight };
 }
 
+/** Where a PDF opens: on the site that holds it when the library only links to it, otherwise the library's own copy. */
+export function pdfOpening(pdf: Pick<ListAttachment, "key" | "parentItem" | "url" | "linkMode" | "PDFCoverPageImage">) {
+	return !pdf.PDFCoverPageImage && pdf.linkMode === "linked_url"
+		? ({ href: pdf.url ?? undefined, action: "open", source: "external" } as const)
+		: ({ href: `/lib/${pdf.parentItem}/download/${pdf.key}`, action: "view", source: "internal" } as const);
+}
+
+/** Counts a reader opening, viewing or downloading one of a record's files. */
+export function useTrackAttachment(parentType: string | null | undefined) {
+	const { reader } = useReaderSession();
+	const locale = useLocale();
+	return (action: "view" | "download" | "open", source: "internal" | "external") =>
+		trackAttachmentInteraction({ action, source, parentType, locale, isAuthenticated: Boolean(reader) });
+}
+
 function AttachmentCover({
 	data,
 	imageRef,
@@ -63,6 +78,7 @@ function AttachmentCover({
 	parentHeight,
 	canHover,
 	onLoad,
+	onOpen,
 }: {
 	data: Item;
 	imageRef: RefObject<HTMLImageElement | null>;
@@ -70,10 +86,16 @@ function AttachmentCover({
 	parentHeight: number | undefined;
 	canHover: boolean;
 	onLoad: () => void;
+	onOpen: () => void;
 }) {
 	const t = useTranslations("ui");
 	return (
-		<div
+		// The cover opens the PDF, as View does.
+		<a
+			href={pdfOpening(data).href}
+			target="_blank"
+			rel="noopener noreferrer"
+			onClick={onOpen}
 			data-height={imageHeight}
 			style={
 				{
@@ -85,7 +107,7 @@ function AttachmentCover({
 				} as any
 			}
 			className={twMerge(
-				"mx-auto w-full max-w-[200px]",
+				"mx-auto block w-full max-w-[200px] rounded-xl outline-offset-2 focus-visible:outline-2 focus-visible:outline-accent",
 				"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
 				canHover && "md:hover:top-[var(--image-height)]",
 			)}
@@ -98,26 +120,13 @@ function AttachmentCover({
 				})}
 				onLoad={onLoad}
 			/>
-		</div>
+		</a>
 	);
 }
 
 function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
-	const { reader } = useReaderSession();
-	const locale = useLocale();
 	const t = useTranslations("ui");
-	const trackAttachment = (
-		action: "view" | "download" | "open",
-		source: "internal" | "external",
-	) => {
-		trackAttachmentInteraction({
-			action,
-			source,
-			parentType: item.itemType,
-			locale,
-			isAuthenticated: Boolean(reader),
-		});
-	};
+	const trackAttachment = useTrackAttachment(item.itemType);
 
 	const isExternal = !data.PDFCoverPageImage && data.linkMode === "linked_url";
 	const pdfUrl = data.url ?? undefined;
@@ -169,7 +178,7 @@ function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
 					<Button
 						size="sm"
 						color="accent"
-						startContent={<HugeiconsIcon icon={Download01Icon} className="size-5" />}
+						startContent={<HugeiconsIcon icon={LinkSquare01Icon} className="size-5" />}
 						onPress={() => {
 							trackAttachment("open", "external");
 							window.open(pdfUrl, "_blank");
@@ -184,11 +193,30 @@ function AttachmentDetails({ data, item }: { data: Item; item: Item }) {
 }
 
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
+	// A PDF that opens on another site has no first page here; it gets the title page the result cards show for it.
+	if (!data.PDFCoverPageImage && data.linkMode === "linked_url" && data.url) return <OnlineAttachment data={data} item={item} url={data.url} />;
+	return <FileAttachment data={data} item={item} />;
+}
+
+function OnlineAttachment({ data, item, url }: { data: Item; item: Item; url: string }) {
+	const trackAttachment = useTrackAttachment(item.itemType);
+	return (
+		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
+			<OnlinePdf url={url} title={item.title ?? undefined} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md shadow-sm" />
+			<div className="flex min-w-0 flex-col gap-2">
+				<AttachmentDetails data={data} item={item} />
+			</div>
+		</Card>
+	);
+}
+
+function FileAttachment({ data, item }: { data: Item; item: Item }) {
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const { imageRef, parentRef, imageHeight, parentHeight } =
 		useCoverHeights(loaded);
 	const hasImage = data.PDFCoverPageImage;
+	const trackAttachment = useTrackAttachment(item.itemType);
 
 	return (
 		<Card
@@ -209,6 +237,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					parentHeight={parentHeight}
 					canHover={canHover}
 					onLoad={() => setLoaded(true)}
+					onOpen={() => trackAttachment("view", "internal")}
 				/>
 			)}
 			<div

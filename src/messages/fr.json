@@ -128,6 +128,8 @@
     "collectionVisibilityPublicDescription": "Tout le monde peut voir cette collection",
     "goToFilters": "Aller aux filtres",
     "pdfPreviewAlt": "Aperçu PDF pour {filename}",
+    "pdfCount": "{count, plural, one {# PDF} other {# PDF}}",
+    "pdfOnline": "Ouvrir le PDF sur {site}",
     "document": "document",
     "logoAlt": "Logo pour {company} en mode {theme}",
     "genericUser": "Utilisateur",

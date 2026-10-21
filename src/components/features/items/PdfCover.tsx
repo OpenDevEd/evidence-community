@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, type Ref } from "react";
+import { Fragment, useState, type Ref } from "react";
 import { preload } from "react-dom";
 import { getImageProps } from "next/image";
 import { CoverImage, optimizedCover } from "./CoverImage";
 import { Skeleton } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
+import { useTranslations } from "next-intl";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { LinkSquare01Icon } from "@hugeicons/core-free-icons";
 import type { Item, ListItem } from "@/app/api/item/types";
 
 /**
@@ -63,10 +66,16 @@ export function PdfCover({ src, alt, ref, onLoad, className, sizes = PAGE_SIZES,
 }
 
 /** A sheet of paper with the title set at its head and a few lines of text, sized to whatever width it is drawn at. */
-function TitlePage({ title, className }: { title?: string; className?: string }) {
+export function TitlePage({ title, site, className }: { title?: string; /** Where the PDF is, set above the title like a publisher's line. */ site?: string; className?: string }) {
 	return (
 		<div aria-hidden className={twMerge("@container relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-xl bg-[#fbf8f2] p-[10%] text-[#2b2521] ring-1 ring-inset ring-black/[0.06]", className)}>
 			<span className="h-[2.5cqw] w-1/4 shrink-0 rounded-full bg-accent" />
+			{site ? (
+				// A long name breaks after a dot. A page narrower than 80 px has no room for one, so the title stands alone there.
+				<span className="mt-[7cqw] hidden text-[length:max(8px,7.5cqw)] font-medium leading-tight text-[#2b2521]/55 @[80px]:block">
+					{site.split(".").map((part, index) => <Fragment key={index}>{index > 0 && <>.<wbr /></>}{part}</Fragment>)}
+				</span>
+			) : null}
 			{title ? <span className="mt-[9cqw] line-clamp-5 font-heading text-[length:9cqw] font-semibold leading-[1.18] tracking-tight">{title}</span> : null}
 			<span className="mt-auto flex flex-col gap-[4cqw]">
 				{["100%", "100%", "86%", "58%"].map((lineWidth, index) => (
@@ -74,5 +83,46 @@ function TitlePage({ title, className }: { title?: string; className?: string })
 				))}
 			</span>
 		</div>
+	);
+}
+
+/**
+ * The site a linked PDF opens on, as a reader knows it: its main domain, "ucf.edu" for stars.library.ucf.edu, keeping a
+ * country's second level ("ox.ac.uk").
+ * ponytail: a short second-to-last label stands for the public suffix list; a site such as "abc.xy" keeps one label too few.
+ */
+function siteOf(url: string) {
+	let labels: string[];
+	try {
+		labels = new URL(url).hostname.split(".");
+	} catch {
+		return url;
+	}
+	const countrySecondLevel = labels.length > 2 && labels.at(-1)!.length === 2 && labels.at(-2)!.length <= 3;
+	return labels.slice(countrySecondLevel ? -3 : -2).join(".");
+}
+
+/**
+ * A PDF the library only links to: a reader opens it on the site that holds it. The library has no picture of its first page,
+ * so a title page stands in with the site set above the title, and a frosted open-elsewhere mark sits in its corner, as on a
+ * link preview: a PDF the library holds has no mark.
+ */
+export function OnlinePdf({ url, title, onOpen, className }: { url: string; title?: string; onOpen?: () => void; className?: string }) {
+	const t = useTranslations("ui");
+	const site = siteOf(url);
+	return (
+		<a
+			href={url}
+			target="_blank"
+			rel="noopener noreferrer"
+			onClick={onOpen}
+			aria-label={t("pdfOnline", { site })}
+			className={twMerge("@container/pdf relative block overflow-hidden outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent", className)}
+		>
+			<TitlePage title={title} site={site} className="rounded-none dark:brightness-[0.94]" />
+			<span className="absolute bottom-[7%] right-[7%] flex size-[max(18px,22cqw)] items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
+				<HugeiconsIcon icon={LinkSquare01Icon} className="size-[55%]" />
+			</span>
+		</a>
 	);
 }

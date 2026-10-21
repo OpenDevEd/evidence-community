@@ -46,6 +46,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { AskAboutButton } from "@/components/features/ai/AskAbout";
 import { EvidenceVerdict, useEvidenceRecord, VisualizeButton, type EvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { OpenAccessLabel } from "./OpenAccessLabel";
+import { ResourceCover, resourcePdfs } from "./ResourceCover";
 
 export function AddButton({
 	itemData,
@@ -501,18 +502,32 @@ function ResourceAbstract({ finalItemData, finalIsLoading, abstract, abstractTex
 	);
 }
 
+/**
+ * With a PDF, its cover takes the card's trailing edge: beside everything on a wide card, and beside the byline and abstract
+ * on a narrow one, so the title keeps the card's whole width and is never cut shorter than a card without a PDF.
+ */
+const WITH_COVER =
+	"grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_1fr] gap-x-4 gap-y-4 [grid-template-areas:'head_head'_'body_cover'] @[640px]:[grid-template-areas:'head_cover'_'body_cover'] @[720px]:gap-x-6";
+
 function ResourceArticle(props: ArticleProps) {
-	const { titleId, finalItemData, finalIsLoading } = props;
+	const { titleId, finalItemData, finalIsLoading, abstract, abstractText } = props;
+	const pdfs = resourcePdfs(finalItemData);
 	return (
-		<article className="flex flex-col gap-4">
-			<ResourceFacts item={finalItemData} isLoading={finalIsLoading} />
-			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
-				<ResourceTitle id={titleId} item={finalItemData} />
-			</Skeleton>
-			<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
-				<ResourceByline {...props} />
-			</Skeleton>
-			<ResourceAbstract {...props} />
+		<article className={pdfs.length ? WITH_COVER : "flex flex-col gap-4"}>
+			{/* Without a cover the two halves are no boxes of their own, and the card is the plain column it always was. */}
+			<div className={pdfs.length ? "flex flex-col gap-4 [grid-area:head]" : "contents"}>
+				<ResourceFacts item={finalItemData} isLoading={finalIsLoading} />
+				<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
+					<ResourceTitle id={titleId} item={finalItemData} />
+				</Skeleton>
+			</div>
+			<div className={pdfs.length ? "flex flex-col gap-4 [grid-area:body]" : "contents"}>
+				<Skeleton isLoaded={!finalIsLoading} className="w-full min-h-8 rounded-2xl">
+					<ResourceByline {...props} />
+				</Skeleton>
+				<ResourceAbstract {...props} />
+			</div>
+			{pdfs.length > 0 && <ResourceCover pdfs={pdfs} title={finalItemData?.title ?? undefined} parentType={finalItemData?.itemType} short={!abstract || !abstractText} />}
 		</article>
 	);
 }
@@ -661,7 +676,7 @@ export default function Resource({
  * type's explanation) sit beside the link rather than inside it. The pointer goes through the card's text to the link, the
  * skeletons that turn it back on once loaded too, and its hover tints the card behind the text.
  */
-const CARD = "relative p-4 @[720px]:p-6 flex-1";
+const CARD = "group/card relative p-4 @[720px]:p-6 flex-1";
 const CARD_LINK = "absolute inset-0 rounded-t-xl transition-colors hover:bg-black/[0.06] dark:hover:bg-black/25";
 const CARD_CONTENT = "pointer-events-none relative [&_*]:!pointer-events-none [&_:is(a,button,[tabindex])]:!pointer-events-auto";
 
