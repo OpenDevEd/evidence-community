@@ -15,6 +15,17 @@ export type CardTag = {
 	groupName: string;
 	name: string;
 	filter: { collections: string[] } | { sources: string[] } | null;
+	/** The member's own icon and colour, else its group's; none leaves the tag plain. */
+	icon?: string;
+	color?: string;
+};
+
+type Group = LibraryServerConfig["content"]["cardTags"][number];
+
+/** A member's own icon and colour, each falling back to its group's. */
+const lookOf = (group: Group, key: string) => {
+	const own = group.members[key];
+	return { icon: own?.icon ?? group.icon, color: own?.color ?? group.color };
 };
 
 /** Works out each record's card tags from the library's `content.cardTags` groups, in their order. */
@@ -36,7 +47,7 @@ export function cardTagsFor(
 					.filter((source) => item.sources?.includes(source.key))
 					.map((source) => ({
 						group: group.index, from: "sources", groupName: config.filters.sources.label, name: source.name,
-						filter: filterBySource ? { sources: [source.key] } : null,
+						filter: filterBySource ? { sources: [source.key] } : null, ...lookOf(group, source.key),
 					}));
 			}
 			const parent = byKey.get(group.collection);
@@ -46,7 +57,7 @@ export function cardTagsFor(
 				if (collection?.parentCollection !== parent.key) return [];
 				return [{
 					group: group.index, from: "collection", groupName: parent.name ?? parent.key, name: collection.name ?? collection.key,
-					filter: { collections: [...(collection.ancestry ?? []), collection.key] },
+					filter: { collections: [...(collection.ancestry ?? []), collection.key] }, ...lookOf(group, collection.key),
 				}];
 			});
 		});

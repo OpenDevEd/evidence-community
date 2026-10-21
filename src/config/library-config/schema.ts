@@ -1041,6 +1041,10 @@ function tagList(defaultValue: readonly string[], minimum = 0) {
 		);
 }
 
+/** How a card tag looks: an icon the library offers or one of its own, and a colour. */
+const cardTagLook = { icon: iconReferenceSchema.optional(), color: colorSchema.optional() };
+const cardTagMembers = z.record(z.string().trim().min(1).max(200), z.strictObject(cardTagLook)).default({});
+
 const contentSchema = z
 	.object({
 		tags: z
@@ -1058,13 +1062,14 @@ const contentSchema = z
 		openAccessLabel: z.enum(OPEN_ACCESS_LABELS).default("open"),
 		/**
 		 * The groups a record's card names it a member of, in this order: the subcollections of a parent collection it
-		 * sits in, or the sources that found it. Each can be turned off without losing its place.
+		 * sits in, or the sources that found it. Each can be turned off without losing its place. A group's icon and
+		 * colour mark every one of its tags, and a member, by its collection or source key, can have its own.
 		 */
 		cardTags: z
 			.array(
 				z.discriminatedUnion("from", [
-					z.strictObject({ from: z.literal("collection"), collection: idSchema, enabled: z.boolean().default(true) }),
-					z.strictObject({ from: z.literal("sources"), enabled: z.boolean().default(true) }),
+					z.strictObject({ from: z.literal("collection"), collection: idSchema, enabled: z.boolean().default(true), ...cardTagLook, members: cardTagMembers }),
+					z.strictObject({ from: z.literal("sources"), enabled: z.boolean().default(true), ...cardTagLook, members: cardTagMembers }),
 				]),
 			)
 			.max(20)
