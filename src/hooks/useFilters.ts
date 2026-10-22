@@ -253,6 +253,14 @@ export function useFilters() {
 		},
 		[filters.tagFilters, setParams, tagTicks],
 	);
+	// Puts a filter a reader emptied back to the library's defaults.
+	const handleTagReset = useCallback(
+		(filterId: string) => {
+			const filter = filters.tagFilters.find((candidate) => candidate.id === filterId);
+			setParams({ tags: tagParam({ ...tagTicks, [filterId]: [...(filter?.defaults ?? [])] }, filters.tagFilters), page: 1 });
+		},
+		[filters.tagFilters, setParams, tagTicks],
+	);
 	const collectionMatch = collectionsMatch(params.match, filters);
 	// The library's own choice stays out of the address.
 	const handleCollectionsMatch = useCallback(
@@ -359,6 +367,7 @@ export function useFilters() {
 		tagTicks,
 		tagsAtDefaults: atDefaults(tagTicks, filters.tagFilters),
 		handleTagSelect,
+		handleTagReset,
 		collectionMatch,
 		handleCollectionsMatch,
 		// How many branches are ticked: the switch between any and all only means something with two.

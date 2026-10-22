@@ -146,6 +146,8 @@
     "closePopupAriaLabel": "Fermer cette fenêtre contextuelle",
     "unknownTopic": "Sujet inconnu",
     "unknownSource": "Source inconnue",
+    "tagFilterAny": "Tous",
+    "resetFilters": "Réinitialiser",
     "clearFiltersAriaLabel": "Effacer tous les filtres",
     "skipNavAriaLabel": "Passer la navigation",
     "collectionButtonAriaLabel": "Bouton de la collection {name}",

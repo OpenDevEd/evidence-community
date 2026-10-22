@@ -146,6 +146,8 @@
     "closePopupAriaLabel": "इस पॉपअप को बंद करें",
     "unknownTopic": "अज्ञात विषय",
     "unknownSource": "अज्ञात स्रोत",
+    "tagFilterAny": "कोई भी",
+    "resetFilters": "रीसेट करें",
     "clearFiltersAriaLabel": "सभी फ़िल्टर साफ़ करें",
     "skipNavAriaLabel": "नेविगेशन छोड़ें",
     "collectionButtonAriaLabel": "{name} संग्रह बटन",

@@ -147,6 +147,8 @@
     "closePopupAriaLabel": "Funga dirisha hili ibukizi",
     "unknownTopic": "Mada isiyojulikana",
     "unknownSource": "Chanzo kisichojulikana",
+    "tagFilterAny": "Yoyote",
+    "resetFilters": "Rejesha",
     "clearFiltersAriaLabel": "Futa vichujio vyote",
     "skipNavAriaLabel": "Ruka usogezaji",
     "collectionButtonAriaLabel": "Kitufe cha mkusanyiko wa {name}",

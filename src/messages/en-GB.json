@@ -146,6 +146,8 @@
     "closePopupAriaLabel": "Close this popup",
     "unknownTopic": "Unknown topic",
     "unknownSource": "Unknown source",
+    "tagFilterAny": "Any",
+    "resetFilters": "Reset",
     "clearFiltersAriaLabel": "Clear all filters",
     "skipNavAriaLabel": "Skip navigation",
     "collectionButtonAriaLabel": "{name} collection button",

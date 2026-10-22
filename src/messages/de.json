@@ -146,6 +146,8 @@
     "closePopupAriaLabel": "Dieses Popup schließen",
     "unknownTopic": "Unbekanntes Thema",
     "unknownSource": "Unbekannte Quelle",
+    "tagFilterAny": "Alle",
+    "resetFilters": "Zurücksetzen",
     "clearFiltersAriaLabel": "Alle Filter zurücksetzen",
     "skipNavAriaLabel": "Navigation überspringen",
     "collectionButtonAriaLabel": "{name}-Sammlungs-Schaltfläche",

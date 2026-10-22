@@ -2,7 +2,7 @@
 import { UNCERTAIN, studyType } from "@/lib/readings/study-types";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Delete02Icon } from "@hugeicons/core-free-icons";
+import { ArrowTurnBackwardIcon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { ReactNode, Suspense, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
@@ -255,7 +255,13 @@ export function FilterChips() {
 	const tagChips = filters.tagFilters
 		.filter((filter) => filter.enabled)
 		.flatMap((filter) => (itemsContext.tagTicks[filter.id] ?? []).map((tag) => ({ filter, tag })));
-	const chipCount = filtersCount + (itemsContext.tagsAtDefaults ? tagChips.length : 0);
+	// A filter with defaults the reader emptied says so, rather than leaving no trace of what the list shows.
+	const anyChips = filters.tagFilters.filter(
+		(filter) => filter.enabled && filter.defaults.length > 0 && (itemsContext.tagTicks[filter.id] ?? []).length === 0,
+	);
+	// With defaults, the button puts them back rather than clearing everything, so it says so.
+	const resets = filters.tagFilters.some((filter) => filter.enabled && filter.defaults.length > 0);
+	const chipCount = filtersCount + (itemsContext.tagsAtDefaults ? tagChips.length : 0) + anyChips.length;
 
 	return (
 		<div
@@ -317,6 +323,26 @@ export function FilterChips() {
 								classNames={{
 									button: "bg-success/80 dark:bg-success/80",
 									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					))}
+					{anyChips.map((filter) => (
+						<motion.div
+							key={`tag-any-${filter.id}`}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								group={filter.label}
+								title={t("tagFilterAny")}
+								callback={() => itemsContext.handleTagReset(filter.id)}
+								classNames={{
+									button: "bg-black/10 dark:bg-white/10",
+									group: "bg-black/40 dark:bg-black/50",
+									title: "text-black/80 dark:text-white/80",
 								}}
 							/>
 						</motion.div>
@@ -507,23 +533,36 @@ export function FilterChips() {
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: -10 }}
 						transition={{ duration: 0.2 }}
-						className="w-7 shrink-0 flex justify-end"
+						className={twMerge("shrink-0 flex justify-end", !resets && "w-7")}
 					>
-						<Button
-							aria-label={t("clearFiltersAriaLabel")}
-							onPress={clearButton}
-							isIconOnly
-							size="sm"
-							variant="solid"
-							color="accent"
-							className="h-7 w-7 min-w-7"
-						>
-							<HugeiconsIcon
-								icon={Delete02Icon}
-								aria-hidden="true"
-								className="text-white size-3"
-							/>
-						</Button>
+						{resets ? (
+							<Button
+								onPress={clearButton}
+								size="sm"
+								variant="solid"
+								color="accent"
+								className="h-7 min-w-0 gap-1.5 px-2.5 text-xs font-medium text-white"
+								startContent={<HugeiconsIcon icon={ArrowTurnBackwardIcon} aria-hidden="true" className="size-3.5" />}
+							>
+								{t("resetFilters")}
+							</Button>
+						) : (
+							<Button
+								aria-label={t("clearFiltersAriaLabel")}
+								onPress={clearButton}
+								isIconOnly
+								size="sm"
+								variant="solid"
+								color="accent"
+								className="h-7 w-7 min-w-7"
+							>
+								<HugeiconsIcon
+									icon={Delete02Icon}
+									aria-hidden="true"
+									className="text-white size-3"
+								/>
+							</Button>
+						)}
 					</motion.div>
 				)}
 			</AnimatePresence>

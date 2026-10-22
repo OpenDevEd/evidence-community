@@ -146,6 +146,8 @@
     "closePopupAriaLabel": "关闭此弹出窗口",
     "unknownTopic": "未知主题",
     "unknownSource": "未知来源",
+    "tagFilterAny": "任意",
+    "resetFilters": "重置",
     "clearFiltersAriaLabel": "清除所有筛选器",
     "skipNavAriaLabel": "跳过导航",
     "collectionButtonAriaLabel": "{name} 收藏按钮",
