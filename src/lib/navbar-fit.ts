@@ -175,7 +175,9 @@ export function navbarWidths(
 
 /** The widths the full and the short name take beside the logo, the short one only where it differs. */
 function nameWidths(config: LibraryServerConfig, measureName: (value: string) => number) {
-	const { name, shortName } = config.identity;
+	const { name, shortName, showName } = config.identity;
+	// A header without the name has nothing beside the logo to fit.
+	if (!showName) return { full: 0, short: null };
 	const full = NAME_GAP + measureName(name);
 	// A short name no narrower than the full one would only ever stand in for it.
 	const short = shortName && shortName !== name ? NAME_GAP + measureName(shortName) : Infinity;

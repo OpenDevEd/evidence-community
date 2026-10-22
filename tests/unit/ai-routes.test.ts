@@ -460,7 +460,7 @@ describe("AI routes", () => {
 
 		await chat(chatRequest({ searchContext }));
 
-		const expected = { ...searchContext, author_country: [], sources: [], study: [], readerList: null };
+		const expected = { ...searchContext, author_country: [], sources: [], study: [], match: "", readerList: null };
 		expect(
 			mocks.createResearchAgent.mock.calls[0]?.[0].searchContext,
 		).toEqual(expected);

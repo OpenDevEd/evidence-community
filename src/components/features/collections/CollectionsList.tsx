@@ -1,12 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import {
-	ArrowDown01Icon,
-	Cancel01Icon,
-	FilterIcon,
-	ListViewIcon,
-} from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, Cancel01Icon, FilterIcon, ListViewIcon, PathfinderIntersectIcon, PathfinderUniteIcon } from "@hugeicons/core-free-icons";
 import {
 	Accordion,
 	AccordionItem,
@@ -64,6 +59,9 @@ import { FacetOption, ShareRing } from "./FacetOption";
 import { useOfferedSources, useSourcesLabel } from "./sources";
 import { SOURCES_FIELD } from "@/lib/search-filter-constants";
 import type { PublicSource } from "@/app/api/sources/types";
+import { tagFacetKey, tagFilterOptions } from "@/lib/tag-filters";
+import { Tab, Tabs } from "@/components/nextui/Tabs";
+import type { CollectionsMatch } from "@/lib/collections-match";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -777,6 +775,25 @@ function treeSlot(collections: boolean, sources: boolean, topics: boolean): Tree
 	return topics ? "topics" : null;
 }
 
+/** The tag filters the owner put under More filters, as pickers, rather than in cards of their own. */
+function useTagPickers(facetDistribution: FacetDistribution | undefined, total: number) {
+	const { filters } = useLibraryConfig();
+	const { tagTicks, handleTagSelect, facetTotals } = useFiltersContext();
+	const pickerTagFilters = useMemo(() => filters.tagFilters.filter((filter) => filter.enabled && filter.placement === "picker"), [filters.tagFilters]);
+	const tagPickers = useMemo(() => pickerTagFilters.map((filter) => {
+		const ticked = tagTicks[filter.id] ?? [];
+		const list = tagFilterOptions(filter, facetDistribution?.[tagFacetKey(filter.id)], ticked).map((option) => ({
+			key: option.tag,
+			label: option.label,
+			count: option.count,
+			isSelected: ticked.includes(option.tag),
+			onSelectionChange: () => handleTagSelect(filter.id, option.tag),
+		}));
+		return <FacetPicker key={`tag-${filter.id}`} total={facetTotals?.[tagFacetKey(filter.id)] ?? total} label={filter.label} placeholder={filter.label} selectedKey={ticked} list={list} />;
+	}), [facetDistribution, facetTotals, handleTagSelect, pickerTagFilters, tagTicks, total]);
+	return { pickerCount: pickerTagFilters.length, tagPickers };
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
@@ -803,13 +820,14 @@ function FiltersList({
 	// Topics are counted without the topic filter, so their shares are out of the results without it.
 	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
+	const { pickerCount, tagPickers } = useTagPickers(facetDistribution, total);
 
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
 		sourcePicker,
 		topicPicker,
-	].filter(Boolean).length;
+	].filter(Boolean).length + pickerCount;
 
 	const t = useTranslations("ui");
 
@@ -856,9 +874,11 @@ function FiltersList({
 		total,
 	]);
 
+
 	const moreFilters = useMemo(() => {
 		return (
 			<>
+				{tagPickers}
 				{institutionFilter}
 				{placeFilters}
 				{sourcePicker ? <SourceFilter sources={sources} /> : null}
@@ -880,6 +900,7 @@ function FiltersList({
 		queryParams.topics,
 		sourcePicker,
 		sources,
+		tagPickers,
 		topicPicker,
 		topicTotal,
 	]);
@@ -991,8 +1012,39 @@ function CollectionsTreeSection(props: Omit<React.ComponentProps<typeof InnerCol
 	const total = useFacetTotal("collectionsAncestry");
 	return (
 		<section className="w-full">
+			<CollectionsMatchTabs />
 			<InnerCollectionList {...props} total={total} />
 		</section>
+	);
+}
+
+/**
+ * Whether ticked collections show the records in any of them or only those in all of them, at the head of the tree
+ * wherever the library lets readers choose. A ticked child always narrows its ticked parent.
+ */
+function CollectionsMatchTabs() {
+	const t = useTranslations("sidebar");
+	const { filters } = useLibraryConfig();
+	const { collectionMatch, handleCollectionsMatch } = useFiltersContext();
+	if (!filters.collectionsMatch.readerSwitch) return null;
+	return (
+		// Sits on the seam between the filter card and the tree, half on each, taking no room of its own.
+		<div className="relative z-10 h-0">
+			<Tabs
+				aria-label={t("collectionsMatch")}
+				selectedKey={collectionMatch}
+				onSelectionChange={(key) => handleCollectionsMatch(key as CollectionsMatch)}
+				classNames={{
+					base: "absolute end-6 top-0 w-auto -translate-y-1/2",
+					tabList: "w-auto md:w-auto rounded-xl p-0.5 md:p-0.5 shadow-md",
+					tab: "h-7 flex-initial rounded-lg px-2.5 md:px-2.5 py-0 md:py-0 text-xs md:text-xs",
+					cursor: "rounded-lg",
+				}}
+			>
+				<Tab key="any" title={<span className="flex items-center gap-1.5"><HugeiconsIcon icon={PathfinderUniteIcon} aria-hidden className="size-3.5" />{t("collectionsMatchAny")}</span>} />
+				<Tab key="all" title={<span className="flex items-center gap-1.5"><HugeiconsIcon icon={PathfinderIntersectIcon} aria-hidden className="size-3.5" />{t("collectionsMatchAll")}</span>} />
+			</Tabs>
+		</div>
 	);
 }
 

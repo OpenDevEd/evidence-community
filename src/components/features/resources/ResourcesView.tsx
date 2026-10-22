@@ -187,6 +187,7 @@ function captureExportResults(items: ReturnType<typeof useItemsList>): { context
 		search: params.search, scope: params.scope, sort: params.sort, range: params.range,
 		institution: params.institution, country: params.country, author_country: params.author_country, author: params.author,
 		collections: params.collections, topics: params.topics, sources: params.sources, type: params.type, study: params.study,
+		tags: params.tags, match: params.match,
 		readerList: items.userData ? { userId: items.userData.id, collectionId: params.collectionId ?? "" } : null,
 	}, count: items.itemsData.totalItems };
 }

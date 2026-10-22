@@ -21,6 +21,8 @@ import { isAdminPath, normalizePathname } from "@/lib/path";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { resolveSearchQuery } from "@/lib/search-query";
+import { atDefaults, tagParam, tagSelections } from "@/lib/tag-filters";
+import { collectionNodes, collectionsMatch, deepestTicked, type CollectionsMatch } from "@/lib/collections-match";
 
 const SWR_OPTIONS = {
 	keepPreviousData: true,
@@ -241,8 +243,35 @@ export function useFilters() {
 		setParams({ country: [], author_country: [], institution: [] });
 	}, [setParams]);
 
+	// Each tag filter's ticks, its defaults where the address says nothing.
+	const tagTicks = useMemo(() => tagSelections(params.tags, filters.tagFilters), [filters.tagFilters, params.tags]);
+	const handleTagSelect = useCallback(
+		(filterId: string, tag: string) => {
+			const ticked = tagTicks[filterId] ?? [];
+			const next = { ...tagTicks, [filterId]: ticked.includes(tag) ? ticked.filter((value) => value !== tag) : [...ticked, tag] };
+			setParams({ tags: tagParam(next, filters.tagFilters), page: 1 });
+		},
+		[filters.tagFilters, setParams, tagTicks],
+	);
+	// Puts a filter a reader emptied back to the library's defaults.
+	const handleTagReset = useCallback(
+		(filterId: string) => {
+			const filter = filters.tagFilters.find((candidate) => candidate.id === filterId);
+			setParams({ tags: tagParam({ ...tagTicks, [filterId]: [...(filter?.defaults ?? [])] }, filters.tagFilters), page: 1 });
+		},
+		[filters.tagFilters, setParams, tagTicks],
+	);
+	const collectionMatch = collectionsMatch(params.match, filters);
+	// The library's own choice stays out of the address.
+	const handleCollectionsMatch = useCallback(
+		(match: CollectionsMatch) => setParams({ match: match === filters.collectionsMatch.default ? "" : match, page: 1 }),
+		[filters.collectionsMatch.default, setParams],
+	);
+
 	const handleClearFilters = useCallback(() => {
 		setParams({
+			tags: [],
+			match: "",
 			author: "",
 			institution: [],
 			country: [],
@@ -335,6 +364,14 @@ export function useFilters() {
 		handleStudySelect,
 		handleClearFilters,
 		handleCheckboxChange,
+		tagTicks,
+		tagsAtDefaults: atDefaults(tagTicks, filters.tagFilters),
+		handleTagSelect,
+		handleTagReset,
+		collectionMatch,
+		handleCollectionsMatch,
+		// How many branches are ticked: the switch between any and all only means something with two.
+		tickedBranches: deepestTicked(selectedCollections, collectionNodes((collectionsData?.collections ?? []) as Collection[])).length,
 		collectionsData,
 		// Undefined while the names load; a library whose names can't load offers no source filter.
 		sources: sourcesData?.sources ?? (sourcesError ? [] : undefined),

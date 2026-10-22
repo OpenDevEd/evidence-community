@@ -4,6 +4,9 @@ import { PLATFORM_SEARCH_SCOPES } from "@/config/library-config/catalogs";
 import { SORT_OPTIONS } from "@/constants/items";
 
 const filterValuesSchema = z.array(z.string().trim().min(1).max(300)).max(100);
+/** Tag filter ticks: up to eight filters of a hundred options each, and a prefix's tags beyond those. */
+const MAX_TAG_VALUES = 2000;
+const tagValuesSchema = z.array(z.string().trim().min(1).max(300)).max(MAX_TAG_VALUES);
 
 const RANGE_PATTERN = /^(?:|\d{4}|\d{4}-\d{4}|\d{4}-|-\d{4})$/;
 
@@ -42,6 +45,10 @@ export const librarySearchContextSchema = z
 		type: filterValuesSchema.default([]),
 		/** Study types, any of them, as Jev read each record. */
 		study: filterValuesSchema.default([]),
+		/** Tag filters' ticks as the address holds them; a filter it doesn't name has its defaults. Absent, as in a read of a whole collection, none apply. */
+		tags: tagValuesSchema.optional(),
+		/** Whether ticked collections match any or all, when the reader chose. */
+		match: z.string().max(3).default(""),
 		/** A reader's bookmarks, or one of their collections, when the list is on a profile. */
 		readerList: z
 			.object({
@@ -67,10 +74,10 @@ const MAX_FILTER_VALUES = 100;
 const MAX_FILTER_VALUE_LENGTH = 300;
 
 /** Filters come from the URL, so keep only values the schema accepts. */
-function filterValues(values: readonly string[] | undefined) {
+function filterValues(values: readonly string[] | undefined, max = MAX_FILTER_VALUES) {
 	return (values ?? [])
 		.filter((value) => typeof value === "string" && value.trim())
-		.slice(0, MAX_FILTER_VALUES)
+		.slice(0, max)
 		.map((value) => value.trim().slice(0, MAX_FILTER_VALUE_LENGTH));
 }
 
@@ -97,6 +104,8 @@ export function normalizeLibrarySearchContext(
 		sources: filterValues(value.sources),
 		type: filterValues(value.type),
 		study: filterValues(value.study),
+		tags: value.tags === undefined ? undefined : filterValues(value.tags, MAX_TAG_VALUES),
+		match: value.match === "any" || value.match === "all" ? value.match : "",
 		readerList: value.readerList ?? null,
 	});
 }
@@ -118,6 +127,8 @@ export function librarySearchContextSummary(
 		sources: context.sources,
 		itemTypes: context.type,
 		studyTypes: context.study,
+		tagFilters: context.tags,
+		collectionsMatch: context.match || "library default",
 		readerList: context.readerList
 			? context.readerList.collectionId
 				? "one of this reader's collections, as shown on their profile"

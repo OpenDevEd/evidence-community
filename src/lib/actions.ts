@@ -87,12 +87,8 @@ export async function getItems(
 	return searchIndex(
 		searchParams,
 		facets,
-		[
-			...collections.map((collection: string) =>
-				meilisearchEquals("collectionsAncestry", collection),
-			),
-			...readerFilter,
-		],
+		// The collections are in the search's own filters, matched as the library and reader choose.
+		readerFilter,
 	);
 }
 

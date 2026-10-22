@@ -34,6 +34,10 @@ vi.mock("@/context/FiltersProvider", async () => {
 			handleSourceSelect: vi.fn(),
 			handleTypeSelect: vi.fn(),
 			handleAuthorSelect: vi.fn(),
+			tagTicks: {},
+			handleTagSelect: vi.fn(),
+			collectionMatch: "all",
+			handleCollectionsMatch: vi.fn(),
 		}),
 	};
 });
@@ -48,6 +52,9 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 			years: { enabled: false },
 			institution: { mode: "hidden", label: "Institutions" },
 			sources: { enabled: true, label: "Searches" },
+			tagFilters: [],
+			collectionsMatch: { default: "all", readerSwitch: false },
+			studyTypes: { enabled: true },
 		},
 		institutions: [],
 		topics: { enabled: library.topics },

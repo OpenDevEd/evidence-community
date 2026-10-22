@@ -2,7 +2,7 @@
 import { UNCERTAIN, studyType } from "@/lib/readings/study-types";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Delete02Icon } from "@hugeicons/core-free-icons";
+import { ArrowTurnBackwardIcon, Delete02Icon } from "@hugeicons/core-free-icons";
 import { ReactNode, Suspense, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "@/lib/tw-merge";
@@ -18,6 +18,7 @@ import useSWR from "swr";
 import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
 import { toggleTopicSelection, topicAncestry } from "@/lib/topics/selection";
 import { useSourcesLabel } from "@/components/features/collections/sources";
+import { tagLabel, type TagFilter } from "@/lib/tag-filters";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -109,6 +110,9 @@ export function getFilterChipState(
 		(queryParams.author ? 1 : 0) +
 		(queryParams.type?.length || 0) +
 		(queryParams.study?.length || 0) +
+		// Only what differs from the library's defaults, which never show in the address: Clear filters puts them back.
+		(queryParams.tags?.length || 0) +
+		(queryParams.match ? 1 : 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
@@ -230,6 +234,72 @@ function SourceChips() {
 	));
 }
 
+/** Every tag ticked, defaults too, and a filter whose defaults the reader emptied, so the row shows what the list holds. */
+function useTagChips() {
+	const { filters } = useLibraryConfig();
+	const { tagTicks, tagsAtDefaults } = useFiltersContext();
+	const enabled = filters.tagFilters.filter((filter) => filter.enabled);
+	const tagChips = enabled.flatMap((filter) => (tagTicks[filter.id] ?? []).map((tag) => ({ filter, tag })));
+	const anyChips = enabled.filter((filter) => filter.defaults.length > 0 && (tagTicks[filter.id] ?? []).length === 0);
+	// Ticks that differ from the defaults are already among the filters counted.
+	return { tagChips, anyChips, resets: enabled.some((filter) => filter.defaults.length > 0), shown: (tagsAtDefaults ? tagChips.length : 0) + anyChips.length };
+}
+
+const CHIP_MOTION = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 }, transition: { duration: 0.2 } };
+
+/** The tag filters' chips, as direct children of the row's AnimatePresence so each one leaves with its own motion. */
+function tagChipElements(
+	anyChips: TagFilter[],
+	tagChips: { filter: TagFilter; tag: string }[],
+	anyLabel: string,
+	onReset: (filterId: string) => void,
+	onSelect: (filterId: string, tag: string) => void,
+) {
+	return [
+		...anyChips.map((filter) => (
+			<motion.div key={`tag-any-${filter.id}`} {...CHIP_MOTION}>
+				<Chip
+					group={filter.label}
+					title={anyLabel}
+					callback={() => onReset(filter.id)}
+					classNames={{ button: "bg-black/10 dark:bg-white/10", group: "bg-black/40 dark:bg-black/50", title: "text-black/80 dark:text-white/80" }}
+				/>
+			</motion.div>
+		)),
+		...tagChips.map(({ filter, tag }) => (
+			<motion.div key={`tag-${filter.id}-${tag}`} {...CHIP_MOTION}>
+				<Chip
+					group={filter.label}
+					title={tagLabel(filter, tag)}
+					callback={() => onSelect(filter.id, tag)}
+					classNames={{ button: "bg-success/80 dark:bg-success/80", title: "text-white dark:text-white" }}
+				/>
+			</motion.div>
+		)),
+	];
+}
+
+/** Clears the filters; where the library has defaults it puts them back, so it says Reset. */
+function ClearButton({ resets, onPress }: { resets: boolean; onPress: () => void }) {
+	const t = useTranslations("ui");
+	return resets ? (
+		<Button
+			onPress={onPress}
+			size="sm"
+			variant="solid"
+			color="accent"
+			className="h-7 min-w-0 gap-1.5 px-2.5 text-xs font-medium text-white"
+			startContent={<HugeiconsIcon icon={ArrowTurnBackwardIcon} aria-hidden="true" className="size-3.5" />}
+		>
+			{t("resetFilters")}
+		</Button>
+	) : (
+		<Button aria-label={t("clearFiltersAriaLabel")} onPress={onPress} isIconOnly size="sm" variant="solid" color="accent" className="h-7 w-7 min-w-7">
+			<HugeiconsIcon icon={Delete02Icon} aria-hidden="true" className="text-white size-3" />
+		</Button>
+	);
+}
+
 export function FilterChips() {
 	// Reads the shared, app-level filter state so the navbar chips and the
 	// library chips are the exact same resident instance (no remount flash).
@@ -246,12 +316,14 @@ export function FilterChips() {
 		itemsContext.handleClearFilters,
 		topics.enabled,
 	);
+	const { anyChips, tagChips, resets, shown } = useTagChips();
+	const chipCount = filtersCount + shown;
 
 	return (
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 && "max-h-filter-chips mb-4 opacity-100",
+				chipCount > 0 && "max-h-filter-chips mb-4 opacity-100",
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a
@@ -311,6 +383,7 @@ export function FilterChips() {
 							/>
 						</motion.div>
 					))}
+					{tagChipElements(anyChips, tagChips, t("tagFilterAny"), itemsContext.handleTagReset, itemsContext.handleTagSelect)}
 					{itemsContext.queryParams.study.map((study) => (
 						<motion.div
 							key={"study-" + study}
@@ -478,23 +551,9 @@ export function FilterChips() {
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: -10 }}
 						transition={{ duration: 0.2 }}
-						className="w-7 shrink-0 flex justify-end"
+						className={twMerge("shrink-0 flex justify-end", !resets && "w-7")}
 					>
-						<Button
-							aria-label={t("clearFiltersAriaLabel")}
-							onPress={clearButton}
-							isIconOnly
-							size="sm"
-							variant="solid"
-							color="accent"
-							className="h-7 w-7 min-w-7"
-						>
-							<HugeiconsIcon
-								icon={Delete02Icon}
-								aria-hidden="true"
-								className="text-white size-3"
-							/>
-						</Button>
+						<ClearButton resets={resets} onPress={clearButton} />
 					</motion.div>
 				)}
 			</AnimatePresence>

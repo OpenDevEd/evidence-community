@@ -122,6 +122,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			"topic",
 		),
 		sources: resolveOffered(params.sources, offersSources(config), "source"),
+		study: resolveOffered(params.study, config.filters.studyTypes.enabled, "study type"),
 	};
 	return {
 		params: {
@@ -134,6 +135,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			author_country: resolved.author_country.value,
 			topics: resolved.topics.value,
 			sources: resolved.sources.value,
+			study: resolved.study.value,
 			// A page that cannot hold a result opens on the first.
 			page:
 				Number.isInteger(page) && page >= 1 && page <= lastReachablePage(perPage)
