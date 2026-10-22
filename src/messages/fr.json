@@ -1055,7 +1055,6 @@
     "authorsFailed": "Impossible de charger les principaux auteurs.",
     "mostCited": "Plus cités",
     "citations": "{count, plural, one {citation} other {citations}}",
-    "noCited": "Rien dans ces résultats n’est encore cité.",
     "citedFailed": "Impossible de charger les résultats les plus cités.",
     "tryAgain": "Réessayer",
     "latestDigests": "Derniers digests",

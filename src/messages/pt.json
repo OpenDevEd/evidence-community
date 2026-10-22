@@ -1055,7 +1055,6 @@
     "authorsFailed": "Não foi possível carregar os principais autores.",
     "mostCited": "Mais citados",
     "citations": "{count, plural, one {citação} other {citações}}",
-    "noCited": "Nada nestes resultados foi citado ainda.",
     "citedFailed": "Não foi possível carregar os resultados mais citados.",
     "tryAgain": "Tentar novamente",
     "latestDigests": "Digests mais recentes",

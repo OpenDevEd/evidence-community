@@ -1055,7 +1055,6 @@
     "authorsFailed": "Die häufigsten Autoren konnten nicht geladen werden.",
     "mostCited": "Meistzitiert",
     "citations": "{count, plural, one {Zitat} other {Zitate}}",
-    "noCited": "Aus diesen Ergebnissen wurde noch nichts zitiert.",
     "citedFailed": "Die meistzitierten Ergebnisse konnten nicht geladen werden.",
     "tryAgain": "Erneut versuchen",
     "latestDigests": "Neueste Digests",
