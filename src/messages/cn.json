@@ -1055,7 +1055,6 @@
     "authorsFailed": "无法加载主要作者。",
     "mostCited": "被引最多",
     "citations": "{count, plural, other {次引用}}",
-    "noCited": "这些结果尚未被引用。",
     "citedFailed": "无法加载被引最多的结果。",
     "tryAgain": "重试",
     "latestDigests": "最新摘要",

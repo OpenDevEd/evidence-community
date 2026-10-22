@@ -1055,7 +1055,6 @@
     "authorsFailed": "Could not load the top authors.",
     "mostCited": "Most cited",
     "citations": "{count, plural, one {citation} other {citations}}",
-    "noCited": "Nothing in these results is cited yet.",
     "citedFailed": "Could not load the most cited results.",
     "tryAgain": "Try again",
     "latestDigests": "Latest digests",

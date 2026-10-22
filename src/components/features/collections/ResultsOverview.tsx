@@ -415,7 +415,7 @@ function PdfShare({ pdf }: { pdf: Record<string, number> | undefined }) {
 	const t = useTranslations("sidebar");
 	const withPdf = pdf?.true ?? 0;
 	const withPdfOf = withPdf + (pdf?.false ?? 0);
-	if (withPdfOf === 0) return null;
+	if (withPdf === 0) return null;
 	return (
 		<div className="flex flex-col gap-2 border-t border-black/5 pt-4 dark:border-white/10">
 			<div className="flex items-baseline justify-between gap-4">
@@ -839,7 +839,7 @@ function useMostCited(shown: boolean) {
 	return { data, failed: Boolean(error) && !isValidating, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, cited: data?.items.filter((item) => item.citationCount) ?? [] };
 }
 
-/** The list in whichever state it is in: failed, loading, nothing cited, or the results. */
+/** The list in whichever state it is in: failed, loading, or the results. */
 function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
 	const t = useTranslations("sidebar");
 	if (cited.failed) {
@@ -851,7 +851,6 @@ function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
 		);
 	}
 	if (!cited.data) return <CitedPlaceholders />;
-	if (cited.cited.length === 0) return <li className="px-2 text-base text-black/60 dark:text-white/60">{t("noCited")}</li>;
 	return cited.cited.map((item) => <CitedRow key={item.key} item={item} stale={cited.stale} />);
 }
 
@@ -859,6 +858,8 @@ function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
 function MostCited({ shown }: { shown: boolean }) {
 	const cited = useMostCited(shown);
 	const t = useTranslations("sidebar");
+	// Results with nothing cited have no card at all.
+	if (cited.data && !cited.failed && cited.cited.length === 0) return null;
 	return (
 		<SidebarCard title={t("mostCited")}>
 			{/* Three rows of a cover beside its count and a two-line title; every state keeps this height. */}

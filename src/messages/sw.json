@@ -1056,7 +1056,6 @@
     "authorsFailed": "Imeshindwa kupakia waandishi wakuu.",
     "mostCited": "Zilizonukuliwa zaidi",
     "citations": "{count, plural, one {nukuu} other {nukuu}}",
-    "noCited": "Hakuna kitu katika matokeo haya kilichonukuliwa bado.",
     "citedFailed": "Imeshindwa kupakia matokeo yaliyonukuliwa zaidi.",
     "tryAgain": "Jaribu tena",
     "latestDigests": "Muhtasari mpya",
