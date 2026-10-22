@@ -358,6 +358,8 @@ const identitySchema = z
 		shortName: singleLineStringSchema(40).optional(),
 		tagline: singleLineStringSchema(160).optional(),
 		description: plainTextSchema(300).optional(),
+		/** The name beside the logo in the header; off for a logo that already spells it. */
+		showName: z.boolean().default(true),
 		baseUrl: publicHttpsOriginSchema,
 		fundingPartners: z
 			.array(fundingPartnerSchema)

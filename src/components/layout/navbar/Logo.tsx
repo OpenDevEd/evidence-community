@@ -21,6 +21,7 @@ interface LogoProps {
  */
 function LogoName() {
 	const { identity } = useLibraryConfig();
+	if (!identity.showName) return null;
 	// Should the measured widths ever be off, the name gives way to the logo rather than squeezing it, the gap before it too.
 	const name = "nf-name min-w-0 shrink-[1000] overflow-hidden";
 	const text = "block truncate ps-3 text-2xl font-medium leading-tight tracking-tight text-black dark:text-white";
