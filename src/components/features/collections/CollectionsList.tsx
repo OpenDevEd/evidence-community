@@ -24,7 +24,7 @@ import {
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { createContext, Fragment, type ReactNode, useContext, useMemo, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
@@ -1019,28 +1019,27 @@ function CollectionsTreeSection(props: Omit<React.ComponentProps<typeof InnerCol
 }
 
 /**
- * Whether ticked collections show the records in any of them or only those in all of them. It slides in over the tree
- * once two branches are ticked, where the library lets readers choose; a ticked child always narrows its ticked parent.
+ * Whether ticked collections show the records in any of them or only those in all of them, at the head of the tree
+ * wherever the library lets readers choose. A ticked child always narrows its ticked parent.
  */
 function CollectionsMatchTabs() {
 	const t = useTranslations("sidebar");
 	const { filters } = useLibraryConfig();
-	const { collectionMatch, handleCollectionsMatch, tickedBranches } = useFiltersContext();
-	const still = useReducedMotion();
-	const shown = filters.collectionsMatch.readerSwitch && tickedBranches > 1;
+	const { collectionMatch, handleCollectionsMatch } = useFiltersContext();
+	if (!filters.collectionsMatch.readerSwitch) return null;
 	return (
-		<AnimatePresence initial={false}>
-			{shown && (
-				<motion.div key="match" initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden bg-card_light dark:bg-card">
-					<div className="px-6 pt-6">
-						<Tabs aria-label={t("collectionsMatch")} selectedKey={collectionMatch} onSelectionChange={(key) => handleCollectionsMatch(key as CollectionsMatch)} classNames={{ tabList: "w-full md:w-full", tab: "flex-1 md:flex-1" }}>
-							<Tab key="any" title={t("collectionsMatchAny")} />
-							<Tab key="all" title={t("collectionsMatchAll")} />
-						</Tabs>
-					</div>
-				</motion.div>
-			)}
-		</AnimatePresence>
+		<div className="flex items-center justify-between gap-3 bg-card_light px-6 pt-5 dark:bg-card">
+			<span id="collections-match-label" className="min-w-0 truncate text-sm text-black/60 dark:text-white/60">{t("collectionsMatch")}</span>
+			<Tabs
+				aria-labelledby="collections-match-label"
+				selectedKey={collectionMatch}
+				onSelectionChange={(key) => handleCollectionsMatch(key as CollectionsMatch)}
+				classNames={{ base: "w-auto shrink-0", tabList: "w-auto md:w-auto", tab: "flex-initial px-3 md:px-3 py-1 md:py-1" }}
+			>
+				<Tab key="any" title={t("collectionsMatchAny")} />
+				<Tab key="all" title={t("collectionsMatchAll")} />
+			</Tabs>
+		</div>
 	);
 }
 
