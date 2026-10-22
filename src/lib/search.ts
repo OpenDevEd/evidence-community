@@ -38,6 +38,8 @@ import { creatorFullName } from "./search-index/projection";
 import { readAuthorProfiles } from "./authors/catalog-server";
 import type { Author } from "@/app/api/item/types";
 import { selectionFrontier, type TopicSelectionNode } from "./topics/selection";
+import { inTagFilter, tagFacetKey, tagParam, tagSelections, type TagSelections } from "./tag-filters";
+import { collectionNodes, collectionsMatch, deepestTicked } from "./collections-match";
 
 /**
  * Result cards also open the item page before the full record loads, so they
@@ -181,6 +183,10 @@ type SearchFilterInput = {
 	studyField?: string;
 	/** The library's sources, any of them. */
 	sources?: readonly string[];
+	/** Each tag filter's ticks: a record carries any of a filter's, and every filter with ticks narrows. */
+	tags?: TagSelections;
+	/** Ticked collections a record may be in any of, in place of all of `collections`. */
+	anyCollections?: readonly string[];
 };
 
 /** An empty search has no relevance to sort by, so it shows the newest first. */
@@ -208,6 +214,8 @@ function buildSearchFilters({
 	study = [],
 	studyField = "studyType",
 	sources = [],
+	tags = {},
+	anyCollections,
 }: SearchFilterInput) {
 	return [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -221,9 +229,10 @@ function buildSearchFilters({
 		study.length ? meilisearchIn(studyField, study) : null,
 		sources.length ? meilisearchIn(SOURCES_FIELD, sources) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
-		...collections.map((collection) =>
-			meilisearchEquals("collectionsAncestry", collection),
-		),
+		...(anyCollections
+			? [anyCollections.length ? meilisearchIn("collectionsAncestry", anyCollections) : null]
+			: collections.map((collection) => meilisearchEquals("collectionsAncestry", collection))),
+		...Object.values(tags).map((ticked) => (ticked.length ? meilisearchIn("tags", ticked) : null)),
 		"deleted != 1",
 		hiddenTags.length ? `tags NOT IN ${JSON.stringify(hiddenTags)}` : null,
 	].filter((filter): filter is string => filter !== null);
@@ -242,9 +251,14 @@ export function resolveSearchRequest(
 		params: { page: pageNum, scope, institution, country, author_country, range, topics, sources },
 	} = resolveSearchQuery(searchParams, libraryConfig, perPage);
 	const search = searchParams.search || "";
+	const collections = searchParams.collections || [];
 	const facetFilters = buildSearchFilters({
 		author: searchParams.author || "",
-		collections: searchParams.collections || [],
+		collections,
+		// The nodes hold the ticked collections' parents when they match any.
+		anyCollections: collectionsMatch(searchParams.match, libraryConfig.filters) === "any" ? deepestTicked(collections, topicNodes) : undefined,
+		// Asked without the param, as a whole-library view is, no defaults apply; a reader's address always has it.
+		tags: searchParams.tags === undefined ? {} : tagSelections(searchParams.tags, libraryConfig.filters.tagFilters),
 		type: searchParams.type ?? [],
 		study: searchParams.study ?? [],
 		studyField: studyTypeFacet(libraryConfig.filters),
@@ -289,16 +303,20 @@ export function resolveSearchRequest(
 	};
 }
 
+/** The tree nodes a search's ticks are read against: the chosen topics' paths, and the collections when ticked ones match any. */
 export async function resolveSearchTopicNodes(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	libraryConfig: Pick<LibraryServerConfig, "authentication" | "revision" | "services" | "topics" | "updatedAt">,
+	libraryConfig: Pick<LibraryServerConfig, "authentication" | "filters" | "revision" | "services" | "topics" | "updatedAt">,
 ) {
 	const selected = libraryConfig.topics.enabled
 		? (searchParams.topics ?? [])
 		: [];
-	if (!selected.length) return [];
-	const database = await getDatabaseForConfig(libraryConfig);
-	return resolveTopicAncestry(selected, { database, config: libraryConfig }, {allowUnknown: true});
+	const anyCollections = (searchParams.collections?.length ?? 0) > 1 && collectionsMatch(searchParams.match, libraryConfig.filters) === "any";
+	const [topics, collections] = await Promise.all([
+		selected.length ? resolveTopicAncestry(selected, { database: await getDatabaseForConfig(libraryConfig), config: libraryConfig }, { allowUnknown: true }) : [],
+		anyCollections ? getCachedCollections() : [],
+	]);
+	return [...topics, ...collectionNodes(collections as Collection[])];
 }
 
 async function readCachedTopicTree(
@@ -469,12 +487,25 @@ export async function getPublicFacets(
 
 	// A chosen year range or item type still shows the other years and types, so each is counted without its own filter.
 	// Sources are too, and always out of the results some source holds: records made here belong to none.
-	const ownFilters = [
+	// Collections that match any are counted without the collection ticks, so the other branches keep theirs.
+	// Each tag filter is counted without its own ticks, under a key of its own, since they share the tags facet.
+	const { tagFilters } = libraryConfig.filters;
+	const tagTicks = tagSelections(searchParams.tags, tagFilters);
+	type OwnFilter = { facet: string; active: boolean; without: Partial<inferParserType<typeof searchParamsLoader>>; also?: string[]; as?: string; keep?: (value: string) => boolean };
+	const ownFilters = ([
 		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
 		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
 		{ facet: studyTypeFacet(libraryConfig.filters), active: Boolean(searchParams.study?.length), without: { study: [] } },
 		{ facet: SOURCES_FIELD, active: offersSources(libraryConfig), without: { sources: [] }, also: [`${SOURCES_FIELD} IS NOT EMPTY`] },
-	].filter(({ facet, active }) => active && facets.includes(facet));
+		{ facet: "collectionsAncestry", active: Boolean(searchParams.collections?.length) && collectionsMatch(searchParams.match, libraryConfig.filters) === "any", without: { collections: [] } },
+		...tagFilters.filter((filter) => filter.enabled).map((filter) => ({
+			facet: "tags",
+			as: tagFacetKey(filter.id),
+			active: true,
+			without: searchParams.tags === undefined ? {} : { tags: tagParam({ ...tagTicks, [filter.id]: [] }, tagFilters) },
+			keep: (tag: string) => inTagFilter(filter, tag),
+		})),
+	] satisfies OwnFilter[] as OwnFilter[]).filter(({ facet, active, as }) => active && (as || facets.includes(facet)));
 
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([
 		index.search(search, {
@@ -494,14 +525,19 @@ export async function getPublicFacets(
 	]);
 	const totals: FacetTotals = { "*": searchResults.estimatedTotalHits ?? 0 };
 	if (topicResults) totals.topicAncestors = topicResults.estimatedTotalHits ?? 0;
-	ownFilters.forEach(({ facet }, index) => {
-		totals[facet] = ownResults[index].estimatedTotalHits ?? 0;
+	ownFilters.forEach(({ facet, as }, index) => {
+		totals[as ?? facet] = ownResults[index].estimatedTotalHits ?? 0;
 	});
 	searchResults.facetDistribution = Object.assign(
 		{},
 		searchResults.facetDistribution,
 		topicResults?.facetDistribution,
-		...ownResults.map((result) => result.facetDistribution),
+		...ownResults.map((result, index) => {
+			const { facet, as, keep } = ownFilters[index];
+			if (!as) return result.facetDistribution;
+			const counts = Object.entries(result.facetDistribution?.[facet] ?? {}).filter(([value]) => !keep || keep(value));
+			return { [as]: Object.fromEntries(counts) };
+		}),
 	);
 
 	return {

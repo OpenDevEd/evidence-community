@@ -982,8 +982,48 @@ const publicSearchSchema = z
 	.transform(applySearchScopeDefaults)
 	.superRefine(refineSearchScopes);
 
+/** URL params a tag filter's ID would collide with if it were ever given a param of its own. */
+const RESERVED_TAG_FILTER_IDS = new Set(["tags", "match", "collections", "topics", "sources", "type", "study", "search", "scope", "range", "institution", "country", "author", "page", "sort"]);
+
+/** One entry of a tag filter: a tag, or every tag starting with a prefix, which readers see without the prefix. */
+const tagFilterOptionSchema = z
+	.object({
+		value: tagSchema,
+		prefix: z.boolean().default(false),
+		/** What readers see in place of the tag; a prefix's own label is unused. */
+		label: singleLineStringSchema(80).optional(),
+	})
+	.strict();
+
+/** A filter readers tick tags in. Ticks in one filter match any of them; different filters narrow each other. */
+const tagFilterSchema = z
+	.object({
+		id: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/u).refine((id) => !RESERVED_TAG_FILTER_IDS.has(id), "This ID is a search option's name"),
+		label: singleLineStringSchema(60),
+		enabled: z.boolean().default(true),
+		/** A card of its own beside the results, or a picker under More filters. */
+		placement: z.enum(["card", "picker"]).default("card"),
+		options: z.array(tagFilterOptionSchema).max(100).default([]),
+		/** Ticked for a reader who has made no choice in this filter. They never show in the address. */
+		defaults: z.array(tagSchema).max(20).default([]),
+	})
+	.strict();
+
 const filtersSchema = z
 	.object({
+		tagFilters: z
+			.array(tagFilterSchema)
+			.max(8)
+			.default([])
+			.superRefine((filters, context) => addDuplicateIssues(filters, context, (filter) => filter.id)),
+		/** Whether ticked collections show records in any of them or in all of them, and whether readers can switch. */
+		collectionsMatch: z
+			.object({
+				default: z.enum(["all", "any"]).default("all"),
+				readerSwitch: z.boolean().default(false),
+			})
+			.strict()
+			.prefault({}),
 		institution: z
 			.object({
 				mode: z

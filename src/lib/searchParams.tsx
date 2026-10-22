@@ -52,6 +52,12 @@ export const searchParamsLoader = {
 	study: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
+	/** Tag filters' ticks as `<filter>:<tag>`; a filter not named here has its defaults ticked. See `tag-filters.ts`. */
+	tags: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
+		scroll: true,
+	}),
+	/** Whether ticked collections match `any` or `all`; empty is the library's choice. */
+	match: parseAsString.withDefault(""),
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 };
@@ -61,7 +67,7 @@ export const serializeSearchParams = createSerializer(searchParamsLoader);
 export const loadSearchParams = createLoader(searchParamsLoader);
 
 type SearchParams = inferParserType<typeof searchParamsLoader>;
-export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author_country", "author", "collections", "topics", "sources", "type", "study"] as const;
+export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author_country", "author", "collections", "topics", "sources", "type", "study", "tags", "match"] as const;
 
 /** The params that decide which results a search returns, so a cache keyed on them ignores page, order and where the reader came from. */
 export function resultParams(params: SearchParams) {

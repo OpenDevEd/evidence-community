@@ -42,6 +42,10 @@ export const librarySearchContextSchema = z
 		type: filterValuesSchema.default([]),
 		/** Study types, any of them, as Jev read each record. */
 		study: filterValuesSchema.default([]),
+		/** Tag filters' ticks as the address holds them; a filter it doesn't name has its defaults. Absent, as in a read of a whole collection, none apply. */
+		tags: filterValuesSchema.optional(),
+		/** Whether ticked collections match any or all, when the reader chose. */
+		match: z.string().max(3).default(""),
 		/** A reader's bookmarks, or one of their collections, when the list is on a profile. */
 		readerList: z
 			.object({
@@ -97,6 +101,8 @@ export function normalizeLibrarySearchContext(
 		sources: filterValues(value.sources),
 		type: filterValues(value.type),
 		study: filterValues(value.study),
+		tags: value.tags === undefined ? undefined : filterValues(value.tags),
+		match: value.match === "any" || value.match === "all" ? value.match : "",
 		readerList: value.readerList ?? null,
 	});
 }
@@ -118,6 +124,8 @@ export function librarySearchContextSummary(
 		sources: context.sources,
 		itemTypes: context.type,
 		studyTypes: context.study,
+		tagFilters: context.tags,
+		collectionsMatch: context.match || "library default",
 		readerList: context.readerList
 			? context.readerList.collectionId
 				? "one of this reader's collections, as shown on their profile"

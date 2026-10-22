@@ -24,7 +24,7 @@ import {
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { createContext, Fragment, type ReactNode, useContext, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { useFormatter, useTranslations } from "next-intl";
@@ -64,6 +64,9 @@ import { FacetOption, ShareRing } from "./FacetOption";
 import { useOfferedSources, useSourcesLabel } from "./sources";
 import { SOURCES_FIELD } from "@/lib/search-filter-constants";
 import type { PublicSource } from "@/app/api/sources/types";
+import { tagFacetKey, tagFilterOptions } from "@/lib/tag-filters";
+import { Tab, Tabs } from "@/components/nextui/Tabs";
+import type { CollectionsMatch } from "@/lib/collections-match";
 
 const UNCATEGORIZED_SECTION = "Uncategorized";
 
@@ -803,12 +806,15 @@ function FiltersList({
 	// Topics are counted without the topic filter, so their shares are out of the results without it.
 	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
+	const { tagTicks, handleTagSelect, facetTotals } = useFiltersContext();
+	const pickerTagFilters = useMemo(() => filters.tagFilters.filter((filter) => filter.enabled && filter.placement === "picker"), [filters.tagFilters]);
 
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
 		sourcePicker,
 		topicPicker,
+		...pickerTagFilters,
 	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
@@ -856,9 +862,23 @@ function FiltersList({
 		total,
 	]);
 
+	// A tag filter the owner put here, rather than in a card of its own.
+	const tagPickers = useMemo(() => pickerTagFilters.map((filter) => {
+		const ticked = tagTicks[filter.id] ?? [];
+		const list = tagFilterOptions(filter, facetDistribution?.[tagFacetKey(filter.id)], ticked).map((option) => ({
+			key: option.tag,
+			label: option.label,
+			count: option.count,
+			isSelected: ticked.includes(option.tag),
+			onSelectionChange: () => handleTagSelect(filter.id, option.tag),
+		}));
+		return <FacetPicker key={`tag-${filter.id}`} total={facetTotals?.[tagFacetKey(filter.id)] ?? total} label={filter.label} placeholder={filter.label} selectedKey={ticked} list={list} />;
+	}), [facetDistribution, facetTotals, handleTagSelect, pickerTagFilters, tagTicks, total]);
+
 	const moreFilters = useMemo(() => {
 		return (
 			<>
+				{tagPickers}
 				{institutionFilter}
 				{placeFilters}
 				{sourcePicker ? <SourceFilter sources={sources} /> : null}
@@ -880,6 +900,7 @@ function FiltersList({
 		queryParams.topics,
 		sourcePicker,
 		sources,
+		tagPickers,
 		topicPicker,
 		topicTotal,
 	]);
@@ -991,8 +1012,35 @@ function CollectionsTreeSection(props: Omit<React.ComponentProps<typeof InnerCol
 	const total = useFacetTotal("collectionsAncestry");
 	return (
 		<section className="w-full">
+			<CollectionsMatchTabs />
 			<InnerCollectionList {...props} total={total} />
 		</section>
+	);
+}
+
+/**
+ * Whether ticked collections show the records in any of them or only those in all of them. It slides in over the tree
+ * once two branches are ticked, where the library lets readers choose; a ticked child always narrows its ticked parent.
+ */
+function CollectionsMatchTabs() {
+	const t = useTranslations("sidebar");
+	const { filters } = useLibraryConfig();
+	const { collectionMatch, handleCollectionsMatch, tickedBranches } = useFiltersContext();
+	const still = useReducedMotion();
+	const shown = filters.collectionsMatch.readerSwitch && tickedBranches > 1;
+	return (
+		<AnimatePresence initial={false}>
+			{shown && (
+				<motion.div key="match" initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={still ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="overflow-hidden bg-card_light dark:bg-card">
+					<div className="px-6 pt-6">
+						<Tabs aria-label={t("collectionsMatch")} selectedKey={collectionMatch} onSelectionChange={(key) => handleCollectionsMatch(key as CollectionsMatch)} classNames={{ tabList: "w-full md:w-full", tab: "flex-1 md:flex-1" }}>
+							<Tab key="any" title={t("collectionsMatchAny")} />
+							<Tab key="all" title={t("collectionsMatchAll")} />
+						</Tabs>
+					</div>
+				</motion.div>
+			)}
+		</AnimatePresence>
 	);
 }
 

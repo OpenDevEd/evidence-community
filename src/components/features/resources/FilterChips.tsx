@@ -18,6 +18,7 @@ import useSWR from "swr";
 import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
 import { toggleTopicSelection, topicAncestry } from "@/lib/topics/selection";
 import { useSourcesLabel } from "@/components/features/collections/sources";
+import { tagLabel } from "@/lib/tag-filters";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -109,6 +110,9 @@ export function getFilterChipState(
 		(queryParams.author ? 1 : 0) +
 		(queryParams.type?.length || 0) +
 		(queryParams.study?.length || 0) +
+		// Only what differs from the library's defaults, which never show in the address: Clear filters puts them back.
+		(queryParams.tags?.length || 0) +
+		(queryParams.match ? 1 : 0) +
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
@@ -246,12 +250,18 @@ export function FilterChips() {
 		itemsContext.handleClearFilters,
 		topics.enabled,
 	);
+	const { filters } = useLibraryConfig();
+	// Every tag ticked, defaults too, so a reader sees what the library shows them first.
+	const tagChips = filters.tagFilters
+		.filter((filter) => filter.enabled)
+		.flatMap((filter) => (itemsContext.tagTicks[filter.id] ?? []).map((tag) => ({ filter, tag })));
+	const chipCount = filtersCount + (itemsContext.tagsAtDefaults ? tagChips.length : 0);
 
 	return (
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 && "max-h-filter-chips mb-4 opacity-100",
+				chipCount > 0 && "max-h-filter-chips mb-4 opacity-100",
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a
@@ -304,6 +314,25 @@ export function FilterChips() {
 								group={t("typeLabel")}
 								title={itemTypeName.has(type) ? itemTypeName(type) : type}
 								callback={() => itemsContext.handleTypeSelect(type)}
+								classNames={{
+									button: "bg-success/80 dark:bg-success/80",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					))}
+					{tagChips.map(({ filter, tag }) => (
+						<motion.div
+							key={`tag-${filter.id}-${tag}`}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								group={filter.label}
+								title={tagLabel(filter, tag)}
+								callback={() => itemsContext.handleTagSelect(filter.id, tag)}
 								classNames={{
 									button: "bg-success/80 dark:bg-success/80",
 									title: "text-white dark:text-white",

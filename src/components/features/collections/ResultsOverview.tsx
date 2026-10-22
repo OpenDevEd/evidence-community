@@ -33,6 +33,7 @@ import type { ListItem } from "@/app/api/item/types";
 import type { AuthorActivity, TopAuthors } from "@/lib/search";
 import { useItemLink } from "@/hooks/useItemLink";
 import { useLastFetchedData } from "@/context/Providers";
+import { tagFacetKey, tagFilterOptions, type TagFilter } from "@/lib/tag-filters";
 
 const YEARS_SHOWN = 30;
 const CITED_SHOWN = 3;
@@ -486,13 +487,66 @@ function TypeRows({ counts, selected, onSelect, pdf }: { counts: Record<string, 
 }
 
 /** Opens the rest of a list and closes it again. */
-function AllToggle({ open, count, onToggle }: { open: boolean; count: number; onToggle: () => void }) {
+function AllToggle({ open, count, onToggle, of = "types" }: { open: boolean; count: number; onToggle: () => void; /** What the list holds, for its labels. */ of?: "types" | "options" }) {
 	const t = useTranslations("sidebar");
 	return (
 		<Button size="sm" onPress={onToggle} endContent={<HugeiconsIcon icon={ArrowDown01Icon} aria-hidden className={twMerge("size-3.5 transition-transform duration-300 motion-reduce:transition-none", open && "rotate-180")} />}>
-			{open ? t("fewerTypes") : t("allTypes", { count })}
+			{of === "options" ? (open ? t("fewerOptions") : t("allOptions", { count })) : open ? t("fewerTypes") : t("allTypes", { count })}
 		</Button>
 	);
+}
+
+/**
+ * A tag filter as a card: a row per option in the owner's order, a prefix's tags by count in its place. A record can
+ * carry several of a filter's tags, so each row's share is of the results without this filter's ticks and no bar
+ * splits them as parts of a whole.
+ */
+function TagFilterCard({ filter, counts, ticked, onSelect }: { filter: TagFilter; counts: Record<string, number> | undefined; ticked: string[]; onSelect: (tag: string) => void }) {
+	const [all, setAll] = useState(false);
+	const expand = useExpandTransition();
+	const total = useFacetTotal(tagFacetKey(filter.id));
+	const rows = tagFilterOptions(filter, counts, ticked);
+	if (rows.length === 0) return null;
+	const dimmed = (tag: string) => ticked.length > 0 && !ticked.includes(tag);
+	const isTop = (tag: string, index: number) => index < TYPES_SHOWN || ticked.includes(tag);
+	const optionRow = (option: (typeof rows)[number]) => (
+		<TypeRow
+			key={option.tag}
+			label={option.label}
+			count={option.count}
+			total={total}
+			tone={toneOf(rows.indexOf(option))}
+			chosen={ticked.includes(option.tag)}
+			dimmed={dimmed(option.tag)}
+			onSelect={() => onSelect(option.tag)}
+		/>
+	);
+	const rest = rows.filter((option, index) => !isTop(option.tag, index));
+	return (
+		<SidebarCard title={filter.label} footer={rest.length > 0 && <AllToggle open={all} count={rows.length} onToggle={() => setAll(!all)} of="options" />}>
+			<div className="-mx-3 -mt-2">
+				<ul className="flex flex-col">{rows.filter((option, index) => isTop(option.tag, index)).map(optionRow)}</ul>
+				<AnimatePresence initial={false}>
+					{all && rest.length > 0 && (
+						<motion.ul key="rest" initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} transition={expand} className="flex flex-col overflow-hidden">
+							{rest.map(optionRow)}
+						</motion.ul>
+					)}
+				</AnimatePresence>
+			</div>
+		</SidebarCard>
+	);
+}
+
+/** The library's tag filters that are cards, in the owner's order. */
+function TagFilterCards({ facetDistribution }: { facetDistribution: FacetDistribution | undefined }) {
+	const { filters } = useLibraryConfig();
+	const { tagTicks, handleTagSelect } = useFiltersContext();
+	return filters.tagFilters
+		.filter((filter) => filter.enabled && filter.placement === "card")
+		.map((filter) => (
+			<TagFilterCard key={filter.id} filter={filter} counts={facetDistribution?.[tagFacetKey(filter.id)]} ticked={tagTicks[filter.id] ?? []} onSelect={(tag) => handleTagSelect(filter.id, tag)} />
+		));
 }
 
 const ACTIVITY_YEARS = 20;
@@ -849,6 +903,7 @@ export function ResultsOverview({
 	const shown = useShown(inExplore);
 	return (
 		<>
+			<TagFilterCards facetDistribution={facetDistribution} />
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
 			<StudyTypeRows facets={facetDistribution} selected={studies} onSelect={onStudySelect} inExplore={inExplore} />
