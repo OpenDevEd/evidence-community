@@ -46,12 +46,13 @@ const SHADOW_LIFTED = `group-hover/card:shadow-[0_2px_4px_rgb(0_0_0/0.06),0_18px
 const EDGE = "pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-black/[0.08] dark:ring-white/[0.1]";
 
 /**
- * How far each PDF behind the front one sits: this share of the front page's width to the right and of its height up, and a
- * little further when the card is under the pointer, as the pages of a fanned hand spread.
+ * How far each PDF behind the front one sits: this share of the front page's width towards the card's edge and of its height
+ * up, and a little further when the card is under the pointer, as the pages of a fanned hand spread.
  */
 const FAN = { x: 8, y: 5 };
-// Tailwind reads classes as written, so FAN's numbers are spelled out here too.
-const FANNED = `[transform:translate(calc(var(--depth)*8%),calc(var(--depth)*-5%))] group-hover/card:[transform:translate(calc(var(--depth)*11%),calc(var(--depth)*-7%))] transition-transform ${EASE}`;
+// Tailwind reads classes as written, so FAN's numbers are spelled out here too. --side turns the fan to the left in a
+// right-to-left language, where the cover sits at the card's left edge.
+const FANNED = `[--side:1] rtl:[--side:-1] [transform:translate(calc(var(--depth)*var(--side)*8%),calc(var(--depth)*-5%))] group-hover/card:[transform:translate(calc(var(--depth)*var(--side)*11%),calc(var(--depth)*-7%))] transition-transform ${EASE}`;
 
 /**
  * The record's PDF as its first page, at the card's trailing edge: what a reader gets before they open it. A record with
@@ -90,7 +91,7 @@ export function ResourceCover({ pdfs, title, short, parentType }: { pdfs: ListAt
 				)}
 				{behind.length > 0 && (
 					// How many PDFs, on the front page's corner, as a photo marks a set.
-					<span className="absolute bottom-1.5 left-1.5 z-10 flex items-center gap-1 rounded-full bg-black/60 py-1 pl-1.5 pr-2 text-[10px] font-semibold leading-none tabular-nums text-white backdrop-blur-md">
+					<span className="absolute bottom-1.5 start-1.5 z-10 flex items-center gap-1 rounded-full bg-black/60 py-1 pe-2 ps-1.5 text-[10px] font-semibold leading-none tabular-nums text-white backdrop-blur-md">
 						<HugeiconsIcon icon={Files02Icon} className="size-3 shrink-0" />
 						<span aria-hidden>{pdfs.length}</span>
 						<span className="sr-only">{t("pdfCount", { count: pdfs.length })}</span>
@@ -138,7 +139,7 @@ function CoverPage({ src, alt }: { src: string; alt: string }) {
 /** The first page of one of the record's other PDFs, fanned out behind the front one; the further back, the dimmer. */
 function BehindPage({ pdf, title, depth, style }: { pdf: ListAttachment; title: string | undefined; depth: number; style: CSSProperties }) {
 	return (
-		<span aria-hidden className={twMerge("absolute bottom-0 left-0 overflow-hidden rounded-[3px] bg-[#f4f1ea] @[560px]:rounded-[5px] dark:bg-[#2a2a2a]", SHADOW, FANNED)} style={{ ...style, zIndex: -depth, "--depth": depth } as CSSProperties}>
+		<span aria-hidden className={twMerge("absolute bottom-0 start-0 overflow-hidden rounded-[3px] bg-[#f4f1ea] @[560px]:rounded-[5px] dark:bg-[#2a2a2a]", SHADOW, FANNED)} style={{ ...style, zIndex: -depth, "--depth": depth } as CSSProperties}>
 			{pdf.PDFCoverPageImage ? <CoverPage key={pdf.PDFCoverPageImage} src={pdf.PDFCoverPageImage} alt="" /> : <TitlePage title={title} className="rounded-none" />}
 			<span className="absolute inset-0 bg-black" style={{ opacity: depth * 0.06 }} />
 			<span className={EDGE} />
