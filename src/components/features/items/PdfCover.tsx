@@ -71,8 +71,9 @@ export function TitlePage({ title, site, className }: { title?: string; /** Wher
 		<div aria-hidden className={twMerge("@container relative flex aspect-[3/4] w-full flex-col overflow-hidden rounded-xl bg-[#fbf8f2] p-[10%] text-[#2b2521] ring-1 ring-inset ring-black/[0.06]", className)}>
 			<span className="h-[2.5cqw] w-1/4 shrink-0 rounded-full bg-accent" />
 			{site ? (
-				// A long name breaks after a dot. A page narrower than 80 px has no room for one, so the title stands alone there.
-				<span className="mt-[7cqw] hidden text-[length:max(8px,7.5cqw)] font-medium leading-tight text-[#2b2521]/55 @[80px]:block">
+				// A long name breaks after a dot. A page narrower than 80 px has no room for one, so the title stands alone there. The
+				// page is measured, not this sheet's own container, whose padding leaves it a fifth narrower.
+				<span className="mt-[7cqw] hidden text-[length:max(8px,7.5cqw)] font-medium leading-tight text-[#2b2521]/55 @[80px]/pdf:block">
 					{site.split(".").map((part, index) => <Fragment key={index}>{index > 0 && <>.<wbr /></>}{part}</Fragment>)}
 				</span>
 			) : null}
@@ -120,7 +121,7 @@ export function OnlinePdf({ url, title, onOpen, className }: { url: string; titl
 			className={twMerge("@container/pdf relative block overflow-hidden outline-offset-4 focus-visible:outline-2 focus-visible:outline-accent", className)}
 		>
 			<TitlePage title={title} site={site} className="rounded-none dark:brightness-[0.94]" />
-			<span className="absolute bottom-[7%] right-[7%] flex size-[max(18px,22cqw)] items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
+			<span className="absolute bottom-[7%] end-[7%] flex size-[max(18px,22cqw)] items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
 				<HugeiconsIcon icon={LinkSquare01Icon} className="size-[55%]" />
 			</span>
 		</a>
