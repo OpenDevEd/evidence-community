@@ -253,7 +253,7 @@ export function resolveSearchRequest(
 	perPage: number = ITEMS_PER_PAGE,
 ) {
 	const {
-		params: { page: pageNum, scope, institution, country, author_country, range, topics, sources },
+		params: { page: pageNum, scope, institution, country, author_country, range, topics, sources, study },
 	} = resolveSearchQuery(searchParams, libraryConfig, perPage);
 	const search = searchParams.search || "";
 	const collections = searchParams.collections || [];
@@ -265,8 +265,7 @@ export function resolveSearchRequest(
 		// Asked without the param, as a whole-library view is, no defaults apply; a reader's address always has it.
 		tags: searchParams.tags === undefined ? {} : tagSelections(searchParams.tags, libraryConfig.filters.tagFilters),
 		type: searchParams.type ?? [],
-		// A library that offers no study type filter ignores one in the address.
-		study: libraryConfig.filters.studyTypes.enabled ? (searchParams.study ?? []) : [],
+		study,
 		studyField: studyTypeFacet(libraryConfig.filters),
 		country,
 		authorCountry: author_country,

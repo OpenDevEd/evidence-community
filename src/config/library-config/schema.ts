@@ -990,7 +990,8 @@ const RESERVED_TAG_FILTER_IDS = new Set(["tags", "match", "collections", "topics
 /** One entry of a tag filter: a tag, or every tag starting with a prefix, which readers see without the prefix. */
 const tagFilterOptionSchema = z
 	.object({
-		value: tagSchema,
+		// "*" is how the address marks a filter a reader emptied, so it can't be a tag here.
+		value: tagSchema.refine((tag) => tag !== "*", "A tag filter can't use * as a tag"),
 		prefix: z.boolean().default(false),
 		/** What readers see in place of the tag; a prefix's own label is unused. */
 		label: singleLineStringSchema(80).optional(),
@@ -1007,7 +1008,7 @@ const tagFilterSchema = z
 		placement: z.enum(["card", "picker"]).default("card"),
 		options: z.array(tagFilterOptionSchema).max(100).default([]),
 		/** Ticked for a reader who has made no choice in this filter. They never show in the address. */
-		defaults: z.array(tagSchema).max(20).default([]),
+		defaults: z.array(tagSchema.refine((tag) => tag !== "*", "A tag filter can't use * as a tag")).max(20).default([]),
 	})
 	.strict();
 

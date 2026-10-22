@@ -5,6 +5,8 @@ export type TagSelections = Record<string, string[]>;
 
 /** The address's mark for a filter a reader emptied, so its defaults don't come back. */
 const NONE = "*";
+/** A `tags` value alone that asks for the whole library: every filter empty, no defaults. Whole-library counts send it. */
+export const WHOLE_LIBRARY_TAGS = ["*"];
 const SEPARATOR = ":";
 
 const enabledFilters = (filters: readonly TagFilter[]) => filters.filter((filter) => filter.enabled);
@@ -14,6 +16,7 @@ const enabledFilters = (filters: readonly TagFilter[]) => filters.filter((filter
  * says nothing about has its defaults ticked.
  */
 export function tagSelections(param: readonly string[] | undefined, filters: readonly TagFilter[]): TagSelections {
+	if (param?.includes(NONE)) return Object.fromEntries(enabledFilters(filters).map((filter) => [filter.id, []]));
 	const entries = (param ?? []).map((entry) => {
 		const at = entry.indexOf(SEPARATOR);
 		return at > 0 ? ([entry.slice(0, at), entry.slice(at + 1)] as const) : null;

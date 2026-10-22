@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { pageTagCounts } from "../../src/lib/admin/openscholar-tags";
 import { parseOpenScholarInstitutionRequest } from "../../src/lib/admin/institution-catalog-contract";
 import { collectionNodes, deepestTicked } from "../../src/lib/collections-match";
-import { tagFilterOptions, tagParam, tagSelections, type TagFilter } from "../../src/lib/tag-filters";
+import { tagFilterOptions, tagParam, tagSelections, WHOLE_LIBRARY_TAGS, type TagFilter } from "../../src/lib/tag-filters";
 
 const status: TagFilter = {
 	id: "status", label: "Status", enabled: true, placement: "card", defaults: ["Reviewed"],
@@ -25,6 +25,10 @@ describe("tag filter ticks in the address", () => {
 		const param = tagParam({ status: [], domain: [] }, filters);
 		expect(param).toEqual(["status:*"]);
 		expect(tagSelections(param, filters).status).toEqual([]);
+	});
+
+	it("applies no defaults where the whole library is asked for", () => {
+		expect(tagSelections(WHOLE_LIBRARY_TAGS, filters)).toEqual({ status: [], domain: [] });
 	});
 
 	it("reads a tag that contains the separator whole", () => {

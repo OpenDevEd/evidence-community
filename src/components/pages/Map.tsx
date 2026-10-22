@@ -36,6 +36,7 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
 import { everyRecordScope, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
+import { WHOLE_LIBRARY_TAGS } from "@/lib/tag-filters";
 
 function MouseTooltip({
 	content,
@@ -731,7 +732,7 @@ const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search:
 	(everyRecordScope(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
 
 /** The whole library: no filter, and a scope that reads every record. */
-const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(search) ?? "" });
+const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(search) ?? "", tags: WHOLE_LIBRARY_TAGS });
 
 /**
  * The whole library's counts, for the tooltips' first line: its countries in the mode and its institutions. Only while the map is
