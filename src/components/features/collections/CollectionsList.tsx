@@ -1,12 +1,7 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import {
-	ArrowDown01Icon,
-	Cancel01Icon,
-	FilterIcon,
-	ListViewIcon,
-} from "@hugeicons/core-free-icons";
+import { ArrowDown01Icon, Cancel01Icon, FilterIcon, ListViewIcon, PathfinderIntersectIcon, PathfinderUniteIcon } from "@hugeicons/core-free-icons";
 import {
 	Accordion,
 	AccordionItem,
@@ -1028,16 +1023,21 @@ function CollectionsMatchTabs() {
 	const { collectionMatch, handleCollectionsMatch } = useFiltersContext();
 	if (!filters.collectionsMatch.readerSwitch) return null;
 	return (
-		<div className="flex items-center justify-between gap-3 bg-card_light px-6 pt-5 dark:bg-card">
-			<span id="collections-match-label" className="min-w-0 truncate text-sm text-black/60 dark:text-white/60">{t("collectionsMatch")}</span>
+		// Sits on the seam between the filter card and the tree, half on each, taking no room of its own.
+		<div className="relative z-10 h-0">
 			<Tabs
-				aria-labelledby="collections-match-label"
+				aria-label={t("collectionsMatch")}
 				selectedKey={collectionMatch}
 				onSelectionChange={(key) => handleCollectionsMatch(key as CollectionsMatch)}
-				classNames={{ base: "w-auto shrink-0", tabList: "w-auto md:w-auto", tab: "flex-initial px-3 md:px-3 py-1 md:py-1" }}
+				classNames={{
+					base: "absolute end-6 top-0 w-auto -translate-y-1/2",
+					tabList: "w-auto md:w-auto rounded-xl p-0.5 md:p-0.5 shadow-md",
+					tab: "h-7 flex-initial rounded-lg px-2.5 md:px-2.5 py-0 md:py-0 text-xs md:text-xs",
+					cursor: "rounded-lg",
+				}}
 			>
-				<Tab key="any" title={t("collectionsMatchAny")} />
-				<Tab key="all" title={t("collectionsMatchAll")} />
+				<Tab key="any" title={<span className="flex items-center gap-1.5"><HugeiconsIcon icon={PathfinderUniteIcon} aria-hidden className="size-3.5" />{t("collectionsMatchAny")}</span>} />
+				<Tab key="all" title={<span className="flex items-center gap-1.5"><HugeiconsIcon icon={PathfinderIntersectIcon} aria-hidden className="size-3.5" />{t("collectionsMatchAll")}</span>} />
 			</Tabs>
 		</div>
 	);
