@@ -201,6 +201,14 @@ function resolveSortOption(search: string, sort: string) {
 	);
 }
 
+/** Ticked collections, all of them or any of `anyCollections`, and each tag filter's ticks, any of them. */
+function collectionAndTagFilters(collections: readonly string[], anyCollections: readonly string[] | undefined, tags: TagSelections) {
+	const collectionFilters = anyCollections
+		? [anyCollections.length ? meilisearchIn("collectionsAncestry", anyCollections) : null]
+		: collections.map((collection) => meilisearchEquals("collectionsAncestry", collection));
+	return [...collectionFilters, ...Object.values(tags).map((ticked) => (ticked.length ? meilisearchIn("tags", ticked) : null))];
+}
+
 function buildSearchFilters({
 	author,
 	collections,
@@ -229,10 +237,7 @@ function buildSearchFilters({
 		study.length ? meilisearchIn(studyField, study) : null,
 		sources.length ? meilisearchIn(SOURCES_FIELD, sources) : null,
 		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
-		...(anyCollections
-			? [anyCollections.length ? meilisearchIn("collectionsAncestry", anyCollections) : null]
-			: collections.map((collection) => meilisearchEquals("collectionsAncestry", collection))),
-		...Object.values(tags).map((ticked) => (ticked.length ? meilisearchIn("tags", ticked) : null)),
+		...collectionAndTagFilters(collections, anyCollections, tags),
 		"deleted != 1",
 		hiddenTags.length ? `tags NOT IN ${JSON.stringify(hiddenTags)}` : null,
 	].filter((filter): filter is string => filter !== null);
@@ -260,7 +265,8 @@ export function resolveSearchRequest(
 		// Asked without the param, as a whole-library view is, no defaults apply; a reader's address always has it.
 		tags: searchParams.tags === undefined ? {} : tagSelections(searchParams.tags, libraryConfig.filters.tagFilters),
 		type: searchParams.type ?? [],
-		study: searchParams.study ?? [],
+		// A library that offers no study type filter ignores one in the address.
+		study: libraryConfig.filters.studyTypes.enabled ? (searchParams.study ?? []) : [],
 		studyField: studyTypeFacet(libraryConfig.filters),
 		country,
 		authorCountry: author_country,

@@ -351,6 +351,7 @@ describe("the chat beside the search results", () => {
 			sources: [],
 			type: [],
 			study: [],
+			match: "",
 			readerList: null,
 		};
 		expect(asked).toHaveLength(1);

@@ -70,7 +70,7 @@ export function getRuntimeSearchFacets(
 	topicsEnabled: boolean,
 ) {
 	// Item types, study types and PDFs describe the results beside the list. Authors are counted apart, on their own cached request.
-	const facets = ["collectionsAncestry", "itemType", studyTypeFacet(filters), PDF_PRESENCE_ATTRIBUTE];
+	const facets = ["collectionsAncestry", "itemType", ...(filters.studyTypes.enabled ? [studyTypeFacet(filters)] : []), PDF_PRESENCE_ATTRIBUTE];
 	if (topicsEnabled) {
 		facets.push("topicAncestors");
 	}

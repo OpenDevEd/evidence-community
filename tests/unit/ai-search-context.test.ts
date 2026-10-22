@@ -44,6 +44,7 @@ describe("the library result set the assistant can see", () => {
 			sources: [],
 			type: [],
 			study: [],
+			match: "",
 			readerList: null,
 		});
 	});

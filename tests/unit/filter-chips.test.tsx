@@ -21,7 +21,7 @@ const libraryState = vi.hoisted(() => ({ topicsEnabled: true }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		topics: { enabled: libraryState.topicsEnabled },
-		filters: { sources: { enabled: true, label: "Searches" } },
+		filters: { sources: { enabled: true, label: "Searches" }, tagFilters: [] },
 	}),
 }));
 
@@ -44,6 +44,8 @@ const filters = {
 	handleTypeSelect: vi.fn(),
 	handleInstitutionSelect: vi.fn(),
 	handleCheckboxChange: vi.fn(),
+	tagTicks: {},
+	tagsAtDefaults: true,
 };
 
 vi.mock("@/context/FiltersProvider", () => ({

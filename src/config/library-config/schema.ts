@@ -1056,6 +1056,13 @@ const filtersSchema = z
 			})
 			.strict()
 			.prefault({}),
+		/** The Study types card beside the results, and filtering by it. Records keep their type labels either way. */
+		studyTypes: z
+			.object({
+				enabled: z.boolean().default(true),
+			})
+			.strict()
+			.prefault({}),
 	})
 	.strict()
 	.prefault({})

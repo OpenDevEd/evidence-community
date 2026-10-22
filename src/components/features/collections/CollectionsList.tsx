@@ -775,6 +775,25 @@ function treeSlot(collections: boolean, sources: boolean, topics: boolean): Tree
 	return topics ? "topics" : null;
 }
 
+/** The tag filters the owner put under More filters, as pickers, rather than in cards of their own. */
+function useTagPickers(facetDistribution: FacetDistribution | undefined, total: number) {
+	const { filters } = useLibraryConfig();
+	const { tagTicks, handleTagSelect, facetTotals } = useFiltersContext();
+	const pickerTagFilters = useMemo(() => filters.tagFilters.filter((filter) => filter.enabled && filter.placement === "picker"), [filters.tagFilters]);
+	const tagPickers = useMemo(() => pickerTagFilters.map((filter) => {
+		const ticked = tagTicks[filter.id] ?? [];
+		const list = tagFilterOptions(filter, facetDistribution?.[tagFacetKey(filter.id)], ticked).map((option) => ({
+			key: option.tag,
+			label: option.label,
+			count: option.count,
+			isSelected: ticked.includes(option.tag),
+			onSelectionChange: () => handleTagSelect(filter.id, option.tag),
+		}));
+		return <FacetPicker key={`tag-${filter.id}`} total={facetTotals?.[tagFacetKey(filter.id)] ?? total} label={filter.label} placeholder={filter.label} selectedKey={ticked} list={list} />;
+	}), [facetDistribution, facetTotals, handleTagSelect, pickerTagFilters, tagTicks, total]);
+	return { pickerCount: pickerTagFilters.length, tagPickers };
+}
+
 function FiltersList({
 	queryParams,
 	handleCountrySelect,
@@ -801,16 +820,14 @@ function FiltersList({
 	// Topics are counted without the topic filter, so their shares are out of the results without it.
 	const topicTotal = useFacetTotal("topicAncestors");
 	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
-	const { tagTicks, handleTagSelect, facetTotals } = useFiltersContext();
-	const pickerTagFilters = useMemo(() => filters.tagFilters.filter((filter) => filter.enabled && filter.placement === "picker"), [filters.tagFilters]);
+	const { pickerCount, tagPickers } = useTagPickers(facetDistribution, total);
 
 	const enabledCount = [
 		isInstitutionEnabled,
 		isCountryFocusEnabled,
 		sourcePicker,
 		topicPicker,
-		...pickerTagFilters,
-	].filter(Boolean).length;
+	].filter(Boolean).length + pickerCount;
 
 	const t = useTranslations("ui");
 
@@ -857,18 +874,6 @@ function FiltersList({
 		total,
 	]);
 
-	// A tag filter the owner put here, rather than in a card of its own.
-	const tagPickers = useMemo(() => pickerTagFilters.map((filter) => {
-		const ticked = tagTicks[filter.id] ?? [];
-		const list = tagFilterOptions(filter, facetDistribution?.[tagFacetKey(filter.id)], ticked).map((option) => ({
-			key: option.tag,
-			label: option.label,
-			count: option.count,
-			isSelected: ticked.includes(option.tag),
-			onSelectionChange: () => handleTagSelect(filter.id, option.tag),
-		}));
-		return <FacetPicker key={`tag-${filter.id}`} total={facetTotals?.[tagFacetKey(filter.id)] ?? total} label={filter.label} placeholder={filter.label} selectedKey={ticked} list={list} />;
-	}), [facetDistribution, facetTotals, handleTagSelect, pickerTagFilters, tagTicks, total]);
 
 	const moreFilters = useMemo(() => {
 		return (

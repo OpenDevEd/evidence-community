@@ -538,6 +538,12 @@ function TagFilterCard({ filter, counts, ticked, onSelect }: { filter: TagFilter
 	);
 }
 
+/** The Study types card, where the library offers the filter. */
+function StudyTypeCard(props: React.ComponentProps<typeof StudyTypeRows>) {
+	const { filters } = useLibraryConfig();
+	return filters.studyTypes.enabled ? <StudyTypeRows {...props} /> : null;
+}
+
 /** The library's tag filters that are cards, in the owner's order. */
 function TagFilterCards({ facetDistribution }: { facetDistribution: FacetDistribution | undefined }) {
 	const { filters } = useLibraryConfig();
@@ -906,7 +912,7 @@ export function ResultsOverview({
 			<TagFilterCards facetDistribution={facetDistribution} />
 			{showYears && <YearBars counts={facetDistribution?.year} range={range} onRangeChange={onRangeChange} />}
 			<TypeRows counts={facetDistribution?.itemType} selected={types} onSelect={onTypeSelect} pdf={facetDistribution?.[PDF_PRESENCE_ATTRIBUTE]} />
-			<StudyTypeRows facets={facetDistribution} selected={studies} onSelect={onStudySelect} inExplore={inExplore} />
+			<StudyTypeCard facets={facetDistribution} selected={studies} onSelect={onStudySelect} inExplore={inExplore} />
 			{showAuthors && <AuthorRows selected={author} onSelect={onAuthorSelect} shown={shown} />}
 			<MostCited shown={shown} />
 		</>
