@@ -19,7 +19,8 @@ export function tagSelections(param: readonly string[] | undefined, filters: rea
 	if (param?.includes(NONE)) return Object.fromEntries(enabledFilters(filters).map((filter) => [filter.id, []]));
 	const entries = (param ?? []).map((entry) => {
 		const at = entry.indexOf(SEPARATOR);
-		return at > 0 ? ([entry.slice(0, at), entry.slice(at + 1)] as const) : null;
+		// An entry with no filter or no tag names nothing, so it changes nothing.
+		return at > 0 && at < entry.length - 1 ? ([entry.slice(0, at), entry.slice(at + 1)] as const) : null;
 	});
 	return Object.fromEntries(
 		enabledFilters(filters).map((filter) => {

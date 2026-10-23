@@ -31,6 +31,11 @@ describe("tag filter ticks in the address", () => {
 		expect(tagSelections(WHOLE_LIBRARY_TAGS, filters)).toEqual({ status: [], domain: [] });
 	});
 
+	it("ignores an entry with no tag, keeping the filter's defaults", () => {
+		expect(tagSelections(["status:"], filters)).toEqual({ status: ["Reviewed"], domain: [] });
+		expect(tagSelections(["status:", "status:Selected"], filters).status).toEqual(["Selected"]);
+	});
+
 	it("reads a tag that contains the separator whole", () => {
 		const param = tagParam({ status: ["Reviewed"], domain: ["Domain: AIG"] }, filters);
 		expect(param).toEqual(["domain:Domain: AIG"]);

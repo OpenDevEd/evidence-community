@@ -62,6 +62,25 @@ describe("library configuration artifacts", () => {
 		).toBe(false);
 	});
 
+	it("refuses the tag filter IDs and tags the runtime refuses, so OpenScholar never saves them", () => {
+		const ajv = new Ajv2020({ allErrors: true, strict: true });
+		ajv.addKeyword("x-runtimeValidation");
+		ajv.addKeyword("x-dynamicDefault");
+		addFormats(ajv);
+		const validate = ajv.compile(createLibraryConfigJsonSchema());
+		const withFilter = async (filter: Record<string, unknown>) => {
+			const example = await readJson("config/library.example.json");
+			return validate({ ...example, filters: { ...example.filters, tagFilters: [{ label: "Status", ...filter }] } });
+		};
+
+		return Promise.all([
+			expect(withFilter({ id: "status", options: [{ value: "Reviewed" }], defaults: ["Reviewed"] })).resolves.toBe(true),
+			expect(withFilter({ id: "type" })).resolves.toBe(false),
+			expect(withFilter({ id: "status", options: [{ value: "*" }] })).resolves.toBe(false),
+			expect(withFilter({ id: "status", defaults: [" * "] })).resolves.toBe(false),
+		]);
+	});
+
 	it("exports closed choices, extensible choices, and write-only paths", () => {
 		const catalog = createLibraryConfigCatalog();
 		const enums = new Map(

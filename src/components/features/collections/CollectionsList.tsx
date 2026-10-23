@@ -53,7 +53,7 @@ import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection, withoutBareRoots } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { useFiltersContext } from "@/context/FiltersProvider";
-import { ResultsOverview, shareOf, useFacetTotal } from "./ResultsOverview";
+import { ResultsOverview, shareOf, useFacetTotal, useMostCitedSettled } from "./ResultsOverview";
 import { SIDEBAR_GREY } from "./SidebarCard";
 import { FacetOption, ShareRing } from "./FacetOption";
 import { useOfferedSources, useSourcesLabel } from "./sources";
@@ -1182,6 +1182,7 @@ export default function CollectionsList({
 	const { topics } = useLibraryConfig();
 	const sources = useOfferedSources();
 	const slot = treeSlot(isCollectionsEnabled, Boolean(sources?.length), topics.enabled);
+	const citedSettled = useMostCitedSettled(isModal);
 	return (
 		<aside
 			id="collections"
@@ -1196,8 +1197,9 @@ export default function CollectionsList({
 			<Skeleton
 				data-collections={isCollectionsEnabled}
 				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
-				// The sources' names decide what takes the place under the filters, so it waits for them too.
-				isLoaded={!!data && !!facetDistribution && !!sources}
+				// The sources' names decide what takes the place under the filters, and the Most cited read whether its card shows,
+				// so it waits for them too.
+				isLoaded={!!data && !!facetDistribution && !!sources && citedSettled}
 			>
 				<FeaturedInstitution chosen={queryParams.institution} onSelect={handleInstitutionSelect} isModal={isModal} />
 				<FilterCard

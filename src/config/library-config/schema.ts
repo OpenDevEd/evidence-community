@@ -985,13 +985,17 @@ const publicSearchSchema = z
 	.superRefine(refineSearchScopes);
 
 /** URL params a tag filter's ID would collide with if it were ever given a param of its own. */
-const RESERVED_TAG_FILTER_IDS = new Set(["tags", "match", "collections", "topics", "sources", "type", "study", "search", "scope", "range", "institution", "country", "author", "page", "sort"]);
+const RESERVED_TAG_FILTER_IDS = ["tags", "match", "collections", "topics", "sources", "type", "study", "search", "scope", "range", "institution", "country", "author", "page", "sort"];
+// Patterns rather than refinements, so the generated schema carries them and OpenScholar's settings never save an ID or a
+// tag the runtime refuses.
+const TAG_FILTER_ID = new RegExp(`^(?!(?:${RESERVED_TAG_FILTER_IDS.join("|")})$)[a-z][a-z0-9-]{0,31}$`, "u");
+/** "*" is how the address marks a filter a reader emptied, so it can't be a tag here. */
+const tagFilterTagSchema = tagSchema.regex(/^(?!\s*\*\s*$)/u, "A tag filter can't use * as a tag");
 
 /** One entry of a tag filter: a tag, or every tag starting with a prefix, which readers see without the prefix. */
 const tagFilterOptionSchema = z
 	.object({
-		// "*" is how the address marks a filter a reader emptied, so it can't be a tag here.
-		value: tagSchema.refine((tag) => tag !== "*", "A tag filter can't use * as a tag"),
+		value: tagFilterTagSchema,
 		prefix: z.boolean().default(false),
 		/** What readers see in place of the tag; a prefix's own label is unused. */
 		label: singleLineStringSchema(80).optional(),
@@ -1001,14 +1005,14 @@ const tagFilterOptionSchema = z
 /** A filter readers tick tags in. Ticks in one filter match any of them; different filters narrow each other. */
 const tagFilterSchema = z
 	.object({
-		id: z.string().regex(/^[a-z][a-z0-9-]{0,31}$/u).refine((id) => !RESERVED_TAG_FILTER_IDS.has(id), "This ID is a search option's name"),
+		id: z.string().regex(TAG_FILTER_ID, "A tag filter's ID is lowercase letters, digits and hyphens, and not a search option's name"),
 		label: singleLineStringSchema(60),
 		enabled: z.boolean().default(true),
 		/** A card of its own beside the results, or a picker under More filters. */
 		placement: z.enum(["card", "picker"]).default("card"),
 		options: z.array(tagFilterOptionSchema).max(100).default([]),
 		/** Ticked for a reader who has made no choice in this filter. They never show in the address. */
-		defaults: z.array(tagSchema.refine((tag) => tag !== "*", "A tag filter can't use * as a tag")).max(20).default([]),
+		defaults: z.array(tagFilterTagSchema).max(20).default([]),
 	})
 	.strict();
 

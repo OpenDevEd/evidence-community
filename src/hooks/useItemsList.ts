@@ -48,8 +48,10 @@ function useItemsResults(
 		// library's list keeps what it already loaded.
 		revalidateIfStale: Boolean(userData),
 		onSuccess: (data) => {
-			if (data.totalPages < params.page) {
-				handlePageChange(data.totalPages);
+			// A list with no results has no pages; its last page is still page 1.
+			const last = Math.max(1, data.totalPages);
+			if (last < params.page) {
+				handlePageChange(last);
 			}
 			setLastFetchedData(data);
 			document.dispatchEvent(
