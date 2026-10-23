@@ -839,6 +839,13 @@ function useMostCited(shown: boolean) {
 	return { data, failed: Boolean(error) && !isValidating, isValidating, retry: () => void mutate(), stale: Boolean(data) && isValidating, cited: data?.items.filter((item) => item.citationCount) ?? [] };
 }
 
+/** Whether the Most cited read has answered, or isn't asked for: the sidebar waits for it, so it shows with the card already in or out. */
+export function useMostCitedSettled(inExplore: boolean) {
+	const shown = useShown(inExplore);
+	const cited = useMostCited(shown);
+	return !shown || Boolean(cited.data) || cited.failed;
+}
+
 /** The list in whichever state it is in: failed, loading, or the results. */
 function CitedList({ cited }: { cited: ReturnType<typeof useMostCited> }) {
 	const t = useTranslations("sidebar");
