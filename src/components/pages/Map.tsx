@@ -36,7 +36,7 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
 import { everyRecordScope, resolveRuntimeSearchScope, type RuntimeSearch } from "@/config/library-config/search";
-import { WHOLE_LIBRARY_TAGS } from "@/lib/tag-filters";
+import { tagSelections, WHOLE_LIBRARY_TAGS, type TagFilter } from "@/lib/tag-filters";
 
 function MouseTooltip({
 	content,
@@ -727,9 +727,12 @@ function useCountryCounts(params: ReturnType<typeof useItemsList>["queryParams"]
 }
 
 /** Whether a search, a filter, a chosen place or the Documents scope narrows the map. The other scopes only choose which fields a
- * search reads, so alone they narrow nothing; so does Documents where it is the only scope. */
-const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch) =>
-	(everyRecordScope(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") || RESULT_PARAMS.some((key) => key !== "scope" && params[key].length > 0);
+ * search reads, so alone they narrow nothing; so does Documents where it is the only scope. A tag filter's defaults narrow it too,
+ * though the address doesn't name them. */
+const narrows = (params: ReturnType<typeof useItemsList>["queryParams"], search: RuntimeSearch, tagFilters: readonly TagFilter[]) =>
+	(everyRecordScope(search) !== undefined && resolveRuntimeSearchScope(params.scope, search) === "documents") ||
+	RESULT_PARAMS.some((key) => key !== "scope" && key !== "tags" && params[key].length > 0) ||
+	Object.values(tagSelections(params.tags, tagFilters)).some((ticked) => ticked.length > 0);
 
 /** The whole library: no filter, and a scope that reads every record. */
 const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(search) ?? "", tags: WHOLE_LIBRARY_TAGS });
@@ -739,9 +742,9 @@ const wholeLibrary = (search: RuntimeSearch) => ({ scope: everyRecordScope(searc
  * narrowed.
  */
 function useLibraryTotals(params: ReturnType<typeof useItemsList>["queryParams"], mode: CountryMode) {
-	const { search } = useLibraryConfig();
+	const { search, filters } = useLibraryConfig();
 	const library = useSWR<FacetsGetResponse>(buildFacetsQuery(wholeLibrary(search)), fetcher, COUNTS_OPTIONS).data;
-	if (!narrows(params, search) || !library) return {};
+	if (!narrows(params, search, filters.tagFilters) || !library) return {};
 	return { countries: countsIn(library, mode), institutions: library.facetDistribution?.[INSTITUTION_FILTER_FIELD] as Record<string, number> | undefined };
 }
 
