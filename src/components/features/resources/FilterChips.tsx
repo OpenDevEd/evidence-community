@@ -277,9 +277,11 @@ export function FilterChips() {
 	const selectedTopics = topics.enabled
 		? (itemsContext.queryParams.topics ?? [])
 		: [];
-	const filtersCount = chosenFilterCount(itemsContext.queryParams);
+	// Topics count only where the library has them, as their chips show.
+	const chosen = { ...itemsContext.queryParams, topics: selectedTopics };
+	const filtersCount = chosenFilterCount(chosen);
 	const { anyChips, tagChips, resets } = useTagChips();
-	const shown = showsFilterChips(itemsContext.queryParams, filters.tagFilters);
+	const shown = showsFilterChips(chosen, filters.tagFilters);
 
 	return (
 		<div

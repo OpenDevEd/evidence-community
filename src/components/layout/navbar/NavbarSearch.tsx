@@ -56,6 +56,8 @@ import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
 const NavbarExplore = dynamic(() => import("./NavbarExplore"), { ssr: false });
 // Active-filter chips: lazy, and only mounted when filters actually exist. Until they load, a row of one chip's height
 // holds their place, so the page below doesn't move down when they arrive.
+// ponytail: one line is reserved; chips that wrap onto a second line still push the page down when they load. Server-render
+// the chips if that needs to hold still too.
 const NavbarFilterChips = dynamic(() => import("./NavbarFilterChips"), {
 	ssr: false,
 	loading: () => <div className="h-7" />,
