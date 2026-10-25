@@ -187,10 +187,24 @@ function readingRow(itemKey: string, index: number, text: { title: string; abstr
 	return [`INSERT INTO "itemReading" ("itemKey", "studyType", "typeConfidence", "typedBy", "pooled", "region", "effects", "input", "contentHash", "questionSet", "model") VALUES (${sql(itemKey)}, ${sql(type)}, ${confidence}, 'ai', 0.1, 'sub-saharan-africa', 0.5, 'abstract', ${sql(contentHashOf(text))}, ${QUESTION_SET}, 'typesafe/jev-1.13');`];
 }
 
+/** Where a seeded PDF's first page is. `verify` serves it itself (cli.ts), as late as the page's data. */
+export const COVER_PATH = "/verify-covers/";
+
+/** A stored PDF of the record, with its first page as the cover the result cards show. */
+function pdfRows(itemKey: string, index: number): string[] {
+	const pdfKey = key("VP", index);
+	return [
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(pdfKey)}, 'native', ${sql(pdfKey)});`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "parentItem", "linkMode", "contentType", "PDFCoverPageImage", "PDFCoverPageWidth", "PDFCoverPageHeight", "dateAdded", "deleted") VALUES (${sql(pdfKey)}, 'native', ${sql(pdfKey)}, 'Attachment', 1, 'Full text PDF', ${sql(itemKey)}, 'imported_file', 'application/pdf', ${sql(`${COVER_PATH}${itemKey}.svg`)}, 600, 800, timestamp '2026-09-01 00:00:00', 0);`,
+	];
+}
+
 function itemRows(index: number, members: Map<string, string[]>): string[] {
 	const itemKey = key("V", index);
 	const item = itemRow(itemKey, index);
 	const rows = [`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES (${sql(itemKey)}, 'native', ${sql(itemKey)});`, item.row, ...readingRow(itemKey, index, item.text)];
+	// Every third record has a PDF. Chosen by place, not by the random sequence, so the other records stay as they were.
+	if (index % 3 === 1) rows.push(...pdfRows(itemKey, index));
 	rows.push(...maybe(0.65, () => citationRows(itemKey, index), []));
 	for (const collection of COLLECTIONS) members.get(collection.key)!.push(...maybe(0.25, () => [itemKey], []));
 	return [...rows, outboxRow("item", itemKey)];

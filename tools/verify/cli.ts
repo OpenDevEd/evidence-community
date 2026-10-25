@@ -15,10 +15,12 @@ import type { BrowserContext, Page } from "@playwright/test";
 import { earlyStep, open, parseStep, type RunOptions } from "./browser";
 import { compare, printShots, report, type Comparison } from "./compare";
 import { hookStop } from "./hook";
+import { COVER_PATH } from "./seed";
 import { buildBranch, buildMain, ensureStack, fingerprint, mainCommit, mainDir, serve, stackRunning, stopStack, type Paths, type Stack } from "./stack";
 import { git, readJson, runsNext, withLock, withTimeout, writeJson } from "./util";
 
 const ROOT = git(["rev-parse", "--show-toplevel"], process.cwd());
+const COVER_PAGE = readFileSync(path.join(ROOT, "tools/verify/cover.svg"));
 const STATE = path.join(ROOT, ".verify");
 const PATHS: Paths = { root: ROOT, state: STATE, stackFile: path.join(STATE, "stack.json") };
 const LAST_PASS = path.join(STATE, "last-pass.json");
@@ -133,6 +135,8 @@ async function prepareFor(stack: Stack, role: string | undefined): Promise<RunOp
 	const cookies = role ? await adminCookies(stack, role) : [];
 	return async (context: BrowserContext, page: Page, origin: string) => {
 		await context.addCookies(cookies);
+		// The seeded PDFs' first pages (seed.ts). Served from here, they come as late as the page's data.
+		await context.route(`**${COVER_PATH}**`, (route) => route.fulfill({ contentType: "image/svg+xml", body: COVER_PAGE }));
 		await answerConsent(page, origin);
 	};
 }
@@ -240,7 +244,7 @@ Options for shift and shot:
                            interactions that save nothing, or run \`up --fresh\` afterwards.
   --as <role>              Sign in to the admin as editor, creator or owner (the fake OpenScholar's users).
   --browser <list>         chromium,firefox (shift default) or one of them.
-  --slow <ms>              Delay for every fetch (shift default 600, 0 to turn off).
+  --slow <ms>              Delay for every fetch and picture (shift default 600, 0 to turn off).
   --allow <selector>       An element whose movement is intended, such as an expanding panel.
   --width <px> --height <px>  Viewport, default 1440x900. Use 390 x 844 for a phone.
   --full                   Full-page screenshots.
