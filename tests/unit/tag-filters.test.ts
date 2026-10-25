@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { pageTagCounts } from "../../src/lib/admin/openscholar-tags";
 import { parseOpenScholarInstitutionRequest } from "../../src/lib/admin/institution-catalog-contract";
 import { collectionNodes, deepestTicked } from "../../src/lib/collections-match";
-import { tagFilterOptions, tagParam, tagSelections, WHOLE_LIBRARY_TAGS, type TagFilter } from "../../src/lib/tag-filters";
+import { showsFilterChips, tagFilterOptions, tagParam, tagSelections, WHOLE_LIBRARY_TAGS, type TagFilter } from "../../src/lib/tag-filters";
 
 const status: TagFilter = {
 	id: "status", label: "Status", enabled: true, placement: "card", defaults: ["Reviewed"],
@@ -40,6 +40,23 @@ describe("tag filter ticks in the address", () => {
 		const param = tagParam({ status: ["Reviewed"], domain: ["Domain: AIG"] }, filters);
 		expect(param).toEqual(["domain:Domain: AIG"]);
 		expect(tagSelections(param, filters)).toEqual({ status: ["Reviewed"], domain: ["Domain: AIG"] });
+	});
+});
+
+describe("the filter chips row", () => {
+	const none = { range: "", author: "", match: "", institution: [], country: [], author_country: [], collections: [], topics: [], sources: [], type: [], study: [], tags: [] };
+
+	it("shows for every kind of filter a reader chooses", () => {
+		for (const chosen of [{ type: ["Report"] }, { study: ["rct"] }, { topics: ["fields/17"] }, { match: "all" }, { range: "2020-2024" }, { author: "Smith" }, { author_country: ["KE"] }])
+			expect(showsFilterChips({ ...none, ...chosen }, [])).toBe(true);
+		expect(showsFilterChips(none, [])).toBe(false);
+	});
+
+	it("shows a filter's default ticks, a changed tag filter and an emptied one", () => {
+		expect(showsFilterChips(none, filters)).toBe(true);
+		expect(showsFilterChips({ ...none, tags: ["status:Selected"] }, filters)).toBe(true);
+		expect(showsFilterChips({ ...none, tags: ["status:*"] }, filters)).toBe(true);
+		expect(showsFilterChips(none, [domain])).toBe(false);
 	});
 });
 

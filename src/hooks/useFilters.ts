@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
 import { useQueryStates } from "nuqs";
 import { fetcher, buildFacetsQuery } from "@/lib/utils";
-import { searchParamsLoader } from "@/lib/searchParams";
+import { NO_FILTERS, searchParamsLoader } from "@/lib/searchParams";
 import {
 	Collection,
 	CollectionsGetResponse,
@@ -21,7 +21,7 @@ import { isAdminPath, normalizePathname } from "@/lib/path";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { resolveSearchQuery } from "@/lib/search-query";
-import { atDefaults, tagParam, tagSelections } from "@/lib/tag-filters";
+import { tagParam, tagSelections } from "@/lib/tag-filters";
 import { collectionNodes, collectionsMatch, deepestTicked, type CollectionsMatch } from "@/lib/collections-match";
 
 const SWR_OPTIONS = {
@@ -268,22 +268,7 @@ export function useFilters() {
 		[filters.collectionsMatch.default, setParams],
 	);
 
-	const handleClearFilters = useCallback(() => {
-		setParams({
-			tags: [],
-			match: "",
-			author: "",
-			institution: [],
-			country: [],
-			author_country: [],
-			collections: [],
-			range: "",
-			topics: [],
-			sources: [],
-			type: [],
-			study: [],
-		});
-	}, [setParams]);
+	const handleClearFilters = useCallback(() => setParams(NO_FILTERS), [setParams]);
 
 	const { data: facetsData } = useSWR<FacetsGetResponse>(
 		filterSurfaceEnabled ? buildFacetsQuery(runtimeParams) : null,
@@ -365,7 +350,6 @@ export function useFilters() {
 		handleClearFilters,
 		handleCheckboxChange,
 		tagTicks,
-		tagsAtDefaults: atDefaults(tagTicks, filters.tagFilters),
 		handleTagSelect,
 		handleTagReset,
 		collectionMatch,

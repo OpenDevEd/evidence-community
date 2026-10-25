@@ -18,7 +18,8 @@ import useSWR from "swr";
 import { fetchTopicCatalog, useTopicTree } from "@/lib/topics/client";
 import { toggleTopicSelection, topicAncestry } from "@/lib/topics/selection";
 import { useSourcesLabel } from "@/components/features/collections/sources";
-import { tagLabel, type TagFilter } from "@/lib/tag-filters";
+import { showsFilterChips, tagFilterChips, tagLabel, type TagFilter } from "@/lib/tag-filters";
+import { chosenFilterCount } from "@/lib/searchParams";
 
 /** The active filters as removable chips, shared by the navbar and the library listing. Kept apart from the listing so the navbar does not load it. */
 function Chip({
@@ -94,38 +95,6 @@ function yearChipTitle(range: string): string {
 	if (start) return `${start}+`;
 	if (end) return `–${end}`;
 	return range;
-}
-
-export function getFilterChipState(
-	queryParams: Record<string, any>,
-	handleClearFilters?: () => void,
-	topicsEnabled = true,
-) {
-	const topicFilters = topicsEnabled ? (queryParams.topics ?? []) : [];
-	const filtersCount =
-		(queryParams.collections?.length || 0) +
-		(queryParams.institution?.length || 0) +
-		topicFilters.length +
-		(queryParams.sources?.length || 0) +
-		(queryParams.author ? 1 : 0) +
-		(queryParams.type?.length || 0) +
-		(queryParams.study?.length || 0) +
-		// Only what differs from the library's defaults, which never show in the address: Clear filters puts them back.
-		(queryParams.tags?.length || 0) +
-		(queryParams.match ? 1 : 0) +
-		(queryParams.range ? 1 : 0) +
-		countryFacetOptions.reduce(
-			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
-			0,
-		);
-	const clearButton = () => {
-		handleClearFilters?.();
-	};
-
-	return {
-		filtersCount,
-		clearButton,
-	};
 }
 
 /** What a topic is in the catalog's tree, by the shape of its ID: its level's name in the sidebar messages, none for a topic. */
@@ -237,12 +206,9 @@ function SourceChips() {
 /** Every tag ticked, defaults too, and a filter whose defaults the reader emptied, so the row shows what the list holds. */
 function useTagChips() {
 	const { filters } = useLibraryConfig();
-	const { tagTicks, tagsAtDefaults } = useFiltersContext();
-	const enabled = filters.tagFilters.filter((filter) => filter.enabled);
-	const tagChips = enabled.flatMap((filter) => (tagTicks[filter.id] ?? []).map((tag) => ({ filter, tag })));
-	const anyChips = enabled.filter((filter) => filter.defaults.length > 0 && (tagTicks[filter.id] ?? []).length === 0);
-	// Ticks that differ from the defaults are already among the filters counted.
-	return { tagChips, anyChips, resets: enabled.some((filter) => filter.defaults.length > 0), shown: (tagsAtDefaults ? tagChips.length : 0) + anyChips.length };
+	const { tagTicks } = useFiltersContext();
+	const { ticked, emptied } = tagFilterChips(tagTicks, filters.tagFilters);
+	return { tagChips: ticked, anyChips: emptied, resets: filters.tagFilters.some((filter) => filter.enabled && filter.defaults.length > 0) };
 }
 
 const CHIP_MOTION = { initial: { opacity: 0, y: 10 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -10 }, transition: { duration: 0.2 } };
@@ -304,26 +270,22 @@ export function FilterChips() {
 	// Reads the shared, app-level filter state so the navbar chips and the
 	// library chips are the exact same resident instance (no remount flash).
 	const itemsContext = useFiltersContext();
-	const { topics } = useLibraryConfig();
+	const { topics, filters } = useLibraryConfig();
 	const t = useTranslations("ui");
 	const itemTypeName = useTranslations("itemType");
 	const studyTypes = useTranslations("studyTypes");
 	const selectedTopics = topics.enabled
 		? (itemsContext.queryParams.topics ?? [])
 		: [];
-	const { filtersCount, clearButton } = getFilterChipState(
-		itemsContext.queryParams,
-		itemsContext.handleClearFilters,
-		topics.enabled,
-	);
-	const { anyChips, tagChips, resets, shown } = useTagChips();
-	const chipCount = filtersCount + shown;
+	const filtersCount = chosenFilterCount(itemsContext.queryParams);
+	const { anyChips, tagChips, resets } = useTagChips();
+	const shown = showsFilterChips(itemsContext.queryParams, filters.tagFilters);
 
 	return (
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				chipCount > 0 && "max-h-filter-chips mb-4 opacity-100",
+				shown && "max-h-filter-chips mb-4 opacity-100",
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a
@@ -553,7 +515,7 @@ export function FilterChips() {
 						transition={{ duration: 0.2 }}
 						className={twMerge("shrink-0 flex justify-end", !resets && "w-7")}
 					>
-						<ClearButton resets={resets} onPress={clearButton} />
+						<ClearButton resets={resets} onPress={itemsContext.handleClearFilters} />
 					</motion.div>
 				)}
 			</AnimatePresence>

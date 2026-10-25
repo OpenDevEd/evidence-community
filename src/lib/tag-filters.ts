@@ -1,4 +1,5 @@
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import { chosenFilterCount } from "@/lib/searchParams";
 
 export type TagFilter = LibraryPublicConfig["filters"]["tagFilters"][number];
 export type TagSelections = Record<string, string[]>;
@@ -43,8 +44,27 @@ export function tagParam(selections: TagSelections, filters: readonly TagFilter[
 }
 
 /** Whether every filter is at its defaults, so there is nothing for Clear filters to put back. */
-export function atDefaults(selections: TagSelections, filters: readonly TagFilter[]) {
+function atDefaults(selections: TagSelections, filters: readonly TagFilter[]) {
 	return tagParam(selections, filters).length === 0;
+}
+
+/** The tag filters' chips: every tag ticked, defaults too, and each filter whose defaults the reader emptied. */
+export function tagFilterChips(selections: TagSelections, filters: readonly TagFilter[]) {
+	const enabled = enabledFilters(filters);
+	return {
+		ticked: enabled.flatMap((filter) => (selections[filter.id] ?? []).map((tag) => ({ filter, tag }))),
+		emptied: enabled.filter((filter) => filter.defaults.length > 0 && (selections[filter.id] ?? []).length === 0),
+	};
+}
+
+/**
+ * Whether the filter row has a chip: a filter the reader chose, or a tag filter's chip. The address names only the tag ticks
+ * that differ from the defaults; while every filter is at its defaults, its ticks are chips too.
+ */
+export function showsFilterChips(params: Parameters<typeof chosenFilterCount>[0], filters: readonly TagFilter[]) {
+	const selections = tagSelections(params.tags, filters);
+	const { ticked, emptied } = tagFilterChips(selections, filters);
+	return chosenFilterCount(params) > 0 || (atDefaults(selections, filters) && ticked.length > 0) || emptied.length > 0;
 }
 
 /** What a reader sees for a tag: its own label, else its prefix's tag without the prefix, else the tag. */

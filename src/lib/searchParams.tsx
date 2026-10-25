@@ -67,7 +67,26 @@ export const serializeSearchParams = createSerializer(searchParamsLoader);
 export const loadSearchParams = createLoader(searchParamsLoader);
 
 type SearchParams = inferParserType<typeof searchParamsLoader>;
-export const RESULT_PARAMS = ["search", "scope", "range", "institution", "country", "author_country", "author", "collections", "topics", "sources", "type", "study", "tags", "match"] as const;
+
+/** What a reader narrows results by: Clear filters empties these and the filter chips count them, so a new filter goes here. */
+const FILTER_PARAMS = ["range", "institution", "country", "author_country", "author", "collections", "topics", "sources", "type", "study", "tags", "match"] as const;
+export const RESULT_PARAMS = ["search", "scope", ...FILTER_PARAMS] as const;
+/** The params that never change which results come back. */
+const OTHER_PARAMS = ["referrer", "page", "sort", "collectionId", "error", "message"] as const;
+type Unsorted = Exclude<keyof SearchParams, (typeof RESULT_PARAMS)[number] | (typeof OTHER_PARAMS)[number]>;
+// A param in neither list stops this compiling, and the error says where it goes.
+const everyParamSorted: [Unsorted] extends [never] ? true : `Add ${Unsorted} to FILTER_PARAMS or OTHER_PARAMS in searchParams.tsx` = true;
+
+/** Every filter emptied, as Clear filters sets them. */
+export const NO_FILTERS = Object.fromEntries(FILTER_PARAMS.map((key) => [key, null])) as Record<(typeof FILTER_PARAMS)[number], null>;
+
+/** How many filters a reader chose: one per value ticked, and one for each single-value filter that is set. */
+export function chosenFilterCount(params: Pick<SearchParams, (typeof FILTER_PARAMS)[number]>) {
+	return FILTER_PARAMS.reduce((count, key) => {
+		const value = params[key];
+		return count + (Array.isArray(value) ? value.length : value ? 1 : 0);
+	}, 0);
+}
 
 /** The params that decide which results a search returns, so a cache keyed on them ignores page, order and where the reader came from. */
 export function resultParams(params: SearchParams) {
