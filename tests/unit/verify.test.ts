@@ -288,6 +288,11 @@ describe("analyzePhase on a step taken while the page loads", () => {
 		expect(analyzePhase([opening, behind], early)).toEqual([]);
 	});
 
+	it("reports a picture that appears at once in the open overlay, but not one on the page behind", () => {
+		const pictures = frame(1_300, { pictures: [{ id: 12, hiddenSince: 450, inside: 10 }, { id: 3, hiddenSince: 450 }] });
+		expect(analyzePhase([opening, behind, pictures], early)).toEqual([{ kind: "picture-pop", id: 12, from: 450, to: 1_300 }]);
+	});
+
 	it("reports rows that land in the open overlay in one frame, and the jump they give it", () => {
 		const rows = frame(1_400, { added: [{ id: 11, box: [16, 60, 284, 132], inside: 10, within: 10, entering: false }], moved: [{ id: 10, dx: 0, dy: 0, dw: 0, dh: 132, inside: 10 }] });
 		expect(analyzePhase([opening, behind, rows], early)).toMatchObject([

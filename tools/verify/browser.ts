@@ -217,12 +217,13 @@ export async function cacheFonts(context: BrowserContext, browserName: string) {
 	await context.route(WEB_FONTS, (route) => serveFont(route, browserName));
 }
 
-// Next prefetches linked pages in the background and Chromium never reports
-// some of those finished; they are not this page's data.
+// The page's data and pictures, which a run waits for. Next prefetches linked
+// pages in the background and Chromium never reports some of those finished;
+// they are not this page's.
 function isData(request: Request): boolean {
 	const headers = request.headers();
 	const prefetch = headers["next-router-prefetch"] !== undefined || headers["next-router-segment-prefetch"] !== undefined;
-	return ["fetch", "xhr"].includes(request.resourceType()) && !prefetch && !IGNORED_TRAFFIC.test(request.url());
+	return ["fetch", "xhr", "image"].includes(request.resourceType()) && !prefetch && !IGNORED_TRAFFIC.test(request.url());
 }
 
 /** An action whose request fails can still leave a page that looks fine. */
@@ -233,7 +234,7 @@ function serverError(response: Response, origin: string): Item | null {
 	return { kind: "http", keys: [`http ${response.status()} ${url.pathname}`], line: `a request to ${url.pathname} answered HTTP ${response.status()}` };
 }
 
-/** Counts the page's data requests as pending until they finish, and collects errors into `errors`. */
+/** Counts the page's data and picture requests as pending until they finish, and collects errors into `errors`. */
 function watch(page: Page, origin: string, activity: Activity, errors: Item[]) {
 	page.on("request", (request) => {
 		if (!isData(request)) return;

@@ -32,7 +32,7 @@ export type Frame = {
 	// Pictures that went from not showing (unloaded, or hidden by their own
 	// opacity or a parent's) to fully showing in this one frame, with when they
 	// were last seen not showing while on screen.
-	pictures?: { id: number; hiddenSince: number }[];
+	pictures?: { id: number; hiddenSince: number; inside?: number }[];
 };
 
 // A load phase starts with navigation; everything after `baseline` (fonts
@@ -292,10 +292,10 @@ function analyzeEarly(frames: Frame[], since: number): Finding[] {
 	const opened = new Map<number, number>();
 	for (const frame of frames) for (const id of frame.opened ?? []) opened.set(id, frame.t);
 	const inside = (entry: { inside?: number }) => opened.has(entry.inside ?? -1);
-	const overlays = frames.map((frame): Frame => ({ ...frame, moved: frame.moved.filter(inside), added: frame.added.filter(inside), removed: frame.removed.filter(inside), textAdded: frame.overlayTextAdded ?? [], textRemoved: frame.overlayTextRemoved ?? [] }));
+	const overlays = frames.map((frame): Frame => ({ ...frame, moved: frame.moved.filter(inside), added: frame.added.filter(inside), removed: frame.removed.filter(inside), textAdded: frame.overlayTextAdded ?? [], textRemoved: frame.overlayTextRemoved ?? [], pictures: frame.pictures?.filter(inside) }));
 	const late = (frame: Frame, move: Move) => frame.t - opened.get(move.inside!)! > OPENING_MS;
 	const shifts = bursts(overlays.filter(changed)).map((burst) => shift(burst, late)).filter((finding): finding is Finding => finding !== null);
-	return [...shifts, ...textBlinks(overlays, since), ...elementBlinks(overlays, since), ...arrivals(frames)].sort((a, b) => a.from - b.from || a.kind.localeCompare(b.kind));
+	return [...shifts, ...textBlinks(overlays, since), ...elementBlinks(overlays, since), ...arrivals(frames), ...picturePops(overlays, since)].sort((a, b) => a.from - b.from || a.kind.localeCompare(b.kind));
 }
 
 /** The problems a person would see in one phase: movement after the page or the response settled, and blinks. */

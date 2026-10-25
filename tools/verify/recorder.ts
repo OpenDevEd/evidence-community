@@ -118,7 +118,7 @@ export function recorder(config: { allow: string }) {
 		overlayTextRemoved: string[];
 		deltas: Map<number, number[]>;
 		positions: Map<Element, number[]>;
-		pictures: { id: number; hiddenSince: number }[];
+		pictures: { id: number; hiddenSince: number; inside?: number }[];
 	};
 
 	function position(frame: Frame, element: Element | null): number[] {
@@ -318,9 +318,9 @@ export function recorder(config: { allow: string }) {
 		forget(frame, seen);
 	}
 
-	// How much of a picture shows: none until it has loaded, then its opacity with every parent's.
+	// How much of a picture shows: none until it has loaded or while it is hidden, then its opacity with every parent's.
 	function showingPicture(image: HTMLImageElement): number {
-		if (!image.complete || image.naturalWidth === 0) return 0;
+		if (!image.complete || image.naturalWidth === 0 || getComputedStyle(image).visibility !== "visible") return 0;
 		let opacity = 1;
 		for (let node: Element | null = image; node; node = node.parentElement) opacity *= Number(getComputedStyle(node).opacity);
 		return opacity;
@@ -337,13 +337,17 @@ export function recorder(config: { allow: string }) {
 		const showed = showingPicture(image);
 		const last = pictures.get(image);
 		pictures.set(image, { showed, hiddenSince: hiddenFrom(last, showed, t) });
-		if (last && last.showed < 0.2 && showed > 0.8) frame.pictures.push({ id: idFor(image), hiddenSince: last.hiddenSince });
+		if (last && last.showed < 0.2 && showed > 0.8) {
+			const id = idFor(image);
+			noteOverlay(image, id);
+			frame.pictures.push({ id, hiddenSince: last.hiddenSince, ...inside(id) });
+		}
 	}
 
-	// A picture off screen is forgotten, so one scrolled to, already loaded, is new.
+	// A picture off screen, or cut off by a frame around it, is forgotten, so one scrolled or opened to, already loaded, is new.
 	function watchPictures(frame: Frame, t: number) {
 		for (const image of document.images) {
-			if (measurable(image) && onScreen(image)) watchPicture(frame, image, t);
+			if (measurable(image) && onScreen(image) && showing(image, document.body, true) > 0) watchPicture(frame, image, t);
 			else pictures.delete(image);
 		}
 	}
