@@ -45,7 +45,6 @@ const filters = {
 	handleInstitutionSelect: vi.fn(),
 	handleCheckboxChange: vi.fn(),
 	tagTicks: {},
-	tagsAtDefaults: true,
 };
 
 vi.mock("@/context/FiltersProvider", () => ({

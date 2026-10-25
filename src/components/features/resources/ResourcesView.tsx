@@ -64,7 +64,8 @@ import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { AskHandedOverQuestion } from "@/components/features/ai/useHandedOverQuestion";
 import InlineLibraryChat from "../ai/InlineLibraryChat";
-import { FilterChips, getFilterChipState } from "./FilterChips";
+import { FilterChips } from "./FilterChips";
+import { chosenFilterCount } from "@/lib/searchParams";
 export { FilterChips };
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
@@ -570,7 +571,7 @@ function useResultsAnalytics(itemsContext: ReturnType<typeof useItemsList>) {
 		}
 
 		const query = itemsContext.queryParams;
-		const { filtersCount } = getFilterChipState(query);
+		const filtersCount = chosenFilterCount(query);
 		const categoricalFilters = {
 			collection: query.collections,
 			country: query.country,

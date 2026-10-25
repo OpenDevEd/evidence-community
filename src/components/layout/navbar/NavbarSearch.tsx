@@ -32,7 +32,7 @@ import { useEarlyTyping } from "@/hooks/useEarlyTyping";
 import { followsInThisTab } from "@/lib/follows-in-this-tab";
 import { SORT_OPTIONS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
-import { countryFacetOptions } from "@/constants/misc";
+import { showsFilterChips } from "@/lib/tag-filters";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
@@ -54,9 +54,13 @@ import { OpenAccessLabel } from "@/components/features/items/OpenAccessLabel";
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
 const NavbarExplore = dynamic(() => import("./NavbarExplore"), { ssr: false });
-// Active-filter chips — lazy, and only mounted when filters actually exist.
+// Active-filter chips: lazy, and only mounted when filters actually exist. Until they load, a row of one chip's height
+// holds their place, so the page below doesn't move down when they arrive.
+// ponytail: one line is reserved; chips that wrap onto a second line still push the page down when they load. Server-render
+// the chips if that needs to hold still too.
 const NavbarFilterChips = dynamic(() => import("./NavbarFilterChips"), {
 	ssr: false,
+	loading: () => <div className="h-7" />,
 });
 
 /**
@@ -227,19 +231,8 @@ export default function NavbarSearch() {
 		[filters, params, search, topics],
 	);
 
-	// How many library filters (collections / institutions / sources / author / countries)
-	// are active — drives whether the filter-chips row appears.
-	const activeFilterCount =
-		(runtimeParams.collections?.length || 0) +
-		(runtimeParams.institution?.length || 0) +
-		(runtimeParams.sources?.length || 0) +
-		(runtimeParams.author ? 1 : 0) +
-		(runtimeParams.range ? 1 : 0) +
-		countryFacetOptions.reduce(
-			(acc, facet) =>
-				acc + ((runtimeParams as any)[facet.queryParam]?.length || 0),
-			0,
-		);
+	// The chips row appears when the library listing's own row would show a chip.
+	const showsChips = showsFilterChips(runtimeParams, filters.tagFilters);
 
 	// Keep an immediate draft while the debounced URL param still represents
 	// the value from which the user started typing. Once the URL changes, it is
@@ -696,10 +689,10 @@ export default function NavbarSearch() {
 					</Button>
 				</div>
 
-				{/* Active filter chips (collections / institutions / countries / author).
+				{/* The active filters as chips.
 			    FilterChips carries a bottom margin meant for the library layout;
 			    drop it here so the bar's own padding controls the spacing. */}
-				{activeFilterCount > 0 && (
+				{showsChips && (
 					<div className="[&>div]:!mb-0">
 						<NavbarFilterChips />
 					</div>
