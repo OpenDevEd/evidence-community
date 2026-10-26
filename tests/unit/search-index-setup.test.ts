@@ -82,7 +82,6 @@ function service(
 		client,
 		index,
 		indexName: "items",
-		redirectsIndex: index,
 	};
 }
 

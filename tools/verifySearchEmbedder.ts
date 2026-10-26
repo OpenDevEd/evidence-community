@@ -69,7 +69,6 @@ function service(client: Meilisearch, indexName: string): MeilisearchService {
 		client,
 		index: client.index(indexName),
 		indexName,
-		redirectsIndex: client.index("redirects"),
 	};
 }
 

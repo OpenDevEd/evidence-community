@@ -12,7 +12,7 @@ import {
 	RUNTIME_LOCALE_COOKIE,
 } from "./i18n/runtime";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "./lib/http-cache";
-import { getMeilisearchForConfig } from "./lib/meilisearch";
+import { readItemRedirect } from "./lib/item-redirects";
 import { normalizePathname } from "./lib/path";
 import { getSessionCookie } from "better-auth/cookies";
 import {
@@ -224,13 +224,6 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 
 function isPublicLibraryPage(pathname: string) {
 	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(normalizePathname(pathname));
-}
-
-function encodeKey(key: string): string {
-	return key
-		.split("")
-		.map((char) => char.charCodeAt(0).toString(36))
-		.join("n");
 }
 
 function mapLegacySearchParams(
@@ -487,20 +480,9 @@ export default async function proxy(request: NextRequest) {
 
 			if (libraryConfig.generation.redirects) {
 				try {
-					const { indexName, redirectsIndex } =
-						await getMeilisearchForConfig(libraryConfig);
-					const compositeKey = indexName + "|" + resolvedKey;
-					const encoding = encodeKey(compositeKey);
-
-					const redirects = (await Promise.race([
-						redirectsIndex.getDocument(encoding),
-						new Promise((_, reject) =>
-							setTimeout(() => reject(new Error("timeout")), 350),
-						),
-					])) as Record<string, unknown>;
-
-					if (redirects?.value && redirects.value !== resolvedKey) {
-						finalKey = String(redirects.value);
+					const redirect = await readItemRedirect(libraryConfig, resolvedKey);
+					if (redirect && redirect !== resolvedKey) {
+						finalKey = redirect;
 					}
 				} catch {
 					// A redirect lookup failure still allows structural

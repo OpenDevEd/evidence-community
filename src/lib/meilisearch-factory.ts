@@ -3,7 +3,6 @@ import { Meilisearch } from "meilisearch";
 
 import { RevisionAwareResourceFactory } from "./revision-aware-resource";
 
-const REDIRECTS_INDEX_NAME = "redirects";
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export type SearchServiceConfiguration = {
@@ -16,7 +15,6 @@ export type MeilisearchService = {
 	client: Meilisearch;
 	index: Index;
 	indexName: string;
-	redirectsIndex: Index;
 };
 
 function configurationsEqual(
@@ -45,7 +43,6 @@ function createMeilisearchService(
 			client,
 			index: client.index(configuration.index),
 			indexName: configuration.index,
-			redirectsIndex: client.index(REDIRECTS_INDEX_NAME),
 		},
 	};
 }

@@ -53,6 +53,7 @@
 		"source:writeback": "tsx ./tools/runSourceWriteback.ts",
 		"search:index": "tsx ./tools/runSearchIndexer.ts",
 		"search:index:health": "tsx ./tools/checkSearchIndexerHealth.ts",
+		"search:copy-redirects": "tsx ./tools/copyMeilisearchRedirects.ts",
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
 		"test:search-embedder": "tsx ./tools/verifySearchEmbedder.ts",
 		"test:search-worker": "npm run build && tsx ./tools/verifySearchIndexerWorker.ts",

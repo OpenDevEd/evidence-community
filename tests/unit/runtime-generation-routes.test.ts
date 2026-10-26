@@ -141,20 +141,15 @@ describe("runtime sitemap routes", () => {
 
 describe("runtime redirect routes", () => {
 	it("uses configured redirect storage when redirects are enabled", async () => {
-		// A stub PostgreSQL client so the real query runs through Drizzle.
+		// A stub PostgreSQL client so the real queries run through Drizzle: the note's redirect list, then the item's redirect.
 		const query = vi
 			.fn()
-			.mockResolvedValue({ rows: [["legacy = /lib/NEWKEY01"]] });
-		const getDocument = vi.fn().mockResolvedValue({
-			value: "NEWKEY01",
-		});
+			.mockResolvedValueOnce({ rows: [["legacy = /lib/NEWKEY01"]] })
+			.mockResolvedValueOnce({ rows: [["NEWKEY01"]] });
 		mocks.getLibraryConfig.mockResolvedValue(config());
 		mocks.getDatabaseForConfig.mockResolvedValue(
 			drizzle({ query } as never, { schema }),
 		);
-		mocks.getMeilisearchForConfig.mockResolvedValue({
-			redirectsIndex: { getDocument },
-		});
 
 		const noteResponse = await getNoteRedirect(
 			new Request(
@@ -175,8 +170,8 @@ describe("runtime redirect routes", () => {
 		expect(await itemResponse.json()).toEqual({
 			value: "NEWKEY01",
 		});
-		expect(query).toHaveBeenCalledOnce();
-		expect(getDocument).toHaveBeenCalledOnce();
+		expect(query).toHaveBeenCalledTimes(2);
+		expect(query.mock.calls[1]?.[1]).toEqual(["OLDKEY01", 1]);
 	});
 
 	it("does not query redirect storage when redirects are disabled", async () => {
@@ -210,7 +205,6 @@ describe("runtime redirect routes", () => {
 			"no-store",
 		);
 		expect(mocks.getDatabaseForConfig).not.toHaveBeenCalled();
-		expect(mocks.getMeilisearchForConfig).not.toHaveBeenCalled();
 	});
 });
 

@@ -1356,12 +1356,6 @@ function seedRedirectNotes(profile: Profile) {
 	postgresScalar(profile.name, statements.join("; "));
 }
 
-async function seedSharedSearchIndexes(profile: Profile) {
-	for (const index of [{ uid: "redirects", primaryKey: "id" }]) {
-		await enqueue(profile, "/indexes", "POST", index);
-	}
-}
-
 function postgresScalar(database: Profile["name"], sql: string) {
 	return captureCompose(
 		"exec",
@@ -3281,7 +3275,6 @@ async function startAcceptanceInfrastructure(profiles: Profile[]) {
 		"postgres",
 		...profiles.map((profile) => `${profile.name}-meilisearch`),
 	);
-	for (const profile of profiles) await seedSharedSearchIndexes(profile);
 }
 
 // The deployment Compose check starts its own library stack beside this one

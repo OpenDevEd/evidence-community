@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { cacheLife, cacheTag } from "next/cache";
 import {
 	PRIVATE_NO_STORE_CACHE_CONTROL,
@@ -7,51 +6,26 @@ import {
 } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-
-function encodeKey(key: string): string {
-	return key.split('').map(char => {
-		const code = char.charCodeAt(0);
-		return code.toString(36); // Use base36 (0-9 and a-z)
-	}).join('n'); // Use 'n' as separator since it's not used in base36
-}
+import { readItemRedirect } from "@/lib/item-redirects";
 
 function isLikelyZoteroKey(key: string) {
 	return /^[A-Z0-9]{8}$/.test(key);
 }
 
 async function getCachedRedirectData(
-	encoding: string,
-	indexKey: string,
 	itemKey: string,
 	configRevision: string,
 	libraryConfig: LibraryServerConfig,
 ) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
-	cacheTag(
-		'redirect-' +
-			indexKey +
-			'-' +
-			configRevision +
-			'-' +
-			itemKey,
-	)
-	const { redirectsIndex } =
-		await getMeilisearchForConfig(libraryConfig);
-	const timeoutPromise = new Promise((_, reject) =>
-		setTimeout(() => reject(new Error("Redirect lookup timeout")), 350)
-	);
-
-	const redirects = (await Promise.race([
-		redirectsIndex.getDocument(encoding),
-		timeoutPromise,
-	])) as Record<string, unknown>;
-
-	if (!redirects?.value) {
+	cacheTag('redirect-' + configRevision + '-' + itemKey)
+	const value = await readItemRedirect(libraryConfig, itemKey);
+	if (!value) {
 		throw new Error("Redirect not found");
 	}
 
-	return redirects;
+	return { value };
 }
 
 export async function GET(
@@ -87,16 +61,10 @@ export async function GET(
 		);
 	}
 
-	const indexKey = libraryConfig.services.search.index;
-	const key = indexKey + "|" + itemKey;
-	const encoding = encodeKey(key);
-
-	let redirects: Record<string, unknown>;
+	let redirects: { value: string };
 
 	try {
 		redirects = await getCachedRedirectData(
-			encoding,
-			indexKey,
 			itemKey,
 			libraryConfig.revision,
 			libraryConfig,
