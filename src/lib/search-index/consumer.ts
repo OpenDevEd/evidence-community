@@ -511,7 +511,8 @@ async function indexClaimedEvents(
 			batchProgress: null,
 			batchUid: null,
 			eventIds,
-			stage: "indexing",
+			// `indexing` names an engine task; until a writer reports one, the claim is still being projected.
+			stage: "projecting",
 			taskUid: null,
 		});
 		await batch.add(plan);

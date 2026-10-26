@@ -318,10 +318,12 @@ async function verify() {
 				initialBatch[0].documentCount === 1,
 			`Bulk outbox delivery did not coalesce parent and child events: ${JSON.stringify(initialBatch)}`,
 		);
+		// Meilisearch reports the task that indexes the claim; an Elasticsearch write has no task to report.
 		assert(
 			observedProgress[0]?.stage === "projecting" &&
-				observedProgress.some(({ eventIds, stage }) => stage === "indexing" && eventIds.length === 2),
-			"The consumer did not report projecting, then indexing the claimed events",
+				(engine.name === "elasticsearch" ||
+					observedProgress.some(({ eventIds, stage, taskUid }) => stage === "indexing" && eventIds.length === 2 && taskUid !== null)),
+			`The consumer did not report the claimed events' progress: ${JSON.stringify(observedProgress)}`,
 		);
 		const initialDocument = await engine.readDocument<{
             country: string[];
@@ -822,8 +824,10 @@ async function verify() {
 			heartbeatIntervalMs: 100,
 			writer: engine.writer(),
 			leaseDurationMs: 1_000,
+			// Hold the worker while Meilisearch indexes the claim; an Elasticsearch write reports no task, so hold it
+			// just before the write.
 			onProgress: async ({ stage }) => {
-				if (stage === "indexing") {
+				if (stage === (engine.name === "meilisearch" ? "indexing" : "projecting")) {
 					reportWaitingReached();
 					await waitingProgressHeld;
 				}
