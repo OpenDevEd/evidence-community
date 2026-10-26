@@ -7,6 +7,7 @@ import * as collectionRelations from "./schema/relations/collection";
 import * as itemRelations from "./schema/relations/item";
 import * as itemToCollectionRelations from "./schema/relations/itemToCollection";
 import * as collectionTable from "./schema/tables/collection";
+import * as computedCacheTable from "./schema/tables/computedCache";
 import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
 import * as itemTable from "./schema/tables/item";
 import * as itemCitationMetricTable from "./schema/tables/itemCitationMetric";
@@ -37,6 +38,7 @@ export const schema = {
 	...itemCitationMetricTable,
 	...itemOpenAccessLookupTable,
 	...collectionTable,
+	...computedCacheTable,
 	...sourceTables,
 	...publicationTables,
 	...itemToCollectionTable,

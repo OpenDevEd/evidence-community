@@ -79,7 +79,6 @@ function service(
 		},
 	} as unknown as Meilisearch;
 	return {
-		cacheIndex: index,
 		client,
 		index,
 		indexName: "items",

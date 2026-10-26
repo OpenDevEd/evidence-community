@@ -1357,10 +1357,7 @@ function seedRedirectNotes(profile: Profile) {
 }
 
 async function seedSharedSearchIndexes(profile: Profile) {
-	for (const index of [
-		{ uid: "cache", primaryKey: "id" },
-		{ uid: "redirects", primaryKey: "id" },
-	]) {
+	for (const index of [{ uid: "redirects", primaryKey: "id" }]) {
 		await enqueue(profile, "/indexes", "POST", index);
 	}
 }

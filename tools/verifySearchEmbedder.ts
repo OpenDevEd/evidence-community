@@ -66,7 +66,6 @@ function startStub(
 
 function service(client: Meilisearch, indexName: string): MeilisearchService {
 	return {
-		cacheIndex: client.index("cache"),
 		client,
 		index: client.index(indexName),
 		indexName,

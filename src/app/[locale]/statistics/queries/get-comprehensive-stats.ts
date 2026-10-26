@@ -23,7 +23,7 @@ import {
 	getOpenAlexTopicStats,
 	getCitationsByYear,
 } from "./index";
-import { peekMeilisearchCache, withMeilisearchCache } from "@/lib/cache-utils";
+import { peekComputedCache, withComputedCache } from "@/lib/cache-utils";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import { resolveCitationMeasure } from "./citation-measure";
@@ -50,7 +50,7 @@ export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
 ): Promise<ComprehensiveStats> {
 	const { config, key, compute, citationMeasure } = await statisticsRequest(requestedCitationMeasure);
-	return { ...(await withMeilisearchCache(config, key, compute)), citationMeasure };
+	return { ...(await withComputedCache(config, key, compute)), citationMeasure };
 }
 
 /**
@@ -59,7 +59,7 @@ export async function getComprehensiveStats(
  */
 export async function peekComprehensiveStats(): Promise<ComprehensiveStats | null> {
 	const { config, key, compute, citationMeasure } = await statisticsRequest();
-	const stats = await peekMeilisearchCache(config, key, compute, { maxAgeMs: 24 * 60 * 60 * 1000 });
+	const stats = await peekComputedCache(config, key, compute, { maxAgeMs: 24 * 60 * 60 * 1000 });
 	return stats && { ...stats, citationMeasure };
 }
 

@@ -81,7 +81,6 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function service(client: Meilisearch, indexName: string): MeilisearchService {
 	return {
-		cacheIndex: client.index("cache"),
 		client,
 		index: client.index(indexName),
 		indexName,
