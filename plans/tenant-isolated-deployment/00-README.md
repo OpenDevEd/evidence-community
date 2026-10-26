@@ -15,6 +15,17 @@ The development library currently appears in Coolify as two applications and one
 7. `docker/compose.sources.yaml` is deleted when its workers move into the main Compose file. There is no second deployment path.
 8. OpenScholar will later call these deployment primitives. This plan does not build the self-service subscription flow or the cross-repository publishing API.
 
+### Decision change (2026-10-26)
+
+Decisions 2 and 3 above are replaced. All libraries share one Elasticsearch,
+separate from OpenScholar's, and each library gets its own index and a login
+limited to it. Hassan decided this because a private Meilisearch costs a small
+library as much as a large one: each gets the same 8 indexing threads and
+8 GiB. Indexing is also slow, about 220 records a second at best (103,688 in
+7.9 minutes, `docs/search-indexing.md`), against a few minutes for about
+500,000 records in the team's Elasticsearch. The work and its proof are in
+`plans/elasticsearch-search/`. The other decisions stand.
+
 ## Plans
 
 1. [Private search and one application](01-private-search-and-one-application.md)
