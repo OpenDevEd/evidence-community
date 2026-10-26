@@ -2,6 +2,7 @@ import { getCachedItemSmall } from "@/app/api/cache";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { getSearchEngine } from "@/lib/search-engines";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import type { Index } from "meilisearch";
 import { NextRequest, NextResponse } from "next/server";
@@ -73,7 +74,9 @@ export async function GET(
 	props: { params: Promise<{ key: string }> },
 ) {
 	const config = await getLibraryConfig();
-	if (!canRecommendSimilarResources(config)) {
+	// Similar records come from Meilisearch's embedder, so a library whose readers search another engine has none
+	// until similar records move there (OpenDevEd/new-el#720).
+	if (!canRecommendSimilarResources(config) || (await getSearchEngine(config)).name !== "meilisearch") {
 		return NextResponse.json(
 			{ hits: [], totalHits: 0 },
 			{

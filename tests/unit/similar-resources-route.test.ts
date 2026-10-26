@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 		},
 	} as { item: Record<string, unknown> } | null,
 	search: vi.fn(),
+	engine: "meilisearch",
 }));
 
 vi.mock("server-only", () => ({}));
@@ -35,6 +36,7 @@ vi.mock("@/app/api/cache", () => ({
 	getCachedItemSmall: vi.fn(async () => mocks.item),
 }));
 vi.mock("@/app/api/item/[key]/route", () => ({ getItem: vi.fn() }));
+vi.mock("@/lib/search-engines", () => ({ getSearchEngine: vi.fn(async () => ({ name: mocks.engine })) }));
 vi.mock("@/lib/meilisearch", () => ({
 	getMeilisearchForConfig: vi.fn(async () => ({
 		index: { search: mocks.search },
@@ -61,8 +63,16 @@ function request(key = "ABCDEFGH") {
 }
 
 describe("Similar Resources route", () => {
+	it("has no similar records while readers search Elasticsearch, which has no embedder yet", async () => {
+		mocks.engine = "elasticsearch";
+		const response = await request();
+		expect(await response.json()).toEqual({ hits: [], totalHits: 0 });
+		expect(mocks.search).not.toHaveBeenCalled();
+	});
+
 	beforeEach(() => {
 		mocks.search.mockReset();
+		mocks.engine = "meilisearch";
 		mocks.config.features.relatedResources = true;
 		mocks.config.search.embedder = {
 			source: "openAi",
