@@ -284,7 +284,10 @@ async function claimEvents(
 				and(
 					isNull(outbox.processedAt),
 					isNull(outbox.deadLetteredAt),
-					lte(outbox.nextAttemptAt, claimedAt),
+					// A new event's nextAttemptAt is PostgreSQL's now(), in microseconds; claimedAt
+					// has milliseconds. Due by either clock, an event inserted this millisecond is
+					// claimed now rather than on the next poll.
+					lte(outbox.nextAttemptAt, sql`greatest(${claimedAt.toISOString()}::timestamptz, now())`),
 					or(
 						isNull(outbox.leaseExpiresAt),
 						lte(outbox.leaseExpiresAt, claimedAt),
