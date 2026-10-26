@@ -112,8 +112,20 @@ engine's index while readers stay on the old one, then sets
 `status.searchEngine`, puts back the events acknowledged meanwhile, and deletes
 the old index 10 seconds later, once no reader still searches it. A library
 upgraded from before engines were recorded keeps its index and records its
-engine without a rebuild. If Meilisearch's embedder fails while its index
-already holds records, the switch waits and readers stay on the old engine.
+engine without a rebuild; if its configuration already names the other engine,
+readers stay on the engine that holds its records until the new index is built.
+If Meilisearch's embedder fails while its index already holds records, the
+switch waits, and readers and the worker's writes stay on the old engine.
+
+The worker drains no changes while it rebuilds, so readers see changes made
+during a switch only once it completes: minutes into Elasticsearch, longer into
+Meilisearch with an embedder, which embeds every record again.
+
+To switch, publish a configuration revision that changes only
+`services.search.engine` and keeps the old engine's connection. Remove the old
+connection only once `status.searchEngine` names the new engine: without it,
+readers search the new index while it is still being built. An old index a
+stopped switch left behind is deleted at the worker's next start.
 
 Prove a switch on a real library with both engines' connections (it switches to
 the other engine and back, and fails if a reader's public result count ever

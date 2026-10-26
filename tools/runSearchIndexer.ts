@@ -163,15 +163,14 @@ async function main() {
 				indexHasRecords,
 				rebuildPending,
 			}),
+			indexCreated: setup.created,
 			signal: abortController.signal,
 			taskTimeoutMs: engine.rebuildTaskTimeoutMs,
 			writer,
 		});
+		// Changes go to the engine readers search: the old one while a switch waits for its embedder.
+		const current = settled.readersOn === writer.engine ? engine : await openSearchWriter(config, settled.readersOn);
 		if (settled.rebuilt) {
-			await setSearchIndexRebuildPending(
-				databaseResource.database,
-				false,
-			);
 			console.log(
 				JSON.stringify({
 					deleted: settled.rebuilt.deleted,
@@ -216,9 +215,9 @@ async function main() {
 			);
 			const rebuilt = await rebuildForOutboxBacklog(
 				databaseResource.database,
-				writer,
+				current.writer,
 				config,
-				{ signal: abortController.signal },
+				{ signal: abortController.signal, taskTimeoutMs: current.rebuildTaskTimeoutMs },
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
 			return rebuilt.acknowledged;
@@ -276,8 +275,10 @@ async function main() {
 							);
 						}
 					},
-					writer,
+					writer: current.writer,
 					signal: abortController.signal,
+					// A drain claim can wait behind other claims' embeddings.
+					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
 				});
 				const previousProgress = reporter.current();

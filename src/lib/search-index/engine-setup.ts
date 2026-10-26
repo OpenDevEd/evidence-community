@@ -1,3 +1,6 @@
+import { errors as ElasticsearchErrors } from "@elastic/elasticsearch";
+import { MeilisearchApiError } from "meilisearch";
+
 import type { LibraryServerConfig, SearchEngineName } from "@/config/library-config/schema";
 import { RevisionAwareSearchFactory } from "@/lib/elasticsearch-factory";
 import { RevisionAwareMeilisearchFactory, type MeilisearchService } from "@/lib/meilisearch-factory";
@@ -20,6 +23,8 @@ type SearchWriterSetup = {
 	prepare(signal: AbortSignal): Promise<{ embedderError: string | null; indexHasRecords: boolean }>;
 	/** How long a rebuild task may wait: every record task also embeds while an embedder is set. */
 	rebuildTaskTimeoutMs: number;
+	/** Whether this engine holds an index of the library with records in it. */
+	hasRecords(): Promise<boolean>;
 };
 
 type Config = Pick<LibraryServerConfig, "revision" | "services" | "updatedAt" | "search">;
@@ -78,6 +83,14 @@ async function meilisearchSetup(config: Config): Promise<SearchWriterSetup> {
 			);
 		},
 		rebuildTaskTimeoutMs: config.search.embedder ? EMBEDDER_TASK_TIMEOUT_MS : DEFAULT_TASK_TIMEOUT_MS,
+		async hasRecords() {
+			try {
+				return (await service.index.getStats()).numberOfDocuments > 0;
+			} catch (error) {
+				if (error instanceof MeilisearchApiError && error.cause?.code === "index_not_found") return false;
+				throw error;
+			}
+		},
 	};
 }
 
@@ -87,6 +100,14 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 		writer: elasticsearchWriter(service),
 		prepare: async () => ({ embedderError: null, indexHasRecords: false }),
 		rebuildTaskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
+		async hasRecords() {
+			try {
+				return (await service.client.count({ index: service.alias })).count > 0;
+			} catch (error) {
+				if (error instanceof ElasticsearchErrors.ResponseError && error.statusCode === 404) return false;
+				throw error;
+			}
+		},
 	};
 }
 

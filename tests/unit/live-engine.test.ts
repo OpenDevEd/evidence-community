@@ -42,11 +42,22 @@ describe("the engine a library's readers search", () => {
 		expect(database.reads).toBe(2);
 	});
 
-	it("is none when the status can't be read, so readers search the configured engine", async () => {
+	it("is none when the status was never read and can't be read, so readers search the configured engine", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		database.fail = true;
 		expect(await readLiveSearchEngine(library("postgresql://two"))).toBeNull();
 		expect(warn).toHaveBeenCalled();
+		warn.mockRestore();
+	});
+
+	it("stays the engine read before when a later read fails, which mid-switch is the complete one", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		database.engine = "meilisearch";
+		expect(await readLiveSearchEngine(library("postgresql://three"))).toBe("meilisearch");
+		vi.setSystemTime(Date.now() + 6_000);
+		database.fail = true;
+		expect(await readLiveSearchEngine(library("postgresql://three"))).toBe("meilisearch");
 		warn.mockRestore();
 	});
 });
