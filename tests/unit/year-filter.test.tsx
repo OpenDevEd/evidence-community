@@ -58,7 +58,6 @@ vi.mock("framer-motion", () => ({
 }));
 
 import { YearFilter } from "@/components/features/collections/YearFilter";
-import type { RangeChange } from "@/hooks/useFilters";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -78,7 +77,7 @@ describe("the publication year filter", () => {
 		onRangeChange = vi.fn(),
 	}: {
 		range?: string;
-		onRangeChange?: RangeChange;
+		onRangeChange?: (start: string | null, end: string | null) => void;
 	} = {}) {
 		await act(async () => {
 			root.render(

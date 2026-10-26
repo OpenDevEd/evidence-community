@@ -3,11 +3,10 @@
 import { AutocompleteItem } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebounce } from "@/hooks/useDebounce";
-import type { RangeChange } from "@/hooks/useFilters";
 
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Input } from "../../nextui/Input";
@@ -106,12 +105,15 @@ export function YearFilter({
 	counts,
 }: {
 	range: string;
-	onRangeChange: RangeChange;
+	onRangeChange: (start: string | null, end: string | null) => void;
 	years: readonly string[];
 	counts?: Record<string, number>;
 }) {
 	const t = useTranslations("ui");
 	const [start = "", end = ""] = range.split("-");
+	// Both ends as the boxes last set them. Each box waits half a second before it applies, and the filter remounts with
+	// every new range, so a box that applies second must send the end the other box set, not the one it rendered with.
+	const typed = useRef({ start, end });
 	const [isRangeMode, setIsRangeMode] = useState(() => range.includes("-"));
 
 	function handleModeChange(selected: boolean) {
@@ -152,18 +154,20 @@ export function YearFilter({
 							<YearPicker
 								label={t("from")}
 								selectedKey={start}
-								onSelectionChange={(key) =>
-									onRangeChange(String(key || ""), undefined)
-								}
+								onSelectionChange={(key) => {
+									typed.current.start = String(key || "");
+									onRangeChange(typed.current.start, typed.current.end);
+								}}
 								years={years}
 								counts={counts}
 							/>
 							<YearPicker
 								label={t("to")}
 								selectedKey={end}
-								onSelectionChange={(key) =>
-									onRangeChange(undefined, String(key || ""))
-								}
+								onSelectionChange={(key) => {
+									typed.current.end = String(key || "");
+									onRangeChange(typed.current.start, typed.current.end);
+								}}
 								years={years}
 								counts={counts}
 							/>
