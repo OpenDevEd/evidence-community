@@ -23,15 +23,15 @@ export function isEmbedderUnavailable(error: unknown) {
 	);
 }
 
-/**
- * Embedder name that older indexes used. It is always removed so a library
- * never keeps two embedders for the same records.
- */
 /** Adding or changing an embedder makes Meilisearch re-embed every record. */
 export const EMBEDDER_TASK_TIMEOUT_MS = 60 * 60 * 1_000;
 /** A re-embed can run for a long time; ask Meilisearch about it every 2 s. */
 export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
 
+/**
+ * Embedder name that older indexes used. It is always removed so a library
+ * never keeps two embedders for the same records.
+ */
 const LEGACY_EMBEDDER_NAME = "openai";
 
 /**
