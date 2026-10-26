@@ -113,8 +113,11 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
+		// Only Elasticsearch has a writer yet; Meilisearch's comes back with the engine switch (plans/elasticsearch-search/09).
+		const configuration = config.services.search.elasticsearch;
+		if (!configuration) throw new Error("The search worker writes to Elasticsearch, and this library has no Elasticsearch connection.");
 		const service = await new RevisionAwareSearchFactory().get({
-			configuration: config.services.search,
+			configuration,
 			revision: config.revision,
 			updatedAt: config.updatedAt,
 		});

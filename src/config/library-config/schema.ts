@@ -1368,6 +1368,45 @@ const publicationServicesSchema = z
 		}
 	});
 
+/** The search engines a library can search (OpenDevEd/new-el#722). */
+const SEARCH_ENGINES = ["elasticsearch", "meilisearch"] as const;
+export type SearchEngineName = (typeof SEARCH_ENGINES)[number];
+
+/** Where one engine keeps the library's search, and the login or key that reaches it. */
+const searchConnectionSchema = z
+	.object({
+		host: serviceUrlSchema,
+		key: secretSchema(1, 512),
+		index: z
+			.string()
+			.trim()
+			.min(1)
+			.max(128)
+			.regex(/^[A-Za-z0-9_-]+$/u),
+	})
+	.strict();
+
+/**
+ * The engine the library chooses, and the connection of each engine it has. The search worker builds the chosen
+ * engine's index; readers keep the one whose index is complete until it is (plans/elasticsearch-search/09).
+ */
+const searchServiceSchema = z
+	.object({
+		engine: z.enum(SEARCH_ENGINES),
+		elasticsearch: searchConnectionSchema.optional(),
+		meilisearch: searchConnectionSchema.optional(),
+	})
+	.strict()
+	.superRefine((search, context) => {
+		if (!search[search.engine]) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: `The chosen search engine, ${search.engine}, needs its connection`,
+				path: [search.engine],
+			});
+		}
+	});
+
 const servicesSchema = z
 	.object({
 		redis: z
@@ -1381,18 +1420,7 @@ const servicesSchema = z
 				url: postgresUrlSchema,
 			})
 			.strict(),
-		search: z
-			.object({
-				host: serviceUrlSchema,
-				key: secretSchema(1, 512),
-				index: z
-					.string()
-					.trim()
-					.min(1)
-					.max(128)
-					.regex(/^[A-Za-z0-9_-]+$/u),
-			})
-			.strict(),
+		search: searchServiceSchema,
 		storage: z
 			.object({
 				url: serviceUrlSchema,

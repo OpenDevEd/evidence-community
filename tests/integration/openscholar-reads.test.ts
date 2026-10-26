@@ -56,7 +56,7 @@ async function successful(task: { waitTask: () => Promise<{ status: string }> })
 it("answers OpenScholar's reads as the person it names, within what the library lets that person see", async () => {
 	await withIsolatedPublicationDatabase(async (database, sql) => {
 		const config = libraryConfigSchema.parse(maximalLibraryConfig);
-		config.services.search = { host, key: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY ?? "", index: `osreads_${randomUUID().replaceAll("-", "")}` };
+		config.services.search = { engine: "meilisearch", meilisearch: { host, key: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY ?? "", index: `osreads_${randomUUID().replaceAll("-", "")}` } };
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
 		const { machineCredential } = config.authentication.openScholar;
@@ -69,7 +69,7 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 		const camps = generateCanonicalRecordKey();
 		await sql.query(`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") SELECT key, 'native', key FROM unnest($1::text[]) key`, [keys]);
 		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "date") SELECT key, 'native', key, 'JournalArticle', 'Saved ' || key, '2024' FROM unnest($1::text[]) key`, [keys]);
-		const index = client.index(config.services.search.index);
+		const index = client.index(config.services.search.meilisearch!.index);
 		await successful(client.createIndex(index.uid, { primaryKey: "key" }));
 		await successful(index.updateSettings({ pagination: { maxTotalHits: 30_000 }, filterableAttributes: ["key", "itemType", "deleted", "tags", "year", "collectionsAncestry"], sortableAttributes: ["title", "dateSortKey"] }));
 		await successful(index.addDocuments([

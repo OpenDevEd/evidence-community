@@ -43,8 +43,8 @@ directly with Docker. They do not apply to the Compose path.
 Run Compose from the repository root with the immutable image reference:
 
 ```bash
-MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
-LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
+MEILISEARCH_MASTER_KEY=example-meilisearch-key \
+LIBRARY_CONFIG_JSON="$(jq -c '.services.search = {engine: "meilisearch", meilisearch: {host: "http://meilisearch:7700", key: "example-meilisearch-key", index: "example_library"}}' config/library.example.json)" \
 SOURCE_COMMIT="$(git rev-parse HEAD)" \
 RUNTIME_IMAGE="ghcr.io/opendeved/evidence-library-runtime@sha256:<digest>" \
   docker compose --project-directory . \

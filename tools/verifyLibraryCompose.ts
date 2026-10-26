@@ -30,7 +30,7 @@ type ComposeModel = {
 type LibraryConfig = {
 	services: {
 		redis: { url: string };
-		search: { host: string; key: string };
+		search: { engine: string; meilisearch?: { host: string; key: string; index: string } };
 	};
 };
 
@@ -51,7 +51,11 @@ function loadLibraryConfig(root: string): LibraryConfig {
 		"utf8",
 	);
 	const libraryConfig = JSON.parse(libraryConfigJson) as LibraryConfig;
-	libraryConfig.services.search.host = "http://meilisearch:7700";
+	// The library's own Meilisearch, which the Compose file runs beside it.
+	libraryConfig.services.search = {
+		engine: "meilisearch",
+		meilisearch: { host: "http://meilisearch:7700", key: "example-meilisearch-key", index: "example_library" },
+	};
 	return libraryConfig;
 }
 
@@ -84,7 +88,7 @@ function renderComposeFile(
 function renderLibraryCompose(root: string, libraryConfig: LibraryConfig) {
 	return renderComposeFile(root, "docker/compose.library.yaml", {
 		LIBRARY_CONFIG_JSON: JSON.stringify(libraryConfig),
-		MEILISEARCH_MASTER_KEY: libraryConfig.services.search.key,
+		MEILISEARCH_MASTER_KEY: libraryConfig.services.search.meilisearch!.key,
 		RUNTIME_IMAGE: runtimeImage,
 		SOURCE_COMMIT: sourceCommit,
 	});
@@ -181,7 +185,7 @@ function requireMeilisearchRuntime(
 	);
 	requireCondition(
 		meilisearch.environment?.MEILI_MASTER_KEY ===
-			libraryConfig.services.search.key,
+			libraryConfig.services.search.meilisearch!.key,
 		"Runtime search key and private Meilisearch key must match",
 	);
 }
@@ -414,7 +418,7 @@ function requireRenderedConfig(model: ComposeModel, expected: LibraryConfig) {
 	requireCondition(content, "Rendered runtime configuration is missing");
 	const renderedConfig = JSON.parse(content) as LibraryConfig;
 	requireCondition(
-		renderedConfig.services.search.host === "http://meilisearch:7700",
+		renderedConfig.services.search.meilisearch?.host === "http://meilisearch:7700",
 		"Rendered runtime search host must use the private Compose service",
 	);
 	requireCondition(
@@ -528,7 +532,7 @@ function main() {
 			meilisearch: "private",
 			elasticsearch: "shared",
 			services: serviceNames,
-			searchHost: libraryConfig.services.search.host,
+			searchHost: libraryConfig.services.search.meilisearch!.host,
 		}),
 	);
 }

@@ -524,14 +524,14 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 	const config = structuredClone(profile.config);
 	config.services.database.url =
 		"postgresql://library:library@postgres:5432/library_compose";
-	config.services.search.host = "http://meilisearch:7700";
+	config.services.search.meilisearch!.host = "http://meilisearch:7700";
 	// The production alias, which only this stack's private network carries.
 	config.services.redis = { url: "redis://evidence-library-redis:6379" };
 	const environment = {
 		...commandEnvironment,
 		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
 		LIBRARY_CONFIG_JSON: JSON.stringify(config),
-		MEILISEARCH_MASTER_KEY: config.services.search.key,
+		MEILISEARCH_MASTER_KEY: config.services.search.meilisearch!.key,
 	};
 	const compose = (...args: string[]) =>
 		run(
@@ -1128,7 +1128,7 @@ async function enqueue(
 }
 
 async function seedSearch(profile: Profile) {
-	const indexUid = profile.config.services.search.index;
+	const indexUid = profile.config.services.search.meilisearch!.index;
 	const amber = profile.name === "amber";
 	const colorName = amber ? "Amber" : "Indigo";
 	const institution = amber ? "Amber Institute" : "Indigo Lab";
@@ -1397,7 +1397,7 @@ async function waitForOutboxProcessed(
 
 async function readMeilisearchDocument(profile: Profile, key: string) {
 	const response = await fetch(
-		`http://127.0.0.1:${profile.meilisearchPort}/indexes/${profile.config.services.search.index}/documents/${key}`,
+		`http://127.0.0.1:${profile.meilisearchPort}/indexes/${profile.config.services.search.meilisearch!.index}/documents/${key}`,
 		{ headers: { Authorization: "Bearer acceptance-master-key" } },
 	);
 	if (response.status === 404) return null;

@@ -13,7 +13,9 @@ import { copyMeilisearchRedirects } from "../src/lib/item-redirect-copy";
 async function main() {
 	const { config, databaseResource, close } = await openLibraryDatabaseProcess({ maxConnections: 2 });
 	try {
-		const { host, index, key } = config.services.search;
+		const connection = config.services.search.meilisearch;
+		if (!connection) throw new Error("This library has no Meilisearch connection, so it has no redirects to copy.");
+		const { host, index, key } = connection;
 		const client = new Meilisearch({ host, apiKey: key });
 		console.log(JSON.stringify(await copyMeilisearchRedirects(client, databaseResource.database, index)));
 	} finally {

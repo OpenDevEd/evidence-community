@@ -140,7 +140,7 @@ function writeConfig(paths: Paths, stack: Stack) {
 		secret: AMBER.secret,
 	};
 	Object.assign(config.services.database, { url: `postgresql://library:library@127.0.0.1:${ports.postgres}/amber` });
-	Object.assign(config.services.search, { host: `http://127.0.0.1:${ports.meilisearch}` });
+	Object.assign(config.services.search.meilisearch!, { host: `http://127.0.0.1:${ports.meilisearch}` });
 	Object.assign(config.services.redis, { url: `redis://127.0.0.1:${ports.redis}` });
 	Object.assign(config.services.storage, { url: `http://127.0.0.1:${ports.fake}` });
 	Object.assign(config.services.zotero, { translationUrl: `http://127.0.0.1:${ports.fake}` });

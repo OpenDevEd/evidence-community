@@ -112,10 +112,15 @@ become Meilisearch documents.
 Each frontend chooses its tenant through one runtime manifest revision:
 
 ```text
-services.database.url -> the active revision's PostgreSQL database
-services.search.host  -> the library application's private Meilisearch service
-services.search.index -> the index inside that private service
+services.database.url  -> the active revision's PostgreSQL database
+services.search.engine -> the engine the library chooses: elasticsearch or meilisearch
+services.search.elasticsearch.{host,index,key} -> the shared Elasticsearch, the library's alias and login
+services.search.meilisearch.{host,index,key}   -> the library application's private Meilisearch
 ```
+
+The search worker builds the chosen engine's index; readers keep the engine
+whose index is complete until a switch finishes
+(`plans/elasticsearch-search/09-switch-engines.md`).
 
 At runtime:
 

@@ -11,9 +11,12 @@ const searchFactory = globalSearch.__evidenceLibrarySearchFactory ?? new Revisio
 
 globalSearch.__evidenceLibrarySearchFactory = searchFactory;
 
+/** The library's Elasticsearch: its alias and a client signed in as its login. */
 export function getSearchForConfig(config: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">) {
+	const configuration = config.services.search.elasticsearch;
+	if (!configuration) throw new Error("This library has no Elasticsearch connection.");
 	return searchFactory.get({
-		configuration: config.services.search,
+		configuration,
 		revision: config.revision,
 		updatedAt: config.updatedAt,
 	});

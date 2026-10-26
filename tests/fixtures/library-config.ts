@@ -53,9 +53,12 @@ export const minimalLibraryConfig = {
 			url: "postgresql://library:password@database:5432/library",
 		},
 		search: {
-			host: "http://meilisearch:7700",
-			key: "search-key",
-			index: "minimal_library",
+			engine: "meilisearch",
+			meilisearch: {
+				host: "http://meilisearch:7700",
+				key: "search-key",
+				index: "minimal_library",
+			},
 		},
 		storage: {
 			url: "http://storage:5000",
@@ -317,9 +320,17 @@ export const maximalLibraryConfig = {
 			url: "postgresql://library:password@database:5432/library",
 		},
 		search: {
-			host: "https://search.example.org",
-			key: "maximal-search-key",
-			index: "maximal_library",
+			engine: "elasticsearch",
+			elasticsearch: {
+				host: "https://search.example.org",
+				key: "maximal-search-key",
+				index: "maximal_library",
+			},
+			meilisearch: {
+				host: "https://meilisearch.example.org",
+				key: "maximal-meilisearch-key",
+				index: "maximal_library",
+			},
 		},
 		storage: {
 			url: "https://storage.example.org",

@@ -307,13 +307,15 @@ async function main() {
 		) as {
 			services: {
 				database: { url: string };
-				search: { host: string; index: string; key: string };
+				search: { engine: string; elasticsearch?: { host: string; index: string; key: string } };
 			};
 		};
 		const isolatedDatabaseUrl = new URL(verifiedDatabaseUrl);
 		isolatedDatabaseUrl.pathname = `/${isolatedDatabaseName}`;
 		isolatedConfig.services.database.url = isolatedDatabaseUrl.toString();
-		isolatedConfig.services.search.index = isolatedIndexName;
+		assert(isolatedConfig.services.search.elasticsearch, "The library configuration needs an Elasticsearch connection");
+		isolatedConfig.services.search.engine = "elasticsearch";
+		isolatedConfig.services.search.elasticsearch.index = isolatedIndexName;
 
 		const isolatedConfigPath = `${temporaryDirectory}/library.json`;
 		await writeFile(isolatedConfigPath, JSON.stringify(isolatedConfig));
@@ -354,7 +356,7 @@ async function main() {
 		admin = elasticsearchAdmin(adminUrl);
 		for (const alias of [isolatedIndexName, failedIndexName]) {
 			await deleteTestLibrary(admin, alias);
-			await createTestLibraryLogin(admin, alias, isolatedConfig.services.search.key);
+			await createTestLibraryLogin(admin, alias, isolatedConfig.services.search.elasticsearch.key);
 		}
 
 		await database.delete(outbox).where(eq(outbox.entityKey, itemKey));
@@ -1258,7 +1260,7 @@ async function main() {
 		await createRefusingIndex(admin, failedIndexName);
 		const browserFailureConfigPath = `${temporaryDirectory}/browser-failure-library.json`;
 		const browserFailureConfig = structuredClone(isolatedConfig);
-		browserFailureConfig.services.search.index = failedIndexName;
+		browserFailureConfig.services.search.elasticsearch!.index = failedIndexName;
 		await writeFile(
 			browserFailureConfigPath,
 			JSON.stringify(browserFailureConfig),
@@ -1473,7 +1475,7 @@ async function main() {
 		);
 		const stalledConfigPath = `${temporaryDirectory}/stalled-library.json`;
 		const stalledConfig = structuredClone(isolatedConfig);
-		stalledConfig.services.search.host = `http://127.0.0.1:${stalledAddress.port}`;
+		stalledConfig.services.search.elasticsearch!.host = `http://127.0.0.1:${stalledAddress.port}`;
 		await writeFile(stalledConfigPath, JSON.stringify(stalledConfig));
 		stalledWorker = runTool("tools/runSearchIndexer.ts", [], {
 			...env,
@@ -1513,7 +1515,7 @@ async function main() {
 
 		const failedConfigPath = `${temporaryDirectory}/failure-library.json`;
 		const failedConfig = structuredClone(isolatedConfig);
-		failedConfig.services.search.host = "http://127.0.0.1:1";
+		failedConfig.services.search.elasticsearch!.host = "http://127.0.0.1:1";
 		await writeFile(failedConfigPath, JSON.stringify(failedConfig));
 		failedWorker = runTool("tools/runSearchIndexer.ts", [], {
 			...env,

@@ -146,8 +146,9 @@ MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
 ## Local operation
 
 Start a local Elasticsearch with the ICU plugin, and give the local library a
-login named after its `services.search.index`, with its `services.search.key`
-as the password (the database provisioner does this on a host):
+login named after its `services.search.elasticsearch.index`, with its
+`services.search.elasticsearch.key` as the password (the database provisioner
+does this on a host):
 
 ```sh
 docker build -f docker/elasticsearch.Dockerfile -t evidence-library-elasticsearch:9.5.5 .
@@ -160,7 +161,8 @@ docker run -d --name evidence-library-local-elasticsearch \
   evidence-library-elasticsearch:9.5.5
 ```
 
-Point `services.search.host` in the local library configuration to
+Set `services.search.engine` to `elasticsearch` and
+`services.search.elasticsearch.host` in the local library configuration to
 `http://127.0.0.1:59200`, then run:
 
 ```sh

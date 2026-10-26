@@ -2004,29 +2004,74 @@
 				"search": {
 					"type": "object",
 					"properties": {
-						"host": {
+						"engine": {
 							"type": "string",
-							"minLength": 1,
-							"maxLength": 2048,
-							"format": "uri"
+							"enum": [
+								"elasticsearch",
+								"meilisearch"
+							]
 						},
-						"key": {
-							"type": "string",
-							"minLength": 1,
-							"maxLength": 512,
-							"writeOnly": true
+						"elasticsearch": {
+							"type": "object",
+							"properties": {
+								"host": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 2048,
+									"format": "uri"
+								},
+								"key": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 512,
+									"writeOnly": true
+								},
+								"index": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 128,
+									"pattern": "^[A-Za-z0-9_-]+$"
+								}
+							},
+							"required": [
+								"host",
+								"key",
+								"index"
+							],
+							"additionalProperties": false
 						},
-						"index": {
-							"type": "string",
-							"minLength": 1,
-							"maxLength": 128,
-							"pattern": "^[A-Za-z0-9_-]+$"
+						"meilisearch": {
+							"type": "object",
+							"properties": {
+								"host": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 2048,
+									"format": "uri"
+								},
+								"key": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 512,
+									"writeOnly": true
+								},
+								"index": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 128,
+									"pattern": "^[A-Za-z0-9_-]+$"
+								}
+							},
+							"required": [
+								"host",
+								"key",
+								"index"
+							],
+							"additionalProperties": false
 						}
 					},
 					"required": [
-						"host",
-						"key",
-						"index"
+						"engine"
 					],
 					"additionalProperties": false
 				},

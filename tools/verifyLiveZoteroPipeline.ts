@@ -153,12 +153,19 @@ async function countRows(
 	return result?.count ?? 0;
 }
 
+/** The Elasticsearch connection the search worker writes through. */
+function searchConnection(config: Awaited<ReturnType<typeof loadLibraryConfig>>) {
+	const connection = config.services.search.elasticsearch;
+	if (!connection) throw new Error("The verifier needs the library's Elasticsearch connection.");
+	return connection;
+}
+
 async function verifyPipeline() {
 	parseLiveVerifierCommand(process.argv.slice(2));
 	const config = await loadLibraryConfig();
 	assertLoopbackServiceUrl("Database URL", config.services.database.url);
 	assertLoopbackServiceUrl("Storage URL", config.services.storage.url);
-	assertLoopbackServiceUrl("Search URL", config.services.search.host);
+	assertLoopbackServiceUrl("Search URL", searchConnection(config).host);
 
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
@@ -195,7 +202,7 @@ async function verifyPipeline() {
 		});
 
 		const search = await new RevisionAwareSearchFactory().get({
-			configuration: config.services.search,
+			configuration: searchConnection(config),
 			revision: config.revision,
 			updatedAt: config.updatedAt,
 		});

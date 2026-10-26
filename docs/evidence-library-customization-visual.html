@@ -437,9 +437,13 @@
         fields: [
           ["services.database.url", "Secret", "postgres or postgresql URL; ≤4,096", "Required; server-only"],
           ["services.redis.url", "Secret", "redis or rediss URL; ≤4,096", "Required when AI is enabled; server-only"],
-          ["services.search.host", "URL", "HTTP or HTTPS; no credentials/query", "Required; server-only"],
-          ["services.search.key", "Secret", "1–512 characters", "Required; server-only"],
-          ["services.search.index", "Text", "1–128; letters, numbers, underscore, hyphen", "Required"],
+          ["services.search.engine", "Choice", "elasticsearch or meilisearch", "Required"],
+          ["services.search.elasticsearch.host", "URL", "HTTP or HTTPS; no credentials/query", "Required for Elasticsearch; server-only"],
+          ["services.search.elasticsearch.key", "Secret", "1–512 characters", "Required for Elasticsearch; server-only"],
+          ["services.search.elasticsearch.index", "Text", "1–128; letters, numbers, underscore, hyphen", "Required for Elasticsearch"],
+          ["services.search.meilisearch.host", "URL", "HTTP or HTTPS; no credentials/query", "Required for Meilisearch; server-only"],
+          ["services.search.meilisearch.key", "Secret", "1–512 characters", "Required for Meilisearch; server-only"],
+          ["services.search.meilisearch.index", "Text", "1–128; letters, numbers, underscore, hyphen", "Required for Meilisearch"],
           ["services.zotero.translationUrl", "URL", "HTTP or HTTPS; no credentials/query", "Optional; server-only"]
         ]
       },
@@ -581,7 +585,8 @@
       "gapMaps[].sourceUrl": ["HTTPS URL"],
       "services.database.url": ["postgres:", "postgresql:"],
       "services.redis.url": ["redis:", "rediss:"],
-      "services.search.host": ["http:", "https:"],
+      "services.search.elasticsearch.host": ["http:", "https:"],
+      "services.search.meilisearch.host": ["http:", "https:"],
       "services.zotero.translationUrl": ["http:", "https:"],
       "ai.providers": ["openai", "google", "anthropic", "mistral", "deepseek", "openrouter"],
       "ai.providers[].models": aiModels,
