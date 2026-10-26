@@ -402,6 +402,27 @@ Drizzle migration, proves both cross-library connections fail, checks
 `created`, `matched`, and `updated`, rejects a conflicting owner, and removes
 its test databases and logins.
 
+## Copy old-key redirects out of Meilisearch
+
+From the release with OpenDevEd/new-el#716 on, an old record key redirects
+from the library's `itemRedirect` table in PostgreSQL instead of Meilisearch's
+`redirects` index. The table starts empty, so old-key links stop redirecting
+until the copy runs. Run it in each library's `search-indexer` container (its
+Coolify terminal, or `docker exec`) right after that release, while the
+library's `services.search` still names its Meilisearch:
+
+```bash
+npm run -s search:copy-redirects
+```
+
+It prints `{"indexFound":true,"read":...,"copied":...,"otherLibraries":...,"unreadable":...}`.
+`copied` counts this library's redirects. `otherLibraries` counts documents of
+other libraries sharing the index, which it leaves alone. `unreadable` counts
+documents that name no record key; check them if it isn't 0.
+`"indexFound":false` means the library never had redirects. Running it again
+changes nothing. Copy every library before it moves to Elasticsearch
+(OpenDevEd/new-el#722): after that the copy can't reach Meilisearch.
+
 ## Run the shared Elasticsearch
 
 Every library on a host searches one Elasticsearch, deployed once per host from
