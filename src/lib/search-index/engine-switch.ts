@@ -22,8 +22,6 @@ type SettleInput = {
 	/** The engine readers search now, or null before the library recorded one. */
 	live: SearchEngineName | null;
 	rebuild: boolean;
-	/** This start created the configured engine's index, empty. */
-	indexCreated: boolean;
 	/** The configured engine's embedder failed while its index holds records a rebuild would lose. */
 	embedderBlocksRebuild: boolean;
 	signal: AbortSignal;
@@ -61,6 +59,19 @@ async function removeOldIndex(config: LibraryServerConfig, engine: SearchEngineN
 	}
 }
 
+/**
+ * Deletes an old index a stopped switch left behind. An engine the library doesn't search can be unreachable; that
+ * leaves the index for a later start rather than stopping the worker.
+ */
+async function removeLeftover(input: SettleInput) {
+	const leftover = otherEngine(input.writer.engine);
+	const holds = await holdsRecords(input.config, leftover).catch((error: unknown) => {
+		console.error(`Search index: checking for an old ${leftover} index failed: ${error instanceof Error ? error.message : String(error)}`);
+		return false;
+	});
+	return holds && removeOldIndex(input.config, leftover, input.signal);
+}
+
 async function rebuild(input: SettleInput) {
 	const rebuilt = await rebuildSearchIndex(input.database, input.writer, input.config, { signal: input.signal, taskTimeoutMs: input.taskTimeoutMs });
 	await setSearchIndexRebuildPending(input.database, false);
@@ -68,12 +79,11 @@ async function rebuild(input: SettleInput) {
 }
 
 /**
- * A library from before engines were recorded searched the engine its old configuration named. When this start had
- * to create the configured engine's index but the other engine holds the library's records, readers stay there until
- * the switch completes.
+ * A library from before engines were recorded searched the engine its old configuration named. When the other engine
+ * holds the library's records, readers stay there until the configured engine's index is built.
  */
 async function recordedOrExisting(input: SettleInput) {
-	if (input.live !== null || !input.indexCreated) return input.live;
+	if (input.live !== null) return input.live;
 	const other = otherEngine(input.writer.engine);
 	if (!(await holdsRecords(input.config, other))) return null;
 	await setSearchEngine(input.database, other);
@@ -107,7 +117,5 @@ export async function settleSearchEngine(input: SettleInput): Promise<SettledEng
 	if (live !== null && live !== target) return switchEngine(input, live);
 	const rebuilt = input.rebuild ? await rebuild(input) : null;
 	if (live !== target) await setSearchEngine(input.database, target);
-	const leftover = otherEngine(target);
-	const oldIndexRemoved = (await holdsRecords(input.config, leftover)) && (await removeOldIndex(input.config, leftover, input.signal));
-	return { rebuilt, switchedFrom: null, oldIndexRemoved, readersOn: target };
+	return { rebuilt, switchedFrom: null, oldIndexRemoved: await removeLeftover(input), readersOn: target };
 }

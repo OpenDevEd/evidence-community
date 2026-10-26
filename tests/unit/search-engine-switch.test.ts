@@ -7,6 +7,7 @@ const world = vi.hoisted(() => ({
 	rebuildFails: false,
 	removeFails: false,
 	waitAborts: false,
+	unreachable: "" as string,
 }));
 vi.mock("node:timers/promises", () => ({
 	setTimeout: async (ms: number) => {
@@ -28,7 +29,10 @@ vi.mock("@/lib/search-index/bootstrap-state", () => ({
 }));
 vi.mock("@/lib/search-index/engine-setup", () => ({
 	openSearchWriter: async (_config: unknown, engine: string) => ({
-		hasRecords: async () => world.records[engine],
+		hasRecords: async () => {
+			if (world.unreachable === engine) throw new Error(`${engine} is unreachable`);
+			return world.records[engine];
+		},
 		writer: {
 			remove: async () => {
 				if (world.removeFails) throw new Error("search host went away");
@@ -44,12 +48,11 @@ const connection = { host: "http://search", key: "key", index: "library" };
 const both = { services: { search: { engine: "meilisearch", elasticsearch: connection, meilisearch: connection } } };
 const meilisearchOnly = { services: { search: { engine: "meilisearch", meilisearch: connection } } };
 
-function settle(input: { config?: object; live: "elasticsearch" | "meilisearch" | null; rebuild?: boolean; indexCreated?: boolean; embedderBlocksRebuild?: boolean }) {
+function settle(input: { config?: object; live: "elasticsearch" | "meilisearch" | null; rebuild?: boolean; embedderBlocksRebuild?: boolean }) {
 	return settleSearchEngine({
 		config: (input.config ?? both) as never,
 		database: {} as never,
 		embedderBlocksRebuild: input.embedderBlocksRebuild ?? false,
-		indexCreated: input.indexCreated ?? false,
 		live: input.live,
 		rebuild: input.rebuild ?? false,
 		signal: new AbortController().signal,
@@ -59,7 +62,7 @@ function settle(input: { config?: object; live: "elasticsearch" | "meilisearch" 
 }
 
 beforeEach(() => {
-	Object.assign(world, { steps: [], records: { elasticsearch: false, meilisearch: false }, rebuildFails: false, removeFails: false, waitAborts: false });
+	Object.assign(world, { steps: [], records: { elasticsearch: false, meilisearch: false }, rebuildFails: false, removeFails: false, waitAborts: false, unreachable: "" });
 });
 
 describe("switching a library to another engine", () => {
@@ -104,7 +107,7 @@ describe("switching a library to another engine", () => {
 
 describe("a library's first recorded engine", () => {
 	it("records the configured engine once its first index is complete", async () => {
-		await settle({ live: null, rebuild: true, indexCreated: true });
+		await settle({ live: null, rebuild: true });
 		expect(world.steps).toEqual(["rebuild meilisearch", "pending false", "readers to meilisearch"]);
 	});
 
@@ -113,9 +116,9 @@ describe("a library's first recorded engine", () => {
 		expect(world.steps).toEqual(["readers to meilisearch"]);
 	});
 
-	it("keeps readers on the other engine's records while the configured engine's new index is built", async () => {
+	it("keeps readers on the other engine's records while the configured engine's new index is built, after any restart", async () => {
 		world.records.elasticsearch = true;
-		expect(await settle({ live: null, rebuild: true, indexCreated: true })).toMatchObject({ switchedFrom: "elasticsearch" });
+		expect(await settle({ live: null, rebuild: true })).toMatchObject({ switchedFrom: "elasticsearch" });
 		expect(world.steps).toEqual(["readers to elasticsearch", "rebuild meilisearch", "pending false", "readers to meilisearch", "wait 10000", "delete elasticsearch"]);
 	});
 });
@@ -124,6 +127,14 @@ describe("a start with readers on the configured engine", () => {
 	it("only rebuilds when asked", async () => {
 		await settle({ live: "meilisearch" });
 		expect(world.steps).toEqual([]);
+	});
+
+	it("keeps working when the engine it doesn't search can't be reached", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		world.unreachable = "elasticsearch";
+		expect(await settle({ live: "meilisearch" })).toMatchObject({ oldIndexRemoved: false, readersOn: "meilisearch" });
+		expect(error).toHaveBeenCalledWith(expect.stringContaining("elasticsearch is unreachable"));
+		error.mockRestore();
 	});
 
 	it("deletes an old index a stopped switch left behind", async () => {

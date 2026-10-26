@@ -164,7 +164,6 @@ async function main() {
 				indexHasRecords,
 				rebuildPending,
 			}),
-			indexCreated: setup.created,
 			signal: abortController.signal,
 			taskTimeoutMs: engine.rebuildTaskTimeoutMs,
 			writer,
