@@ -1,38 +1,33 @@
 /**
- * Measures Elasticsearch against Meilisearch on one library's real records, and compares their results for a fixed
- * set of reader searches (OpenDevEd/new-el#717). The comparison file it writes keeps Meilisearch's top keys for each
- * query, so #721 can compare the finished Elasticsearch search against them after Meilisearch is gone.
+ * Loads one library's real records into Elasticsearch and compares its results for a fixed set of reader searches
+ * with the ones Meilisearch gave before the move (OpenDevEd/new-el#717, #721).
  *
  *   npm run search:compare -- export --out aied.ndjson
  *   npm run search:compare -- load-elasticsearch --in aied.ndjson --url http://127.0.0.1:9200 --index aied
- *   npm run search:compare -- load-meilisearch --in aied.ndjson
- *   npm run search:compare -- compare --queries tools/search-comparison/aied-queries.json \
+ *   npm run search:compare -- compare --baseline tools/search-comparison/aied-meilisearch-baseline.json \
  *     --url http://127.0.0.1:9200 --index aied --out aied-comparison.json
  *
- * `export`, `load-meilisearch`, and `compare` read the library configuration from LIBRARY_CONFIG_PATH: its database,
- * its Meilisearch, and the search settings a reader's search goes through. Each command prints one JSON summary.
+ * `export` and `compare` read the library configuration from LIBRARY_CONFIG_PATH: its database and the search
+ * settings a reader's search goes through. Each command prints one JSON summary.
  */
 import { createReadStream, createWriteStream, readFileSync, writeFileSync, type WriteStream } from "node:fs";
 import { once } from "node:events";
 import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 
-import { Meilisearch } from "meilisearch";
-
 import { openLibraryConfigProcess, openLibraryDatabaseProcess } from "../src/config/library-config/process";
 import { resolveSearchRequest } from "../src/lib/search";
-import { ensureSearchIndex } from "../src/lib/search-index/consumer";
+import { searchIndexDefinition } from "../src/lib/search-index/elasticsearch-index";
 import { generateFullSearchProjectionPlans } from "../src/lib/search-index/projection";
-import { draftElasticsearchIndex, draftElasticsearchSearch } from "./search-comparison/draft-elasticsearch";
+import { draftElasticsearchSearch } from "./search-comparison/draft-elasticsearch";
 
 const BATCH_BYTES = 20 * 1024 * 1024;
-const MEILISEARCH_TASKS_IN_FLIGHT = 500;
 const ELASTICSEARCH_BULKS_IN_FLIGHT = 4;
 const RESULTS = 20;
 const TIMED_RUNS = 5;
 
-type ComparisonQuery = { id: string; params: Record<string, unknown>; note?: string };
 type EngineResult = { keys: string[]; total: number | undefined; p50: number; p95: number };
+type BaselineQuery = EngineResult & { id: string; params: Record<string, unknown> };
 type ComparisonResult = {
 	id: string;
 	params: Record<string, unknown>;
@@ -145,7 +140,8 @@ async function indexStats(url: string, index: string) {
 async function loadElasticsearch(values: Arguments) {
 	const [file, url, index] = [required(values, "in"), required(values, "url"), required(values, "index")];
 	await fetch(new URL(`/${index}`, url), { method: "DELETE" });
-	await elasticsearch(url, "PUT", `/${index}`, JSON.stringify(draftElasticsearchIndex()));
+	const { settings, mappings } = searchIndexDefinition();
+	await elasticsearch(url, "PUT", `/${index}`, JSON.stringify({ settings: { ...settings, index: { ...settings.index, refresh_interval: "-1" } }, mappings }));
 	const started = performance.now();
 	let documents = 0;
 	const failures: string[] = [];
@@ -162,48 +158,6 @@ async function loadElasticsearch(values: Arguments) {
 	await elasticsearch(url, "POST", `/${index}/_refresh`);
 	const loadSeconds = seconds(started);
 	return { documents, failures, seconds: loadSeconds, perSecond: Math.round(documents / loadSeconds), ...(await indexStats(url, index)) };
-}
-
-async function meilisearchForConfig() {
-	const configProcess = await openLibraryConfigProcess();
-	const { host, index: indexName, key } = configProcess.config.services.search;
-	const client = new Meilisearch({ host, apiKey: key });
-	return { configProcess, client, service: { client, index: client.index(indexName), indexName } };
-}
-
-type EnqueuedTask = { waitTask: (options: { timeout: number; interval: number }) => Promise<{ uid: number; status: string; error?: unknown }> };
-
-async function succeeded(enqueued: EnqueuedTask) {
-	const task = await enqueued.waitTask({ timeout: 24 * 3_600_000, interval: 1_000 });
-	if (task.status !== "succeeded") throw new Error(`Meilisearch task ${task.uid} ${task.status}: ${JSON.stringify(task.error)}`);
-}
-
-async function loadMeilisearch(values: Arguments) {
-	const { configProcess, client, service } = await meilisearchForConfig();
-	try {
-		await client.deleteIndex(service.indexName).waitTask({ timeout: 600_000 }).catch(() => undefined);
-		await ensureSearchIndex(service, { taskTimeoutMs: 600_000 });
-		const started = performance.now();
-		const tasks: EnqueuedTask[] = [];
-		let documents = 0;
-		for await (const batch of documentBatches(required(values, "in"))) {
-			tasks.push(service.index.addDocuments(batch.map((line) => JSON.parse(line) as object), { primaryKey: "key" }));
-			documents += batch.length;
-			if (tasks.length >= MEILISEARCH_TASKS_IN_FLIGHT) await succeeded(tasks.shift()!);
-		}
-		for (const task of tasks) await succeeded(task);
-		const loadSeconds = seconds(started);
-		const [stats, global] = [await service.index.getStats(), await client.getStats()];
-		return {
-			documents,
-			indexed: stats.numberOfDocuments,
-			seconds: loadSeconds,
-			perSecond: Math.round(documents / loadSeconds),
-			databaseMegabytes: Math.round(global.databaseSize / 1_048_576),
-		};
-	} finally {
-		configProcess.close();
-	}
 }
 
 async function timed<T>(run: () => Promise<T>) {
@@ -225,20 +179,6 @@ function overlap(left: readonly string[], right: readonly string[], depth: numbe
 }
 
 type SearchRequest = ReturnType<typeof resolveSearchRequest>;
-
-async function meilisearchResult(index: ReturnType<Meilisearch["index"]>, request: SearchRequest): Promise<EngineResult> {
-	const measured = await timed(() =>
-		index.search(request.search, {
-			offset: (request.pageNum - 1) * request.limitNum,
-			limit: request.limitNum,
-			attributesToSearchOn: [...request.attributesToSearchOn],
-			attributesToRetrieve: ["key"],
-			filter: request.finalFilters,
-			sort: request.sortOption ? [...request.sortOption] : undefined,
-		}),
-	);
-	return { keys: measured.result.hits.map((hit) => String(hit.key)), total: measured.result.estimatedTotalHits, p50: measured.p50, p95: measured.p95 };
-}
 
 async function draftResult(url: string, index: string, request: SearchRequest): Promise<EngineResult | { error: string }> {
 	try {
@@ -270,8 +210,7 @@ function summarise(results: readonly ComparisonResult[], out: string) {
 	};
 }
 
-async function compareQuery(service: { index: ReturnType<Meilisearch["index"]> }, request: SearchRequest, url: string, index: string) {
-	const meilisearch = await meilisearchResult(service.index, request);
+async function compareQuery(meilisearch: EngineResult, request: SearchRequest, url: string, index: string) {
 	const elasticsearchDraft = await draftResult(url, index, request);
 	const keys = "keys" in elasticsearchDraft ? elasticsearchDraft.keys : null;
 	return {
@@ -284,12 +223,12 @@ async function compareQuery(service: { index: ReturnType<Meilisearch["index"]> }
 
 async function compare(values: Arguments) {
 	const [url, index, out] = [required(values, "url"), required(values, "index"), required(values, "out")];
-	const { configProcess, service } = await meilisearchForConfig();
+	const configProcess = await openLibraryConfigProcess();
 	try {
 		const results: ComparisonResult[] = [];
-		for (const query of JSON.parse(readFileSync(required(values, "queries"), "utf8")) as ComparisonQuery[]) {
-			const request = resolveSearchRequest(query.params, configProcess.config, [], RESULTS);
-			results.push({ id: query.id, params: query.params, ...(await compareQuery(service, request, url, index)) });
+		for (const { id, params, ...meilisearch } of JSON.parse(readFileSync(required(values, "baseline"), "utf8")) as BaselineQuery[]) {
+			const request = resolveSearchRequest(params, configProcess.config, [], RESULTS);
+			results.push({ id, params, ...(await compareQuery(meilisearch, request, url, index)) });
 		}
 		writeFileSync(out, `${JSON.stringify(results, null, "\t")}\n`);
 		return summarise(results, out);
@@ -298,9 +237,9 @@ async function compare(values: Arguments) {
 	}
 }
 
-const USAGE = "Usage: npm run search:compare -- export --out <file> | load-elasticsearch --in <file> --url <url> --index <name> | load-meilisearch --in <file> | compare --queries <file> --url <url> --index <name> --out <file>";
+const USAGE = "Usage: npm run search:compare -- export --out <file> | load-elasticsearch --in <file> --url <url> --index <name> | compare --baseline <file> --url <url> --index <name> --out <file>";
 
-type Arguments = Partial<Record<"in" | "out" | "url" | "index" | "queries", string>>;
+type Arguments = Partial<Record<"in" | "out" | "url" | "index" | "baseline", string>>;
 
 function required(values: Arguments, name: keyof Arguments) {
 	const value = values[name];
@@ -311,7 +250,6 @@ function required(values: Arguments, name: keyof Arguments) {
 const COMMANDS: Record<string, (values: Arguments) => Promise<object>> = {
 	export: exportDocuments,
 	"load-elasticsearch": loadElasticsearch,
-	"load-meilisearch": loadMeilisearch,
 	compare,
 };
 
@@ -321,7 +259,7 @@ async function main() {
 	if (!run) throw new Error(USAGE);
 	const { values } = parseArgs({
 		args: rest,
-		options: { in: { type: "string" }, out: { type: "string" }, url: { type: "string" }, index: { type: "string" }, queries: { type: "string" } },
+		options: { in: { type: "string" }, out: { type: "string" }, url: { type: "string" }, index: { type: "string" }, baseline: { type: "string" } },
 	});
 	console.log(JSON.stringify(await run(values)));
 }

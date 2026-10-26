@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { draftElasticsearchIndex, draftElasticsearchSearch } from "../../tools/search-comparison/draft-elasticsearch";
+import { draftElasticsearchSearch } from "../../tools/search-comparison/draft-elasticsearch";
 
 function request(overrides: Partial<Parameters<typeof draftElasticsearchSearch>[0]>) {
 	return {
@@ -71,12 +71,5 @@ describe("draft Elasticsearch search for the engine comparison", () => {
 		expect(() => draftElasticsearchSearch(request({ finalFilters: ['(country = "GB" OR authorCountry = "GB")'] }), 0)).toThrow(
 			/cannot translate/,
 		);
-	});
-
-	it("keeps the measured index settings: ICU text, whole-value filter fields, one shard", () => {
-		const index = draftElasticsearchIndex();
-		expect(index.settings.index.number_of_shards).toBe(1);
-		expect(index.settings.analysis.analyzer.library_text.tokenizer).toBe("icu_tokenizer");
-		expect((index.mappings.properties as Record<string, unknown>).tags).toMatchObject({ type: "keyword", fields: { text: { type: "text" } } });
 	});
 });

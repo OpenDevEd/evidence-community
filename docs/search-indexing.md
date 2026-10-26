@@ -1,7 +1,10 @@
 # Database-driven search indexing
 
-PostgreSQL is canonical. Meilisearch is a derived, disposable item projection
-maintained from the transactional `outbox`.
+PostgreSQL is canonical. Each library's index on the host's shared
+Elasticsearch is a derived, disposable item projection maintained from the
+transactional `outbox`. The worker writes through the library's alias, signed
+in as the library's own login (see "Run the shared Elasticsearch" in
+`docs/evidence-library-operations.md`).
 
 ## Projection
 
@@ -37,7 +40,7 @@ deletion cannot leave stale collection facets.
 ## Delivery guarantees
 
 Each event has a claim owner and expiry. The consumer maintains a heartbeat
-while it builds the projection and waits for Meilisearch. Claims in one library
+while it builds the projection and writes it. Claims in one library
 take a single transaction-scoped advisory lock, so they run one at a time; each
 claim then uses `FOR UPDATE SKIP LOCKED` and skips entities already covered by
 an active lease. This keeps two workers from applying different revisions of
@@ -45,10 +48,14 @@ the same entity out of order, with one lock per claim rather than one per
 event: PostgreSQL's lock table is shared by every library database on the
 server. An expired claim is recoverable.
 
-Meilisearch mutations are asynchronous tasks. The consumer checks the terminal
-task result and writes `processedAt` only after `succeeded`. Request failures,
-timeouts, and terminal task failures increment `attempts`, clear the lease, and
-set an exponential `nextAttemptAt`. Each event in a failed batch is marked on
+The worker writes each claim with Elasticsearch's bulk API, and its last
+request waits until the change is searchable (`refresh: wait_for`), so
+`processedAt` means readers can find it. Elasticsearch answers for each record:
+a record it refuses for its content (a mapping or parsing error) fails the
+claim with `SearchIndexDocumentError`, and the claim is halved until the event
+behind that record is found, so only that event retries. An overload (429),
+a server error, or a failed request keeps the whole claim for retry. Failures
+increment `attempts`, clear the lease, and set an exponential `nextAttemptAt`. Each event in a failed batch is marked on
 its own, so a lease lost on one event does not leave its batch siblings leased
 until the lease expires; the error the worker logs names the failure that
 caused it. The default 15-attempt schedule starts at
@@ -56,17 +63,15 @@ five seconds, caps each delay at one hour, and spans several hours before an
 event is dead-lettered. Operators can reset all dead letters through the
 explicit requeue command.
 
-Processing is idempotent. A crash after Meilisearch success but before the
+Processing is idempotent. A crash after a successful write but before the
 PostgreSQL acknowledgment causes the same current document to be written
 again. Stale events cannot overwrite a newer canonical revision because every
 attempt reads current PostgreSQL state rather than reconstructing historical
 event payloads.
 
 The drain claims up to 5,000 events and coalesces duplicate parent/child work.
-It sends every Meilisearch task of a claim before waiting for any, and works on
-three claims at once, so one claim is projected while Meilisearch indexes
-another. A large import (a first Zotero or OpenAlex sync) is therefore indexed
-in a few large batches: 103,688 records took 7.9 minutes instead of 32.
+It works on three claims at once, so one claim is projected while another is
+written.
 
 A very large backlog is faster to index as a rebuild. When at least 50,000
 events wait and they cover at least a quarter of the records, the worker saves
@@ -74,16 +79,23 @@ the list of waiting events, rebuilds the index, and then acknowledges exactly
 those events: the rebuild read every record after they were committed. Events
 written during the rebuild stay queued and are drained afterwards.
 
-At startup the worker warns when Meilisearch's legacy search path is off,
-because deep result pages are then slow.
-Projection reads remain bounded to at most 500 item keys, while outgoing
-Meilisearch document requests are split by serialized size and stay below a
-20 MiB default budget. A single larger document is sent alone. If Meilisearch
-rejects a batch because of document content, the consumer retries those claimed
-events individually:
-valid events are acknowledged and only the poison event consumes retries or
-becomes a dead letter. Transport failures retain the batch because splitting
-cannot repair an unavailable service.
+A rebuild fills a new index, `<alias>_<timestamp>`, with refresh off, one write
+in flight while the next records are projected, and then moves the library's
+alias to it in one step. Readers search the old index until then. The old index,
+and any a stopped rebuild left behind, are deleted. A worker may write a change
+to the old index, and acknowledge its event, after the rebuild read that record;
+every event acknowledged after the rebuild started is therefore put back once
+the alias moves, and the drain writes it again. On AIED (282,948 records) a
+rebuild takes about 5 to 8 minutes; reading the records from PostgreSQL is the
+slower half.
+
+Projection reads remain bounded to at most 500 item keys, while outgoing bulk
+requests are split by serialized size and stay below a 20 MiB default budget. A
+single larger document is sent alone.
+
+The index is created by the worker from `src/lib/search-index/elasticsearch-index.ts`.
+Its version is part of the projection signature, so a changed definition marks
+a rebuild as pending and the worker rebuilds into a new index at its next start.
 
 ## Embedder
 
@@ -130,18 +142,23 @@ MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
 
 ## Local operation
 
-Start a local Meilisearch:
+Start a local Elasticsearch with the ICU plugin, and give the local library a
+login named after its `services.search.index`, with its `services.search.key`
+as the password (the database provisioner does this on a host):
 
 ```sh
-docker run -d --name openscholar-local-meilisearch \
-  -p 57700:7700 \
-  -e MEILI_ENV=development \
-  -e MEILI_MASTER_KEY=local-search-key \
-  getmeili/meilisearch:v1.54
+docker build -f docker/elasticsearch.Dockerfile -t evidence-library-elasticsearch:9.5.5 .
+docker run -d --name evidence-library-local-elasticsearch \
+  -p 127.0.0.1:59200:9200 \
+  -e discovery.type=single-node \
+  -e ELASTIC_PASSWORD=local-search-password \
+  -e xpack.security.http.ssl.enabled=false \
+  -e ES_JAVA_OPTS="-Xms1g -Xmx1g" \
+  evidence-library-elasticsearch:9.5.5
 ```
 
 Point `services.search.host` in the local library configuration to
-`http://127.0.0.1:57700`, then run:
+`http://127.0.0.1:59200`, then run:
 
 ```sh
 npm run search:index
@@ -151,13 +168,9 @@ npm run search:index -- --requeue-dead-letters
 ```
 
 `--watch` polls continuously and stops cleanly on `SIGINT` or `SIGTERM`.
-`--rebuild` streams current top-level items in batches, then drains the outbox.
-It replaces records in place instead of emptying the index first, so search
-keeps answering and Meilisearch keeps the embedding of every record whose
-embedded text did not change. It keeps up to 500 batches queued in
-Meilisearch so they are indexed together, then removes records that are no
-longer public. Meilisearch keeps a file open for each queued batch, so its
-container runs with a higher open-file limit.
+`--rebuild` streams current top-level items into a new index, moves the alias to
+it, then drains the outbox. Search keeps answering from the old index until the
+alias moves.
 `--requeue-dead-letters` resets terminal events to immediately retryable state
 and can be combined with either one-shot or watch mode.
 
@@ -219,8 +232,8 @@ docker run -d \
   evidence-library-search-indexer
 ```
 
-The worker stores its stage, heartbeat, current Meilisearch task and batch,
-real batch progress when available, last completion, and last error in
+The worker stores its stage, heartbeat, the number of events it is indexing,
+last completion, and last error in
 PostgreSQL. The container health check fails while startup is still preparing
 the index, when its durable heartbeat is more than twenty seconds old, or when
 that heartbeat belongs to a replacement container generation.
@@ -240,8 +253,8 @@ receipts because they do not affect the public search projection.
 
 The admin application uses three private, non-cacheable endpoints:
 
-- `GET /api/admin/search-index` returns the current worker stage and genuine
-  Meilisearch batch progress, plus lightweight pending/failed queue signals;
+- `GET /api/admin/search-index` returns the current worker stage, plus
+  lightweight pending/failed queue signals;
 - `POST /api/admin/search-index/receipts` resolves up to 100 exact receipts as
   queued, processing, retrying, indexed, failed, or unknown. Before it returns
   an indexed receipt, it immediately expires the affected Next.js item,
@@ -259,13 +272,14 @@ and proxy cache headers are a separate policy and are not changed by this flow.
 
 The real-service verifier creates isolated indexes and proves document shape,
 collection reprojection, re-parent cleanup, tombstone deletion, restoration,
-byte-aware requests, asynchronous task failure, retry, dead-letter requeue,
-entity lease serialization, expired-lease recovery, and full rebuild:
+byte-aware requests, a refused record, retry, dead-letter requeue, entity lease
+serialization, expired-lease recovery, a full rebuild, and a change written to
+the old index while a rebuild runs:
 
 ```sh
 DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
-MEILISEARCH_HOST=http://127.0.0.1:57700 \
-MEILISEARCH_KEY=local-search-key \
+ELASTICSEARCH_URL=http://127.0.0.1:59200 \
+ELASTICSEARCH_PASSWORD=local-search-password \
 npm run test:search-index
 ```
 
@@ -274,11 +288,12 @@ server and database, then exercises process health, rolling replacement
 fencing, historical errors, active PostgreSQL cancellation, durable task
 progress, receipt states, targeted and global retry, startup failures, graceful
 shutdown, and a real publish-edit-unpublish lifecycle through HTTP and
-Meilisearch:
+Elasticsearch. It creates its test libraries' logins as the administrator:
 
 ```sh
 LIBRARY_CONFIG_PATH=config/library.local.json \
 DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
+ELASTICSEARCH_ADMIN_URL=http://elastic:local-search-password@127.0.0.1:59200 \
 EVIDENCE_LIBRARY_ADMIN_SESSION_COOKIE='<cookies from a signed-in browser>' \
 npm run test:search-worker
 ```

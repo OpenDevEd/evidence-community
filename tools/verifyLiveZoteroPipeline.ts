@@ -18,7 +18,7 @@ import type { Database } from "../src/db/database-schema";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemFilePublication } from "../src/db/schema/source";
 import { item } from "../src/db/schema/tables/item";
-import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
+import { RevisionAwareSearchFactory } from "../src/lib/elasticsearch-factory";
 import {
 	drainSearchOutbox,
 	ensureSearchIndex,
@@ -194,7 +194,7 @@ async function verifyPipeline() {
 			workerId: `zotero-live-verifier:${process.pid}`,
 		});
 
-		const search = await new RevisionAwareMeilisearchFactory().get({
+		const search = await new RevisionAwareSearchFactory().get({
 			configuration: config.services.search,
 			revision: config.revision,
 			updatedAt: config.updatedAt,
@@ -202,9 +202,8 @@ async function verifyPipeline() {
 		await ensureSearchIndex(search);
 		const indexedBatches = await drainSearchOutbox({
 			config,
-			batchClient: search.client.batches,
 			database,
-			index: search.index,
+			search,
 			maxEvents: 100_000,
 			workerId: `zotero-live-verifier-index:${process.pid}`,
 		});
@@ -320,7 +319,7 @@ async function verifyPipeline() {
 				const remoteKey = seed.fixtureItems[fixtureId]!;
 				const key = items.get(remoteKey);
 				assert(key, `Canonical identity is missing for ${fixtureId}`);
-				return search.index.getDocument<Record<string, unknown>>(key);
+				return (await search.client.get<Record<string, unknown>>({ index: search.alias, id: key }))._source!;
 			}),
 		);
 		for (const [index, document] of documents.entries()) {

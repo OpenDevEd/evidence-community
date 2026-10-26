@@ -4,20 +4,18 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
+import { RevisionAwareSearchFactory } from "../src/lib/elasticsearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	prepareSearchProjection,
 	resolveIdleLastError,
-	resolveRebuildTaskTimeoutMs,
 	setSearchIndexRebuildPending,
 	shouldRebuildSearchIndex,
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
 	outboxBacklogForRebuild,
-	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildForOutboxBacklog,
@@ -115,8 +113,7 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
-		const meilisearchFactory = new RevisionAwareMeilisearchFactory();
-		const service = await meilisearchFactory.get({
+		const service = await new RevisionAwareSearchFactory().get({
 			configuration: config.services.search,
 			revision: config.revision,
 			updatedAt: config.updatedAt,
@@ -135,14 +132,6 @@ async function main() {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
-		// Deep result pages are fast only on Meilisearch's legacy search path
-		// (MEILI_EXPERIMENTAL_LEGACY_SEARCH, which a stored flag can override).
-		const features = await service.client.getExperimentalFeatures();
-		if ((features as { legacySearch?: boolean | null }).legacySearch !== true) {
-			console.warn(
-				"Search index: Meilisearch's legacy search path is off, so deep result pages will be slow. Set MEILI_EXPERIMENTAL_LEGACY_SEARCH=true and check GET /experimental-features.",
-			);
-		}
 		const setup = await ensureSearchIndex(service, {
 			onMissing: async () => {
 				await setSearchIndexRebuildPending(
@@ -154,69 +143,14 @@ async function main() {
 			signal: abortController.signal,
 		});
 		// The site and the other workers wait for this worker to leave
-		// "starting", which only needs the migrations and the index with its
-		// settings, so a new sort field works. The embedder and rebuild below
-		// can take many minutes on a large library; search answers from the
-		// existing records meanwhile.
+		// "starting", which only needs the migrations and an index behind the
+		// library's alias. A rebuild can take many minutes on a large library;
+		// search answers from the existing index meanwhile.
 		await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
-		let embedderError: string | null = null;
-		try {
-			// The worker reads as idle here. The stored worker state cannot
-			// describe a settings task (it requires outbox events for
-			// "waiting"/"indexing"), so progress goes to the log instead.
-			let lastEmbedderStage = "";
-			await applySearchIndexEmbedder(service, config.search.embedder, {
-				batchClient: service.client.batches,
-				onProgress: async (progress) => {
-					const line = `${progress.stage} task ${progress.taskUid ?? "?"}${
-						progress.batchProgress === null
-							? ""
-							: ` ${progress.batchProgress}%`
-					}`;
-					if (line === lastEmbedderStage) return;
-					lastEmbedderStage = line;
-					console.log(`Search index embedder: ${line}`);
-				},
-				signal: abortController.signal,
-			});
-			console.log(
-				config.search.embedder
-					? "Search index embedder: ready"
-					: "Search index embedder: removed",
-			);
-		} catch (error) {
-			if (
-				error instanceof SearchOutboxAbortError &&
-				abortController.signal.aborted
-			) {
-				throw error;
-			}
-			// A broken embedder must not stop record indexing. The next worker
-			// start retries it, and Similar Resources stays unavailable until then.
-			embedderError =
-				error instanceof Error
-					? `${error.name}: ${error.message}`
-					: String(error);
-			console.error(`Search index embedder failed: ${embedderError}`);
-		}
-		const indexHasRecords = embedderError
-			? (await service.index.getStats()).numberOfDocuments > 0
-			: false;
-		if (
-			embedderError &&
-			indexHasRecords &&
-			(rebuildPending || command.rebuild)
-		) {
-			console.error(
-				"Search index rebuild stays pending: the embedder step failed and the existing records are kept.",
-			);
-		}
 		if (
 			shouldRebuildSearchIndex({
-				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
-				indexHasRecords,
 				rebuildPending,
 			})
 		) {
@@ -224,12 +158,7 @@ async function main() {
 				databaseResource.database,
 				service,
 				config,
-				{
-					signal: abortController.signal,
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
-				},
+				{ signal: abortController.signal },
 			);
 			await setSearchIndexRebuildPending(
 				databaseResource.database,
@@ -237,9 +166,9 @@ async function main() {
 			);
 			console.log(
 				JSON.stringify({
-					deleted: plan.deleted,
 					indexed: plan.indexed,
 					rebuild: true,
+					replacedIndexes: plan.replacedIndexes,
 					requeued,
 				}),
 			);
@@ -251,9 +180,8 @@ async function main() {
 				currentEventCount: 0,
 				currentTaskUid: null,
 				lastCompletedAt: registeredWorker.lastCompletedAt,
-				// Startup finished, so a previous run's error is gone; only a
-				// failed embedder from this run stays visible.
-				lastError: embedderError,
+				// Startup finished, so a previous run's error is gone.
+				lastError: null,
 				stage: "idle",
 			},
 			true,
@@ -279,12 +207,7 @@ async function main() {
 				databaseResource.database,
 				service,
 				config,
-				{
-					signal: abortController.signal,
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
-				},
+				{ signal: abortController.signal },
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
 			return rebuilt.acknowledged;
@@ -314,9 +237,7 @@ async function main() {
 				}
 				const results = await drainSearchOutbox({
 					config,
-					batchClient: service.client.batches,
 					database: databaseResource.database,
-					index: service.index,
 					maxEvents: command.maxEvents,
 					onProgress: async (progress) => {
 						try {
@@ -344,11 +265,8 @@ async function main() {
 							);
 						}
 					},
+					search: service,
 					signal: abortController.signal,
-					// A drain claim can wait behind other claims' embeddings.
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
 					workerId: instanceId,
 				});
 				const previousProgress = reporter.current();
@@ -363,7 +281,6 @@ async function main() {
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
 						lastError: resolveIdleLastError({
-							embedderError,
 							previousLastError:
 								previousProgress.lastError ?? null,
 							processedEvents: results.length + acknowledged,
