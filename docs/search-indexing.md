@@ -1,10 +1,12 @@
 # Database-driven search indexing
 
-PostgreSQL is canonical. Each library's index on the host's shared
-Elasticsearch is a derived, disposable item projection maintained from the
-transactional `outbox`. The worker writes through the library's alias, signed
-in as the library's own login (see "Run the shared Elasticsearch" in
-`docs/evidence-library-operations.md`).
+PostgreSQL is canonical. A library searches the engine its configuration
+chooses (`services.search.engine`): its own index on the host's shared
+Elasticsearch, written through the library's alias and signed in as its own
+login (see "Run the shared Elasticsearch" in
+`docs/evidence-library-operations.md`), or its private Meilisearch. Either index
+is a derived, disposable item projection maintained from the transactional
+`outbox`.
 
 ## Projection
 
@@ -99,6 +101,34 @@ single larger document is sent alone.
 The index is created by the worker from `src/lib/search-index/elasticsearch-index.ts`.
 Its version is part of the projection signature, so a changed definition marks
 a rebuild as pending and the worker rebuilds into a new index at its next start.
+
+## Switching engines
+
+Only the chosen engine's index is kept current. `status.searchEngine` names the
+engine whose index holds every record, and readers search it; each web process
+reads it at most every 5 seconds, and searches the configured engine while it
+is empty. When the worker starts with another engine configured, it builds that
+engine's index while readers stay on the old one, then sets
+`status.searchEngine`, puts back the events acknowledged meanwhile, and deletes
+the old index 10 seconds later, once no reader still searches it. A library
+upgraded from before engines were recorded keeps its index and records its
+engine without a rebuild. If Meilisearch's embedder fails while its index
+already holds records, the switch waits and readers stay on the old engine.
+
+Prove a switch on a real library with both engines' connections (it switches to
+the other engine and back, and fails if a reader's public result count ever
+drops below PostgreSQL's):
+
+```sh
+LIBRARY_CONFIG_PATH=<library with both connections> npm run test:search-switch
+```
+
+Check the outbox worker on either engine:
+
+```sh
+SEARCH_ENGINE=meilisearch MEILISEARCH_URL=http://127.0.0.1:7700 \
+  DATABASE_URL_POST=postgresql://... npm run test:search-index
+```
 
 ## Embedder
 

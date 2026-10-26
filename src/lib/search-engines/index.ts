@@ -6,6 +6,7 @@ import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import type { SearchEngine } from "@/lib/search-engine";
 
 import { elasticsearchEngine } from "./elasticsearch";
+import { readLiveSearchEngine } from "./live-engine";
 import { meilisearchEngine } from "./meilisearch";
 
 /** One engine per client, so what an engine keeps between searches lasts as long as its client. */
@@ -20,9 +21,15 @@ function engineFor<S extends object>(service: S, create: (service: S) => SearchE
 	return engine;
 }
 
-/** The engine a library's readers search: the one its configuration chooses (OpenDevEd/new-el#722). */
+/**
+ * The engine a library's readers search (OpenDevEd/new-el#722): the one whose index holds every record. While a switch
+ * builds the configured engine's index, readers keep the old engine; before the first build, and when the old engine
+ * has no connection left, they search the configured one.
+ */
 export async function getSearchEngine(config: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">): Promise<SearchEngine> {
-	return config.services.search.engine === "meilisearch"
+	const live = await readLiveSearchEngine(config);
+	const engine = live && config.services.search[live] ? live : config.services.search.engine;
+	return engine === "meilisearch"
 		? engineFor(await getMeilisearchForConfig(config), meilisearchEngine)
 		: engineFor(await getSearchForConfig(config), elasticsearchEngine);
 }

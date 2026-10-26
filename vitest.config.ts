@@ -60,7 +60,7 @@ export default defineConfig({
 			// each file: most of the suite's CPU. A file that mocks a module, or needs jsdom, keeps
 			// its own module graph instead, since another file may have loaded the real module.
 			{ extends: true, test: { name: "unit", environment: "node", include: unitTests, exclude: [...domTests, ...mockingTests, ...workerTests], isolate: false, setupFiles: ["./tests/shared-worker.ts"] } },
-			{ extends: true, test: { name: "unit-mocks", environment: "node", include: mockingTests, pool: "vmThreads" } },
+			{ extends: true, test: { name: "unit-mocks", environment: "node", include: mockingTests, pool: "vmThreads", setupFiles: ["./tests/search-live-engine-stub.ts"] } },
 			{ extends: true, test: { name: "dom", environment: "jsdom", include: domTests, pool: "vmThreads", setupFiles: ["./tests/dom-globals.ts"] } },
 			{ extends: true, test: { name: "workers", environment: "node", include: workerTests, setupFiles: ["./tests/dom-globals.ts"] } },
 		],

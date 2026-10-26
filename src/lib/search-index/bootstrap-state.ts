@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 
+import type { SearchEngineName } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { status } from "@/db/schema/tables/status";
 
@@ -32,6 +33,26 @@ export function shouldRebuildSearchIndex(input: {
 }) {
 	if (input.embedderError && input.indexHasRecords) return false;
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
+}
+
+/** How long a reader process trusts the engine it last read; a switch reaches every reader within this. */
+export const LIVE_ENGINE_TTL_MS = 5_000;
+
+/** The engine whose index holds every record, which readers search; null before the library's first build. */
+export async function readSearchEngine(database: Database): Promise<SearchEngineName | null> {
+	const [row] = await database.select({ engine: status.searchEngine }).from(status).where(eq(status.id, 1)).limit(1);
+	if (!row) throw new Error("Library status row is missing.");
+	return row.engine;
+}
+
+/** Moves the library's readers to `engine`, once its index holds every record. */
+export async function setSearchEngine(database: Database, engine: SearchEngineName) {
+	const [row] = await database
+		.update(status)
+		.set({ searchEngine: engine, updatedAt: new Date() })
+		.where(eq(status.id, 1))
+		.returning({ engine: status.searchEngine });
+	if (!row) throw new Error("Library status row is missing.");
 }
 
 export async function setSearchIndexRebuildPending(

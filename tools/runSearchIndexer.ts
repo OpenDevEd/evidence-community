@@ -8,6 +8,7 @@ import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal"
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	prepareSearchProjection,
+	readSearchEngine,
 	resolveIdleLastError,
 	setSearchIndexRebuildPending,
 	shouldRebuildSearchIndex,
@@ -18,10 +19,10 @@ import {
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildForOutboxBacklog,
-	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
 import { openSearchWriter } from "../src/lib/search-index/engine-setup";
+import { settleSearchEngine } from "../src/lib/search-index/engine-switch";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -149,32 +150,36 @@ async function main() {
 		if (embedderError && indexHasRecords && (rebuildPending || command.rebuild)) {
 			console.error("Search index rebuild stays pending: the embedder step failed and the existing records are kept.");
 		}
-		if (
-			shouldRebuildSearchIndex({
+		// A switch to another engine builds its index before readers move to it (OpenDevEd/new-el#722).
+		const settled = await settleSearchEngine({
+			config,
+			database: databaseResource.database,
+			embedderBlocksRebuild: Boolean(embedderError && indexHasRecords),
+			live: await readSearchEngine(databaseResource.database),
+			rebuild: shouldRebuildSearchIndex({
 				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
 				indexHasRecords,
 				rebuildPending,
-			})
-		) {
-			const plan = await rebuildSearchIndex(
-				databaseResource.database,
-				writer,
-				config,
-				{ signal: abortController.signal, taskTimeoutMs: engine.rebuildTaskTimeoutMs },
-			);
+			}),
+			signal: abortController.signal,
+			taskTimeoutMs: engine.rebuildTaskTimeoutMs,
+			writer,
+		});
+		if (settled.rebuilt) {
 			await setSearchIndexRebuildPending(
 				databaseResource.database,
 				false,
 			);
 			console.log(
 				JSON.stringify({
-					deleted: plan.deleted,
+					deleted: settled.rebuilt.deleted,
 					engine: writer.engine,
-					indexed: plan.indexed,
+					indexed: settled.rebuilt.indexed,
 					rebuild: true,
 					requeued,
+					...(settled.switchedFrom ? { switchedFrom: settled.switchedFrom, oldIndexRemoved: settled.oldIndexRemoved } : {}),
 				}),
 			);
 		}

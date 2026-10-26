@@ -56,6 +56,7 @@
 		"search:copy-redirects": "tsx ./tools/copyMeilisearchRedirects.ts",
 		"search:compare": "tsx --conditions=react-server ./tools/compareSearchEngines.ts",
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
+		"test:search-switch": "tsx --conditions=react-server ./tools/verifySearchEngineSwitch.ts",
 		"test:search-worker": "npm run build && tsx ./tools/verifySearchIndexerWorker.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"test:item-links": "tsx ./tools/verifyItemLinks.ts",
