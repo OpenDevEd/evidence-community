@@ -25,11 +25,22 @@ describe("search index bootstrap", () => {
 	});
 });
 
-describe("search index worker error state", () => {
-	it("clears a delivery error once records index successfully", () => {
+describe("search index worker embedder state", () => {
+	it("keeps a failed embedder visible after records index successfully", () => {
 		expect(
 			resolveIdleLastError({
-				previousLastError: "SearchIndexWriteError: Elasticsearch could not write records (429)",
+				embedderError: "SearchIndexTaskError: embedding failed",
+				previousLastError: "SearchIndexTaskError: embedding failed",
+				processedEvents: 12,
+			}),
+		).toBe("SearchIndexTaskError: embedding failed");
+	});
+
+	it("clears an ordinary batch error once records index successfully", () => {
+		expect(
+			resolveIdleLastError({
+				embedderError: null,
+				previousLastError: "MeilisearchTaskTimeOutError: task 9",
 				processedEvents: 3,
 			}),
 		).toBeNull();
@@ -38,9 +49,66 @@ describe("search index worker error state", () => {
 	it("keeps the previous error when nothing was processed", () => {
 		expect(
 			resolveIdleLastError({
-				previousLastError: "SearchIndexWriteError: Elasticsearch could not write records (429)",
+				embedderError: null,
+				previousLastError: "MeilisearchTaskTimeOutError: task 9",
 				processedEvents: 0,
 			}),
-		).toBe("SearchIndexWriteError: Elasticsearch could not write records (429)");
+		).toBe("MeilisearchTaskTimeOutError: task 9");
+	});
+
+	it("falls back to the embedder error when the previous state has none", () => {
+		expect(
+			resolveIdleLastError({
+				embedderError: "SearchIndexTaskError: embedding failed",
+				previousLastError: null,
+				processedEvents: 0,
+			}),
+		).toBe("SearchIndexTaskError: embedding failed");
+	});
+
+	it("does not wipe an index that has records when the embedder step failed", () => {
+		const embedderError = "SearchIndexTaskError: embedding failed";
+		expect(
+			shouldRebuildSearchIndex({
+				embedderError,
+				forceRebuild: true,
+				indexCreated: false,
+				indexHasRecords: true,
+				rebuildPending: false,
+			}),
+		).toBe(false);
+		expect(
+			shouldRebuildSearchIndex({
+				embedderError,
+				forceRebuild: false,
+				indexCreated: false,
+				indexHasRecords: true,
+				rebuildPending: true,
+			}),
+		).toBe(false);
+	});
+
+	it("still fills an existing empty index when the embedder step failed", () => {
+		expect(
+			shouldRebuildSearchIndex({
+				embedderError: "SearchIndexTaskError: embedding failed",
+				forceRebuild: false,
+				indexCreated: false,
+				indexHasRecords: false,
+				rebuildPending: true,
+			}),
+		).toBe(true);
+	});
+
+	it("still fills a brand-new index when the embedder step failed", () => {
+		expect(
+			shouldRebuildSearchIndex({
+				embedderError: "SearchIndexTaskError: embedding failed",
+				forceRebuild: false,
+				indexCreated: true,
+				indexHasRecords: false,
+				rebuildPending: true,
+			}),
+		).toBe(true);
 	});
 });

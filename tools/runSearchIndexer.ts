@@ -4,7 +4,6 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { RevisionAwareSearchFactory } from "../src/lib/elasticsearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
@@ -22,7 +21,7 @@ import {
 	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
-import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
+import { openSearchWriter } from "../src/lib/search-index/engine-setup";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -114,14 +113,9 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
-		// Only Elasticsearch has a writer yet; Meilisearch's comes back with the engine switch (plans/elasticsearch-search/09).
-		const configuration = config.services.search.elasticsearch;
-		if (!configuration) throw new Error("The search worker writes to Elasticsearch, and this library has no Elasticsearch connection.");
-		const service = await new RevisionAwareSearchFactory().get({
-			configuration,
-			revision: config.revision,
-			updatedAt: config.updatedAt,
-		});
+		// The engine the library's configuration chooses (OpenDevEd/new-el#722).
+		const engine = await openSearchWriter(config, config.services.search.engine);
+		const writer = engine.writer;
 		const requeued = command.requeueDeadLetters
 			? (await requeueSearchOutboxDeadLetters(databaseResource.database))
 					.length
@@ -136,7 +130,6 @@ async function main() {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
-		const writer = elasticsearchWriter(service);
 		const setup = await ensureSearchIndex(writer, {
 			onMissing: async () => {
 				await setSearchIndexRebuildPending(
@@ -148,14 +141,20 @@ async function main() {
 			signal: abortController.signal,
 		});
 		// The site and the other workers wait for this worker to leave
-		// "starting", which only needs the migrations and an index behind the
-		// library's alias. A rebuild can take many minutes on a large library;
-		// search answers from the existing index meanwhile.
+		// "starting", which only needs the migrations and the library's index
+		// with its settings. The embedder and a rebuild can take many minutes
+		// on a large library; search answers from the existing index meanwhile.
 		await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+		const { embedderError, indexHasRecords } = await engine.prepare(abortController.signal);
+		if (embedderError && indexHasRecords && (rebuildPending || command.rebuild)) {
+			console.error("Search index rebuild stays pending: the embedder step failed and the existing records are kept.");
+		}
 		if (
 			shouldRebuildSearchIndex({
+				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
+				indexHasRecords,
 				rebuildPending,
 			})
 		) {
@@ -163,7 +162,7 @@ async function main() {
 				databaseResource.database,
 				writer,
 				config,
-				{ signal: abortController.signal },
+				{ signal: abortController.signal, taskTimeoutMs: engine.rebuildTaskTimeoutMs },
 			);
 			await setSearchIndexRebuildPending(
 				databaseResource.database,
@@ -171,9 +170,10 @@ async function main() {
 			);
 			console.log(
 				JSON.stringify({
+					deleted: plan.deleted,
+					engine: writer.engine,
 					indexed: plan.indexed,
 					rebuild: true,
-					replacedIndexes: plan.deleted,
 					requeued,
 				}),
 			);
@@ -185,8 +185,9 @@ async function main() {
 				currentEventCount: 0,
 				currentTaskUid: null,
 				lastCompletedAt: registeredWorker.lastCompletedAt,
-				// Startup finished, so a previous run's error is gone.
-				lastError: null,
+				// Startup finished, so a previous run's error is gone; only a
+				// failed embedder from this run stays visible.
+				lastError: embedderError,
 				stage: "idle",
 			},
 			true,
@@ -286,6 +287,7 @@ async function main() {
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
 						lastError: resolveIdleLastError({
+							embedderError,
 							previousLastError:
 								previousProgress.lastError ?? null,
 							processedEvents: results.length + acknowledged,

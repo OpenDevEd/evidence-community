@@ -4,7 +4,7 @@ import { RevisionAwareResourceFactory } from "./revision-aware-resource";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
-export type SearchServiceConfiguration = {
+type SearchServiceConfiguration = {
 	host: string;
 	index: string;
 	key: string;

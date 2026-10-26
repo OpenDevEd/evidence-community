@@ -90,6 +90,21 @@ export function throwIfAborted(signal?: AbortSignal) {
 	if (signal?.aborted) throw new SearchOutboxAbortError();
 }
 
+/** A promise that rejects with `SearchOutboxAbortError` as soon as `signal` aborts. */
+export async function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal) {
+	throwIfAborted(signal);
+	if (!signal) return promise;
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => reject(new SearchOutboxAbortError());
+		signal.addEventListener("abort", abort, { once: true });
+		Promise.resolve(promise)
+			.then(resolve, reject)
+			.finally(() => {
+				signal.removeEventListener("abort", abort);
+			});
+	});
+}
+
 export function validateMaxDocumentBatchBytes(maxDocumentBatchBytes: number) {
 	if (!Number.isSafeInteger(maxDocumentBatchBytes) || maxDocumentBatchBytes < 1_024) {
 		throw new Error("maxDocumentBatchBytes must be an integer of at least 1,024");

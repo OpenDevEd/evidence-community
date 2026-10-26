@@ -6,7 +6,6 @@ import {
 	outbox,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { Client, errors } from "@elastic/elasticsearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
@@ -20,11 +19,9 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
 import { NATIVE_COLLECTION_SORT_ORDER_STEP } from "../src/lib/admin/native-collection-service";
-import type { SearchService } from "../src/lib/elasticsearch-factory";
 import {
 	applySearchProjectionPlan,
 	drainSearchOutbox,
-	ensureSearchIndex,
 	processNextSearchOutboxBatch,
 	processNextSearchOutboxEvent,
 	requeueSearchOutboxDeadLetters,
@@ -35,19 +32,15 @@ import {
 	SearchOutboxLeaseLostError,
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
-import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
-import { FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } from "../src/lib/search-filter-constants";
 import { PLATFORM_SEARCH_SCOPE_OPTIONS } from "../src/config/library-config/catalogs";
+import { outboxVerifierEngine } from "./search-outbox-engines";
 
 const libraryConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
-const elasticsearchUrl = process.env.ELASTICSEARCH_URL ?? "http://127.0.0.1:59200";
-const elasticsearchUser = process.env.ELASTICSEARCH_USERNAME ?? "elastic";
-const elasticsearchPassword = process.env.ELASTICSEARCH_PASSWORD ?? "local-search-password";
 
 const parentKey = "SRCH2345";
 const keptKey = "LEAS2345";
@@ -78,71 +71,6 @@ const badIndexName = `search_outbox_bad_e2e_${process.pid}`;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function service(client: Client, alias: string): SearchService {
-	return { alias, client };
-}
-
-/** Deletes every index behind an alias, and any a stopped rebuild left beside them. */
-async function deleteIndexIfPresent(client: Client, alias: string) {
-	const resolved = await client.indices.resolveIndex({ name: `${alias}_*` });
-	const names = resolved.indices.map((index) => index.name);
-	if (names.length > 0) await client.indices.delete({ index: names });
-}
-
-async function readDocument<T>(search: SearchService, key: string) {
-	return (await search.client.get<T>({ index: search.alias, id: key }))._source as T;
-}
-
-async function documentMissing(search: SearchService, key: string) {
-	try {
-		await search.client.get({ index: search.alias, id: key });
-		return false;
-	} catch (error) {
-		if (error instanceof errors.ResponseError && error.statusCode === 404) return true;
-		throw error;
-	}
-}
-
-async function addDocuments(search: SearchService, documents: ReadonlyArray<Record<string, unknown>>) {
-	await search.client.bulk({
-		refresh: "wait_for",
-		operations: documents.flatMap((document) => [{ index: { _index: search.alias, _id: String(document.key) } }, document]),
-	});
-}
-
-/** The keys a text search over `fields` finds, limited to records with PDF page text when `withPageText`. */
-async function searchKeys(search: SearchService, text: string, fields: readonly string[], withPageText: boolean) {
-	const response = await search.client.search<{ key: string }>({
-		index: search.alias,
-		query: {
-			bool: {
-				must: [{ multi_match: { query: text, fields: [...fields], operator: "and" } }],
-				filter: withPageText ? [{ exists: { field: FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } }] : [],
-			},
-		},
-	});
-	return response.hits.hits.map((hit) => hit._source!.key);
-}
-
-/** The library's client, counting bulk writes and letting a scenario act before one is sent. */
-function interceptBulk(search: SearchService, before: (request: { operations?: unknown[] }) => Promise<void>) {
-	let bulkCalls = 0;
-	const client = new Proxy(search.client, {
-		get(target, property, receiver) {
-			if (property === "bulk") {
-				return async (request: { operations?: unknown[] }, options?: unknown) => {
-					bulkCalls += 1;
-					await before(request);
-					return target.bulk(request as never, options as never);
-				};
-			}
-			const value = Reflect.get(target, property, receiver);
-			return typeof value === "function" ? value.bind(target) : value;
-		},
-	});
-	return { search: { alias: search.alias, client } as SearchService, bulkCalls: () => bulkCalls };
 }
 
 async function cleanupDatabase(
@@ -178,12 +106,7 @@ async function verify() {
 		"select pg_advisory_lock(hashtextextended('search-index-verifier', 0))",
 	);
 	const database = resource.database;
-	const client = new Client({
-		node: elasticsearchUrl,
-		auth: { username: elasticsearchUser, password: elasticsearchPassword },
-	});
-	const goodService = service(client, goodIndexName);
-	const badService = service(client, badIndexName);
+	const engine = outboxVerifierEngine(goodIndexName, badIndexName);
 	const delayedExistingEvents: Array<{
 		id: number;
 		nextAttemptAt: Date;
@@ -191,16 +114,8 @@ async function verify() {
 
 	try {
 		await cleanupDatabase(database);
-		await Promise.all([
-			deleteIndexIfPresent(client, goodIndexName),
-			deleteIndexIfPresent(client, badIndexName),
-		]);
-		await ensureSearchIndex(elasticsearchWriter(goodService));
-		await client.indices.create({
-			index: `${badIndexName}_1`,
-			mappings: { dynamic: "strict", properties: {} },
-			aliases: { [badIndexName]: { is_write_index: true } },
-		});
+		await engine.reset();
+		await engine.prepare();
 
 		const pending = await database
 			.select({
@@ -388,7 +303,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			maxEvents: 2,
 			onProgress: async (progress) => {
@@ -408,7 +323,7 @@ async function verify() {
 				observedProgress.some(({ eventIds, stage }) => stage === "indexing" && eventIds.length === 2),
 			"The consumer did not report projecting, then indexing the claimed events",
 		);
-		const initialDocument = await readDocument<{
+		const initialDocument = await engine.readDocument<{
             country: string[];
 			attachmentsData: Array<{ key: string; tags: string[] }>;
 			collections: string[];
@@ -434,7 +349,7 @@ async function verify() {
 			revision: number;
 			tags: string[];
 			year: string;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			initialDocument.country.join(",") === "GB,MA" &&
 				initialDocument.key === parentKey &&
@@ -469,20 +384,20 @@ async function verify() {
 		assert(fullTextScope, "The full-text search scope is missing");
 		const fullTextFields = fullTextScope.attributesToSearchOn;
 		assert(
-			(await searchKeys(goodService, "Second page text", fullTextFields, true)).join(",") === parentKey,
+			(await engine.searchKeys("Second page text", fullTextFields, true)).join(",") === parentKey,
 			"Full-text search did not return the publication containing the matching PDF page",
 		);
 		assert(
-			(await searchKeys(goodService, "Initial indexed report", fullTextFields, true)).length === 0,
+			(await engine.searchKeys("Initial indexed report", fullTextFields, true)).length === 0,
 			"Full-text-only search matched metadata outside the PDF",
 		);
 		const textlessKey = "TEXTLESS2345";
-		await addDocuments(goodService, [{ ...initialDocument, key: textlessKey, fullTextPDFs: [] }]);
+		await engine.addDocuments([{ ...initialDocument, key: textlessKey, fullTextPDFs: [] }]);
 		assert(
-			(await searchKeys(goodService, "Initial indexed report", ["title"], true)).join(",") === parentKey,
+			(await engine.searchKeys("Initial indexed report", ["title"], true)).join(",") === parentKey,
 			"Requiring PDF text did not exclude a matching record without extracted pages",
 		);
-		await goodService.client.delete({ index: goodService.alias, id: textlessKey, refresh: "wait_for" });
+		await engine.deleteDocument(textlessKey);
 		assert(
 			initialDocument.publicationIdentifiers.crossref.doi ===
 				"10.53832/search.000001" &&
@@ -525,7 +440,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-standalone",
 		});
@@ -535,7 +450,7 @@ async function verify() {
 		);
 		// A parentless attachment is not a public record, so it must stay out
 		// of the search index even when its own event is processed.
-		assert(await documentMissing(goodService, reparentedKey), "A parentless attachment was indexed on its own");
+		assert(await engine.documentMissing(reparentedKey), "A parentless attachment was indexed on its own");
 		await database
 			.update(item)
 			.set({ parentItem: parentKey, revision: 2 })
@@ -550,7 +465,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-reparent",
 		});
@@ -560,10 +475,10 @@ async function verify() {
 				reparentResult.documentCount === 1,
 			`The re-parent event produced the wrong projection: ${JSON.stringify(reparentResult)}`,
 		);
-		assert(await documentMissing(goodService, reparentedKey), "The standalone document survived re-parenting");
-		const reparentedParent = await readDocument<{
+		assert(await engine.documentMissing(reparentedKey), "The standalone document survived re-parenting");
+		const reparentedParent = await engine.readDocument<{
 			attachmentsData: Array<{ key: string }>;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			reparentedParent.attachmentsData.some(
 				(attachment) => attachment.key === reparentedKey,
@@ -576,19 +491,19 @@ async function verify() {
 			abstractNote: "x".repeat(2_000),
 			key,
 		})) as unknown as SearchProjectionPlan["documents"];
-		const counted = interceptBulk(goodService, async () => undefined);
+		const counted = engine.intercept(async () => undefined);
 		await applySearchProjectionPlan(
-			elasticsearchWriter(counted.search),
+			counted.writer,
 			{ deleteKeys: [], documents: sizedBatchDocuments },
 			10_000,
 			1_024,
 		);
 		assert(
-			counted.bulkCalls() === sizedBatchDocuments.length,
+			counted.writeCalls() === sizedBatchDocuments.length,
 			"Serialized-size batching did not split oversized batches",
 		);
 		await applySearchProjectionPlan(
-			elasticsearchWriter(goodService),
+			engine.writer(),
 			{ deleteKeys: sizedBatchKeys, documents: [] },
 			10_000,
 		);
@@ -615,7 +530,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				writer: elasticsearchWriter(badService),
+				writer: engine.refusingWriter(),
 				leaseDurationMs: 1_000,
 				retryBaseMs: 100,
 				taskTimeoutMs: 10_000,
@@ -638,7 +553,7 @@ async function verify() {
 			failedEvent?.processedAt === null &&
 				failedEvent.deadLetteredAt === null &&
 				failedEvent.attempts === 1 &&
-				failedEvent.lastError?.includes("SearchIndexDocumentError") &&
+				/SearchIndex(Document|Task)Error/u.test(failedEvent.lastError ?? "") &&
 				failedEvent.leaseOwner === null,
 			"A refused write was acknowledged or did not become retryable",
 		);
@@ -650,13 +565,13 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-retry",
 		});
-		const retriedDocument = await readDocument<{
+		const retriedDocument = await engine.readDocument<{
 			title: string;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			retriedDocument.title === "Retry-safe indexed report",
 			"The successful retry did not update the search document",
@@ -681,7 +596,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				writer: elasticsearchWriter(badService),
+				writer: engine.refusingWriter(),
 				leaseDurationMs: 1_000,
 				maxAttempts: 1,
 				retryBaseMs: 100,
@@ -720,7 +635,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-requeued",
 		});
@@ -742,15 +657,15 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-collection",
 		});
-		const movedDocument = await readDocument<{
+		const movedDocument = await engine.readDocument<{
 			collectionsAncestry: string[];
 			revision: number;
 			title: string;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			movedDocument.collectionsAncestry.includes(secondRootKey) &&
 				!movedDocument.collectionsAncestry.includes(firstRootKey) &&
@@ -773,11 +688,11 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-delete",
 		});
-		assert(await documentMissing(goodService, parentKey), "The tombstoned document remains searchable");
+		assert(await engine.documentMissing(parentKey), "The tombstoned document remains searchable");
 
 		await database
 			.update(item)
@@ -798,7 +713,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-restore",
 		});
@@ -843,7 +758,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-contender",
 		});
@@ -856,7 +771,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement",
 		});
@@ -864,14 +779,14 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-serialized-follower",
 		});
-		const recoveredDocument = await readDocument<{
+		const recoveredDocument = await engine.readDocument<{
 			revision: number;
 			title: string;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			recoveredDocument.revision === 7 &&
 				recoveredDocument.title === "Serialized lease recovery report",
@@ -905,7 +820,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			onProgress: async ({ stage }) => {
 				if (stage === "indexing") {
@@ -921,7 +836,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement-generation",
 		});
@@ -956,14 +871,14 @@ async function verify() {
 			config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-after-shutdown",
 		});
-		const recoveredAfterShutdown = await readDocument<{
+		const recoveredAfterShutdown = await engine.readDocument<{
 			revision: number;
 			title: string;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			recoveredAfterShutdown.revision === 8 &&
 				recoveredAfterShutdown.title === "Interrupted indexing report",
@@ -973,16 +888,16 @@ async function verify() {
 		// The rebuild fills a new index from PostgreSQL, so a document with no
 		// PostgreSQL record is left behind with the old index.
 		const orphanKey = `${parentKey}ORPHAN`;
-		await addDocuments(goodService, [{ key: orphanKey, title: "Orphaned search copy" }]);
-		const rebuilt = await rebuildSearchIndex(database, elasticsearchWriter(goodService), libraryConfig, {
+		await engine.addDocuments([{ key: orphanKey, title: "Orphaned search copy" }]);
+		const rebuilt = await rebuildSearchIndex(database, engine.writer(), libraryConfig, {
 			taskTimeoutMs: 60_000,
 		});
 		assert(
 			rebuilt.indexed >= 1,
 			"The full rebuild omitted the canonical item",
 		);
-		await readDocument(goodService, parentKey);
-		assert(await documentMissing(goodService, orphanKey), "The full rebuild kept a record PostgreSQL no longer has");
+		await engine.readDocument(parentKey);
+		assert(await engine.documentMissing(orphanKey), "The full rebuild kept a record PostgreSQL no longer has");
 
 		// A record unpublished when the rebuild reads it, then published again
 		// and indexed into the old index by a running worker before the alias
@@ -1000,7 +915,7 @@ async function verify() {
 			.set({ deleted: 1, deletedAt: new Date(), revision: 9 })
 			.where(eq(item.key, parentKey));
 		let republishedDuringRebuild = false;
-		const rebuildWithRepublish = interceptBulk(goodService, async () => {
+		const rebuildWithRepublish = engine.intercept(async () => {
 			if (republishedDuringRebuild) return;
 			republishedDuringRebuild = true;
 			await database
@@ -1012,12 +927,12 @@ async function verify() {
 				config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				writer: elasticsearchWriter(goodService),
+				writer: engine.writer(),
 				leaseDurationMs: 1_000,
 				workerId: "search-e2e-during-rebuild",
 			});
 		});
-		const raced = await rebuildSearchIndex(database, elasticsearchWriter(rebuildWithRepublish.search), libraryConfig, { taskTimeoutMs: 60_000 });
+		const raced = await rebuildSearchIndex(database, rebuildWithRepublish.writer, libraryConfig, { taskTimeoutMs: 60_000 });
 		assert(
 			republishedDuringRebuild && raced.redrained >= 1,
 			"The rebuild did not put back an event acknowledged while it ran",
@@ -1026,13 +941,13 @@ async function verify() {
 			config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-after-rebuild",
 		});
-		const republished = await readDocument<{
+		const republished = await engine.readDocument<{
 			revision: number;
-		}>(goodService, parentKey);
+		}>(parentKey);
 		assert(
 			republished.revision === 10,
 			"The full rebuild lost a record published again during the rebuild",
@@ -1062,7 +977,7 @@ async function verify() {
 			title: "Written during the rebuild",
 		});
 		let lateEventId: number | undefined;
-		const writeDuringRebuild = interceptBulk(goodService, async () => {
+		const writeDuringRebuild = engine.intercept(async () => {
 			if (lateEventId !== undefined) return;
 			const [lateEvent] = await database
 				.insert(outbox)
@@ -1072,7 +987,7 @@ async function verify() {
 		});
 		const backlogRebuild = await rebuildForOutboxBacklog(
 			database,
-			elasticsearchWriter(writeDuringRebuild.search),
+			writeDuringRebuild.writer,
 			libraryConfig,
 			{ taskTimeoutMs: 60_000 },
 		);
@@ -1084,7 +999,7 @@ async function verify() {
 			"The backlog rebuild did not acknowledge the event waiting before it",
 		);
 		assert(
-			(await readDocument<{ title: string }>(goodService, parentKey)).title === "Backlog report",
+			(await engine.readDocument<{ title: string }>(parentKey)).title === "Backlog report",
 			"The backlog rebuild did not index the waiting event's change",
 		);
 		assert(
@@ -1151,7 +1066,7 @@ async function verify() {
 			])
 			.returning();
 		assert(keptEvent && stolenEvent, "The lease-loss events were not created");
-		const stealing = interceptBulk(goodService, async () => {
+		const stealing = engine.intercept(async () => {
 			await database
 				.update(outbox)
 				.set({ leaseOwner: "search-e2e-thief" })
@@ -1163,7 +1078,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 30_000,
-				writer: elasticsearchWriter(stealing.search),
+				writer: stealing.writer,
 				leaseDurationMs: 60_000,
 				retryBaseMs: 100,
 				workerId: "search-e2e-lease-loss",
@@ -1194,7 +1109,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			writer: elasticsearchWriter(goodService),
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-lease-loss-retry",
 		});
@@ -1227,6 +1142,7 @@ async function verify() {
 				expiredLeaseRecovery: true,
 				fullRebuild: true,
 				gracefulActiveShutdown: true,
+				engine: engine.name,
 				index: goodIndexName,
 				leaseLossIsolation: true,
 				rebuildRace: true,
@@ -1242,10 +1158,7 @@ async function verify() {
 				.set({ nextAttemptAt: event.nextAttemptAt })
 				.where(eq(outbox.id, event.id));
 		}
-		await Promise.all([
-			deleteIndexIfPresent(client, goodIndexName),
-			deleteIndexIfPresent(client, badIndexName),
-		]);
+		await engine.reset();
 		await testLock.query(
 			"select pg_advisory_unlock(hashtextextended('search-index-verifier', 0))",
 		);

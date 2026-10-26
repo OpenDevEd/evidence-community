@@ -5,19 +5,32 @@ import { status } from "@/db/schema/tables/status";
 
 import { SEARCH_INDEX_VERSION } from "./elasticsearch-index";
 
-/** What the worker records as `lastError` after an outbox pass: a pass that indexed events clears it. */
+/**
+ * Decides what the worker records as `lastError` after an outbox pass. A successful batch clears an ordinary indexing
+ * error, but a failed Meilisearch embedder stays visible until the next worker start applies it again.
+ */
 export function resolveIdleLastError(input: {
+	embedderError: string | null;
 	previousLastError: string | null;
 	processedEvents: number;
 }) {
-	return input.processedEvents > 0 ? null : input.previousLastError;
+	if (input.processedEvents > 0) return input.embedderError;
+	return input.previousLastError ?? input.embedderError;
 }
 
+/**
+ * When the embedder step failed on an index that already has records, keep those records and leave the rebuild
+ * pending: adding documents would need the broken embedder, so every rebuild task would fail. An empty index
+ * (brand-new, or created by an earlier worker that stopped) has nothing to lose, so it is still filled.
+ */
 export function shouldRebuildSearchIndex(input: {
+	embedderError?: string | null;
 	forceRebuild: boolean;
 	indexCreated: boolean;
+	indexHasRecords?: boolean;
 	rebuildPending: boolean;
 }) {
+	if (input.embedderError && input.indexHasRecords) return false;
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
 }
 
