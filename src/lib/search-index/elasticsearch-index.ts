@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
-import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
+import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD, TITLE_START_WORDS } from "@/lib/search-filter-constants";
 
 /**
  * The Elasticsearch index a library's records are searched in (OpenDevEd/new-el#719). Fields readers filter, count,
@@ -44,7 +44,11 @@ function definition() {
 				"mapping.ignore_malformed": true,
 			},
 			analysis: {
-				analyzer: { library_text: { type: "custom", tokenizer: "icu_tokenizer", filter: ["icu_folding"] } },
+				filter: { title_start: { type: "limit", max_token_count: TITLE_START_WORDS } },
+				analyzer: {
+					library_text: { type: "custom", tokenizer: "icu_tokenizer", filter: ["icu_folding"] },
+					title_start: { type: "custom", tokenizer: "icu_tokenizer", filter: ["icu_folding", "title_start"] },
+				},
 				normalizer: { sort_key: { type: "custom", filter: ["lowercase", "asciifolding"] } },
 			},
 		},
@@ -57,7 +61,13 @@ function definition() {
 				...Object.fromEntries(
 					SEARCHED_KEYWORD_FIELDS.map((field) => [field, { type: "keyword", normalizer: "sort_key", fields: { text } }]),
 				),
-				title: { ...text, fields: { sort: { type: "keyword", normalizer: "sort_key", ignore_above: 512 } } },
+				title: {
+					...text,
+					fields: {
+						sort: { type: "keyword", normalizer: "sort_key", ignore_above: 512 },
+						start: { type: "text", analyzer: "title_start" },
+					},
+				},
 				deleted: { type: "integer" },
 				year: { type: "integer" },
 				citationCount: { type: "long" },
