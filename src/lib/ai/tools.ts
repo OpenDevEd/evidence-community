@@ -216,6 +216,8 @@ async function searchOne(
 		limit,
 		attributesToSearchOn: compiled.attributesToSearchOn,
 		sort: compiled.sortOption,
+		// Semantic search needs the embedder this library configured.
+		...(config.search.embedder ? { semantic: { ratio: 0.5 } } : {}),
 	};
 	const startedAt = Date.now();
 
@@ -235,6 +237,7 @@ async function searchOne(
 			sort: compiled.sortOption,
 			size: limit,
 			returned: { only: [...SEARCH_ATTRIBUTES] },
+			semantic: searchOptions.semantic,
 		});
 		const hits = result.hits.map((record) => {
 			const modelHit = searchHitToModelHit(record);

@@ -1,7 +1,9 @@
 import { MeilisearchApiError, type SearchParams, type SearchResponse } from "meilisearch";
 
+import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import { SearchChangedError, type SearchAnswer, type SearchEngine, type SearchFilter, type SearchRequest } from "@/lib/search-engine";
+import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 
 /** Keys one page of a deep key walk reads at once. */
 const KEYS_PER_PAGE = 500;
@@ -35,7 +37,8 @@ export function filterExpression(filter: SearchFilter): string {
 	const field = filterField(filter.field);
 	if ("equals" in filter) return `${field} = ${filterValue(filter.equals)}`;
 	if ("in" in filter) return `${field} IN [${filter.in.map(filterValue).join(",")}]`;
-	if ("present" in filter) return `${field} EXISTS`;
+	// Meilisearch counts an empty list or a null as existing; Elasticsearch doesn't, and `sources: []` must not count.
+	if ("present" in filter) return `(${field} EXISTS AND ${field} IS NOT EMPTY AND ${field} IS NOT NULL)`;
 	return rangeExpression(field, filter.range);
 }
 
@@ -51,6 +54,22 @@ function startOf(request: SearchRequest, total?: number) {
 	if (request.before) return Math.max(0, Number(request.before[0]) - request.size);
 	if (request.fromEnd) return Math.max(0, (total ?? 0) - request.size);
 	return request.from ?? 0;
+}
+
+/** The fields the words are searched in, and how far meaning ranks the results, when the request says. */
+function wordParams(request: SearchRequest): SearchParams {
+	return {
+		...(request.text.trim() && request.fields.length ? { attributesToSearchOn: [...request.fields] } : {}),
+		...(request.semantic ? { hybrid: { embedder: PLATFORM_SEARCH_EMBEDDER, semanticRatio: request.semantic.ratio } } : {}),
+	};
+}
+
+/** The chosen order and the facets to count, when the request names them. */
+function orderParams(request: SearchRequest): SearchParams {
+	return {
+		...(request.sort?.length ? { sort: [...request.sort] } : {}),
+		...(request.facets?.length ? { facets: [...request.facets] } : {}),
+	};
 }
 
 function answerOf<T>(response: SearchResponse<Record<string, unknown>>, offset: number): SearchAnswer<T> {
@@ -98,9 +117,8 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 			offset,
 			limit: request.size,
 			filter: request.filters.map(filterExpression),
-			...(request.text.trim() && request.fields.length ? { attributesToSearchOn: [...request.fields] } : {}),
-			...(request.sort?.length ? { sort: [...request.sort] } : {}),
-			...(request.facets?.length ? { facets: [...request.facets] } : {}),
+			...wordParams(request),
+			...orderParams(request),
 			...(returned ? { attributesToRetrieve: "only" in returned ? [...returned.only] : await fieldsExcept(returned.except) } : {}),
 		};
 	}
@@ -121,10 +139,21 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 		return JSON.stringify(revisions);
 	}
 
-	/** Pages reach only as deep as the index's `maxTotalHits`. */
+	/** Searches; while the search worker still sets up the embedder, words alone rank the results. */
+	async function searchIndex(text: string, searchParams: SearchParams) {
+		return index.search<Record<string, unknown>>(text, searchParams).catch((error: unknown) => {
+			if (!searchParams.hybrid || !isEmbedderUnavailable(error)) throw error;
+			const { hybrid: _hybrid, ...byWords } = searchParams;
+			return index.search<Record<string, unknown>>(text, byWords);
+		});
+	}
+
+	/** Pages reach only as deep as the index's `maxTotalHits`; returns it. */
 	async function requireDepth(depth: number) {
 		const { pagination } = await index.getSettings();
-		if ((pagination?.maxTotalHits ?? 1_000) < depth) throw new SearchChangedError(true);
+		const maxTotalHits = pagination?.maxTotalHits ?? 1_000;
+		if (maxTotalHits < depth) throw new SearchChangedError(true);
+		return maxTotalHits;
 	}
 
 	/** `count` keys from `offset` on, page by page. A key read twice means records moved between pages. */
@@ -154,8 +183,11 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 	return {
 		name: "meilisearch",
 		async search<T>(request: SearchRequest) {
-			const offset = startOf(request, request.fromEnd ? await totalOf(request) : undefined);
-			return answerOf<T>(await index.search(request.text, await params(request, offset)), offset);
+			// The last page starts from the exact count, which then is the total, not Meilisearch's estimate.
+			const counted = request.fromEnd ? await totalOf(request) : undefined;
+			const offset = startOf(request, counted);
+			const answer = answerOf<T>(await searchIndex(request.text, await params(request, offset)), offset);
+			return counted === undefined ? answer : { ...answer, total: counted };
 		},
 		async searchMany<T>(requests: readonly SearchRequest[]) {
 			if (requests.length === 0) return [];
@@ -174,9 +206,11 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 		/** Read while the index holds still: a write or an index swap meanwhile throws `SearchChangedError`. */
 		async keys(request: SearchRequest, offset: number, count: number, signal: AbortSignal) {
 			const revision = await idleRevision();
-			await requireDepth(offset + count);
+			const maxTotalHits = await requireDepth(offset + count);
 			const keys = await walkKeys(request, offset, count, signal);
 			const total = await totalOf(request);
+			// Meilisearch counts no further than `maxTotalHits`, so a total that reaches it may be short.
+			if (total >= maxTotalHits) throw new SearchChangedError(true);
 			if ((await idleRevision()) !== revision) throw new SearchChangedError();
 			return { keys, total };
 		},

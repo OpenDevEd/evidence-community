@@ -10,7 +10,11 @@ describe("a filter in Meilisearch", () => {
 		expect(filterExpression(fieldEquals("deleted", 0))).toBe("deleted = 0");
 		expect(filterExpression(fieldIn("country", ["KE", "QA"]))).toBe('country IN ["KE","QA"]');
 		expect(filterExpression(fieldNotIn("itemType", ["Note"]))).toBe('NOT (itemType IN ["Note"])');
-		expect(filterExpression(fieldPresent("fullTextPDFs.fullTextPDF.page"))).toBe("fullTextPDFs.fullTextPDF.page EXISTS");
+		expect(filterExpression(fieldPresent("fullTextPDFs.fullTextPDF.page"))).toBe(
+			"(fullTextPDFs.fullTextPDF.page EXISTS AND fullTextPDFs.fullTextPDF.page IS NOT EMPTY AND fullTextPDFs.fullTextPDF.page IS NOT NULL)",
+		);
+		// A record made in the library has `sources: []`, which belongs to no source.
+		expect(filterExpression(fieldPresent("sources"))).toBe("(sources EXISTS AND sources IS NOT EMPTY AND sources IS NOT NULL)");
 		expect(filterExpression(yearRange("2015-2020")!)).toBe("(year >= 2015 AND year <= 2020)");
 		expect(filterExpression({ any: [fieldEquals("a", "x"), fieldEquals("b", "y")] })).toBe('(a = "x" OR b = "y")');
 	});
@@ -20,12 +24,12 @@ describe("a filter in Meilisearch", () => {
 	});
 });
 
-function fakeIndex(hits: Array<Record<string, unknown>>, total = 40) {
+function fakeIndex(hits: Array<Record<string, unknown>>, total = 40, estimated = total) {
 	return {
 		search: vi.fn(async (_text: string, params: { limit?: number; hitsPerPage?: number }) =>
 			params.hitsPerPage === 0
 				? { hits: [], totalHits: total }
-				: { hits: hits.slice(0, params.limit), estimatedTotalHits: total, facetDistribution: { year: { "2024": 3 } } }),
+				: { hits: hits.slice(0, params.limit), estimatedTotalHits: estimated, facetDistribution: { year: { "2024": 3 } } }),
 		getDisplayedAttributes: vi.fn(async () => ["*"]),
 		getStats: vi.fn(async () => ({ fieldDistribution: { key: 1, title: 1, fullTextPDFs: 1, "fullTextPDFs.fullTextPDF.text": 1, topics: 1 } })),
 		getDocument: vi.fn(),
@@ -54,15 +58,37 @@ describe("a search in Meilisearch", () => {
 		expect(answer).toEqual({ hits: [{ key: "A" }, { key: "B" }], total: 40, facets: { year: { "2024": 3 } }, first: [20], last: [21] });
 	});
 
-	it("continues after or before a place, and reads the last page from the total", async () => {
+	it("continues after or before a place", async () => {
 		const index = fakeIndex([{ key: "A" }]);
 		const engine = engineWith(index);
 		await engine.search({ ...request, after: [21] });
 		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 22 }));
 		await engine.search({ ...request, before: [20] });
 		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 18 }));
-		await engine.search({ ...request, fromEnd: true });
-		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 38 }));
+	});
+
+	it("starts the last page from the exact count, and answers that count", async () => {
+		const index = fakeIndex([{ key: "A" }], 39, 41);
+		const answer = await engineWith(index).search({ ...request, fromEnd: true });
+		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 37 }));
+		expect(answer.total).toBe(39);
+	});
+
+	it("ranks by meaning with the library's embedder, and by words alone while the embedder is being set up", async () => {
+		const { MeilisearchApiError } = await import("meilisearch");
+		const index = fakeIndex([{ key: "A" }]);
+		index.search.mockRejectedValueOnce(
+			new MeilisearchApiError(new Response(null, { status: 400 }), {
+				code: "invalid_search_embedder",
+				link: "",
+				message: "Cannot find embedder with name `default`.",
+				type: "invalid_request",
+			}),
+		);
+		const answer = await engineWith(index).search({ ...request, semantic: { ratio: 0.5 } });
+		expect(index.search.mock.calls[0]![1]).toMatchObject({ hybrid: { embedder: "default", semanticRatio: 0.5 } });
+		expect(index.search.mock.calls[1]![1]).not.toHaveProperty("hybrid");
+		expect(answer.hits).toEqual([{ key: "A" }]);
 	});
 
 	it("names every stored field but the ones left out, since Meilisearch can't leave fields out itself", async () => {
@@ -113,5 +139,9 @@ describe("a deep key walk in Meilisearch", () => {
 
 	it("refuses when the index can't page as deep as asked", async () => {
 		await expect(walkable(10, { maxTotalHits: 1_000 }).keys(request, 0, 20_001, signal)).rejects.toMatchObject({ notReady: true });
+	});
+
+	it("refuses when the total reaches as far as Meilisearch counts, as it may be short", async () => {
+		await expect(walkable(10, { maxTotalHits: 10 }).keys(request, 0, 5, signal)).rejects.toMatchObject({ notReady: true });
 	});
 });

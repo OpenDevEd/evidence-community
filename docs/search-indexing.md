@@ -144,9 +144,11 @@ SEARCH_ENGINE=meilisearch MEILISEARCH_URL=http://127.0.0.1:7700 \
 
 ## Embedder
 
-Similar Resources, AI search, and chat use Meilisearch hybrid search. Hybrid
-search needs an embedder on the index. The library configuration describes it
-in `search.embedder`:
+On a Meilisearch library, Similar Resources, AI search, and chat use
+Meilisearch hybrid search. Elasticsearch stores no embeddings yet
+(OpenDevEd/new-el#720): its libraries show no Similar Resources, and AI search
+and chat rank by words alone. Hybrid search needs an embedder on the index. The
+library configuration describes it in `search.embedder`:
 
 - `null` turns embeddings off. Related resources cannot be enabled.
 - `{ "source": "openAi", "model": "text-embedding-3-small", "apiKey": "…" }`

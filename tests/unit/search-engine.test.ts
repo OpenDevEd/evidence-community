@@ -27,6 +27,11 @@ describe("a cursor", () => {
 		expect(decodeCursor(encodeCursor(newest, [{} as never, "A"]), newest)).toBeNull();
 		expect(encodeCursor(newest, null)).toBeNull();
 	});
+
+	it("places nothing at an offset Meilisearch can't page to", () => {
+		const offsets = searchOrder("meilisearch", { text: "tutoring" });
+		for (const at of [-5, 1.5, "20", null]) expect(decodeCursor(encodeCursor(offsets, [at]), offsets)).toBeNull();
+	});
 });
 
 describe("where a page starts", () => {

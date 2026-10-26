@@ -88,6 +88,11 @@ export type SearchRequest = {
 	facets?: readonly string[];
 	/** False when a count past the results asked for isn't needed. */
 	exactTotal?: boolean;
+	/**
+	 * Also rank by meaning with the library's embedder, `ratio` (0 to 1) of the way. Only Meilisearch embeds records
+	 * (OpenDevEd/new-el#720); Elasticsearch ranks by words alone.
+	 */
+	semantic?: { ratio: number };
 };
 
 /** What one search answers. */
@@ -158,13 +163,19 @@ function isPlaceValue(value: unknown) {
 	return value === null || ["string", "number", "boolean"].includes(typeof value);
 }
 
+/** Whether a cursor's place fits the order: Meilisearch's is an offset, Elasticsearch's are sort values and a key. */
+function fitsOrder(place: unknown[], order: SearchOrder) {
+	if (place.length !== placeLength(order)) return false;
+	return order.engine === "meilisearch" ? Number.isSafeInteger(place[0]) && (place[0] as number) >= 0 : place.every(isPlaceValue);
+}
+
 /** The place a cursor holds, or null when it is no cursor for this order. */
 export function decodeCursor(cursor: string | null | undefined, order: SearchOrder): SearchPlace | null {
 	if (!cursor) return null;
 	try {
 		const read = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<Cursor>;
 		const place = Array.isArray(read.at) ? read.at : [];
-		return read.order === orderName(order) && place.length === placeLength(order) && place.every(isPlaceValue) ? place : null;
+		return read.order === orderName(order) && fitsOrder(place, order) ? place : null;
 	} catch {
 		return null;
 	}
