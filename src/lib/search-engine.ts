@@ -88,6 +88,8 @@ export type SearchRequest = {
 	facets?: readonly string[];
 	/** False when a count past the results asked for isn't needed. */
 	exactTotal?: boolean;
+	/** Stops the search, as when the reader who asked has gone. */
+	signal?: AbortSignal;
 	/**
 	 * Also rank by meaning with the library's embedder, `ratio` (0 to 1) of the way. Only Meilisearch embeds records
 	 * (OpenDevEd/new-el#720); Elasticsearch ranks by words alone.

@@ -54,7 +54,7 @@ describe("a search in Meilisearch", () => {
 			sort: ["year:desc"],
 			facets: ["year"],
 			attributesToRetrieve: ["key"],
-		});
+		}, { signal: undefined });
 		expect(answer).toEqual({ hits: [{ key: "A" }, { key: "B" }], total: 40, facets: { year: { "2024": 3 } }, first: [20], last: [21] });
 	});
 
@@ -62,15 +62,15 @@ describe("a search in Meilisearch", () => {
 		const index = fakeIndex([{ key: "A" }]);
 		const engine = engineWith(index);
 		await engine.search({ ...request, after: [21] });
-		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 22 }));
+		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 22 }), { signal: undefined });
 		await engine.search({ ...request, before: [20] });
-		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 18 }));
+		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 18 }), { signal: undefined });
 	});
 
 	it("starts the last page from the exact count, and answers that count", async () => {
 		const index = fakeIndex([{ key: "A" }], 39, 41);
 		const answer = await engineWith(index).search({ ...request, fromEnd: true });
-		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 37 }));
+		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ offset: 37 }), { signal: undefined });
 		expect(answer.total).toBe(39);
 	});
 
@@ -94,7 +94,7 @@ describe("a search in Meilisearch", () => {
 	it("names every stored field but the ones left out, since Meilisearch can't leave fields out itself", async () => {
 		const index = fakeIndex([]);
 		await engineWith(index).search({ ...request, returned: { except: ["fullTextPDFs", "topics"] } });
-		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ attributesToRetrieve: ["key", "title"] }));
+		expect(index.search).toHaveBeenLastCalledWith("tutoring", expect.objectContaining({ attributesToRetrieve: ["key", "title"] }), { signal: undefined });
 	});
 });
 

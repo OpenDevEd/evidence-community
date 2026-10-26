@@ -462,6 +462,7 @@ export async function getPublicItems(
 export async function getPublicItemKeys(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	limit: number,
+	signal?: AbortSignal,
 ): Promise<{ keys: string[]; total: number }> {
 	const libraryConfig = await getLibraryConfig();
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
@@ -473,6 +474,7 @@ export async function getPublicItemKeys(
 		sort: sortOption,
 		size: limit,
 		returned: { only: ["key"] },
+		signal,
 	});
 	return { keys: response.hits.map((hit) => String(hit.key)), total: response.total };
 }

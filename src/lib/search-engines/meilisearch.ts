@@ -140,11 +140,11 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 	}
 
 	/** Searches; while the search worker still sets up the embedder, words alone rank the results. */
-	async function searchIndex(text: string, searchParams: SearchParams) {
-		return index.search<Record<string, unknown>>(text, searchParams).catch((error: unknown) => {
+	async function searchIndex(text: string, searchParams: SearchParams, signal?: AbortSignal) {
+		return index.search<Record<string, unknown>>(text, searchParams, { signal }).catch((error: unknown) => {
 			if (!searchParams.hybrid || !isEmbedderUnavailable(error)) throw error;
 			const { hybrid: _hybrid, ...byWords } = searchParams;
-			return index.search<Record<string, unknown>>(text, byWords);
+			return index.search<Record<string, unknown>>(text, byWords, { signal });
 		});
 	}
 
@@ -186,7 +186,7 @@ export function meilisearchEngine({ client, index, indexName }: MeilisearchServi
 			// The last page starts from the exact count, which then is the total, not Meilisearch's estimate.
 			const counted = request.fromEnd ? await totalOf(request) : undefined;
 			const offset = startOf(request, counted);
-			const answer = answerOf<T>(await searchIndex(request.text, await params(request, offset)), offset);
+			const answer = answerOf<T>(await searchIndex(request.text, await params(request, offset), request.signal), offset);
 			return counted === undefined ? answer : { ...answer, total: counted };
 		},
 		async searchMany<T>(requests: readonly SearchRequest[]) {
