@@ -51,9 +51,15 @@ async function publicResults(config: LibraryServerConfig) {
 	return { engine: engine.name, total };
 }
 
+/** The library choosing `engine`; it has both engines' connections (`libraryToSwitch`). */
+function choosing(base: LibraryServerConfig, engine: SearchEngineName): LibraryServerConfig {
+	const search = { ...base.services.search, engine } as LibraryServerConfig["services"]["search"];
+	return { ...base, services: { ...base.services, search } };
+}
+
 /** Switches the library to `to` while a reader counts results; returns what the reader saw. */
 async function switchTo(directory: string, base: LibraryServerConfig, to: SearchEngineName, records: number) {
-	const config = { ...base, services: { ...base.services, search: { ...base.services.search, engine: to } } };
+	const config = choosing(base, to);
 	const seen = { lowest: Number.POSITIVE_INFINITY, engines: new Set<string>(), reads: 0 };
 	let switching = true;
 	const reader = (async () => {
