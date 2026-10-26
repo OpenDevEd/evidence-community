@@ -1,11 +1,12 @@
 /**
- * Loads one library's real records into Elasticsearch and compares its results for a fixed set of reader searches
- * with the ones Meilisearch gave before the move (OpenDevEd/new-el#717, #721).
+ * Loads one library's real records into Elasticsearch and compares an engine's results for a fixed set of reader
+ * searches with the ones Meilisearch gave before EL-32 (OpenDevEd/new-el#717, #721, #722). `compare` searches through
+ * the runtime's own engine adapter, Elasticsearch's by default or Meilisearch's with `--engine meilisearch`.
  *
  *   npm run search:compare -- export --out aied.ndjson
  *   npm run search:compare -- load-elasticsearch --in aied.ndjson --url http://127.0.0.1:9200 --index aied
  *   npm run search:compare -- compare --baseline tools/search-comparison/aied-meilisearch-baseline.json \
- *     --url http://127.0.0.1:9200 --index aied --out aied-comparison.json
+ *     --url http://127.0.0.1:9200 --index aied --out aied-comparison.json [--engine meilisearch --key <key>]
  *
  * `export` and `compare` read the library configuration from LIBRARY_CONFIG_PATH: its database and the search
  * settings a reader's search goes through. Each command prints one JSON summary.
@@ -19,7 +20,12 @@ import { openLibraryConfigProcess, openLibraryDatabaseProcess } from "../src/con
 import { resolveSearchRequest } from "../src/lib/search";
 import { searchIndexDefinition } from "../src/lib/search-index/elasticsearch-index";
 import { generateFullSearchProjectionPlans } from "../src/lib/search-index/projection";
-import { searchQuery, sortClauses } from "../src/lib/search-engine";
+import { Client } from "@elastic/elasticsearch";
+import { Meilisearch } from "meilisearch";
+
+import type { SearchEngine } from "../src/lib/search-engine";
+import { elasticsearchEngine } from "../src/lib/search-engines/elasticsearch";
+import { meilisearchEngine } from "../src/lib/search-engines/meilisearch";
 
 const BATCH_BYTES = 20 * 1024 * 1024;
 const ELASTICSEARCH_BULKS_IN_FLIGHT = 4;
@@ -31,8 +37,10 @@ type BaselineQuery = EngineResult & { id: string; params: Record<string, unknown
 type ComparisonResult = {
 	id: string;
 	params: Record<string, unknown>;
-	meilisearch: EngineResult;
-	elasticsearch: EngineResult | { error: string };
+	/** What Meilisearch answered before EL-32. */
+	baseline: EngineResult;
+	/** What the engine under test answers now. */
+	candidate: EngineResult | { error: string };
 	overlapAt10: number | null;
 	overlapAt20: number | null;
 };
@@ -180,31 +188,37 @@ function overlap(left: readonly string[], right: readonly string[], depth: numbe
 
 type SearchRequest = ReturnType<typeof resolveSearchRequest>;
 
-/** The search the library's public results page sends, as `src/lib/search.ts` builds it. */
-function searchBody(request: SearchRequest) {
-	return {
-		from: (request.pageNum - 1) * request.limitNum,
-		size: request.limitNum,
-		track_total_hits: true,
-		_source: false,
-		query: searchQuery(request.search, request.attributesToSearchOn, request.finalFilters, request.sortOption),
-		sort: sortClauses(request.sortOption, { text: request.search }),
-	};
+function engineOf(values: Arguments): SearchEngine {
+	const [url, index] = [required(values, "url"), required(values, "index")];
+	if (values.engine === "meilisearch") {
+		const client = new Meilisearch({ host: url, apiKey: values.key });
+		return meilisearchEngine({ client, index: client.index(index), indexName: index });
+	}
+	return elasticsearchEngine({ alias: index, client: new Client({ node: url }) });
 }
 
-async function elasticsearchResult(url: string, index: string, request: SearchRequest): Promise<EngineResult | { error: string }> {
+/** The search the library's public results page sends, as `src/lib/search.ts` builds it, keys only. */
+async function engineResult(engine: SearchEngine, request: SearchRequest): Promise<EngineResult | { error: string }> {
 	try {
-		const body = JSON.stringify(searchBody(request));
-		const measured = await timed(() => elasticsearch(url, "POST", `/${index}/_search`, body));
-		const hits = measured.result.hits as { total: { value: number }; hits: Array<{ _id: string }> };
-		return { keys: hits.hits.map((hit) => hit._id), total: hits.total.value, p50: measured.p50, p95: measured.p95 };
+		const measured = await timed(() =>
+			engine.search<{ key: string }>({
+				text: request.search,
+				fields: request.attributesToSearchOn,
+				filters: request.finalFilters,
+				sort: request.sortOption,
+				size: request.limitNum,
+				from: (request.pageNum - 1) * request.limitNum,
+				returned: { only: ["key"] },
+			}),
+		);
+		return { keys: measured.result.hits.map((hit) => String(hit.key)), total: measured.result.total, p50: measured.p50, p95: measured.p95 };
 	} catch (error) {
 		return { error: error instanceof Error ? error.message.slice(0, 500) : String(error) };
 	}
 }
 
-function engineLatency(results: readonly ComparisonResult[], engine: "meilisearch" | "elasticsearch", field: "p50" | "p95") {
-	return percentile(results.flatMap((result) => ("keys" in result[engine] ? [(result[engine] as EngineResult)[field]] : [])), 0.5);
+function engineLatency(results: readonly ComparisonResult[], side: "baseline" | "candidate", field: "p50" | "p95") {
+	return percentile(results.flatMap((result) => ("keys" in result[side] ? [(result[side] as EngineResult)[field]] : [])), 0.5);
 }
 
 function summarise(results: readonly ComparisonResult[], out: string) {
@@ -215,43 +229,44 @@ function summarise(results: readonly ComparisonResult[], out: string) {
 		medianOverlapAt10: percentile(answered.map((result) => result.overlapAt10!), 0.5),
 		queriesUnderHalfOverlap: answered.filter((result) => result.overlapAt10! < 0.5).map((result) => result.id),
 		medianLatencyMs: {
-			meilisearch: { p50: engineLatency(results, "meilisearch", "p50"), p95: engineLatency(results, "meilisearch", "p95") },
-			elasticsearch: { p50: engineLatency(results, "elasticsearch", "p50"), p95: engineLatency(results, "elasticsearch", "p95") },
+			baseline: { p50: engineLatency(results, "baseline", "p50"), p95: engineLatency(results, "baseline", "p95") },
+			candidate: { p50: engineLatency(results, "candidate", "p50"), p95: engineLatency(results, "candidate", "p95") },
 		},
 		out,
 	};
 }
 
-async function compareQuery(meilisearch: EngineResult, request: SearchRequest, url: string, index: string) {
-	const elasticsearch = await elasticsearchResult(url, index, request);
-	const keys = "keys" in elasticsearch ? elasticsearch.keys : null;
+async function compareQuery(baseline: EngineResult, request: SearchRequest, engine: SearchEngine) {
+	const candidate = await engineResult(engine, request);
+	const keys = "keys" in candidate ? candidate.keys : null;
 	return {
-		meilisearch,
-		elasticsearch,
-		overlapAt10: keys && overlap(meilisearch.keys, keys, 10),
-		overlapAt20: keys && overlap(meilisearch.keys, keys, 20),
+		baseline,
+		candidate,
+		overlapAt10: keys && overlap(baseline.keys, keys, 10),
+		overlapAt20: keys && overlap(baseline.keys, keys, 20),
 	};
 }
 
 async function compare(values: Arguments) {
-	const [url, index, out] = [required(values, "url"), required(values, "index"), required(values, "out")];
+	const out = required(values, "out");
+	const engine = engineOf(values);
 	const configProcess = await openLibraryConfigProcess();
 	try {
 		const results: ComparisonResult[] = [];
-		for (const { id, params, ...meilisearch } of JSON.parse(readFileSync(required(values, "baseline"), "utf8")) as BaselineQuery[]) {
+		for (const { id, params, ...baseline } of JSON.parse(readFileSync(required(values, "baseline"), "utf8")) as BaselineQuery[]) {
 			const request = resolveSearchRequest(params, configProcess.config, [], RESULTS);
-			results.push({ id, params, ...(await compareQuery(meilisearch, request, url, index)) });
+			results.push({ id, params, ...(await compareQuery(baseline, request, engine)) });
 		}
 		writeFileSync(out, `${JSON.stringify(results, null, "\t")}\n`);
-		return summarise(results, out);
+		return { engine: engine.name, ...summarise(results, out) };
 	} finally {
 		configProcess.close();
 	}
 }
 
-const USAGE = "Usage: npm run search:compare -- export --out <file> | load-elasticsearch --in <file> --url <url> --index <name> | compare --baseline <file> --url <url> --index <name> --out <file>";
+const USAGE = "Usage: npm run search:compare -- export --out <file> | load-elasticsearch --in <file> --url <url> --index <name> | compare --baseline <file> --url <url> --index <name> --out <file> [--engine meilisearch --key <key>]";
 
-type Arguments = Partial<Record<"in" | "out" | "url" | "index" | "baseline", string>>;
+type Arguments = Partial<Record<"in" | "out" | "url" | "index" | "baseline" | "engine" | "key", string>>;
 
 function required(values: Arguments, name: keyof Arguments) {
 	const value = values[name];
@@ -271,7 +286,7 @@ async function main() {
 	if (!run) throw new Error(USAGE);
 	const { values } = parseArgs({
 		args: rest,
-		options: { in: { type: "string" }, out: { type: "string" }, url: { type: "string" }, index: { type: "string" }, baseline: { type: "string" } },
+		options: { in: { type: "string" }, out: { type: "string" }, url: { type: "string" }, index: { type: "string" }, baseline: { type: "string" }, engine: { type: "string" }, key: { type: "string" } },
 	});
 	console.log(JSON.stringify(await run(values)));
 }

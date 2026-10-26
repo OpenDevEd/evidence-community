@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
-import { LIST_ITEM_FIELDS, publicSource, searchKeys, toLightweightItem, totalOf } from "@/lib/search";
+import { LIST_ITEM_FIELDS, publicFields, searchKeys, toLightweightItem } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -18,10 +18,10 @@ async function getPaginatedItems(
 
 	try {
 		const result = await searchKeys(libraryConfig, keys, { number: page, size: perPage }, {
-			_source: includeHeavyFields ? publicSource(libraryConfig) : [...LIST_ITEM_FIELDS],
+			returned: includeHeavyFields ? publicFields(libraryConfig) : { only: [...LIST_ITEM_FIELDS] },
 		});
 
-		const items = result.hits.hits.map((hit) => hit._source as ListItem);
+		const items = result.hits;
 		const { tags } = libraryConfig.content;
 		return {
 			items: items.map((item) =>
@@ -29,7 +29,7 @@ async function getPaginatedItems(
 					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }
 					: toLightweightItem(item, publicTagRules(libraryConfig)),
 			),
-			total: totalOf(result),
+			total: result.total,
 		};
 	} catch (error: any) {
 		console.warn("Error fetching items from search:", error);

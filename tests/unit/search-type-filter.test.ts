@@ -16,21 +16,21 @@ const config = libraryConfigSchema.parse(
 describe("item type filter", () => {
 	it("keeps results of any chosen type, in the results and in the counts beside them", () => {
 		const request = resolveSearchRequest({ type: ["Thesis", "Report"] }, config);
-		const filter = { terms: { itemType: ["Thesis", "Report"] } };
+		const filter = { field: "itemType", in: ["Thesis", "Report"] };
 		expect(request.finalFilters).toContainEqual(filter);
 		expect(request.facetFilters).toContainEqual(filter);
 	});
 
 	it("filters by no type when none is chosen", () => {
 		const request = resolveSearchRequest({}, config);
-		expect(request.finalFilters).not.toContainEqual(expect.objectContaining({ terms: expect.objectContaining({ itemType: expect.anything() }) }));
+		expect(request.finalFilters).not.toContainEqual(expect.objectContaining({ field: "itemType", in: expect.anything() }));
 	});
 });
 
 describe("study type filter", () => {
 	it("keeps results of any chosen study type, in the results and in the counts beside them", () => {
 		const request = resolveSearchRequest({ study: ["meta-analysis", "systematic-review"] }, config);
-		const filter = { terms: { studyType: ["meta-analysis", "systematic-review"] } };
+		const filter = { field: "studyType", in: ["meta-analysis", "systematic-review"] };
 		expect(request.finalFilters).toContainEqual(filter);
 		expect(request.facetFilters).toContainEqual(filter);
 	});

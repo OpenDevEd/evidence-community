@@ -25,13 +25,12 @@ import {
 import {
 	pagePosition,
 	publicFacetDistribution,
-	publicSource,
+	publicFields,
 	resolveSearchRequest,
 	resolveSearchTopicNodes,
-	searchRecords,
-	totalOf,
 } from "@/lib/search";
-import { facetAggregations, facetDistribution, fieldIn, sortClauses, type SearchFilter } from "@/lib/search-engine";
+import { fieldIn, searchOrder, type SearchFilter } from "@/lib/search-engine";
+import { getSearchEngine } from "@/lib/search-engines";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import { AIError } from "@/lib/ai/errors";
@@ -134,23 +133,25 @@ async function searchIndex(
 			sortOption,
 		} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 		const finalFilters = [...baseFilters, ...extraFilters];
-		const order = sortClauses(sortOption, { text: search });
-		const position = pagePosition(pageNum, limitNum, searchParams, order);
+		const engine = await getSearchEngine(libraryConfig);
+		const position = pagePosition(pageNum, limitNum, searchParams, searchOrder(engine.name, { text: search, sort: sortOption }));
 
 		const [searchResults, collections] = await Promise.all([
-			searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
+			engine.search<Item>({
+				text: search,
+				fields: attributesToSearchOn,
+				filters: finalFilters,
+				sort: sortOption,
 				size: limitNum,
-				_source: publicSource(libraryConfig),
-				sort: position.reverse ? sortClauses(sortOption, { text: search, reverse: true }) : order,
-				...(position.searchAfter ? { search_after: position.searchAfter } : { from: position.from ?? 0 }),
-				aggs: facetAggregations(facets),
+				returned: publicFields(libraryConfig),
+				facets,
+				...position.start,
 			}),
 			getCachedCollections(libraryConfig),
 		]);
 
-		const hits = position.reverse ? [...searchResults.hits.hits].reverse() : searchResults.hits.hits;
-		const items = hits.map((hit) => hit._source as unknown as Item);
-		const totalCount = totalOf(searchResults);
+		const items = searchResults.hits;
+		const totalCount = searchResults.total;
 
 		const itemPromises = items.map(async (item) => {
 			if (collections) {
@@ -185,7 +186,7 @@ async function searchIndex(
 			perPage: limitNum,
 			totalPages: Math.ceil(totalCount / limitNum),
 			facetDistribution: publicFacetDistribution(
-				facetDistribution(searchResults.aggregations),
+				searchResults.facets,
 				facets,
 				{ country, author_country: authorCountry },
 			),

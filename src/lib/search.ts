@@ -19,30 +19,28 @@ import type {
 	LibraryPublicConfig,
 	LibraryServerConfig,
 } from "@/config/library-config/schema";
-import type { estypes } from "@elastic/elasticsearch";
 import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import { getSearchForConfig } from "./elasticsearch";
 import { searchParamsLoader } from "./searchParams";
 import { lastNumberedPage, offersSources, resolveSearchQuery } from "./search-query";
 import {
 	decodeCursor,
 	encodeCursor,
-	facetAggregations,
-	facetDistribution as facetCounts,
 	fieldEquals,
 	fieldIn,
 	fieldNotEquals,
 	fieldNotIn,
 	fieldPresent,
 	HAS_PDF_TEXT,
-	searchQuery,
-	sortClauses,
+	searchOrder,
 	yearRange,
 	type FacetDistribution,
 	type SearchFilter,
+	type SearchOrder,
+	type SearchRequest,
 } from "./search-engine";
+import { getSearchEngine } from "./search-engines";
 import { SOURCES_FIELD } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
@@ -132,50 +130,38 @@ function hiddenFields(libraryConfig: Pick<LibraryServerConfig, "topics">) {
 }
 
 /** Every public field a search sends. */
-export function publicSource(libraryConfig: Pick<LibraryServerConfig, "topics">): estypes.SearchSourceConfig {
-	return { excludes: hiddenFields(libraryConfig) };
+export function publicFields(libraryConfig: Pick<LibraryServerConfig, "topics">): SearchRequest["returned"] {
+	return { except: hiddenFields(libraryConfig) };
 }
 
-/** One search of the library's records: every filter must hold, the text decides the order, and totals are exact. */
-export async function searchRecords(
+/** One search of the library's records, in the engine its readers search: every filter must hold. */
+export async function searchRecords<T = ListItem>(
 	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
-	request: { search: string; attributesToSearchOn: readonly string[]; filters: readonly SearchFilter[]; sort?: readonly string[] },
-	body: Omit<estypes.SearchRequest, "index" | "query"> = {},
+	request: SearchRequest,
 ) {
-	const { alias, client } = await getSearchForConfig(libraryConfig);
-	return client.search<ListItem>({
-		index: alias,
-		query: searchQuery(request.search, request.attributesToSearchOn, request.filters, request.sort),
-		track_total_hits: true,
-		...body,
-	});
+	return (await getSearchEngine(libraryConfig)).search<T>(request);
 }
 
-/** A page of the records with these keys, in key order. */
+/** A page of the records with these keys. */
 export function searchKeys(
 	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
 	keys: readonly string[],
 	page: { number: number; size: number },
-	body: Omit<estypes.SearchRequest, "index" | "query" | "from" | "size" | "sort"> = {},
+	request: Pick<SearchRequest, "returned" | "facets" | "exactTotal"> = {},
 ) {
-	return searchRecords(libraryConfig, { search: "", attributesToSearchOn: [], filters: [fieldIn("key", keys)] }, {
+	return searchRecords(libraryConfig, {
+		text: "",
+		fields: [],
+		filters: [fieldIn("key", keys)],
 		from: (page.number - 1) * page.size,
 		size: page.size,
-		sort: sortClauses(undefined),
-		...body,
+		...request,
 	});
 }
 
 /** One record's search copy with every public field, or null when the library has none under this key. */
 export async function readSearchDocument(libraryConfig: LibraryServerConfig, key: string) {
-	const { alias, client } = await getSearchForConfig(libraryConfig);
-	const response = await client.get<ListItem>({ index: alias, id: key, _source_excludes: hiddenFields(libraryConfig) }, { ignore: [404] });
-	return response.found ? (response._source ?? null) : null;
-}
-
-export function totalOf(response: { hits: { total?: number | estypes.SearchTotalHits } }) {
-	const total = response.hits.total;
-	return typeof total === "number" ? total : (total?.value ?? 0);
+	return (await getSearchEngine(libraryConfig)).read<ListItem>(key, hiddenFields(libraryConfig));
 }
 
 /** A list result keeps only its public attachments that the item page reads. */
@@ -368,12 +354,15 @@ async function readCachedTopicTree(
 	"use cache";
 	// New topics from an import show within five minutes; until then the last tree is served.
 	cacheLife({ revalidate: 300 });
-	const response = await searchRecords(
-		libraryConfig,
-		{ search: "", attributesToSearchOn: [], filters: publicRecordFilters(libraryConfig.content.tags.hidden) },
-		{ size: 0, track_total_hits: false, aggs: facetAggregations(["topicAncestors"]) },
-	);
-	return readTopicTree(Object.keys(facetCounts(response.aggregations).topicAncestors ?? {}), {
+	const response = await searchRecords(libraryConfig, {
+		text: "",
+		fields: [],
+		filters: publicRecordFilters(libraryConfig.content.tags.hidden),
+		size: 0,
+		exactTotal: false,
+		facets: ["topicAncestors"],
+	});
+	return readTopicTree(Object.keys(response.facets.topicAncestors ?? {}), {
 		database: await getDatabaseForConfig(libraryConfig),
 		config: libraryConfig,
 	});
@@ -389,13 +378,18 @@ export async function getPublicTopicTree(libraryConfig: LibraryServerConfig) {
  * cursor names, or before the one its `before` cursor names, read backwards. A deep page whose cursor belongs to
  * another order opens on the first page, and says so in its page number.
  */
-export function pagePosition(page: number, pageSize: number, searchParams: { after?: string; before?: string }, order: readonly estypes.SortCombinations[]) {
-	if (page <= lastNumberedPage(pageSize)) return { page, from: (page - 1) * pageSize, searchAfter: null, reverse: false };
+export function pagePosition(
+	page: number,
+	pageSize: number,
+	searchParams: { after?: string; before?: string },
+	order: SearchOrder,
+): { page: number; start: Pick<SearchRequest, "from" | "after" | "before"> } {
+	if (page <= lastNumberedPage(pageSize)) return { page, start: { from: (page - 1) * pageSize } };
 	const after = decodeCursor(searchParams.after, order);
-	if (after) return { page, from: null, searchAfter: after, reverse: false };
+	if (after) return { page, start: { after } };
 	const before = decodeCursor(searchParams.before, order);
-	if (before) return { page, from: null, searchAfter: before, reverse: true };
-	return { page: 1, from: 0, searchAfter: null, reverse: false };
+	if (before) return { page, start: { before } };
+	return { page: 1, start: { from: 0 } };
 }
 
 export async function getPublicItems(
@@ -426,27 +420,21 @@ export async function getPublicItems(
 	);
 
 	const pageSize = options.perPage ?? limitNum;
-	const order = sortClauses(sortOption, { text: search });
+	const engine = await getSearchEngine(libraryConfig);
+	const order = searchOrder(engine.name, { text: search, sort: sortOption });
 	const position = pagePosition(pageNum, pageSize, searchParams, order);
 	const includeHeavyFields = options.includeHeavyFields === true;
-	const source = includeHeavyFields
-		? publicSource(libraryConfig)
-		: LIST_ITEM_FIELDS.filter(attribute => libraryConfig.topics.enabled || attribute !== "topics");
+	const returned = includeHeavyFields
+		? publicFields(libraryConfig)
+		: { only: LIST_ITEM_FIELDS.filter(attribute => libraryConfig.topics.enabled || attribute !== "topics") };
 
 	const [response, collections] = await Promise.all([
-		searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
-			size: pageSize,
-			_source: source,
-			sort: position.reverse ? sortClauses(sortOption, { text: search, reverse: true }) : order,
-			...(position.searchAfter ? { search_after: position.searchAfter } : { from: position.from ?? 0 }),
-		}),
+		engine.search<ListItem>({ text: search, fields: attributesToSearchOn, filters: finalFilters, sort: sortOption, size: pageSize, returned, ...position.start }),
 		getCachedCollections(libraryConfig),
 	]);
-	const hits = position.reverse ? [...response.hits.hits].reverse() : response.hits.hits;
 
 	const rules = publicTagRules(libraryConfig);
-	const items = hits.map(({ _source }) => {
-		const item = _source as ListItem;
+	const items = response.hits.map((item) => {
 		return includeHeavyFields
 			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey) }
 			: toLightweightItem(item, rules);
@@ -454,7 +442,7 @@ export async function getPublicItems(
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount = totalOf(response);
+	const totalCount = response.total;
 	const totalPages = Math.ceil(totalCount / pageSize);
 
 	return {
@@ -464,8 +452,8 @@ export async function getPublicItems(
 		perPage: pageSize,
 		totalPages,
 		cursors: {
-			previous: position.page > 1 ? encodeCursor(order, hits[0]?.sort) : null,
-			next: position.page < totalPages ? encodeCursor(order, hits.at(-1)?.sort) : null,
+			previous: position.page > 1 ? encodeCursor(order, response.first) : null,
+			next: position.page < totalPages ? encodeCursor(order, response.last) : null,
 		},
 	};
 }
@@ -478,12 +466,15 @@ export async function getPublicItemKeys(
 	const libraryConfig = await getLibraryConfig();
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, sortOption, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes, limit);
-	const response = await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
+	const response = await searchRecords(libraryConfig, {
+		text: search,
+		fields: attributesToSearchOn,
+		filters: finalFilters,
+		sort: sortOption,
 		size: limit,
-		_source: ["key"],
-		sort: sortClauses(sortOption, { text: search }),
+		returned: { only: ["key"] },
 	});
-	return { keys: response.hits.hits.map((hit) => String(hit._source?.key)), total: totalOf(response) };
+	return { keys: response.hits.map((hit) => String(hit.key)), total: response.total };
 }
 
 /** What keeps a search to public records: no excluded type, nothing deleted, nothing hidden. */
@@ -496,14 +487,17 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 	const libraryConfig = await getLibraryConfig();
 	const { tags } = libraryConfig.content;
 	const [response, collections] = await Promise.all([
-		searchRecords(libraryConfig, { search: "", attributesToSearchOn: [], filters: [fieldIn("key", keys), ...publicRecordFilters(tags.hidden)] }, {
+		searchRecords(libraryConfig, {
+			text: "",
+			fields: [],
+			filters: [fieldIn("key", keys), ...publicRecordFilters(tags.hidden)],
 			size: keys.length,
-			_source: [...LIST_ITEM_FIELDS],
-			track_total_hits: false,
+			returned: { only: [...LIST_ITEM_FIELDS] },
+			exactTotal: false,
 		}),
 		getCachedCollections(libraryConfig),
 	]);
-	const items = response.hits.hits.map(({ _source }) => toLightweightItem(_source as ListItem, publicTagRules(libraryConfig)));
+	const items = response.hits.map((item) => toLightweightItem(item, publicTagRules(libraryConfig)));
 	applyCollectionsData(items, collections as Collection[]);
 	return items;
 }
@@ -548,7 +542,7 @@ export async function getPublicFacets(
 	] satisfies OwnFilter[] as OwnFilter[]).filter(({ facet, active, as }) => active && (as || facets.includes(facet)));
 
 	const count = (facetsToCount: readonly string[], filters: readonly SearchFilter[]) =>
-		searchRecords(libraryConfig, { search, attributesToSearchOn, filters }, { size: 0, aggs: facetAggregations(facetsToCount) });
+		searchRecords(libraryConfig, { text: search, fields: attributesToSearchOn, filters, size: 0, facets: facetsToCount });
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([
 		count(facets, finalFilters),
 		facets.includes("topicAncestors") && finalFilters.length !== facetFilters.length ? count(["topicAncestors"], facetFilters) : null,
@@ -556,18 +550,18 @@ export async function getPublicFacets(
 			count([facet], [...resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters, ...also]),
 		),
 	]);
-	const totals: FacetTotals = { "*": totalOf(searchResults) };
-	if (topicResults) totals.topicAncestors = totalOf(topicResults);
+	const totals: FacetTotals = { "*": searchResults.total };
+	if (topicResults) totals.topicAncestors = topicResults.total;
 	ownFilters.forEach(({ facet, as }, index) => {
-		totals[as ?? facet] = totalOf(ownResults[index]);
+		totals[as ?? facet] = ownResults[index].total;
 	});
 	const distribution: FacetDistribution = Object.assign(
 		{},
-		facetCounts(searchResults.aggregations),
-		topicResults ? facetCounts(topicResults.aggregations) : {},
+		searchResults.facets,
+		topicResults ? topicResults.facets : {},
 		...ownResults.map((result, index) => {
 			const { facet, as, keep } = ownFilters[index];
-			const counted = facetCounts(result.aggregations);
+			const counted = result.facets;
 			if (!as) return counted;
 			const counts = Object.entries(counted[facet] ?? {}).filter(([value]) => !keep || keep(value));
 			return { [as]: Object.fromEntries(counts) };
@@ -621,9 +615,7 @@ export async function getItemsPaginationMeta(
 		attributesToSearchOn,
 	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
-	const totalItems = totalOf(
-		await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters }, { size: 0 }),
-	);
+	const { total: totalItems } = await searchRecords(libraryConfig, { text: search, fields: attributesToSearchOn, filters: finalFilters, size: 0 });
 
 	return {
 		currentPage: pageNum,
@@ -675,8 +667,8 @@ async function readTopAuthors(
 	cacheTag("library");
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
-	const ranked = await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters }, { size: 0, aggs: facetAggregations(["fullNames"]) });
-	const everyone = facetCounts(ranked.aggregations).fullNames ?? {};
+	const ranked = await searchRecords(libraryConfig, { text: search, fields: attributesToSearchOn, filters: finalFilters, size: 0, facets: ["fullNames"] });
+	const everyone = ranked.facets.fullNames ?? {};
 	const top = Object.entries(everyone)
 		.filter(([name]) => name.trim().length > 1)
 		.sort((left, right) => right[1] - left[1])
@@ -684,33 +676,22 @@ async function readTopAuthors(
 	const names = top.map(([name]) => name);
 	if (names.length === 0) return { authorCount: 0, authors: [], combined: {} };
 	const institutions = libraryConfig.filters.institution.mode !== "hidden";
-	const { alias, client } = await getSearchForConfig(libraryConfig);
-	const query = (filters: readonly SearchFilter[]) => searchQuery(search, attributesToSearchOn, filters);
-	const { responses } = await client.msearch<ListItem>({
-		index: alias,
-		searches: [
-			{},
-			{ size: 0, query: query([...finalFilters, fieldIn("fullNames", names)]), aggs: facetAggregations(["year"]) },
-			...names.flatMap((name) => [
-				{},
-				{
-					// One of their results, to find the profile their name is linked to on it.
-					size: 1,
-					_source: ["creators"],
-					query: query([...finalFilters, fieldEquals("fullNames", name)]),
-					aggs: facetAggregations(["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])]),
-				},
-			]),
-		],
-	});
-	const [all, ...perAuthor] = responses.map((response) => {
-		if ("error" in response) throw new Error(`Top authors search failed: ${JSON.stringify(response.error).slice(0, 500)}`);
-		return response;
-	});
-	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits.hits[0]?._source, name));
+	const searched = { text: search, fields: attributesToSearchOn };
+	const [all, ...perAuthor] = await (await getSearchEngine(libraryConfig)).searchMany<ListItem>([
+		{ ...searched, filters: [...finalFilters, fieldIn("fullNames", names)], size: 0, facets: ["year"] },
+		...names.map((name) => ({
+			...searched,
+			filters: [...finalFilters, fieldEquals("fullNames", name)],
+			// One of their results, to find the profile their name is linked to on it.
+			size: 1,
+			returned: { only: ["creators"] },
+			facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
+		})),
+	]);
+	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits[0], name));
 	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
 	const authors = top.map(([name, count], position): AuthorActivity => {
-		const distribution = facetCounts(perAuthor[position]?.aggregations);
+		const distribution = perAuthor[position]?.facets ?? {};
 		const profileId = profileIds[position];
 		return {
 			name,
@@ -721,7 +702,7 @@ async function readTopAuthors(
 			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
 		};
 	});
-	return { authorCount: Object.keys(everyone).length, authors, combined: facetCounts(all?.aggregations).year ?? {} };
+	return { authorCount: Object.keys(everyone).length, authors, combined: all?.facets.year ?? {} };
 }
 
 /** The profile a result links an author to, found by the name the index files them under. */

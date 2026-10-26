@@ -18,8 +18,8 @@ import { LibraryExportError } from "@/lib/library-export-request";
 import { readSearchKeys } from "@/lib/library-export-selection";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readCollectionFor, readerIdOfClerkUser, readReaderListKeys } from "@/lib/readers/data";
-import { publicRecordFilters, publicSource, searchRecords } from "@/lib/search";
-import { facetAggregations, facetDistribution, fieldIn } from "@/lib/search-engine";
+import { publicFields, publicRecordFilters, searchRecords } from "@/lib/search";
+import { fieldIn } from "@/lib/search-engine";
 import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
@@ -237,13 +237,16 @@ export async function readLibraryOverview(config: LibraryServerConfig, database:
 	const [status, collections, counted] = await Promise.all([
 		readPublicLibraryStatus(database, config),
 		getCachedCollections(config),
-		searchRecords(
-			config,
-			{ search: "", attributesToSearchOn: [], filters: publicRecordFilters(config.content.tags.hidden) },
-			{ size: 0, track_total_hits: false, aggs: facetAggregations(["collectionsAncestry"]) },
-		),
+		searchRecords(config, {
+			text: "",
+			fields: [],
+			filters: publicRecordFilters(config.content.tags.hidden),
+			size: 0,
+			exactTotal: false,
+			facets: ["collectionsAncestry"],
+		}),
 	]);
-	const records = facetDistribution(counted.aggregations).collectionsAncestry ?? {};
+	const records = counted.facets.collectionsAncestry ?? {};
 	return {
 		records: Number(status?.totalItems ?? 0),
 		collections: collections
@@ -263,13 +266,16 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 	const unique = await publicKeys(config, database, keys);
 	if (!unique.length) return { records: [], unread: [] };
 	// The index keeps hidden and deleted records too: a record hidden since the source was resolved isn't read.
-	const found = await searchRecords(
-		config,
-		{ search: "", attributesToSearchOn: [], filters: [fieldIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)] },
-		{ size: unique.length, track_total_hits: false, _source: publicSource(config) },
-	);
+	const found = await searchRecords(config, {
+		text: "",
+		fields: [],
+		filters: [fieldIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)],
+		size: unique.length,
+		exactTotal: false,
+		returned: publicFields(config),
+	});
 	const rules = publicTagRules(config);
-	const byKey = new Map(found.hits.hits.map(({ _source }) => [String(_source?.key), _source!]));
+	const byKey = new Map(found.hits.map((record) => [String(record.key), record]));
 	const records: OpenScholarRecord[] = [];
 	const unread: string[] = [];
 	let bytes = 0;

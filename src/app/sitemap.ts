@@ -46,10 +46,10 @@ async function readSitemapRecords(libraryConfig: LibraryServerConfig, identifier
 	for (let attempt = 1; ; attempt++) {
 		try {
 			const response = await searchKeys(libraryConfig, keys, { number: 1, size: keys.length }, {
-				track_total_hits: false,
-				_source: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
+				exactTotal: false,
+				returned: { only: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"] },
 			});
-			return response.hits.hits.map((hit) => hit._source);
+			return response.hits;
 		} catch (error) {
 			if (attempt === maxRetries) {
 				console.error(`Failed to fetch documents after ${maxRetries} attempts:`, error);

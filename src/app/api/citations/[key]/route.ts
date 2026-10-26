@@ -11,8 +11,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { filterPublicAttachments } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
-import { publicSource, readSearchDocument, searchKeys, totalOf } from "@/lib/search";
-import { facetAggregations, facetDistribution } from "@/lib/search-engine";
+import { publicFields, readSearchDocument, searchKeys } from "@/lib/search";
 
 export type CitationYearData = {
 	year: string;
@@ -71,14 +70,13 @@ async function getCitingItems(
 
 	try {
 		const result = await searchKeys(libraryConfig, keys, { number: page, size: perPage }, {
-			_source: publicSource(libraryConfig),
-			aggs: facetAggregations(["country", "year"]),
+			returned: publicFields(libraryConfig),
+			facets: ["country", "year"],
 		});
-		const counts = facetDistribution(result.aggregations);
+		const counts = result.facets;
 
 		const { tags } = libraryConfig.content;
-		const filteredItems = result.hits.hits
-			.map((hit) => hit._source as unknown as Item)
+		const filteredItems = (result.hits as unknown as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
 			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }));
 
@@ -86,7 +84,7 @@ async function getCitingItems(
 			items: filteredItems,
 			countryDistribution: counts.country ?? {},
 			yearDistribution: counts.year ?? {},
-			totalHits: totalOf(result),
+			totalHits: result.total,
 		};
 	} catch (error: any) {
 		console.warn("Error fetching citing items from search:", error);

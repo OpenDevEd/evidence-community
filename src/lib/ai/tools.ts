@@ -4,8 +4,8 @@ import { tool, type ModelMessage } from "ai";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
-import { resolveSearchRequest, resolveSearchTopicNodes, searchRecords, totalOf } from "@/lib/search";
-import { fieldEquals, fieldIn, sortClauses } from "@/lib/search-engine";
+import { resolveSearchRequest, resolveSearchTopicNodes, searchRecords } from "@/lib/search";
+import { fieldEquals, fieldIn } from "@/lib/search-engine";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { PDF_PRESENCE_ATTRIBUTE, SEARCH_RESULT_LIMIT } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
@@ -228,16 +228,19 @@ async function searchOne(
 	});
 
 	try {
-		const result = await searchRecords(
-			config,
-			{ search: query, attributesToSearchOn: compiled.attributesToSearchOn, filters: finalFilters, sort: compiled.sortOption },
-			{ size: limit, _source: [...SEARCH_ATTRIBUTES], sort: sortClauses(compiled.sortOption, { text: query }) },
-		);
-		const hits = result.hits.hits.map(({ _source }) => {
-			const modelHit = searchHitToModelHit(_source as Record<string, unknown>);
+		const result = await searchRecords<Record<string, unknown>>(config, {
+			text: query,
+			fields: compiled.attributesToSearchOn,
+			filters: finalFilters,
+			sort: compiled.sortOption,
+			size: limit,
+			returned: { only: [...SEARCH_ATTRIBUTES] },
+		});
+		const hits = result.hits.map((record) => {
+			const modelHit = searchHitToModelHit(record);
 			return listKeys ? { ...modelHit, inCurrentList: listKeys.has(modelHit.key) } : modelHit;
 		});
-		const totalHits = totalOf(result);
+		const totalHits = result.total;
 
 		logDevelopmentSearch("query.completed", {
 			...logContext,
@@ -287,26 +290,22 @@ async function loadCurrentResultsWindow(
 		config,
 		await resolveSearchTopicNodes(searchContext, config),
 	);
-	const request = {
-		search: compiled.search,
-		attributesToSearchOn: compiled.attributesToSearchOn,
+	// The last window is read from the end, which may lie past the results a page offset reaches; other windows stop
+	// there.
+	const last = !cursor && window === "last";
+	const requested = currentResultsOffset(searchContext, cursor);
+	const result = await searchRecords<Record<string, unknown>>(config, {
+		text: compiled.search,
+		fields: compiled.attributesToSearchOn,
 		// A reader's list is exactly the records the chat route allowed.
 		filters: readerListKeys ? [...compiled.finalFilters, fieldIn("key", readerListKeys)] : compiled.finalFilters,
 		sort: compiled.sortOption,
-	};
-	// The last window is read backwards from the end, which may lie past the
-	// results Elasticsearch pages to by offset; other windows stop there.
-	const last = !cursor && window === "last";
-	const requested = currentResultsOffset(searchContext, cursor);
-	const result = await searchRecords(config, request, {
 		size: last ? CURRENT_RESULTS_WINDOW_SIZE : Math.max(0, Math.min(CURRENT_RESULTS_WINDOW_SIZE, SEARCH_RESULT_LIMIT - requested)),
-		_source: [...SEARCH_ATTRIBUTES],
-		sort: sortClauses(compiled.sortOption, { text: compiled.search, reverse: last }),
-		...(last ? {} : { from: Math.min(requested, SEARCH_RESULT_LIMIT) }),
+		returned: { only: [...SEARCH_ATTRIBUTES] },
+		...(last ? { fromEnd: true } : { from: Math.min(requested, SEARCH_RESULT_LIMIT) }),
 	});
-	const total = totalOf(result);
-	const read = result.hits.hits.map(({ _source }) => _source as Record<string, unknown>);
-	const ordered = last ? read.reverse() : read;
+	const total = result.total;
+	const ordered = result.hits;
 	const offset = last ? Math.max(0, total - ordered.length) : requested;
 	const hits = ordered.filter(
 		(hit) =>

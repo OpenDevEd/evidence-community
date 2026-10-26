@@ -4,14 +4,13 @@ import { createHash } from "node:crypto";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { LIBRARY_EXPORT_RECORD_CAP } from "@/config/library-config/exports";
 import { getDatabaseForConfig } from "@/db";
-import type { estypes } from "@elastic/elasticsearch";
-import { getSearchForConfig } from "./elasticsearch";
-import { fieldIn, searchQuery, sortClauses, type SearchFilter } from "./search-engine";
+import { fieldIn, SearchChangedError } from "./search-engine";
+import { getSearchEngine } from "./search-engines";
 import { readReaderListKeys, readReaderListRevision } from "./readers/data";
 import { getSignedInReader } from "./readers/session";
 import { resolveSearchQuery } from "./search-query";
 import type { LibrarySearchContext } from "./search-context";
-import { resolveSearchRequest, resolveSearchTopicNodes, totalOf } from "./search";
+import { resolveSearchRequest, resolveSearchTopicNodes } from "./search";
 import { readCitationRecordsByKeys, readPublicLibraryKeys } from "./library-export-records";
 import type { CitationRecordReader } from "./library-exports";
 import { exportChanged, exportTooLarge, LibraryExportError, type LibraryExportRequest } from "./library-export-request";
@@ -38,43 +37,6 @@ async function prepareReaderList(config: LibraryServerConfig, readerList: Librar
 	return { allowedKeys, checkReader };
 }
 
-/** Keys a page reads at once. */
-const KEYS_PER_PAGE = 500;
-
-/**
- * `count` of a search's keys from `offset` (from 0), in its order, and how many the search finds in all, read from
- * one point in time of the index: writes and a rebuild meanwhile don't change what this export reads.
- */
-async function collectSearchKeys(config: LibraryServerConfig, query: ReturnType<typeof resolveSearchRequest>, filters: SearchFilter[], signal: AbortSignal, { offset = 0, count = LIBRARY_EXPORT_RECORD_CAP + 1 } = {}) {
-	const { alias, client } = await getSearchForConfig(config);
-	const pit = await client.openPointInTime({ index: alias, keep_alive: "2m" }, { signal });
-	try {
-		const keys: string[] = [];
-		let total = 0;
-		let after: estypes.SortResults | undefined;
-		while (keys.length < offset + count) {
-			signal.throwIfAborted();
-			const size = Math.min(KEYS_PER_PAGE, offset + count - keys.length);
-			const response = await client.search<{ key: string }>({
-				pit: { id: pit.id, keep_alive: "2m" },
-				size,
-				query: searchQuery(query.search, query.attributesToSearchOn, filters, query.sortOption),
-				sort: sortClauses(query.sortOption, { text: query.search }),
-				_source: ["key"],
-				track_total_hits: after === undefined,
-				...(after ? { search_after: after } : {}),
-			}, { signal });
-			if (after === undefined) total = totalOf(response);
-			keys.push(...response.hits.hits.map((hit) => String(hit._source?.key)));
-			if (response.hits.hits.length < size) break;
-			after = response.hits.hits.at(-1)!.sort;
-		}
-		return { keys: keys.slice(offset, offset + count), total };
-	} finally {
-		await client.closePointInTime({ id: pit.id }).catch(() => undefined);
-	}
-}
-
 /**
  * A search's record keys in its order, read from one point in time of the index: at most one past the export cap,
  * or with `range` the `count` from `offset` (from 0) and how many the search finds in all.
@@ -86,7 +48,14 @@ export async function readSearchKeys(config: LibraryServerConfig, context: Libra
 	const topics = await resolveSearchTopicNodes(context, config);
 	const query = resolveSearchRequest(context, config, topics);
 	const filters = [...query.finalFilters, ...(allowedKeys ? [fieldIn("key", allowedKeys)] : [])];
-	const { keys, total } = await collectSearchKeys(config, query, filters, signal, range);
+	const { offset = 0, count = LIBRARY_EXPORT_RECORD_CAP + 1 } = range ?? {};
+	// Elasticsearch reads them from one point in time of the index; Meilisearch refuses when the index moved meanwhile.
+	const { keys, total } = await (await getSearchEngine(config))
+		.keys({ text: query.search, fields: query.attributesToSearchOn, filters, sort: query.sortOption, size: count }, offset, count, signal)
+		.catch((error: unknown) => {
+			if (!(error instanceof SearchChangedError)) throw error;
+			throw error.notReady ? new LibraryExportError("exportChanged", error.message) : exportChanged();
+		});
 	return { keys, total: range ? total : keys.length };
 }
 
