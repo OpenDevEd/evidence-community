@@ -115,11 +115,21 @@ describe("facet counts", () => {
 		});
 	});
 
-	it("counts tags and names as records spell them, though filters ignore case and accents", () => {
-		expect(facetAggregations(["tags", "fullNames"])).toMatchObject({
-			tags: { terms: { field: "tags.raw" } },
-			fullNames: { terms: { field: "fullNames.raw" } },
+	it("counts tags and names ignoring case and accents, each named as most of its records spell it", () => {
+		expect(facetAggregations(["tags"])).toMatchObject({
+			tags: { terms: { field: "tags" }, aggs: { spelling: { terms: { field: "tags.raw", size: 1 } } } },
 		});
+		expect(
+			facetDistribution({
+				tags: {
+					buckets: [
+						{ key: "oecd", doc_count: 8, spelling: { buckets: [{ key: "OECD", doc_count: 5 }] } },
+						// An index from before the spelling was kept names the value as it is filtered.
+						{ key: "policy brief", doc_count: 2, spelling: { buckets: [] } },
+					],
+				},
+			}),
+		).toEqual({ tags: { OECD: 8, "policy brief": 2 } });
 	});
 
 	it("reads each value's count, naming true and false as words", () => {

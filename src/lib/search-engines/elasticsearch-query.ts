@@ -38,15 +38,13 @@ const COUNT_ORDERED_FACETS = new Set([
 	INSTITUTION_FILTER_FIELD,
 ]);
 
-/** Fields readers filter on whole and also search as words: the words are in `<field>.text`. */
-const SEARCHED_WHOLE_FIELDS = new Set(["tags", "fullNames"]);
 
 /** Sort options that sort on another field than the attribute they name. */
 const SORT_FIELDS: Readonly<Record<string, string>> = { title: "title.sort" };
 
 /** The field a search attribute is read from: whole-value fields keep their words in `.text`. */
 function textField(attribute: string) {
-	return SEARCHED_WHOLE_FIELDS.has(attribute) ? `${attribute}.text` : attribute;
+	return SEARCHED_KEYWORD_FIELDS.includes(attribute) ? `${attribute}.text` : attribute;
 }
 
 /** Meilisearch searched the first ten words of a search and ignored the rest. */
@@ -163,24 +161,35 @@ export function sortClauses(sort: readonly string[] | undefined, options: { text
 	return [...relevance, ...fields, { key: { order: flip("asc") } }];
 }
 
-/** Counts for each facet, in the order readers see them. */
+/**
+ * Counts for each facet, in the order readers see them. Tags and names count ignoring case and accents, as
+ * Meilisearch counted them; each value is named as most of its records spell it.
+ */
 export function facetAggregations(facets: readonly string[]): Record<string, estypes.AggregationsAggregationContainer> {
 	return Object.fromEntries(
 		facets.map((facet) => [
 			facet,
-			{ terms: { field: SEARCHED_KEYWORD_FIELDS.includes(facet) ? `${facet}.raw` : facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } } },
+			{
+				terms: { field: facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } },
+				...(SEARCHED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
+			},
 		]),
 	);
 }
 
-type TermsBuckets = { buckets?: Array<{ key: string | number; key_as_string?: string; doc_count: number }> };
+type Bucket = { key: string | number; key_as_string?: string; doc_count: number; spelling?: { buckets?: Array<{ key: string }> } };
+
+/** A value's name: as most of its records spell it, else as Elasticsearch keys it (an index from before `.raw`). */
+function bucketName(bucket: Bucket) {
+	return bucket.spelling?.buckets?.[0]?.key ?? bucket.key_as_string ?? String(bucket.key);
+}
 
 /** The facet counts an answer's aggregations hold. */
 export function facetDistribution(aggregations: Record<string, unknown> | undefined): FacetDistribution {
 	return Object.fromEntries(
 		Object.entries(aggregations ?? {}).map(([facet, result]) => [
 			facet,
-			Object.fromEntries(((result as TermsBuckets).buckets ?? []).map((bucket) => [bucket.key_as_string ?? String(bucket.key), bucket.doc_count])),
+			Object.fromEntries(((result as { buckets?: Bucket[] }).buckets ?? []).map((bucket) => [bucketName(bucket), bucket.doc_count])),
 		]),
 	);
 }
