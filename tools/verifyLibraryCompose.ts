@@ -329,15 +329,28 @@ function requireRuntimeConfig(name: string, service: ComposeService) {
 	);
 }
 
+/** The runtime containers that search, and so join the host's shared Elasticsearch network too. */
+const SEARCHING_SERVICES = new Set(["web", "search-indexer"]);
+
+function expectedRuntimeNetworks(name: string) {
+	return SEARCHING_SERVICES.has(name)
+		? ["coolify", "library-search", "private"]
+		: ["coolify", "private"];
+}
+
+function networkNames(service: ComposeService) {
+	return JSON.stringify(Object.keys(service.networks ?? {}).sort());
+}
+
 function requireRuntimeNetwork(name: string, service: ComposeService) {
 	requireCondition(
 		!service.ports?.length,
 		`${name} must not publish a host port`,
 	);
+	const expected = expectedRuntimeNetworks(name);
 	requireCondition(
-		JSON.stringify(Object.keys(service.networks ?? {}).sort()) ===
-			JSON.stringify(["coolify", "private"]),
-		`${name} must join the private and shared database networks`,
+		networkNames(service) === JSON.stringify(expected),
+		`${name} must join exactly the ${expected.join(", ")} networks`,
 	);
 }
 
@@ -434,6 +447,54 @@ function requireCoolifyNetwork(model: ComposeModel) {
 	);
 }
 
+function requireLibrarySearchNetwork(model: ComposeModel) {
+	const network = model.networks?.["library-search"];
+	requireCondition(network, "Shared search network is missing");
+	requireCondition(network.external === true, "Shared search network must be external");
+	requireCondition(network.name === "library-search", "Shared search network must be library-search");
+}
+
+function requireElasticsearchPorts(elasticsearch: ComposeService) {
+	requireCondition(!elasticsearch.ports?.length, "Elasticsearch must not publish a port");
+	requireCondition(!elasticsearch.expose?.length, "Elasticsearch must not expose a port");
+}
+
+function requireElasticsearchNetwork(elasticsearch: ComposeService) {
+	requireCondition(networkNames(elasticsearch) === JSON.stringify(["library-search"]), "Elasticsearch must join only the shared search network");
+	const network = elasticsearch.networks?.["library-search"];
+	requireCondition(network?.aliases?.includes("elasticsearch"), "Libraries must reach Elasticsearch as elasticsearch");
+}
+
+function requireElasticsearchLogin(elasticsearch: ComposeService) {
+	const environment = elasticsearch.environment ?? {};
+	requireCondition(environment["xpack.security.enabled"] === "true", "Elasticsearch must require a login");
+}
+
+function requireElasticsearchStorage(elasticsearch: ComposeService) {
+	const volumes = elasticsearch.volumes ?? [];
+	requireCondition(
+		volumes.some((volume) => volume.source === "elasticsearch-data" && volume.target === "/usr/share/elasticsearch/data"),
+		"Elasticsearch must keep its data in the named volume",
+	);
+	requireCondition(Boolean(elasticsearch.healthcheck?.test?.length), "Elasticsearch must have a health check");
+}
+
+/** The host's one Elasticsearch: private, secured, on the shared search network only, with a named volume. */
+function requireSharedSearch(model: ComposeModel) {
+	requireCondition(
+		JSON.stringify(Object.keys(model.services ?? {})) === JSON.stringify(["elasticsearch"]),
+		"The shared search stack must run only Elasticsearch",
+	);
+	const elasticsearch = requireComposeService(model, "elasticsearch", "Shared Elasticsearch service is missing");
+	requireElasticsearchPorts(elasticsearch);
+	requireElasticsearchNetwork(elasticsearch);
+	requireElasticsearchLogin(elasticsearch);
+	requireElasticsearchStorage(elasticsearch);
+	const network = model.networks?.["library-search"];
+	requireCondition(network?.name === "library-search", "The shared search stack must create the library-search network");
+	requireCondition(!network.external, "The shared search stack must create the library-search network");
+}
+
 function main() {
 	const root = resolve(import.meta.dirname, "..");
 	const libraryConfig = loadLibraryConfig(root);
@@ -450,6 +511,12 @@ function main() {
 	requireRenderedConfig(model, libraryConfig);
 	requireNamedStorage(model);
 	requireCoolifyNetwork(model);
+	requireLibrarySearchNetwork(model);
+	requireSharedSearch(
+		renderComposeFile(root, "docker/compose.search.yaml", {
+			ELASTICSEARCH_ADMIN_PASSWORD: "compose-check",
+		}),
+	);
 	requireVerifierDockerAccess(
 		renderComposeFile(root, "docker/compose.runtime-verifier.yaml", {
 			EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "compose-check",
@@ -459,6 +526,7 @@ function main() {
 	console.log(
 		JSON.stringify({
 			meilisearch: "private",
+			elasticsearch: "shared",
 			services: serviceNames,
 			searchHost: libraryConfig.services.search.host,
 		}),

@@ -19,6 +19,12 @@ x-runtime-networks: &runtime-networks
     - private
     - coolify
 
+# The containers that search join the host's shared Elasticsearch network too (docker/compose.search.yaml).
+x-search-networks: &search-networks
+    - private
+    - coolify
+    - library-search
+
 # Every library on a host shares one systemd slice, which the host caps (16
 # cores, 64 GB on hetzner), so libraries reindexing at once slow each other
 # down instead of starving the other services on the machine. Docker creates
@@ -37,7 +43,7 @@ services:
             - *runtime-config
         volumes:
             - *runtime-volume
-        networks: *runtime-networks
+        networks: *search-networks
         depends_on:
             publication-worker:
                 condition: service_healthy
@@ -88,7 +94,7 @@ services:
             - *runtime-config
         volumes:
             - *runtime-volume
-        networks: *runtime-networks
+        networks: *search-networks
         depends_on:
             meilisearch:
                 condition: service_healthy
@@ -276,4 +282,7 @@ networks:
     private:
     coolify:
         name: coolify
+        external: true
+    library-search:
+        name: library-search
         external: true

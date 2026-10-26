@@ -400,6 +400,19 @@ Drizzle migration, proves both cross-library connections fail, checks
 `created`, `matched`, and `updated`, rejects a conflicting owner, and removes
 its test databases and logins.
 
+## Run the shared Elasticsearch
+
+Every library on a host searches one Elasticsearch, deployed once per host from
+`docker/compose.search.yaml` as its own Coolify application, before the
+libraries. It builds `docker/elasticsearch.Dockerfile` (Elasticsearch 9.5.5 on
+the free Basic licence, with the ICU plugin), keeps its data in the
+`elasticsearch-data` volume, publishes no port, and creates the
+`library-search` network. Each library's `web` and `search-indexer` containers
+join that network and reach it as `http://elasticsearch:9200`; the other
+workers don't. Set `ELASTICSEARCH_ADMIN_PASSWORD`, and `ELASTICSEARCH_HEAP`
+from the measurement in `plans/elasticsearch-search/01-size-on-a-real-library.md`.
+
+
 ## HTTPS and admin access
 
 Every library uses the normal Compose file and a public HTTPS origin. Set
