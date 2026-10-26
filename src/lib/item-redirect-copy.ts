@@ -38,18 +38,26 @@ function decodeRedirectKey(encoded: string): string | null {
 	return /^[A-Z0-9]{8}$/.test(key) ? key : null;
 }
 
-/** Splits one page of redirect documents into this library's redirects and the documents it leaves alone. */
-function redirectsForIndex(documents: readonly { id?: unknown; value?: unknown }[], indexName: string) {
+/**
+ * Splits one page of redirect documents into this library's redirects and the documents it leaves alone. A document's
+ * id is in the index's primary key field, whatever the index named it.
+ */
+function redirectsForIndex(documents: readonly Record<string, unknown>[], primaryKey: string, indexName: string) {
 	const prefix = `${encodeRedirectId(`${indexName}|`)}n`;
 	const redirects: { fromKey: string; toKey: string }[] = [];
 	let otherLibraries = 0;
 	let unreadable = 0;
 	for (const document of documents) {
-		if (typeof document.id !== "string" || !document.id.startsWith(prefix)) {
+		const id = document[primaryKey];
+		if (typeof id !== "string") {
+			unreadable += 1;
+			continue;
+		}
+		if (!id.startsWith(prefix)) {
 			otherLibraries += 1;
 			continue;
 		}
-		const fromKey = decodeRedirectKey(document.id.slice(prefix.length));
+		const fromKey = decodeRedirectKey(id.slice(prefix.length));
 		if (fromKey === null || typeof document.value !== "string" || !document.value) {
 			unreadable += 1;
 		} else {
@@ -66,17 +74,16 @@ export async function copyMeilisearchRedirects(
 ): Promise<RedirectCopySummary> {
 	const summary: RedirectCopySummary = { indexFound: true, read: 0, copied: 0, otherLibraries: 0, unreadable: 0 };
 	const index = client.index("redirects");
+	let primaryKey: string;
+	try {
+		primaryKey = (await index.fetchInfo()).primaryKey ?? "id";
+	} catch (error) {
+		if (error instanceof MeilisearchApiError && error.cause?.code === "index_not_found") return { ...summary, indexFound: false };
+		throw error;
+	}
 	for (let offset = 0; ; offset += PAGE_SIZE) {
-		let page;
-		try {
-			page = await index.getDocuments<{ id?: unknown; value?: unknown }>({ offset, limit: PAGE_SIZE });
-		} catch (error) {
-			if (offset === 0 && error instanceof MeilisearchApiError && error.cause?.code === "index_not_found") {
-				return { ...summary, indexFound: false };
-			}
-			throw error;
-		}
-		const { redirects, otherLibraries, unreadable } = redirectsForIndex(page.results, indexName);
+		const page = await index.getDocuments<Record<string, unknown>>({ offset, limit: PAGE_SIZE });
+		const { redirects, otherLibraries, unreadable } = redirectsForIndex(page.results, primaryKey, indexName);
 		if (redirects.length) {
 			await database
 				.insert(itemRedirect)

@@ -75,3 +75,23 @@ it("copies one library's redirects out of Meilisearch, and a second copy changes
 		expect(await readItemRedirect(config, "OLDKEY03")).toBeNull();
 	});
 });
+
+it("reads ids from the index's own primary key, across more than one page", async () => {
+	await withIsolatedPublicationDatabase(async (database) => {
+		await successful(client.createIndex("redirects", { primaryKey: "uid" }));
+		try {
+			const keys = Array.from({ length: 1_001 }, (_, index) => `OLD${String(index).padStart(5, "0")}`);
+			await successful(client.index("redirects").addDocuments([
+				...keys.map((key) => ({ uid: encodeRedirectId(`evidence_library|${key}`), value: "NEWKEY01" })),
+				// Not text, so no library's id: counted as unreadable rather than as another library's.
+				{ uid: 7, value: "NEWKEY02" },
+			]));
+			expect(await copyMeilisearchRedirects(client, database, "evidence_library")).toEqual({
+				indexFound: true, read: 1_002, copied: 1_001, otherLibraries: 0, unreadable: 1,
+			});
+		} finally {
+			await successful(client.deleteIndex("redirects"));
+		}
+		expect(await database.$count(itemRedirect)).toBe(1_001);
+	});
+});
