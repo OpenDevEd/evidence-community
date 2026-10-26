@@ -102,5 +102,5 @@ export function resultParams(params: SearchParams) {
 
 /** What a results list is asked for: the results, their order and the page. Where the reader came from and page notices stay on the page. */
 export function listingParams(params: SearchParams) {
-	return { ...resultParams(params), sort: params.sort, page: params.page };
+	return { ...resultParams(params), sort: params.sort, page: params.page, after: params.after, before: params.before };
 }

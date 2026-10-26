@@ -15,7 +15,7 @@ import { useFiltersContext } from "@/context/FiltersProvider";
  */
 function useItemsResults(
 	params: any,
-	handlePageChange: (page: number) => void,
+	handlePageChange: (page: number, cursor?: { after?: string; before?: string }) => void,
 	userData?: any
 ) {
 	const pathname = usePathname();
