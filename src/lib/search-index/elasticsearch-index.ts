@@ -28,7 +28,11 @@ const KEYWORD_FIELDS = [
 	SOURCES_FIELD,
 ];
 
-const SEARCHED_KEYWORD_FIELDS = ["tags", "fullNames"];
+/**
+ * Keywords readers also search. Filters match them ignoring case and accents, as Meilisearch's filters do; facets
+ * count their `.raw` values, which keep the spelling records have.
+ */
+export const SEARCHED_KEYWORD_FIELDS: readonly string[] = ["tags", "fullNames"];
 
 const text = { type: "text", analyzer: "library_text" } as const;
 
@@ -59,7 +63,7 @@ function definition() {
 			properties: {
 				...Object.fromEntries(KEYWORD_FIELDS.map((field) => [field, { type: "keyword" }])),
 				...Object.fromEntries(
-					SEARCHED_KEYWORD_FIELDS.map((field) => [field, { type: "keyword", normalizer: "sort_key", fields: { text } }]),
+					SEARCHED_KEYWORD_FIELDS.map((field) => [field, { type: "keyword", normalizer: "sort_key", fields: { text, raw: { type: "keyword" } } }]),
 				),
 				title: {
 					...text,

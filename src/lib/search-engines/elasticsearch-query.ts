@@ -3,6 +3,7 @@ import type { estypes } from "@elastic/elasticsearch";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import type { FacetDistribution, SearchFilter } from "@/lib/search-engine";
 import { SOURCES_FIELD, TITLE_START_WORDS } from "@/lib/search-filter-constants";
+import { SEARCHED_KEYWORD_FIELDS } from "@/lib/search-index/elasticsearch-index";
 
 /**
  * A search request as Elasticsearch runs it (OpenDevEd/new-el#721): filters as query clauses, the text query ranked as
@@ -162,7 +163,7 @@ export function facetAggregations(facets: readonly string[]): Record<string, est
 	return Object.fromEntries(
 		facets.map((facet) => [
 			facet,
-			{ terms: { field: facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } } },
+			{ terms: { field: SEARCHED_KEYWORD_FIELDS.includes(facet) ? `${facet}.raw` : facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } } },
 		]),
 	);
 }

@@ -105,6 +105,13 @@ describe("facet counts", () => {
 		});
 	});
 
+	it("counts tags and names as records spell them, though filters ignore case and accents", () => {
+		expect(facetAggregations(["tags", "fullNames"])).toMatchObject({
+			tags: { terms: { field: "tags.raw" } },
+			fullNames: { terms: { field: "fullNames.raw" } },
+		});
+	});
+
 	it("reads each value's count, naming true and false as words", () => {
 		expect(
 			facetDistribution({
