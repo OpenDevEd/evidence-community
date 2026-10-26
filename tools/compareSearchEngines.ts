@@ -19,7 +19,7 @@ import { openLibraryConfigProcess, openLibraryDatabaseProcess } from "../src/con
 import { resolveSearchRequest } from "../src/lib/search";
 import { searchIndexDefinition } from "../src/lib/search-index/elasticsearch-index";
 import { generateFullSearchProjectionPlans } from "../src/lib/search-index/projection";
-import { draftElasticsearchSearch } from "./search-comparison/draft-elasticsearch";
+import { searchQuery, sortClauses } from "../src/lib/search-engine";
 
 const BATCH_BYTES = 20 * 1024 * 1024;
 const ELASTICSEARCH_BULKS_IN_FLIGHT = 4;
@@ -32,7 +32,7 @@ type ComparisonResult = {
 	id: string;
 	params: Record<string, unknown>;
 	meilisearch: EngineResult;
-	elasticsearchDraft: EngineResult | { error: string };
+	elasticsearch: EngineResult | { error: string };
 	overlapAt10: number | null;
 	overlapAt20: number | null;
 };
@@ -180,9 +180,21 @@ function overlap(left: readonly string[], right: readonly string[], depth: numbe
 
 type SearchRequest = ReturnType<typeof resolveSearchRequest>;
 
-async function draftResult(url: string, index: string, request: SearchRequest): Promise<EngineResult | { error: string }> {
+/** The search the library's public results page sends, as `src/lib/search.ts` builds it. */
+function searchBody(request: SearchRequest) {
+	return {
+		from: (request.pageNum - 1) * request.limitNum,
+		size: request.limitNum,
+		track_total_hits: true,
+		_source: false,
+		query: searchQuery(request.search, request.attributesToSearchOn, request.finalFilters, request.sortOption),
+		sort: sortClauses(request.sortOption, { text: request.search }),
+	};
+}
+
+async function elasticsearchResult(url: string, index: string, request: SearchRequest): Promise<EngineResult | { error: string }> {
 	try {
-		const body = JSON.stringify(draftElasticsearchSearch(request, (request.pageNum - 1) * request.limitNum));
+		const body = JSON.stringify(searchBody(request));
 		const measured = await timed(() => elasticsearch(url, "POST", `/${index}/_search`, body));
 		const hits = measured.result.hits as { total: { value: number }; hits: Array<{ _id: string }> };
 		return { keys: hits.hits.map((hit) => hit._id), total: hits.total.value, p50: measured.p50, p95: measured.p95 };
@@ -191,7 +203,7 @@ async function draftResult(url: string, index: string, request: SearchRequest): 
 	}
 }
 
-function engineLatency(results: readonly ComparisonResult[], engine: "meilisearch" | "elasticsearchDraft", field: "p50" | "p95") {
+function engineLatency(results: readonly ComparisonResult[], engine: "meilisearch" | "elasticsearch", field: "p50" | "p95") {
 	return percentile(results.flatMap((result) => ("keys" in result[engine] ? [(result[engine] as EngineResult)[field]] : [])), 0.5);
 }
 
@@ -199,23 +211,23 @@ function summarise(results: readonly ComparisonResult[], out: string) {
 	const answered = results.filter((result) => result.overlapAt10 !== null);
 	return {
 		queries: results.length,
-		draftErrors: results.length - answered.length,
+		errors: results.length - answered.length,
 		medianOverlapAt10: percentile(answered.map((result) => result.overlapAt10!), 0.5),
 		queriesUnderHalfOverlap: answered.filter((result) => result.overlapAt10! < 0.5).map((result) => result.id),
 		medianLatencyMs: {
 			meilisearch: { p50: engineLatency(results, "meilisearch", "p50"), p95: engineLatency(results, "meilisearch", "p95") },
-			elasticsearchDraft: { p50: engineLatency(results, "elasticsearchDraft", "p50"), p95: engineLatency(results, "elasticsearchDraft", "p95") },
+			elasticsearch: { p50: engineLatency(results, "elasticsearch", "p50"), p95: engineLatency(results, "elasticsearch", "p95") },
 		},
 		out,
 	};
 }
 
 async function compareQuery(meilisearch: EngineResult, request: SearchRequest, url: string, index: string) {
-	const elasticsearchDraft = await draftResult(url, index, request);
-	const keys = "keys" in elasticsearchDraft ? elasticsearchDraft.keys : null;
+	const elasticsearch = await elasticsearchResult(url, index, request);
+	const keys = "keys" in elasticsearch ? elasticsearch.keys : null;
 	return {
 		meilisearch,
-		elasticsearchDraft,
+		elasticsearch,
 		overlapAt10: keys && overlap(meilisearch.keys, keys, 10),
 		overlapAt20: keys && overlap(meilisearch.keys, keys, 20),
 	};

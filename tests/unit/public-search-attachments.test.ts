@@ -7,12 +7,18 @@ vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn() }));
 vi.mock("next/cache", () => ({ cacheLife() {}, cacheTag() {} }));
 vi.mock("@/app/api/cache", () => ({ getCachedCollections: async () => [] }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: vi.fn() }));
-const service = vi.hoisted(() => ({
-	search: vi.fn(),
-	getDisplayedAttributes: vi.fn(async () => ["*"]),
-	getStats: async () => ({ fieldDistribution: { key: 1, title: 1, attachmentsData: 1, "attachmentsData.key": 1, fullTextPDFs: 1, "fullTextPDFs.fullTextPDF.text": 1 } }),
-}));
-vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: service }) }));
+const service = vi.hoisted(() => ({ search: vi.fn() }));
+vi.mock("@/lib/elasticsearch", () => ({ getSearchForConfig: async () => ({ alias: "library", client: service }) }));
+
+/** An Elasticsearch answer holding these records. */
+function found(records: Array<Record<string, unknown>>) {
+	return { hits: { total: { value: records.length, relation: "eq" }, hits: records.map((record) => ({ _source: record, sort: [record.key] })) } };
+}
+
+/** What the last search asked Elasticsearch to send back. */
+function sentFields() {
+	return service.search.mock.lastCall?.[0]._source;
+}
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getPublicItems } from "@/lib/search";
 import { POST as readBatch } from "@/app/api/items/batch/route";
@@ -21,18 +27,18 @@ it("removes hidden and deleted attachments, file note text and PDF full text fro
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
 	config.content.tags.hidden = ["hidden"];
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
-	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
+	service.search.mockResolvedValue(found([{
 		key: "PUBAAAAA", title: "Published record", attachmentsData: [
 			{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf", itemType: "Attachment", note: "<p>Kept on the file</p>" },
 			{ key: "HIDDENAA", deleted: 0, tags: ["Hidden", "_r:doi"], url: "https://doi.org/10.5555/hidden" },
 			{ key: "DELETEDD", deleted: 1, tags: [], url: "https://example.org/deleted.pdf" },
 		],
-	}] });
+	}]));
 	const result = await getPublicItems({}, { includeHeavyFields: true });
 	expect(result.items[0].attachmentsData).toEqual([
 		{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf", itemType: "Attachment", note: null },
 	]);
-	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title", "attachmentsData"]);
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
 });
 
 it("gives list results only the attachments the item page shows, without unpublished note text", async () => {
@@ -43,7 +49,7 @@ it("gives list results only the attachments the item page shows, without unpubli
 	if (zotero.provider === "zotero") zotero.settings.pdfPublishing = { mode: "tagged", tags: ["_publish"] };
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
 	const attachment = { deleted: 0, parentItem: "PUBAAAAA", filename: null, title: null, url: null, PDFCoverPageImage: null, linkMode: null, itemType: "Attachment", note: null, fullTextPDF: [{ text: "body", page: 1 }] };
-	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
+	service.search.mockResolvedValue(found([{
 		key: "PUBAAAAA", title: "Published record", sourceConnectionKey: zotero.key, attachmentsData: [
 			{ ...attachment, key: "COVERPDF", tags: [], filename: "report.pdf", PDFCoverPageImage: "cover.png" },
 			{ ...attachment, key: "PLAINPDF", tags: [], filename: "draft.pdf" },
@@ -52,7 +58,7 @@ it("gives list results only the attachments the item page shows, without unpubli
 			{ ...attachment, key: "PRIVNOTE", itemType: "Note", tags: [], note: "<p>Private</p>" },
 			{ ...attachment, key: "HIDNOTEA", itemType: "Note", tags: ["_publish", "hidden"], note: "<p>Hidden</p>" },
 		],
-	}] });
+	}]));
 	const result = await getPublicItems({});
 	const common = { parentItem: "PUBAAAAA", itemType: "Attachment", linkMode: null, title: null, filename: null, url: null, PDFCoverPageImage: null, note: null };
 	expect(result.items[0].attachmentsData).toEqual([
@@ -60,33 +66,32 @@ it("gives list results only the attachments the item page shows, without unpubli
 		{ ...common, key: "DOILINKA", tags: ["_r:doi"], linkMode: "linked_url", url: "https://doi.org/10.5281/zenodo.123" },
 		{ ...common, key: "PUBNOTEA", itemType: "Note", tags: ["_publish"], note: "<p>Shown</p>" },
 	]);
-	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toContain("attachmentsData");
+	expect(sentFields()).toContain("attachmentsData");
 });
 
 it("removes hidden and deleted attachments from full batch results used by the assistant", async () => {
 	const config = libraryConfigSchema.parse(maximalLibraryConfig);
 	config.content.tags.hidden = ["hidden"];
 	vi.mocked(getLibraryConfig).mockResolvedValue(config);
-	service.search.mockResolvedValue({ estimatedTotalHits: 1, hits: [{
+	service.search.mockResolvedValue(found([{
 		key: "PUBAAAAA", title: "Published record", attachmentsData: [
 			{ key: "VISIBLEA", deleted: 0, tags: [], PDFCoverPageImage: "public.png" },
 			{ key: "HIDDENAA", deleted: 0, tags: ["hidden"], PDFCoverPageImage: "hidden.png" },
 			{ key: "DELETEDD", deleted: 1, tags: [], PDFCoverPageImage: "deleted.png" },
 		],
-	}] });
+	}]));
 	const response = await readBatch(new Request("http://localhost/api/items/batch", {
 		method: "POST",
 		body: JSON.stringify({ keys: ["PUBAAAAA"], includeHeavyFields: true }),
 	}) as never);
 	const { items } = await response.json();
 	expect(items[0].attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["VISIBLEA"]);
-	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title", "attachmentsData"]);
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
 });
 
-it("never retrieves PDF full text when the index names nested full-text fields", async () => {
+it("never retrieves PDF full text, nor topics when the library has them off", async () => {
 	vi.mocked(getLibraryConfig).mockResolvedValue(libraryConfigSchema.parse(maximalLibraryConfig));
-	service.getDisplayedAttributes.mockResolvedValueOnce(["key", "title", "fullTextPDFs.fullTextPDF.text", "fullTextPDFs"]);
-	service.search.mockResolvedValue({ estimatedTotalHits: 0, hits: [] });
+	service.search.mockResolvedValue(found([]));
 	await getPublicItems({}, { includeHeavyFields: true });
-	expect(service.search.mock.lastCall?.[1].attributesToRetrieve).toEqual(["key", "title"]);
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
 });

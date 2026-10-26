@@ -48,9 +48,10 @@ describe("a request to a public list endpoint", () => {
 	it("names an option the endpoint does not have", () => {
 		expect(named("search=tutoring&paperLikeOnly=true")).toEqual(["paperLikeOnly"]);
 		// The facets endpoint has no page, order or page size.
-		expect(named("search=tutoring&perPage=50&page=2&sort=bogus", {})).toEqual([
+		expect(named("search=tutoring&perPage=50&page=2&after=abc&sort=bogus", {})).toEqual([
 			"perPage",
 			"page",
+			"after",
 			"sort",
 		]);
 		// Where a reader came from stays on the page; the API has no use for it.
@@ -77,12 +78,15 @@ describe("a request to a public list endpoint", () => {
 	it("names a page or page size that is not a whole number in range", () => {
 		expect(named("page=0")).toEqual(["page"]);
 		expect(named("page=two")).toEqual(["page"]);
-		// Past the last result any library can return.
 		expect(named("page=1000000000000000000000")).toEqual(["page"]);
-		// The last page depends on how many results a page holds.
-		expect(named("page=100000&perPage=100")).toEqual([]);
-		expect(named("page=100001&perPage=100")).toEqual(["page"]);
-		expect(named("page=100001")).toEqual([]);
+		// Page numbers reach the first 10,000 results, so the last numbered page depends on how many a page holds.
+		expect(named("page=100&perPage=100")).toEqual([]);
+		expect(named("page=101&perPage=100")).toEqual(["page"]);
+		expect(named("page=500")).toEqual([]);
+		expect(named("page=501")).toEqual(["page"]);
+		// A page past them comes with the cursor of the page next to it.
+		expect(named("page=501&after=abc")).toEqual([]);
+		expect(named("page=7000&before=abc")).toEqual([]);
 		expect(named("perPage=0")).toEqual(["perPage"]);
 		expect(named("perPage=101")).toEqual(["perPage"]);
 		expect(named("perPage=20.5")).toEqual(["perPage"]);
@@ -177,11 +181,20 @@ describe("a page address", () => {
 				perPage,
 			).params.page;
 		expect(page("page=1000000000000000000000")).toBe(1);
-		// A listing holds 20 a page, so its last page is 500,000: the same one the API accepts.
-		expect(page("page=500000")).toBe(500000);
-		expect(page("page=500001")).toBe(1);
-		expect(named("page=500001")).toEqual(["page"]);
-		// A smaller page reaches further.
-		expect(page("page=500001", 1)).toBe(500001);
+		// A listing holds 20 a page, so its last numbered page is 500: the same one the API accepts.
+		expect(page("page=500")).toBe(500);
+		expect(page("page=501")).toBe(1);
+		expect(named("page=501")).toEqual(["page"]);
+		// A smaller page has more numbered pages.
+		expect(page("page=10000", 1)).toBe(10000);
+		expect(page("page=10001", 1)).toBe(1);
+	});
+
+	it("keeps a cursor only on the page past the numbered ones it places", () => {
+		const params = (query: string) => resolveSearchQuery(loadSearchParams(new URLSearchParams(query)), config).params;
+		expect(params("page=523&after=abc")).toMatchObject({ page: 523, after: "abc", before: "" });
+		expect(params("page=522&before=abc")).toMatchObject({ page: 522, after: "", before: "abc" });
+		// A filter that sends the reader back to page 1 leaves the cursor behind.
+		expect(params("page=1&after=abc")).toMatchObject({ page: 1, after: "", before: "" });
 	});
 });

@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
 	connection: vi.fn(),
 	getDatabaseForConfig: vi.fn(),
 	getLibraryConfig: vi.fn(),
-	getMeilisearchForConfig: vi.fn(),
+	getSearchForConfig: vi.fn(),
 	getSitemapPageCount: vi.fn(),
 	notFound: vi.fn(() => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -37,8 +37,8 @@ vi.mock("@/config/library-config/server", () => ({
 vi.mock("@/db", () => ({
 	getDatabaseForConfig: mocks.getDatabaseForConfig,
 }));
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: mocks.getMeilisearchForConfig,
+vi.mock("@/lib/elasticsearch", () => ({
+	getSearchForConfig: mocks.getSearchForConfig,
 }));
 vi.mock("@/config/library-config/gap-maps", () => ({
 	getEnabledGapMaps: vi.fn(() => []),
@@ -135,7 +135,7 @@ describe("runtime sitemap routes", () => {
 		expect(robotsResult).not.toHaveProperty("sitemap");
 		expect(indexResponse.status).toBe(404);
 		expect(mocks.getSitemapPageCount).not.toHaveBeenCalled();
-		expect(mocks.getMeilisearchForConfig).not.toHaveBeenCalled();
+		expect(mocks.getSearchForConfig).not.toHaveBeenCalled();
 	});
 });
 

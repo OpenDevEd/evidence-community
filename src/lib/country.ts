@@ -1,6 +1,5 @@
 import { COUNTRY_HIERARCHY, Entry } from "@/constants/misc";
-import { FacetDistribution } from "meilisearch";
-import { meilisearchEquals } from "@/lib/meilisearch-filter";
+import { fieldEquals, fieldIn, type FacetDistribution, type SearchFilter } from "@/lib/search-engine";
 
 /** Adds the continents and regions to each country facet, the country focus and the authors' countries, keeping the chosen places. */
 export function addRegionsToFacetDistribution(
@@ -206,15 +205,15 @@ export function extractCountryCode(path: string): string {
 	return parts[parts.length - 1];
 }
 
-export function buildCountryFilters(selections: string[]): string | null {
+export function buildCountryFilters(selections: string[]): SearchFilter[] {
 	return buildHierarchicalFilters(selections, "country");
 }
 
 export function buildHierarchicalFilters(
 	selections: string[],
 	filterAttribute: string,
-): string | null {
-	if (!selections.length) return null;
+): SearchFilter[] {
+	if (!selections.length) return [];
 
 	const continentSelections = new Set<string>();
 	const regionSelections: Record<string, Set<string>> = {};
@@ -259,14 +258,12 @@ export function buildHierarchicalFilters(
 		}
 	}
 
-	const filterParts: string[] = [];
+	const filterParts: SearchFilter[] = [];
 
 	if (countrySelections["direct"] && countrySelections["direct"].size > 0) {
 		const countries = Array.from(countrySelections["direct"]);
 		filterParts.push(
-			...countries.map((code) =>
-				meilisearchEquals(filterAttribute, code),
-			),
+			...countries.map((code) => fieldEquals(filterAttribute, code)),
 		);
 	}
 
@@ -281,11 +278,8 @@ export function buildHierarchicalFilters(
 			const entry = findEntryByPath(continent);
 			if (entry) {
 				const countryCodes = extractCountryCodes(entry);
-				const filter = countryCodes
-					.map((code) => meilisearchEquals(filterAttribute, code))
-					.join(" OR ");
-				if (filter) {
-					filterParts.push(`(${filter})`);
+				if (countryCodes.length) {
+					filterParts.push(fieldIn(filterAttribute, countryCodes));
 				}
 			}
 		}
@@ -300,11 +294,8 @@ export function buildHierarchicalFilters(
 				const entry = findEntryByPath(region);
 				if (entry) {
 					const countryCodes = extractCountryCodes(entry);
-					const filter = countryCodes
-						.map((code) => meilisearchEquals(filterAttribute, code))
-						.join(" OR ");
-					if (filter) {
-						filterParts.push(`(${filter})`);
+					if (countryCodes.length) {
+						filterParts.push(fieldIn(filterAttribute, countryCodes));
 					}
 				}
 			}
@@ -316,21 +307,17 @@ export function buildHierarchicalFilters(
 
 		const countries = Array.from(countrySelections[parent]);
 		filterParts.push(
-			...countries.map((code) =>
-				meilisearchEquals(filterAttribute, code),
-			),
+			...countries.map((code) => fieldEquals(filterAttribute, code)),
 		);
 	}
 
-	if (filterParts.length === 0) return null;
-	if (filterParts.length === 1) return filterParts[0];
-
-	return filterParts.join(" AND ");
+	// Every part must hold, as the parts were joined with AND.
+	return filterParts;
 }
 
 export function createCountryFilters(
 	countrySelections: string[] = [],
 	authorCountrySelections: string[] = [],
-): string[] {
-	return [buildCountryFilters(countrySelections), buildHierarchicalFilters(authorCountrySelections, "authorCountry")].filter((filter): filter is string => filter !== null);
+): SearchFilter[] {
+	return [...buildCountryFilters(countrySelections), ...buildHierarchicalFilters(authorCountrySelections, "authorCountry")];
 }

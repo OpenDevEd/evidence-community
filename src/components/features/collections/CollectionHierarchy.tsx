@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
-import { FacetDistribution } from "meilisearch";
+import type { FacetDistribution } from "@/lib/search-engine";
 import { useMemo, memo } from "react";
 import { useFormatter } from "next-intl";
 import { shareOf } from "./ResultsOverview";

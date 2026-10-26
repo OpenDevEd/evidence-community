@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { getMainAttributes, LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
+import { LIST_ITEM_FIELDS, publicSource, searchKeys, toLightweightItem, totalOf } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -18,20 +17,11 @@ async function getPaginatedItems(
 	if (keys.length === 0) return { items: [], total: 0 };
 
 	try {
-		const { index } = await getMeilisearchForConfig(libraryConfig);
-
-		const offset = (page - 1) * perPage;
-
-		const result = await index.search("", {
-			filter: `key IN [${keys.map((k) => `"${k}"`).join(", ")}]`,
-			limit: perPage,
-			offset: offset,
-			attributesToRetrieve: includeHeavyFields
-				? await getMainAttributes(libraryConfig)
-				: [...LIST_ITEM_FIELDS],
+		const result = await searchKeys(libraryConfig, keys, { number: page, size: perPage }, {
+			_source: includeHeavyFields ? publicSource(libraryConfig) : [...LIST_ITEM_FIELDS],
 		});
 
-		const items = result.hits as ListItem[];
+		const items = result.hits.hits.map((hit) => hit._source as ListItem);
 		const { tags } = libraryConfig.content;
 		return {
 			items: items.map((item) =>
@@ -39,12 +29,10 @@ async function getPaginatedItems(
 					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }
 					: toLightweightItem(item, publicTagRules(libraryConfig)),
 			),
-			total: result.estimatedTotalHits || result.hits.length,
+			total: totalOf(result),
 		};
 	} catch (error: any) {
-		if (error?.response?.status !== 404) {
-			console.warn("Error fetching items from meilisearch:", error);
-		}
+		console.warn("Error fetching items from search:", error);
 		return { items: [], total: 0 };
 	}
 }

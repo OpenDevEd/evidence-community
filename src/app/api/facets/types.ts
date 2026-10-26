@@ -1,4 +1,4 @@
-import { FacetDistribution } from "meilisearch";
+import type { FacetDistribution } from "@/lib/search-engine";
 
 export type FacetsGetResponse = {
   facetDistribution: FacetDistribution;

@@ -5,8 +5,8 @@ vi.mock("server-only", () => ({}));
 const search = vi.hoisted(() => vi.fn());
 const publicationToolModelOutput = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: vi.fn(async () => ({ index: { search } })),
+vi.mock("@/lib/elasticsearch", () => ({
+	getSearchForConfig: vi.fn(async () => ({ alias: "library", client: { search } })),
 }));
 vi.mock("@/lib/ai/attachments", () => ({ publicationToolModelOutput }));
 // The search compiler reaches the collection cache and the sign-in actions,
@@ -31,7 +31,6 @@ import {
 import { PDF_HANDOFF_TEXT } from "@/lib/ai/prompt-context";
 import { createResearchTools } from "@/lib/ai/tools";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
-import { PDF_FILTER } from "@/lib/search-filter-constants";
 import { cloneLibraryConfig } from "../fixtures/library-config";
 
 const config = libraryConfigSchema.parse(cloneLibraryConfig());
@@ -59,8 +58,17 @@ async function runSearch(
 	} as never);
 }
 
+/** An Elasticsearch answer holding these records. */
+function found(records: Array<Record<string, unknown>>, total = records.length) {
+	return { hits: { total: { value: total, relation: "eq" }, hits: records.map((record) => ({ _source: record })) } };
+}
+
 function searchOptions(callIndex = 0) {
-	return search.mock.calls[callIndex]?.[1] as Record<string, unknown>;
+	return search.mock.calls[callIndex]?.[0] as { size: number; query: { bool: { filter: unknown[] } } };
+}
+
+function filtersOf(callIndex = 0) {
+	return searchOptions(callIndex).query.bool.filter;
 }
 
 describe("what the search tool may be asked for", () => {
@@ -133,19 +141,16 @@ describe("what the search tool may be asked for", () => {
 describe("searching the library for the assistant", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		search.mockResolvedValue({
-			hits: [
-				{
-					key: "ITEM0001",
-					title: "Teaching by radio",
-					abstractNote: "<p>Radio &amp; learning</p>",
-					creators: [{ lastName: "Ada", firstName: "Grace" }],
-					year: 2024,
-					hasPdf: true,
-				},
-			],
-			estimatedTotalHits: 1,
-		});
+		search.mockResolvedValue(found([
+			{
+				key: "ITEM0001",
+				title: "Teaching by radio",
+				abstractNote: "<p>Radio &amp; learning</p>",
+				creators: [{ lastName: "Ada", firstName: "Grace" }],
+				year: 2024,
+				hasPdf: true,
+			},
+		]));
 	});
 
 	it("returns publication metadata with a readable abstract and link", async () => {
@@ -163,45 +168,17 @@ describe("searching the library for the assistant", () => {
 		});
 	});
 
-	it("uses the library's semantic search and its own filters", async () => {
+	it("searches with the library's own filters", async () => {
 		await runSearch("quick", { queries: ["radio teaching"] });
 
-		const options = searchOptions();
-		expect(options.hybrid).toEqual({
-			embedder: "default",
-			semanticRatio: 0.5,
-		});
-		expect(options.filter).toEqual(
-			expect.arrayContaining(["deleted != 1"]),
-		);
-		expect(options.limit).toBe(10);
-	});
-
-	it("searches by keyword while the search worker still sets up the embedder", async () => {
-		const { MeilisearchApiError } = await import("meilisearch");
-		search.mockRejectedValueOnce(
-			new MeilisearchApiError(new Response(null, { status: 400 }), {
-				code: "invalid_search_embedder",
-				link: "",
-				message: "Cannot find embedder with name `default`.",
-				type: "invalid_request",
-			}),
-		);
-		const result = (await runSearch("quick", {
-			queries: ["radio teaching"],
-		})) as { queries: Array<{ hits: Array<Record<string, unknown>> }> };
-
-		expect(searchOptions(0).hybrid).toBeDefined();
-		expect(searchOptions(1).hybrid).toBeUndefined();
-		expect(result.queries[0].hits[0]).toMatchObject({ key: "ITEM0001" });
+		expect(filtersOf()).toEqual(expect.arrayContaining([{ bool: { must_not: [{ term: { deleted: 1 } }] } }]));
+		expect(searchOptions().size).toBe(10);
 	});
 
 	it("keeps Deep Research on publications that have a PDF", async () => {
 		await runSearch("research", { queries: ["radio", "schools"] });
 
-		expect(searchOptions().filter).toEqual(
-			expect.arrayContaining([PDF_FILTER]),
-		);
+		expect(filtersOf()).toEqual(expect.arrayContaining([{ term: { hasPdf: true } }]));
 	});
 
 	it("lets Deep Research widen the search when PDFs are missing", async () => {
@@ -210,7 +187,7 @@ describe("searching the library for the assistant", () => {
 			filters: { pdfOnly: false },
 		});
 
-		expect(searchOptions().filter).not.toContain(PDF_FILTER);
+		expect(filtersOf()).not.toContainEqual({ term: { hasPdf: true } });
 	});
 
 	it("refuses to search inside results the reader does not have", async () => {
@@ -223,13 +200,10 @@ describe("searching the library for the assistant", () => {
 	});
 
 	it("lists the reader's own results in their own order", async () => {
-		search.mockResolvedValue({
-			hits: [
-				{ key: "ITEM0001", title: "First", creators: [] },
-				{ key: "ITEM0002", title: "Second", creators: [] },
-			],
-			estimatedTotalHits: 2,
-		});
+		search.mockResolvedValue(found([
+			{ key: "ITEM0001", title: "First", creators: [] },
+			{ key: "ITEM0002", title: "Second", creators: [] },
+		]));
 		const tools = createResearchTools(
 			"quick",
 			config,
@@ -254,7 +228,7 @@ describe("searching the library for the assistant", () => {
 	});
 
 	it("reads only the records of a reader's list on their profile", async () => {
-		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
+		search.mockResolvedValue(found([]));
 		const tools = createResearchTools(
 			"quick",
 			config,
@@ -268,7 +242,7 @@ describe("searching the library for the assistant", () => {
 			{ messages: userMessages("compare these") } as never,
 		);
 
-		expect(searchOptions().filter).toEqual(expect.arrayContaining(['key IN ["SAVED001","SAVED002"]']));
+		expect(filtersOf()).toEqual(expect.arrayContaining([{ terms: { key: ["SAVED001", "SAVED002"] } }]));
 	});
 
 	it("keeps the reader's year range when PDFs were read before the search", async () => {
@@ -288,7 +262,7 @@ describe("searching the library for the assistant", () => {
 	});
 
 	it("tells which library hits are already on the reader's list, so only new ones are recommended", async () => {
-		search.mockResolvedValue({ hits: [{ key: "SAVED001" }, { key: "OTHER001" }], estimatedTotalHits: 2 });
+		search.mockResolvedValue(found([{ key: "SAVED001" }, { key: "OTHER001" }]));
 		const tools = createResearchTools(
 			"quick",
 			config,
@@ -302,7 +276,7 @@ describe("searching the library for the assistant", () => {
 			{ messages: userMessages("what else would fit this collection?") } as never,
 		)) as { queries: Array<{ hits: Array<{ key: string; inCurrentList: boolean }> }> };
 
-		expect(searchOptions().filter).not.toEqual(expect.arrayContaining([expect.stringContaining("SAVED")]));
+		expect(filtersOf()).not.toContainEqual({ terms: { key: ["SAVED001", "SAVED002"] } });
 		expect(result.queries[0].hits.map(({ key, inCurrentList }) => ({ key, inCurrentList }))).toEqual([
 			{ key: "SAVED001", inCurrentList: true },
 			{ key: "OTHER001", inCurrentList: false },
@@ -310,7 +284,7 @@ describe("searching the library for the assistant", () => {
 	});
 
 	it("keeps the reader's topic filter when reading their results", async () => {
-		search.mockResolvedValue({ hits: [], estimatedTotalHits: 0 });
+		search.mockResolvedValue(found([]));
 		const tools = createResearchTools(
 			"quick",
 			{ ...config, topics: { ...config.topics, enabled: true } },
@@ -322,8 +296,8 @@ describe("searching the library for the assistant", () => {
 			{ messages: userMessages("what is on my list?") } as never,
 		);
 
-		expect(searchOptions().filter).toEqual(
-			expect.arrayContaining([expect.stringContaining("T12260")]),
+		expect(filtersOf()).toEqual(
+			expect.arrayContaining([{ terms: { topicAncestors: expect.arrayContaining(["T12260"]) } }]),
 		);
 	});
 

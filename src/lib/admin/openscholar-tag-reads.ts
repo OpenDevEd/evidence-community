@@ -1,6 +1,6 @@
 import { getLibraryConfig } from "@/config/library-config/server";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { publicRecordFilters } from "@/lib/search";
+import { publicRecordFilters, searchRecords } from "@/lib/search";
+import { facetAggregations, facetDistribution } from "@/lib/search-engine";
 
 import { parseOpenScholarInstitutionRequest } from "./institution-catalog-contract";
 import { pageTagCounts, type OpenScholarTagPage } from "./openscholar-tags";
@@ -9,7 +9,10 @@ import { pageTagCounts, type OpenScholarTagPage } from "./openscholar-tags";
 export async function listPublicTagCounts(input: unknown): Promise<OpenScholarTagPage> {
 	const request = parseOpenScholarInstitutionRequest(input);
 	const config = await getLibraryConfig();
-	const { index } = await getMeilisearchForConfig(config);
-	const { facetDistribution } = await index.search("", { limit: 0, facets: ["tags"], filter: publicRecordFilters(config.content.tags.hidden) });
-	return pageTagCounts(facetDistribution?.tags ?? {}, request);
+	const response = await searchRecords(
+		config,
+		{ search: "", attributesToSearchOn: [], filters: publicRecordFilters(config.content.tags.hidden) },
+		{ size: 0, track_total_hits: false, aggs: facetAggregations(["tags"]) },
+	);
+	return pageTagCounts(facetDistribution(response.aggregations).tags ?? {}, request);
 }

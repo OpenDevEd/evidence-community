@@ -4,7 +4,6 @@ import { filterPublicAttachments } from "./attachment-visibility";
 import { publicTagRules } from "./tags";
 
 import { Item, ItemGetResponse } from "@/app/api/item/types";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { exportCitationItems } from "@/lib/citation-export";
 import {
 	getCachedCollections,
@@ -24,17 +23,20 @@ import {
 	Entry,
 } from "@/constants/misc";
 import {
-	getMainAttributes,
+	pagePosition,
 	publicFacetDistribution,
+	publicSource,
 	resolveSearchRequest,
 	resolveSearchTopicNodes,
+	searchRecords,
+	totalOf,
 } from "@/lib/search";
+import { facetAggregations, facetDistribution, fieldIn, sortClauses, type SearchFilter } from "@/lib/search-engine";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import { AIError } from "@/lib/ai/errors";
 import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
-import { meilisearchEquals, meilisearchIn } from "@/lib/meilisearch-filter";
 
 export async function areLinksValid(links: string[]) {
 	const validity = await Promise.allSettled(
@@ -64,7 +66,7 @@ export async function getItems(
 	const collections = searchParams.collections || [];
 	const libraryConfig = await getLibraryConfig();
 
-	let readerFilter: string[] = [];
+	let readerFilter: SearchFilter[] = [];
 	if (userId) {
 		if (!libraryConfig.features.readerAccounts) return { refused: 404 as const };
 		const list = await readReaderListKeys(
@@ -75,7 +77,7 @@ export async function getItems(
 		// Without its filter the search would list the whole library, so a
 		// collection the caller may not see is refused instead.
 		if ("refused" in list) return list;
-		readerFilter = [meilisearchIn("key", list.keys)];
+		readerFilter = [fieldIn("key", list.keys)];
 	}
 
 	const facets = getRuntimeSearchFacets(
@@ -113,7 +115,7 @@ export async function convertItem(
 async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	facets: string[],
-	extraFilters: string[],
+	extraFilters: SearchFilter[],
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
@@ -131,27 +133,24 @@ async function searchIndex(
 			search,
 			sortOption,
 		} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
-		const { index: searchIndex } =
-			await getMeilisearchForConfig(libraryConfig);
 		const finalFilters = [...baseFilters, ...extraFilters];
-
-		const allAttributes = await getMainAttributes(libraryConfig);
+		const order = sortClauses(sortOption, { text: search });
+		const position = pagePosition(pageNum, limitNum, searchParams, order);
 
 		const [searchResults, collections] = await Promise.all([
-			searchIndex.search(search, {
-				offset: (pageNum - 1) * limitNum,
-				limit: limitNum,
-				attributesToSearchOn,
-				attributesToRetrieve: allAttributes,
-				...(sortOption ? { sort: sortOption } : {}),
-				facets,
-				filter: finalFilters,
+			searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
+				size: limitNum,
+				_source: publicSource(libraryConfig),
+				sort: position.reverse ? sortClauses(sortOption, { text: search, reverse: true }) : order,
+				...(position.searchAfter ? { search_after: position.searchAfter } : { from: position.from ?? 0 }),
+				aggs: facetAggregations(facets),
 			}),
 			getCachedCollections(libraryConfig),
 		]);
 
-		const items = searchResults.hits;
-		const totalCount = searchResults.estimatedTotalHits;
+		const hits = position.reverse ? [...searchResults.hits.hits].reverse() : searchResults.hits.hits;
+		const items = hits.map((hit) => hit._source as unknown as Item);
+		const totalCount = totalOf(searchResults);
 
 		const itemPromises = items.map(async (item) => {
 			if (collections) {
@@ -181,12 +180,12 @@ async function searchIndex(
 
 		return {
 			items: items as Item[],
-			currentPage: pageNum,
+			currentPage: position.page,
 			totalItems: totalCount,
 			perPage: limitNum,
 			totalPages: Math.ceil(totalCount / limitNum),
 			facetDistribution: publicFacetDistribution(
-				searchResults.facetDistribution,
+				facetDistribution(searchResults.aggregations),
 				facets,
 				{ country, author_country: authorCountry },
 			),

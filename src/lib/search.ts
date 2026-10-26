@@ -19,16 +19,31 @@ import type {
 	LibraryPublicConfig,
 	LibraryServerConfig,
 } from "@/config/library-config/schema";
-import { FacetDistribution } from "meilisearch";
+import type { estypes } from "@elastic/elasticsearch";
 import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import { getMeilisearchForConfig } from "./meilisearch";
+import { getSearchForConfig } from "./elasticsearch";
 import { searchParamsLoader } from "./searchParams";
-import { offersSources, resolveSearchQuery } from "./search-query";
-import { formatRange } from "./utils";
-import { meilisearchEquals, meilisearchIn } from "./meilisearch-filter";
-import { FULL_TEXT_PDF_FILTER, SOURCES_FIELD } from "./search-filter-constants";
+import { lastNumberedPage, offersSources, resolveSearchQuery } from "./search-query";
+import {
+	decodeCursor,
+	encodeCursor,
+	facetAggregations,
+	facetDistribution as facetCounts,
+	fieldEquals,
+	fieldIn,
+	fieldNotEquals,
+	fieldNotIn,
+	fieldPresent,
+	HAS_PDF_TEXT,
+	searchQuery,
+	sortClauses,
+	yearRange,
+	type FacetDistribution,
+	type SearchFilter,
+} from "./search-engine";
+import { SOURCES_FIELD } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { filterPublicAttachments, itemPageAttachments } from "./attachment-visibility";
@@ -96,6 +111,8 @@ type SearchCountOnlyResult = {
 
 type SearchItemsResult = SearchCountOnlyResult & {
 	items: ListItem[];
+	/** Where the next and previous pages continue from, past the pages readers reach by number. */
+	cursors: { previous: string | null; next: string | null };
 };
 
 type SearchFacetsResult = {
@@ -109,34 +126,56 @@ type SearchFacetsResult = {
 
 type FacetTotals = Record<string, number>;
 
-async function getCachedDisplayedAttributes(
-	configRevision: string,
-	libraryConfig: LibraryServerConfig,
-) {
-	"use cache";
-	cacheLife({ revalidate: 60 });
-	cacheTag("attributes-" + configRevision);
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const displayed = await index.getDisplayedAttributes();
-	if (!displayed.includes("*")) return displayed;
-	// "*" cannot leave a field out, so name every stored field instead.
-	const { fieldDistribution } = await index.getStats();
-	return [...new Set(Object.keys(fieldDistribution).map((field) => field.split(".")[0]))];
+/** Fields never sent: PDF full text, which is searched but not shown, and topics when the library has them off. */
+function hiddenFields(libraryConfig: Pick<LibraryServerConfig, "topics">) {
+	return ["fullTextPDFs", ...(libraryConfig.topics.enabled ? [] : ["topics", "topicAncestors"])];
 }
 
-/** Every public field except PDF full text, which is searched but never sent. */
-export async function getMainAttributes(config?: LibraryServerConfig) {
-	const libraryConfig = config ?? (await getLibraryConfig());
-	const attributes = await getCachedDisplayedAttributes(
-		libraryConfig.revision,
-		libraryConfig,
-	);
-	return attributes.filter(
-		(attribute) =>
-			attribute !== "fullTextPDFs" &&
-			!attribute.startsWith("fullTextPDFs.") &&
-			(libraryConfig.topics.enabled || (attribute !== "topics" && attribute !== "topicAncestors")),
-	);
+/** Every public field a search sends. */
+export function publicSource(libraryConfig: Pick<LibraryServerConfig, "topics">): estypes.SearchSourceConfig {
+	return { excludes: hiddenFields(libraryConfig) };
+}
+
+/** One search of the library's records: every filter must hold, the text decides the order, and totals are exact. */
+export async function searchRecords(
+	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
+	request: { search: string; attributesToSearchOn: readonly string[]; filters: readonly SearchFilter[]; sort?: readonly string[] },
+	body: Omit<estypes.SearchRequest, "index" | "query"> = {},
+) {
+	const { alias, client } = await getSearchForConfig(libraryConfig);
+	return client.search<ListItem>({
+		index: alias,
+		query: searchQuery(request.search, request.attributesToSearchOn, request.filters, request.sort),
+		track_total_hits: true,
+		...body,
+	});
+}
+
+/** A page of the records with these keys, in key order. */
+export function searchKeys(
+	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
+	keys: readonly string[],
+	page: { number: number; size: number },
+	body: Omit<estypes.SearchRequest, "index" | "query" | "from" | "size" | "sort"> = {},
+) {
+	return searchRecords(libraryConfig, { search: "", attributesToSearchOn: [], filters: [fieldIn("key", keys)] }, {
+		from: (page.number - 1) * page.size,
+		size: page.size,
+		sort: sortClauses(undefined),
+		...body,
+	});
+}
+
+/** One record's search copy with every public field, or null when the library has none under this key. */
+export async function readSearchDocument(libraryConfig: LibraryServerConfig, key: string) {
+	const { alias, client } = await getSearchForConfig(libraryConfig);
+	const response = await client.get<ListItem>({ index: alias, id: key, _source_excludes: hiddenFields(libraryConfig) }, { ignore: [404] });
+	return response.found ? (response._source ?? null) : null;
+}
+
+export function totalOf(response: { hits: { total?: number | estypes.SearchTotalHits } }) {
+	const total = response.hits.total;
+	return typeof total === "number" ? total : (total?.value ?? 0);
 }
 
 /** A list result keeps only its public attachments that the item page reads. */
@@ -204,9 +243,9 @@ function resolveSortOption(search: string, sort: string) {
 /** Ticked collections, all of them or any of `anyCollections`, and each tag filter's ticks, any of them. */
 function collectionAndTagFilters(collections: readonly string[], anyCollections: readonly string[] | undefined, tags: TagSelections) {
 	const collectionFilters = anyCollections
-		? [anyCollections.length ? meilisearchIn("collectionsAncestry", anyCollections) : null]
-		: collections.map((collection) => meilisearchEquals("collectionsAncestry", collection));
-	return [...collectionFilters, ...Object.values(tags).map((ticked) => (ticked.length ? meilisearchIn("tags", ticked) : null))];
+		? [anyCollections.length ? fieldIn("collectionsAncestry", anyCollections) : null]
+		: collections.map((collection) => fieldEquals("collectionsAncestry", collection));
+	return [...collectionFilters, ...Object.values(tags).map((ticked) => (ticked.length ? fieldIn("tags", ticked) : null))];
 }
 
 function buildSearchFilters({
@@ -226,21 +265,19 @@ function buildSearchFilters({
 	anyCollections,
 }: SearchFilterInput) {
 	return [
-		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-		range ? formatRange(range) : null,
-		...institution.map((value) =>
-			meilisearchEquals(INSTITUTION_FILTER_FIELD, value),
-		),
+		fieldNotIn("itemType", EXCLUDED_ITEM_TYPES),
+		yearRange(range),
+		...institution.map((value) => fieldEquals(INSTITUTION_FILTER_FIELD, value)),
 		...createCountryFilters(country, authorCountry),
-		author ? meilisearchEquals("fullNames", author) : null,
-		type.length ? meilisearchIn("itemType", type) : null,
-		study.length ? meilisearchIn(studyField, study) : null,
-		sources.length ? meilisearchIn(SOURCES_FIELD, sources) : null,
-		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
+		author ? fieldEquals("fullNames", author) : null,
+		type.length ? fieldIn("itemType", type) : null,
+		study.length ? fieldIn(studyField, study) : null,
+		sources.length ? fieldIn(SOURCES_FIELD, sources) : null,
+		scope === "documents" ? HAS_PDF_TEXT : null,
 		...collectionAndTagFilters(collections, anyCollections, tags),
-		"deleted != 1",
-		hiddenTags.length ? `tags NOT IN ${JSON.stringify(hiddenTags)}` : null,
-	].filter((filter): filter is string => filter !== null);
+		fieldNotEquals("deleted", 1),
+		hiddenTags.length ? fieldNotIn("tags", hiddenTags) : null,
+	].filter((filter): filter is SearchFilter => filter !== null);
 }
 
 export function resolveSearchRequest(
@@ -281,7 +318,7 @@ export function resolveSearchRequest(
 	const topicIds = known.length > 0 ? known : topics;
 	const finalFilters = [
 		...facetFilters,
-		...(topicIds.length ? [meilisearchIn("topicAncestors", topicIds)] : []),
+		...(topicIds.length ? [fieldIn("topicAncestors", topicIds)] : []),
 	];
 
 	const sortOption = resolveSortOption(
@@ -331,21 +368,12 @@ async function readCachedTopicTree(
 	"use cache";
 	// New topics from an import show within five minutes; until then the last tree is served.
 	cacheLife({ revalidate: 300 });
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const { facetDistribution } = await index.search("", {
-		limit: 0,
-		facets: ["topicAncestors"],
-		filter: buildSearchFilters({
-			author: "",
-			collections: [],
-			country: [],
-			hiddenTags: libraryConfig.content.tags.hidden,
-			institution: [],
-			range: null,
-			scope: "",
-		}),
-	});
-	return readTopicTree(Object.keys(facetDistribution?.topicAncestors ?? {}), {
+	const response = await searchRecords(
+		libraryConfig,
+		{ search: "", attributesToSearchOn: [], filters: publicRecordFilters(libraryConfig.content.tags.hidden) },
+		{ size: 0, track_total_hits: false, aggs: facetAggregations(["topicAncestors"]) },
+	);
+	return readTopicTree(Object.keys(facetCounts(response.aggregations).topicAncestors ?? {}), {
 		database: await getDatabaseForConfig(libraryConfig),
 		config: libraryConfig,
 	});
@@ -354,6 +382,20 @@ async function readCachedTopicTree(
 /** Every topic a public item carries, with its ancestors: the whole topic filter in one response. */
 export async function getPublicTopicTree(libraryConfig: LibraryServerConfig) {
 	return readCachedTopicTree(libraryConfig.revision, libraryConfig);
+}
+
+/**
+ * Where a page starts. Numbered pages start at their offset. Past them, a page continues after the record its `after`
+ * cursor names, or before the one its `before` cursor names, read backwards. A deep page whose cursor belongs to
+ * another order opens on the first page, and says so in its page number.
+ */
+export function pagePosition(page: number, pageSize: number, searchParams: { after?: string; before?: string }, order: readonly estypes.SortCombinations[]) {
+	if (page <= lastNumberedPage(pageSize)) return { page, from: (page - 1) * pageSize, searchAfter: null, reverse: false };
+	const after = decodeCursor(searchParams.after, order);
+	if (after) return { page, from: null, searchAfter: after, reverse: false };
+	const before = decodeCursor(searchParams.before, order);
+	if (before) return { page, from: null, searchAfter: before, reverse: true };
+	return { page: 1, from: 0, searchAfter: null, reverse: false };
 }
 
 export async function getPublicItems(
@@ -365,7 +407,6 @@ export async function getPublicItems(
 	} = {},
 ): Promise<SearchItemsResult> {
 	const libraryConfig = await getLibraryConfig();
-	const displayedAttributes = await getMainAttributes(libraryConfig);
 	const topicNodes = await resolveSearchTopicNodes(
 		searchParams,
 		libraryConfig,
@@ -385,44 +426,47 @@ export async function getPublicItems(
 	);
 
 	const pageSize = options.perPage ?? limitNum;
-	const page = pageNum;
+	const order = sortClauses(sortOption, { text: search });
+	const position = pagePosition(pageNum, pageSize, searchParams, order);
 	const includeHeavyFields = options.includeHeavyFields === true;
-	const attributesToRetrieve = includeHeavyFields
-		? displayedAttributes
+	const source = includeHeavyFields
+		? publicSource(libraryConfig)
 		: LIST_ITEM_FIELDS.filter(attribute => libraryConfig.topics.enabled || attribute !== "topics");
 
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-
-	const [searchResults, collections] = await Promise.all([
-		index.search(search, {
-			offset: (page - 1) * pageSize,
-			limit: pageSize,
-			attributesToSearchOn,
-			attributesToRetrieve,
-			...(sortOption ? { sort: sortOption } : {}),
-			filter: finalFilters,
+	const [response, collections] = await Promise.all([
+		searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
+			size: pageSize,
+			_source: source,
+			sort: position.reverse ? sortClauses(sortOption, { text: search, reverse: true }) : order,
+			...(position.searchAfter ? { search_after: position.searchAfter } : { from: position.from ?? 0 }),
 		}),
 		getCachedCollections(libraryConfig),
 	]);
+	const hits = position.reverse ? [...response.hits.hits].reverse() : response.hits.hits;
 
 	const rules = publicTagRules(libraryConfig);
-	const items = (searchResults.hits as ListItem[]).map((item) =>
-		includeHeavyFields
+	const items = hits.map(({ _source }) => {
+		const item = _source as ListItem;
+		return includeHeavyFields
 			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey) }
-			: toLightweightItem(item, rules),
-	);
+			: toLightweightItem(item, rules);
+	});
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount =
-		searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalCount = totalOf(response);
+	const totalPages = Math.ceil(totalCount / pageSize);
 
 	return {
 		items,
-		currentPage: page,
+		currentPage: position.page,
 		totalItems: totalCount,
 		perPage: pageSize,
-		totalPages: Math.ceil(totalCount / pageSize),
+		totalPages,
+		cursors: {
+			previous: position.page > 1 ? encodeCursor(order, hits[0]?.sort) : null,
+			next: position.page < totalPages ? encodeCursor(order, hits.at(-1)?.sort) : null,
+		},
 	};
 }
 
@@ -434,15 +478,12 @@ export async function getPublicItemKeys(
 	const libraryConfig = await getLibraryConfig();
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, sortOption, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes, limit);
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const result = await index.search(search, {
-		limit,
-		attributesToSearchOn,
-		attributesToRetrieve: ["key"],
-		...(sortOption ? { sort: sortOption } : {}),
-		filter: finalFilters,
+	const response = await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters, sort: sortOption }, {
+		size: limit,
+		_source: ["key"],
+		sort: sortClauses(sortOption, { text: search }),
 	});
-	return { keys: result.hits.map((hit) => String(hit.key)), total: result.estimatedTotalHits ?? result.hits.length };
+	return { keys: response.hits.hits.map((hit) => String(hit._source?.key)), total: totalOf(response) };
 }
 
 /** What keeps a search to public records: no excluded type, nothing deleted, nothing hidden. */
@@ -454,19 +495,15 @@ export async function getPublicItemsByKeys(keys: string[]): Promise<ListItem[]> 
 	if (keys.length === 0) return [];
 	const libraryConfig = await getLibraryConfig();
 	const { tags } = libraryConfig.content;
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-	const [searchResults, collections] = await Promise.all([
-		index.search("", {
-			limit: keys.length,
-			attributesToRetrieve: [...LIST_ITEM_FIELDS],
-			filter: [
-				`key IN ${JSON.stringify(keys)}`,
-				...publicRecordFilters(tags.hidden),
-			],
+	const [response, collections] = await Promise.all([
+		searchRecords(libraryConfig, { search: "", attributesToSearchOn: [], filters: [fieldIn("key", keys), ...publicRecordFilters(tags.hidden)] }, {
+			size: keys.length,
+			_source: [...LIST_ITEM_FIELDS],
+			track_total_hits: false,
 		}),
 		getCachedCollections(libraryConfig),
 	]);
-	const items = (searchResults.hits as ListItem[]).map((item) => toLightweightItem(item, publicTagRules(libraryConfig)));
+	const items = response.hits.hits.map(({ _source }) => toLightweightItem(_source as ListItem, publicTagRules(libraryConfig)));
 	applyCollectionsData(items, collections as Collection[]);
 	return items;
 }
@@ -488,20 +525,18 @@ export async function getPublicFacets(
 		libraryConfig.topics.enabled,
 	);
 
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-
 	// A chosen year range or item type still shows the other years and types, so each is counted without its own filter.
 	// Sources are too, and always out of the results some source holds: records made here belong to none.
 	// Collections that match any are counted without the collection ticks, so the other branches keep theirs.
 	// Each tag filter is counted without its own ticks, under a key of its own, since they share the tags facet.
 	const { tagFilters } = libraryConfig.filters;
 	const tagTicks = tagSelections(searchParams.tags, tagFilters);
-	type OwnFilter = { facet: string; active: boolean; without: Partial<inferParserType<typeof searchParamsLoader>>; also?: string[]; as?: string; keep?: (value: string) => boolean };
+	type OwnFilter = { facet: string; active: boolean; without: Partial<inferParserType<typeof searchParamsLoader>>; also?: SearchFilter[]; as?: string; keep?: (value: string) => boolean };
 	const ownFilters = ([
 		{ facet: "year", active: Boolean(searchParams.range), without: { range: "" } },
 		{ facet: "itemType", active: Boolean(searchParams.type?.length), without: { type: [] } },
 		{ facet: studyTypeFacet(libraryConfig.filters), active: Boolean(searchParams.study?.length), without: { study: [] } },
-		{ facet: SOURCES_FIELD, active: offersSources(libraryConfig), without: { sources: [] }, also: [`${SOURCES_FIELD} IS NOT EMPTY`] },
+		{ facet: SOURCES_FIELD, active: offersSources(libraryConfig), without: { sources: [] }, also: [fieldPresent(SOURCES_FIELD)] },
 		{ facet: "collectionsAncestry", active: Boolean(searchParams.collections?.length) && collectionsMatch(searchParams.match, libraryConfig.filters) === "any", without: { collections: [] } },
 		...tagFilters.filter((filter) => filter.enabled).map((filter) => ({
 			facet: "tags",
@@ -512,42 +547,36 @@ export async function getPublicFacets(
 		})),
 	] satisfies OwnFilter[] as OwnFilter[]).filter(({ facet, active, as }) => active && (as || facets.includes(facet)));
 
+	const count = (facetsToCount: readonly string[], filters: readonly SearchFilter[]) =>
+		searchRecords(libraryConfig, { search, attributesToSearchOn, filters }, { size: 0, aggs: facetAggregations(facetsToCount) });
 	const [searchResults, topicResults, ...ownResults] = await Promise.all([
-		index.search(search, {
-			offset: 0, limit: 0, attributesToSearchOn, facets, filter: finalFilters,
-		}),
-		facets.includes("topicAncestors") && finalFilters.length !== facetFilters.length
-			? index.search(search, {
-				offset: 0, limit: 0, attributesToSearchOn, facets: ["topicAncestors"], filter: facetFilters,
-			})
-			: null,
+		count(facets, finalFilters),
+		facets.includes("topicAncestors") && finalFilters.length !== facetFilters.length ? count(["topicAncestors"], facetFilters) : null,
 		...ownFilters.map(({ facet, without, also = [] }) =>
-			index.search(search, {
-				offset: 0, limit: 0, attributesToSearchOn, facets: [facet],
-				filter: [...resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters, ...also],
-			}),
+			count([facet], [...resolveSearchRequest({ ...searchParams, ...without }, libraryConfig, topicNodes).finalFilters, ...also]),
 		),
 	]);
-	const totals: FacetTotals = { "*": searchResults.estimatedTotalHits ?? 0 };
-	if (topicResults) totals.topicAncestors = topicResults.estimatedTotalHits ?? 0;
+	const totals: FacetTotals = { "*": totalOf(searchResults) };
+	if (topicResults) totals.topicAncestors = totalOf(topicResults);
 	ownFilters.forEach(({ facet, as }, index) => {
-		totals[as ?? facet] = ownResults[index].estimatedTotalHits ?? 0;
+		totals[as ?? facet] = totalOf(ownResults[index]);
 	});
-	searchResults.facetDistribution = Object.assign(
+	const distribution: FacetDistribution = Object.assign(
 		{},
-		searchResults.facetDistribution,
-		topicResults?.facetDistribution,
+		facetCounts(searchResults.aggregations),
+		topicResults ? facetCounts(topicResults.aggregations) : {},
 		...ownResults.map((result, index) => {
 			const { facet, as, keep } = ownFilters[index];
-			if (!as) return result.facetDistribution;
-			const counts = Object.entries(result.facetDistribution?.[facet] ?? {}).filter(([value]) => !keep || keep(value));
+			const counted = facetCounts(result.aggregations);
+			if (!as) return counted;
+			const counts = Object.entries(counted[facet] ?? {}).filter(([value]) => !keep || keep(value));
 			return { [as]: Object.fromEntries(counts) };
 		}),
 	);
 
 	return {
 		facetDistribution: publicFacetDistribution(
-			searchResults.facetDistribution,
+			distribution,
 			facets,
 			{ country, author_country: authorCountry },
 		),
@@ -588,23 +617,13 @@ export async function getItemsPaginationMeta(
 		search,
 		pageNum,
 		limitNum,
-		sortOption,
 		finalFilters,
 		attributesToSearchOn,
 	} = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
 
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-
-	const searchResults = await index.search(search, {
-		offset: 0,
-		limit: 0,
-		attributesToSearchOn,
-		...(sortOption ? { sort: sortOption } : {}),
-		filter: finalFilters,
-	});
-
-	const totalItems =
-		searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalItems = totalOf(
+		await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters }, { size: 0 }),
+	);
 
 	return {
 		currentPage: pageNum,
@@ -656,9 +675,8 @@ async function readTopAuthors(
 	cacheTag("library");
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
-	const { client, index } = await getMeilisearchForConfig(libraryConfig);
-	const ranked = await index.search(search, { offset: 0, limit: 0, attributesToSearchOn, facets: ["fullNames"], filter: finalFilters });
-	const everyone = (ranked.facetDistribution?.fullNames ?? {}) as Record<string, number>;
+	const ranked = await searchRecords(libraryConfig, { search, attributesToSearchOn, filters: finalFilters }, { size: 0, aggs: facetAggregations(["fullNames"]) });
+	const everyone = facetCounts(ranked.aggregations).fullNames ?? {};
 	const top = Object.entries(everyone)
 		.filter(([name]) => name.trim().length > 1)
 		.sort((left, right) => right[1] - left[1])
@@ -666,24 +684,33 @@ async function readTopAuthors(
 	const names = top.map(([name]) => name);
 	if (names.length === 0) return { authorCount: 0, authors: [], combined: {} };
 	const institutions = libraryConfig.filters.institution.mode !== "hidden";
-	const indexUid = index.uid;
-	const { results } = await client.multiSearch({
-		queries: [
-			{ indexUid, q: search, limit: 0, attributesToSearchOn, facets: ["year"], filter: [...finalFilters, meilisearchIn("fullNames", names)] },
-			...names.map((name) => ({
-				indexUid, q: search, attributesToSearchOn,
-				// One of their results, to find the profile their name is linked to on it.
-				limit: 1, attributesToRetrieve: ["creators"],
-				facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
-				filter: [...finalFilters, meilisearchEquals("fullNames", name)],
-			})),
+	const { alias, client } = await getSearchForConfig(libraryConfig);
+	const query = (filters: readonly SearchFilter[]) => searchQuery(search, attributesToSearchOn, filters);
+	const { responses } = await client.msearch<ListItem>({
+		index: alias,
+		searches: [
+			{},
+			{ size: 0, query: query([...finalFilters, fieldIn("fullNames", names)]), aggs: facetAggregations(["year"]) },
+			...names.flatMap((name) => [
+				{},
+				{
+					// One of their results, to find the profile their name is linked to on it.
+					size: 1,
+					_source: ["creators"],
+					query: query([...finalFilters, fieldEquals("fullNames", name)]),
+					aggs: facetAggregations(["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])]),
+				},
+			]),
 		],
 	});
-	const [all, ...perAuthor] = results;
-	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits[0] as ListItem | undefined, name));
+	const [all, ...perAuthor] = responses.map((response) => {
+		if ("error" in response) throw new Error(`Top authors search failed: ${JSON.stringify(response.error).slice(0, 500)}`);
+		return response;
+	});
+	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits.hits[0]?._source, name));
 	const profiles = new Map((await readAuthorProfiles(profileIds.filter((id): id is string => Boolean(id)))).map((profile) => [profile.id, profile]));
 	const authors = top.map(([name, count], position): AuthorActivity => {
-		const distribution = (perAuthor[position]?.facetDistribution ?? {}) as Record<string, Record<string, number>>;
+		const distribution = facetCounts(perAuthor[position]?.aggregations);
 		const profileId = profileIds[position];
 		return {
 			name,
@@ -694,7 +721,7 @@ async function readTopAuthors(
 			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
 		};
 	});
-	return { authorCount: Object.keys(everyone).length, authors, combined: (all?.facetDistribution?.year ?? {}) as Record<string, number> };
+	return { authorCount: Object.keys(everyone).length, authors, combined: facetCounts(all?.aggregations).year ?? {} };
 }
 
 /** The profile a result links an author to, found by the name the index files them under. */

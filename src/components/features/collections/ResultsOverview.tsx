@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AiMagicIcon, ArrowDown01Icon, ArrowRight01Icon, BalanceScaleIcon, Cancel01Icon, Database02Icon, FileSearchIcon, PercentCircleIcon, Tick01Icon, UserEdit01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
-import { FacetDistribution } from "meilisearch";
+import type { FacetDistribution } from "@/lib/search-engine";
 import { useFormatter, useTranslations } from "next-intl";
 import { useId, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
 import { twMerge } from "@/lib/tw-merge";

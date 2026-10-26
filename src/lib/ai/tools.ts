@@ -2,15 +2,12 @@ import "server-only";
 
 import { tool, type ModelMessage } from "ai";
 
-import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { abstractPlainText } from "@/lib/abstract-text";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { meilisearchIn } from "@/lib/meilisearch-filter";
-import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
-import { resolveSearchRequest, resolveSearchTopicNodes } from "@/lib/search";
+import { resolveSearchRequest, resolveSearchTopicNodes, searchRecords, totalOf } from "@/lib/search";
+import { fieldEquals, fieldIn, sortClauses } from "@/lib/search-engine";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import { PDF_FILTER, PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import { PDF_PRESENCE_ATTRIBUTE, SEARCH_RESULT_LIMIT } from "@/lib/search-filter-constants";
 import { publicationToolModelOutput } from "./attachments";
 import { PDF_HANDOFF_TEXT } from "./prompt-context";
 import {
@@ -168,18 +165,6 @@ function latestUserText(messages: ModelMessage[]) {
 	return "";
 }
 
-/** Semantic search needs the embedder this library configured. */
-function hybridOptions(config: SearchConfig) {
-	if (!config.search.embedder) return {};
-
-	return {
-		hybrid: {
-			embedder: PLATFORM_SEARCH_EMBEDDER,
-			semanticRatio: 0.5,
-		},
-	};
-}
-
 type SearchLogContext = {
 	requestId: string;
 	searchId: string;
@@ -193,10 +178,10 @@ function toolSearchFilters(
 ) {
 	const finalFilters = [...compiled.finalFilters];
 	if (filters?.pdfOnly) {
-		finalFilters.push(PDF_FILTER);
+		finalFilters.push(fieldEquals(PDF_PRESENCE_ATTRIBUTE, true));
 	}
 	if (allowedKeys) {
-		finalFilters.push(`key IN ${JSON.stringify(allowedKeys)}`);
+		finalFilters.push(fieldIn("key", allowedKeys));
 	}
 	return finalFilters;
 }
@@ -227,12 +212,10 @@ async function searchOne(
 	const finalFilters = toolSearchFilters(compiled, filters, allowedKeys);
 
 	const searchOptions = {
-		...hybridOptions(config),
-		filter: finalFilters,
+		filters: finalFilters,
 		limit,
 		attributesToSearchOn: compiled.attributesToSearchOn,
-		attributesToRetrieve: [...SEARCH_ATTRIBUTES],
-		...(compiled.sortOption ? { sort: compiled.sortOption } : {}),
+		sort: compiled.sortOption,
 	};
 	const startedAt = Date.now();
 
@@ -245,18 +228,16 @@ async function searchOne(
 	});
 
 	try {
-		const { index } = await getMeilisearchForConfig(config);
-		const result = await index.search(query, searchOptions).catch((error: unknown) => {
-			// While the search worker still sets up the embedder, keyword search answers alone.
-			if (!("hybrid" in searchOptions) || !isEmbedderUnavailable(error)) throw error;
-			const { hybrid: _hybrid, ...keywordOptions } = searchOptions;
-			return index.search(query, keywordOptions);
-		});
-		const hits = result.hits.map((hit) => {
-			const modelHit = searchHitToModelHit(hit);
+		const result = await searchRecords(
+			config,
+			{ search: query, attributesToSearchOn: compiled.attributesToSearchOn, filters: finalFilters, sort: compiled.sortOption },
+			{ size: limit, _source: [...SEARCH_ATTRIBUTES], sort: sortClauses(compiled.sortOption, { text: query }) },
+		);
+		const hits = result.hits.hits.map(({ _source }) => {
+			const modelHit = searchHitToModelHit(_source as Record<string, unknown>);
 			return listKeys ? { ...modelHit, inCurrentList: listKeys.has(modelHit.key) } : modelHit;
 		});
-		const totalHits = result.estimatedTotalHits ?? result.hits.length;
+		const totalHits = totalOf(result);
 
 		logDevelopmentSearch("query.completed", {
 			...logContext,
@@ -301,39 +282,33 @@ async function loadCurrentResultsWindow(
 	window: CurrentResultsWindowChoice,
 	readerListKeys: string[] | undefined,
 ): Promise<CurrentResultsWindow> {
-	const { index } = await getMeilisearchForConfig(config);
 	const compiled = resolveSearchRequest(
 		searchContext,
 		config,
 		await resolveSearchTopicNodes(searchContext, config),
 	);
-	const baseOptions = {
+	const request = {
+		search: compiled.search,
 		attributesToSearchOn: compiled.attributesToSearchOn,
 		// A reader's list is exactly the records the chat route allowed.
-		filter: readerListKeys ? [...compiled.finalFilters, meilisearchIn("key", readerListKeys)] : compiled.finalFilters,
-		...(compiled.sortOption ? { sort: compiled.sortOption } : {}),
+		filters: readerListKeys ? [...compiled.finalFilters, fieldIn("key", readerListKeys)] : compiled.finalFilters,
+		sort: compiled.sortOption,
 	};
-
-	let offset = currentResultsOffset(searchContext, cursor);
-	if (!cursor && window === "last") {
-		// A page-based request returns the exact total instead of an
-		// estimate, so the final window can start at total - 200.
-		const count = await index.search(compiled.search, {
-			...baseOptions,
-			hitsPerPage: 1,
-			page: 1,
-			attributesToRetrieve: ["key"],
-		});
-		offset = Math.max(0, count.totalHits - CURRENT_RESULTS_WINDOW_SIZE);
-	}
-
-	const result = await index.search(compiled.search, {
-		...baseOptions,
-		offset,
-		limit: CURRENT_RESULTS_WINDOW_SIZE,
-		attributesToRetrieve: [...SEARCH_ATTRIBUTES],
+	// The last window is read backwards from the end, which may lie past the
+	// results Elasticsearch pages to by offset; other windows stop there.
+	const last = !cursor && window === "last";
+	const requested = currentResultsOffset(searchContext, cursor);
+	const result = await searchRecords(config, request, {
+		size: last ? CURRENT_RESULTS_WINDOW_SIZE : Math.max(0, Math.min(CURRENT_RESULTS_WINDOW_SIZE, SEARCH_RESULT_LIMIT - requested)),
+		_source: [...SEARCH_ATTRIBUTES],
+		sort: sortClauses(compiled.sortOption, { text: compiled.search, reverse: last }),
+		...(last ? {} : { from: Math.min(requested, SEARCH_RESULT_LIMIT) }),
 	});
-	const hits = result.hits.filter(
+	const total = totalOf(result);
+	const read = result.hits.hits.map(({ _source }) => _source as Record<string, unknown>);
+	const ordered = last ? read.reverse() : read;
+	const offset = last ? Math.max(0, total - ordered.length) : requested;
+	const hits = ordered.filter(
 		(hit) =>
 			(typeof hit.key === "string" && hit.key) ||
 			typeof hit.key === "number",
@@ -342,9 +317,8 @@ async function loadCurrentResultsWindow(
 	const entries = hits.map((hit, hitIndex) =>
 		searchHitToListEntry(hit, offset + hitIndex + 1),
 	);
-	const total = result.estimatedTotalHits ?? keys.length;
 	const end = offset + keys.length;
-	const hasMore = end < total;
+	const hasMore = end < Math.min(total, SEARCH_RESULT_LIMIT);
 
 	return {
 		keys,
