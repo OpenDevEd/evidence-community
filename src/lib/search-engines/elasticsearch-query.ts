@@ -67,9 +67,12 @@ function scored(filter: Query, boost: number): Query {
 	return { constant_score: { filter, boost } };
 }
 
-/** The start of a longer word, which the last word of a search may be while it is still being typed. */
+/**
+ * The start of a longer word, which the last word of a search may be while it is still being typed. Every word with
+ * that start matches, as in Meilisearch; a phrase prefix would match only the first 50.
+ */
 function startOfWord(word: string, fields: string[]): Query {
-	return { multi_match: { query: word, fields, type: "phrase_prefix" } };
+	return { multi_match: { query: word, fields, type: "bool_prefix", operator: "and" } };
 }
 
 /** A word in any of the fields, as typed. */
@@ -120,7 +123,9 @@ function titleStart(words: readonly string[], last: number): Query {
  * every rule after it together, so the rules apply in turn.
  */
 export function textQuery(text: string, attributes: readonly string[], options: { sorted?: boolean } = {}): Query | null {
-	const words = text.trim().split(/\s+/u).filter(Boolean).slice(0, SEARCHED_WORDS);
+	const typed = text.trim().split(/\s+/u).filter(Boolean).slice(0, SEARCHED_WORDS);
+	// A word of only punctuation, like `&` or `-`, has no letter to find; Meilisearch read it as a separator.
+	const words = typed.filter((word) => /[\p{L}\p{N}]/u.test(word));
 	if (!words.length) return null;
 	const query = words.join(" ");
 	const fields = attributes.map(textField);
@@ -136,7 +141,7 @@ export function textQuery(text: string, attributes: readonly string[], options: 
 					? [{ dis_max: { queries: [scored({ multi_match: { query, fields, type: "phrase" } }, 300), scored({ multi_match: { query, fields, type: "phrase", slop: 3 } }, 200)] } }]
 					: []),
 				{ dis_max: { queries: fields.map((field, index) => scored(everyWordIn(field, words, last), 10 * Math.max(1, 9 - index))) } },
-				...(byTitle ? [scored(titleStart(words, last), 5), { term: { "title.sort": { value: query, boost: 2 } } }] : []),
+				...(byTitle ? [scored(titleStart(words, last), 5), { term: { "title.sort": { value: typed.join(" "), boost: 2 } } }] : []),
 			],
 		},
 	};

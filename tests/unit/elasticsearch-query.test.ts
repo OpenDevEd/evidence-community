@@ -57,8 +57,18 @@ describe("the text of a search", () => {
 		expect(JSON.stringify(query.bool.should)).toContain('"query":"tracing"');
 	});
 
-	it("takes the last word as the start of a longer one", () => {
-		expect(clauses("generat")).toContain('"type":"phrase_prefix"');
+	it("takes the last word as the start of every longer word", () => {
+		expect(clauses("generat")).toContain('"type":"bool_prefix"');
+		expect(clauses("generat")).not.toContain("phrase_prefix");
+	});
+
+	it("leaves out words with no letter or digit, as Meilisearch read them as separators", () => {
+		const query = textQuery("- teacher & learning", ["title"]) as { bool: { filter: unknown[] } };
+		expect(JSON.stringify(query.bool.filter)).toContain('"query":"teacher"');
+		expect(clauses("- teacher & learning")).not.toContain('"query":"&"');
+		expect(textQuery("& -", ["title"])).toBeNull();
+		// The exact title keeps what was typed.
+		expect(clauses("Teaching & Learning", ["title"])).toContain('"title.sort":{"value":"Teaching & Learning"');
 	});
 
 	it("searches whole-value fields by their words, and an earlier field ranks higher", () => {
