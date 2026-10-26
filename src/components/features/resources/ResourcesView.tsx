@@ -704,7 +704,7 @@ function LibraryResultsFooter() {
 			<ContentActions />
 			{status.latestPublicationUpdatedAt && (
 				// The server's Node and the browser can format the same date differently: in Arabic, Node puts a comma between
-				// the date and the time and Chromium doesn't. The server's text stays, instead of React rebuilding the page.
+				// the date and the time and Chromium doesn't. The server's text stays, instead of React discarding the server's HTML.
 				<div suppressHydrationWarning className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 					{t("lastUpdate", {
 						date: format.dateTime(
