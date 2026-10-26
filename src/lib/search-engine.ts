@@ -110,6 +110,11 @@ function wordAsTyped(word: string, fields: string[], last: boolean) {
 	return last ? eitherOf(typed, startOfWord(word, fields)) : typed;
 }
 
+/** Every word in one field as typed, the last also as the start of a longer word. */
+function everyWordIn(field: string, words: readonly string[], last: number): SearchFilter {
+	return { bool: { filter: words.map((word, index) => wordAsTyped(word, [field], index === last)) } };
+}
+
 /** A word in any of the fields, allowing typos. */
 function wordFound(word: string, fields: string[], last: boolean) {
 	const typos = inAnyField(word, fields, TYPOS);
@@ -162,7 +167,7 @@ export function textQuery(text: string, attributes: readonly string[], options: 
 				...(words.length > 1
 					? [{ dis_max: { queries: [scored({ multi_match: { query, fields, type: "phrase" } }, 300), scored({ multi_match: { query, fields, type: "phrase", slop: 3 } }, 200)] } }]
 					: []),
-				{ dis_max: { queries: fields.map((field, index) => scored({ match: { [field]: { query, operator: "and" } } }, 10 * Math.max(1, 9 - index))) } },
+				{ dis_max: { queries: fields.map((field, index) => scored(everyWordIn(field, words, last), 10 * Math.max(1, 9 - index))) } },
 				...(byTitle ? [scored(titleStart(words, last), 5), { term: { "title.sort": { value: query, boost: 2 } } }] : []),
 			],
 		},

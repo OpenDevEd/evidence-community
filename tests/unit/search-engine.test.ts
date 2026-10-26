@@ -112,11 +112,12 @@ describe("the text of a search", () => {
 	});
 
 	it("searches whole-value fields by their words, and an earlier field ranks higher", () => {
-		const query = clauses("tutoring");
-		expect(query).toContain('"tags.text"');
-		expect(query).toContain('"fullNames.text"');
-		expect(query).toMatch(/"title":\{"query":"tutoring","operator":"and"\}\}\},"boost":90/u);
-		expect(query).toMatch(/"fullNames\.text":\{"query":"tutoring","operator":"and"\}\}\},"boost":60/u);
+		const query = textQuery("tutoring", ["title", "abstractNote", "tags", "fullNames"]) as { bool: { should: Array<{ dis_max?: { queries: unknown[] } }> } };
+		const fieldTier = query.bool.should.find((clause) => clause.dis_max)!.dis_max!.queries.map((clause) => [
+			(clause as { constant_score: { boost: number } }).constant_score.boost,
+			JSON.stringify(clause).match(/"fields":\["([^"]+)"\]/u)?.[1],
+		]);
+		expect(fieldTier).toEqual([[90, "title"], [80, "abstractNote"], [70, "tags.text"], [60, "fullNames.text"]]);
 	});
 
 	it("searches the first ten words, as Meilisearch did", () => {
