@@ -35,6 +35,7 @@ import {
 	SearchOutboxLeaseLostError,
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
+import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
 import { FULL_TEXT_PDF_PRESENCE_ATTRIBUTE } from "../src/lib/search-filter-constants";
 import { PLATFORM_SEARCH_SCOPE_OPTIONS } from "../src/config/library-config/catalogs";
@@ -194,7 +195,7 @@ async function verify() {
 			deleteIndexIfPresent(client, goodIndexName),
 			deleteIndexIfPresent(client, badIndexName),
 		]);
-		await ensureSearchIndex(goodService);
+		await ensureSearchIndex(elasticsearchWriter(goodService));
 		await client.indices.create({
 			index: `${badIndexName}_1`,
 			mappings: { dynamic: "strict", properties: {} },
@@ -387,7 +388,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			maxEvents: 2,
 			onProgress: async (progress) => {
@@ -524,7 +525,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-standalone",
 		});
@@ -549,7 +550,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-reparent",
 		});
@@ -577,7 +578,7 @@ async function verify() {
 		})) as unknown as SearchProjectionPlan["documents"];
 		const counted = interceptBulk(goodService, async () => undefined);
 		await applySearchProjectionPlan(
-			counted.search,
+			elasticsearchWriter(counted.search),
 			{ deleteKeys: [], documents: sizedBatchDocuments },
 			10_000,
 			1_024,
@@ -587,7 +588,7 @@ async function verify() {
 			"Serialized-size batching did not split oversized batches",
 		);
 		await applySearchProjectionPlan(
-			goodService,
+			elasticsearchWriter(goodService),
 			{ deleteKeys: sizedBatchKeys, documents: [] },
 			10_000,
 		);
@@ -614,7 +615,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				search: badService,
+				writer: elasticsearchWriter(badService),
 				leaseDurationMs: 1_000,
 				retryBaseMs: 100,
 				taskTimeoutMs: 10_000,
@@ -649,7 +650,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-retry",
 		});
@@ -680,7 +681,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				search: badService,
+				writer: elasticsearchWriter(badService),
 				leaseDurationMs: 1_000,
 				maxAttempts: 1,
 				retryBaseMs: 100,
@@ -719,7 +720,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-requeued",
 		});
@@ -741,7 +742,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-collection",
 		});
@@ -772,7 +773,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-delete",
 		});
@@ -797,7 +798,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-restore",
 		});
@@ -842,7 +843,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-contender",
 		});
@@ -855,7 +856,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement",
 		});
@@ -863,7 +864,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-serialized-follower",
 		});
@@ -904,7 +905,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			onProgress: async ({ stage }) => {
 				if (stage === "indexing") {
@@ -920,7 +921,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement-generation",
 		});
@@ -955,7 +956,7 @@ async function verify() {
 			config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-after-shutdown",
 		});
@@ -973,7 +974,7 @@ async function verify() {
 		// PostgreSQL record is left behind with the old index.
 		const orphanKey = `${parentKey}ORPHAN`;
 		await addDocuments(goodService, [{ key: orphanKey, title: "Orphaned search copy" }]);
-		const rebuilt = await rebuildSearchIndex(database, goodService, libraryConfig, {
+		const rebuilt = await rebuildSearchIndex(database, elasticsearchWriter(goodService), libraryConfig, {
 			taskTimeoutMs: 60_000,
 		});
 		assert(
@@ -1011,12 +1012,12 @@ async function verify() {
 				config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				search: goodService,
+				writer: elasticsearchWriter(goodService),
 				leaseDurationMs: 1_000,
 				workerId: "search-e2e-during-rebuild",
 			});
 		});
-		const raced = await rebuildSearchIndex(database, rebuildWithRepublish.search, libraryConfig, { taskTimeoutMs: 60_000 });
+		const raced = await rebuildSearchIndex(database, elasticsearchWriter(rebuildWithRepublish.search), libraryConfig, { taskTimeoutMs: 60_000 });
 		assert(
 			republishedDuringRebuild && raced.redrained >= 1,
 			"The rebuild did not put back an event acknowledged while it ran",
@@ -1025,7 +1026,7 @@ async function verify() {
 			config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-after-rebuild",
 		});
@@ -1071,7 +1072,7 @@ async function verify() {
 		});
 		const backlogRebuild = await rebuildForOutboxBacklog(
 			database,
-			writeDuringRebuild.search,
+			elasticsearchWriter(writeDuringRebuild.search),
 			libraryConfig,
 			{ taskTimeoutMs: 60_000 },
 		);
@@ -1162,7 +1163,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 30_000,
-				search: stealing.search,
+				writer: elasticsearchWriter(stealing.search),
 				leaseDurationMs: 60_000,
 				retryBaseMs: 100,
 				workerId: "search-e2e-lease-loss",
@@ -1193,7 +1194,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			search: goodService,
+			writer: elasticsearchWriter(goodService),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-lease-loss-retry",
 		});

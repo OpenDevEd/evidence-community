@@ -22,6 +22,7 @@ import {
 	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
+import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -135,7 +136,8 @@ async function main() {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
-		const setup = await ensureSearchIndex(service, {
+		const writer = elasticsearchWriter(service);
+		const setup = await ensureSearchIndex(writer, {
 			onMissing: async () => {
 				await setSearchIndexRebuildPending(
 					databaseResource.database,
@@ -159,7 +161,7 @@ async function main() {
 		) {
 			const plan = await rebuildSearchIndex(
 				databaseResource.database,
-				service,
+				writer,
 				config,
 				{ signal: abortController.signal },
 			);
@@ -171,7 +173,7 @@ async function main() {
 				JSON.stringify({
 					indexed: plan.indexed,
 					rebuild: true,
-					replacedIndexes: plan.replacedIndexes,
+					replacedIndexes: plan.deleted,
 					requeued,
 				}),
 			);
@@ -208,7 +210,7 @@ async function main() {
 			);
 			const rebuilt = await rebuildForOutboxBacklog(
 				databaseResource.database,
-				service,
+				writer,
 				config,
 				{ signal: abortController.signal },
 			);
@@ -268,7 +270,7 @@ async function main() {
 							);
 						}
 					},
-					search: service,
+					writer,
 					signal: abortController.signal,
 					workerId: instanceId,
 				});

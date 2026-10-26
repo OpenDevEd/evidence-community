@@ -1,7 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
-import { errors as ElasticsearchErrors, type estypes } from "@elastic/elasticsearch";
 import {
 	and,
 	asc,
@@ -22,15 +21,22 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
-import type { SearchService } from "@/lib/elasticsearch-factory";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 import {
 	generateFullSearchProjectionPlans,
 	generateSearchProjectionPlans,
 	type SearchProjectionPlan,
 } from "./projection";
-import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
-import type { LibraryServerConfig } from "@/config/library-config/schema";
+import {
+	SearchIndexDocumentError,
+	SearchOutboxAbortError,
+	throwIfAborted,
+	type SearchIndexWriter,
+	type SearchWriteOptions,
+} from "./writer";
+
+export { SearchIndexDocumentError, SearchIndexWriteError, SearchOutboxAbortError } from "./writer";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -51,7 +57,8 @@ export type SearchOutboxConsumerOptions = {
 	config: LibraryServerConfig;
 	database: Database;
 	heartbeatIntervalMs?: number;
-	search: SearchService;
+	/** Where the library's records go, in the engine it searches. */
+	writer: SearchIndexWriter;
 	leaseDurationMs?: number;
 	maxDocumentBatchBytes?: number;
 	maxAttempts?: number;
@@ -88,40 +95,6 @@ export class SearchOutboxLeaseLostError extends Error {
 			cause === undefined ? undefined : { cause },
 		);
 		this.name = "SearchOutboxLeaseLostError";
-	}
-}
-
-export class SearchOutboxAbortError extends Error {
-	constructor() {
-		super("Search outbox processing was aborted");
-		this.name = "SearchOutboxAbortError";
-	}
-}
-
-/**
- * Records Elasticsearch refused for their content. Sending the same claim again can't succeed, so the claim is split
- * until the event behind the record is found and only that event retries.
- */
-export class SearchIndexDocumentError extends Error {
-	readonly failures: ReadonlyArray<{ key: string; reason: string }>;
-
-	constructor(failures: ReadonlyArray<{ key: string; reason: string }>) {
-		super(
-			`Elasticsearch rejected ${failures.length} record(s): ${failures
-				.slice(0, 3)
-				.map(({ key, reason }) => `${key}: ${reason}`)
-				.join("; ")}`,
-		);
-		this.name = "SearchIndexDocumentError";
-		this.failures = failures;
-	}
-}
-
-/** A bulk write Elasticsearch answered for some records with a server-side or overload error; the claim retries. */
-export class SearchIndexWriteError extends Error {
-	constructor(status: number, reason: string) {
-		super(`Elasticsearch could not write records (${status}): ${reason}`);
-		this.name = "SearchIndexWriteError";
 	}
 }
 
@@ -215,11 +188,6 @@ function errorMessage(error: unknown) {
 	).slice(0, MAX_ERROR_LENGTH);
 }
 
-function throwIfAborted(signal?: AbortSignal) {
-	if (signal?.aborted) throw new SearchOutboxAbortError();
-}
-
-/** No other event for the same entity holds an unexpired lease. */
 function noActiveEntityLease(transaction: DatabaseTransaction, claimedAt: Date) {
 	const leasedEntity = alias(outbox, "leasedEntity");
 	return notExists(
@@ -449,111 +417,17 @@ async function failEvents(
 	return lost;
 }
 
-type BulkItem = { status: number; _id?: string | null; error?: { type?: string; reason?: string | null } };
-
-/** Elasticsearch error types that mean the record itself can't be indexed as it is. */
-const DOCUMENT_ERROR_TYPES = new Set([
-	"document_parsing_exception",
-	"illegal_argument_exception",
-	"mapper_parsing_exception",
-	"strict_dynamic_mapping_exception",
-]);
-
-/** Whether one bulk answer succeeded, refused the record for its content, or failed in a way a retry can fix. */
-function bulkItemOutcome(action: string, item: BulkItem) {
-	if (!item.error || (action === "delete" && item.status === 404)) return "written";
-	const busyOrBroken = item.status === 429 || item.status >= 500;
-	return !busyOrBroken && DOCUMENT_ERROR_TYPES.has(item.error.type ?? "") ? "refused" : "retry";
-}
-
-/** Checks one bulk answer: a refused record throws `SearchIndexDocumentError`, an overload or server error a retry. */
-function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
-	const rejected: Array<{ key: string; reason: string }> = [];
-	for (const entry of items) {
-		const [action, item] = Object.entries(entry)[0]!;
-		const outcome = bulkItemOutcome(action, item);
-		const reason = `${item.error?.type}: ${item.error?.reason ?? ""}`;
-		if (outcome === "retry") throw new SearchIndexWriteError(item.status, reason.slice(0, 2_000));
-		if (outcome === "refused") rejected.push({ key: String(item._id), reason: reason.slice(0, 500) });
-	}
-	if (rejected.length > 0) throw new SearchIndexDocumentError(rejected);
-}
-
-/**
- * Writes records to one of the library's indexes, in bulk requests no larger than `maxDocumentBatchBytes`, and
- * removes `deleteKeys`. With `searchable`, Elasticsearch answers only once readers can find the change.
- */
-async function writeSearchDocuments(
-	search: SearchService,
-	target: string,
-	plan: Pick<SearchProjectionPlan, "deleteKeys" | "documents">,
-	options: { maxDocumentBatchBytes: number; searchable: boolean; signal?: AbortSignal; taskTimeoutMs: number },
-) {
-	if (!Number.isSafeInteger(options.maxDocumentBatchBytes) || options.maxDocumentBatchBytes < 1_024) {
-		throw new Error("maxDocumentBatchBytes must be an integer of at least 1,024");
-	}
-	const requests: Array<Array<Record<string, unknown>>> = chunkDocumentsBySerializedBytes(
-		plan.documents,
-		options.maxDocumentBatchBytes,
-	).map((documents) => documents.flatMap((document) => [{ index: { _index: target, _id: String(document.key) } }, document]));
-	if (plan.deleteKeys.length > 0) {
-		requests.push(plan.deleteKeys.map((key) => ({ delete: { _index: target, _id: key } })));
-	}
-	for (const [position, operations] of requests.entries()) {
-		throwIfAborted(options.signal);
-		const response = await search.client
-			.bulk(
-				{ operations, refresh: options.searchable && position === requests.length - 1 ? "wait_for" : false },
-				{ signal: options.signal, requestTimeout: options.taskTimeoutMs },
-			)
-			.catch((error: unknown) => {
-				if (options.signal?.aborted) throw new SearchOutboxAbortError();
-				throw error;
-			});
-		if (response.errors) checkBulkItems(response.items as unknown as ReadonlyArray<Record<string, BulkItem>>);
-	}
-}
-
-/** Writes one projection plan to the library's live index, searchable once this returns. */
+/** Writes one projection plan to the library's index, searchable once this returns. */
 export async function applySearchProjectionPlan(
-	search: SearchService,
+	writer: SearchIndexWriter,
 	plan: SearchProjectionPlan,
 	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
 	maxDocumentBatchBytes = DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
-	options: { signal?: AbortSignal } = {},
+	options: Pick<SearchWriteOptions, "signal" | "onProgress" | "eventIds"> = {},
 ) {
-	await writeSearchDocuments(search, search.alias, plan, {
-		maxDocumentBatchBytes,
-		searchable: true,
-		signal: options.signal,
-		taskTimeoutMs,
-	});
-}
-
-function chunkDocumentsBySerializedBytes(
-	documents: SearchProjectionPlan["documents"],
-	maxBytes: number,
-) {
-	const chunks: Array<SearchProjectionPlan["documents"]> = [];
-	let chunk: SearchProjectionPlan["documents"] = [];
-	let chunkBytes = 2;
-	for (const document of documents) {
-		const documentBytes = Buffer.byteLength(
-			JSON.stringify(document),
-			"utf8",
-		);
-		const nextBytes =
-			chunkBytes + documentBytes + (chunk.length > 0 ? 1 : 0);
-		if (chunk.length > 0 && nextBytes > maxBytes) {
-			chunks.push(chunk);
-			chunk = [];
-			chunkBytes = 2;
-		}
-		chunk.push(document);
-		chunkBytes += documentBytes + (chunk.length > 1 ? 1 : 0);
-	}
-	if (chunk.length > 0) chunks.push(chunk);
-	return chunks;
+	const batch = writer.batch({ ...options, taskTimeoutMs, maxDocumentBatchBytes });
+	await batch.add(plan);
+	await batch.finish();
 }
 
 type ValidatedConsumerOptions = ReturnType<typeof validateOptions>;
@@ -606,6 +480,16 @@ async function indexClaimedEvents(
 	heartbeatFailure: () => unknown,
 ) {
 	const eventIds = events.map(({ id }) => id);
+	const batch = options.writer.batch({
+		checkLease: () => {
+			if (heartbeatFailure()) throw heartbeatFailure();
+		},
+		eventIds,
+		maxDocumentBatchBytes: validated.maxDocumentBatchBytes,
+		onProgress: options.onProgress,
+		signal: options.signal,
+		taskTimeoutMs: validated.taskTimeoutMs,
+	});
 	let deleteCount = 0;
 	let documentCount = 0;
 	for await (const plan of generateSearchProjectionPlans(
@@ -630,16 +514,11 @@ async function indexClaimedEvents(
 			stage: "indexing",
 			taskUid: null,
 		});
-		await applySearchProjectionPlan(
-			options.search,
-			plan,
-			validated.taskTimeoutMs,
-			validated.maxDocumentBatchBytes,
-			{ signal: options.signal },
-		);
+		await batch.add(plan);
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
 	}
+	await batch.finish();
 	return { deleteCount, documentCount };
 }
 
@@ -963,54 +842,15 @@ export async function requeueSearchOutboxDeadLetters(
 	return rows;
 }
 
-/** The index the library's alias points to, or null before the library has one. */
-async function liveSearchIndex(search: SearchService, signal?: AbortSignal) {
-	try {
-		const aliases = await search.client.indices.getAlias({ name: search.alias }, { signal });
-		return Object.keys(aliases)[0] ?? null;
-	} catch (error) {
-		if (error instanceof ElasticsearchErrors.ResponseError && error.statusCode === 404) return null;
-		throw error;
-	}
-}
-
-/** Creates an empty index; a bulk load creates it with refresh off and turns refresh on once it is full. */
-async function createSearchIndex(search: SearchService, index: string, options: { bulkLoad: boolean; signal?: AbortSignal }) {
-	const { settings, mappings } = searchIndexDefinition();
-	await search.client.indices.create(
-		{
-			index,
-			settings: (options.bulkLoad
-				? { ...settings, index: { ...settings.index, refresh_interval: "-1" } }
-				: settings) as estypes.IndicesIndexSettings,
-			mappings: mappings as estypes.MappingTypeMapping,
-		},
-		{ signal: options.signal },
-	);
-}
-
-/** Makes sure the library's alias points to an index, creating the first one when it has none. */
-export async function ensureSearchIndex(
-	search: SearchService,
+/** Makes sure the library has an index with this runtime's settings, creating the first one when it has none. */
+export function ensureSearchIndex(
+	writer: SearchIndexWriter,
 	options: {
 		onMissing?: () => Promise<void>;
 		signal?: AbortSignal;
 	} = {},
 ) {
-	throwIfAborted(options.signal);
-	const live = await liveSearchIndex(search, options.signal);
-	if (live === null) {
-		await options.onMissing?.();
-		throwIfAborted(options.signal);
-		const index = newSearchIndexName(search.alias);
-		await createSearchIndex(search, index, { bulkLoad: false, signal: options.signal });
-		await search.client.indices.updateAliases(
-			{ actions: [{ add: { index, alias: search.alias, is_write_index: true } }] },
-			{ signal: options.signal },
-		);
-		return { created: true };
-	}
-	return { created: false };
+	return writer.ensure(options);
 }
 
 /**
@@ -1047,7 +887,7 @@ export async function outboxBacklogForRebuild(database: Database) {
  */
 export async function rebuildForOutboxBacklog(
 	database: Database,
-	search: SearchService,
+	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
 	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
 ) {
@@ -1055,7 +895,7 @@ export async function rebuildForOutboxBacklog(
 		.select({ id: outbox.id })
 		.from(outbox)
 		.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
-	const rebuilt = await rebuildSearchIndex(database, search, config, options);
+	const rebuilt = await rebuildSearchIndex(database, writer, config, options);
 	const acknowledgedAt = new Date();
 	let acknowledged = 0;
 	for (const ids of chunkValues(
@@ -1090,16 +930,15 @@ export async function rebuildForOutboxBacklog(
 }
 
 /**
- * Rebuilds the library's search into a new index and moves the alias to it in one step, so readers keep searching
- * the old index until the new one is complete. The indexes it replaces, and any a stopped rebuild left behind, are
- * deleted afterwards. One write is in flight while the next batch of records is projected.
+ * Rebuilds the library's search from every record. Readers keep finding the old records until the new ones are
+ * complete: Elasticsearch fills a new index and moves the alias to it, Meilisearch replaces records in place.
  *
- * While the rebuild reads records, a worker may write a change to the old index and acknowledge its event after the
- * rebuild read that record. Those events are put back once the alias moves, so the drain writes the change again.
+ * While the rebuild reads records, a worker may write a change to the old records and acknowledge its event after the
+ * rebuild read that record. Those events are put back afterwards, so the drain writes the change again.
  */
 export async function rebuildSearchIndex(
 	database: Database,
-	search: SearchService,
+	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
@@ -1107,51 +946,16 @@ export async function rebuildSearchIndex(
 		taskTimeoutMs?: number;
 	} = {},
 ) {
-	const writeOptions = {
-		maxDocumentBatchBytes: options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
-		searchable: false,
-		signal: options.signal,
-		taskTimeoutMs: options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
-	};
 	throwIfAborted(options.signal);
 	const startedAt = new Date();
-	const target = newSearchIndexName(search.alias);
-	await createSearchIndex(search, target, { bulkLoad: true, signal: options.signal });
-	let indexed = 0;
-	let failure: unknown;
-	let writing = Promise.resolve();
-	for await (const plan of generateFullSearchProjectionPlans(database, config, 500, options.signal)) {
-		await writing;
-		if (failure) throw failure;
-		throwIfAborted(options.signal);
-		writing = writeSearchDocuments(search, target, { documents: plan.documents, deleteKeys: [] }, writeOptions).catch(
-			(error: unknown) => {
-				failure ??= error;
-			},
-		);
-		indexed += plan.documents.length;
-	}
-	await writing;
-	if (failure) throw failure;
-	await search.client.indices.putSettings({ index: target, settings: { index: { refresh_interval: "1s" } } }, { signal: options.signal });
-	await search.client.indices.refresh({ index: target }, { signal: options.signal });
-	const resolved = await search.client.indices.resolveIndex({ name: `${search.alias}_*` }, { signal: options.signal });
-	const replaced = resolved.indices.map((index) => index.name).filter((name) => name !== target);
-	const live = await liveSearchIndex(search, options.signal);
-	await search.client.indices.updateAliases(
-		{
-			actions: [
-				...(live === null ? [] : [{ remove: { index: live, alias: search.alias } }]),
-				{ add: { index: target, alias: search.alias, is_write_index: true } },
-			],
-		},
-		{ signal: options.signal },
-	);
-	if (replaced.length > 0) await search.client.indices.delete({ index: replaced }, { signal: options.signal });
-	// A bulk load leaves a dozen segments; one searches about twice as fast (OpenDevEd/new-el#721). Elasticsearch merges
-	// them in the background, as a large library's merge can take far longer than a rebuild may wait.
-	await search.client.indices.forcemerge({ index: target, max_num_segments: 1, wait_for_completion: false }, { signal: options.signal });
-	return { indexed, replacedIndexes: replaced.length, redrained: await redrainEventsAcknowledgedSince(database, startedAt) };
+	const rebuilt = await writer.rebuild(generateFullSearchProjectionPlans(database, config, 500, options.signal), {
+		maxDocumentBatchBytes: options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
+		signal: options.signal,
+		taskTimeoutMs: options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
+		reproject: (keys) =>
+			generateSearchProjectionPlans(database, config, keys.map((entityKey) => ({ entityKey, entityType: "item" })), 500, options.signal),
+	});
+	return { ...rebuilt, redrained: await redrainEventsAcknowledgedSince(database, startedAt) };
 }
 
 async function redrainEventsAcknowledgedSince(database: Database, since: Date) {

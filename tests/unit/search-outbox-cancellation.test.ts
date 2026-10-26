@@ -5,6 +5,7 @@ import {
 	applySearchProjectionPlan,
 	SearchOutboxAbortError,
 } from "@/lib/search-index/consumer";
+import { elasticsearchWriter } from "@/lib/search-index/elasticsearch-writer";
 import type { SearchProjectionPlan } from "@/lib/search-index/projection";
 
 const plan = {
@@ -48,7 +49,7 @@ describe("search write cancellation", () => {
 			},
 		} as unknown as SearchService;
 
-		const writing = applySearchProjectionPlan(search, plan, 10_000, 20 * 1024 * 1024, { signal: controller.signal });
+		const writing = applySearchProjectionPlan(elasticsearchWriter(search), plan, 10_000, 20 * 1024 * 1024, { signal: controller.signal });
 		await started;
 		controller.abort();
 

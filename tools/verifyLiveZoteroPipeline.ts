@@ -23,6 +23,7 @@ import {
 	drainSearchOutbox,
 	ensureSearchIndex,
 } from "../src/lib/search-index/consumer";
+import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
 import { runSourceConnection } from "../src/lib/source-ingestion/orchestrator";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
 import {
@@ -206,11 +207,11 @@ async function verifyPipeline() {
 			revision: config.revision,
 			updatedAt: config.updatedAt,
 		});
-		await ensureSearchIndex(search);
+		await ensureSearchIndex(elasticsearchWriter(search));
 		const indexedBatches = await drainSearchOutbox({
 			config,
 			database,
-			search,
+			writer: elasticsearchWriter(search),
 			maxEvents: 100_000,
 			workerId: `zotero-live-verifier-index:${process.pid}`,
 		});
