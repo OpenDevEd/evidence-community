@@ -6,6 +6,12 @@ import {
 } from "../src/lib/deployment/library-database";
 import { createLibraryDatabaseProvisionerServer } from "../src/lib/deployment/library-database-provisioner-http";
 import {
+	deleteLibrarySearch,
+	parseSearchAdminUrl,
+	parseSearchRuntimeHost,
+	reconcileLibrarySearch,
+} from "../src/lib/deployment/library-search";
+import {
 	deleteOpenScholarLibraryDatabase,
 	reconcileOpenScholarLibraryDatabase,
 } from "../src/lib/deployment/provision-library-database";
@@ -40,8 +46,16 @@ async function main() {
 	const token = readRequiredEnvironment(
 		"EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN",
 	);
+	const searchAdminUrl = readRequiredEnvironment(
+		"EVIDENCE_LIBRARY_SEARCH_ADMIN_URL",
+	);
+	const searchRuntimeHost = readRequiredEnvironment(
+		"EVIDENCE_LIBRARY_SEARCH_RUNTIME_HOST",
+	);
 	parsePostgresAdminUrl(adminUrl);
 	parseInternalPostgresHost(runtimeHost);
+	parseSearchAdminUrl(searchAdminUrl);
+	parseSearchRuntimeHost(searchRuntimeHost);
 
 	const server = createLibraryDatabaseProvisionerServer({
 		onError: (error) =>
@@ -55,6 +69,15 @@ async function main() {
 			}),
 		remove: ({ libraryId }) =>
 			deleteOpenScholarLibraryDatabase({ adminUrl, libraryId }),
+		reconcileSearch: ({ libraryId, password }) =>
+			reconcileLibrarySearch({
+				adminUrl: searchAdminUrl,
+				libraryId,
+				password,
+				runtimeHost: searchRuntimeHost,
+			}),
+		removeSearch: ({ libraryId }) =>
+			deleteLibrarySearch({ adminUrl: searchAdminUrl, libraryId }),
 		token,
 	});
 	const stop = () => {

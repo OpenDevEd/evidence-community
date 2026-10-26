@@ -22,12 +22,18 @@ import {
 	parseOpenScholarLibraryId,
 } from "./library-database";
 import type {
+	LibrarySearchDeletionResult,
+	LibrarySearchReconciliationResult,
+} from "./library-search";
+import type {
 	LibraryDatabaseDeletionResult,
 	LibraryDatabaseReconciliationResult,
 } from "./provision-library-database";
 
 const reconcilePath = "/v1/library-databases/reconcile";
 const deletePath = "/v1/library-databases/delete";
+const searchReconcilePath = "/v1/library-search/reconcile";
+const searchDeletePath = "/v1/library-search/delete";
 const maximumBodyBytes = 16 * 1_024;
 
 type ReconcileRequest = {
@@ -43,10 +49,20 @@ export type LibraryDatabaseHttpDeleter = (request: {
 	libraryId: string;
 }) => Promise<LibraryDatabaseDeletionResult>;
 
+export type LibrarySearchHttpReconciler = (
+	request: ReconcileRequest,
+) => Promise<LibrarySearchReconciliationResult>;
+
+type LibrarySearchHttpDeleter = (request: {
+	libraryId: string;
+}) => Promise<LibrarySearchDeletionResult>;
+
 type ProvisionerServerOptions = {
 	onError?: (error: unknown) => void;
 	reconcile: LibraryDatabaseHttpReconciler;
 	remove: LibraryDatabaseHttpDeleter;
+	reconcileSearch: LibrarySearchHttpReconciler;
+	removeSearch: LibrarySearchHttpDeleter;
 	token: string;
 };
 
@@ -146,50 +162,40 @@ function sendReconciliationError(
 	});
 }
 
+function sendSearchError(
+	response: ServerResponse,
+	error: unknown,
+	onError: (error: unknown) => void,
+) {
+	onError(error);
+	sendJson(response, 500, {
+		error: {
+			code: "search_reconciliation_failed",
+			message: "The library search login could not be reconciled.",
+		},
+	});
+}
+
+type Route = {
+	parse: (serialized: string) => ReconcileRequest | { libraryId: string };
+	run: (options: Required<ProvisionerServerOptions>, body: never) => Promise<object>;
+	fail: typeof sendReconciliationError;
+};
+
+const routes: Record<string, Route> = {
+	[reconcilePath]: { parse: parseReconcileRequest, run: (options, body: ReconcileRequest) => options.reconcile(body), fail: sendReconciliationError },
+	[deletePath]: { parse: parseDeleteRequest, run: (options, body: { libraryId: string }) => options.remove(body), fail: sendReconciliationError },
+	[searchReconcilePath]: { parse: parseReconcileRequest, run: (options, body: ReconcileRequest) => options.reconcileSearch(body), fail: sendSearchError },
+	[searchDeletePath]: { parse: parseDeleteRequest, run: (options, body: { libraryId: string }) => options.removeSearch(body), fail: sendSearchError },
+};
+
 function requireKnownPath(url: URL) {
-	if (
-		!url.search &&
-		["/health", reconcilePath, deletePath].includes(url.pathname)
-	)
-		return;
+	if (!url.search && (url.pathname === "/health" || url.pathname in routes)) return;
 	throw new HttpContractError({
 		code: "not_found",
 		message: "The requested endpoint does not exist.",
 		status: 404,
 	});
-}
-
-async function handleDeleteRequest(
-	request: IncomingMessage,
-	response: ServerResponse,
-	options: Required<ProvisionerServerOptions>,
-) {
-	requireMethod(request, "POST");
-	requireAuthorization(request, options.token);
-	requireJsonContentType(request);
-	const body = parseDeleteRequest(
-		await readBoundedBody(request, maximumBodyBytes),
-	);
-	try {
-		const result = await options.remove(body);
-		sendJson(response, 200, { libraryId: body.libraryId, ...result });
-	} catch (error: unknown) {
-		sendReconciliationError(response, error, options.onError);
-	}
-}
-
-async function handleReconcileRequest(
-	request: IncomingMessage,
-	response: ServerResponse,
-	options: Required<ProvisionerServerOptions>,
-) {
-	requireMethod(request, "POST");
-	requireAuthorization(request, options.token);
-	requireJsonContentType(request);
-	const body = parseReconcileRequest(
-		await readBoundedBody(request, maximumBodyBytes),
-	);
-	await runReconciliation(response, body, options);
 }
 
 async function handleRequest(
@@ -203,23 +209,16 @@ async function handleRequest(
 		sendHealthResponse(request, response);
 		return;
 	}
-	if (url.pathname === deletePath) {
-		await handleDeleteRequest(request, response, options);
-		return;
-	}
-	await handleReconcileRequest(request, response, options);
-}
-
-async function runReconciliation(
-	response: ServerResponse,
-	body: ReconcileRequest,
-	options: Required<ProvisionerServerOptions>,
-) {
+	const route = routes[url.pathname]!;
+	requireMethod(request, "POST");
+	requireAuthorization(request, options.token);
+	requireJsonContentType(request);
+	const body = route.parse(await readBoundedBody(request, maximumBodyBytes));
 	try {
-		const result = await options.reconcile(body);
+		const result = await route.run(options, body as never);
 		sendJson(response, 200, { libraryId: body.libraryId, ...result });
 	} catch (error: unknown) {
-		sendReconciliationError(response, error, options.onError);
+		route.fail(response, error, options.onError);
 	}
 }
 
@@ -235,6 +234,8 @@ export function createLibraryDatabaseProvisionerServer(
 		onError: options.onError ?? ((error) => console.error(error)),
 		reconcile: options.reconcile,
 		remove: options.remove,
+		reconcileSearch: options.reconcileSearch,
+		removeSearch: options.removeSearch,
 		token: options.token,
 	};
 	return createFixedJsonHttpServer({

@@ -314,6 +314,8 @@ The container reads these values only from its environment:
 | `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL`         | PostgreSQL administrator URL used to create databases, logins, and extensions      |
 | `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST`      | Internal PostgreSQL host and optional port written into each library's runtime URL |
 | `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes                                                |
+| `EVIDENCE_LIBRARY_SEARCH_ADMIN_URL`           | The shared Elasticsearch with its administrator login, `http://elastic:<password>@elasticsearch:9200` |
+| `EVIDENCE_LIBRARY_SEARCH_RUNTIME_HOST`        | Where libraries reach that Elasticsearch, written into each search receipt: `http://elasticsearch:9200` |
 | `PORT`                                        | HTTP port, default `3000`                                                          |
 
 `GET /health` returns `{"status":"ok"}`. Database setup uses this endpoint:
@@ -412,6 +414,34 @@ join that network and reach it as `http://elasticsearch:9200`; the other
 workers don't. Set `ELASTICSEARCH_ADMIN_PASSWORD`, and `ELASTICSEARCH_HEAP`
 from the measurement in `plans/elasticsearch-search/01-size-on-a-real-library.md`.
 
+The database provisioner joins `library-search` too and creates each library's
+login with the same token and request as its database:
+
+```http
+POST /v1/library-search/reconcile
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>","password":"<saved search key>"}
+```
+
+It answers `{"libraryId":"...","outcome":"created","host":"http://elasticsearch:9200","index":"el_..."}`.
+The login, its role, and the library's search alias share the name of the
+library's database. The role reaches only that alias and the indexes named
+`<name>_*` behind it, which the library's search worker creates and swaps. A
+retry with the same password answers `matched`; a new password or a role changed
+by hand answers `updated`. `POST /v1/library-search/delete` with only
+`libraryId` deletes the library's indexes, login, and role, and answers `absent`
+once they are gone. Failures answer `search_reconciliation_failed` without
+Elasticsearch's details.
+
+Prove the login rules against a real Elasticsearch (the test starts its own
+container unless `EVIDENCE_LIBRARY_TEST_ELASTICSEARCH_ADMIN_URL` names one):
+
+```bash
+DATABASE_URL_POST=postgresql://... npx vitest run --config vitest.integration.config.ts \
+  tests/integration/library-search-provisioning.test.ts
+```
 
 ## HTTPS and admin access
 
