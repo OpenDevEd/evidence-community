@@ -447,9 +447,12 @@ rejects the new one. For each library:
    "Switching engines").
 
 Rollback: deploy the previous image with the previous configuration revision.
-A library that had moved to Elasticsearch has no Meilisearch index left; the
-older worker rebuilds it from PostgreSQL, and search finds nothing until it
-finishes (`drizzle/rollback/0098_search-engine.sql`).
+A library still on Meilisearch notices nothing, before or after rolling forward
+again. A library that had moved to Elasticsearch has no Meilisearch index left;
+the older worker refills it from PostgreSQL, and search finds only the records
+indexed so far until it finishes. Rolling forward rebuilds its Elasticsearch
+index on its own, since the projection signature the older worker stored differs
+(`drizzle/rollback/0098_search-engine.sql`).
 
 ## Run the shared Elasticsearch
 

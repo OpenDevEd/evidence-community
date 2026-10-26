@@ -123,9 +123,11 @@ Meilisearch with an embedder, which embeds every record again.
 
 To switch, publish a configuration revision that changes only
 `services.search.engine` and keeps the old engine's connection. Remove the old
-connection only once `status.searchEngine` names the new engine: without it,
-readers search the new index while it is still being built. An old index a
-stopped switch left behind is deleted at the worker's next start.
+connection only once the worker has logged `"oldIndexRemoved":true`: before the
+switch completes, readers would search the new index while it is still being
+built, and once the connection is gone, nothing deletes the old index. An old
+index a stopped switch left behind is deleted at the worker's next start while
+the old connection is still there.
 
 Prove a switch on a real library with both engines' connections (it switches to
 the other engine and back, and fails if a reader's public result count ever
