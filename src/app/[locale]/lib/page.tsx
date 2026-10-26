@@ -6,6 +6,7 @@ import {
   buildLocalizedSiteUrl,
 } from "@/lib/language-alternates";
 import { getItemsPaginationMeta } from "@/lib/search";
+import { lastNumberedPage } from "@/lib/search-query";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
@@ -63,20 +64,17 @@ export async function libraryMetadata(props: {
     libraryConfig.features.atomFeed &&
     Boolean(libraryConfig.exports.atom);
 
-  let previous: string | null = null;
-  let next: string | null = null;
-
-  if (page > 1) {
-    const prevUrl = new URL(currentUrl);
-    prevUrl.searchParams.set("page", String(page - 1));
-    previous = prevUrl.toString();
-  }
-
-  if (page < totalPages) {
-    const nextUrl = new URL(currentUrl);
-    nextUrl.searchParams.set("page", String(page + 1));
-    next = nextUrl.toString();
-  }
+  // Links name numbered pages only: past them, a page needs the cursor its neighbour's results give.
+  const numbered = lastNumberedPage(paginationMeta.perPage);
+  const pageUrl = (target: number) => {
+    const url = new URL(currentUrl);
+    url.searchParams.set("page", String(target));
+    url.searchParams.delete("after");
+    url.searchParams.delete("before");
+    return url.toString();
+  };
+  const previous = page > 1 && page - 1 <= numbered ? pageUrl(page - 1) : null;
+  const next = page < totalPages && page + 1 <= numbered ? pageUrl(page + 1) : null;
 
   return {
     generator: "new-el",

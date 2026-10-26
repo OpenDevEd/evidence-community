@@ -71,4 +71,22 @@ describe("runtime library metadata", () => {
 
 		expect(metadata.alternates?.types).toBeUndefined();
 	});
+
+	it("links the pages either side only while they are numbered, since later ones need a cursor", async () => {
+		const linksOn = async (currentPage: number) => {
+			mocks.getItemsPaginationMeta.mockResolvedValue({ currentPage, perPage: 20, totalPages: 2_805 });
+			const metadata = await libraryMetadata({
+				params: Promise.resolve({ locale: "en-GB" }),
+				pathname: "/lib?page=1&after=CURSOR",
+				searchParams: Promise.resolve(new URLSearchParams()),
+			});
+			return (metadata as { pagination?: { previous: string | null; next: string | null } }).pagination;
+		};
+		expect(await linksOn(499)).toEqual({
+			previous: "https://maximal.example.org/lib?page=498",
+			next: "https://maximal.example.org/lib?page=500",
+		});
+		expect(await linksOn(500)).toEqual({ previous: "https://maximal.example.org/lib?page=499", next: null });
+		expect(await linksOn(502)).toEqual({ previous: null, next: null });
+	});
 });
