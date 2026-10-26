@@ -159,14 +159,29 @@ export function encodeCursor(order: SearchOrder, place: SearchPlace | null) {
 	return Buffer.from(JSON.stringify(cursor)).toString("base64url");
 }
 
-function isPlaceValue(value: unknown) {
-	return value === null || ["string", "number", "boolean"].includes(typeof value);
+/** Sort fields that hold numbers. Elasticsearch places a record without one at "Infinity" or "-Infinity". */
+const NUMBER_SORT_FIELDS = new Set(["citationCount", "dateSortKey", "year"]);
+
+/** Whether a sort value can be one of this sort field's, which Elasticsearch refuses otherwise. */
+function fitsSortField(value: unknown, entry: string) {
+	if (!NUMBER_SORT_FIELDS.has(entry.split(":")[0]!)) return typeof value === "string" || value === null;
+	return typeof value === "number" || value === "Infinity" || value === "-Infinity";
+}
+
+/** Whether Elasticsearch's place fits the order: the relevance score, each sort field's value, then the key. */
+function fitsElasticsearchOrder(place: unknown[], order: SearchOrder) {
+	const values = order.ranked ? place.slice(1) : place;
+	return (
+		(!order.ranked || typeof place[0] === "number") &&
+		order.sort.every((entry, index) => fitsSortField(values[index], entry)) &&
+		typeof values.at(-1) === "string"
+	);
 }
 
 /** Whether a cursor's place fits the order: Meilisearch's is an offset, Elasticsearch's are sort values and a key. */
 function fitsOrder(place: unknown[], order: SearchOrder) {
 	if (place.length !== placeLength(order)) return false;
-	return order.engine === "meilisearch" ? Number.isSafeInteger(place[0]) && (place[0] as number) >= 0 : place.every(isPlaceValue);
+	return order.engine === "meilisearch" ? Number.isSafeInteger(place[0]) && (place[0] as number) >= 0 : fitsElasticsearchOrder(place, order);
 }
 
 /** The place a cursor holds, or null when it is no cursor for this order. */

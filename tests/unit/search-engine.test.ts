@@ -28,6 +28,16 @@ describe("a cursor", () => {
 		expect(encodeCursor(newest, null)).toBeNull();
 	});
 
+	it("places nothing at a value Elasticsearch can't sort that field by", () => {
+		expect(decodeCursor(encodeCursor(relevance, ["x", "ABCD1234"]), relevance)).toBeNull();
+		expect(decodeCursor(encodeCursor(newest, ["2024", "ABCD1234"]), newest)).toBeNull();
+		expect(decodeCursor(encodeCursor(newest, [2024, 7]), newest)).toBeNull();
+		// A record without a date sorts at infinity, which Elasticsearch writes as a string.
+		expect(decodeCursor(encodeCursor(newest, ["-Infinity", "ABCD1234"]), newest)).toEqual(["-Infinity", "ABCD1234"]);
+		const byAuthor = searchOrder("elasticsearch", { text: "", sort: ["fullNames:asc"] });
+		expect(decodeCursor(encodeCursor(byAuthor, [null, "ABCD1234"]), byAuthor)).toEqual([null, "ABCD1234"]);
+	});
+
 	it("places nothing at an offset Meilisearch can't page to", () => {
 		const offsets = searchOrder("meilisearch", { text: "tutoring" });
 		for (const at of [-5, 1.5, "20", null]) expect(decodeCursor(encodeCursor(offsets, [at]), offsets)).toBeNull();
