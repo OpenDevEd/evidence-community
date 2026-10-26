@@ -132,16 +132,20 @@ async function fillIndex(search: SearchService, target: string, plans: AsyncIter
 	let indexed = 0;
 	let failure: unknown;
 	let writing = Promise.resolve();
-	for await (const plan of plans) {
+	try {
+		for await (const plan of plans) {
+			await writing;
+			if (failure) throw failure;
+			throwIfAborted(options.signal);
+			writing = writeSearchDocuments(search, target, { documents: plan.documents, deleteKeys: [] }, options).catch((error: unknown) => {
+				failure ??= error;
+			});
+			indexed += plan.documents.length;
+		}
+	} finally {
+		// A write still landing could otherwise create `target` again after a failed rebuild deletes it.
 		await writing;
-		if (failure) throw failure;
-		throwIfAborted(options.signal);
-		writing = writeSearchDocuments(search, target, { documents: plan.documents, deleteKeys: [] }, options).catch((error: unknown) => {
-			failure ??= error;
-		});
-		indexed += plan.documents.length;
 	}
-	await writing;
 	if (failure) throw failure;
 	return indexed;
 }
@@ -190,7 +194,9 @@ async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<Se
 		indexed = await fillIndex(search, target, plans, options);
 		replaced = await swapAlias(search, target, options.signal);
 	} catch (error) {
-		await search.client.indices.delete({ index: target }).catch(() => undefined);
+		// The alias may have moved even though its request failed; then readers search `target`, which must stay.
+		const live = await liveSearchIndex(search).catch(() => target);
+		if (live !== target) await search.client.indices.delete({ index: target }).catch(() => undefined);
 		if (options.signal?.aborted) throw new SearchOutboxAbortError();
 		throw error;
 	}

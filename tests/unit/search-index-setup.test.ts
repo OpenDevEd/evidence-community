@@ -1,5 +1,5 @@
 import { errors } from "@elastic/elasticsearch";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SearchService } from "@/lib/elasticsearch-factory";
 import {
@@ -25,8 +25,9 @@ function notFound() {
 }
 
 /** A stand-in for the Elasticsearch client: it records requests and answers bulk writes with `bulkItems`. */
-function search(options: { aliasExists: boolean; bulkItems?: Array<Record<string, unknown>> }) {
+function search(options: { aliasExists: boolean; bulkItems?: Array<Record<string, unknown>>; aliasMoveTimesOut?: boolean }) {
 	const calls: Call[] = [];
+	let aliased = "library_1793000000000";
 	const record = (api: string) => async (request: Record<string, unknown>) => {
 		calls.push({ api, request });
 		return {};
@@ -41,10 +42,16 @@ function search(options: { aliasExists: boolean; bulkItems?: Array<Record<string
 			getAlias: async (request: Record<string, unknown>) => {
 				calls.push({ api: "getAlias", request });
 				if (!options.aliasExists) throw notFound();
-				return { library_1793000000000: { aliases: { library: {} } } };
+				return { [aliased]: { aliases: { library: {} } } };
 			},
 			create: record("create"),
-			updateAliases: record("updateAliases"),
+			updateAliases: async (request: { actions: Array<{ add?: { index: string } }> }) => {
+				calls.push({ api: "updateAliases", request });
+				aliased = request.actions.find((action) => action.add)?.add?.index ?? aliased;
+				// Elasticsearch moved the alias, but the answer never reached the worker.
+				if (options.aliasMoveTimesOut) throw new Error("Request timed out");
+				return {};
+			},
 			refresh: record("refresh"),
 			putSettings: record("putSettings"),
 			delete: record("delete"),
@@ -155,6 +162,15 @@ describe("an Elasticsearch rebuild", () => {
 		expect(deletes).toEqual([["library_1792000000000"], ["library_1793000000000"]]);
 		// 12 GiB merges into three segments of at most 5 GiB.
 		expect(calls.find((call) => call.api === "forcemerge")?.request).toMatchObject({ max_num_segments: 3, wait_for_completion: false });
+	});
+
+	it("keeps its new index when the alias moved though the request failed, as readers search it", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const { calls, service } = search({ aliasExists: true, aliasMoveTimesOut: true });
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).rejects.toThrow("Request timed out");
+		const created = calls.find((call) => call.api === "create")?.request.index;
+		expect(calls.filter((call) => call.api === "delete").map((call) => call.request.index)).not.toContainEqual(created);
+		error.mockRestore();
 	});
 
 	it("deletes its half-built index when a write fails, and leaves readers on the old one", async () => {
