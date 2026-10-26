@@ -123,6 +123,7 @@ async function main() {
 			: 0;
 		let rebuildPending = await prepareSearchProjection(
 			databaseResource.database,
+			writer.engine,
 			config.topics.enabled,
 			config.search.fullText,
 			config.content.tags.hidden,
