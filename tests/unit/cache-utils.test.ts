@@ -5,9 +5,13 @@ import { schema } from "@/db/database-schema";
 
 /** The `computedCache` rows this stub PostgreSQL client holds, by key. */
 const stored = new Map<string, { value: unknown; computedAt: Date }>();
-const failing = { writes: 0 };
+const failing = { reads: 0, writes: 0 };
 const query = vi.fn(async ({ text }: { text: string }, values: unknown[]) => {
 	if (text.startsWith("select")) {
+		if (failing.reads > 0) {
+			failing.reads -= 1;
+			throw new Error("connection reset");
+		}
 		const row = stored.get(values[0] as string);
 		return { rows: row ? [[row.value, row.computedAt.toISOString()]] : [] };
 	}
@@ -71,6 +75,14 @@ it("keeps answering with an old value while a fresh one is computed behind it", 
 	expect(await peekComputedCache(config, "aged", compute, { maxAgeMs: 60_000 })).toEqual({ count: 1 });
 	await vi.waitFor(() => expect(compute).toHaveBeenCalledTimes(2));
 	await vi.waitFor(async () => expect(await peekComputedCache(config, "aged", compute, { maxAgeMs: 60_000 })).toEqual({ count: 2 }));
+});
+
+it("computes the value itself when the cache can't be read", async () => {
+	const error = vi.spyOn(console, "error").mockImplementation(() => {});
+	failing.reads = 1;
+	expect(await withComputedCache(config, "unread", async () => ({ count: 4 }))).toEqual({ count: 4 });
+	expect(error).toHaveBeenCalledWith(expect.stringContaining("reading unread failed"), expect.anything());
+	error.mockRestore();
 });
 
 it("still answers from memory when the cache write fails, and tries again after a failed compute", async () => {
