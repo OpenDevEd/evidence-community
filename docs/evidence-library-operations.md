@@ -423,6 +423,34 @@ documents that name no record key; check them if it isn't 0.
 changes nothing. Copy every library before it moves to Elasticsearch
 (OpenDevEd/new-el#722): after that the copy can't reach Meilisearch.
 
+## Upgrade to a chosen search engine
+
+From the release with OpenDevEd/new-el#722 on, `services.search` names the
+library's engine and holds each engine's connection:
+
+```json
+"search": {"engine": "meilisearch", "meilisearch": {"host": "http://meilisearch:7700", "key": "<key>", "index": "<index>"}}
+```
+
+This runtime rejects the old `{host, key, index}` shape, and an older runtime
+rejects the new one. For each library:
+
+1. Prepare and validate a configuration revision whose `services.search` is
+   `{"engine": "meilisearch", "meilisearch": <the old host, key and index>}`,
+   and deploy it with this runtime.
+2. Migration `0098` records Meilisearch as the engine readers search for every
+   library whose worker has built an index, so readers see no change.
+3. To move the library to Elasticsearch, add the `elasticsearch` connection
+   from its search receipt and set `engine` to `elasticsearch`. The search
+   worker builds the Elasticsearch index while readers stay on Meilisearch,
+   then moves them and deletes the Meilisearch index (`docs/search-indexing.md`,
+   "Switching engines").
+
+Rollback: deploy the previous image with the previous configuration revision.
+A library that had moved to Elasticsearch has no Meilisearch index left; the
+older worker rebuilds it from PostgreSQL, and search finds nothing until it
+finishes (`drizzle/rollback/0098_search-engine.sql`).
+
 ## Run the shared Elasticsearch
 
 Every library on a host searches one Elasticsearch, deployed once per host from
