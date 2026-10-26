@@ -82,7 +82,10 @@ written during the rebuild stay queued and are drained afterwards.
 A rebuild fills a new index, `<alias>_<timestamp>`, with refresh off, one write
 in flight while the next records are projected, and then moves the library's
 alias to it in one step. Readers search the old index until then. The old index,
-and any a stopped rebuild left behind, are deleted. A worker may write a change
+and any a stopped rebuild left behind, are deleted. Elasticsearch then merges
+the new index into one segment in the background: on AIED that halves search
+time (about 55 to 26 ms at the 95th percentile), and the rebuild does not wait
+for it. A worker may write a change
 to the old index, and acknowledge its event, after the rebuild read that record;
 every event acknowledged after the rebuild started is therefore put back once
 the alias moves, and the drain writes it again. On AIED (282,948 records) a

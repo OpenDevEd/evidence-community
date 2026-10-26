@@ -1148,6 +1148,9 @@ export async function rebuildSearchIndex(
 		{ signal: options.signal },
 	);
 	if (replaced.length > 0) await search.client.indices.delete({ index: replaced }, { signal: options.signal });
+	// A bulk load leaves a dozen segments; one searches about twice as fast (OpenDevEd/new-el#721). Elasticsearch merges
+	// them in the background, as a large library's merge can take far longer than a rebuild may wait.
+	await search.client.indices.forcemerge({ index: target, max_num_segments: 1, wait_for_completion: false }, { signal: options.signal });
 	return { indexed, replacedIndexes: replaced.length, redrained: await redrainEventsAcknowledgedSince(database, startedAt) };
 }
 
