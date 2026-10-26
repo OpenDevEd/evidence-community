@@ -7,6 +7,7 @@ import { useState } from "react";
 
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebounce } from "@/hooks/useDebounce";
+import type { RangeChange } from "@/hooks/useFilters";
 
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Input } from "../../nextui/Input";
@@ -105,7 +106,7 @@ export function YearFilter({
 	counts,
 }: {
 	range: string;
-	onRangeChange: (start: string | null, end: string | null) => void;
+	onRangeChange: RangeChange;
 	years: readonly string[];
 	counts?: Record<string, number>;
 }) {
@@ -152,7 +153,7 @@ export function YearFilter({
 								label={t("from")}
 								selectedKey={start}
 								onSelectionChange={(key) =>
-									onRangeChange(String(key || ""), end)
+									onRangeChange(String(key || ""), undefined)
 								}
 								years={years}
 								counts={counts}
@@ -161,7 +162,7 @@ export function YearFilter({
 								label={t("to")}
 								selectedKey={end}
 								onSelectionChange={(key) =>
-									onRangeChange(start, String(key || ""))
+									onRangeChange(undefined, String(key || ""))
 								}
 								years={years}
 								counts={counts}

@@ -31,6 +31,7 @@ import {
 	useFacetList,
 	useFacetListRaw,
 } from "@/hooks/useFacetList";
+import type { RangeChange } from "@/hooks/useFilters";
 import Image from "next/image";
 import {
 	getCountryAncestry,
@@ -987,7 +988,7 @@ function MoreFilters({ children }: { children: ReactNode }) {
 export const LibraryHighlightsSlot = createContext<ReactNode>(null);
 
 /** The grey filter card: the year picker and the filter dropdowns. */
-function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, slot, sources }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: (start: string | null, end: string | null) => void; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; slot: TreeSlot; sources: PublicSource[] }) {
+function FilterCard({ facetDistribution, range, onRangeChange, queryParams, handleCountrySelect, handleInstitutionSelect, handleTopicsChange, slot, sources }: { facetDistribution: FacetDistribution | undefined; range: string; onRangeChange: RangeChange; queryParams: inferParserType<typeof searchParamsLoader>; handleCountrySelect: (country: string) => void; handleInstitutionSelect: (institution: string) => void; handleTopicsChange: (topics: string[]) => void; slot: TreeSlot; sources: PublicSource[] }) {
 	const { filters } = useLibraryConfig();
 	const years = useMemo(() => Object.keys(facetDistribution?.year ?? {}).sort((left, right) => Number(right) - Number(left)), [facetDistribution]);
 	return (
@@ -1171,7 +1172,7 @@ export default function CollectionsList({
 	selectedCollections: string[];
 	isModal?: boolean;
 	range: string;
-	handleRangeChange: (start: string | null, end: string | null) => void;
+	handleRangeChange: RangeChange;
 	handleInstitutionSelect: (institution: string) => void;
 	handleTopicsChange: (topics: string[]) => void;
 	hierarchy: Collection[];

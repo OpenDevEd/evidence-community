@@ -63,6 +63,12 @@ function returnToListTop() {
 	return { scroll: false };
 }
 
+/**
+ * Sets the year filter: a `null` end means one year, not a range. `undefined` keeps that end as it is now: the From and
+ * To boxes each wait half a second before they apply, so a box's own idea of the other end can be out of date.
+ */
+export type RangeChange = (start: string | null | undefined, end: string | null | undefined) => void;
+
 export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 	const config = useLibraryConfig();
@@ -143,9 +149,13 @@ export function useFilters() {
 	}, []);
 	const readTypedSearch = useCallback(() => typedSearch.current, []);
 
-	const handleRangeChange = useCallback(
-		(start: string | null, end: string | null) => {
-			setParams({ range: [start, end].join(end !== null ? "-" : "") });
+	const handleRangeChange: RangeChange = useCallback(
+		(start, end) => {
+			setParams((old) => {
+				const [oldStart = "", oldEnd = ""] = old.range.split("-");
+				const to = end === undefined ? oldEnd : end;
+				return { range: [start === undefined ? oldStart : start, to].join(to !== null ? "-" : "") };
+			});
 		},
 		[setParams],
 	);
