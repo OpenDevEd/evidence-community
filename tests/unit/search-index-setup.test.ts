@@ -45,6 +45,12 @@ function search(options: { aliasExists: boolean; bulkItems?: Array<Record<string
 			},
 			create: record("create"),
 			updateAliases: record("updateAliases"),
+			refresh: record("refresh"),
+			putSettings: record("putSettings"),
+			delete: record("delete"),
+			forcemerge: record("forcemerge"),
+			stats: async () => ({ _all: { primaries: { store: { size_in_bytes: 12 * 1024 ** 3 } } } }),
+			resolveIndex: async () => ({ indices: [{ name: "library_1793000000000" }, { name: "library_1792000000000" }] }),
 		},
 	};
 	return { calls, service: { alias: "library", client } as unknown as SearchService };
@@ -83,13 +89,15 @@ describe("search index setup", () => {
 });
 
 describe("search index writes", () => {
-	it("writes records and deletions through the alias, searchable when the last write returns", async () => {
+	it("writes records and deletions through the alias, then makes them searchable once", async () => {
 		const { calls, service } = search({ aliasExists: true, bulkItems: [{ delete: { _id: "CCCC3333", status: 404, error: { type: "not_found" } } }] });
 
 		await applySearchProjectionPlan(elasticsearchWriter(service), plan, 30_000, 1_024);
 
+		expect(calls.map((call) => call.api)).toEqual(["bulk", "bulk", "refresh"]);
 		const bulks = calls.filter((call) => call.api === "bulk").map((call) => call.request);
-		expect(bulks.map((request) => request.refresh)).toEqual([false, "wait_for"]);
+		// A missing alias fails the write rather than create an index under its name.
+		expect(bulks.map((request) => request.require_alias)).toEqual([true, true]);
 		expect(bulks[0]!.operations).toEqual([
 			{ index: { _index: "library", _id: "AAAA1111" } },
 			plan.documents[0],
@@ -115,6 +123,15 @@ describe("search index writes", () => {
 		});
 	});
 
+	it("retries a deletion when the index itself is missing", async () => {
+		const { service } = search({
+			aliasExists: true,
+			bulkItems: [{ delete: { _id: "CCCC3333", status: 404, error: { type: "index_not_found_exception", reason: "no such index [library]" } } }],
+		});
+
+		await expect(applySearchProjectionPlan(elasticsearchWriter(service), { ...plan, documents: [] })).rejects.toBeInstanceOf(SearchIndexWriteError);
+	});
+
 	it("retries the whole write when Elasticsearch is overloaded", async () => {
 		const { service } = search({
 			aliasExists: true,
@@ -122,5 +139,32 @@ describe("search index writes", () => {
 		});
 
 		await expect(applySearchProjectionPlan(elasticsearchWriter(service), { ...plan, deleteKeys: [] })).rejects.toBeInstanceOf(SearchIndexWriteError);
+	});
+});
+
+describe("an Elasticsearch rebuild", () => {
+	const rebuildOptions = { maxDocumentBatchBytes: 1_024 * 1_024, taskTimeoutMs: 30_000, reproject: async function* () {} };
+	async function* plans() {
+		yield { documents: plan.documents, deleteKeys: [] } as unknown as SearchProjectionPlan;
+	}
+
+	it("deletes what an earlier rebuild left behind, swaps the alias, then merges into segments Elasticsearch still merges", async () => {
+		const { calls, service } = search({ aliasExists: true });
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).resolves.toMatchObject({ indexed: 2, deleted: 2 });
+		const deletes = calls.filter((call) => call.api === "delete").map((call) => call.request.index);
+		expect(deletes).toEqual([["library_1792000000000"], ["library_1793000000000"]]);
+		// 12 GiB merges into three segments of at most 5 GiB.
+		expect(calls.find((call) => call.api === "forcemerge")?.request).toMatchObject({ max_num_segments: 3, wait_for_completion: false });
+	});
+
+	it("deletes its half-built index when a write fails, and leaves readers on the old one", async () => {
+		const { calls, service } = search({
+			aliasExists: true,
+			bulkItems: [{ index: { _id: "AAAA1111", status: 503, error: { type: "unavailable_shards_exception", reason: "no shard" } } }],
+		});
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).rejects.toBeInstanceOf(SearchIndexWriteError);
+		const created = calls.find((call) => call.api === "create")?.request.index;
+		expect(calls.filter((call) => call.api === "delete").map((call) => call.request.index)).toContainEqual(created);
+		expect(calls.some((call) => call.api === "updateAliases")).toBe(false);
 	});
 });

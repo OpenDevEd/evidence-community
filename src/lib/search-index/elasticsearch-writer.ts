@@ -28,7 +28,8 @@ const DOCUMENT_ERROR_TYPES = new Set([
 
 /** Whether one bulk answer succeeded, refused the record for its content, or failed in a way a retry can fix. */
 function bulkItemOutcome(action: string, item: BulkItem) {
-	if (!item.error || (action === "delete" && item.status === 404)) return "written";
+	// A delete of a record the index doesn't have is done; a missing index is not.
+	if (!item.error || (action === "delete" && item.status === 404 && item.error.type !== "index_not_found_exception")) return "written";
 	const busyOrBroken = item.status === 429 || item.status >= 500;
 	return !busyOrBroken && DOCUMENT_ERROR_TYPES.has(item.error.type ?? "") ? "refused" : "retry";
 }
@@ -48,13 +49,13 @@ function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
 
 /**
  * Writes records to one of the library's indexes, in bulk requests no larger than `maxDocumentBatchBytes`, and
- * removes `deleteKeys`. With `searchable`, Elasticsearch answers only once readers can find the change.
+ * removes `deleteKeys`. Through the alias, a write fails rather than create an index under the alias's name.
  */
 async function writeSearchDocuments(
 	search: SearchService,
 	target: string,
 	plan: Pick<SearchProjectionPlan, "deleteKeys" | "documents">,
-	options: SearchWriteOptions & { searchable: boolean },
+	options: SearchWriteOptions,
 ) {
 	validateMaxDocumentBatchBytes(options.maxDocumentBatchBytes);
 	const requests: Array<Array<Record<string, unknown>>> = chunkDocumentsBySerializedBytes(
@@ -64,11 +65,11 @@ async function writeSearchDocuments(
 	if (plan.deleteKeys.length > 0) {
 		requests.push(plan.deleteKeys.map((key) => ({ delete: { _index: target, _id: key } })));
 	}
-	for (const [position, operations] of requests.entries()) {
+	for (const operations of requests) {
 		throwIfAborted(options.signal);
 		const response = await search.client
 			.bulk(
-				{ operations, refresh: options.searchable && position === requests.length - 1 ? "wait_for" : false },
+				{ operations, require_alias: target === search.alias },
 				{ signal: options.signal, requestTimeout: options.taskTimeoutMs },
 			)
 			.catch((error: unknown) => {
@@ -111,15 +112,23 @@ async function libraryIndexes(search: SearchService, signal?: AbortSignal) {
 	return resolved.indices.map((index) => index.name);
 }
 
-/**
- * Fills a new index with every record and moves the alias to it in one step, so readers keep searching the old index
- * until the new one is complete. The indexes it replaces, and any a stopped rebuild left behind, are deleted. One
- * write is in flight while the next batch of records is projected.
- */
-async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<SearchProjectionPlan>, options: SearchRebuildOptions) {
-	const writeOptions = { ...options, searchable: false };
-	const target = newSearchIndexName(search.alias);
-	await createSearchIndex(search, target, { bulkLoad: true, signal: options.signal });
+/** The size Elasticsearch stops merging segments at; a forced merge keeps segments under it so they still merge later. */
+const MERGED_SEGMENT_BYTES = 5 * 1024 ** 3;
+
+async function deleteIndexes(search: SearchService, names: readonly string[], signal?: AbortSignal) {
+	if (names.length > 0) await search.client.indices.delete({ index: [...names] }, { signal });
+}
+
+/** Deletes the library's indexes no alias points to: what a stopped or failed rebuild left behind. */
+async function deleteLeftovers(search: SearchService, signal?: AbortSignal) {
+	const live = await liveSearchIndex(search, signal);
+	const leftovers = (await libraryIndexes(search, signal)).filter((name) => name !== live);
+	await deleteIndexes(search, leftovers, signal);
+	return leftovers.length;
+}
+
+/** Writes every record to `target`, one write in flight while the next batch of records is projected. */
+async function fillIndex(search: SearchService, target: string, plans: AsyncIterable<SearchProjectionPlan>, options: SearchRebuildOptions) {
 	let indexed = 0;
 	let failure: unknown;
 	let writing = Promise.resolve();
@@ -127,19 +136,21 @@ async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<Se
 		await writing;
 		if (failure) throw failure;
 		throwIfAborted(options.signal);
-		writing = writeSearchDocuments(search, target, { documents: plan.documents, deleteKeys: [] }, writeOptions).catch(
-			(error: unknown) => {
-				failure ??= error;
-			},
-		);
+		writing = writeSearchDocuments(search, target, { documents: plan.documents, deleteKeys: [] }, options).catch((error: unknown) => {
+			failure ??= error;
+		});
 		indexed += plan.documents.length;
 	}
 	await writing;
 	if (failure) throw failure;
-	await search.client.indices.putSettings({ index: target, settings: { index: { refresh_interval: "1s" } } }, { signal: options.signal });
-	await search.client.indices.refresh({ index: target }, { signal: options.signal });
-	const replaced = (await libraryIndexes(search, options.signal)).filter((name) => name !== target);
-	const live = await liveSearchIndex(search, options.signal);
+	return indexed;
+}
+
+/** Turns refresh back on and moves the alias to `target` in one step; returns the index readers left. */
+async function swapAlias(search: SearchService, target: string, signal?: AbortSignal) {
+	await search.client.indices.putSettings({ index: target, settings: { index: { refresh_interval: "1s" } } }, { signal });
+	await search.client.indices.refresh({ index: target }, { signal });
+	const live = await liveSearchIndex(search, signal);
 	await search.client.indices.updateAliases(
 		{
 			actions: [
@@ -147,13 +158,50 @@ async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<Se
 				{ add: { index: target, alias: search.alias, is_write_index: true } },
 			],
 		},
-		{ signal: options.signal },
+		{ signal },
 	);
-	if (replaced.length > 0) await search.client.indices.delete({ index: replaced }, { signal: options.signal });
-	// A bulk load leaves a dozen segments; one searches about twice as fast (OpenDevEd/new-el#721). Elasticsearch merges
-	// them in the background, as a large library's merge can take far longer than a rebuild may wait.
-	await search.client.indices.forcemerge({ index: target, max_num_segments: 1, wait_for_completion: false }, { signal: options.signal });
-	return { indexed, deleted: replaced.length };
+	return live;
+}
+
+/**
+ * A bulk load leaves a dozen segments; fewer search about twice as fast (OpenDevEd/new-el#721). Segments stay under
+ * the size Elasticsearch still merges, since the index keeps taking writes. Elasticsearch merges in the background, as
+ * a large library's merge can take far longer than a rebuild may wait.
+ */
+async function mergeSegments(search: SearchService, target: string, signal?: AbortSignal) {
+	const stats = await search.client.indices.stats({ index: target, metric: "store" }, { signal });
+	const bytes = stats._all.primaries?.store?.size_in_bytes ?? 0;
+	const segments = Math.max(1, Math.ceil(bytes / MERGED_SEGMENT_BYTES));
+	await search.client.indices.forcemerge({ index: target, max_num_segments: segments, wait_for_completion: false }, { signal });
+}
+
+/**
+ * Fills a new index with every record and moves the alias to it in one step, so readers keep searching the old index
+ * until the new one is complete. A failed or stopped rebuild deletes its new index; any one a crash left behind is
+ * deleted by the next rebuild, before it creates another.
+ */
+async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<SearchProjectionPlan>, options: SearchRebuildOptions) {
+	const leftovers = await deleteLeftovers(search, options.signal);
+	const target = newSearchIndexName(search.alias);
+	await createSearchIndex(search, target, { bulkLoad: true, signal: options.signal });
+	let indexed: number;
+	let replaced: string | null;
+	try {
+		indexed = await fillIndex(search, target, plans, options);
+		replaced = await swapAlias(search, target, options.signal);
+	} catch (error) {
+		await search.client.indices.delete({ index: target }).catch(() => undefined);
+		if (options.signal?.aborted) throw new SearchOutboxAbortError();
+		throw error;
+	}
+	// Readers already search the new index; tidying up after it can fail without undoing that.
+	try {
+		await deleteIndexes(search, replaced === null ? [] : [replaced], options.signal);
+		await mergeSegments(search, target, options.signal);
+	} catch (error) {
+		console.error(`Search index: tidying up after the rebuild failed: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	return { indexed, deleted: leftovers + (replaced === null ? 0 : 1) };
 }
 
 /** A library's records in the shared Elasticsearch, written through its alias and login (OpenDevEd/new-el#719). */
@@ -173,11 +221,16 @@ export function elasticsearchWriter(search: SearchService): SearchIndexWriter {
 			);
 			return { created: true };
 		},
-		/** Each plan is written as it comes, searchable once its write returns. */
+		/** Each plan is written as it comes; readers find the claim's changes once `finish` refreshes the index. */
 		batch(options) {
 			return {
-				add: (plan) => writeSearchDocuments(search, search.alias, plan, { ...options, searchable: true }),
-				finish: async () => {},
+				add: (plan) => writeSearchDocuments(search, search.alias, plan, options),
+				finish: async () => {
+					await search.client.indices.refresh({ index: search.alias }, { signal: options.signal }).catch((error: unknown) => {
+						if (options.signal?.aborted) throw new SearchOutboxAbortError();
+						throw error;
+					});
+				},
 			};
 		},
 		rebuild: (plans, options) => rebuildSearchIndex(search, plans, options),
