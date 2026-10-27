@@ -1,228 +1,352 @@
 /**
- * Checks records' vectors and search by meaning on a real Elasticsearch (OpenDevEd/new-el#720), with a local embedder
- * standing in for the library's: no paid service is called. It writes a test library's records with vectors, searches
- * them by meaning and from a record, changes a record, rebuilds reusing vectors, recovers from a failing embedder,
- * changes the embedder, and turns it off. Its indexes are deleted at the end.
- *
- *   ELASTICSEARCH_URL=http://127.0.0.1:59200 ELASTICSEARCH_PASSWORD=… npm run test:search-embedder
- *
- * `SEARCH_ENGINE=meilisearch` checks Meilisearch's own embedder instead (`verifyMeilisearchEmbedder.ts`).
+ * Checks Meilisearch's embedder on a local Meilisearch with a stand-in embedder: no paid service is called. Run it
+ * with `SEARCH_ENGINE=meilisearch npm run test:search-embedder`; without it, the command checks Elasticsearch.
  */
-import { createServer } from "node:http";
+import assert from "node:assert/strict";
+import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
-import { Client } from "@elastic/elasticsearch";
+import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
-import type { LibraryServerConfig } from "../src/config/library-config/schema";
-import type { SearchService } from "../src/lib/elasticsearch-factory";
-import { createEmbedder } from "../src/lib/embedder";
-import { SearchMeaningUnavailableError } from "../src/lib/search-engine";
-import { elasticsearchEngine } from "../src/lib/search-engines/elasticsearch";
-import { elasticsearchEmbeddings } from "../src/lib/search-index/elasticsearch-embeddings";
-import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
-import type { ItemSearchDocument, SearchProjectionPlan } from "../src/lib/search-index/projection";
+import { PLATFORM_SEARCH_EMBEDDER } from "../src/config/library-config/catalogs";
+import type { MeilisearchService } from "../src/lib/meilisearch-factory";
+import type { SearchEmbedderConfiguration } from "../src/lib/search-index/embedder-settings";
+import { applySearchIndexEmbedder, meilisearchWriter } from "../src/lib/search-index/meilisearch-writer";
 
-const alias = `search_embedder_e2e_${process.pid}`;
-const client = new Client({
-	node: process.env.ELASTICSEARCH_URL ?? "http://127.0.0.1:59200",
-	auth: { username: process.env.ELASTICSEARCH_USERNAME ?? "elastic", password: process.env.ELASTICSEARCH_PASSWORD ?? "local-search-password" },
-});
-const service: SearchService = { alias, client };
-const writeOptions = { maxDocumentBatchBytes: 10 * 1024 * 1024, taskTimeoutMs: 60_000 };
+const meilisearchHost =
+	process.env.MEILISEARCH_HOST ?? "http://127.0.0.1:57710";
+const meilisearchKey = process.env.MEILISEARCH_KEY ?? "embedder-test-key";
+// Host name the Meilisearch container uses to reach this process.
+const stubHost = process.env.EMBEDDER_STUB_HOST ?? "host.docker.internal";
+const DIMENSIONS = 8;
+// Unique per run, so two verifier processes on one Meilisearch never delete
+// each other's indexes, and a pre-existing index is never touched.
+const RUN_ID = `${process.pid.toString(36)}${Date.now().toString(36)}`;
+const INDEX_NAMES = [`embedder-a-${RUN_ID}`, `embedder-b-${RUN_ID}`] as const;
 
-function assert(condition: unknown, message: string): asserts condition {
-	if (!condition) throw new Error(message);
+type StubState = { requests: number; texts: string[] };
+
+function vectorFor(text: string) {
+	// Deterministic, non-zero, different per text.
+	return Array.from({ length: DIMENSIONS }, (_, index) => {
+		let hash = index + 1;
+		for (const char of text) hash = (hash * 31 + char.charCodeAt(0)) % 997;
+		return (hash + 1) / 1000;
+	});
 }
 
-/**
- * A stand-in embedder: each word of a text adds 1 to one of `dimensions` numbers, so texts sharing words point the
- * same way. It counts the texts it embeds, and refuses every request while `failing`.
- */
-async function startEmbedder() {
-	const state = { texts: 0, failing: false };
-	const server = createServer((request, response) => {
-		let body = "";
-		request.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
-		request.on("end", () => {
-			if (state.failing) {
-				response.writeHead(400).end("refused");
-				return;
-			}
-			const { input, dimensions } = JSON.parse(body) as { input: string[]; dimensions: number };
-			state.texts += input.length;
-			const data = input.map((text) => {
-				const vector = new Array<number>(dimensions).fill(0);
-				for (const word of text.toLowerCase().match(/[a-z]+/g) ?? []) {
-					let hash = 0;
-					for (const character of word) hash = (hash * 31 + character.charCodeAt(0)) % dimensions;
-					vector[hash]! += 1;
-				}
-				return { embedding: vector };
+function startStub(
+	state: StubState,
+): Promise<{ server: Server; port: number }> {
+	return new Promise((resolve) => {
+		const server = createServer((request, response) => {
+			let body = "";
+			request.on("data", (chunk) => (body += chunk));
+			request.on("end", () => {
+				const payload = JSON.parse(body || "{}") as { input?: unknown };
+				const inputs = Array.isArray(payload.input)
+					? (payload.input as string[])
+					: [String(payload.input ?? "")];
+				state.requests += 1;
+				state.texts.push(...inputs);
+				response.setHeader("content-type", "application/json");
+				response.end(
+					JSON.stringify({
+						data: inputs.map((text) => ({
+							embedding: vectorFor(text),
+						})),
+					}),
+				);
 			});
-			response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ data }));
+		});
+		server.listen(0, "0.0.0.0", () => {
+			resolve({ server, port: (server.address() as AddressInfo).port });
 		});
 	});
-	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/embeddings`;
-	return { state, url, close: () => new Promise((resolve) => server.close(resolve)) };
 }
 
-function embedderConfig(url: string, dimensions: number): NonNullable<LibraryServerConfig["search"]["embedder"]> {
+function service(client: Meilisearch, indexName: string): MeilisearchService {
 	return {
-		source: "rest",
-		url,
-		dimensions,
-		request: { model: "stand-in", dimensions, input: ["{{text}}", "{{..}}"] },
-		response: { data: [{ embedding: "{{embedding}}" }, "{{..}}"] },
+		client,
+		index: client.index(indexName),
+		indexName,
 	};
 }
 
-function record(key: string, title: string, abstractNote: string): ItemSearchDocument {
-	return {
-		key,
-		title,
-		abstractNote,
-		itemType: "journalArticle",
-		collections: [],
-		collectionsAncestry: [],
-		deleted: 0,
-		provider: "native",
-		revision: 1,
-		sourceConnectionKey: "native",
-		sourceExternalScopeKey: null,
-		sourceRecordKey: key,
-		tags: [],
-		topicAncestors: [],
-		topics: [],
-	};
-}
+const SETUP_TASK_TIMEOUT_MS = 5 * 60 * 1_000;
 
-const records = [
-	record("RADIO001", "Radio lessons for rural schools", "Teachers broadcast lessons by radio to rural schools."),
-	record("MOBILE01", "Mobile phones and literacy", "Text messages helped adults practise reading."),
-	record("TUTOR001", "Intelligent tutoring for algebra", "A tutoring system adapts algebra problems to each student."),
-	record("RURAL001", "Rural schools and radio broadcast", "Radio programmes reached schools far from towns."),
-];
-
-async function* plansOf(documents: readonly ItemSearchDocument[]): AsyncGenerator<SearchProjectionPlan> {
-	yield { documents: [...documents], deleteKeys: [] };
-}
-
-/** The library's writer, vector step and search with this embedder, as a worker or page would make them. */
-function library(configuration: LibraryServerConfig["search"]["embedder"]) {
-	const embedder = createEmbedder(configuration);
-	const embeddings = embedder ? elasticsearchEmbeddings(service, embedder) : null;
-	return { writer: elasticsearchWriter(service, embeddings), embeddings, engine: elasticsearchEngine(service, embedder) };
-}
-
-async function rebuild(configuration: LibraryServerConfig["search"]["embedder"], documents = records) {
-	await library(configuration).writer.rebuild(plansOf(documents), { ...writeOptions, reproject: () => plansOf([]) });
-}
-
-async function write(configuration: LibraryServerConfig["search"]["embedder"], documents: readonly ItemSearchDocument[]) {
-	const batch = library(configuration).writer.batch(writeOptions);
-	await batch.add({ documents: [...documents], deleteKeys: [] });
-	await batch.finish();
-}
-
-async function withoutVectors() {
-	await client.indices.refresh({ index: alias });
-	return (await client.count({ index: alias, query: { bool: { must_not: [{ exists: { field: "embedding" } }] } } })).count;
-}
-
-async function dimensions() {
-	const mappings = await client.indices.getMapping({ index: alias });
-	const properties = Object.values(mappings)[0]!.mappings.properties as Record<string, { dims?: number }>;
-	return properties.embedding?.dims;
-}
-
-const searched = { fields: ["title", "abstractNote"], filters: [], returned: { only: ["key"] } };
-
-async function keys(engine: ReturnType<typeof library>["engine"], request: { text: string; size: number; semantic: { ratio: number; like?: string } }) {
-	// Similar records leave out the record they start from, as the Similar Resources route does.
-	const like = request.semantic.like;
-	const filters = like ? [{ not: { field: "key", equals: like } }] : [];
-	return (await engine.search<{ key: string }>({ ...searched, filters, ...request })).hits.map((hit) => hit.key);
-}
-
-function step(name: string, detail: string) {
-	console.log(`✓ ${name}: ${detail}`);
-}
-
-async function verify(stub: Awaited<ReturnType<typeof startEmbedder>>) {
-	const enabled = embedderConfig(stub.url, 1_024);
-
-	await rebuild(enabled);
-	assert(stub.state.texts === 4, `Turning the embedder on embedded ${stub.state.texts} texts, not 4.`);
-	assert((await withoutVectors()) === 0, "A record has no vector after the embedder was turned on.");
-	assert((await dimensions()) === 1_024, `The vectors have ${await dimensions()} dimensions, not 1,024.`);
-	step("embedder on", "4 records embedded, 1,024 float dimensions");
-
-	const { engine } = library(enabled);
-	const byMeaning = await keys(engine, { text: "radio lessons", size: 4, semantic: { ratio: 1 } });
-	assert(byMeaning.length === 4 && byMeaning[0] === "RADIO001" && byMeaning[1] === "RURAL001", `Search by meaning answered ${byMeaning.join(", ")}.`);
-	const similar = await keys(engine, { text: "Radio lessons for rural schools", size: 3, semantic: { ratio: 0.7, like: "RADIO001" } });
-	assert(similar.length === 3 && similar[0] === "RURAL001" && !similar.includes("RADIO001"), `Records like RADIO001 were ${similar.join(", ")}.`);
-	step("search", `by meaning ${byMeaning.join(", ")}; like RADIO001 ${similar.join(", ")}`);
-
-	const before = stub.state.texts;
-	await write(enabled, [record("RADIO001", "Radio lessons for rural schools, revised", records[0]!.abstractNote as string), records[1]!]);
-	assert(stub.state.texts === before + 1, `Writing one changed and one unchanged record embedded ${stub.state.texts - before} texts, not 1.`);
-	step("record changed", "only the changed record was embedded again");
-
-	const beforeRebuild = stub.state.texts;
-	await rebuild(enabled);
-	assert(stub.state.texts === beforeRebuild + 1, `The rebuild embedded ${stub.state.texts - beforeRebuild} texts, not just RADIO001's restored title.`);
-	assert((await withoutVectors()) === 0, "A record lost its vector in the rebuild.");
-	step("rebuild", "3 of 4 vectors reused from the old index");
-
-	stub.state.failing = true;
-	const failing = library(enabled);
-	const batch = failing.writer.batch(writeOptions);
-	await batch.add({ documents: [record("MOBILE01", "Mobile phones and reading", records[1]!.abstractNote as string)], deleteKeys: [] });
-	await batch.finish();
-	assert((await withoutVectors()) === 1 && failing.embeddings?.lastError(), "A record written while the embedder failed should have no vector and a recorded error.");
-	stub.state.failing = false;
-	const embedded = await library(enabled).embeddings!.embedMissing();
-	assert(embedded === 1 && (await withoutVectors()) === 0, `Once the embedder answered, ${embedded} record(s) got their vector, not 1.`);
-	step("embedder failing", "the record was written without a vector, and got it once the embedder answered");
-
-	const changed = embedderConfig(stub.url, 512);
-	const beforeChange = stub.state.texts;
-	await rebuild(changed);
-	assert(stub.state.texts === beforeChange + 4 && (await dimensions()) === 512, "Changing the embedder should embed every record again, at 512 dimensions.");
-	step("embedder changed", "every record embedded again, 512 dimensions");
-
-	await rebuild(null);
-	assert((await withoutVectors()) === 4, "Turning the embedder off should leave no vector.");
-	const off = library(null).engine;
-	const byWords = await keys(off, { text: "radio lessons", size: 4, semantic: { ratio: 0.5 } });
-	assert(byWords[0] === "RADIO001", `Without an embedder, words alone should rank; they gave ${byWords.join(", ")}.`);
-	const unavailable = await off.search({ ...searched, text: "", size: 3, semantic: { ratio: 0.7, like: "RADIO001" } }).then(
-		() => false,
-		(error: unknown) => error instanceof SearchMeaningUnavailableError,
+async function successfulTask(taskPromise: {
+	waitTask: (options?: { timeout?: number }) => Promise<Task>;
+}) {
+	// A freshly started container can take tens of seconds for its first writes.
+	const task = await taskPromise.waitTask({ timeout: SETUP_TASK_TIMEOUT_MS });
+	assert(
+		task.status === "succeeded",
+		`Meilisearch task ${task.uid} failed: ${task.error?.message}`,
 	);
-	assert(unavailable, "Similar records without vectors should say they aren't ready.");
-	step("embedder off", "no vectors; search by words; similar records not ready");
+	return task;
 }
 
-async function main() {
-	const stub = await startEmbedder();
+async function deleteIndexIfPresent(client: Meilisearch, indexName: string) {
 	try {
-		await verify(stub);
-		console.log("Search embedder verification passed.");
-	} finally {
-		await library(null).writer.remove().catch(() => undefined);
-		await stub.close();
-		await client.close();
+		await client.getRawIndex(indexName);
+		await successfulTask(client.deleteIndex(indexName));
+	} catch (error) {
+		if (
+			error instanceof MeilisearchApiError &&
+			error.cause?.code === "index_not_found"
+		) {
+			return;
+		}
+		throw error;
 	}
 }
 
-if (process.env.SEARCH_ENGINE === "meilisearch") {
-	void import("./verifyMeilisearchEmbedder");
-} else {
-	main().catch((error) => {
-		console.error(error instanceof Error ? error.message : error);
-		process.exitCode = 1;
+function documents(indexName: string) {
+	return [
+		{
+			key: `${indexName}-1`,
+			title: "Mobile phones and literacy in rural schools",
+			abstractNote: "A study of reading gains when pupils use phones.",
+			fullNames: ["Amina Okafor", "Luis Perez"],
+			tags: ["literacy", "mobile learning"],
+			year: 2021,
+			itemType: "journalArticle",
+			deleted: 0,
+		},
+		{
+			key: `${indexName}-2`,
+			title: "Teacher coaching at scale",
+			abstractNote: "Coaching visits improved lesson quality.",
+			fullNames: ["Grace Mwangi"],
+			tags: ["teachers", "coaching"],
+			year: 2020,
+			itemType: "report",
+			deleted: 0,
+		},
+		{
+			key: `${indexName}-3`,
+			title: "Radio lessons during school closures",
+			fullNames: ["Sam Osei"],
+			tags: ["radio", "emergencies"],
+			year: 2022,
+			itemType: "report",
+			deleted: 0,
+		},
+		{
+			key: `${indexName}-4`,
+			title: "Cost of tablets per pupil",
+			abstractNote: "Unit costs across four countries.",
+			fullNames: ["Ana Silva"],
+			tags: ["cost", "tablets"],
+			year: 2019,
+			itemType: "journalArticle",
+			deleted: 0,
+		},
+		{
+			key: `${indexName}-5`,
+			title: "Girls' education and distance learning",
+			abstractNote: "Access gaps widened for girls.",
+			fullNames: ["Fatima Noor"],
+			tags: ["gender", "distance learning"],
+			year: 2021,
+			itemType: "journalArticle",
+			deleted: 0,
+		},
+		{
+			// The live compose-e2e library held an untitled ComputerProgram.
+			// Meilisearch fails the whole embedding task when the template
+			// reads a field the document does not have.
+			key: `${indexName}-6`,
+			fullNames: [],
+			tags: [],
+			itemType: "computerProgram",
+			deleted: 0,
+		},
+	];
+}
+
+async function stats(client: Meilisearch, indexName: string) {
+	const raw = (await client.index(indexName).getStats()) as {
+		numberOfDocuments: number;
+		numberOfEmbeddedDocuments?: number | null;
+		numberOfEmbeddings?: number | null;
+	};
+	return raw;
+}
+
+function restEmbedder(
+	port: number,
+	variant: "v1" | "v2",
+): SearchEmbedderConfiguration {
+	return {
+		source: "rest",
+		url: `http://${stubHost}:${port}/embed`,
+		dimensions: DIMENSIONS,
+		request:
+			variant === "v1"
+				? { input: "{{text}}" }
+				: { input: "{{text}}", version: "2" },
+		response: { data: [{ embedding: "{{embedding}}" }] },
+		headers: { "X-Embedder-Variant": variant },
+	};
+}
+
+function step(
+	name: string,
+	indexName: string,
+	extra: Record<string, unknown> = {},
+) {
+	console.log(JSON.stringify({ step: name, index: indexName, ...extra }));
+}
+
+async function expectEmbedded(client: Meilisearch, indexName: string) {
+	const current = await stats(client, indexName);
+	assert.equal(
+		current.numberOfEmbeddedDocuments,
+		current.numberOfDocuments,
+		`${indexName}: ${current.numberOfEmbeddedDocuments} embedded of ${current.numberOfDocuments}`,
+	);
+	return current;
+}
+
+async function hybridSearch(client: Meilisearch, indexName: string) {
+	return client.index(indexName).search("phones in schools", {
+		hybrid: { embedder: PLATFORM_SEARCH_EMBEDDER, semanticRatio: 0.7 },
+		limit: 6,
 	});
 }
+
+async function runIndex(
+	client: Meilisearch,
+	indexName: string,
+	port: number,
+	stub: StubState,
+) {
+	const target = service(client, indexName);
+	await deleteIndexIfPresent(client, indexName);
+	await meilisearchWriter(target, { taskTimeoutMs: 60_000 }).ensure({});
+	await successfulTask(target.index.addDocuments(documents(indexName)));
+
+	// 1. Enable
+	const before = stub.requests;
+	await applySearchIndexEmbedder(target, restEmbedder(port, "v1"));
+	const embedders = await target.index.getEmbedders();
+	assert.deepEqual(Object.keys(embedders ?? {}), [PLATFORM_SEARCH_EMBEDDER]);
+	const enabled = await expectEmbedded(client, indexName);
+	assert(stub.requests > before, "stub was not called on enable");
+	step("enable", indexName, {
+		embedded: enabled.numberOfEmbeddedDocuments,
+		documents: enabled.numberOfDocuments,
+	});
+
+	// 2. Search
+	const hits = await hybridSearch(client, indexName);
+	assert(hits.hits.length > 0, "hybrid search returned no hits");
+	step("search", indexName, { hits: hits.hits.length });
+
+	// 3. Change
+	const beforeChange = stub.requests;
+	await applySearchIndexEmbedder(target, restEmbedder(port, "v2"));
+	await expectEmbedded(client, indexName);
+	assert(stub.requests > beforeChange, "stub was not called after change");
+	step("change", indexName, { requests: stub.requests - beforeChange });
+
+	// 4. Disable
+	await applySearchIndexEmbedder(target, null);
+	assert.deepEqual(await target.index.getEmbedders(), {});
+	let disabledCode: string | undefined;
+	try {
+		await hybridSearch(client, indexName);
+	} catch (error) {
+		if (error instanceof MeilisearchApiError)
+			disabledCode = error.cause?.code;
+		else throw error;
+	}
+	assert.equal(disabledCode, "invalid_search_embedder");
+	step("disable", indexName, { searchError: disabledCode });
+
+	// 5. Rebuild
+	await applySearchIndexEmbedder(target, restEmbedder(port, "v1"));
+	await successfulTask(target.index.deleteAllDocuments());
+	await successfulTask(target.index.addDocuments(documents(indexName)));
+	const rebuilt = await expectEmbedded(client, indexName);
+	const afterRebuild = await hybridSearch(client, indexName);
+	assert(
+		afterRebuild.hits.length > 0,
+		"hybrid search after rebuild returned no hits",
+	);
+	step("rebuild", indexName, {
+		embedded: rebuilt.numberOfEmbeddedDocuments,
+		documents: rebuilt.numberOfDocuments,
+		hits: afterRebuild.hits.length,
+	});
+}
+
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+/**
+ * The script creates and deletes its own indexes on whatever Meilisearch it is
+ * pointed at. Only allow that on a local instance unless the caller opts in
+ * with EMBEDDER_TEST_ALLOW_REMOTE=1.
+ */
+function assertSafeMeilisearchHost(host: string) {
+	if (process.env.EMBEDDER_TEST_ALLOW_REMOTE === "1") return;
+	const hostname = new URL(host).hostname;
+	assert(
+		LOOPBACK_HOSTS.has(hostname),
+		`Refusing to run against ${host}: MEILISEARCH_HOST must be a local Meilisearch. Set EMBEDDER_TEST_ALLOW_REMOTE=1 to override.`,
+	);
+}
+
+async function main() {
+	assertSafeMeilisearchHost(meilisearchHost);
+	const stub: StubState = { requests: 0, texts: [] };
+	const { server, port } = await startStub(stub);
+	console.log(
+		JSON.stringify({
+			stub: `http://${stubHost}:${port}/embed`,
+			meilisearchHost,
+		}),
+	);
+	const client = new Meilisearch({
+		apiKey: meilisearchKey,
+		host: meilisearchHost,
+	});
+	try {
+		for (const indexName of INDEX_NAMES) {
+			await runIndex(client, indexName, port, stub);
+		}
+		assert(
+			stub.texts.some((text) =>
+				text.includes("Mobile phones and literacy"),
+			),
+			"the platform template did not send the record title",
+		);
+		console.log(
+			JSON.stringify({
+				ok: true,
+				stubRequests: stub.requests,
+				indexes: INDEX_NAMES,
+			}),
+		);
+	} finally {
+		try {
+			for (const indexName of INDEX_NAMES) {
+				await deleteIndexIfPresent(client, indexName);
+			}
+		} catch (cleanupError) {
+			// Report cleanup trouble without hiding the real failure.
+			console.error(
+				`Index cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`,
+			);
+		} finally {
+			server.close();
+		}
+	}
+}
+
+main().catch((error) => {
+	console.error(error instanceof Error ? error.stack : error);
+	process.exitCode = 1;
+});

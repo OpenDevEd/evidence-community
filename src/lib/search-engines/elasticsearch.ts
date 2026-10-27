@@ -125,6 +125,39 @@ function recordsByKey<T>(...pages: Array<Array<estypes.SearchHit<T>>>) {
 	return records;
 }
 
+type MultiSearchAnswer<T> = estypes.MsearchResponseItem<T> | undefined;
+
+/** One search of a multi-search, which fails the whole search when it failed. */
+function answered<T>(response: MultiSearchAnswer<T>) {
+	if (!response || "error" in response) throw new Error(`Elasticsearch search failed: ${JSON.stringify(response?.error).slice(0, 500)}`);
+	return response;
+}
+
+/** The nearest records, or none when they couldn't be read, as before any record has a vector. */
+function nearestHits<T>(response: MultiSearchAnswer<T>) {
+	if (response && !("error" in response)) return response.hits.hits;
+	console.warn(`Search: the nearest records couldn't be read, so words alone rank the results. ${JSON.stringify(response?.error).slice(0, 500)}`);
+	return [];
+}
+
+/** The page of the words and nearest orders mixed, `ratio` of the way to meaning; it has no cursor. */
+function mixedAnswer<T>(request: SearchRequest, words: estypes.SearchResponse<T>, nearest: Array<estypes.SearchHit<T>>): SearchAnswer<T> {
+	const from = request.from ?? 0;
+	const ratio = request.semantic?.ratio ?? 0;
+	const order = fuseRanks([
+		{ weight: 1 - ratio, keys: words.hits.hits.map(keyOf) },
+		{ weight: ratio, keys: nearest.map(keyOf) },
+	]);
+	const records = recordsByKey(words.hits.hits, nearest);
+	return {
+		hits: order.slice(from, from + request.size).map((key) => records.get(key)!),
+		total: Math.max(totalOf(words), order.length),
+		facets: facetDistribution(words.aggregations),
+		first: null,
+		last: null,
+	};
+}
+
 /**
  * A library's search in the shared Elasticsearch, through its alias and login (OpenDevEd/new-el#721), ranking by
  * meaning with the library's `embedder` when a request asks (OpenDevEd/new-el#720).
@@ -213,22 +246,7 @@ export function elasticsearchEngine({ alias, client }: SearchService, embedder: 
 		const depth = Math.max(MIXED_DEPTH, from + request.size);
 		const searches = [{}, searchBody({ ...byWords, from: 0, size: depth }), {}, nearestBody(request, vector, depth)];
 		const [words, nearest] = (await client.msearch<T>({ index: alias, searches }, { signal: request.signal })).responses;
-		if (!words || "error" in words) throw new Error(`Elasticsearch search failed: ${JSON.stringify(words?.error).slice(0, 500)}`);
-		const nearestHits = !nearest || "error" in nearest ? [] : nearest.hits.hits;
-		if (nearest && "error" in nearest) console.warn(`Search: the nearest records couldn't be read, so words alone rank the results. ${JSON.stringify(nearest.error).slice(0, 500)}`);
-		const ratio = request.semantic!.ratio;
-		const order = fuseRanks([
-			{ weight: 1 - ratio, keys: words.hits.hits.map(keyOf) },
-			{ weight: ratio, keys: nearestHits.map(keyOf) },
-		]);
-		const records = recordsByKey(words.hits.hits, nearestHits);
-		return {
-			hits: order.slice(from, from + request.size).map((key) => records.get(key)!),
-			total: Math.max(totalOf(words), order.length),
-			facets: facetDistribution(words.aggregations),
-			first: null,
-			last: null,
-		};
+		return mixedAnswer(request, answered(words), nearestHits(nearest));
 	}
 
 	const search = <T>(request: SearchRequest) => (mixesMeaning(request) ? searchMixed<T>(request) : searchByWords<T>(request));

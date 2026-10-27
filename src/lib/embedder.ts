@@ -58,7 +58,7 @@ function repeated(value: unknown, placeholder: string): value is [unknown, typeo
 }
 
 /** Whether the request template sends several texts at once. */
-export function sendsBatches(template: unknown): boolean {
+function sendsBatches(template: unknown): boolean {
 	if (repeated(template, TEXT)) return true;
 	if (Array.isArray(template)) return template.some(sendsBatches);
 	return template !== null && typeof template === "object" && Object.values(template).some(sendsBatches);
