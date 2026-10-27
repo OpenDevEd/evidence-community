@@ -48,6 +48,9 @@ function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
 	if (rejected.length > 0) throw new SearchIndexDocumentError("Elasticsearch", rejected);
 }
 
+/** How a write gives records their vectors: the library's vector step, and whether it may ask the embedder. */
+type Vectors = { embeddings: ElasticsearchEmbeddings | null; embedNew: boolean };
+
 /**
  * Writes records to one of the library's indexes, with their vectors when the library has an embedder, in bulk
  * requests no larger than `maxDocumentBatchBytes`, and removes `deleteKeys`. Through the alias, a write fails rather
@@ -57,10 +60,11 @@ async function writeSearchDocuments(
 	search: SearchService,
 	target: string,
 	plan: Pick<SearchProjectionPlan, "deleteKeys" | "documents">,
-	options: SearchWriteOptions & { embeddings: ElasticsearchEmbeddings | null },
+	options: SearchWriteOptions & Vectors,
 ) {
 	validateMaxDocumentBatchBytes(options.maxDocumentBatchBytes);
-	const documents = options.embeddings ? await options.embeddings.attach(plan.documents, options.signal) : plan.documents;
+	const { embeddings, embedNew, signal } = options;
+	const documents = embeddings ? await embeddings.attach(plan.documents, signal, { embedNew }) : plan.documents;
 	const requests: Array<Array<Record<string, unknown>>> = chunkDocumentsBySerializedBytes(
 		documents,
 		options.maxDocumentBatchBytes,
@@ -135,7 +139,7 @@ async function fillIndex(
 	search: SearchService,
 	target: string,
 	plans: AsyncIterable<SearchProjectionPlan>,
-	options: SearchRebuildOptions & { embeddings: ElasticsearchEmbeddings | null },
+	options: SearchRebuildOptions & Vectors,
 ) {
 	let indexed = 0;
 	let failure: unknown;
@@ -195,7 +199,7 @@ async function mergeSegments(search: SearchService, target: string, signal?: Abo
 async function rebuildSearchIndex(
 	search: SearchService,
 	plans: AsyncIterable<SearchProjectionPlan>,
-	options: SearchRebuildOptions & { embeddings: ElasticsearchEmbeddings | null },
+	options: SearchRebuildOptions & Vectors,
 ) {
 	const leftovers = await deleteLeftovers(search, options.signal);
 	const target = newSearchIndexName(search.alias);
@@ -224,8 +228,9 @@ async function rebuildSearchIndex(
 
 /**
  * A library's records in the shared Elasticsearch, written through its alias and login (OpenDevEd/new-el#719), with
- * their vectors when the library has an embedder (OpenDevEd/new-el#720). A rebuild reuses the vectors of the index
- * readers search, which the alias still names while the new index fills.
+ * their vectors when the library has an embedder (OpenDevEd/new-el#720). A rebuild only reuses the vectors of the
+ * index readers search, which the alias still names while the new index fills, and the worker embeds the rest after
+ * it: a rebuild that embedded every record could take hours with a slow embedder, and a stop would lose all of it.
  */
 export function elasticsearchWriter(search: SearchService, embeddings: ElasticsearchEmbeddings | null = null): SearchIndexWriter {
 	return {
@@ -246,7 +251,7 @@ export function elasticsearchWriter(search: SearchService, embeddings: Elasticse
 		/** Each plan is written as it comes; readers find the claim's changes once `finish` refreshes the index. */
 		batch(options) {
 			return {
-				add: (plan) => writeSearchDocuments(search, search.alias, plan, { ...options, embeddings }),
+				add: (plan) => writeSearchDocuments(search, search.alias, plan, { ...options, embeddings, embedNew: true }),
 				finish: async () => {
 					await search.client.indices.refresh({ index: search.alias }, { signal: options.signal }).catch((error: unknown) => {
 						if (options.signal?.aborted) throw new SearchOutboxAbortError();
@@ -255,7 +260,7 @@ export function elasticsearchWriter(search: SearchService, embeddings: Elasticse
 				},
 			};
 		},
-		rebuild: (plans, options) => rebuildSearchIndex(search, plans, { ...options, embeddings }),
+		rebuild: (plans, options) => rebuildSearchIndex(search, plans, { ...options, embeddings, embedNew: false }),
 		async remove(signal) {
 			const indexes = await libraryIndexes(search, signal);
 			if (indexes.length > 0) await search.client.indices.delete({ index: indexes }, { signal });

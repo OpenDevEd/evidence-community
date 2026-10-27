@@ -20,8 +20,11 @@ import { SearchOutboxAbortError } from "./writer";
 type Stored = { embedding?: unknown; embeddingHash?: string };
 
 export type ElasticsearchEmbeddings = {
-	/** The documents with their vectors; any the embedder couldn't give are written without one. */
-	attach(documents: readonly ItemSearchDocument[], signal?: AbortSignal): Promise<ItemSearchDocument[]>;
+	/**
+	 * The documents with their vectors; any the embedder couldn't give are written without one. With `embedNew` false,
+	 * as in a rebuild, only stored vectors are reused, and `embedMissing` embeds the rest afterwards.
+	 */
+	attach(documents: readonly ItemSearchDocument[], signal?: AbortSignal, options?: { embedNew?: boolean }): Promise<ItemSearchDocument[]>;
 	/** Embeds records written without a vector, for at most `MISSING_TIME_MS`; returns how many it wrote. */
 	embedMissing(signal?: AbortSignal): Promise<number>;
 	/** The embedder's last failure, until it answers again. */
@@ -143,14 +146,14 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 	}
 
 	return {
-		async attach(documents, signal) {
+		async attach(documents, signal, { embedNew = true } = {}) {
 			const texts = documents.map((document) => embeddingText(document));
 			const hashes = texts.map((text) => hashOf(embedder.fingerprint, text));
 			const stored = await readStored(search, documents.map((document) => document.key), signal);
 			// The same text from the same embedder keeps what it had: its vector, or the mark that the embedder refused it.
 			const kept = documents.map((document, position) => stored.get(document.key)?.embeddingHash === hashes[position]);
 			const asked = kept.flatMap((same, position) => (same ? [] : [position]));
-			const vectors = await embed(asked.map((position) => texts[position]!), signal);
+			const vectors = embedNew ? await embed(asked.map((position) => texts[position]!), signal) : null;
 			const fresh = new Map(asked.map((position, index) => [position, vectors?.[index]]));
 			return documents.map((document, position) => {
 				if (kept[position]) return { ...document, ...embedded(hashes[position]!, stored.get(document.key)!.embedding) };
