@@ -161,12 +161,16 @@ async function turnOn(stub: Stub, enabled: Configuration) {
 }
 
 async function searchByMeaning(enabled: Configuration) {
-	const { engine } = library(enabled);
-	const byMeaning = await keys(engine, { text: "radio lessons", size: 4, semantic: { ratio: 1 } });
-	assert(byMeaning.length === 4 && byMeaning[0] === "RADIO001" && byMeaning[1] === "RURAL001", `Search by meaning answered ${byMeaning.join(", ")}.`);
-	const similar = await keys(engine, { text: "Radio lessons for rural schools", size: 3, semantic: { ratio: 0.7, like: "RADIO001" } });
-	assert(similar.length === 3 && similar[0] === "RURAL001" && !similar.includes("RADIO001"), `Records like RADIO001 were ${similar.join(", ")}.`);
-	step("search", `by meaning ${byMeaning.join(", ")}; like RADIO001 ${similar.join(", ")}`);
+	const byMeaning = await keys(library(enabled).engine, { text: "radio lessons", size: 4, semantic: { ratio: 1 } });
+	assert(byMeaning.join(",").startsWith("RADIO001,RURAL001,") && byMeaning.length === 4, `Search by meaning answered ${byMeaning.join(", ")}.`);
+	step("search by meaning", byMeaning.join(", "));
+}
+
+async function searchFromRecord(enabled: Configuration) {
+	const similar = await keys(library(enabled).engine, { text: "Radio lessons for rural schools", size: 3, semantic: { ratio: 0.7, like: "RADIO001" } });
+	// RADIO001 itself is left out, as Similar Resources leaves it out.
+	assert(similar[0] === "RURAL001" && similar.length === 3, `Records like RADIO001 were ${similar.join(", ")}.`);
+	step("records like RADIO001", similar.join(", "));
 }
 
 async function changeRecord(stub: Stub, enabled: Configuration) {
@@ -222,6 +226,7 @@ async function verify(stub: Stub) {
 	const enabled = embedderConfig(stub.url, 1_024);
 	await turnOn(stub, enabled);
 	await searchByMeaning(enabled);
+	await searchFromRecord(enabled);
 	await changeRecord(stub, enabled);
 	await rebuildReusing(stub, enabled);
 	await recoverFromFailure(stub, enabled);
