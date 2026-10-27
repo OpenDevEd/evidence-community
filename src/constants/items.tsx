@@ -184,7 +184,8 @@ export const SCOPE_OPTIONS = [
 
 export const COMING_SOON_TAG = process.env.NEXT_PUBLIC_COMING_SOON_TAG || "_comingsoon"
 export const INTERNAL_TAG = process.env.NEXT_PUBLIC_INTERNAL_TAG || "internal"
-export const HIDE_TAG = process.env.NEXT_PUBLIC_HIDE_TAG || "hide"
+// Comma-separated; a record carrying any of these tags is hidden everywhere. Lowercase because callers compare lowercased tags.
+export const HIDE_TAGS = (process.env.NEXT_PUBLIC_HIDE_TAG || "hide").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean)
 export const DESCRIPTION_TAG = process.env.NEXT_PUBLIC_DESCRIPTION_TAG || "_category_description"
 export const REDIRECTS_TAG = process.env.NEXT_PUBLIC_REDIRECTS_TAG || "_redirects"
 export const PUBLISH_TAGS = (process.env.NEXT_PUBLIC_PUBLISH_TAGS || "_publish,publishPDF").split(",")
