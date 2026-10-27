@@ -283,8 +283,13 @@ async function main() {
 					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
 				});
-				// Records written while the embedder failed get their vectors once it answers again.
-				const embedded = await current.embedMissing(abortController.signal);
+				// Records written while the embedder failed get their vectors once it answers again. A failure here
+				// leaves the drain's result standing; the next pass tries again.
+				const embedded = await current.embedMissing(abortController.signal).catch((error: unknown) => {
+					if (error instanceof SearchOutboxAbortError && abortController.signal.aborted) throw error;
+					console.error(`Search index: embedding records without a vector failed: ${error instanceof Error ? `${error.name}: ${error.message}` : error}`);
+					return 0;
+				});
 				const previousProgress = reporter.current();
 				await writeWorkerState(
 					{

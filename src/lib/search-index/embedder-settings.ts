@@ -85,7 +85,8 @@ function cutToBytes(text: string, maxBytes: number) {
 
 /**
  * The text embedded for a record in Elasticsearch: `PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE` rendered as Meilisearch's
- * Liquid renders it, cut to the same byte limit (OpenDevEd/new-el#720).
+ * Liquid renders it, cut to the same byte limit (OpenDevEd/new-el#720). Change it with the template, and bump
+ * `SEARCH_PROJECTION_VERSION`: the rebuild that follows embeds every record whose text changed.
  */
 export function embeddingText(document: Record<string, unknown>) {
 	const { title, abstractNote, fullNames, tags, year } = document;

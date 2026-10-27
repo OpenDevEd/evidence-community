@@ -36,7 +36,8 @@ function assert(condition: unknown, message: string): asserts condition {
 
 /**
  * A stand-in embedder: each word of a text adds 1 to one of `dimensions` numbers, so texts sharing words point the
- * same way. It counts the texts it embeds, and refuses every request while `failing`.
+ * same way. It counts the texts it embeds, refuses its key while `failing`, and refuses a request holding a text with
+ * "unembeddable" in it, as a model refuses a text too long for it.
  */
 async function startEmbedder() {
 	const state = { texts: 0, failing: false };
@@ -45,10 +46,14 @@ async function startEmbedder() {
 		request.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
 		request.on("end", () => {
 			if (state.failing) {
-				response.writeHead(400).end("refused");
+				response.writeHead(401).end("key refused");
 				return;
 			}
 			const { input, dimensions } = JSON.parse(body) as { input: string[]; dimensions: number };
+			if (input.some((text) => text.includes("unembeddable"))) {
+				response.writeHead(422).end("input refused");
+				return;
+			}
 			state.texts += input.length;
 			const data = input.map((text) => {
 				const vector = new Array<number>(dimensions).fill(0);
@@ -201,6 +206,16 @@ async function recoverFromFailure(stub: Stub, enabled: Configuration) {
 	step("embedder failing", "the record was written without a vector, and got it once the embedder answered");
 }
 
+async function refusedText(stub: Stub, enabled: Configuration) {
+	await write(enabled, [record("TUTOR001", "Intelligent tutoring for algebra, unembeddable", records[2]!.abstractNote as string), records[3]!]);
+	const before = stub.state.texts;
+	const embedded = await library(enabled).embeddings!.embedMissing();
+	assert((await withoutVectors()) === 1 && embedded === 0 && stub.state.texts === before, "A text the embedder refused should stay without a vector and not be asked again.");
+	await write(enabled, [records[2]!]);
+	assert((await withoutVectors()) === 0, "Once its text changed, the refused record should get a vector.");
+	step("text refused", "the record was marked and not asked again, and got a vector once its text changed");
+}
+
 async function changeEmbedder(stub: Stub) {
 	const before = stub.state.texts;
 	await rebuild(embedderConfig(stub.url, 512));
@@ -230,6 +245,7 @@ async function verify(stub: Stub) {
 	await changeRecord(stub, enabled);
 	await rebuildReusing(stub, enabled);
 	await recoverFromFailure(stub, enabled);
+	await refusedText(stub, enabled);
 	await changeEmbedder(stub);
 	await turnOff();
 }

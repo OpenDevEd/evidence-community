@@ -18,17 +18,20 @@ function library(stored: Record<string, { embedding: number[]; embeddingHash: st
 			const hits = missing.map(({ key, title }, position) => ({ _id: key, _index: "library_1", _seq_no: position, _primary_term: 1, sort: [key], _source: { title } }));
 			return { hits: { hits } };
 		}),
-		bulk: vi.fn(async () => ({ errors: false, items: [] })),
+		bulk: vi.fn(async ({ operations }: { operations: Array<{ update?: { _id: string } }> }) => ({
+			errors: false,
+			items: operations.flatMap((operation) => (operation.update ? [{ update: { _id: operation.update._id, status: 200 } }] : [])),
+		})),
 	};
 	return { client, service: { alias: "library", client } as never };
 }
 
-function embedder(fail = false) {
+function embedder(fail = false, refuse = "") {
 	return {
 		fingerprint: "perplexity-0.6b",
 		embed: vi.fn(async (texts: readonly string[]) => {
 			if (fail) throw new Error("401 bad key");
-			return texts.map((text) => [text.length, 1]);
+			return texts.map((text) => (refuse && text.includes(refuse) ? null : [text.length, 1]));
 		}),
 	};
 }
@@ -58,6 +61,17 @@ describe("records' vectors in Elasticsearch", () => {
 		expect(embeddings.lastError()).toContain("401 bad key");
 		await embeddings.attach([record("B", "Mobile phones")]);
 		expect(failing.embed).toHaveBeenCalledTimes(1);
+	});
+
+	it("marks a text the embedder refuses, and doesn't ask again while the text stays the same", async () => {
+		const [marked] = await elasticsearchEmbeddings(library().service, embedder(false, "Radio")).attach([record("A", "Radio lessons")]);
+		expect(marked).not.toHaveProperty("embedding");
+		expect(marked).toMatchObject({ embeddingHash: expect.any(String), embeddingModel: "perplexity-0.6b" });
+		const { service } = library({ A: { embeddingHash: marked!.embeddingHash as string } as never });
+		const model = embedder();
+		const [again] = await elasticsearchEmbeddings(service, model).attach([record("A", "Radio lessons")]);
+		expect(model.embed).not.toHaveBeenCalled();
+		expect(again).not.toHaveProperty("embedding");
 	});
 
 	it("gives records written without a vector one, only where nothing wrote them since", async () => {
