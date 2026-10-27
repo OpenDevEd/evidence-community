@@ -2,6 +2,7 @@ import { errors as ElasticsearchErrors, type estypes } from "@elastic/elasticsea
 
 import type { SearchService } from "@/lib/elasticsearch-factory";
 
+import type { ElasticsearchEmbeddings } from "./elasticsearch-embeddings";
 import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
 import type { SearchProjectionPlan } from "./projection";
 import {
@@ -48,18 +49,20 @@ function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
 }
 
 /**
- * Writes records to one of the library's indexes, in bulk requests no larger than `maxDocumentBatchBytes`, and
- * removes `deleteKeys`. Through the alias, a write fails rather than create an index under the alias's name.
+ * Writes records to one of the library's indexes, with their vectors when the library has an embedder, in bulk
+ * requests no larger than `maxDocumentBatchBytes`, and removes `deleteKeys`. Through the alias, a write fails rather
+ * than create an index under the alias's name.
  */
 async function writeSearchDocuments(
 	search: SearchService,
 	target: string,
 	plan: Pick<SearchProjectionPlan, "deleteKeys" | "documents">,
-	options: SearchWriteOptions,
+	options: SearchWriteOptions & { embeddings: ElasticsearchEmbeddings | null },
 ) {
 	validateMaxDocumentBatchBytes(options.maxDocumentBatchBytes);
+	const documents = options.embeddings ? await options.embeddings.attach(plan.documents, options.signal) : plan.documents;
 	const requests: Array<Array<Record<string, unknown>>> = chunkDocumentsBySerializedBytes(
-		plan.documents,
+		documents,
 		options.maxDocumentBatchBytes,
 	).map((documents) => documents.flatMap((document) => [{ index: { _index: target, _id: String(document.key) } }, document]));
 	if (plan.deleteKeys.length > 0) {
@@ -128,7 +131,12 @@ async function deleteLeftovers(search: SearchService, signal?: AbortSignal) {
 }
 
 /** Writes every record to `target`, one write in flight while the next batch of records is projected. */
-async function fillIndex(search: SearchService, target: string, plans: AsyncIterable<SearchProjectionPlan>, options: SearchRebuildOptions) {
+async function fillIndex(
+	search: SearchService,
+	target: string,
+	plans: AsyncIterable<SearchProjectionPlan>,
+	options: SearchRebuildOptions & { embeddings: ElasticsearchEmbeddings | null },
+) {
 	let indexed = 0;
 	let failure: unknown;
 	let writing = Promise.resolve();
@@ -184,7 +192,11 @@ async function mergeSegments(search: SearchService, target: string, signal?: Abo
  * until the new one is complete. A failed or stopped rebuild deletes its new index; any one a crash left behind is
  * deleted by the next rebuild, before it creates another.
  */
-async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<SearchProjectionPlan>, options: SearchRebuildOptions) {
+async function rebuildSearchIndex(
+	search: SearchService,
+	plans: AsyncIterable<SearchProjectionPlan>,
+	options: SearchRebuildOptions & { embeddings: ElasticsearchEmbeddings | null },
+) {
 	const leftovers = await deleteLeftovers(search, options.signal);
 	const target = newSearchIndexName(search.alias);
 	await createSearchIndex(search, target, { bulkLoad: true, signal: options.signal });
@@ -210,8 +222,12 @@ async function rebuildSearchIndex(search: SearchService, plans: AsyncIterable<Se
 	return { indexed, deleted: leftovers + (replaced === null ? 0 : 1) };
 }
 
-/** A library's records in the shared Elasticsearch, written through its alias and login (OpenDevEd/new-el#719). */
-export function elasticsearchWriter(search: SearchService): SearchIndexWriter {
+/**
+ * A library's records in the shared Elasticsearch, written through its alias and login (OpenDevEd/new-el#719), with
+ * their vectors when the library has an embedder (OpenDevEd/new-el#720). A rebuild reuses the vectors of the index
+ * readers search, which the alias still names while the new index fills.
+ */
+export function elasticsearchWriter(search: SearchService, embeddings: ElasticsearchEmbeddings | null = null): SearchIndexWriter {
 	return {
 		engine: "elasticsearch",
 		async ensure(options) {
@@ -230,7 +246,7 @@ export function elasticsearchWriter(search: SearchService): SearchIndexWriter {
 		/** Each plan is written as it comes; readers find the claim's changes once `finish` refreshes the index. */
 		batch(options) {
 			return {
-				add: (plan) => writeSearchDocuments(search, search.alias, plan, options),
+				add: (plan) => writeSearchDocuments(search, search.alias, plan, { ...options, embeddings }),
 				finish: async () => {
 					await search.client.indices.refresh({ index: search.alias }, { signal: options.signal }).catch((error: unknown) => {
 						if (options.signal?.aborted) throw new SearchOutboxAbortError();
@@ -239,7 +255,7 @@ export function elasticsearchWriter(search: SearchService): SearchIndexWriter {
 				},
 			};
 		},
-		rebuild: (plans, options) => rebuildSearchIndex(search, plans, options),
+		rebuild: (plans, options) => rebuildSearchIndex(search, plans, { ...options, embeddings }),
 		async remove(signal) {
 			const indexes = await libraryIndexes(search, signal);
 			if (indexes.length > 0) await search.client.indices.delete({ index: indexes }, { signal });

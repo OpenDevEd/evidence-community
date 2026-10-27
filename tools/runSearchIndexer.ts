@@ -21,6 +21,7 @@ import {
 	rebuildForOutboxBacklog,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
+import { embedderFingerprint } from "../src/lib/embedder";
 import { openSearchWriter } from "../src/lib/search-index/engine-setup";
 import { settleSearchEngine } from "../src/lib/search-index/engine-switch";
 import {
@@ -127,6 +128,7 @@ async function main() {
 			config.topics.enabled,
 			config.search.fullText,
 			config.content.tags.hidden,
+			config.search.embedder ? embedderFingerprint(config.search.embedder) : null,
 		);
 		if (command.rebuild && !rebuildPending) {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
@@ -281,6 +283,8 @@ async function main() {
 					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
 				});
+				// Records written while the embedder failed get their vectors once it answers again.
+				const embedded = await current.embedMissing(abortController.signal);
 				const previousProgress = reporter.current();
 				await writeWorkerState(
 					{
@@ -293,10 +297,10 @@ async function main() {
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
 						lastError: resolveIdleLastError({
-							embedderError,
+							embedderError: embedderError ?? current.embedderError(),
 							previousLastError:
 								previousProgress.lastError ?? null,
-							processedEvents: results.length + acknowledged,
+							processedEvents: results.length + acknowledged + embedded,
 						}),
 						stage: "idle",
 					},

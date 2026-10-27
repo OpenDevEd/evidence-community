@@ -77,10 +77,13 @@ export async function setSearchIndexRebuildPending(
  */
 const SEARCH_PROJECTION_VERSION = 11;
 
-/** Persist the configuration used by the projection; a failed rebuild stays pending. */
-export async function prepareSearchProjection(database: Database, engine: SearchEngineName, topicsEnabled: boolean, fullTextSearch: boolean, hiddenTags: readonly string[]) {
+/**
+ * Persist the configuration used by the projection; a failed rebuild stays pending. In Elasticsearch, another embedder
+ * (`embedder`, its fingerprint) rebuilds too: each record gets the new embedder's vector, or none without one.
+ */
+export async function prepareSearchProjection(database: Database, engine: SearchEngineName, topicsEnabled: boolean, fullTextSearch: boolean, hiddenTags: readonly string[], embedder: string | null = null) {
   // Page text is indexed only with full-text search, and hidden tags decide `hasPdf`; changing either rebuilds.
-  const signature = JSON.stringify({version: SEARCH_PROJECTION_VERSION, ...(engine === "elasticsearch" ? {index: SEARCH_INDEX_VERSION} : {}), topics: topicsEnabled, ...(fullTextSearch ? {} : {fullText: false}), hiddenTags: [...hiddenTags].sort()});
+  const signature = JSON.stringify({version: SEARCH_PROJECTION_VERSION, ...(engine === "elasticsearch" ? {index: SEARCH_INDEX_VERSION, ...(embedder ? {embedder} : {})} : {}), topics: topicsEnabled, ...(fullTextSearch ? {} : {fullText: false}), hiddenTags: [...hiddenTags].sort()});
   const [row] = await database.select().from(status).where(eq(status.id, 1)).limit(1);
   if (!row) throw new Error("Library status row is missing.");
   if (row.searchProjectionSignature === signature) return row.searchIndexRebuildPending;

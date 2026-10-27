@@ -74,6 +74,12 @@ function definition() {
 				},
 				// Each value whole as well, so a search that is a journal's or publisher's full name ranks its records first.
 				metadataSearch: { ...text, fields: { exact: { type: "keyword", normalizer: "sort_key", ignore_above: 512 } } },
+				// The record's meaning from the library's embedder (OpenDevEd/new-el#720), kept as 32-bit floats. The
+				// default since Elasticsearch 9.1 keeps about one bit a number, a 32nd of the memory, and loses some accuracy.
+				// The first vector written sets the dimensions.
+				embedding: { type: "dense_vector", element_type: "float", similarity: "cosine", index: true, index_options: { type: "hnsw" } },
+				// What the vector was made from, so writing the record again reuses it instead of embedding the same text.
+				embeddingHash: { type: "keyword", index: false, doc_values: false },
 				deleted: { type: "integer" },
 				year: { type: "integer" },
 				citationCount: { type: "long" },

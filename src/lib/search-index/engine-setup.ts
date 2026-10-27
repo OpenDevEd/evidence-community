@@ -3,8 +3,10 @@ import { MeilisearchApiError } from "meilisearch";
 
 import type { LibraryServerConfig, SearchEngineName } from "@/config/library-config/schema";
 import { RevisionAwareSearchFactory } from "@/lib/elasticsearch-factory";
+import { createEmbedder } from "@/lib/embedder";
 import { RevisionAwareMeilisearchFactory, type MeilisearchService } from "@/lib/meilisearch-factory";
 
+import { elasticsearchEmbeddings } from "./elasticsearch-embeddings";
 import { elasticsearchWriter } from "./elasticsearch-writer";
 import { EMBEDDER_TASK_TIMEOUT_MS } from "./embedder-settings";
 import { applySearchIndexEmbedder, meilisearchWriter } from "./meilisearch-writer";
@@ -25,6 +27,13 @@ type SearchWriterSetup = {
 	rebuildTaskTimeoutMs: number;
 	/** Whether this engine holds an index of the library with records in it. */
 	hasRecords(): Promise<boolean>;
+	/**
+	 * Embeds records written without a vector while the embedder failed; returns how many. Elasticsearch only: Meilisearch
+	 * embeds by itself.
+	 */
+	embedMissing(signal: AbortSignal): Promise<number>;
+	/** The embedder's failure since the last records it embedded, in Elasticsearch; Meilisearch's comes from `prepare`. */
+	embedderError(): string | null;
 };
 
 type Config = Pick<LibraryServerConfig, "revision" | "services" | "updatedAt" | "search">;
@@ -91,13 +100,17 @@ async function meilisearchSetup(config: Config): Promise<SearchWriterSetup> {
 				throw error;
 			}
 		},
+		embedMissing: async () => 0,
+		embedderError: () => null,
 	};
 }
 
 async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 	const service = await new RevisionAwareSearchFactory().get(connection(config, "elasticsearch"));
+	const embedder = createEmbedder(config.search.embedder);
+	const embeddings = embedder ? elasticsearchEmbeddings(service, embedder) : null;
 	return {
-		writer: elasticsearchWriter(service),
+		writer: elasticsearchWriter(service, embeddings),
 		prepare: async () => ({ embedderError: null, indexHasRecords: false }),
 		rebuildTaskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
 		async hasRecords() {
@@ -108,6 +121,8 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 				throw error;
 			}
 		},
+		embedMissing: async (signal) => (embeddings ? embeddings.embedMissing(signal) : 0),
+		embedderError: () => embeddings?.lastError() ?? null,
 	};
 }
 
