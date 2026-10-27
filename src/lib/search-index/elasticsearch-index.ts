@@ -72,6 +72,8 @@ function definition() {
 						start: { type: "text", analyzer: "title_start" },
 					},
 				},
+				// Each value whole as well, so a search that is a journal's or publisher's full name ranks its records first.
+				metadataSearch: { ...text, fields: { exact: { type: "keyword", normalizer: "sort_key", ignore_above: 512 } } },
 				deleted: { type: "integer" },
 				year: { type: "integer" },
 				citationCount: { type: "long" },

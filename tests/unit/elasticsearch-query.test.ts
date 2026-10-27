@@ -106,6 +106,13 @@ describe("the text of a search", () => {
 		expect(clauses("Tutor CoPilot", ["abstractNote"])).not.toContain("title.sort");
 	});
 
+	it("ranks a record first when a metadata value is the search, such as its journal, only in a metadata search", () => {
+		expect(clauses("Computers & Education", ["metadataSearch", "tags"])).toContain('"metadataSearch.exact":{"value":"Computers & Education"');
+		// Beside the full text, a value that names a topic says little; a tag or name is one value among many.
+		expect(clauses("Machine Learning", ["metadataSearch", "tags", "fullTextPDFs.fullTextPDF.text"])).not.toContain("metadataSearch.exact");
+		expect(clauses("ChatGPT", ["title", "abstractNote", "tags", "fullNames"])).not.toContain('"tags":{"value"');
+	});
+
 	it("orders records the rules tie by Elasticsearch's relevance, worth less than the smallest rule, only without a chosen order", () => {
 		const query = textQuery("machine learning", ["fullTextPDFs.fullTextPDF.text"]) as { bool: { should: Array<{ multi_match?: { boost?: number; type?: string } }> } };
 		const relevance = query.bool.should.filter((clause) => clause.multi_match && !clause.multi_match.type);

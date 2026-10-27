@@ -2,7 +2,7 @@ import type { estypes } from "@elastic/elasticsearch";
 
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import type { FacetDistribution, SearchFilter } from "@/lib/search-engine";
-import { SOURCES_FIELD, TITLE_START_WORDS } from "@/lib/search-filter-constants";
+import { FULL_TEXT_PDF_ATTRIBUTE, SOURCES_FIELD, TITLE_START_WORDS } from "@/lib/search-filter-constants";
 import { SEARCHED_KEYWORD_FIELDS } from "@/lib/search-index/elasticsearch-index";
 
 /**
@@ -109,6 +109,22 @@ function wordInterval(word: string, last: boolean): estypes.QueryDslIntervalsCon
 	return last && oneTerm && word.length >= SHORTEST_INTERVAL_PREFIX ? { any_of: { intervals: [typed, { prefix: { prefix: word } }] } } : typed;
 }
 
+/**
+ * The fields whose whole value can be the search, lowercased and without accents: the title, as in Meilisearch, and a
+ * metadata value when only metadata is searched, where a reader looks for a journal, publisher or institution by name.
+ * Beside the full text, a value that names a topic (the journal Machine Learning) says little about a paper.
+ */
+function exactValueFields(attributes: readonly string[]) {
+	const byMetadata = attributes.includes("metadataSearch") && !attributes.includes(FULL_TEXT_PDF_ATTRIBUTE);
+	return [...(attributes.includes("title") ? ["title.sort"] : []), ...(byMetadata ? ["metadataSearch.exact"] : [])];
+}
+
+/** A record with a whole value that is the search, such as its title or its journal's name. */
+function exactValue(attributes: readonly string[], typed: readonly string[]): Query[] {
+	const fields = exactValueFields(attributes);
+	return fields.length ? [{ dis_max: { queries: fields.map((field) => ({ term: { [field]: { value: typed.join(" "), boost: 2 } } })) } }] : [];
+}
+
 /** Every one of the first words at the start of the title, typos allowed. */
 function titleStart(words: readonly string[], last: number): Query {
 	const rules = words.slice(0, TITLE_START_WORDS).map((word, index) => wordInterval(word, index === last));
@@ -119,8 +135,9 @@ function titleStart(words: readonly string[], last: number): Query {
  * The text part of a search, matching and ranking as Meilisearch's default rules did, in their order. A record needs
  * the first word, typos allowed. Then it ranks higher with more of the other words (words), more words as typed
  * (typo), the words as a phrase or close together (proximity), and every word in an earlier field (attributeRank).
- * Without a chosen order, it then ranks higher with the words at the start of the title (wordPosition), and highest
- * when its title is the search (exactness); Meilisearch ranked those after a chosen order. Each rule scores more than every rule after it together, so the rules apply in turn. Records
+ * Without a chosen order, it then ranks higher with the words at the start of the title (wordPosition), and when its
+ * title, or in a metadata search a journal or other value, is the search (exactness); Meilisearch ranked those
+ * after a chosen order. Each rule scores more than every rule after it together, so the rules apply in turn. Records
  * the rules tie are last ordered by Elasticsearch's own relevance, which Meilisearch's position rules stood in for.
  */
 export function textQuery(text: string, attributes: readonly string[], options: { sorted?: boolean } = {}): Query | null {
@@ -143,7 +160,8 @@ export function textQuery(text: string, attributes: readonly string[], options: 
 					? [{ dis_max: { queries: [scored({ multi_match: { query, fields, type: "phrase" } }, 300), scored({ multi_match: { query, fields, type: "phrase", slop: 3 } }, 200)] } }]
 					: []),
 				{ dis_max: { queries: fields.map((field, index) => scored(everyWordIn(field, words, last), 10 * Math.max(1, 9 - index))) } },
-				...(byTitle ? [scored(titleStart(words, last), 5), { term: { "title.sort": { value: typed.join(" "), boost: 2 } } }] : []),
+				...(byTitle ? [scored(titleStart(words, last), 5)] : []),
+				...(ranked ? exactValue(attributes, typed) : []),
 				// Records the rules give the same points are ordered by Elasticsearch's own relevance (BM25): how often the
 				// words occur against the field's length, and how rare they are. Scaled to stay below the smallest rule.
 				...(ranked ? [{ multi_match: { query, fields, boost: TIE_BREAK } }] : []),
