@@ -118,8 +118,8 @@ If Meilisearch's embedder fails while its index already holds records, the
 switch waits, and readers and the worker's writes stay on the old engine.
 
 The worker drains no changes while it rebuilds, so readers see changes made
-during a switch only once it completes: minutes into Elasticsearch, longer into
-Meilisearch with an embedder, which embeds every record again.
+during a switch only once it completes: minutes without an embedder, longer with
+one, since either engine embeds every record again.
 
 To switch, publish a configuration revision that changes only
 `services.search.engine` and keeps the old engine's connection. Remove the old
@@ -146,39 +146,87 @@ SEARCH_ENGINE=meilisearch MEILISEARCH_URL=http://127.0.0.1:7700 \
 
 ## Embedder
 
-On a Meilisearch library, Similar Resources, AI search, and chat use
-Meilisearch hybrid search. Elasticsearch stores no embeddings yet
-(OpenDevEd/new-el#720): its libraries show no Similar Resources, and AI search
-and chat rank by words alone. Hybrid search needs an embedder on the index. The
-library configuration describes it in `search.embedder`:
+Similar Resources, AI search, and chat rank by meaning as well as words when the
+library has an embedder. The library configuration describes it in
+`search.embedder`, the same way for both engines:
 
 - `null` turns embeddings off. Related resources cannot be enabled.
 - `{ "source": "openAi", "model": "text-embedding-3-small", "apiKey": "…" }`
-  uses OpenAI through Meilisearch.
+  uses OpenAI.
 - `{ "source": "rest", "url": "…", "request": { … "{{text}}" … }, "response": { … "{{embedding}}" … } }`
-  uses any HTTP embedding service.
+  uses any HTTP embedding service. `["{{text}}", "{{..}}"]` in the request
+  sends several texts at once, and `[{ … "{{embedding}}" … }, "{{..}}"]` in the
+  response reads one vector for each.
+
+Each record's embedded text is the platform document template
+(`src/lib/search-index/embedder-settings.ts`): its title, abstract, authors,
+keywords, and year, cut to 8,000 bytes. Libraries cannot change it.
+
+### Meilisearch
 
 The worker writes the embedder under the fixed name `default`
-(`PLATFORM_SEARCH_EMBEDDER`) when it starts, together with the platform
-document template (`src/lib/search-index/embedder-settings.ts`) and
-`documentTemplateMaxBytes: 8000`. Meilisearch embeds every record inside that
-one settings task, so the worker waits up to 60 minutes for it. If the task
-fails, the worker logs the error, records it as `lastError`, and keeps indexing
-records without embeddings. Setting `search.embedder` to `null` removes the
-embedder and its vectors.
+(`PLATFORM_SEARCH_EMBEDDER`) when it starts, together with the document
+template and `documentTemplateMaxBytes: 8000`, and Meilisearch calls the
+embedder itself. Meilisearch embeds every record inside that one settings task,
+so the worker waits up to 60 minutes for it. If the task fails, the worker logs
+the error, records it as `lastError`, and keeps indexing records without
+embeddings. Setting `search.embedder` to `null` removes the embedder and its
+vectors.
 
 Changing `search.embedder` needs a search-worker restart. Check
 `GET /indexes/<index>/stats`: `numberOfEmbeddedDocuments` must equal
 `numberOfDocuments`.
 
-To prove the embedder flow against a real Meilisearch without any paid
-provider, start the dedicated test container and run the script. It starts a
-local REST embedder stub, then checks enable, search, change, disable, and
-rebuild on two indexes:
+### Elasticsearch
+
+Elasticsearch's free licence stores and searches vectors but can't call an
+embedding service, and its own result fusion needs a paid licence
+(OpenDevEd/new-el#720). So the worker calls the embedder and the application
+mixes the results:
+
+- The worker writes each record with its vector in `embedding`, a 32-bit float
+  `dense_vector` compared by cosine, unquantised. The first vector sets the
+  number of dimensions. `embeddingHash` records the embedder and the text the
+  vector came from. A record written again with the same text keeps its vector,
+  so a rebuild reads the vectors from the index readers search and embeds only
+  changed records.
+- Changing `search.embedder` rebuilds the index: every record is embedded again
+  with the new embedder, or written without a vector when it is `null`.
+- When the embedder fails, records are written without a vector, so word search
+  stays current, and the worker records the error as `lastError`. It leaves the
+  embedder alone for a minute, doubling up to 30 minutes, then embeds the
+  records that have no vector, up to 2,000 after each outbox pass.
+- Similar Resources mixes the six records nearest the record's stored vector
+  (weight 0.7) with records matching words from its description (0.3). It needs
+  no call to the embedder, and answers 503 until the record has a vector.
+- AI search and chat embed the question and mix the nearest records with the
+  word results, 0.5 each. If the embedder fails, words alone rank them.
+- Both mix the two orders by reciprocal rank fusion, Elastic's formula:
+  `weight / (60 + rank)`, summed for each record.
+
+Vectors need memory beside the heap: about `records × dimensions × 4` bytes
+for the vectors, plus `records × 64` for the graph. AIED's 283,000 records at
+1,024 dimensions need about 1.2 GB. Elasticsearch's default quantisation would
+need about a 32nd of that, but would lose some accuracy.
+([Elasticsearch: approximate kNN memory](https://www.elastic.co/docs/deploy-manage/production-guidance/optimize-performance/approximate-knn-search))
+
+To check the Elasticsearch flow without any paid provider, run the script
+against a local Elasticsearch. It starts a stand-in embedder, then checks
+turning the embedder on, searching by meaning and from a record, changing a
+record, a rebuild that reuses vectors, a failing embedder, changing the
+embedder, and turning it off:
+
+```sh
+ELASTICSEARCH_URL=http://127.0.0.1:59200 ELASTICSEARCH_PASSWORD=local-search-password npm run test:search-embedder
+```
+
+To check the Meilisearch flow, start the dedicated test container and run the
+script with `SEARCH_ENGINE=meilisearch`. It checks enable, search, change,
+disable, and rebuild on two indexes:
 
 ```sh
 docker compose -f tests/embedder/compose.yaml up -d --wait
-npm run test:search-embedder
+SEARCH_ENGINE=meilisearch npm run test:search-embedder
 docker compose -f tests/embedder/compose.yaml down
 ```
 
@@ -186,7 +234,7 @@ If port 57710 is taken, pick another one for both steps:
 
 ```sh
 EMBEDDER_TEST_MEILI_PORT=57730 docker compose -f tests/embedder/compose.yaml up -d --wait
-MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
+SEARCH_ENGINE=meilisearch MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
 ```
 
 ## Local operation
