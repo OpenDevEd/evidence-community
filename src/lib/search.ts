@@ -136,7 +136,7 @@ export function publicFields(libraryConfig: Pick<LibraryServerConfig, "topics">)
 
 /** One search of the library's records, in the engine its readers search: every filter must hold. */
 export async function searchRecords<T = ListItem>(
-	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
+	libraryConfig: Pick<LibraryServerConfig, "revision" | "search" | "services" | "updatedAt">,
 	request: SearchRequest,
 ) {
 	return (await getSearchEngine(libraryConfig)).search<T>(request);
@@ -144,7 +144,7 @@ export async function searchRecords<T = ListItem>(
 
 /** A page of the records with these keys. */
 export function searchKeys(
-	libraryConfig: Pick<LibraryServerConfig, "revision" | "services" | "updatedAt">,
+	libraryConfig: Pick<LibraryServerConfig, "revision" | "search" | "services" | "updatedAt">,
 	keys: readonly string[],
 	page: { number: number; size: number },
 	request: Pick<SearchRequest, "returned" | "facets" | "exactTotal"> = {},

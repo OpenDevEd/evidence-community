@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { SearchMeaningUnavailableError } from "@/lib/search-engine";
 import { elasticsearchEngine } from "@/lib/search-engines/elasticsearch";
 
 /** An index of `count` records, sorted by key, that answers point-in-time pages after a place. */
@@ -63,5 +64,56 @@ describe("a deep read that starts past every result", () => {
 		const { client, engine } = index(30);
 		expect(await engine.keys({ ...request, size: 0 }, 50_000, 10, new AbortController().signal)).toEqual({ keys: [], total: 30 });
 		expect(client.search).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * An index whose words search answers `words` and whose nearest-vector search answers `nearest`, by key. Asked for keys
+ * alone, it sends them as doc values without `_id`, as Elasticsearch does.
+ */
+function mixed(words: string[], nearest: string[], stored: Record<string, number[]> = {}) {
+	const hits = (keys: string[]) => ({ hits: { total: { value: keys.length, relation: "eq" }, hits: keys.map((key) => ({ fields: { key: [key] } })) } });
+	const client = {
+		search: vi.fn(async (body: { query: { ids?: { values: string[] } } }) => {
+			const key = body.query.ids?.values[0];
+			return key ? { hits: { hits: stored[key] ? [{ _id: key, _source: { embedding: stored[key] } }] : [] } } : hits(words);
+		}),
+		msearch: vi.fn(async () => ({ responses: [hits(words), hits(nearest)] })),
+	};
+	const embedder = { fingerprint: "model", embed: vi.fn(async () => [[1, 0]]) };
+	return { client, embedder, engine: elasticsearchEngine({ alias: "library", client: client as never }, embedder) };
+}
+
+describe("a search by words and meaning in Elasticsearch", () => {
+	const asked = { text: "radio lessons", fields: ["title"], filters: [{ field: "itemType", equals: "book" }], size: 3, returned: { only: ["key"] }, semantic: { ratio: 0.5 } };
+
+	it("mixes the words order with the records nearest the text's vector, with the same filters", async () => {
+		const { client, engine } = mixed(["a", "b"], ["b", "c"]);
+		const answer = await engine.search<{ key: string }>(asked);
+		// b: 0.5/62 + 0.5/61, a: 0.5/61, c: 0.5/62.
+		expect(answer.hits.map((hit) => hit.key)).toEqual(["b", "a", "c"]);
+		const [{ searches }] = client.msearch.mock.calls[0] as unknown as [{ searches: Array<Record<string, unknown>> }];
+		expect(searches[3]).toMatchObject({ knn: { field: "embedding", query_vector: [1, 0], k: 50, filter: [{ term: { itemType: "book" } }] } });
+	});
+
+	it("ranks by words alone when the embedder fails", async () => {
+		const { client, embedder, engine } = mixed(["a", "b"], ["c"]);
+		embedder.embed.mockRejectedValueOnce(new Error("503 busy"));
+		const answer = await engine.search<{ key: string }>(asked);
+		expect(answer.hits.map((hit) => hit.key)).toEqual(["a", "b"]);
+		expect(client.msearch).not.toHaveBeenCalled();
+	});
+
+	it("searches near a record's stored vector without calling the embedder", async () => {
+		const { client, embedder, engine } = mixed(["a"], ["c"], { K: [0, 1] });
+		await engine.search({ ...asked, semantic: { ratio: 0.7, like: "K" } });
+		expect(embedder.embed).not.toHaveBeenCalled();
+		const [{ searches }] = client.msearch.mock.calls[0] as unknown as [{ searches: Array<Record<string, unknown>> }];
+		expect(searches[3]).toMatchObject({ knn: { query_vector: [0, 1] } });
+	});
+
+	it("says so when the record has no vector yet", async () => {
+		const { engine } = mixed(["a"], ["c"]);
+		await expect(engine.search({ ...asked, semantic: { ratio: 0.7, like: "K" } })).rejects.toThrow(SearchMeaningUnavailableError);
 	});
 });

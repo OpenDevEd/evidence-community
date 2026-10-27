@@ -9,7 +9,7 @@ vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ cl
 import { getSearchEngine } from "@/lib/search-engines";
 
 const connection = { host: "http://search", key: "key", index: "library" };
-const library = (search: object) => ({ revision: "r1", updatedAt: "2026-10-26T00:00:00.000Z", services: { search } }) as never;
+const library = (search: object) => ({ revision: "r1", updatedAt: "2026-10-26T00:00:00.000Z", services: { search }, search: { embedder: null } }) as never;
 
 describe("the engine readers search", () => {
 	it("is the configured one before the library's first build", async () => {

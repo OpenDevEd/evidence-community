@@ -13,6 +13,12 @@ import type { Item } from "@/app/api/item/types";
 import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
 import { publicTagRules } from "@/lib/tags";
 import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
+import { getRuntimeSearchAttributes } from "@/config/library-config/search";
+import { fieldNotEquals, fieldNotIn, SearchMeaningUnavailableError, type SearchEngine } from "@/lib/search-engine";
+
+/** How far meaning ranks similar records, against words from the record's description, as in Meilisearch. */
+const SIMILAR_MEANING_RATIO = 0.7;
+const SIMILAR_RECORDS = 6;
 
 function canRecommendSimilarResources(config: LibraryServerConfig) {
 	return Boolean(
@@ -74,9 +80,7 @@ export async function GET(
 	props: { params: Promise<{ key: string }> },
 ) {
 	const config = await getLibraryConfig();
-	// Similar records come from Meilisearch's embedder, so a library whose readers search another engine has none
-	// until similar records move there (OpenDevEd/new-el#720).
-	if (!canRecommendSimilarResources(config) || (await getSearchEngine(config)).name !== "meilisearch") {
+	if (!canRecommendSimilarResources(config)) {
 		return NextResponse.json(
 			{ hits: [], totalHits: 0 },
 			{
@@ -99,17 +103,15 @@ export async function GET(
 		);
 	}
 
-	const { index } = await getMeilisearchForConfig(config);
+	const engine = await getSearchEngine(config);
+	const description = similarResourcesDescription(itemResponse.item);
 	let result;
 	try {
-		result = await searchSimilar(
-			index,
-			similarResourcesDescription(itemResponse.item),
-			key,
-			config,
-		);
+		result = engine.name === "meilisearch"
+			? await searchSimilar((await getMeilisearchForConfig(config)).index, description, key, config)
+			: await searchSimilarByStoredMeaning(engine, description, key, config);
 	} catch (error) {
-		if (isEmbedderUnavailable(error)) {
+		if (isEmbedderUnavailable(error) || error instanceof SearchMeaningUnavailableError) {
 			return NextResponse.json(
 				{ error: "Similar resources are not ready" },
 				{ status: 503 },
@@ -148,4 +150,32 @@ function searchSimilar(
 		limit: 6,
 		attributesToRetrieve: [...LIST_ITEM_FIELDS],
 	});
+}
+
+/**
+ * Records nearest this one's stored vector, which the search worker made from it, mixed with records matching words
+ * from its description (OpenDevEd/new-el#720). Elasticsearch needs no call to the embedder for it.
+ */
+async function searchSimilarByStoredMeaning(
+	engine: SearchEngine,
+	description: string,
+	key: string,
+	config: LibraryServerConfig,
+) {
+	const hidden = config.content.tags.hidden;
+	const answer = await engine.search<Item>({
+		text: description,
+		fields: getRuntimeSearchAttributes("title_abstract_author_and_keywords", config.search),
+		filters: [
+			fieldNotEquals("key", key),
+			fieldNotIn("itemType", EXCLUDED_ITEM_TYPES),
+			fieldNotEquals("deleted", 1),
+			...(hidden.length ? [fieldNotIn("tags", hidden)] : []),
+		],
+		size: SIMILAR_RECORDS,
+		returned: { only: [...LIST_ITEM_FIELDS] },
+		exactTotal: false,
+		semantic: { ratio: SIMILAR_MEANING_RATIO, like: key },
+	});
+	return { hits: answer.hits, totalHits: answer.total };
 }

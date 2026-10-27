@@ -91,11 +91,20 @@ export type SearchRequest = {
 	/** Stops the search, as when the reader who asked has gone. */
 	signal?: AbortSignal;
 	/**
-	 * Also rank by meaning with the library's embedder, `ratio` (0 to 1) of the way. Only Meilisearch embeds records
-	 * (OpenDevEd/new-el#720); Elasticsearch ranks by words alone.
+	 * Also rank by meaning with the library's embedder, `ratio` (0 to 1) of the way (OpenDevEd/new-el#720): by the
+	 * text's meaning, or in Elasticsearch, by the stored meaning of the record `like` names. Elasticsearch mixes the
+	 * two orders and answers no cursor; with a chosen order (`sort`) it ranks by words alone.
 	 */
-	semantic?: { ratio: number };
+	semantic?: { ratio: number; like?: string };
 };
+
+/** The record a search by its meaning starts from has no vector yet. */
+export class SearchMeaningUnavailableError extends Error {
+	constructor(key: string) {
+		super(`Record ${key} has no vector yet.`);
+		this.name = "SearchMeaningUnavailableError";
+	}
+}
 
 /** What one search answers. */
 export type SearchAnswer<T> = {
