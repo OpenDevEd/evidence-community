@@ -126,7 +126,7 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 			const fresh = new Map(missing.map((position, index) => [position, vectors?.[index]]));
 			return documents.map((document, position) => {
 				const vector = reused[position] ?? fresh.get(position);
-				return usable(vector) ? { ...document, embedding: vector, embeddingHash: hashes[position] } : { ...document };
+				return usable(vector) ? { ...document, embedding: vector, embeddingHash: hashes[position], embeddingModel: embedder.fingerprint } : { ...document };
 			});
 		},
 		async embedMissing(signal) {
@@ -143,7 +143,7 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 					usable(vectors[position])
 						? [
 								{ update: { _index: hit._index, _id: hit._id!, if_seq_no: hit._seq_no!, if_primary_term: hit._primary_term! } },
-								{ doc: { embedding: vectors[position], embeddingHash: hashOf(embedder.fingerprint, texts[position]!) } },
+								{ doc: { embedding: vectors[position], embeddingHash: hashOf(embedder.fingerprint, texts[position]!), embeddingModel: embedder.fingerprint } },
 							]
 						: [],
 				);

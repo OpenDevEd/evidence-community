@@ -68,6 +68,6 @@ describe("records' vectors in Elasticsearch", () => {
 		expect(await elasticsearchEmbeddings(service, embedder()).embedMissing()).toBe(2);
 		const [{ operations }] = client.bulk.mock.calls[0] as unknown as [{ operations: Array<Record<string, unknown>> }];
 		expect(operations[0]).toEqual({ update: { _index: "library_1", _id: "A", if_seq_no: 0, if_primary_term: 1 } });
-		expect(operations[1]).toMatchObject({ doc: { embedding: [expect.any(Number), 1], embeddingHash: expect.any(String) } });
+		expect(operations[1]).toMatchObject({ doc: { embedding: [expect.any(Number), 1], embeddingHash: expect.any(String), embeddingModel: "perplexity-0.6b" } });
 	});
 });

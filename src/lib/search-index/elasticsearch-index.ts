@@ -80,6 +80,9 @@ function definition() {
 				embedding: { type: "dense_vector", element_type: "float", similarity: "cosine", index: true, index_options: { type: "hnsw" } },
 				// What the vector was made from, so writing the record again reuses it instead of embedding the same text.
 				embeddingHash: { type: "keyword", index: false, doc_values: false },
+				// The embedder that made the vector: a search compares vectors of one embedder only, as while a library
+				// rebuilds after changing it, readers still search the old vectors.
+				embeddingModel: { type: "keyword" },
 				deleted: { type: "integer" },
 				year: { type: "integer" },
 				citationCount: { type: "long" },
