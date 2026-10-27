@@ -47,6 +47,9 @@ function textField(attribute: string) {
 	return SEARCHED_KEYWORD_FIELDS.includes(attribute) ? `${attribute}.text` : attribute;
 }
 
+/** A hundredth of a BM25 score. AIED's highest was 21, for a ten-word question, so this stays below the smallest rule's 2 points. */
+const TIE_BREAK = 0.01;
+
 /** Meilisearch searched the first ten words of a search and ignored the rest. */
 const SEARCHED_WORDS = 10;
 
@@ -117,8 +120,8 @@ function titleStart(words: readonly string[], last: number): Query {
  * the first word, typos allowed. Then it ranks higher with more of the other words (words), more words as typed
  * (typo), the words as a phrase or close together (proximity), and every word in an earlier field (attributeRank).
  * Without a chosen order, it then ranks higher with the words at the start of the title (wordPosition), and highest
- * when its title is the search (exactness); Meilisearch ranked those after a chosen order. Each rule scores more than
- * every rule after it together, so the rules apply in turn.
+ * when its title is the search (exactness); Meilisearch ranked those after a chosen order. Each rule scores more than every rule after it together, so the rules apply in turn. Records
+ * the rules tie are last ordered by Elasticsearch's own relevance, which Meilisearch's position rules stood in for.
  */
 export function textQuery(text: string, attributes: readonly string[], options: { sorted?: boolean } = {}): Query | null {
 	const typed = text.trim().split(/\s+/u).filter(Boolean).slice(0, SEARCHED_WORDS);
@@ -128,7 +131,8 @@ export function textQuery(text: string, attributes: readonly string[], options: 
 	const query = words.join(" ");
 	const fields = attributes.map(textField);
 	const last = words.length - 1;
-	const byTitle = attributes.includes("title") && options.sorted !== true;
+	const ranked = options.sorted !== true;
+	const byTitle = attributes.includes("title") && ranked;
 	return {
 		bool: {
 			filter: [wordFound(words[0]!, fields, last === 0)],
@@ -140,6 +144,9 @@ export function textQuery(text: string, attributes: readonly string[], options: 
 					: []),
 				{ dis_max: { queries: fields.map((field, index) => scored(everyWordIn(field, words, last), 10 * Math.max(1, 9 - index))) } },
 				...(byTitle ? [scored(titleStart(words, last), 5), { term: { "title.sort": { value: typed.join(" "), boost: 2 } } }] : []),
+				// Records the rules give the same points are ordered by Elasticsearch's own relevance (BM25): how often the
+				// words occur against the field's length, and how rare they are. Scaled to stay below the smallest rule.
+				...(ranked ? [{ multi_match: { query, fields, boost: TIE_BREAK } }] : []),
 			],
 		},
 	};

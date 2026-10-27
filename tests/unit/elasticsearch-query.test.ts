@@ -105,6 +105,14 @@ describe("the text of a search", () => {
 		expect(clauses("Tutor CoPilot", ["title"])).toContain('"title.sort":{"value":"Tutor CoPilot"');
 		expect(clauses("Tutor CoPilot", ["abstractNote"])).not.toContain("title.sort");
 	});
+
+	it("orders records the rules tie by Elasticsearch's relevance, worth less than the smallest rule, only without a chosen order", () => {
+		const query = textQuery("machine learning", ["fullTextPDFs.fullTextPDF.text"]) as { bool: { should: Array<{ multi_match?: { boost?: number; type?: string } }> } };
+		const relevance = query.bool.should.filter((clause) => clause.multi_match && !clause.multi_match.type);
+		expect(relevance).toHaveLength(1);
+		expect(relevance[0]!.multi_match!.boost! * 50).toBeLessThan(2);
+		expect(JSON.stringify(textQuery("machine learning", ["title"], { sorted: true }))).not.toContain('"boost":0.01');
+	});
 });
 
 describe("facet counts", () => {
