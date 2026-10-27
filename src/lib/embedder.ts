@@ -16,11 +16,14 @@ export type EmbedderConfiguration = NonNullable<LibraryServerConfig["search"]["e
 export type Embedder = {
 	/** Changes when the embedder would give other vectors for the same text; its key isn't part of it. */
 	readonly fingerprint: string;
-	/** One vector for each text, in order. */
-	embed(texts: readonly string[], signal?: AbortSignal): Promise<number[][]>;
+	/**
+	 * One vector for each text, in order, or null for a text the embedder refuses, as one too long for it. Throws
+	 * `EmbedderError` when the embedder fails as a whole: a refused key, no answer, or an answer that holds no vectors.
+	 */
+	embed(texts: readonly string[], signal?: AbortSignal): Promise<Array<number[] | null>>;
 };
 
-/** The embedder failed or answered something that isn't a vector for each text. */
+/** The embedder failed, or answered something that isn't a vector for each text. */
 export class EmbedderError extends Error {
 	constructor(message: string) {
 		super(message);
@@ -28,20 +31,27 @@ export class EmbedderError extends Error {
 	}
 }
 
+/** The embedder refused what it was sent, not the request itself: one of the texts, or how many there were. */
+class RefusedTexts extends Error {}
+
 const TEXT = "{{text}}";
 const EMBEDDING = "{{embedding}}";
 const REPEAT = "{{..}}";
 
 const OPENAI_URL = "https://api.openai.com/v1/embeddings";
 
-/** Texts in one request, and their size: under Perplexity's 512 texts and 120,000 tokens, and OpenAI's limits. */
-const BATCH_TEXTS = 64;
+/**
+ * Texts in one request: as many as Meilisearch sends a REST embedder, and more to OpenAI, which takes 2,048. A batch
+ * stays under 256 KB, far below Perplexity's 120,000 tokens.
+ */
+const REST_BATCH_TEXTS = 10;
+const OPENAI_BATCH_TEXTS = 64;
 const BATCH_BYTES = 256 * 1024;
 
-/** Requests in flight at once while embedding many texts. */
-const PARALLEL_REQUESTS = 4;
+/** Requests in flight at once to one embedder, whoever asks: every claim the worker drains shares them. */
+const PARALLEL_REQUESTS = 8;
 
-/** A self-hosted model on CPU embeds about 3 records a second, so a batch of 64 can take most of this. */
+/** A self-hosted model on CPU embeds about 3 records a second, so a batch can take tens of seconds. */
 const REQUEST_TIMEOUT_MS = 120_000;
 /** Waits before each retry of a request the service answered busy or failed: 1, 2, 4 and 8 seconds. */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
@@ -91,21 +101,20 @@ function isVector(value: unknown, dimensions: number | undefined): value is numb
 	);
 }
 
-/** Texts in requests of at most `BATCH_TEXTS` texts and `BATCH_BYTES` bytes; one text alone when the template sends one. */
-function batches(texts: readonly string[], batched: boolean) {
-	if (!batched) return texts.map((text) => [text]);
+/** Texts in requests of at most `size` texts and `BATCH_BYTES` bytes. */
+function batches(texts: readonly string[], size: number) {
 	const result: string[][] = [];
 	let batch: string[] = [];
 	let bytes = 0;
 	for (const text of texts) {
-		const size = Buffer.byteLength(text, "utf8");
-		if (batch.length > 0 && (batch.length >= BATCH_TEXTS || bytes + size > BATCH_BYTES)) {
+		const length = Buffer.byteLength(text, "utf8");
+		if (batch.length > 0 && (batch.length >= size || bytes + length > BATCH_BYTES)) {
 			result.push(batch);
 			batch = [];
 			bytes = 0;
 		}
 		batch.push(text);
-		bytes += size;
+		bytes += length;
 	}
 	if (batch.length > 0) result.push(batch);
 	return result;
@@ -123,10 +132,12 @@ function restCall(embedder: Extract<EmbedderConfiguration, { source: "rest" }>, 
 }
 
 function openAiCall(embedder: Extract<EmbedderConfiguration, { source: "openAi" }>, texts: readonly string[]): Call {
+	// Only the text-embedding-3 models take a size; OpenAI refuses it for older ones, as Meilisearch knows.
+	const sized = embedder.dimensions && embedder.model.startsWith("text-embedding-3");
 	return {
 		url: OPENAI_URL,
 		headers: { Authorization: `Bearer ${embedder.apiKey}` },
-		body: { model: embedder.model, input: texts, encoding_format: "float", ...(embedder.dimensions ? { dimensions: embedder.dimensions } : {}) },
+		body: { model: embedder.model, input: texts, encoding_format: "float", ...(sized ? { dimensions: embedder.dimensions } : {}) },
 		read: (answer) =>
 			[...((answer as { data?: Array<{ index: number; embedding: unknown }> }).data ?? [])]
 				.sort((left, right) => left.index - right.index)
@@ -134,9 +145,27 @@ function openAiCall(embedder: Extract<EmbedderConfiguration, { source: "openAi" 
 	};
 }
 
-/** A busy or failing service, or a network error, is worth another try; any other refusal is not. */
+/** A busy or failing service is worth another try. */
 function retryable(status: number) {
-	return status === 408 || status === 429 || status >= 500;
+	return status === 429 || status >= 500;
+}
+
+/** A refusal of what was sent, which a smaller batch or another text may pass; not of the key, nor a busy service. */
+function refusesTexts(status: number) {
+	return status >= 400 && status < 500 && ![401, 403, 404, 407, 408, 429].includes(status);
+}
+
+/**
+ * Why a request got no answer, without the error's own words: a header error quotes the header, key and all. Only a
+ * lost connection is tried again; a request that ran out of time may still be running, and sending it again would
+ * only add to the embedder's work.
+ */
+function unanswered(error: unknown) {
+	if (error instanceof Error && error.name === "TimeoutError") return { failure: `no answer within ${REQUEST_TIMEOUT_MS / 1_000} s`, retry: false };
+	if (error instanceof TypeError && error.message === "fetch failed") {
+		return { failure: `no connection (${(error.cause as { code?: string } | undefined)?.code ?? "network error"})`, retry: true };
+	}
+	return { failure: `the request couldn't be sent (${error instanceof Error ? error.name : "error"}); check the embedder's URL, key and headers`, retry: false };
 }
 
 async function post(call: Call, signal: AbortSignal | undefined) {
@@ -147,69 +176,102 @@ async function post(call: Call, signal: AbortSignal | undefined) {
 		signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
 	if (response.ok) return { answer: (await response.json()) as unknown };
-	const reason = `${response.status} ${(await response.text().catch(() => "")).slice(0, 300)}`;
-	return { failure: reason, retry: retryable(response.status) };
+	const failure = `${response.status} ${(await response.text().catch(() => "")).slice(0, 300)}`;
+	return { failure, retry: retryable(response.status), refused: refusesTexts(response.status) };
 }
 
-/** One request, tried again after a busy answer, a server error or a network error. */
-async function send(call: Call, signal: AbortSignal | undefined) {
-	let failure = "";
+/** One request, tried again after a busy answer, a server error or a lost connection. */
+async function send(call: Call, signal: AbortSignal | undefined, secret: string | undefined) {
+	let outcome: Awaited<ReturnType<typeof post>> | ReturnType<typeof unanswered> = { failure: "", retry: true };
 	for (const wait of [0, ...RETRY_DELAYS_MS]) {
 		if (wait > 0) await delay(wait, undefined, { signal });
 		signal?.throwIfAborted();
-		const outcome = await post(call, signal).catch((error: unknown) => {
+		outcome = await post(call, signal).catch((error: unknown) => {
 			if (signal?.aborted) throw error;
-			return { failure: error instanceof Error ? error.message : String(error), retry: true };
+			return unanswered(error);
 		});
-		if ("answer" in outcome) return outcome.answer;
-		failure = outcome.failure;
-		if (!outcome.retry) break;
+		if ("answer" in outcome || !outcome.retry) break;
 	}
+	if ("answer" in outcome) return outcome.answer;
+	// An answer can quote what it was sent; the key never goes further.
+	const failure = secret ? outcome.failure.replaceAll(secret, "[key]") : outcome.failure;
+	if ("refused" in outcome && outcome.refused) throw new RefusedTexts(failure);
 	throw new EmbedderError(`The embedder failed: ${failure}`);
 }
 
-/** What makes an embedder's vectors: everything but its key and headers, which can hold secrets. */
+/**
+ * What makes an embedder's vectors: everything but its key and the values of its headers, which can hold secrets.
+ * Header names count, as a header can choose the model.
+ */
 export function embedderFingerprint(embedder: EmbedderConfiguration) {
 	const { source, dimensions } = embedder;
-	const described = embedder.source === "openAi" ? { source, dimensions, model: embedder.model } : { source, dimensions, url: embedder.url, request: embedder.request, response: embedder.response };
+	const described =
+		embedder.source === "openAi"
+			? { source, dimensions, model: embedder.model }
+			: { source, dimensions, url: embedder.url, request: embedder.request, response: embedder.response, headers: Object.keys(embedder.headers ?? {}).sort() };
 	return createHash("sha256").update(JSON.stringify(described)).digest("hex").slice(0, 16);
 }
 
-/** Runs `work` on each item, `limit` at a time, keeping the order; after a failure no more items start. */
-async function inParallel<T, R>(items: readonly T[], limit: number, work: (item: T) => Promise<R>) {
-	const results: R[] = new Array(items.length);
-	let next = 0;
-	let failed = false;
-	const lane = async () => {
-		while (next < items.length && !failed) {
-			const position = next++;
-			results[position] = await work(items[position]!).catch((error: unknown) => {
-				failed = true;
-				throw error;
-			});
+/** Runs at most `size` tasks at once; a task that finishes hands its place to the next one waiting. */
+function limiter(size: number) {
+	let active = 0;
+	const waiting: Array<() => void> = [];
+	return async <T>(task: () => Promise<T>) => {
+		if (active < size) active += 1;
+		else await new Promise<void>((resolve) => waiting.push(resolve));
+		try {
+			return await task();
+		} finally {
+			const next = waiting.shift();
+			if (next) next();
+			else active -= 1;
 		}
 	};
-	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, lane));
-	return results;
 }
 
 /** The library's embedder, or null when it has none. */
 export function createEmbedder(configuration: LibraryServerConfig["search"]["embedder"]): Embedder | null {
 	if (!configuration) return null;
 	const call = (texts: readonly string[]) => (configuration.source === "openAi" ? openAiCall(configuration, texts) : restCall(configuration, texts));
-	const batched = configuration.source === "openAi" || sendsBatches(configuration.request);
-	const embedBatch = async (texts: readonly string[], signal?: AbortSignal) => {
+	const batchSize = configuration.source === "openAi" ? OPENAI_BATCH_TEXTS : sendsBatches(configuration.request) ? REST_BATCH_TEXTS : 1;
+	const inTurn = limiter(PARALLEL_REQUESTS);
+
+	/** Vectors for one batch; a refused batch is split in halves to find the texts the embedder refuses. */
+	const embedBatch = async (texts: readonly string[], signal: AbortSignal): Promise<Array<number[] | null>> => {
 		const request = call(texts);
-		const vectors = request.read(await send(request, signal));
-		if (vectors.length !== texts.length || !vectors.every((vector) => isVector(vector, configuration.dimensions))) {
-			throw new EmbedderError(`The embedder answered ${vectors.length} vector(s) for ${texts.length} text(s), or a vector that isn't ${configuration.dimensions ?? "a list of"} numbers.`);
+		try {
+			const answer = await inTurn(() => {
+				signal.throwIfAborted();
+				return send(request, signal, configuration.apiKey);
+			});
+			const vectors = request.read(answer);
+			if (vectors.length !== texts.length || !vectors.every((vector) => isVector(vector, configuration.dimensions))) {
+				throw new EmbedderError(`The embedder answered ${vectors.length} vector(s) for ${texts.length} text(s), or a vector that isn't ${configuration.dimensions ?? "a list of"} numbers.`);
+			}
+			return vectors as number[][];
+		} catch (error) {
+			if (!(error instanceof RefusedTexts)) throw error;
+			if (texts.length === 1) return [null];
+			const half = Math.ceil(texts.length / 2);
+			const [first, second] = await Promise.all([embedBatch(texts.slice(0, half), signal), embedBatch(texts.slice(half), signal)]);
+			return [...first, ...second];
 		}
-		return vectors as number[][];
 	};
+
 	return {
 		fingerprint: embedderFingerprint(configuration),
 		async embed(texts, signal) {
-			const answers = await inParallel(batches(texts, batched), PARALLEL_REQUESTS, (batch) => embedBatch(batch, signal));
+			// The first failure stops the call's other requests, which would only fail the same way.
+			const stop = new AbortController();
+			const lanes = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal;
+			const answers = await Promise.all(
+				batches(texts, batchSize).map((batch) =>
+					embedBatch(batch, lanes).catch((error: unknown) => {
+						stop.abort();
+						throw error;
+					}),
+				),
+			);
 			return answers.flat();
 		},
 	};

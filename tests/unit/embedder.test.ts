@@ -41,14 +41,41 @@ describe("the library's embedder templates", () => {
 });
 
 describe("calling the library's embedder", () => {
-	it("sends the texts in batches of at most 64, with the key, and answers a vector for each in order", async () => {
+	it("sends the texts 10 a request, as Meilisearch does, with the key, and answers a vector for each in order", async () => {
 		const fetch = answering();
 		vi.stubGlobal("fetch", fetch);
-		const texts = Array.from({ length: 130 }, (_, index) => "x".repeat(index + 1));
+		const texts = Array.from({ length: 25 }, (_, index) => "x".repeat(index + 1));
 		const vectors = await createEmbedder(openRouter)!.embed(texts);
-		expect(fetch.mock.calls.map(([, init]) => (JSON.parse(String(init.body)) as { input: string[] }).input.length)).toEqual([64, 64, 2]);
+		expect(fetch.mock.calls.map(([, init]) => (JSON.parse(String(init.body)) as { input: string[] }).input.length)).toEqual([10, 10, 5]);
 		expect(fetch.mock.calls[0]![1].headers).toMatchObject({ Authorization: "Bearer router-key" });
-		expect(vectors.map((vector) => vector[0])).toEqual(texts.map((text) => text.length));
+		expect(vectors.map((vector) => vector?.[0])).toEqual(texts.map((text) => text.length));
+	});
+
+	it("finds the text the embedder refuses in a batch, and answers no vector for it alone", async () => {
+		const ok = answering();
+		const fetch = vi.fn(async (url: string, init: RequestInit) =>
+			String(init.body).includes("too long") ? new Response("input too long", { status: 422 }) : ok(url, init),
+		);
+		vi.stubGlobal("fetch", fetch);
+		const vectors = await createEmbedder(openRouter)!.embed(["a", "bb", "too long", "dddd"]);
+		expect(vectors).toEqual([[1, 1, 0], [2, 1, 0], null, [4, 1, 0]]);
+	});
+
+	it("keeps the key out of what it reports", async () => {
+		vi.stubGlobal("fetch", vi.fn(async () => new Response("unknown key router-key", { status: 401 })));
+		await expect(createEmbedder(openRouter)!.embed(["a"])).rejects.toThrow("unknown key [key]");
+		vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError('Headers.append: "Bearer router-key" is an invalid header value.'))));
+		const failure = await createEmbedder(openRouter)!.embed(["a"]).catch((error: Error) => error.message);
+		expect(failure).not.toContain("router-key");
+	});
+
+	it("asks OpenAI for a size only for the models that take one", async () => {
+		const fetch = vi.fn(async () => new Response(JSON.stringify({ data: [{ index: 0, embedding: [1, 0, 0] }] })));
+		vi.stubGlobal("fetch", fetch);
+		await createEmbedder({ source: "openAi", model: "text-embedding-ada-002", apiKey: "k", dimensions: 3 })!.embed(["a"]);
+		await createEmbedder({ source: "openAi", model: "text-embedding-3-small", apiKey: "k", dimensions: 3 })!.embed(["a"]);
+		const bodies = fetch.mock.calls.map((call) => JSON.parse(String((call as unknown as [string, RequestInit])[1].body)) as { dimensions?: number });
+		expect(bodies.map((body) => body.dimensions)).toEqual([undefined, 3]);
 	});
 
 	it("sends one request a text when the template holds one text", async () => {
