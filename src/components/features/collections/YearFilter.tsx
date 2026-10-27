@@ -17,13 +17,14 @@ import { shareOf, useFacetTotal } from "./ResultsOverview";
 function YearPicker({
 	label,
 	selectedKey,
-	onSelectionChange,
+	onYearChange,
 	years,
 	counts,
 }: {
 	label?: string;
 	selectedKey: string | null;
-	onSelectionChange: (value: string | number | null) => void;
+	/** A typed year waits for the reader to stop typing; one picked from the list applies `now`. */
+	onYearChange: (year: string, now: boolean) => void;
 	years: readonly string[];
 	/** Results per year, counted without the year filter. */
 	counts?: Record<string, number>;
@@ -32,10 +33,6 @@ function YearPicker({
 	// Years are counted without the year filter, so their shares are out of the results without it.
 	const total = useFacetTotal("year");
 	const largest = Math.max(1, ...years.map((year) => counts?.[year] ?? 0));
-	const [debouncedOnSelectionChange] = useDebounce(
-		onSelectionChange,
-		500,
-	);
 	const isYearsDropDownEnabled = useLibraryFeature("yearsDropdown");
 
 	if (!isYearsDropDownEnabled) {
@@ -44,9 +41,7 @@ function YearPicker({
 				type="number"
 				label={label}
 				defaultValue={selectedKey || ""}
-				onChange={(event) =>
-					debouncedOnSelectionChange(event.target.value)
-				}
+				onChange={(event) => onYearChange(event.target.value, false)}
 				classNames={{
 					inputWrapper:
 						"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
@@ -69,8 +64,8 @@ function YearPicker({
 			// follows runs before React re-renders, sees no pick, and commits again: it unpicks the year and empties the box.
 			// The list still closes on a click outside, through the popover.
 			shouldCloseOnBlur={false}
-			onInputChange={debouncedOnSelectionChange}
-			onSelectionChange={onSelectionChange}
+			onInputChange={(year) => onYearChange(year, false)}
+			onSelectionChange={(key) => onYearChange(String(key || ""), true)}
 			inputProps={{
 				classNames: {
 					inputWrapper:
@@ -115,19 +110,34 @@ export function YearFilter({
 }) {
 	const t = useTranslations("ui");
 	const [start = "", end = ""] = range.split("-");
-	// Both ends as the boxes last set them. Each box waits half a second before it applies, and the filter remounts with
-	// every new range, so a box that applies second must send the end the other box set, not the one it rendered with.
+	// Both ends as the boxes last set them, and one wait for both: the range applies half a second after the reader stops
+	// typing in either box. The filter remounts with every new range, and a wait that started before still applies, with
+	// the ends this instance's boxes hold.
 	const typed = useRef({ start, end });
 	const [isRangeMode, setIsRangeMode] = useState(() => range.includes("-"));
+	const [applySoon, , cancelApply] = useDebounce(onRangeChange, 500);
+
+	function changeYear(ends: { start?: string; end?: string }, now: boolean) {
+		Object.assign(typed.current, ends);
+		const next = [typed.current.start, isRangeMode ? typed.current.end : null] as const;
+		if (now) {
+			cancelApply();
+			onRangeChange(...next);
+		} else applySoon(...next);
+	}
 
 	function handleModeChange(selected: boolean) {
+		// The switch is the reader's latest choice. A year still waiting in the boxes goes with it, instead of applying
+		// after it and turning the switch back. The other mode starts with no end.
+		cancelApply();
+		typed.current.end = "";
 		setIsRangeMode(selected);
 		if (!selected) {
-			onRangeChange(start, null);
+			onRangeChange(typed.current.start, null);
 			return;
 		}
 
-		if (start) onRangeChange(start, "");
+		if (typed.current.start) onRangeChange(typed.current.start, "");
 	}
 
 	return (
@@ -158,20 +168,14 @@ export function YearFilter({
 							<YearPicker
 								label={t("from")}
 								selectedKey={start}
-								onSelectionChange={(key) => {
-									typed.current.start = String(key || "");
-									onRangeChange(typed.current.start, typed.current.end);
-								}}
+								onYearChange={(year, now) => changeYear({ start: year }, now)}
 								years={years}
 								counts={counts}
 							/>
 							<YearPicker
 								label={t("to")}
 								selectedKey={end}
-								onSelectionChange={(key) => {
-									typed.current.end = String(key || "");
-									onRangeChange(typed.current.start, typed.current.end);
-								}}
+								onYearChange={(year, now) => changeYear({ end: year }, now)}
 								years={years}
 								counts={counts}
 							/>
@@ -188,9 +192,7 @@ export function YearFilter({
 							<YearPicker
 								label={t("year")}
 								selectedKey={start}
-								onSelectionChange={(key) =>
-									onRangeChange(String(key || ""), null)
-								}
+								onYearChange={(year, now) => changeYear({ start: year }, now)}
 								years={years}
 								counts={counts}
 							/>
