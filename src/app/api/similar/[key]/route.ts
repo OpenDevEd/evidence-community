@@ -10,11 +10,11 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { Item } from "@/app/api/item/types";
-import { LIST_ITEM_FIELDS, toLightweightItem } from "@/lib/search";
+import { LIST_ITEM_FIELDS, publicRecordFilters, toLightweightItem } from "@/lib/search";
 import { publicTagRules } from "@/lib/tags";
 import { isEmbedderUnavailable } from "@/lib/search-index/embedder-settings";
 import { getRuntimeSearchAttributes } from "@/config/library-config/search";
-import { fieldNotEquals, fieldNotIn, SearchMeaningUnavailableError, type SearchEngine } from "@/lib/search-engine";
+import { fieldNotEquals, SearchMeaningUnavailableError, type SearchEngine } from "@/lib/search-engine";
 
 /** How far meaning ranks similar records, against words from the record's description, as in Meilisearch. */
 const SIMILAR_MEANING_RATIO = 0.7;
@@ -162,16 +162,10 @@ async function searchSimilarByStoredMeaning(
 	key: string,
 	config: LibraryServerConfig,
 ) {
-	const hidden = config.content.tags.hidden;
 	const answer = await engine.search<Item>({
 		text: description,
 		fields: getRuntimeSearchAttributes("title_abstract_author_and_keywords", config.search),
-		filters: [
-			fieldNotEquals("key", key),
-			fieldNotIn("itemType", EXCLUDED_ITEM_TYPES),
-			fieldNotEquals("deleted", 1),
-			...(hidden.length ? [fieldNotIn("tags", hidden)] : []),
-		],
+		filters: [fieldNotEquals("key", key), ...publicRecordFilters(config.content.tags.hidden)],
 		size: SIMILAR_RECORDS,
 		returned: { only: [...LIST_ITEM_FIELDS] },
 		exactTotal: false,
