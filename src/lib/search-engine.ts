@@ -93,7 +93,8 @@ export type SearchRequest = {
 	/**
 	 * Also rank by meaning with the library's embedder, `ratio` (0 to 1) of the way (OpenDevEd/new-el#720): by the
 	 * text's meaning, or in Elasticsearch, by the stored meaning of the record `like` names. Elasticsearch mixes the
-	 * two orders and answers no cursor; with a chosen order (`sort`) it ranks by words alone.
+	 * first 50 records of each order, counts facets over the word results, and answers no cursor; with a chosen order
+	 * (`sort`), a cursor, or a page past the result window, it ranks by words alone.
 	 */
 	semantic?: { ratio: number; like?: string };
 };

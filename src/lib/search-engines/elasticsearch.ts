@@ -99,16 +99,31 @@ function pastResultWindow(request: SearchRequest) {
 /** How deep the words and the meaning orders are read to mix them: a page's records come from at least this many of each. */
 const MIXED_DEPTH = 50;
 
-/** Whether words and meaning rank the results together; a chosen order ranks by words alone. */
+/** How long a reader's search waits for the embedder before words alone rank it. */
+const QUERY_EMBED_TIMEOUT_MS = 3_000;
+/** After the embedder fails a reader's search, searches skip it this long, so an outage costs one wait, not each. */
+const QUERY_EMBED_PAUSE_MS = 30_000;
+/** When each embedder, by fingerprint, may be asked again after it failed a reader's search. */
+const pausedEmbedders = new Map<string, number>();
+
+/**
+ * Whether words and meaning rank the results together: only from the first result, which a mixed answer starts at.
+ * A chosen order, a cursor, or a page past the result window ranks by words alone.
+ */
 function mixesMeaning(request: SearchRequest) {
-	return Boolean(request.semantic && request.semantic.ratio > 0 && !request.sort?.length);
+	const fromStart = !request.after && !request.before && !request.fromEnd && !pastResultWindow(request);
+	return Boolean(request.semantic && request.semantic.ratio > 0 && !request.sort?.length && fromStart);
 }
 
-/** The records nearest a vector by angle that pass the request's filters. */
-function nearestBody(request: SearchRequest, vector: number[], depth: number): Omit<estypes.SearchRequest, "index"> {
+/** A vector, and the embedder fingerprint of the vectors it can be compared with. */
+type Meaning = { vector: number[]; model: string };
+
+/** The records nearest a vector by angle, among those made by the same embedder, that pass the request's filters. */
+function nearestBody(request: SearchRequest, meaning: Meaning, depth: number): Omit<estypes.SearchRequest, "index"> {
+	const filter = [...request.filters.map(filterClause), { term: { embeddingModel: meaning.model } }];
 	return {
 		size: depth,
-		knn: { field: "embedding", query_vector: vector, k: depth, num_candidates: Math.min(10_000, Math.max(100, depth * 2)), filter: request.filters.map(filterClause) },
+		knn: { field: "embedding", query_vector: meaning.vector, k: depth, num_candidates: Math.min(10_000, Math.max(100, depth * 2)), filter },
 		...returnedFields(request.returned),
 	};
 }
@@ -208,29 +223,37 @@ export function elasticsearchEngine({ alias, client }: SearchService, embedder: 
 		};
 	}
 
-	/** A record's stored vector; it has none until the worker embeds it. */
-	async function storedVector(key: string, signal?: AbortSignal) {
-		const response = await client.search<{ embedding?: unknown }>(
+	/** A record's stored vector and the embedder that made it; it has none until the worker embeds it. */
+	async function storedMeaning(key: string, signal?: AbortSignal): Promise<Meaning> {
+		const response = await client.search<{ embedding?: unknown; embeddingModel?: string }>(
 			// Elasticsearch leaves vectors out of the records it sends back unless asked.
-			{ index: alias, size: 1, query: { ids: { values: [key] } }, _source: { includes: ["embedding"], exclude_vectors: false } as estypes.SearchSourceConfig },
+			{ index: alias, size: 1, query: { ids: { values: [key] } }, _source: { includes: ["embedding", "embeddingModel"], exclude_vectors: false } as estypes.SearchSourceConfig },
 			{ signal },
 		);
-		const vector = response.hits.hits[0]?._source?.embedding;
-		if (!Array.isArray(vector)) throw new SearchMeaningUnavailableError(key);
-		return vector as number[];
+		const stored = response.hits.hits[0]?._source;
+		if (!Array.isArray(stored?.embedding) || !stored.embeddingModel) throw new SearchMeaningUnavailableError(key);
+		return { vector: stored.embedding as number[], model: stored.embeddingModel };
+	}
+
+	/** The text's vector, or null when the embedder fails or doesn't answer in time, or failed a moment ago. */
+	async function textMeaning(model: Embedder, text: string, signal?: AbortSignal): Promise<Meaning | null> {
+		if (Date.now() < (pausedEmbedders.get(model.fingerprint) ?? 0)) return null;
+		const deadline = AbortSignal.timeout(QUERY_EMBED_TIMEOUT_MS);
+		try {
+			const [vector] = await model.embed([text], signal ? AbortSignal.any([signal, deadline]) : deadline);
+			return vector ? { vector, model: model.fingerprint } : null;
+		} catch (error) {
+			signal?.throwIfAborted();
+			pausedEmbedders.set(model.fingerprint, Date.now() + QUERY_EMBED_PAUSE_MS);
+			console.warn(`Search: the embedder failed, so words alone rank searches for ${QUERY_EMBED_PAUSE_MS / 1_000} s. ${error instanceof Error ? error.message : String(error)}`);
+			return null;
+		}
 	}
 
 	/** The vector to search by: the record's own, or the text's from the embedder; null to rank by words alone. */
 	async function meaningOf(request: SearchRequest) {
-		if (request.semantic?.like) return storedVector(request.semantic.like, request.signal);
-		if (!embedder || !request.text.trim()) return null;
-		try {
-			return (await embedder.embed([request.text], request.signal))[0] ?? null;
-		} catch (error) {
-			request.signal?.throwIfAborted();
-			console.warn(`Search: the embedder failed, so words alone rank the results. ${error instanceof Error ? error.message : String(error)}`);
-			return null;
-		}
+		if (request.semantic?.like) return storedMeaning(request.semantic.like, request.signal);
+		return embedder && request.text.trim() ? textMeaning(embedder, request.text, request.signal) : null;
 	}
 
 	/**
@@ -240,11 +263,11 @@ export function elasticsearchEngine({ alias, client }: SearchService, embedder: 
 	 */
 	async function searchMixed<T>(request: SearchRequest): Promise<SearchAnswer<T>> {
 		const byWords = { ...request, semantic: undefined };
-		const vector = await meaningOf(request);
-		if (!vector) return searchByWords<T>(byWords);
+		const meaning = await meaningOf(request);
+		if (!meaning) return searchByWords<T>(byWords);
 		const from = request.from ?? 0;
 		const depth = Math.max(MIXED_DEPTH, from + request.size);
-		const searches = [{}, searchBody({ ...byWords, from: 0, size: depth }), {}, nearestBody(request, vector, depth)];
+		const searches = [{}, searchBody({ ...byWords, from: 0, size: depth }), {}, nearestBody(request, meaning, depth)];
 		const [words, nearest] = (await client.msearch<T>({ index: alias, searches }, { signal: request.signal })).responses;
 		return mixedAnswer(request, answered(words), nearestHits(nearest));
 	}

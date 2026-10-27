@@ -71,16 +71,16 @@ describe("a deep read that starts past every result", () => {
  * An index whose words search answers `words` and whose nearest-vector search answers `nearest`, by key. Asked for keys
  * alone, it sends them as doc values without `_id`, as Elasticsearch does.
  */
-function mixed(words: string[], nearest: string[], stored: Record<string, number[]> = {}) {
+function mixed(words: string[], nearest: string[], stored: Record<string, number[]> = {}, fingerprint = "model") {
 	const hits = (keys: string[]) => ({ hits: { total: { value: keys.length, relation: "eq" }, hits: keys.map((key) => ({ fields: { key: [key] } })) } });
 	const client = {
 		search: vi.fn(async (body: { query: { ids?: { values: string[] } } }) => {
 			const key = body.query.ids?.values[0];
-			return key ? { hits: { hits: stored[key] ? [{ _id: key, _source: { embedding: stored[key] } }] : [] } } : hits(words);
+			return key ? { hits: { hits: stored[key] ? [{ _id: key, _source: { embedding: stored[key], embeddingModel: "stored-model" } }] : [] } } : hits(words);
 		}),
 		msearch: vi.fn(async () => ({ responses: [hits(words), hits(nearest)] })),
 	};
-	const embedder = { fingerprint: "model", embed: vi.fn(async () => [[1, 0]]) };
+	const embedder = { fingerprint, embed: vi.fn(async (_texts: readonly string[], _signal?: AbortSignal) => [[1, 0]]) };
 	return { client, embedder, engine: elasticsearchEngine({ alias: "library", client: client as never }, embedder) };
 }
 
@@ -93,14 +93,34 @@ describe("a search by words and meaning in Elasticsearch", () => {
 		// b: 0.5/62 + 0.5/61, a: 0.5/61, c: 0.5/62.
 		expect(answer.hits.map((hit) => hit.key)).toEqual(["b", "a", "c"]);
 		const [{ searches }] = client.msearch.mock.calls[0] as unknown as [{ searches: Array<Record<string, unknown>> }];
-		expect(searches[3]).toMatchObject({ knn: { field: "embedding", query_vector: [1, 0], k: 50, filter: [{ term: { itemType: "book" } }] } });
+		// Only vectors the same embedder made compare: while a library rebuilds after changing it, the old ones remain.
+		expect(searches[3]).toMatchObject({ knn: { field: "embedding", query_vector: [1, 0], k: 50, filter: [{ term: { itemType: "book" } }, { term: { embeddingModel: "model" } }] } });
 	});
 
-	it("ranks by words alone when the embedder fails", async () => {
-		const { client, embedder, engine } = mixed(["a", "b"], ["c"]);
+	it("ranks by words alone when the embedder fails, and leaves it alone for the next searches", async () => {
+		const { client, embedder, engine } = mixed(["a", "b"], ["c"], {}, "failing-model");
 		embedder.embed.mockRejectedValueOnce(new Error("503 busy"));
 		const answer = await engine.search<{ key: string }>(asked);
 		expect(answer.hits.map((hit) => hit.key)).toEqual(["a", "b"]);
+		await engine.search(asked);
+		expect(embedder.embed).toHaveBeenCalledTimes(1);
+		expect(client.msearch).not.toHaveBeenCalled();
+	});
+
+	it("ranks by words alone when the embedder doesn't answer within 3 seconds", async () => {
+		const { client, embedder, engine } = mixed(["a"], ["c"], {}, "slow-model");
+		embedder.embed.mockImplementationOnce(
+			(_texts, signal) => new Promise((_resolve, reject) => signal?.addEventListener("abort", () => reject(signal.reason as Error))),
+		);
+		const answer = await engine.search<{ key: string }>(asked);
+		expect(answer.hits.map((hit) => hit.key)).toEqual(["a"]);
+		expect(client.msearch).not.toHaveBeenCalled();
+	});
+
+	it("ranks by words alone past the first page's start, as with a cursor", async () => {
+		const { client, embedder, engine } = mixed(["a"], ["c"], {}, "cursor-model");
+		await engine.search({ ...asked, after: [1, "a"] });
+		expect(embedder.embed).not.toHaveBeenCalled();
 		expect(client.msearch).not.toHaveBeenCalled();
 	});
 
@@ -109,7 +129,7 @@ describe("a search by words and meaning in Elasticsearch", () => {
 		await engine.search({ ...asked, semantic: { ratio: 0.7, like: "K" } });
 		expect(embedder.embed).not.toHaveBeenCalled();
 		const [{ searches }] = client.msearch.mock.calls[0] as unknown as [{ searches: Array<Record<string, unknown>> }];
-		expect(searches[3]).toMatchObject({ knn: { query_vector: [0, 1] } });
+		expect(searches[3]).toMatchObject({ knn: { query_vector: [0, 1], filter: [{ term: { itemType: "book" } }, { term: { embeddingModel: "stored-model" } }] } });
 	});
 
 	it("says so when the record has no vector yet", async () => {
