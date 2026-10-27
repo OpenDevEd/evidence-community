@@ -229,6 +229,17 @@ it("rebuilds existing search documents when topic visibility changes and retains
     await setSearchIndexRebuildPending(db, false);
     expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(false);
     expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"])).toBe(true);
+    // In Elasticsearch the worker makes the vectors, so another embedder, or none, rebuilds; Meilisearch embeds itself.
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-a")).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-a")).toBe(false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-b")).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], null)).toBe(true);
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 11, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"], "model-a")).toBe(false);
   });
 });
 

@@ -23,8 +23,9 @@ import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-write
 import type { ItemSearchDocument, SearchProjectionPlan } from "../src/lib/search-index/projection";
 
 const alias = `search_embedder_e2e_${process.pid}`;
+const elasticsearchUrl = process.env.ELASTICSEARCH_URL ?? "http://127.0.0.1:59200";
 const client = new Client({
-	node: process.env.ELASTICSEARCH_URL ?? "http://127.0.0.1:59200",
+	node: elasticsearchUrl,
 	auth: { username: process.env.ELASTICSEARCH_USERNAME ?? "elastic", password: process.env.ELASTICSEARCH_PASSWORD ?? "local-search-password" },
 });
 const service: SearchService = { alias, client };
@@ -120,8 +121,11 @@ function library(configuration: LibraryServerConfig["search"]["embedder"]) {
 	return { writer: elasticsearchWriter(service, embeddings), embeddings, engine: elasticsearchEngine(service, embedder) };
 }
 
+/** A rebuild, which reuses stored vectors only, then the worker's backfill; returns how many records it embedded. */
 async function rebuild(configuration: LibraryServerConfig["search"]["embedder"], documents = records) {
-	await library(configuration).writer.rebuild(plansOf(documents), { ...writeOptions, reproject: () => plansOf([]) });
+	const { writer, embeddings } = library(configuration);
+	await writer.rebuild(plansOf(documents), { ...writeOptions, reproject: () => plansOf([]) });
+	return embeddings ? embeddings.embedMissing() : 0;
 }
 
 async function write(configuration: LibraryServerConfig["search"]["embedder"], documents: readonly ItemSearchDocument[]) {
@@ -135,10 +139,14 @@ async function withoutVectors() {
 	return (await client.count({ index: alias, query: { bool: { must_not: [{ exists: { field: "embedding" } }] } } })).count;
 }
 
-async function dimensions() {
+async function vectorField() {
 	const mappings = await client.indices.getMapping({ index: alias });
-	const properties = Object.values(mappings)[0]!.mappings.properties as Record<string, { dims?: number }>;
-	return properties.embedding?.dims;
+	const properties = Object.values(mappings)[0]!.mappings.properties as Record<string, { dims?: number; index_options?: { type: string } }>;
+	return properties.embedding;
+}
+
+async function dimensions() {
+	return (await vectorField())?.dims;
 }
 
 const searched = { fields: ["title", "abstractNote"], filters: [], returned: { only: ["key"] } };
@@ -158,17 +166,21 @@ type Stub = Awaited<ReturnType<typeof startEmbedder>>;
 type Configuration = LibraryServerConfig["search"]["embedder"];
 
 async function turnOn(stub: Stub, enabled: Configuration) {
-	await rebuild(enabled);
-	assert(stub.state.texts === 4, `Turning the embedder on embedded ${stub.state.texts} texts, not 4.`);
+	const embedded = await rebuild(enabled);
+	assert(stub.state.texts === 4 && embedded === 4, `Turning the embedder on embedded ${stub.state.texts} texts, not 4.`);
+	assert((await vectorField())?.index_options?.type === "hnsw", "The vectors should be kept as unquantised floats (hnsw).");
 	assert((await withoutVectors()) === 0, "A record has no vector after the embedder was turned on.");
 	assert((await dimensions()) === 1_024, `The vectors have ${await dimensions()} dimensions, not 1,024.`);
-	step("embedder on", "4 records embedded, 1,024 float dimensions");
+	step("embedder on", "the rebuild wrote 4 records, the backfill embedded them: 1,024 unquantised float dimensions");
 }
 
 async function searchByMeaning(enabled: Configuration) {
 	const byMeaning = await keys(library(enabled).engine, { text: "radio lessons", size: 4, semantic: { ratio: 1 } });
 	assert(byMeaning.join(",").startsWith("RADIO001,RURAL001,") && byMeaning.length === 4, `Search by meaning answered ${byMeaning.join(", ")}.`);
-	step("search by meaning", byMeaning.join(", "));
+	// AI search weighs words and meaning alike; "radio" alone matches two records by words.
+	const asAiSearch = await keys(library(enabled).engine, { text: "radio lessons", size: 4, semantic: { ratio: 0.5 } });
+	assert(asAiSearch[0] === "RADIO001" && asAiSearch.length === 4, `Words and meaning alike answered ${asAiSearch.join(", ")}.`);
+	step("search by meaning", `${byMeaning.join(", ")}; with words alike ${asAiSearch.join(", ")}`);
 }
 
 async function searchFromRecord(enabled: Configuration) {
@@ -187,10 +199,10 @@ async function changeRecord(stub: Stub, enabled: Configuration) {
 
 async function rebuildReusing(stub: Stub, enabled: Configuration) {
 	const before = stub.state.texts;
-	await rebuild(enabled);
-	assert(stub.state.texts === before + 1, `The rebuild embedded ${stub.state.texts - before} texts, not just RADIO001's restored title.`);
+	const embedded = await rebuild(enabled);
+	assert(embedded === 1 && stub.state.texts === before + 1, `The rebuild and backfill embedded ${stub.state.texts - before} texts, not just RADIO001's restored title.`);
 	assert((await withoutVectors()) === 0, "A record lost its vector in the rebuild.");
-	step("rebuild", "3 of 4 vectors reused from the old index");
+	step("rebuild", "3 of 4 vectors reused from the old index; the backfill embedded the changed one");
 }
 
 async function recoverFromFailure(stub: Stub, enabled: Configuration) {
@@ -251,12 +263,19 @@ async function verify(stub: Stub) {
 }
 
 async function main() {
+	// It creates and deletes indexes; a local Elasticsearch only, unless asked.
+	const host = new URL(elasticsearchUrl).hostname;
+	if (!["127.0.0.1", "localhost", "::1"].includes(host) && process.env.EMBEDDER_TEST_ALLOW_REMOTE !== "1") {
+		throw new Error(`ELASTICSEARCH_URL names ${host}; set EMBEDDER_TEST_ALLOW_REMOTE=1 to check a remote Elasticsearch.`);
+	}
 	const stub = await startEmbedder();
 	try {
 		await verify(stub);
 		console.log("Search embedder verification passed.");
 	} finally {
-		await library(null).writer.remove().catch(() => undefined);
+		await library(null)
+			.writer.remove()
+			.catch((error: unknown) => console.error(`Deleting the test indexes ${alias}_* failed: ${error instanceof Error ? error.message : error}`));
 		await stub.close();
 		await client.close();
 	}
