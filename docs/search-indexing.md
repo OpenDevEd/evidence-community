@@ -212,6 +212,15 @@ Writing records:
   `embeddingModel` without a vector, and isn't sent again until its text or the
   embedder changes. A REST embedder gets 10 texts a request, as Meilisearch
   sends; a refused batch is split to find the texts it refuses.
+- The worker keeps 8 requests in flight to the embedder, shared by everything it
+  embeds. A hosted service takes more: set `SEARCH_EMBEDDER_PARALLEL_REQUESTS`
+  (1 to 64) on the search worker. The backfill reads twice that many requests'
+  records at a time. To choose, time the embedder on the library's own records;
+  it writes nothing, but a paid embedder charges for what it embeds:
+
+  ```sh
+  LIBRARY_CONFIG_PATH=… npm run search:embedder-speed -- --records 1000 --parallel 8,16,32
+  ```
 
 Searching:
 

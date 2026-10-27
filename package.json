@@ -52,6 +52,7 @@
 		"pdf:reread-text": "tsx --conditions=react-server ./tools/rereadPdfText.ts",
 		"source:writeback": "tsx ./tools/runSourceWriteback.ts",
 		"search:index": "tsx ./tools/runSearchIndexer.ts",
+		"search:embedder-speed": "tsx ./tools/timeSearchEmbedder.ts",
 		"search:index:health": "tsx ./tools/checkSearchIndexerHealth.ts",
 		"search:copy-redirects": "tsx ./tools/copyMeilisearchRedirects.ts",
 		"search:compare": "tsx --conditions=react-server ./tools/compareSearchEngines.ts",
