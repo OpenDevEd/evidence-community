@@ -19,13 +19,26 @@ const TEXT_FIELDS = ["title", "abstractNote", "fullNames", "tags", "year"];
 /** Elasticsearch answers at most this many records at once. */
 const MOST_RECORDS = 10_000;
 
+function wholeNumberIn(value: number, lowest: number, highest: number) {
+	return Number.isSafeInteger(value) && value >= lowest && value <= highest;
+}
+
 function settings() {
 	const { values } = parseArgs({ options: { records: { type: "string", default: "1000" }, parallel: { type: "string", default: "8" } } });
 	const records = Number(values.records);
 	const parallel = values.parallel.split(",").map(Number);
-	if (!Number.isSafeInteger(records) || records < 1 || records > MOST_RECORDS) throw new Error(`--records must be 1 to ${MOST_RECORDS}.`);
-	if (!parallel.every((value) => Number.isSafeInteger(value) && value >= 1 && value <= 64)) throw new Error("--parallel takes numbers from 1 to 64, such as 8,16,32.");
+	if (!wholeNumberIn(records, 1, MOST_RECORDS)) throw new Error(`--records must be 1 to ${MOST_RECORDS}.`);
+	if (!parallel.every((value) => wholeNumberIn(value, 1, 64))) throw new Error("--parallel takes numbers from 1 to 64, such as 8,16,32.");
 	return { records, parallel };
+}
+
+/** The library's configuration from `LIBRARY_CONFIG_PATH`, which must have an embedder. */
+async function libraryWithEmbedder() {
+	const configPath = process.env.LIBRARY_CONFIG_PATH;
+	if (!configPath) throw new Error("LIBRARY_CONFIG_PATH is required");
+	const config = libraryConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
+	if (!config.search.embedder) throw new Error("This library has no embedder.");
+	return config;
 }
 
 /** `count` records' embedding texts, chosen at random, and how many records the library has. */
@@ -64,21 +77,24 @@ async function timeSetting(config: LibraryServerConfig, parallelRequests: number
 	return { parallelRequests, pageRecords: page, records: texts.length, refused, seconds: Number(seconds.toFixed(1)), recordsPerSecond: Number((texts.length / seconds).toFixed(1)) };
 }
 
+/** One setting's timing, with how long the whole library would take, or why it failed. */
+function timed(config: LibraryServerConfig, parallelRequests: number, texts: readonly string[], total: number) {
+	return timeSetting(config, parallelRequests, texts).then(
+		(result) => ({ ...result, wholeLibraryMinutes: Math.round(total / result.recordsPerSecond / 60) }),
+		(error: unknown) => ({ parallelRequests, failed: error instanceof Error ? error.message : String(error) }),
+	);
+}
+
 async function main() {
 	const { records, parallel } = settings();
-	const configPath = process.env.LIBRARY_CONFIG_PATH;
-	if (!configPath) throw new Error("LIBRARY_CONFIG_PATH is required");
-	const config = libraryConfigSchema.parse(JSON.parse(await readFile(configPath, "utf8")));
-	if (!config.search.embedder) throw new Error("This library has no embedder.");
+	const config = await libraryWithEmbedder();
 	const { total, texts } = await libraryTexts(config, records);
 	const bytes = texts.reduce((sum, text) => sum + Buffer.byteLength(text, "utf8"), 0);
 	console.log(`${texts.length.toLocaleString("en")} of ${total.toLocaleString("en")} records, ${Math.round(bytes / texts.length)} bytes of text on average`);
 	const share = Math.ceil(texts.length / parallel.length);
 	const results = [];
 	for (const [index, requests] of parallel.entries()) {
-		const own = texts.slice(index * share, (index + 1) * share);
-		const result = await timeSetting(config, requests, own).catch((error: unknown) => ({ parallelRequests: requests, failed: error instanceof Error ? error.message : String(error) }));
-		results.push("recordsPerSecond" in result ? { ...result, wholeLibraryMinutes: Math.round(total / result.recordsPerSecond / 60) } : result);
+		results.push(await timed(config, requests, texts.slice(index * share, (index + 1) * share), total));
 	}
 	console.log(JSON.stringify({ libraryRecords: total, meanTextBytes: Math.round(bytes / texts.length), results }, null, 1));
 }
