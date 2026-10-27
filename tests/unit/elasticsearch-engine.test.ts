@@ -80,7 +80,7 @@ function mixed(words: string[], nearest: string[], stored: Record<string, number
 		}),
 		msearch: vi.fn(async () => ({ responses: [hits(words), hits(nearest)] })),
 	};
-	const embedder = { fingerprint, embed: vi.fn(async (_texts: readonly string[], _signal?: AbortSignal) => [[1, 0]]) };
+	const embedder = { fingerprint, capacity: 80, embed: vi.fn(async (_texts: readonly string[], _signal?: AbortSignal) => [[1, 0]]) };
 	return { client, embedder, engine: elasticsearchEngine({ alias: "library", client: client as never }, embedder) };
 }
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { answerVectors, createEmbedder, embedderFingerprint, EmbedderError, requestBody } from "@/lib/embedder";
+import { answerVectors, createEmbedder, embedderFingerprint, EmbedderError, embedderParallelRequests, requestBody } from "@/lib/embedder";
 
 /** AIED's embedder: Perplexity's 0.6B model through OpenRouter, several texts a request. */
 const openRouter = {
@@ -107,5 +107,29 @@ describe("calling the library's embedder", () => {
 		expect(createEmbedder(null)).toBeNull();
 		expect(embedderFingerprint({ ...openRouter, apiKey: "other-key" })).toBe(embedderFingerprint(openRouter));
 		expect(embedderFingerprint({ ...openRouter, dimensions: 512 })).not.toBe(embedderFingerprint(openRouter));
+	});
+});
+
+describe("the worker's requests in flight", () => {
+	it("is 8 unless set, and refuses a setting outside 1 to 64", () => {
+		expect(embedderParallelRequests(undefined)).toBe(8);
+		expect(embedderParallelRequests("32")).toBe(32);
+		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 64");
+		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 64");
+		expect(createEmbedder(openRouter, { parallelRequests: 32 })!.capacity).toBe(320);
+	});
+
+	it("keeps at most that many requests in flight", async () => {
+		let inFlight = 0;
+		let most = 0;
+		const ok = answering();
+		vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+			most = Math.max(most, ++inFlight);
+			await new Promise((resolve) => setTimeout(resolve, 5));
+			inFlight -= 1;
+			return ok(url, init);
+		}));
+		await createEmbedder(openRouter, { parallelRequests: 3 })!.embed(Array.from({ length: 100 }, (_, index) => `text ${index}`));
+		expect(most).toBe(3);
 	});
 });

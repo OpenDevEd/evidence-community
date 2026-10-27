@@ -41,9 +41,16 @@ const LONGEST_PAUSE_MS = 30 * 60_000;
 /** The most numbers an indexed `dense_vector` holds. */
 const MOST_DIMENSIONS = 4_096;
 
-/** Records `embedMissing` reads at once, and how long it may run before the worker drains the outbox again. */
-const MISSING_PAGE = 100;
+/**
+ * How long `embedMissing` may run before the worker drains the outbox again; it checks between pages. A page keeps
+ * every request in flight twice over, between 100 and 1,000 records: a model on CPU gets small pages, so a page doesn't
+ * hold up the drain long, and a hosted service large ones, so its requests don't wait on a page's slowest.
+ */
 const MISSING_TIME_MS = 30_000;
+
+export function missingPage(embedder: Embedder) {
+	return Math.min(1_000, Math.max(100, 2 * embedder.capacity));
+}
 
 function hashOf(fingerprint: string, text: string) {
 	return createHash("sha256").update(`${fingerprint}\n${text}`).digest("hex").slice(0, 32);
@@ -81,13 +88,13 @@ async function readStored(search: SearchService, keys: readonly string[], signal
 }
 
 /** Records without a vector that this embedder hasn't refused, after `after` in key order, as last written. */
-function readMissing(search: SearchService, fingerprint: string, after: estypes.SortResults | undefined, signal?: AbortSignal) {
+function readMissing(search: SearchService, embedder: Embedder, after: estypes.SortResults | undefined, signal?: AbortSignal) {
 	const request = search.client.search<Record<string, unknown>>(
 		{
 			index: search.alias,
 			ignore_unavailable: true,
-			size: MISSING_PAGE,
-			query: { bool: { must_not: [{ exists: { field: "embedding" } }, { term: { embeddingModel: fingerprint } }] } },
+			size: missingPage(embedder),
+			query: { bool: { must_not: [{ exists: { field: "embedding" } }, { term: { embeddingModel: embedder.fingerprint } }] } },
 			sort: [{ key: "asc" }],
 			...(after ? { search_after: after } : {}),
 			seq_no_primary_term: true,
@@ -166,7 +173,7 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 			let written = 0;
 			let after: estypes.SortResults | undefined;
 			while (Date.now() < stopAt) {
-				const hits = (await readMissing(search, embedder.fingerprint, after, signal)).hits.hits;
+				const hits = (await readMissing(search, embedder, after, signal)).hits.hits;
 				if (hits.length === 0) break;
 				const texts = hits.map((hit) => embeddingText(hit._source ?? {}));
 				const vectors = await embed(texts, signal);
@@ -178,7 +185,7 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 				]);
 				written += writtenUpdates(await stoppable(search.client.bulk({ operations }, { signal }), signal));
 				after = hits.at(-1)!.sort;
-				if (hits.length < MISSING_PAGE) break;
+				if (hits.length < missingPage(embedder)) break;
 			}
 			return written;
 		},

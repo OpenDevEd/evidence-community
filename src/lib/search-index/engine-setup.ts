@@ -3,7 +3,7 @@ import { MeilisearchApiError } from "meilisearch";
 
 import type { LibraryServerConfig, SearchEngineName } from "@/config/library-config/schema";
 import { RevisionAwareSearchFactory } from "@/lib/elasticsearch-factory";
-import { createEmbedder } from "@/lib/embedder";
+import { createEmbedder, embedderParallelRequests } from "@/lib/embedder";
 import { RevisionAwareMeilisearchFactory, type MeilisearchService } from "@/lib/meilisearch-factory";
 
 import { elasticsearchEmbeddings } from "./elasticsearch-embeddings";
@@ -107,7 +107,7 @@ async function meilisearchSetup(config: Config): Promise<SearchWriterSetup> {
 
 async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 	const service = await new RevisionAwareSearchFactory().get(connection(config, "elasticsearch"));
-	const embedder = createEmbedder(config.search.embedder);
+	const embedder = createEmbedder(config.search.embedder, { parallelRequests: embedderParallelRequests(process.env.SEARCH_EMBEDDER_PARALLEL_REQUESTS) });
 	const embeddings = embedder ? elasticsearchEmbeddings(service, embedder) : null;
 	return {
 		writer: elasticsearchWriter(service, embeddings),

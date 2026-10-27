@@ -40,6 +40,7 @@ function library(
 function embedder(fail = false, refuse = "", fingerprint = "perplexity-0.6b") {
 	return {
 		fingerprint,
+		capacity: 80,
 		embed: vi.fn(async (texts: readonly string[]) => {
 			if (fail) throw new Error("401 bad key");
 			return texts.map((text) => (refuse && text.includes(refuse) ? null : [text.length, 1]));

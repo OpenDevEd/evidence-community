@@ -16,6 +16,8 @@ export type EmbedderConfiguration = NonNullable<LibraryServerConfig["search"]["e
 export type Embedder = {
 	/** Changes when the embedder would give other vectors for the same text; its key isn't part of it. */
 	readonly fingerprint: string;
+	/** How many texts it embeds at once: requests in flight times texts a request. */
+	readonly capacity: number;
 	/**
 	 * One vector for each text, in order, or null for a text the embedder refuses, as one too long for it. Throws
 	 * `EmbedderError` when the embedder fails as a whole: a refused key, no answer, or an answer that holds no vectors.
@@ -48,8 +50,22 @@ const REST_BATCH_TEXTS = 10;
 const OPENAI_BATCH_TEXTS = 64;
 const BATCH_BYTES = 256 * 1024;
 
-/** Requests in flight at once to one embedder, whoever asks: every claim the worker drains shares them. */
+/**
+ * Requests in flight at once to one embedder, whoever asks: every claim the worker drains shares them. A hosted service
+ * takes many more than a model on a few CPU cores; `SEARCH_EMBEDDER_PARALLEL_REQUESTS` sets it for the worker.
+ */
 const PARALLEL_REQUESTS = 8;
+const MOST_PARALLEL_REQUESTS = 64;
+
+/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 64. */
+export function embedderParallelRequests(value: string | undefined) {
+	if (value === undefined || value.trim() === "") return PARALLEL_REQUESTS;
+	const requests = Number(value);
+	if (!Number.isSafeInteger(requests) || requests < 1 || requests > MOST_PARALLEL_REQUESTS) {
+		throw new Error(`SEARCH_EMBEDDER_PARALLEL_REQUESTS must be a whole number from 1 to ${MOST_PARALLEL_REQUESTS}.`);
+	}
+	return requests;
+}
 
 /** A self-hosted model on CPU embeds about 3 records a second, so a batch can take tens of seconds. */
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -229,12 +245,15 @@ function limiter(size: number) {
 	};
 }
 
-/** The library's embedder, or null when it has none. */
-export function createEmbedder(configuration: LibraryServerConfig["search"]["embedder"]): Embedder | null {
+/** The library's embedder, or null when it has none; `parallelRequests` requests in flight at once. */
+export function createEmbedder(
+	configuration: LibraryServerConfig["search"]["embedder"],
+	{ parallelRequests = PARALLEL_REQUESTS }: { parallelRequests?: number } = {},
+): Embedder | null {
 	if (!configuration) return null;
 	const call = (texts: readonly string[]) => (configuration.source === "openAi" ? openAiCall(configuration, texts) : restCall(configuration, texts));
 	const batchSize = configuration.source === "openAi" ? OPENAI_BATCH_TEXTS : sendsBatches(configuration.request) ? REST_BATCH_TEXTS : 1;
-	const inTurn = limiter(PARALLEL_REQUESTS);
+	const inTurn = limiter(parallelRequests);
 
 	/** Vectors for one batch; a refused batch is split in halves to find the texts the embedder refuses. */
 	const embedBatch = async (texts: readonly string[], signal: AbortSignal): Promise<Array<number[] | null>> => {
@@ -260,6 +279,7 @@ export function createEmbedder(configuration: LibraryServerConfig["search"]["emb
 
 	return {
 		fingerprint: embedderFingerprint(configuration),
+		capacity: parallelRequests * batchSize,
 		async embed(texts, signal) {
 			// The first failure stops the call's other requests, which would only fail the same way.
 			const stop = new AbortController();
