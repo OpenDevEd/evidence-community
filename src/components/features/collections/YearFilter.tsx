@@ -137,7 +137,8 @@ export function YearFilter({
 			return;
 		}
 
-		if (typed.current.start) onRangeChange(typed.current.start, "");
+		// A Year cleared but still waiting has to clear the applied one too.
+		if (typed.current.start || start) onRangeChange(typed.current.start, "");
 	}
 
 	return (
