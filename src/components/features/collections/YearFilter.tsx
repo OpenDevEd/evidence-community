@@ -65,6 +65,10 @@ function YearPicker({
 			fullWidth
 			defaultInputValue={selectedKey || ""}
 			allowsCustomValue
+			// Tab already commits the typed year (React Aria's keydown picks the focused option). In Firefox the blur that
+			// follows runs before React re-renders, sees no pick, and commits again: it unpicks the year and empties the box.
+			// The list still closes on a click outside, through the popover.
+			shouldCloseOnBlur={false}
 			onInputChange={debouncedOnSelectionChange}
 			onSelectionChange={onSelectionChange}
 			inputProps={{
