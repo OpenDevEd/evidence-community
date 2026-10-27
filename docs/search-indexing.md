@@ -92,7 +92,8 @@ to the old index, and acknowledge its event, after the rebuild read that record;
 every event acknowledged after the rebuild started is therefore put back once
 the alias moves, and the drain writes it again. On AIED (282,948 records) a
 rebuild takes about 5 to 8 minutes; reading the records from PostgreSQL is the
-slower half.
+slower half. Measured before records had vectors: a rebuild now also reads each
+record's stored vector to reuse it, and calls no embedder (see Embedder).
 
 Projection reads remain bounded to at most 500 item keys, while outgoing bulk
 requests are split by serialized size and stay below a 20 MiB default budget. A
@@ -182,33 +183,79 @@ Changing `search.embedder` needs a search-worker restart. Check
 Elasticsearch's free licence stores and searches vectors but can't call an
 embedding service, and its own result fusion needs a paid licence
 (OpenDevEd/new-el#720). So the worker calls the embedder and the application
-mixes the results:
+mixes the results.
 
-- The worker writes each record with its vector in `embedding`, a 32-bit float
-  `dense_vector` compared by cosine, unquantised. The first vector sets the
+Writing records:
+
+- Each record is written with its vector in `embedding`, a 32-bit float
+  `dense_vector` compared by cosine and not quantised. The first vector sets the
   number of dimensions. `embeddingHash` records the embedder and the text the
-  vector came from. A record written again with the same text keeps its vector,
-  so a rebuild reads the vectors from the index readers search and embeds only
-  changed records.
-- Changing `search.embedder` rebuilds the index: every record is embedded again
-  with the new embedder, or written without a vector when it is `null`.
+  vector came from, and `embeddingModel` the embedder alone.
+- A record written again with the same text keeps its vector. A rebuild only
+  copies the vectors of the index readers search and calls no embedder: it takes
+  minutes, and a stopped rebuild loses no embedding work.
+- After each outbox pass, the worker embeds records that have no vector, for at
+  most 30 s, then drains the outbox again. What it embedded stays when it stops.
+  This fills a library after a rebuild that changed records' text, after an
+  embedder change, after a switch from Meilisearch, and on its first build. A
+  model served from 16 CPU cores embedded 2.8 AIED records a second, about a day
+  for all of AIED; a hosted service is much faster, but its speed for AIED isn't
+  measured yet.
+- Changing `search.embedder` rebuilds the index, so no vector of the old
+  embedder stays; the worker then embeds every record with the new one. With
+  `null`, records are written without a vector.
 - When the embedder fails, records are written without a vector, so word search
   stays current, and the worker records the error as `lastError`. It leaves the
-  embedder alone for a minute, doubling up to 30 minutes, then embeds the
-  records that have no vector, up to 2,000 after each outbox pass.
-- Similar Resources mixes the six records nearest the record's stored vector
-  (weight 0.7) with records matching words from its description (0.3). It needs
-  no call to the embedder, and answers 503 until the record has a vector.
-- AI search and chat embed the question and mix the nearest records with the
-  word results, 0.5 each. If the embedder fails, words alone rank them.
-- Both mix the two orders by reciprocal rank fusion, Elastic's formula:
-  `weight / (60 + rank)`, summed for each record.
+  embedder alone for a minute, doubling up to 30 minutes, and the backfill
+  embeds those records once it answers.
+- A text the embedder refuses, as one too long for it, gets its hash and
+  `embeddingModel` without a vector, and isn't sent again until its text or the
+  embedder changes. A REST embedder gets 10 texts a request, as Meilisearch
+  sends; a refused batch is split to find the texts it refuses.
 
-Vectors need memory beside the heap: about `records × dimensions × 4` bytes
-for the vectors, plus `records × 64` for the graph. AIED's 283,000 records at
-1,024 dimensions need about 1.2 GB. Elasticsearch's default quantisation would
-need about a 32nd of that, but would lose some accuracy.
-([Elasticsearch: approximate kNN memory](https://www.elastic.co/docs/deploy-manage/production-guidance/optimize-performance/approximate-knn-search))
+Searching:
+
+- Similar Resources mixes the 50 records nearest the record's stored vector
+  (weight 0.7) with the 50 best word matches for its description (0.3), and
+  shows the first six. It calls no embedder, and answers 503 until the record
+  has a vector.
+- AI search and chat embed the question and mix the nearest records with the
+  word results, 0.5 each. They wait 3 s for the embedder; then words alone rank
+  the search, and the next 30 s of searches skip the embedder.
+- Both compare only vectors the same embedder made (`embeddingModel`), so while
+  a library rebuilds after changing its embedder, questions embedded by the new
+  one find no old vectors and rank by words.
+- Both mix the two orders by reciprocal rank fusion, Elastic's formula:
+  `weight / (60 + rank)`, summed for each record. Facet counts come from the
+  word results.
+
+Vectors need memory beside the heap, for each library on the host
+([Elasticsearch: approximate kNN memory](https://www.elastic.co/docs/deploy-manage/production-guidance/optimize-performance/approximate-knn-search)).
+For AIED, 282,948 records at 1,024 dimensions:
+
+| Index option | Memory beside the heap |
+|---|---|
+| `hnsw`, 32-bit floats (chosen, 2026-10-27) | 1.16 GB, plus 18 MB for the graph |
+| `int8_hnsw` | 0.29 GB, plus the graph |
+| `bbq_hnsw`, Elasticsearch's default from 9.1 | about 40 MB, plus the graph |
+
+Hassan chose unquantised floats. Perplexity's `pplx-embed-v1` models output int8
+values, so `int8_hnsw` would lose almost nothing and need a quarter of the
+memory; changing `index_options` changes the index version and rebuilds.
+
+To see how many records lack a vector, count them on the library's alias (they
+include records whose text the embedder refused):
+
+```http
+GET <alias>/_count
+{"query": {"bool": {"must_not": [{"exists": {"field": "embedding"}}]}}}
+```
+
+Elasticsearch leaves vectors out of the records it sends back unless a search
+asks for them with `"_source": {"exclude_vectors": false}`.
+
+Going back to code from before this change rebuilds each Elasticsearch library
+without vectors, and coming forward again embeds every record again.
 
 To check the Elasticsearch flow without any paid provider, run the script
 against a local Elasticsearch. It starts a stand-in embedder, then checks

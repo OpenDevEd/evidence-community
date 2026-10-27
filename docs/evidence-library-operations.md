@@ -465,6 +465,9 @@ the free Basic licence, with the ICU plugin), keeps its data in the
 join that network and reach it as `http://elasticsearch:9200`; the other
 workers don't. Set `ELASTICSEARCH_ADMIN_PASSWORD`, and `ELASTICSEARCH_HEAP`
 from the measurement in `plans/elasticsearch-search/01-size-on-a-real-library.md`.
+Leave memory beside the heap for every library's vectors: about
+`records × dimensions × 4` bytes each, 1.2 GB for AIED's 282,948 records at
+1,024 dimensions (`docs/search-indexing.md`, Embedder).
 
 The database provisioner joins `library-search` too and creates each library's
 login with the same token and request as its database:
