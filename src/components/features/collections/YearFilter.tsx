@@ -110,35 +110,57 @@ export function YearFilter({
 }) {
 	const t = useTranslations("ui");
 	const [start = "", end = ""] = range.split("-");
-	// Both ends as the boxes last set them, and one wait for both: the range applies half a second after the reader stops
-	// typing in either box. The filter remounts with every new range, and a wait that started before still applies, with
-	// the ends this instance's boxes hold.
-	const typed = useRef({ start, end });
+	// The range the boxes were filled from, the one this filter sent last, and how many times the boxes were filled. A range
+	// this filter sent leaves the boxes, and the focus, where the reader left them. One from anywhere else (a chip, Clear,
+	// the year bars) fills them again and sets the switch to match.
+	const [shown, setShown] = useState({ range, sent: null as string | null, fills: 0 });
 	const [isRangeMode, setIsRangeMode] = useState(() => range.includes("-"));
-	const [applySoon, , cancelApply] = useDebounce(onRangeChange, 500);
+	if (range !== shown.range) {
+		const sentHere = range === shown.sent;
+		setShown({ range, sent: null, fills: shown.fills + (sentHere ? 0 : 1) });
+		if (!sentHere) setIsRangeMode(range.includes("-"));
+	}
+	// Both ends as the boxes last set them, since they were last filled.
+	const typed = useRef({ fills: 0, start, end });
+	function typedEnds() {
+		if (typed.current.fills !== shown.fills) typed.current = { fills: shown.fills, start, end };
+		return typed.current;
+	}
+	function send(from: string, to: string | null) {
+		// No year at either end is no range, so the switch stays where the reader put it.
+		const until = from || to ? to : null;
+		setShown((current) => ({ ...current, sent: until === null ? from : `${from}-${until}` }));
+		onRangeChange(from, until);
+	}
+	// One wait for both boxes: a typed year applies half a second after the reader stops typing in either. A range that
+	// came from anywhere else in that time is newer, so the wait is dropped, even when it came back to the same range.
+	const [applySoon, , cancelApply] = useDebounce((typedOver: string, fills: number, from: string, to: string | null) => {
+		if (typedOver === range && fills === shown.fills) send(from, to);
+	}, 500);
 
 	function changeYear(ends: { start?: string; end?: string }, now: boolean) {
-		Object.assign(typed.current, ends);
-		const next = [typed.current.start, isRangeMode ? typed.current.end : null] as const;
+		const next = Object.assign(typedEnds(), ends);
+		const to = isRangeMode ? next.end : null;
 		if (now) {
 			cancelApply();
-			onRangeChange(...next);
-		} else applySoon(...next);
+			send(next.start, to);
+		} else applySoon(range, shown.fills, next.start, to);
 	}
 
 	function handleModeChange(selected: boolean) {
 		// The switch is the reader's latest choice. A year still waiting in the boxes goes with it, instead of applying
 		// after it and turning the switch back. The other mode starts with no end.
 		cancelApply();
-		typed.current.end = "";
+		const next = typedEnds();
+		next.end = "";
 		setIsRangeMode(selected);
 		if (!selected) {
-			onRangeChange(typed.current.start, null);
+			send(next.start, null);
 			return;
 		}
 
 		// A Year cleared but still waiting has to clear the applied one too.
-		if (typed.current.start || start) onRangeChange(typed.current.start, "");
+		if (next.start || start) send(next.start, "");
 	}
 
 	return (
@@ -155,7 +177,7 @@ export function YearFilter({
 					</Switch>
 				</div>
 			</div>
-			<div>
+			<div key={shown.fills}>
 				<AnimatePresence mode="popLayout" initial={false}>
 					{isRangeMode ? (
 						<motion.div
