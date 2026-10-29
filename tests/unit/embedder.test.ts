@@ -41,12 +41,12 @@ describe("the library's embedder templates", () => {
 });
 
 describe("calling the library's embedder", () => {
-	it("sends the texts 10 a request, as Meilisearch does, with the key, and answers a vector for each in order", async () => {
+	it("sends the texts 50 a request unless set, with the key, and answers a vector for each in order", async () => {
 		const fetch = answering();
 		vi.stubGlobal("fetch", fetch);
-		const texts = Array.from({ length: 25 }, (_, index) => "x".repeat(index + 1));
+		const texts = Array.from({ length: 125 }, (_, index) => "x".repeat(index + 1));
 		const vectors = await createEmbedder(openRouter)!.embed(texts);
-		expect(fetch.mock.calls.map(([, init]) => (JSON.parse(String(init.body)) as { input: string[] }).input.length)).toEqual([10, 10, 5]);
+		expect(fetch.mock.calls.map(([, init]) => (JSON.parse(String(init.body)) as { input: string[] }).input.length)).toEqual([50, 50, 25]);
 		expect(fetch.mock.calls[0]![1].headers).toMatchObject({ Authorization: "Bearer router-key" });
 		expect(vectors.map((vector) => vector?.[0])).toEqual(texts.map((text) => text.length));
 	});
@@ -119,13 +119,13 @@ describe("calling the library's embedder", () => {
 });
 
 describe("the worker's requests in flight", () => {
-	it("is 8 unless set, and refuses a setting outside 1 to 512", () => {
-		expect(embedderParallelRequests(undefined)).toBe(8);
+	it("is 128 unless set, and refuses a setting outside 1 to 512", () => {
+		expect(embedderParallelRequests(undefined)).toBe(128);
 		expect(embedderParallelRequests("512")).toBe(512);
 		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 512");
 		expect(() => embedderParallelRequests("513")).toThrow("from 1 to 512");
 		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 512");
-		expect(createEmbedder(openRouter, { parallelRequests: 32 })!.capacity).toBe(320);
+		expect(createEmbedder(openRouter, { parallelRequests: 32 })!.capacity).toBe(1_600);
 	});
 
 	it("sends the texts a request the worker sets, up to Perplexity's 512, and the embedder's own unless set", async () => {
@@ -150,7 +150,7 @@ describe("the worker's requests in flight", () => {
 			inFlight -= 1;
 			return ok(url, init);
 		}));
-		await createEmbedder(openRouter, { parallelRequests: 3 })!.embed(Array.from({ length: 100 }, (_, index) => `text ${index}`));
+		await createEmbedder(openRouter, { parallelRequests: 3, batchTexts: 10 })!.embed(Array.from({ length: 100 }, (_, index) => `text ${index}`));
 		expect(most).toBe(3);
 	});
 });

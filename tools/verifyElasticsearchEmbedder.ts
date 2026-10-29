@@ -2,7 +2,7 @@
  * Checks records' vectors and search by meaning on a real Elasticsearch (OpenDevEd/new-el#720), with a local embedder
  * standing in for the library's: no paid service is called. It writes a test library's records with vectors, searches
  * them by meaning and from a record, changes a record, rebuilds reusing vectors, recovers from a failing embedder,
- * changes the embedder, backfills 1,204 records at 128 requests in flight, and turns it off. Its indexes are deleted
+ * changes the embedder, backfills 1,204 records at 512 requests in flight, and turns it off. Its indexes are deleted
  * at the end.
  *
  *   ELASTICSEARCH_URL=http://127.0.0.1:59200 ELASTICSEARCH_PASSWORD=… npm run test:search-embedder
@@ -127,8 +127,8 @@ async function* plansOf(documents: readonly ItemSearchDocument[]): AsyncGenerato
 }
 
 /** The library's writer, vector step and search with this embedder, as a worker or page would make them. */
-function library(configuration: LibraryServerConfig["search"]["embedder"], parallelRequests?: number) {
-	const embedder = createEmbedder(configuration, { parallelRequests });
+function library(configuration: LibraryServerConfig["search"]["embedder"], requests: { parallelRequests?: number; batchTexts?: number } = {}) {
+	const embedder = createEmbedder(configuration, requests);
 	const embeddings = embedder ? elasticsearchEmbeddings(service, embedder) : null;
 	return { writer: elasticsearchWriter(service, embeddings), embeddings, engine: elasticsearchEngine(service, embedder) };
 }
@@ -247,16 +247,16 @@ async function changeEmbedder(stub: Stub) {
 	step("embedder changed", "every record embedded again, 512 dimensions");
 }
 
-/** The backfill at the most requests in flight: one page of 1,204 records, its vectors written 500 a request. */
+/** The backfill at the most requests in flight, of 10 texts: one page of 1,204 records, its vectors written 500 a request. */
 async function backfillAtMost(stub: Stub, enabled: Configuration) {
 	const many = Array.from({ length: 1_200 }, (_, index) => record(`BULK${String(index).padStart(4, "0")}`, `School radio record ${index}`, "Lessons reached schools by radio."));
-	const { writer, embeddings } = library(enabled, MOST_PARALLEL_REQUESTS);
+	const { writer, embeddings } = library(enabled, { parallelRequests: MOST_PARALLEL_REQUESTS, batchTexts: 10 });
 	await writer.rebuild(plansOf([...records, ...many]), { ...writeOptions, reproject: () => plansOf([]) });
 	const before = stub.state.texts;
 	stub.state.mostInFlight = 0;
 	const embedded = await embeddings!.embedMissing();
 	assert(embedded === 1_204 && stub.state.texts === before + 1_204, `The backfill embedded ${stub.state.texts - before} texts and wrote ${embedded} vectors, not 1,204.`);
-	assert((await withoutVectors()) === 0, "A record has no vector after the backfill at 128 requests in flight.");
+	assert((await withoutVectors()) === 0, `A record has no vector after the backfill at ${MOST_PARALLEL_REQUESTS} requests in flight.`);
 	assert(stub.state.mostInFlight > 64, `Only ${stub.state.mostInFlight} requests were in flight at once, not up to ${MOST_PARALLEL_REQUESTS}.`);
 	step(`backfill at ${MOST_PARALLEL_REQUESTS} in flight`, `1,204 records in one page, ${stub.state.mostInFlight} requests at once, every record with a vector`);
 }

@@ -43,20 +43,17 @@ const REPEAT = "{{..}}";
 const OPENAI_URL = "https://api.openai.com/v1/embeddings";
 
 /**
- * Texts in one request: unless set, as many as Meilisearch sends a REST embedder, and more to OpenAI, which takes
- * 2,048. `SEARCH_EMBEDDER_BATCH_TEXTS` sets it for the worker, up to Perplexity's 512. A batch stays under 256 KB, below
- * Perplexity's 120,000 tokens.
+ * Texts in one request and requests in flight at once to one embedder, whoever asks: every claim the worker drains
+ * shares them. Unless set, a REST embedder gets 128 requests of 50 texts, the fastest of 12 settings OpenRouter's
+ * Perplexity model answered (3,005 records a second, 29 October 2026), and OpenAI, which takes 2,048, 64 texts. A model
+ * on a few CPU cores needs about 8 requests of 10: `SEARCH_EMBEDDER_PARALLEL_REQUESTS` and `SEARCH_EMBEDDER_BATCH_TEXTS`
+ * set them for the worker, up to Perplexity's 512 texts. A batch stays under 256 KB, below Perplexity's 120,000 tokens.
  */
-const REST_BATCH_TEXTS = 10;
+const REST_BATCH_TEXTS = 50;
 const OPENAI_BATCH_TEXTS = 64;
 export const MOST_BATCH_TEXTS = 512;
 const BATCH_BYTES = 256 * 1024;
-
-/**
- * Requests in flight at once to one embedder, whoever asks: every claim the worker drains shares them. A hosted service
- * takes many more than a model on a few CPU cores; `SEARCH_EMBEDDER_PARALLEL_REQUESTS` sets it for the worker.
- */
-const PARALLEL_REQUESTS = 8;
+const PARALLEL_REQUESTS = 128;
 export const MOST_PARALLEL_REQUESTS = 512;
 
 /** A worker setting: undefined when unset, else a whole number from 1 to `most`. */
@@ -67,7 +64,7 @@ function wholeNumberSetting(name: string, value: string | undefined, most: numbe
 	return number;
 }
 
-/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 512. */
+/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 128 when unset, else 1 to 512. */
 export function embedderParallelRequests(value: string | undefined) {
 	return wholeNumberSetting("SEARCH_EMBEDDER_PARALLEL_REQUESTS", value, MOST_PARALLEL_REQUESTS) ?? PARALLEL_REQUESTS;
 }
