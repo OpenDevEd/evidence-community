@@ -211,25 +211,54 @@ Writing records:
   credit or over its budget for requests in flight, is such a failure.
 - A text the embedder refuses, as one too long for it, gets its hash and
   `embeddingModel` without a vector, and isn't sent again until its text or the
-  embedder changes. A REST embedder gets 10 texts a request, as Meilisearch
-  sends; a refused batch is split to find the texts it refuses.
-- The worker keeps 8 requests in flight to the embedder, shared by everything it
-  embeds. A hosted service takes more: set `SEARCH_EMBEDDER_PARALLEL_REQUESTS`
-  (1 to 128) on the search worker. The backfill reads twice that many requests'
-  records at a time, up to 2,560, and writes their vectors 500 records a
-  request. To choose, time the embedder on the library's own records;
-  it writes nothing, but a paid embedder charges for what it embeds:
+  embedder changes. A refused batch is split to find the texts it refuses.
+- The worker sends a REST embedder 128 requests at once of 50 texts each, and
+  OpenAI 128 of 64, shared by everything it embeds. Set
+  `SEARCH_EMBEDDER_PARALLEL_REQUESTS` (1 to 512) and
+  `SEARCH_EMBEDDER_BATCH_TEXTS` (1 to 512) on the search worker to change them.
+  A model on a few CPU cores needs about 8 requests of 10 texts: at the defaults
+  its requests run out of time. The backfill reads twice as many records as the
+  requests in flight hold, up to 10,000, and writes their vectors 500 records a
+  request. To choose, time the embedder on the library's own records; it writes
+  nothing, but a paid embedder charges for what it embeds:
 
   ```sh
-  LIBRARY_CONFIG_PATH=… npm run search:embedder-speed -- --records 1000 --parallel 8,16,32
+  LIBRARY_CONFIG_PATH=… npm run search:embedder-speed -- --records 10000 --parallel 64,128 --batch 50
   ```
 
+  It also reports the answers by status, seconds a request, and the worker's
+  CPU and bytes received for every 1,000 records.
+
   On 29 October 2026, OpenRouter's `perplexity/pplx-embed-v1-0.6b` embedded
-  AIED's records 155 a second at 8 requests in flight, 498 at 32, 920 at 64
-  and 1,746 at 128, with none refused. Embedding alone took 30, 10, 5 and 3
-  minutes for its 282,948 records, at about $0.0011 for every 1,000. A backfill
-  takes longer: it writes each page's vectors to Elasticsearch before it embeds
-  the next page. The same model on 16 CPU cores embedded 2.8 a second.
+  10,000 of AIED's records at these settings, with every answer a 200 and none
+  refused:
+
+  | Texts a request | Requests at once | Records a second | Seconds a request |
+  | --- | --- | --- | --- |
+  | 10 | 8 | 155 | 0.52 |
+  | 10 | 128 | 1,744 | 0.53 |
+  | 10 | 256 | 2,374 | 0.75 |
+  | 10 | 512 | 2,083 | 1.55 |
+  | 50 | 64 | 2,420 | 0.81 |
+  | 50 | 128 | 3,005 | 1.41 |
+  | 50 | 256 | 2,885 | 1.93 |
+  | 100 | 32 | 1,840 | 1.07 |
+  | 100 | 64 | 2,773 | 1.47 |
+  | 100 | 128 | 2,621 | 2.08 |
+  | 189 | 16 | 1,210 | 1.47 |
+  | 189 | 32 | 2,302 | 1.63 |
+  | 189 | 64 | 2,391 | 2.33 |
+
+  Above about 2,500 texts in flight each request took longer, so no setting
+  passed about 3,000 records a second: OpenRouter's limit, not the worker's.
+  At 3,005 a second, embedding AIED's 282,948 records takes about 1.6 minutes,
+  at about $0.001 for every 1,000. The worker used about 0.35 CPU seconds for
+  every 1,000 records with 50 or more texts a request (0.5 with 10), and
+  received about 1.4 KB for each; writing a record's vector for Elasticsearch
+  took 0.12 CPU seconds for every 1,000 and 9.4 KB. A backfill takes longer
+  than embedding alone: it writes each page's vectors to Elasticsearch before
+  it embeds the next page. Requests of 200 texts held about 189 within 256 KB.
+  The same model on 16 CPU cores embedded 2.8 records a second.
 
 Searching:
 
