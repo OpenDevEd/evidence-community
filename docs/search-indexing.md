@@ -280,7 +280,12 @@ Searching:
   has a vector.
 - AI search and chat embed the question and mix the nearest records with the
   word results, 0.5 each. They wait 3 s for the embedder; then words alone rank
-  the search, and the next 30 s of searches skip the embedder.
+  the search, and the next 30 s of searches skip the embedder. A search the
+  reader asked to sort still mixes them, as Meilisearch's hybrid search does:
+  the words order ranks by relevance first and the sort breaks its ties.
+- On a library that searches with Elasticsearch, Similar Resources, AI search,
+  deep research and the chat about a record all search Elasticsearch alone; a
+  library still on Meilisearch keeps Meilisearch's own hybrid search.
 - Both compare only vectors the same embedder made (`embeddingModel`), so while
   a library rebuilds after changing its embedder, questions embedded by the new
   one find no old vectors and rank by words.
