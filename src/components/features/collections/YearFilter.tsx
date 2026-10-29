@@ -115,8 +115,13 @@ export function YearFilter({
 	// the year bars) fills them again and sets the switch to match.
 	const [shown, setShown] = useState({ range, sent: null as string | null, fills: 0 });
 	const [isRangeMode, setIsRangeMode] = useState(() => range.includes("-"));
+	// Each turn of the switch draws new boxes. A mode turned back on while it still fades out comes back as the same element,
+	// and its boxes would keep the years they held.
+	const [switches, setSwitches] = useState(0);
 	if (range !== shown.range) {
-		const sentHere = range === shown.sent;
+		// A range pasted into the Year box (2020-2024, -2024) goes out as a range the switch doesn't show, so it counts as one
+		// from elsewhere and turns the switch on. An empty range fits either mode.
+		const sentHere = range === shown.sent && (!range || range.includes("-") === isRangeMode);
 		setShown({ range, sent: null, fills: shown.fills + (sentHere ? 0 : 1) });
 		if (!sentHere) setIsRangeMode(range.includes("-"));
 	}
@@ -154,6 +159,7 @@ export function YearFilter({
 		const next = typedEnds();
 		next.end = "";
 		setIsRangeMode(selected);
+		setSwitches(switches + 1);
 		if (!selected) {
 			send(next.start, null);
 			return;
@@ -189,6 +195,7 @@ export function YearFilter({
 							className="flex w-full gap-4"
 						>
 							<YearPicker
+								key={`from-${switches}`}
 								label={t("from")}
 								selectedKey={start}
 								onYearChange={(year, now) => changeYear({ start: year }, now)}
@@ -196,6 +203,7 @@ export function YearFilter({
 								counts={counts}
 							/>
 							<YearPicker
+								key={`to-${switches}`}
 								label={t("to")}
 								selectedKey={end}
 								onYearChange={(year, now) => changeYear({ end: year }, now)}
@@ -213,6 +221,7 @@ export function YearFilter({
 							className="w-full"
 						>
 							<YearPicker
+								key={switches}
 								label={t("year")}
 								selectedKey={start}
 								onYearChange={(year, now) => changeYear({ start: year }, now)}
