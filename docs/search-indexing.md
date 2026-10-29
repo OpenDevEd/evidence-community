@@ -199,8 +199,11 @@ Writing records:
   This fills a library after a rebuild that changed records' text, after an
   embedder change, after a switch from Meilisearch, and on its first build. A
   model served from 16 CPU cores embedded 2.8 AIED records a second, about a day
-  for all of AIED; OpenRouter embedded up to 3,005 a second (below). How long
-  Elasticsearch takes to write the vectors isn't measured yet.
+  for all of AIED; OpenRouter embedded up to 3,005 a second (below). On 29
+  October 2026 the backfill gave all 282,948 AIED records a vector in 16
+  minutes 47 seconds, 281 a second, at 128 requests of 50 texts: Elasticsearch
+  wrote one bulk request at a time into the index's one shard and used about
+  one core, so writing, not the embedder, set the speed.
 - Changing `search.embedder` rebuilds the index, so no vector of the old
   embedder stays; the worker then embeds every record with the new one. With
   `null`, records are written without a vector.
