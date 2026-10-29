@@ -1391,7 +1391,7 @@ const elasticsearchConnectionSchema = searchConnectionSchema(/^[a-z0-9][a-z0-9_-
  * the chosen one is built. The search worker builds the chosen engine's index; readers keep the one whose index is
  * complete until it is (plans/elasticsearch-search/09).
  */
-const searchServiceSchema = z.discriminatedUnion("engine", [
+const chosenEngineSchema = z.discriminatedUnion("engine", [
 	z
 		.object({
 			engine: z.literal("elasticsearch"),
@@ -1407,6 +1407,17 @@ const searchServiceSchema = z.discriminatedUnion("engine", [
 		})
 		.strict(),
 ]);
+
+/**
+ * Before libraries chose an engine, `services.search` was the Meilisearch connection alone. OpenScholar takes this
+ * schema only from merged new-el, so it keeps writing that shape until then; it reads as Meilisearch until OpenScholar
+ * writes `engine` for every library, and is dropped after (widen, migrate, narrow).
+ */
+const meilisearchOnlySchema = meilisearchConnectionSchema.transform(
+	(meilisearch): z.output<typeof chosenEngineSchema> => ({ engine: "meilisearch", meilisearch }),
+);
+
+const searchServiceSchema = z.union([chosenEngineSchema, meilisearchOnlySchema]);
 
 const servicesSchema = z
 	.object({

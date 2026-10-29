@@ -371,6 +371,13 @@ describe("search engine settings", () => {
 		expect(withSearch({ engine: "meilisearch", meilisearch, elasticsearch }).success).toBe(true);
 	});
 
+	it("reads the Meilisearch connection alone, which OpenScholar writes until it names the engine, as Meilisearch", () => {
+		const parsed = withSearch(meilisearch);
+		expect(parsed.success).toBe(true);
+		expect(parsed.data?.services.search).toEqual({ engine: "meilisearch", meilisearch });
+		expect(withSearch({ ...meilisearch, unknown: true }).success).toBe(false);
+	});
+
 	it("takes only an index name Elasticsearch can create", () => {
 		for (const index of ["Library_1", "-library", "_library"]) {
 			expect(withSearch({ engine: "elasticsearch", elasticsearch: { ...elasticsearch, index } }).success).toBe(false);

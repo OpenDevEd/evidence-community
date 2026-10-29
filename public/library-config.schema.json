@@ -2002,148 +2002,181 @@
 					"additionalProperties": false
 				},
 				"search": {
-					"oneOf": [
+					"anyOf": [
 						{
-							"type": "object",
-							"properties": {
-								"engine": {
-									"type": "string",
-									"const": "elasticsearch"
-								},
-								"elasticsearch": {
+							"oneOf": [
+								{
 									"type": "object",
 									"properties": {
-										"host": {
+										"engine": {
 											"type": "string",
-											"minLength": 1,
-											"maxLength": 2048,
-											"format": "uri"
+											"const": "elasticsearch"
 										},
-										"key": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 512,
-											"writeOnly": true
+										"elasticsearch": {
+											"type": "object",
+											"properties": {
+												"host": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 2048,
+													"format": "uri"
+												},
+												"key": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 512,
+													"writeOnly": true
+												},
+												"index": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 128,
+													"pattern": "^[a-z0-9][a-z0-9_-]*$"
+												}
+											},
+											"required": [
+												"host",
+												"key",
+												"index"
+											],
+											"additionalProperties": false
 										},
-										"index": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 128,
-											"pattern": "^[a-z0-9][a-z0-9_-]*$"
+										"meilisearch": {
+											"type": "object",
+											"properties": {
+												"host": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 2048,
+													"format": "uri"
+												},
+												"key": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 512,
+													"writeOnly": true
+												},
+												"index": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 128,
+													"pattern": "^[A-Za-z0-9_-]+$"
+												}
+											},
+											"required": [
+												"host",
+												"key",
+												"index"
+											],
+											"additionalProperties": false
 										}
 									},
 									"required": [
-										"host",
-										"key",
-										"index"
+										"engine",
+										"elasticsearch"
 									],
 									"additionalProperties": false
 								},
-								"meilisearch": {
+								{
 									"type": "object",
 									"properties": {
-										"host": {
+										"engine": {
 											"type": "string",
-											"minLength": 1,
-											"maxLength": 2048,
-											"format": "uri"
+											"const": "meilisearch"
 										},
-										"key": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 512,
-											"writeOnly": true
+										"elasticsearch": {
+											"type": "object",
+											"properties": {
+												"host": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 2048,
+													"format": "uri"
+												},
+												"key": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 512,
+													"writeOnly": true
+												},
+												"index": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 128,
+													"pattern": "^[a-z0-9][a-z0-9_-]*$"
+												}
+											},
+											"required": [
+												"host",
+												"key",
+												"index"
+											],
+											"additionalProperties": false
 										},
-										"index": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 128,
-											"pattern": "^[A-Za-z0-9_-]+$"
+										"meilisearch": {
+											"type": "object",
+											"properties": {
+												"host": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 2048,
+													"format": "uri"
+												},
+												"key": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 512,
+													"writeOnly": true
+												},
+												"index": {
+													"type": "string",
+													"minLength": 1,
+													"maxLength": 128,
+													"pattern": "^[A-Za-z0-9_-]+$"
+												}
+											},
+											"required": [
+												"host",
+												"key",
+												"index"
+											],
+											"additionalProperties": false
 										}
 									},
 									"required": [
-										"host",
-										"key",
-										"index"
+										"engine",
+										"meilisearch"
 									],
 									"additionalProperties": false
 								}
-							},
-							"required": [
-								"engine",
-								"elasticsearch"
-							],
-							"additionalProperties": false
+							]
 						},
 						{
 							"type": "object",
 							"properties": {
-								"engine": {
+								"host": {
 									"type": "string",
-									"const": "meilisearch"
+									"minLength": 1,
+									"maxLength": 2048,
+									"format": "uri"
 								},
-								"elasticsearch": {
-									"type": "object",
-									"properties": {
-										"host": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 2048,
-											"format": "uri"
-										},
-										"key": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 512,
-											"writeOnly": true
-										},
-										"index": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 128,
-											"pattern": "^[a-z0-9][a-z0-9_-]*$"
-										}
-									},
-									"required": [
-										"host",
-										"key",
-										"index"
-									],
-									"additionalProperties": false
+								"key": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 512,
+									"writeOnly": true
 								},
-								"meilisearch": {
-									"type": "object",
-									"properties": {
-										"host": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 2048,
-											"format": "uri"
-										},
-										"key": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 512,
-											"writeOnly": true
-										},
-										"index": {
-											"type": "string",
-											"minLength": 1,
-											"maxLength": 128,
-											"pattern": "^[A-Za-z0-9_-]+$"
-										}
-									},
-									"required": [
-										"host",
-										"key",
-										"index"
-									],
-									"additionalProperties": false
+								"index": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 128,
+									"pattern": "^[A-Za-z0-9_-]+$"
 								}
 							},
 							"required": [
-								"engine",
-								"meilisearch"
+								"host",
+								"key",
+								"index"
 							],
 							"additionalProperties": false
 						}

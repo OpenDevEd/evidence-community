@@ -436,6 +436,7 @@
 			"services.publication.zenodo.token",
 			"services.redis.url",
 			"services.search.elasticsearch.key",
+			"services.search.key",
 			"services.search.meilisearch.key",
 			"services.storage.serviceRoleKey",
 			"sources[].apiKey"
