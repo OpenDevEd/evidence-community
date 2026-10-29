@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { answerVectors, createEmbedder, embedderFingerprint, EmbedderError, embedderParallelRequests, requestBody } from "@/lib/embedder";
+import { answerVectors, createEmbedder, embedderBatchTexts, embedderFingerprint, EmbedderError, embedderParallelRequests, requestBody } from "@/lib/embedder";
 
 /** AIED's embedder: Perplexity's 0.6B model through OpenRouter, several texts a request. */
 const openRouter = {
@@ -119,13 +119,25 @@ describe("calling the library's embedder", () => {
 });
 
 describe("the worker's requests in flight", () => {
-	it("is 8 unless set, and refuses a setting outside 1 to 128", () => {
+	it("is 8 unless set, and refuses a setting outside 1 to 512", () => {
 		expect(embedderParallelRequests(undefined)).toBe(8);
-		expect(embedderParallelRequests("128")).toBe(128);
-		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 128");
-		expect(() => embedderParallelRequests("129")).toThrow("from 1 to 128");
-		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 128");
+		expect(embedderParallelRequests("512")).toBe(512);
+		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 512");
+		expect(() => embedderParallelRequests("513")).toThrow("from 1 to 512");
+		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 512");
 		expect(createEmbedder(openRouter, { parallelRequests: 32 })!.capacity).toBe(320);
+	});
+
+	it("sends the texts a request the worker sets, up to Perplexity's 512, and the embedder's own unless set", async () => {
+		expect(embedderBatchTexts(undefined)).toBeUndefined();
+		expect(embedderBatchTexts("100")).toBe(100);
+		expect(() => embedderBatchTexts("513")).toThrow("SEARCH_EMBEDDER_BATCH_TEXTS must be a whole number from 1 to 512");
+		const fetch = answering();
+		vi.stubGlobal("fetch", fetch);
+		const embedder = createEmbedder(openRouter, { parallelRequests: 8, batchTexts: 4 })!;
+		expect(embedder.capacity).toBe(32);
+		await embedder.embed(Array.from({ length: 10 }, (_, index) => `text ${index}`));
+		expect(fetch.mock.calls.map(([, init]) => (JSON.parse(String(init.body)) as { input: string[] }).input.length)).toEqual([4, 4, 2]);
 	});
 
 	it("keeps at most that many requests in flight", async () => {

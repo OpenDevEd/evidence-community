@@ -43,14 +43,14 @@ const MOST_DIMENSIONS = 4_096;
 
 /**
  * How long `embedMissing` may run before the worker drains the outbox again; it checks between pages. A page keeps
- * every request in flight twice over, between 100 and 2,560 records (128 requests of 10 texts): a model on CPU gets
- * small pages, so a page doesn't hold up the drain long, and a hosted service large ones, so its requests don't wait
- * on a page's slowest.
+ * every request in flight twice over, between 100 and 10,000 records, the most Elasticsearch answers at once: a model
+ * on CPU gets small pages, so a page doesn't hold up the drain long, and a hosted service large ones, so its requests
+ * don't wait on a page's slowest.
  */
 const MISSING_TIME_MS = 30_000;
 
 export function missingPage(embedder: Embedder) {
-	return Math.min(2_560, Math.max(100, 2 * embedder.capacity));
+	return Math.min(10_000, Math.max(100, 2 * embedder.capacity));
 }
 
 /** Records one bulk write holds: Elasticsearch takes at most 100 MB a request, and 500 vectors of 4,096 numbers are about 40 MB. */

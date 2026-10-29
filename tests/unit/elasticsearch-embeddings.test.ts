@@ -134,6 +134,7 @@ describe("records' vectors in Elasticsearch", () => {
 		const { client, service } = library({}, missing);
 		const model = { ...embedder(), capacity: 1_280 };
 		expect(missingPage(model)).toBe(2_560);
+		expect(missingPage({ ...model, capacity: 6_400 })).toBe(10_000);
 		expect(await elasticsearchEmbeddings(service, model).embedMissing()).toBe(600);
 		const writes = client.bulk.mock.calls.map(([{ operations }]) => operations.length);
 		expect(writes).toEqual([1_000, 200]);

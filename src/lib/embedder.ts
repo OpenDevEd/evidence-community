@@ -43,11 +43,13 @@ const REPEAT = "{{..}}";
 const OPENAI_URL = "https://api.openai.com/v1/embeddings";
 
 /**
- * Texts in one request: as many as Meilisearch sends a REST embedder, and more to OpenAI, which takes 2,048. A batch
- * stays under 256 KB, far below Perplexity's 120,000 tokens.
+ * Texts in one request: unless set, as many as Meilisearch sends a REST embedder, and more to OpenAI, which takes
+ * 2,048. `SEARCH_EMBEDDER_BATCH_TEXTS` sets it for the worker, up to Perplexity's 512. A batch stays under 256 KB, below
+ * Perplexity's 120,000 tokens.
  */
 const REST_BATCH_TEXTS = 10;
 const OPENAI_BATCH_TEXTS = 64;
+export const MOST_BATCH_TEXTS = 512;
 const BATCH_BYTES = 256 * 1024;
 
 /**
@@ -55,16 +57,24 @@ const BATCH_BYTES = 256 * 1024;
  * takes many more than a model on a few CPU cores; `SEARCH_EMBEDDER_PARALLEL_REQUESTS` sets it for the worker.
  */
 const PARALLEL_REQUESTS = 8;
-export const MOST_PARALLEL_REQUESTS = 128;
+export const MOST_PARALLEL_REQUESTS = 512;
 
-/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 128. */
+/** A worker setting: undefined when unset, else a whole number from 1 to `most`. */
+function wholeNumberSetting(name: string, value: string | undefined, most: number) {
+	if (value === undefined || value.trim() === "") return undefined;
+	const number = Number(value);
+	if (!Number.isSafeInteger(number) || number < 1 || number > most) throw new Error(`${name} must be a whole number from 1 to ${most}.`);
+	return number;
+}
+
+/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 512. */
 export function embedderParallelRequests(value: string | undefined) {
-	if (value === undefined || value.trim() === "") return PARALLEL_REQUESTS;
-	const requests = Number(value);
-	if (!Number.isSafeInteger(requests) || requests < 1 || requests > MOST_PARALLEL_REQUESTS) {
-		throw new Error(`SEARCH_EMBEDDER_PARALLEL_REQUESTS must be a whole number from 1 to ${MOST_PARALLEL_REQUESTS}.`);
-	}
-	return requests;
+	return wholeNumberSetting("SEARCH_EMBEDDER_PARALLEL_REQUESTS", value, MOST_PARALLEL_REQUESTS) ?? PARALLEL_REQUESTS;
+}
+
+/** The worker's texts a request from `SEARCH_EMBEDDER_BATCH_TEXTS`: the embedder's own when unset, else 1 to 512. */
+export function embedderBatchTexts(value: string | undefined) {
+	return wholeNumberSetting("SEARCH_EMBEDDER_BATCH_TEXTS", value, MOST_BATCH_TEXTS);
 }
 
 /** A self-hosted model on CPU embeds about 3 records a second, so a batch can take tens of seconds. */
@@ -248,14 +258,20 @@ function limiter(size: number) {
 	};
 }
 
-/** The library's embedder, or null when it has none; `parallelRequests` requests in flight at once. */
+/** Texts in one request: `batchTexts` if set, else the embedder's own; one for a template that sends one. */
+function textsPerRequest(configuration: EmbedderConfiguration, batchTexts: number | undefined) {
+	if (configuration.source === "openAi") return batchTexts ?? OPENAI_BATCH_TEXTS;
+	return sendsBatches(configuration.request) ? (batchTexts ?? REST_BATCH_TEXTS) : 1;
+}
+
+/** The library's embedder, or null when it has none; `parallelRequests` requests in flight at once, of `batchTexts` texts. */
 export function createEmbedder(
 	configuration: LibraryServerConfig["search"]["embedder"],
-	{ parallelRequests = PARALLEL_REQUESTS }: { parallelRequests?: number } = {},
+	{ parallelRequests = PARALLEL_REQUESTS, batchTexts }: { parallelRequests?: number; batchTexts?: number } = {},
 ): Embedder | null {
 	if (!configuration) return null;
 	const call = (texts: readonly string[]) => (configuration.source === "openAi" ? openAiCall(configuration, texts) : restCall(configuration, texts));
-	const batchSize = configuration.source === "openAi" ? OPENAI_BATCH_TEXTS : sendsBatches(configuration.request) ? REST_BATCH_TEXTS : 1;
+	const batchSize = textsPerRequest(configuration, batchTexts);
 	const inTurn = limiter(parallelRequests);
 
 	/** Vectors for one batch; a refused batch is split in halves to find the texts the embedder refuses. */
