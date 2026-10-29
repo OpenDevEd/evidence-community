@@ -224,6 +224,12 @@ Writing records:
   LIBRARY_CONFIG_PATH=… npm run search:embedder-speed -- --records 1000 --parallel 8,16,32
   ```
 
+  On 29 October 2026, OpenRouter's `perplexity/pplx-embed-v1-0.6b` embedded
+  AIED's records 155 a second at 8 requests in flight, 498 at 32, 920 at 64
+  and 1,746 at 128, with none refused. That is 30, 10, 5 and 3 minutes for its
+  282,948 records, at about $0.0011 for every 1,000. The same model on 16 CPU
+  cores embedded 2.8 a second.
+
 Searching:
 
 - Similar Resources mixes the 50 records nearest the record's stored vector
