@@ -43,14 +43,18 @@ const MOST_DIMENSIONS = 4_096;
 
 /**
  * How long `embedMissing` may run before the worker drains the outbox again; it checks between pages. A page keeps
- * every request in flight twice over, between 100 and 1,000 records: a model on CPU gets small pages, so a page doesn't
- * hold up the drain long, and a hosted service large ones, so its requests don't wait on a page's slowest.
+ * every request in flight twice over, between 100 and 2,560 records (128 requests of 10 texts): a model on CPU gets
+ * small pages, so a page doesn't hold up the drain long, and a hosted service large ones, so its requests don't wait
+ * on a page's slowest.
  */
 const MISSING_TIME_MS = 30_000;
 
 export function missingPage(embedder: Embedder) {
-	return Math.min(1_000, Math.max(100, 2 * embedder.capacity));
+	return Math.min(2_560, Math.max(100, 2 * embedder.capacity));
 }
+
+/** Records one bulk write holds: Elasticsearch takes at most 100 MB a request, and 500 vectors of 4,096 numbers are about 40 MB. */
+const WRITE_RECORDS = 500;
 
 function hashOf(fingerprint: string, text: string) {
 	return createHash("sha256").update(`${fingerprint}\n${text}`).digest("hex").slice(0, 32);
@@ -113,6 +117,16 @@ function writtenUpdates(response: estypes.BulkResponse) {
 	});
 	if (refused.length > 0) console.error(`Search index: ${refused.length} vector(s) were refused: ${refused.slice(0, 3).join("; ")}`);
 	return response.items.filter((item) => !item.update?.error).length;
+}
+
+/** Writes the updates `WRITE_RECORDS` records a request; returns how many succeeded. */
+async function writeUpdates(search: SearchService, updates: ReadonlyArray<readonly [object, object]>, signal?: AbortSignal) {
+	let written = 0;
+	for (let start = 0; start < updates.length; start += WRITE_RECORDS) {
+		const operations = updates.slice(start, start + WRITE_RECORDS).flat();
+		written += writtenUpdates(await stoppable(search.client.bulk({ operations }, { signal }), signal));
+	}
+	return written;
 }
 
 export function elasticsearchEmbeddings(search: SearchService, embedder: Embedder): ElasticsearchEmbeddings {
@@ -179,11 +193,11 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 				const vectors = await embed(texts, signal);
 				if (!vectors) break;
 				// Only a record unchanged since it was read takes the vector: one written meanwhile has its own.
-				const operations = hits.flatMap((hit, position) => [
+				const updates = hits.map((hit, position) => [
 					{ update: { _index: hit._index, _id: hit._id!, if_seq_no: hit._seq_no!, if_primary_term: hit._primary_term! } },
 					{ doc: embedded(hashOf(embedder.fingerprint, texts[position]!), vectors[position]) },
-				]);
-				written += writtenUpdates(await stoppable(search.client.bulk({ operations }, { signal }), signal));
+				] as const);
+				written += await writeUpdates(search, updates, signal);
 				after = hits.at(-1)!.sort;
 				if (hits.length < missingPage(embedder)) break;
 			}

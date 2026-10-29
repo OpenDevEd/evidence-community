@@ -119,11 +119,12 @@ describe("calling the library's embedder", () => {
 });
 
 describe("the worker's requests in flight", () => {
-	it("is 8 unless set, and refuses a setting outside 1 to 64", () => {
+	it("is 8 unless set, and refuses a setting outside 1 to 128", () => {
 		expect(embedderParallelRequests(undefined)).toBe(8);
-		expect(embedderParallelRequests("32")).toBe(32);
-		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 64");
-		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 64");
+		expect(embedderParallelRequests("128")).toBe(128);
+		expect(() => embedderParallelRequests("0")).toThrow("from 1 to 128");
+		expect(() => embedderParallelRequests("129")).toThrow("from 1 to 128");
+		expect(() => embedderParallelRequests("many")).toThrow("from 1 to 128");
 		expect(createEmbedder(openRouter, { parallelRequests: 32 })!.capacity).toBe(320);
 	});
 

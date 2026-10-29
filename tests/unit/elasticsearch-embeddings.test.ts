@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { elasticsearchEmbeddings } from "@/lib/search-index/elasticsearch-embeddings";
+import { elasticsearchEmbeddings, missingPage } from "@/lib/search-index/elasticsearch-embeddings";
 import type { ItemSearchDocument } from "@/lib/search-index/projection";
 
 function record(key: string, title: string) {
@@ -118,5 +118,15 @@ describe("records' vectors in Elasticsearch", () => {
 		const [{ operations }] = client.bulk.mock.calls[0] as unknown as [{ operations: Array<Record<string, unknown>> }];
 		expect(operations[0]).toEqual({ update: { _index: "library_1", _id: "A", if_seq_no: 0, if_primary_term: 1 } });
 		expect(operations[1]).toMatchObject({ doc: { embedding: [expect.any(Number), 1], embeddingHash: expect.any(String), embeddingModel: "perplexity-0.6b" } });
+	});
+
+	it("reads pages that keep 128 requests in flight twice over, and writes their vectors 500 records a request", async () => {
+		const missing = Array.from({ length: 600 }, (_, index) => ({ key: `R${String(index).padStart(3, "0")}`, title: `Record ${index}` }));
+		const { client, service } = library({}, missing);
+		const model = { ...embedder(), capacity: 1_280 };
+		expect(missingPage(model)).toBe(2_560);
+		expect(await elasticsearchEmbeddings(service, model).embedMissing()).toBe(600);
+		const writes = client.bulk.mock.calls.map(([{ operations }]) => operations.length);
+		expect(writes).toEqual([1_000, 200]);
 	});
 });

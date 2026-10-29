@@ -55,9 +55,9 @@ const BATCH_BYTES = 256 * 1024;
  * takes many more than a model on a few CPU cores; `SEARCH_EMBEDDER_PARALLEL_REQUESTS` sets it for the worker.
  */
 const PARALLEL_REQUESTS = 8;
-const MOST_PARALLEL_REQUESTS = 64;
+export const MOST_PARALLEL_REQUESTS = 128;
 
-/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 64. */
+/** The worker's requests in flight from `SEARCH_EMBEDDER_PARALLEL_REQUESTS`: 8 when unset, else 1 to 128. */
 export function embedderParallelRequests(value: string | undefined) {
 	if (value === undefined || value.trim() === "") return PARALLEL_REQUESTS;
 	const requests = Number(value);

@@ -11,7 +11,7 @@ import { parseArgs } from "node:util";
 
 import { libraryConfigSchema, type LibraryServerConfig } from "../src/config/library-config/schema";
 import { RevisionAwareSearchFactory } from "../src/lib/elasticsearch-factory";
-import { createEmbedder } from "../src/lib/embedder";
+import { createEmbedder, MOST_PARALLEL_REQUESTS } from "../src/lib/embedder";
 import { missingPage } from "../src/lib/search-index/elasticsearch-embeddings";
 import { embeddingText } from "../src/lib/search-index/embedder-settings";
 
@@ -28,7 +28,7 @@ function settings() {
 	const records = Number(values.records);
 	const parallel = values.parallel.split(",").map(Number);
 	if (!wholeNumberIn(records, 1, MOST_RECORDS)) throw new Error(`--records must be 1 to ${MOST_RECORDS}.`);
-	if (!parallel.every((value) => wholeNumberIn(value, 1, 64))) throw new Error("--parallel takes numbers from 1 to 64, such as 8,16,32.");
+	if (!parallel.every((value) => wholeNumberIn(value, 1, MOST_PARALLEL_REQUESTS))) throw new Error(`--parallel takes numbers from 1 to ${MOST_PARALLEL_REQUESTS}, such as 8,16,32.`);
 	return { records, parallel };
 }
 
