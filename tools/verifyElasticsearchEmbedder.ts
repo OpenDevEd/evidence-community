@@ -2,20 +2,21 @@
  * Checks records' vectors and search by meaning on a real Elasticsearch (OpenDevEd/new-el#720), with a local embedder
  * standing in for the library's: no paid service is called. It writes a test library's records with vectors, searches
  * them by meaning and from a record, changes a record, rebuilds reusing vectors, recovers from a failing embedder,
- * changes the embedder, and turns it off. Its indexes are deleted at the end.
+ * changes the embedder, backfills 1,204 records at 128 requests in flight, and turns it off. Its indexes are deleted
+ * at the end.
  *
  *   ELASTICSEARCH_URL=http://127.0.0.1:59200 ELASTICSEARCH_PASSWORD=… npm run test:search-embedder
  *
  * `SEARCH_ENGINE=meilisearch` checks Meilisearch's own embedder instead (`verifySearchEmbedder.ts`).
  */
-import { createServer } from "node:http";
+import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import { Client } from "@elastic/elasticsearch";
 
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { SearchService } from "../src/lib/elasticsearch-factory";
-import { createEmbedder } from "../src/lib/embedder";
+import { createEmbedder, MOST_PARALLEL_REQUESTS } from "../src/lib/embedder";
 import { SearchMeaningUnavailableError } from "../src/lib/search-engine";
 import { elasticsearchEngine } from "../src/lib/search-engines/elasticsearch";
 import { elasticsearchEmbeddings } from "../src/lib/search-index/elasticsearch-embeddings";
@@ -35,38 +36,49 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
+type StubState = { texts: number; failing: boolean; inFlight: number; mostInFlight: number };
+
+/** Each word of the text adds 1 to one of `dimensions` numbers, so texts sharing words point the same way. */
+function wordVector(text: string, dimensions: number) {
+	const vector = new Array<number>(dimensions).fill(0);
+	for (const word of text.toLowerCase().match(/[a-z]+/g) ?? []) {
+		let hash = 0;
+		for (const character of word) hash = (hash * 31 + character.charCodeAt(0)) % dimensions;
+		vector[hash]! += 1;
+	}
+	return vector;
+}
+
+function answer(state: StubState, body: string, response: ServerResponse) {
+	if (state.failing) {
+		response.writeHead(401).end("key refused");
+		return;
+	}
+	const { input, dimensions } = JSON.parse(body) as { input: string[]; dimensions: number };
+	if (input.some((text) => text.includes("unembeddable"))) {
+		response.writeHead(422).end("input refused");
+		return;
+	}
+	state.texts += input.length;
+	const data = input.map((text) => ({ embedding: wordVector(text, dimensions) }));
+	response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ data }));
+}
+
 /**
- * A stand-in embedder: each word of a text adds 1 to one of `dimensions` numbers, so texts sharing words point the
- * same way. It counts the texts it embeds, refuses its key while `failing`, and refuses a request holding a text with
- * "unembeddable" in it, as a model refuses a text too long for it.
+ * A stand-in embedder answering `wordVector`s. It counts the texts it embeds and the most requests in flight at once,
+ * refuses its key while `failing`, and refuses a request holding a text with "unembeddable" in it, as a model refuses
+ * a text too long for it.
  */
 async function startEmbedder() {
-	const state = { texts: 0, failing: false };
+	const state: StubState = { texts: 0, failing: false, inFlight: 0, mostInFlight: 0 };
 	const server = createServer((request, response) => {
+		state.inFlight += 1;
+		state.mostInFlight = Math.max(state.mostInFlight, state.inFlight);
+		response.on("close", () => (state.inFlight -= 1));
 		let body = "";
 		request.on("data", (chunk: Buffer) => (body += chunk.toString("utf8")));
-		request.on("end", () => {
-			if (state.failing) {
-				response.writeHead(401).end("key refused");
-				return;
-			}
-			const { input, dimensions } = JSON.parse(body) as { input: string[]; dimensions: number };
-			if (input.some((text) => text.includes("unembeddable"))) {
-				response.writeHead(422).end("input refused");
-				return;
-			}
-			state.texts += input.length;
-			const data = input.map((text) => {
-				const vector = new Array<number>(dimensions).fill(0);
-				for (const word of text.toLowerCase().match(/[a-z]+/g) ?? []) {
-					let hash = 0;
-					for (const character of word) hash = (hash * 31 + character.charCodeAt(0)) % dimensions;
-					vector[hash]! += 1;
-				}
-				return { embedding: vector };
-			});
-			response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ data }));
-		});
+		// Each answer takes 50 ms, as a service's would, so requests sent together are in flight together.
+		request.on("end", () => setTimeout(() => answer(state, body, response), 50));
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/embeddings`;
@@ -115,8 +127,8 @@ async function* plansOf(documents: readonly ItemSearchDocument[]): AsyncGenerato
 }
 
 /** The library's writer, vector step and search with this embedder, as a worker or page would make them. */
-function library(configuration: LibraryServerConfig["search"]["embedder"]) {
-	const embedder = createEmbedder(configuration);
+function library(configuration: LibraryServerConfig["search"]["embedder"], parallelRequests?: number) {
+	const embedder = createEmbedder(configuration, { parallelRequests });
 	const embeddings = embedder ? elasticsearchEmbeddings(service, embedder) : null;
 	return { writer: elasticsearchWriter(service, embeddings), embeddings, engine: elasticsearchEngine(service, embedder) };
 }
@@ -235,6 +247,20 @@ async function changeEmbedder(stub: Stub) {
 	step("embedder changed", "every record embedded again, 512 dimensions");
 }
 
+/** The backfill at the most requests in flight: one page of 1,204 records, its vectors written 500 a request. */
+async function backfillAtMost(stub: Stub, enabled: Configuration) {
+	const many = Array.from({ length: 1_200 }, (_, index) => record(`BULK${String(index).padStart(4, "0")}`, `School radio record ${index}`, "Lessons reached schools by radio."));
+	const { writer, embeddings } = library(enabled, MOST_PARALLEL_REQUESTS);
+	await writer.rebuild(plansOf([...records, ...many]), { ...writeOptions, reproject: () => plansOf([]) });
+	const before = stub.state.texts;
+	stub.state.mostInFlight = 0;
+	const embedded = await embeddings!.embedMissing();
+	assert(embedded === 1_204 && stub.state.texts === before + 1_204, `The backfill embedded ${stub.state.texts - before} texts and wrote ${embedded} vectors, not 1,204.`);
+	assert((await withoutVectors()) === 0, "A record has no vector after the backfill at 128 requests in flight.");
+	assert(stub.state.mostInFlight > 64, `Only ${stub.state.mostInFlight} requests were in flight at once, not up to ${MOST_PARALLEL_REQUESTS}.`);
+	step(`backfill at ${MOST_PARALLEL_REQUESTS} in flight`, `1,204 records in one page, ${stub.state.mostInFlight} requests at once, every record with a vector`);
+}
+
 async function turnOff() {
 	await rebuild(null);
 	assert((await withoutVectors()) === 4, "Turning the embedder off should leave no vector.");
@@ -259,6 +285,7 @@ async function verify(stub: Stub) {
 	await recoverFromFailure(stub, enabled);
 	await refusedText(stub, enabled);
 	await changeEmbedder(stub);
+	await backfillAtMost(stub, enabled);
 	await turnOff();
 }
 
