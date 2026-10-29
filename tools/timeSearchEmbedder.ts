@@ -9,6 +9,7 @@
  *   LIBRARY_CONFIG_PATH=… npm run search:embedder-speed -- --records 10000 --parallel 8,16,32 [--batch 100]
  */
 import { readFile } from "node:fs/promises";
+import { performance } from "node:perf_hooks";
 import { parseArgs } from "node:util";
 
 import { libraryConfigSchema, type LibraryServerConfig } from "../src/config/library-config/schema";
@@ -69,15 +70,22 @@ async function libraryTexts(config: LibraryServerConfig, count: number) {
 	return { total, texts: sample.hits.hits.map((hit) => embeddingText(hit._source ?? {})) };
 }
 
-/** The embedder's requests, counted as they are answered: how many, by status, and seconds until each answered. */
-const answers = { byStatus: {} as Record<string, number>, seconds: 0 };
+/**
+ * The embedder's requests: how many by status, the most in flight at once, and seconds until each answered's headers
+ * came, which include any wait for the worker's own event loop.
+ */
+const answers = { byStatus: {} as Record<string, number>, answered: 0, seconds: 0, inFlight: 0, mostInFlight: 0 };
 const sendRequest = globalThis.fetch;
 globalThis.fetch = async (...request: Parameters<typeof fetch>) => {
 	const started = performance.now();
-	const response = await sendRequest(...request).catch((error: unknown) => {
-		answers.byStatus["no answer"] = (answers.byStatus["no answer"] ?? 0) + 1;
-		throw error;
-	});
+	answers.mostInFlight = Math.max(answers.mostInFlight, ++answers.inFlight);
+	const response = await sendRequest(...request)
+		.catch((error: unknown) => {
+			answers.byStatus["no answer"] = (answers.byStatus["no answer"] ?? 0) + 1;
+			throw error;
+		})
+		.finally(() => (answers.inFlight -= 1));
+	answers.answered += 1;
 	answers.seconds += (performance.now() - started) / 1_000;
 	answers.byStatus[response.status] = (answers.byStatus[response.status] ?? 0) + 1;
 	return response;
@@ -90,7 +98,7 @@ async function bytesRead() {
 	return match ? Number(match[1]) : null;
 }
 
-/** The CPU seconds and bytes of turning the vectors into the backfill's bulk writes, 500 records a request. */
+/** The CPU seconds and bytes of serialising the vectors as the backfill's bulk writes, 500 records a request. */
 function writeCost(vectors: ReadonlyArray<number[] | null>) {
 	const started = process.cpuUsage();
 	let bytes = 0;
@@ -120,28 +128,30 @@ const perThousand = (value: number, records: number) => Number(((value * 1_000) 
 async function timeSetting(config: LibraryServerConfig, parallelRequests: number, batchTexts: number | undefined, texts: readonly string[]) {
 	const embedder = createEmbedder(config.search.embedder, { parallelRequests, batchTexts })!;
 	const label = `${parallelRequests} in flight, ${embedder.capacity / parallelRequests} texts a request`;
-	answers.byStatus = {};
-	answers.seconds = 0;
-	const [readBefore, cpuBefore] = [await bytesRead(), process.cpuUsage()];
+	Object.assign(answers, { byStatus: {}, answered: 0, seconds: 0, mostInFlight: 0 });
+	const [readBefore, cpuBefore, loopBefore] = [await bytesRead(), process.cpuUsage(), performance.eventLoopUtilization()];
 	const { page, vectors, seconds } = await embedPages(embedder, label, texts);
 	const { user, system } = process.cpuUsage(cpuBefore);
+	const loop = performance.eventLoopUtilization(loopBefore);
 	const readAfter = await bytesRead();
-	const requests = Object.values(answers.byStatus).reduce((sum, count) => sum + count, 0);
 	const write = writeCost(vectors);
 	return {
 		parallelRequests,
-		textsPerRequest: Number((texts.length / (answers.byStatus[200] ?? requests)).toFixed(1)),
+		textsPerRequest: Number((texts.length / (answers.byStatus[200] ?? answers.answered)).toFixed(1)),
+		mostRequestsInFlight: answers.mostInFlight,
 		pageRecords: page,
 		records: texts.length,
 		refused: vectors.filter((vector) => vector === null).length,
 		seconds: Number(seconds.toFixed(1)),
 		recordsPerSecond: Number((texts.length / seconds).toFixed(1)),
 		answers: answers.byStatus,
-		secondsPerRequest: Number((answers.seconds / requests).toFixed(2)),
+		secondsPerRequest: Number((answers.seconds / answers.answered).toFixed(2)),
+		// How busy the worker's one JavaScript thread was: near 1, it, not the embedder, sets the speed.
+		eventLoopBusy: Number(loop.utilization.toFixed(2)),
 		workerCpuSecondsPer1000Records: perThousand((user + system) / 1e6, texts.length),
 		workerCores: Number(((user + system) / 1e6 / seconds).toFixed(2)),
 		receivedKBPerRecord: readBefore === null || readAfter === null ? null : Number(((readAfter - readBefore) / texts.length / 1_024).toFixed(1)),
-		writeCpuSecondsPer1000Records: perThousand(write.cpuSeconds, texts.length),
+		serialiseCpuSecondsPer1000Records: perThousand(write.cpuSeconds, texts.length),
 		writeKBPerRecord: Number((write.bytes / texts.length / 1_024).toFixed(1)),
 	};
 }
