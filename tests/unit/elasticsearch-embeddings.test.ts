@@ -120,6 +120,15 @@ describe("records' vectors in Elasticsearch", () => {
 		expect(operations[1]).toMatchObject({ doc: { embedding: [expect.any(Number), 1], embeddingHash: expect.any(String), embeddingModel: "perplexity-0.6b" } });
 	});
 
+	it("leaves the records without a vector unread while the embedder is left alone", async () => {
+		const { client, service } = library({}, [{ key: "A", title: "Radio lessons" }]);
+		const embeddings = elasticsearchEmbeddings(service, embedder(true));
+		expect(await embeddings.embedMissing()).toBe(0);
+		expect(client.search).toHaveBeenCalledTimes(1);
+		expect(await embeddings.embedMissing()).toBe(0);
+		expect(client.search).toHaveBeenCalledTimes(1);
+	});
+
 	it("reads pages that keep 128 requests in flight twice over, and writes their vectors 500 records a request", async () => {
 		const missing = Array.from({ length: 600 }, (_, index) => ({ key: `R${String(index).padStart(3, "0")}`, title: `Record ${index}` }));
 		const { client, service } = library({}, missing);

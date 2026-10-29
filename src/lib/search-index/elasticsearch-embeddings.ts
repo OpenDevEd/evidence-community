@@ -183,6 +183,8 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 			});
 		},
 		async embedMissing(signal) {
+			// While the embedder is left alone, a page read now would only be thrown away.
+			if (Date.now() < pausedUntil) return 0;
 			const stopAt = Date.now() + MISSING_TIME_MS;
 			let written = 0;
 			let after: estypes.SortResults | undefined;
