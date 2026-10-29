@@ -163,7 +163,7 @@ async function dimensions() {
 
 const searched = { fields: ["title", "abstractNote"], filters: [], returned: { only: ["key"] } };
 
-async function keys(engine: ReturnType<typeof library>["engine"], request: { text: string; size: number; semantic: { ratio: number; like?: string } }) {
+async function keys(engine: ReturnType<typeof library>["engine"], request: { text: string; size: number; semantic: { ratio: number; like?: string }; sort?: string[] }) {
 	// Similar records leave out the record they start from, as the Similar Resources route does.
 	const like = request.semantic.like;
 	const filters = like ? [{ not: { field: "key", equals: like } }] : [];
@@ -192,7 +192,10 @@ async function searchByMeaning(enabled: Configuration) {
 	// AI search weighs words and meaning alike; "radio" alone matches two records by words.
 	const asAiSearch = await keys(library(enabled).engine, { text: "radio lessons", size: 4, semantic: { ratio: 0.5 } });
 	assert(asAiSearch[0] === "RADIO001" && asAiSearch.length === 4, `Words and meaning alike answered ${asAiSearch.join(", ")}.`);
-	step("search by meaning", `${byMeaning.join(", ")}; with words alike ${asAiSearch.join(", ")}`);
+	// Sorted, words alone find the two radio records; the records found by meaning stay, as in Meilisearch.
+	const sorted = await keys(library(enabled).engine, { text: "radio lessons", size: 4, semantic: { ratio: 0.5 }, sort: ["title:asc"] });
+	assert(sorted[0] === "RADIO001" && sorted.length === 4, `A sorted search by words and meaning answered ${sorted.join(", ")}.`);
+	step("search by meaning", `${byMeaning.join(", ")}; with words alike ${asAiSearch.join(", ")}; sorted by title ${sorted.join(", ")}`);
 }
 
 async function searchFromRecord(enabled: Configuration) {

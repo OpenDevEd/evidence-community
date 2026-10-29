@@ -117,6 +117,14 @@ describe("a search by words and meaning in Elasticsearch", () => {
 		expect(client.msearch).not.toHaveBeenCalled();
 	});
 
+	it("keeps records found by meaning in a sorted search, ranked first by relevance with the order breaking ties, as Meilisearch does", async () => {
+		const { client, engine } = mixed(["a", "b"], ["b", "c"], {}, "sorted-model");
+		const answer = await engine.search<{ key: string }>({ ...asked, sort: ["date:desc"] });
+		expect(answer.hits.map((hit) => hit.key)).toEqual(["b", "a", "c"]);
+		const [{ searches }] = client.msearch.mock.calls[0] as unknown as [{ searches: Array<Record<string, unknown>> }];
+		expect(searches[1]).toMatchObject({ sort: [{ _score: { order: "desc" } }, { date: { order: "desc" } }, { key: { order: "asc" } }] });
+	});
+
 	it("ranks by words alone past the first page's start, as with a cursor", async () => {
 		const { client, embedder, engine } = mixed(["a"], ["c"], {}, "cursor-model");
 		await engine.search({ ...asked, after: [1, "a"] });

@@ -108,11 +108,12 @@ const pausedEmbedders = new Map<string, number>();
 
 /**
  * Whether words and meaning rank the results together: only from the first result, which a mixed answer starts at.
- * A chosen order, a cursor, or a page past the result window ranks by words alone.
+ * A cursor or a page past the result window ranks by words alone. A chosen order still mixes them, as Meilisearch's
+ * hybrid search does: the words order ranks by relevance first and the chosen order breaks its ties.
  */
 function mixesMeaning(request: SearchRequest) {
 	const fromStart = !request.after && !request.before && !request.fromEnd && !pastResultWindow(request);
-	return Boolean(request.semantic && request.semantic.ratio > 0 && !request.sort?.length && fromStart);
+	return Boolean(request.semantic && request.semantic.ratio > 0 && fromStart);
 }
 
 /** A vector, and the embedder fingerprint of the vectors it can be compared with. */
