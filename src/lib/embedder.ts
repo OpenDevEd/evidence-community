@@ -44,7 +44,7 @@ const OPENAI_URL = "https://api.openai.com/v1/embeddings";
 
 /**
  * Texts in one request and requests in flight at once to one embedder, whoever asks: every claim the worker drains
- * shares them. Unless set, a REST embedder gets 128 requests of 50 texts, the fastest of 12 settings OpenRouter's
+ * shares them. Unless set, a REST embedder gets 128 requests of 50 texts, the fastest of 13 settings OpenRouter's
  * Perplexity model answered (3,005 records a second, 29 October 2026), and OpenAI, which takes 2,048, 64 texts. A model
  * on a few CPU cores needs about 8 requests of 10: `SEARCH_EMBEDDER_PARALLEL_REQUESTS` and `SEARCH_EMBEDDER_BATCH_TEXTS`
  * set them for the worker, up to Perplexity's 512 texts. A batch stays under 256 KB, below Perplexity's 120,000 tokens.

@@ -258,7 +258,7 @@ async function backfillAtMost(stub: Stub, enabled: Configuration) {
 	assert(embedded === 1_204 && stub.state.texts === before + 1_204, `The backfill embedded ${stub.state.texts - before} texts and wrote ${embedded} vectors, not 1,204.`);
 	assert((await withoutVectors()) === 0, `A record has no vector after the backfill at ${MOST_PARALLEL_REQUESTS} requests in flight.`);
 	assert(stub.state.mostInFlight > 64, `Only ${stub.state.mostInFlight} requests were in flight at once, not up to ${MOST_PARALLEL_REQUESTS}.`);
-	step(`backfill at ${MOST_PARALLEL_REQUESTS} in flight`, `1,204 records in one page, ${stub.state.mostInFlight} requests at once, every record with a vector`);
+	step(`backfill allowing ${MOST_PARALLEL_REQUESTS} requests at once`, `1,204 records in one page, ${stub.state.mostInFlight} requests at once, every record with a vector`);
 }
 
 async function turnOff() {

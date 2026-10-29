@@ -43,7 +43,7 @@ const MOST_DIMENSIONS = 4_096;
 
 /**
  * How long `embedMissing` may run before the worker drains the outbox again; it checks between pages. A page keeps
- * every request in flight twice over, between 100 and 10,000 records, the most Elasticsearch answers at once: a model
+ * every request in flight twice over, between 100 and 10,000 records (once over at 128 requests of 50 texts), the most Elasticsearch answers at once: a model
  * on CPU gets small pages, so a page doesn't hold up the drain long, and a hosted service large ones, so its requests
  * don't wait on a page's slowest.
  */
