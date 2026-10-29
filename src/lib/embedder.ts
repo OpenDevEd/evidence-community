@@ -161,14 +161,17 @@ function openAiCall(embedder: Extract<EmbedderConfiguration, { source: "openAi" 
 	};
 }
 
-/** A busy or failing service is worth another try. */
+/**
+ * A busy or failing service is worth another try, as is OpenRouter's 402: an account out of credit, or over its budget
+ * for paid requests in flight (https://openrouter.ai/docs/api-reference/limits).
+ */
 function retryable(status: number) {
-	return status === 429 || status >= 500;
+	return status === 402 || status === 429 || status >= 500;
 }
 
-/** A refusal of what was sent, which a smaller batch or another text may pass; not of the key, nor a busy service. */
+/** A refusal of what was sent, which a smaller batch or another text may pass; not of the key or the account, nor a busy service. */
 function refusesTexts(status: number) {
-	return status >= 400 && status < 500 && ![401, 403, 404, 407, 408, 429].includes(status);
+	return status >= 400 && status < 500 && ![401, 402, 403, 404, 407, 408, 429].includes(status);
 }
 
 /**

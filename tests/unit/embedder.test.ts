@@ -94,6 +94,14 @@ describe("calling the library's embedder", () => {
 		expect(fetch).toHaveBeenCalledTimes(2);
 	});
 
+	it("tries a whole batch again after OpenRouter answers 402, as for an account over its budget, refusing none of its texts", async () => {
+		const ok = answering();
+		const fetch = vi.fn(async (url: string, init: RequestInit) => (fetch.mock.calls.length === 1 ? new Response("insufficient credits", { status: 402 }) : ok(url, init)));
+		vi.stubGlobal("fetch", fetch);
+		expect(await createEmbedder(openRouter)!.embed(["a", "bb"])).toEqual([[1, 1, 0], [2, 1, 0]]);
+		expect(fetch.mock.calls.map(([, init]) => JSON.parse(String(init.body)).input)).toEqual([["a", "bb"], ["a", "bb"]]);
+	});
+
 	it("fails at once on a refusal, and on vectors of another size than configured", async () => {
 		const refusing = vi.fn(async () => new Response("bad key", { status: 401 }));
 		vi.stubGlobal("fetch", refusing);

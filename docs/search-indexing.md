@@ -207,7 +207,8 @@ Writing records:
 - When the embedder fails, records are written without a vector, so word search
   stays current, and the worker records the error as `lastError`. It leaves the
   embedder alone for a minute, doubling up to 30 minutes, and the backfill
-  embeds those records once it answers.
+  embeds those records once it answers. OpenRouter's 402, for an account out of
+  credit or over its budget for requests in flight, is such a failure.
 - A text the embedder refuses, as one too long for it, gets its hash and
   `embeddingModel` without a vector, and isn't sent again until its text or the
   embedder changes. A REST embedder gets 10 texts a request, as Meilisearch
