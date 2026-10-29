@@ -171,6 +171,23 @@ describe("the publication year filter", () => {
 		expect(container.querySelector('[aria-label="to"]')).not.toBeNull();
 	});
 
+	it("turns Year Range on for a range typed into the Year box", async () => {
+		vi.useFakeTimers();
+		const onRangeChange = vi.fn();
+		await render({ onRangeChange });
+
+		await type("year", "2020-2024");
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(onRangeChange).toHaveBeenCalledWith("2020-2024", null);
+
+		await render({ range: "2020-2024", onRangeChange });
+		expect(container.querySelector<HTMLInputElement>('input[role="switch"]')?.checked).toBe(true);
+		expect(box("from")?.value).toBe("2020");
+		expect(box("to")?.value).toBe("2024");
+	});
+
 	it("drops a typed year that is still waiting when the range changes elsewhere, even back to the same range", async () => {
 		vi.useFakeTimers();
 		const onRangeChange = vi.fn();
