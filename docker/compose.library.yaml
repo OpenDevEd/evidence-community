@@ -90,6 +90,9 @@ services:
         environment:
             <<: *runtime-environment
             SEARCH_INDEX_WORKER_ID: search-indexer
+            # Empty keeps the embedder's defaults; a model on a few CPU cores needs about 8 requests of 10 texts.
+            SEARCH_EMBEDDER_PARALLEL_REQUESTS: "${SEARCH_EMBEDDER_PARALLEL_REQUESTS:-}"
+            SEARCH_EMBEDDER_BATCH_TEXTS: "${SEARCH_EMBEDDER_BATCH_TEXTS:-}"
         configs:
             - *runtime-config
         volumes:
