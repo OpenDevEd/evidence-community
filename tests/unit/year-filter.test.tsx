@@ -48,6 +48,7 @@ vi.mock("@/components/nextui/Switch", () => ({
 }));
 vi.mock("framer-motion", () => ({
 	AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+	useIsPresent: () => true,
 	motion: {
 		div: ({
 			children,

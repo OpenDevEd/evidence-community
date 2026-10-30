@@ -1,9 +1,9 @@
 "use client";
 
 import { AutocompleteItem } from "@nextui-org/react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useIsPresent } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode, type Ref } from "react";
 
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -97,6 +97,28 @@ function YearPicker({
 	);
 }
 
+/**
+ * One mode's boxes, fading in and out as the switch turns. Boxes fading out stay in the page until they're gone, so they
+ * take no focus meanwhile: Tab goes to the boxes replacing them. `ref` is AnimatePresence's, which measures the boxes to
+ * lift them out of the layout as they leave.
+ */
+function ModeBoxes({ ref, className, children }: { ref?: Ref<HTMLDivElement>; className: string; children: ReactNode }) {
+	const leaving = !useIsPresent();
+	return (
+		<motion.div
+			ref={ref}
+			initial={{ opacity: 0, y: 10 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: 10 }}
+			layout
+			inert={leaving || undefined}
+			className={className}
+		>
+			{children}
+		</motion.div>
+	);
+}
+
 export function YearFilter({
 	range,
 	onRangeChange,
@@ -186,14 +208,7 @@ export function YearFilter({
 			<div key={shown.fills}>
 				<AnimatePresence mode="popLayout" initial={false}>
 					{isRangeMode ? (
-						<motion.div
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: 10 }}
-							key="year-range"
-							layout
-							className="flex w-full gap-4"
-						>
+						<ModeBoxes key="year-range" className="flex w-full gap-4">
 							<YearPicker
 								key={`from-${switches}`}
 								label={t("from")}
@@ -210,16 +225,9 @@ export function YearFilter({
 								years={years}
 								counts={counts}
 							/>
-						</motion.div>
+						</ModeBoxes>
 					) : (
-						<motion.div
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: 10 }}
-							key="same-year"
-							layout
-							className="w-full"
-						>
+						<ModeBoxes key="same-year" className="w-full">
 							<YearPicker
 								key={switches}
 								label={t("year")}
@@ -228,7 +236,7 @@ export function YearFilter({
 								years={years}
 								counts={counts}
 							/>
-						</motion.div>
+						</ModeBoxes>
 					)}
 				</AnimatePresence>
 			</div>
