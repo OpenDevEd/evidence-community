@@ -1,7 +1,8 @@
 "use client";
 import { extendVariants, Switch as NextUISwitch } from "@nextui-org/react";
+import { useId, type ComponentProps } from "react";
 
-export const Switch = extendVariants(NextUISwitch, {
+const VariantSwitch = extendVariants(NextUISwitch, {
   variants: {
     color: {
       tertiary: {
@@ -38,3 +39,12 @@ export const Switch = extendVariants(NextUISwitch, {
     variant: "default",
   },
 });
+
+/**
+ * On Back and Forward, WebKit puts each unnamed checkbox back as it was by its place among the page's unnamed checkboxes,
+ * so one drawn only in the browser (a collection's) hands its state to a switch, and React takes that as the reader turning
+ * the switch. A name of its own keeps each switch's state its own.
+ */
+export function Switch(props: ComponentProps<typeof VariantSwitch>) {
+  return <VariantSwitch name={useId()} {...props} />;
+}
