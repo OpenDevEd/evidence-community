@@ -226,8 +226,6 @@
 		},
 		"postcss": "^8.5.26",
 		"@react-aria/i18n": "^3.13.1",
-		"@react-aria/focus": "^3.22.1",
-		"@react-aria/interactions": "^3.28.1",
 		"@parcel/watcher": {
 			"picomatch": "^4.0.4"
 		}

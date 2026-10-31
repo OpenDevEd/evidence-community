@@ -99,8 +99,10 @@ function YearPicker({
 
 /**
  * One mode's boxes, fading in and out as the switch turns. Boxes fading out stay in the page until they're gone, so they
- * take no focus meanwhile: Tab goes to the boxes replacing them. `ref` is AnimatePresence's, which measures the boxes to
- * lift them out of the layout as they leave.
+ * take no focus meanwhile: Tab goes to the boxes replacing them. Inside Explore on a phone, NextUI's modal moves Tab
+ * itself with the React Aria FocusScope it pins (@react-aria/focus 3.19.0), which skips `data-react-aria-prevent-focus`
+ * but not `inert`, so the boxes carry both. `ref` is AnimatePresence's, which measures the boxes to lift them out of the
+ * layout as they leave.
  */
 function ModeBoxes({ ref, className, children }: { ref?: Ref<HTMLDivElement>; className: string; children: ReactNode }) {
 	const leaving = !useIsPresent();
@@ -112,6 +114,7 @@ function ModeBoxes({ ref, className, children }: { ref?: Ref<HTMLDivElement>; cl
 			exit={{ opacity: 0, y: 10 }}
 			layout
 			inert={leaving || undefined}
+			data-react-aria-prevent-focus={leaving || undefined}
 			className={className}
 		>
 			{children}
