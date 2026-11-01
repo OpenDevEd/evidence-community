@@ -43,7 +43,10 @@ The old Popover accessibility-hiding workaround is superseded by upstream's
 removal of the redundant effect.
 Autocomplete keeps focus on the selected option as hierarchical filters expand,
 and falls back to the first enabled option only when the active option is gone.
-This retains first-match selection while searching. The regression check is
+This retains first-match selection while searching. Tab picks the active
+option only when the reader typed or moved to it with the arrow keys, so
+tabbing through an empty box leaves its value alone instead of choosing the
+first option the list highlights when it opens. The regression check is
 `tests/unit/autocomplete-focus.test.tsx`.
 Non-virtualized lists also use their actual scroll container for keyboard focus,
 so moving through long results scrolls the dropdown instead of the page.
