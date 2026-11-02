@@ -605,7 +605,19 @@
     "analysedWords": "उसके विश्लेषित {total} अध्ययनों में से {held} इस पुस्तकालय में हैं; वह {others} अन्य कृतियों का भी उद्धरण देता है",
     "notFoundTitle": "404 - पृष्ठ नहीं मिला",
     "citationsTitle": "उद्धरण - {title}",
-    "citationsDescription": "“{title}” के लिए उद्धरण आँकड़े और उद्धरण देने वाले स्रोत देखें"
+    "citationsDescription": "“{title}” के लिए उद्धरण आँकड़े और उद्धरण देने वाले स्रोत देखें",
+    "selectFilterType": "फ़िल्टर प्रकार का चयन करें",
+    "chooseTopic": "विषय चुनें",
+    "chooseInstitution": "संस्थान चुनें",
+    "currentFilter": "वर्तमान फ़िल्टर",
+    "totalCitationsPerYear": "प्रति वर्ष कुल उद्धरण",
+    "avgCitationsPerItem": "प्रति आइटम औसत उद्धरण",
+    "avgPerItem": "प्रति आइटम औसत",
+    "inSelectedPeriod": "चयनित अवधि में",
+    "overallAvgCitations": "कुल औसत उद्धरण",
+    "acrossAllYears": "सभी वर्षों में",
+    "topicFilteringUnavailable": "विषय फ़िल्टरिंग के लिए अतिरिक्त डेटा की आवश्यकता होती है जो वर्तमान में उपलब्ध नहीं है",
+    "rateLimitedMessage": "आपने अनुरोध की सीमा पूरी कर ली है। {seconds} सेकंड बाद फिर से प्रयास करें।"
   },
   "ai": {
     "sourcesTitle": "स्रोत",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "1 जनवरी की कई तिथियों में केवल वर्ष दिया गया है।",
     "yearOnlyText": "OpenAlex जिस कृति का केवल वर्ष जानता है, उसकी तिथि 1 जनवरी मानता है, इसलिए इस अवधि की कुछ कृतियाँ उसी वर्ष बाद में प्रकाशित हुई हो सकती हैं।",
     "updatesWhenAdded": "प्रकाशन जुड़ने पर अपडेट",
-    "libraryDigestsTitle": "पुस्तकालय<br></br>सारांश"
+    "libraryDigestsTitle": "पुस्तकालय<br></br>सारांश",
+    "publicationCount": "{count, plural, one {# प्रकाशन} other {# प्रकाशन}}",
+    "zoneTime": "{place} का समय",
+    "scheduleMonthly": "हर महीने की {day} तारीख",
+    "scheduleMonthlyLong": "हर महीने की {day} तारीख, या अगर महीना छोटा हो तो उसकी आखिरी तारीख,",
+    "scheduleAt": "{day} को {time} {zone}",
+    "scheduleChecked": "{day}, संपादक द्वारा जाँचे जाने के बाद"
   },
   "home": {
     "earlierIssues": "पिछले अंक",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "दायरे का आइकन",
     "sortBy": "क्रम से लगाएँ",
     "sortIcon": "क्रम का आइकन",
-    "switchToMode": "{themeToMatch} मोड पर जाएँ",
     "toggleTheme": "थीम बदलें"
   },
   "takedown": {

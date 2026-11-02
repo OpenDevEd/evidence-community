@@ -2,7 +2,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BarChartIcon, Building02Icon, Cancel01Icon, FilterIcon, Folder01Icon, QuoteUpIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState, memo, Fragment } from "react";
 import type { ReactNode } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -72,6 +72,7 @@ function OptionalFlag({ countryCode }: { countryCode: string | undefined | null 
 
 function YearTooltip({ active, payload, label }: { active?: boolean; payload?: readonly { payload?: unknown }[]; label?: ReactNode }) {
 	const t = useTranslations("ui");
+	const locale = useLocale();
 	const data = payload?.[0]?.payload as { totalCitations?: number; avgCitationsPerItem?: number; itemCount?: number } | undefined;
 	if (!active || !data) return null;
 	const { totalCitations = 0, avgCitationsPerItem: avgCitations = 0, itemCount = 0 } = data;
@@ -96,7 +97,7 @@ function YearTooltip({ active, payload, label }: { active?: boolean; payload?: r
 						</span>
 					</div>
 					<span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-						{totalCitations.toLocaleString()}
+						{totalCitations.toLocaleString(locale)}
 					</span>
 				</div>
 				
@@ -109,7 +110,7 @@ function YearTooltip({ active, payload, label }: { active?: boolean; payload?: r
 						</span>
 					</div>
 					<span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
-						{avgCitations.toFixed(2)}
+						{avgCitations.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 					</span>
 				</div>
 				
@@ -122,7 +123,7 @@ function YearTooltip({ active, payload, label }: { active?: boolean; payload?: r
 						</span>
 					</div>
 					<span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
-						{itemCount.toLocaleString()}
+						{itemCount.toLocaleString(locale)}
 					</span>
 				</div>
 			</div>
@@ -138,25 +139,30 @@ function chooser(choose: (value: string) => void, clearOther: (value: string) =>
 	};
 }
 
+function ClearFilters({ shown, onPress, label }: { shown: boolean; onPress: () => void; label: string }) {
+	if (!shown) return null;
+	return <Button size="sm" variant="flat" color="default" onPress={onPress} startContent={<HugeiconsIcon icon={Cancel01Icon} />}>{label}</Button>;
+}
+
 function countryNameOf(code: string | undefined | null) {
 	return code ? COUNTRIES[code] : undefined;
 }
 
 type StatisticsTranslator = ReturnType<typeof useTranslations<"statistics">>;
 
-function institutionOptions(rows: CitationsByYearProps["institutionsByYear"], t: StatisticsTranslator) {
+function institutionOptions(rows: CitationsByYearProps["institutionsByYear"], t: StatisticsTranslator, locale: string) {
 	const counts = new Map<string, number>();
 	for (const item of rows) counts.set(item.institution, (counts.get(item.institution) ?? 0) + item.itemCount);
 	return Array.from(counts.entries())
-		.map(([name, count]) => ({ value: name, label: t("label", { name, count: count.toLocaleString() }), count }))
+		.map(([name, count]) => ({ value: name, label: t("label", { name, count: count.toLocaleString(locale) }), count }))
 		.sort((a, b) => b.count - a.count);
 }
 
-function topicOptions(rows: CitationsByYearProps["topicsByYear"], t: StatisticsTranslator) {
+function topicOptions(rows: CitationsByYearProps["topicsByYear"], t: StatisticsTranslator, locale: string) {
 	const counts = new Map<string, { topic: string; level: number; count: number }>();
 	for (const item of rows) counts.set(item.id, { topic: item.topic, level: item.level, count: (counts.get(item.id)?.count ?? 0) + item.itemCount });
 	return Array.from(counts.entries())
-		.map(([id, { topic, level, count }]) => ({ value: id, topic, level, label: t("label2", { topic, count: count.toLocaleString() }), count }))
+		.map(([id, { topic, level, count }]) => ({ value: id, topic, level, label: t("label2", { topic, count: count.toLocaleString(locale) }), count }))
 		.sort((a, b) => b.count - a.count);
 }
 
@@ -177,12 +183,13 @@ function chartRows(all: CitationsByYearProps["citationsByYear"], institutions: C
 	return all;
 }
 
-function itemsLine(t: StatisticsTranslator, countryName: string | undefined | null, count: number) {
-	const value = count.toLocaleString();
+function itemsLine(t: StatisticsTranslator, countryName: string | undefined | null, count: number, locale: string) {
+	const value = count.toLocaleString(locale);
 	return countryName ? t("items", { countryName, value }) : t("items2", { value });
 }
 
 export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByYear }: CitationsByYearProps) {
+	const locale = useLocale();
 	const tLabels = useTranslations("statistics");
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
@@ -190,10 +197,10 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 	const [selectedTopic, setSelectedTopic] = useState<string>("all");
 	
 	// Get all institutions with their counts (don't limit here)
-	const allInstitutions = useMemo(() => institutionOptions(institutionsByYear, tLabels), [institutionsByYear, tLabels]);
+	const allInstitutions = useMemo(() => institutionOptions(institutionsByYear, tLabels, locale), [institutionsByYear, tLabels, locale]);
 
 	// Get all topics with their counts (don't limit here)
-	const allTopics = useMemo(() => topicOptions(topicsByYear, tLabels), [topicsByYear, tLabels]);
+	const allTopics = useMemo(() => topicOptions(topicsByYear, tLabels, locale), [topicsByYear, tLabels, locale]);
 
 	// Filter institutions based on search, then limit to 200
 	const [institutionSearchTerm, setInstitutionSearchTerm] = useState("");
@@ -233,17 +240,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							<HugeiconsIcon icon={FilterIcon} className="text-accent" />
 							{t("filterOptions")}
 						</h3>
-						{hasActiveFilters && (
-							<Button
-								size="sm"
-								variant="flat"
-								color="default"
-								onPress={clearFilters}
-								startContent={<HugeiconsIcon icon={Cancel01Icon} />}
-							>
-								{t("clearFilters")}
-							</Button>
-						)}
+						<ClearFilters shown={hasActiveFilters} onPress={clearFilters} label={t("clearFilters")} />
 					</div>
 
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -285,7 +282,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 													<HugeiconsIcon icon={Building02Icon} className="text-black/40 dark:text-white/40" />
 												</div>
 											}
-											description={itemsLine(tLabels, countryName, institution.count)}
+											description={itemsLine(tLabels, countryName, institution.count, locale)}
 										>
 											{institution.value}
 										</AutocompleteItem>
@@ -330,7 +327,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 													<LevelBadge level={level} />
 												</div>
 											}
-											description={itemsLine(tLabels, undefined, topic.count)}
+											description={itemsLine(tLabels, undefined, topic.count, locale)}
 										>
 											{displayName}
 										</AutocompleteItem>
@@ -345,7 +342,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 				<motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-4 gap-6">
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
 						<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-							{stats.totalCitations.toLocaleString()}
+							{stats.totalCitations.toLocaleString(locale)}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalCitations")}
@@ -353,7 +350,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 					</div>
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
 						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{stats.totalItems.toLocaleString()}
+							{stats.totalItems.toLocaleString(locale)}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalItems")}
@@ -402,7 +399,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 										className="text-black/60 dark:text-white/60"
 										tick={{ fontSize: 12 }}
 										axisLine={false}
-										tickFormatter={(value) => value.toLocaleString()}
+										tickFormatter={(value) => value.toLocaleString(locale)}
 									/>
 									<YAxis
 										yAxisId="avg"
@@ -418,7 +415,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 										className="text-black/60 dark:text-white/60"
 										tick={{ fontSize: 12 }}
 										axisLine={false}
-										tickFormatter={(value) => value.toLocaleString()}
+										tickFormatter={(value) => value.toLocaleString(locale)}
 									/>
 									<Tooltip
 										contentStyle={{

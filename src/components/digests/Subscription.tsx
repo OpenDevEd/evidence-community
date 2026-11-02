@@ -75,7 +75,7 @@ function SubscriptionForm({preferences, schedule, model}: {preferences: boolean;
 function SubscriptionBody({preferences, schedule, model}: {preferences: boolean; schedule: string; model: FormModel}) {
   const t = useTranslations("digests");
   const {step, value, setStep} = model;
-  if (step === "confirm") return <div className="space-y-4" role="status"><h3 className="text-base font-semibold">{t("checkYourEmail")}</h3><p className={`text-sm leading-6 ${muted}`}>{t.rich("linkSent", { email: value.email, strong: (chunks) => <strong>{chunks}</strong> })}</p><Button size="sm" variant="transparent" onPress={() => setStep("form")}>{t("changeEmail")}</Button></div>;
+  if (step === "confirm") return <div className="space-y-4" role="status"><h3 className="text-base font-semibold">{t("checkYourEmail")}</h3><p className={`text-sm leading-6 ${muted}`}>{t.rich("linkSent", { email: value.email, strong: (chunks) => <span className="break-all font-medium text-black dark:text-white">{chunks}</span> })}</p><Button size="sm" variant="transparent" onPress={() => setStep("form")}>{t("changeEmail")}</Button></div>;
   if (step === "stopped") return <div className="space-y-4" role="status"><h2 className="flex items-center gap-2 text-lg font-semibold"><Icon value={Tick01Icon} />{t("unsubscribed")}</h2><p className={`text-sm ${muted}`}>{t("allLibraryEmailsAreSwitchedOff")}</p><Button size="md" className="rounded-xl" onPress={() => setStep("form")}>{t("changePreferences")}</Button></div>;
   return <SubscriptionForm preferences={preferences} schedule={schedule} model={model} />;
 }

@@ -1,5 +1,5 @@
 import { BarChartIcon, Calendar01Icon } from "@hugeicons/core-free-icons";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
 import {
 	BarChart,
@@ -18,6 +18,7 @@ type ItemTypesAndYearsProps = {
 };
 
 export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const tItemType = useTranslations("itemType");
 	const { resolvedTheme: theme } = useTheme();
@@ -41,7 +42,7 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 							</span>
 							<div className="text-right">
 								<div className="font-bold text-accent">
-									{type.count.toLocaleString()}
+									{type.count.toLocaleString(locale)}
 								</div>
 								<div className="text-xs text-black/60 dark:text-white/60">
 									{type.percentage}%
@@ -78,7 +79,7 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 								className="text-black/60 dark:text-white/60"
 								tick={{ fontSize: 12 }}
 								axisLine={false}
-								tickFormatter={(value) => value.toLocaleString()}
+								tickFormatter={(value) => value.toLocaleString(locale)}
 							/>
 							<Tooltip
 								contentStyle={{
@@ -105,7 +106,7 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 								}}
 								labelFormatter={(label) => `${t("year")} ${label}`}
 								formatter={(value: number) => [
-									value.toLocaleString() + ` ${t("publicationsLowercase")}`,
+									value.toLocaleString(locale) + ` ${t("publicationsLowercase")}`,
 									t("publications"),
 								]}
 							/>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useId, useRef, useState } from "react";
 import useSWR from "swr";
 import { FreeSoloPopover, Spinner } from "@nextui-org/react";
@@ -29,9 +29,10 @@ function directoryUrl(base: string, id: string) {
 }
 
 function TopicWorks({ count }: { count: number | undefined }) {
+  const locale = useLocale();
 	const t = useTranslations("topics");
 	if (count === undefined) return null;
-	return <p className="mt-0.5 text-xs text-black/50 dark:text-white/50">{t("publicationsInOpenalex", { value: count.toLocaleString() })}</p>;
+	return <p className="mt-0.5 text-xs text-black/50 dark:text-white/50">{t("publicationsInOpenalex", { value: count.toLocaleString(locale) })}</p>;
 }
 
 export function TopicHoverCard({

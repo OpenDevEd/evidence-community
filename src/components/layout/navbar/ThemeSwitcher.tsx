@@ -102,7 +102,7 @@ export default function ThemeSwitcher({
 									: "hidden dark:block"
 							)}
 						>
-							{tLabels("switchToMode", { themeToMatch })}
+							{t("switchThemeAriaLabel", { theme: themeToMatch === "dark" ? t("darkTheme") : t("lightTheme") })}
 						</span>
 					))}
 				</span>

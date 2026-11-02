@@ -616,7 +616,8 @@
     "analysedWords": "{held} of the {total} studies it analysed are in this library; it also cites {others} other works",
     "notFoundTitle": "404 - Not Found",
     "citationsTitle": "Citations - {title}",
-    "citationsDescription": "View citation statistics and citing resources for “{title}”"
+    "citationsDescription": "View citation statistics and citing resources for “{title}”",
+    "rateLimitedMessage": "You have reached the request limit. Try again in {seconds} seconds."
   },
   "ai": {
     "sourcesTitle": "Sources",
@@ -1352,7 +1353,13 @@
     "yearOnlyLead": "Many 1 January dates are year-only.",
     "yearOnlyText": "OpenAlex dates a work it knows only the year of 1 January, so some of this period’s works may have come out later that year.",
     "updatesWhenAdded": "Updates when publications are added",
-    "libraryDigestsTitle": "Library<br></br>digests"
+    "libraryDigestsTitle": "Library<br></br>digests",
+    "publicationCount": "{count, plural, one {# publication} other {# publications}}",
+    "zoneTime": "{place} time",
+    "scheduleMonthly": "Day {day} of each month",
+    "scheduleMonthlyLong": "Day {day} of each month, or its last day if shorter,",
+    "scheduleAt": "{day} at {time} {zone}",
+    "scheduleChecked": "{day}, once an editor has checked it"
   },
   "home": {
     "earlierIssues": "Earlier issues",
@@ -1603,7 +1610,6 @@
     "scopeIcon": "Scope icon",
     "sortBy": "Sort by",
     "sortIcon": "Sort icon",
-    "switchToMode": "Switch to {themeToMatch} mode",
     "toggleTheme": "Toggle theme"
   },
   "takedown": {

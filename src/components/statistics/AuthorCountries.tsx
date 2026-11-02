@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BarChartIcon, ChartIncreaseIcon, Flag02Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -48,6 +48,7 @@ const pieColors = [
 ];
 
 export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountriesProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
 	const [countriesPage, setCountriesPage] = useState(1);
@@ -117,7 +118,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 						className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20"
 					>
 						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{creatorStats.uniqueCreators.toLocaleString()}
+							{creatorStats.uniqueCreators.toLocaleString(locale)}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalAuthors")}
@@ -221,7 +222,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 											tick={{ fontSize: 12 }}
 											axisLine={false}
 											tickFormatter={(value) =>
-												value.toLocaleString()
+												value.toLocaleString(locale)
 											}
 										/>
 										<Tooltip
@@ -301,7 +302,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 																}}
 															>
 																<span className="font-medium text-emerald-600 dark:text-emerald-400">
-																	{data.authors.toLocaleString()}
+																	{data.authors.toLocaleString(locale)}
 																</span>{" "}
 																{t("authorsLabel").toLowerCase()}
 															</div>
@@ -314,7 +315,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 																}}
 															>
 																<span className="font-medium text-blue-600 dark:text-blue-400">
-																	{data.items.toLocaleString()}
+																	{data.items.toLocaleString(locale)}
 																</span>{" "}
 																{t("itemsLowercase")}
 															</div>
@@ -498,7 +499,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 															}}
 														>
 															<span className="font-medium text-blue-600 dark:text-blue-400">
-																{data.itemCount.toLocaleString()}
+																{data.itemCount.toLocaleString(locale)}
 															</span>{" "}
 															{t("itemsLowercase")}
 														</div>
@@ -511,7 +512,7 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 															}}
 														>
 															<span className="font-medium text-emerald-600 dark:text-emerald-400">
-																{data.authorCount.toLocaleString()}
+																{data.authorCount.toLocaleString(locale)}
 															</span>{" "}
 															{t("authorsLabel").toLowerCase()}
 														</div>
@@ -597,10 +598,10 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 										</div>
 											<div className="text-xs text-black/60 dark:text-white/60 space-x-3">
 												<span className="text-blue-600 dark:text-blue-400 font-medium">
-													{country.itemCount.toLocaleString()}
+													{country.itemCount.toLocaleString(locale)}
 												</span>
 												<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-											{country.authorCount.toLocaleString()}
+											{country.authorCount.toLocaleString(locale)}
 												</span>
 												<span className="text-purple-600 dark:text-purple-400 font-medium">
 													H:{country.hIndex}
@@ -674,12 +675,12 @@ export function AuthorCountries({ authorCountries, creatorStats }: AuthorCountri
 										</TableCell>
 										<TableCell>
 											<div className="font-medium">
-												{country.authorCount.toLocaleString()}
+												{country.authorCount.toLocaleString(locale)}
 											</div>
 										</TableCell>
 										<TableCell>
 											<div className="font-medium">
-												{country.itemCount.toLocaleString()}
+												{country.itemCount.toLocaleString(locale)}
 											</div>
 										</TableCell>
 										<TableCell>

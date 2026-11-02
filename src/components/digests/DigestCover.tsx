@@ -10,8 +10,10 @@ import { TruncatedText } from "@/components/nextui/TruncatedText";
 import styles from "./DigestPages.module.css";
 import { Icon } from "./DigestPrimitives";
 
-export function publicationCount(count: number, locale: string) {
-  return `${count.toLocaleString(locale)} ${count === 1 ? "publication" : "publications"}`;
+type DigestWords = ReturnType<typeof useTranslations<"digests">>;
+
+export function publicationCount(count: number, t: DigestWords) {
+  return t("publicationCount", { count });
 }
 
 /** Every cover and its loading placeholder share one height, so the page never moves when the edition arrives. A title fits in four lines. */
@@ -32,7 +34,7 @@ export function DigestCover({edition, libraryName, href, locale, titleAs: Title 
               <Title className={`relative line-clamp-4 hyphens-auto text-[28px] font-semibold leading-[1.12] tracking-tight ${cover ? "max-w-[190px]" : "max-w-[230px]"}`}>{edition.title}</Title>
             </div>
             <MarkdownExcerpt className="-mt-2 mb-6 line-clamp-2 px-7 text-sm leading-6 text-[#352b24]/70">{edition.summary}</MarkdownExcerpt>
-            <div className="relative flex items-center justify-between gap-4 bg-[#352b24] px-7 py-4 text-[#eee4d5]"><span className="text-xs text-[#eee4d5]/70">{publicationCount(edition.publicationCount, locale)}</span><span className="inline-flex items-center gap-2 text-sm font-medium">{t("readEdition")}<Icon value={ArrowRight01Icon} size={18} /></span></div>
+            <div className="relative flex items-center justify-between gap-4 bg-[#352b24] px-7 py-4 text-[#eee4d5]"><span className="text-xs text-[#eee4d5]/70">{publicationCount(edition.publicationCount, t)}</span><span className="inline-flex items-center gap-2 text-sm font-medium">{t("readEdition")}<Icon value={ArrowRight01Icon} size={18} /></span></div>
           </article>
           {/* One real cover from the edition, pinned over the corner like a clipped photo. */}
           {cover && <span aria-hidden="true" className="absolute -right-4 -top-5 h-36 w-[6.75rem] rotate-6 overflow-hidden rounded-md bg-white shadow-xl ring-1 ring-[#352b24]/15 transition-transform duration-300 ease-out group-hover:-translate-y-1 group-hover:rotate-[9deg] motion-reduce:transition-none">

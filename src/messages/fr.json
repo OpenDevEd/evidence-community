@@ -605,7 +605,19 @@
     "analysedWords": "{held} des {total} études qu’elle a analysées se trouvent dans cette bibliothèque ; elle cite aussi {others} autres travaux",
     "notFoundTitle": "404 - Page introuvable",
     "citationsTitle": "Citations - {title}",
-    "citationsDescription": "Consulter les statistiques de citation et les ressources qui citent « {title} »"
+    "citationsDescription": "Consulter les statistiques de citation et les ressources qui citent « {title} »",
+    "selectFilterType": "Sélectionner le type de filtre",
+    "chooseTopic": "Choisir un sujet",
+    "chooseInstitution": "Choisir l'établissement",
+    "currentFilter": "Filtre actuel",
+    "totalCitationsPerYear": "Nombre total de citations par année",
+    "avgCitationsPerItem": "Citations moyennes par élément",
+    "avgPerItem": "Moy. par article",
+    "inSelectedPeriod": "dans la période sélectionnée",
+    "overallAvgCitations": "Nombre moyen total de citations",
+    "acrossAllYears": "sur toutes les années",
+    "topicFilteringUnavailable": "Le filtrage des sujets nécessite des données supplémentaires qui ne sont pas actuellement disponibles",
+    "rateLimitedMessage": "Vous avez atteint la limite de requêtes. Réessayez dans {seconds} secondes."
   },
   "ai": {
     "sourcesTitle": "Sources",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "Beaucoup de dates du 1er janvier ne comportent que l’année.",
     "yearOnlyText": "OpenAlex date au 1er janvier un travail dont elle ne connaît que l’année ; certains travaux de cette période peuvent donc être parus plus tard dans l’année.",
     "updatesWhenAdded": "Mises à jour à l’ajout de publications",
-    "libraryDigestsTitle": "Résumés<br></br>de la bibliothèque"
+    "libraryDigestsTitle": "Résumés<br></br>de la bibliothèque",
+    "publicationCount": "{count, plural, one {# publication} other {# publications}}",
+    "zoneTime": "Heure de {place}",
+    "scheduleMonthly": "Jour {day} de chaque mois",
+    "scheduleMonthlyLong": "Jour {day} de chaque mois, ou le dernier jour du mois si celui-ci est plus court,",
+    "scheduleAt": "{day} à {time} {zone}",
+    "scheduleChecked": "{day}, une fois vérifié par un éditeur"
   },
   "home": {
     "earlierIssues": "Éditions précédentes",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "Icône du périmètre",
     "sortBy": "Trier par",
     "sortIcon": "Icône de tri",
-    "switchToMode": "Passer au mode {themeToMatch}",
     "toggleTheme": "Changer de thème"
   },
   "takedown": {

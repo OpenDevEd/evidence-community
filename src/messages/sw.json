@@ -605,7 +605,19 @@
     "analysedWords": "{held} kati ya tafiti {total} ilizochanganua ziko katika maktaba hii; pia inanukuu kazi nyingine {others}",
     "notFoundTitle": "404 - Haijapatikana",
     "citationsTitle": "Manukuu - {title}",
-    "citationsDescription": "Tazama takwimu za manukuu na rasilimali zinazonukuu “{title}”"
+    "citationsDescription": "Tazama takwimu za manukuu na rasilimali zinazonukuu “{title}”",
+    "selectFilterType": "Chagua Aina ya Kichujio",
+    "chooseTopic": "Chagua Mada",
+    "chooseInstitution": "Chagua Taasisi",
+    "currentFilter": "Kichujio cha Sasa",
+    "totalCitationsPerYear": "Idadi ya Nukuu kwa Mwaka",
+    "avgCitationsPerItem": "Manuku ya Wastani kwa Kifungu",
+    "avgPerItem": "Kati ya Kila Kitu",
+    "inSelectedPeriod": "katika kipindi kilichochaguliwa",
+    "overallAvgCitations": "Wastani wa jumla wa Nukuu",
+    "acrossAllYears": "katika miaka yote",
+    "topicFilteringUnavailable": "Uchujaji wa mada unahitaji data ya ziada ambayo haipatikani sasa",
+    "rateLimitedMessage": "Umefikia kikomo cha maombi. Jaribu tena baada ya sekunde {seconds}."
   },
   "ai": {
     "sourcesTitle": "Vyanzo",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "Tarehe nyingi za 1 Januari zina mwaka pekee.",
     "yearOnlyText": "OpenAlex huweka tarehe ya 1 Januari kwenye kazi ambayo inajua mwaka wake pekee, kwa hiyo baadhi ya kazi za kipindi hiki huenda zilitoka baadaye mwaka huo.",
     "updatesWhenAdded": "Masasisho machapisho yanapoongezwa",
-    "libraryDigestsTitle": "Muhtasari<br></br>wa maktaba"
+    "libraryDigestsTitle": "Muhtasari<br></br>wa maktaba",
+    "publicationCount": "{count, plural, one {# chapisho} other {# machapisho}}",
+    "zoneTime": "Muda wa {place}",
+    "scheduleMonthly": "Siku ya {day} kila mwezi",
+    "scheduleMonthlyLong": "Siku ya {day} kila mwezi, au siku ya mwisho ya mwezi ikiwa mwezi ni mfupi zaidi,",
+    "scheduleAt": "{day} saa {time} {zone}",
+    "scheduleChecked": "{day}, baada ya mhariri kuikagua"
   },
   "home": {
     "earlierIssues": "Matoleo yaliyotangulia",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "Aikoni ya wigo",
     "sortBy": "Panga kwa",
     "sortIcon": "Aikoni ya upangaji",
-    "switchToMode": "Badili hadi hali ya {themeToMatch}",
     "toggleTheme": "Badili mandhari"
   },
   "takedown": {

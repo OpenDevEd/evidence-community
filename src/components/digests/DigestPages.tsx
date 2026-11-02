@@ -70,11 +70,12 @@ function Attribution({ by }: { by: DigestSignature | undefined }) {
     : <span className="inline-flex items-center gap-1.5"><Icon value={AiMagicIcon} size={14} />{tLabels("writtenByAi")}</span>;
 }
 function EditionMeta({ edition }: { edition: DigestEdition }) {
+  const tLabels = useTranslations("digests");
   const locale = useLocale();
   const timezone = useLibraryConfig().notifications.schedule.timezone;
   return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-sm ${muted}`}>
     <Hint content={<PeriodCard period={edition.period} timezone={timezone} />} {...headerHint}><Icon value={Calendar03Icon} size={16} /><time dateTime={edition.period.first}>{edition.period.label}</time></Hint>
-    <Hint content={<CountCard edition={edition} locale={locale} />} {...headerHint}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, locale)}</Hint>
+    <Hint content={<CountCard edition={edition} locale={locale} />} {...headerHint}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, tLabels)}</Hint>
     <Attribution by={edition.by} />
   </div>;
 }
@@ -110,7 +111,7 @@ const holdsNewYear = (period: DigestPeriod) => period.first <= `${period.year}-0
 function periodFacts(period: DigestPeriod, timezone: string, covers: keyof typeof ENTERED_BY, t: DigestTranslator) {
   return [
     {icon: ENTERED_BY[covers].icon, lead: t(ENTERED_BY[covers].lead), text: t(ENTERED_BY[covers].text)},
-    {icon: Globe02Icon, lead: t("daysIn", { zone: timeZoneLabel(timezone) })},
+    {icon: Globe02Icon, lead: t("daysIn", { zone: timeZoneLabel(timezone, (place) => t("zoneTime", { place })) })},
     covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: t("yearOnlyLead"), text: t("yearOnlyText")},
   ];
 }
@@ -187,11 +188,17 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 // included, so an edition opened from the list is already complete.
 
 /** What the library's settings mean for these pages. A library that is not sending digests names no day for the next one, here or beside the choice to subscribe. */
+const scheduleWords = (t: DigestTranslator) => ({
+  monthly: (day: number, long: boolean) => (long ? t("scheduleMonthlyLong", { day }) : t("scheduleMonthly", { day })),
+  checked: (day: string) => t("scheduleChecked", { day }),
+  at: (day: string, time: string, zone: string) => t("scheduleAt", { day, time, zone }),
+});
+
 function useDigestSettings(locale: string): DigestSettings {
   const t = useTranslations("digests");
   const {identity, notifications} = useLibraryConfig();
   const sending = notifications.enabled && notifications.pausedSince === null;
-  const schedule = sending ? describeDigestSchedule(notifications.schedule, locale, notifications.approval) : t("notSending");
+  const schedule = sending ? describeDigestSchedule(notifications.schedule, locale, notifications.approval, scheduleWords(t)) : t("notSending");
   return {libraryName: identity.name, enabled: notifications.enabled, covers: notifications.digestCovers, sending, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule};
 }
 
@@ -233,7 +240,7 @@ function DigestArchive({settings, latest, editions, chart, nextEdition, base, lo
       </header>
       <div className={withRail}>
         <section id="archive" aria-label={tLabels("digestArchive")} className="min-w-0 scroll-mt-8">
-          <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
+          <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} /></Suspense>
         </section>
         <aside className="space-y-4 lg:sticky lg:top-8">
           <Suspense fallback={<Skeleton className="h-[19rem] rounded-2xl" />}><EditionsChart chart={chart} base={base} locale={locale} /></Suspense>
@@ -253,18 +260,19 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
   if (!next) return null;
   return <div className={nextEditionRow}>
     <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
-    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>{tLabels("nextEdition")}</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : tLabels("at", { dayName: next.dayName, time: next.time })}</p><TruncatedText text={settings.approval ? tLabels("onceAnEditorHasCheckedIt") : timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
+    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>{tLabels("nextEdition")}</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : tLabels("at", { dayName: next.dayName, time: next.time })}</p><TruncatedText text={settings.approval ? tLabels("onceAnEditorHasCheckedIt") : timeZoneLabel(settings.timezone, (place) => tLabels("zoneTime", { place }))} className={`mt-0.5 text-xs ${muted}`} /></div>
   </div>;
 }
 
 /** One edition in a list: its date in a gutter, then its title and opening. The archive and an edition's "More digests" share it. */
-function EditionRow({item, base, locale, summary = true}: {item: DigestSummary; base: string; locale: string; summary?: boolean}) {
+function EditionRow({item, base, summary = true}: {item: DigestSummary; base: string; summary?: boolean}) {
+  const tLabels = useTranslations("digests");
   return <Link href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-xl p-4 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-6">
     <PeriodTile period={item.period} />
     <div className="min-w-0">
       <h3 className="font-heading text-xl font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</h3>
       {summary && <MarkdownExcerpt className={`mt-1.5 line-clamp-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt>}
-      <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span><Attribution by={item.by} /></span>
+      <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, tLabels)}</span><Attribution by={item.by} /></span>
     </div>
   </Link>;
 }
@@ -286,13 +294,13 @@ const rowCard = "rounded-2xl bg-card_light p-2 dark:bg-card";
 function ArchiveLoading() {
   return <div className={rowCard}>{[0, 1, 2].map(index => <div key={index} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-6 p-4"><Skeleton className="mx-auto h-10 w-10 rounded-lg" /><div className="space-y-3"><Skeleton className="h-5 w-3/5 rounded-lg" /><Skeleton className="h-3 w-full rounded-lg" /><Skeleton className="h-3 w-24 rounded-lg" /></div></div>)}</div>;
 }
-function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
+function ArchiveList({editions, nextEdition, settings, base}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string}) {
   const {editions: items, page, pages} = use(editions);
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
   return <Paged page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} anchor="archive"><div className="space-y-8">
     {byYear(items).map(({year, items: ofYear}) => <section key={year} aria-labelledby={`year-${year}`}>
       <SectionTitle className="mb-3 text-xl"><span id={`year-${year}`}>{year}</span></SectionTitle>
-      <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} />)}</div>
+      <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} />)}</div>
     </section>)}
   </div></Paged>;
 }
@@ -322,7 +330,7 @@ function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base
   return <SidebarCard title={tLabels("editions")} aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
     <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
     <div className="flex h-24 items-end gap-1" onMouseLeave={() => setPointed(null)}>
-      {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={tLabels("label", { title: item.title, value: publicationCount(item.publicationCount, locale) })} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={tLabels("label", { title: item.title, value: publicationCount(item.publicationCount, tLabels) })} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className={twMerge("block w-full rounded-t-[3px] transition-colors duration-200 motion-reduce:transition-none", index === focus ? "bg-accent" : "bg-accent/30")} style={{height: barWidth(item.publicationCount, largest)}} />
       </Link>)}
     </div>
@@ -377,7 +385,7 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
         <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
           <div className="min-w-0 [&>section]:h-full">
             <SidebarCard title={tLabels("moreDigests")} aside={<TextLink href={base}>{tLabels("browseAllDigests")}</TextLink>}>
-              <PastDigests earlier={earlier} base={base} locale={locale} />
+              <PastDigests earlier={earlier} base={base} />
             </SidebarCard>
           </div>
           {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
@@ -691,11 +699,11 @@ function EditionCards({records: {cards, profiles}, keys}: {records: EditionCards
     <div className={cardList}>{listed.map(card => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
   </AuthorProfilesContext>;
 }
-function PastDigests({earlier, base, locale}: {earlier: Promise<DigestSummary[]>; base: string; locale: string}) {
+function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: string;}) {
   const tLabels = useTranslations("digests");
   const older = use(earlier);
   if (!older.length) return <p className={`text-sm ${muted}`}>{tLabels("thisIsTheFirstEdition")}</p>;
-  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} summary={false} />)}</div>;
+  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} summary={false} />)}</div>;
 }
 
 function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {

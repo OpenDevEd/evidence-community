@@ -605,7 +605,19 @@
     "analysedWords": "{held} der {total} Studien, die sie analysiert hat, befinden sich in dieser Bibliothek; außerdem zitiert sie {others} weitere Werke",
     "notFoundTitle": "404 – Nicht gefunden",
     "citationsTitle": "Zitationen – {title}",
-    "citationsDescription": "Zitationsstatistiken und zitierende Quellen für „{title}“ anzeigen"
+    "citationsDescription": "Zitationsstatistiken und zitierende Quellen für „{title}“ anzeigen",
+    "selectFilterType": "Filtertyp auswählen",
+    "chooseTopic": "Thema auswählen",
+    "chooseInstitution": "Institution auswählen",
+    "currentFilter": "Aktueller Filter",
+    "totalCitationsPerYear": "Gesamtzitate pro Jahr",
+    "avgCitationsPerItem": "Durchschnittliche Zitationen pro Artikel",
+    "avgPerItem": "Ø/Stk.",
+    "inSelectedPeriod": "im ausgewählten Zeitraum",
+    "overallAvgCitations": "Gesamt-Durchschnitt Zitate",
+    "acrossAllYears": "über alle Jahre",
+    "topicFilteringUnavailable": "Die Themenfilterung benötigt zusätzliche Daten, die derzeit nicht verfügbar sind",
+    "rateLimitedMessage": "Sie haben das Anfragelimit erreicht. Versuchen Sie es in {seconds} Sekunden erneut."
   },
   "ai": {
     "sourcesTitle": "Quellen",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "Viele Datumsangaben vom 1. Januar enthalten nur das Jahr.",
     "yearOnlyText": "OpenAlex datiert eine Arbeit, von der nur das Jahr bekannt ist, auf den 1. Januar. Einige Arbeiten dieses Zeitraums können daher später im selben Jahr erschienen sein.",
     "updatesWhenAdded": "Updates, wenn Publikationen hinzukommen",
-    "libraryDigestsTitle": "Zusammenfassungen<br></br>der Bibliothek"
+    "libraryDigestsTitle": "Zusammenfassungen<br></br>der Bibliothek",
+    "publicationCount": "{count, plural, one {# Publikation} other {# Publikationen}}",
+    "zoneTime": "Zeit in {place}",
+    "scheduleMonthly": "Tag {day} jedes Monats",
+    "scheduleMonthlyLong": "Tag {day} jedes Monats, oder dessen letzter Tag, falls der Monat kürzer ist,",
+    "scheduleAt": "{day} um {time} {zone}",
+    "scheduleChecked": "{day}, nachdem ein Redakteur es geprüft hat"
   },
   "home": {
     "earlierIssues": "Frühere Ausgaben",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "Symbol für den Suchbereich",
     "sortBy": "Sortieren nach",
     "sortIcon": "Sortiersymbol",
-    "switchToMode": "Zum Modus {themeToMatch} wechseln",
     "toggleTheme": "Design umschalten"
   },
   "takedown": {

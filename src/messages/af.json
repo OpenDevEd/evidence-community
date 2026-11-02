@@ -605,7 +605,19 @@
     "analysedWords": "{held} van die {total} studies wat dit ontleed het, is in hierdie biblioteek; dit haal ook {others} ander werke aan",
     "notFoundTitle": "404 – Nie gevind nie",
     "citationsTitle": "Aanhalings – {title}",
-    "citationsDescription": "Wys aanhalingstatistiek en aanhalende hulpbronne vir “{title}”"
+    "citationsDescription": "Wys aanhalingstatistiek en aanhalende hulpbronne vir “{title}”",
+    "selectFilterType": "Kies filtertipe",
+    "chooseTopic": "Kies onderwerp",
+    "chooseInstitution": "Kies instelling",
+    "currentFilter": "Huidige filter",
+    "totalCitationsPerYear": "Totale aanhalings per jaar",
+    "avgCitationsPerItem": "Gemiddelde aanhalings per item",
+    "avgPerItem": "Gem. per item",
+    "inSelectedPeriod": "in geselekteerde tydperk",
+    "overallAvgCitations": "Algehele gem. aanhalings",
+    "acrossAllYears": "oor alle jare",
+    "topicFilteringUnavailable": "Onderwerpfiltering vereis bykomende data wat tans nie beskikbaar is nie",
+    "rateLimitedMessage": "Jy het die versoeklimiet bereik. Probeer weer oor {seconds} sekondes."
   },
   "ai": {
     "sourcesTitle": "Bronne",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "Baie 1 Januarie-datums is net jaar.",
     "yearOnlyText": "OpenAlex dateer ’n werk wat dit net die jaar van 1 Januarie ken, dus het sommige werke van hierdie tydperk moontlik later in daardie jaar verskyn.",
     "updatesWhenAdded": "Opdaterings wanneer publikasies bygevoeg word",
-    "libraryDigestsTitle": "Biblioteek<br></br>samevattings"
+    "libraryDigestsTitle": "Biblioteek<br></br>samevattings",
+    "publicationCount": "{count, plural, one {# publikasie} other {# publikasies}}",
+    "zoneTime": "{place} tyd",
+    "scheduleMonthly": "Dag {day} van elke maand",
+    "scheduleMonthlyLong": "Dag {day} van elke maand, of die laaste dag van die maand as dit korter is,",
+    "scheduleAt": "{day} om {time} {zone}",
+    "scheduleChecked": "{day}, sodra ’n redakteur dit nagegaan het"
   },
   "home": {
     "earlierIssues": "Vroeëre uitgawes",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "Ikoon vir omvang",
     "sortBy": "Sorteer volgens",
     "sortIcon": "Sorteerikoon",
-    "switchToMode": "Skakel na {themeToMatch}-modus",
     "toggleTheme": "Wissel tema"
   },
   "takedown": {

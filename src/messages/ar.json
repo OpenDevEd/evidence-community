@@ -605,7 +605,19 @@
     "analysedWords": "{held} من أصل {total} دراسة حلّلها موجودة في هذه المكتبة، كما يستشهد بـ{others} من الأعمال الأخرى",
     "notFoundTitle": "404 - الصفحة غير موجودة",
     "citationsTitle": "الاستشهادات - {title}",
-    "citationsDescription": "عرض إحصاءات الاستشهاد والمصادر التي تستشهد بـ“{title}”"
+    "citationsDescription": "عرض إحصاءات الاستشهاد والمصادر التي تستشهد بـ“{title}”",
+    "selectFilterType": "حدد نوع المرشح",
+    "chooseTopic": "اختر موضوعًا",
+    "chooseInstitution": "اختيار المؤسسة",
+    "currentFilter": "المرشح الحالي",
+    "totalCitationsPerYear": "إجمالي الاستشهادات في السنة",
+    "avgCitationsPerItem": "متوسط الاستشهادات لكل عنصر",
+    "avgPerItem": "متوسط لكل عنصر",
+    "inSelectedPeriod": "في الفترة المحددة",
+    "overallAvgCitations": "متوسط الاستشهادات الإجمالي",
+    "acrossAllYears": "على مدار السنوات",
+    "topicFilteringUnavailable": "تتطلب تصفية المواضيع بيانات إضافية غير متوفرة حاليًا",
+    "rateLimitedMessage": "لقد بلغت الحد المسموح به من الطلبات. حاول مرة أخرى بعد {seconds} ثانية."
   },
   "ai": {
     "sourcesTitle": "المصادر",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "كثير من تواريخ 1 يناير تحتوي على السنة فقط.",
     "yearOnlyText": "تؤرخ OpenAlex العمل الذي تعرف سنته فقط بتاريخ 1 يناير، لذلك قد يكون بعض أعمال هذه الفترة قد صدر لاحقًا في السنة نفسها.",
     "updatesWhenAdded": "تحديثات عند إضافة منشورات",
-    "libraryDigestsTitle": "ملخصات<br></br>المكتبة"
+    "libraryDigestsTitle": "ملخصات<br></br>المكتبة",
+    "publicationCount": "{count, plural, zero {# منشورات} one {# منشور} two {# منشوران} few {# منشورات} many {# منشورًا} other {# منشور}}",
+    "zoneTime": "توقيت {place}",
+    "scheduleMonthly": "اليوم {day} من كل شهر",
+    "scheduleMonthlyLong": "اليوم {day} من كل شهر، أو آخر يوم فيه إذا كان أقصر،",
+    "scheduleAt": "{day} في الساعة {time} {zone}",
+    "scheduleChecked": "{day}، بعد أن يراجعه محرر"
   },
   "home": {
     "earlierIssues": "الإصدارات السابقة",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "أيقونة النطاق",
     "sortBy": "ترتيب حسب",
     "sortIcon": "أيقونة الترتيب",
-    "switchToMode": "التبديل إلى وضع {themeToMatch}",
     "toggleTheme": "تبديل السمة"
   },
   "takedown": {

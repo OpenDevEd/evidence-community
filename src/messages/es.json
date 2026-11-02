@@ -605,7 +605,19 @@
     "analysedWords": "{held} de los {total} estudios que analizó están en esta biblioteca; también cita {others} otras obras",
     "notFoundTitle": "404 - No encontrado",
     "citationsTitle": "Citas - {title}",
-    "citationsDescription": "Vea las estadísticas de citas y los recursos que citan «{title}»"
+    "citationsDescription": "Vea las estadísticas de citas y los recursos que citan «{title}»",
+    "selectFilterType": "Seleccionar tipo de filtro",
+    "chooseTopic": "Elegir tema",
+    "chooseInstitution": "Elegir institución",
+    "currentFilter": "Filtro actual",
+    "totalCitationsPerYear": "Citas totales por año",
+    "avgCitationsPerItem": "Promedio de citas por elemento",
+    "avgPerItem": "Prom. por elemento",
+    "inSelectedPeriod": "en el período seleccionado",
+    "overallAvgCitations": "Promedio general de citas",
+    "acrossAllYears": "en todos los años",
+    "topicFilteringUnavailable": "El filtrado por tema requiere datos adicionales que actualmente no están disponibles",
+    "rateLimitedMessage": "Has alcanzado el límite de solicitudes. Vuelve a intentarlo en {seconds} segundos."
   },
   "ai": {
     "sourcesTitle": "Fuentes",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "Muchas fechas del 1 de enero solo indican el año.",
     "yearOnlyText": "OpenAlex fecha como 1 de enero las obras de las que solo conoce el año, así que algunas obras de este periodo pueden haberse publicado más tarde ese mismo año.",
     "updatesWhenAdded": "Novedades cuando se añadan publicaciones",
-    "libraryDigestsTitle": "Resúmenes<br></br>de la biblioteca"
+    "libraryDigestsTitle": "Resúmenes<br></br>de la biblioteca",
+    "publicationCount": "{count, plural, one {# publicación} other {# publicaciones}}",
+    "zoneTime": "Hora de {place}",
+    "scheduleMonthly": "Día {day} de cada mes",
+    "scheduleMonthlyLong": "Día {day} de cada mes, o su último día si el mes es más corto,",
+    "scheduleAt": "{day} a las {time} {zone}",
+    "scheduleChecked": "{day}, cuando un editor lo haya revisado"
   },
   "home": {
     "earlierIssues": "Ediciones anteriores",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "Icono de ámbito",
     "sortBy": "Ordenar por",
     "sortIcon": "Icono de ordenación",
-    "switchToMode": "Cambiar al modo {themeToMatch}",
     "toggleTheme": "Cambiar tema"
   },
   "takedown": {

@@ -927,6 +927,7 @@ function ItemCollection({
 	/** Published records in the collection or its subcollections, as its link shows. */
 	publicationCount: number;
 }) {
+  const locale = useLocale();
 	const tLabels = useTranslations("item");
 	const [referrer] = useQueryState("referrer");
 	const reducedMotion = useReducedMotion();
@@ -982,7 +983,7 @@ function ItemCollection({
 									</h3>
 									{publicationCount > 0 && (
 										<p className="mt-0.5 text-xs text-black/50 dark:text-white/50">
-											{publicationCount.toLocaleString()}{" "}
+											{publicationCount.toLocaleString(locale)}{" "}
 											{publicationCount === 1 ? "publication" : "publications"}
 										</p>
 									)}
@@ -1200,7 +1201,7 @@ function AnalysedStudies({ itemKey }: { itemKey: string | undefined }) {
 	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
 	return (
 		<p className="text-black/80 dark:text-white/80">
-			{tLabels("ofTheWorksItCitesAre", { analysed: evidence.analysed ?? 0, analysedHere: evidence.analysedHere ?? 0, others })}
+			{tLabels("ofTheWorksItCitesAre", { analysed: evidence.analysed ?? 0, analysedHere: evidence.analysedHere ?? 0, others })}{" "}
 			<Link href={`/evidence?paper=${itemKey}`} className="font-medium text-accent hover:underline">{tLabels("seeTheStudiesItAnalysed")}</Link>
 		</p>
 	);

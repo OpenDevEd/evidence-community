@@ -130,7 +130,6 @@ function NoticeChip({ children }: { children: ReactNode }) {
 }
 
 /** Names joined as a reader says them: "a", "a or b"; more than two only counted, as "3 types". */
-const either = (names: string[], many: string) => (names.length > 2 ? `${names.length} ${many}` : names.join(" or "));
 
 /**
  * What the filter keeps, said: how many, of which types, and with which checks, each check with its icon. Up to two types and
@@ -141,7 +140,7 @@ function FilterSummary({ count, types, verdicts }: { count: number; types: Reado
 	const locale = useLocale();
 	const kinds = [...types].map((kind) => KINDS[kind] as keyof typeof KIND_PLURAL);
 	const named = count === 1 ? kinds.map((kind) => t(KIND_LABEL[kind]!).toLowerCase()) : kinds.map((kind) => t(KIND_PLURAL[kind]).toLowerCase());
-	const noun = kinds.length > 2 ? t("papersOfTypes", { count, types: kinds.length }) : named.length ? either(named, "types") : count === 1 ? t("paperNoun") : t("papersNoun");
+	const noun = kinds.length > 2 ? t("papersOfTypes", { count, types: kinds.length }) : named.length ? named.join(` ${t("or")} `) : count === 1 ? t("paperNoun") : t("papersNoun");
 	const checks = [...verdicts].sort((a, b) => b - a);
 	return (
 		<span className="flex items-center gap-1.5">

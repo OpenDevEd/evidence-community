@@ -605,7 +605,19 @@
     "analysedWords": "其所分析的 {total} 项研究中，有 {held} 项位于本文献库；它还引用了 {others} 篇其他文献",
     "notFoundTitle": "404 - 页面未找到",
     "citationsTitle": "引用 - {title}",
-    "citationsDescription": "查看“{title}”的引用统计和引用来源"
+    "citationsDescription": "查看“{title}”的引用统计和引用来源",
+    "selectFilterType": "选择筛选器类型",
+    "chooseTopic": "选择主题",
+    "chooseInstitution": "选择机构",
+    "currentFilter": "当前筛选器",
+    "totalCitationsPerYear": "每年总引用量",
+    "avgCitationsPerItem": "每项的平均引用次数",
+    "avgPerItem": "平均每个项目",
+    "inSelectedPeriod": "在选定期间内",
+    "overallAvgCitations": "总平均引用",
+    "acrossAllYears": "跨越所有年份",
+    "topicFilteringUnavailable": "主题筛选需要当前不可用的附加数据",
+    "rateLimitedMessage": "已达到请求次数上限。请在 {seconds} 秒后重试。"
   },
   "ai": {
     "sourcesTitle": "来源",
@@ -1341,7 +1353,13 @@
     "yearOnlyLead": "许多 1 月 1 日的日期只精确到年份。",
     "yearOnlyText": "对于只知道年份的文献，OpenAlex 记为 1 月 1 日，因此本期部分文献可能是当年晚些时候发表的。",
     "updatesWhenAdded": "新增文献时更新",
-    "libraryDigestsTitle": "文献库<br></br>摘要"
+    "libraryDigestsTitle": "文献库<br></br>摘要",
+    "publicationCount": "{count, plural, other {# 篇文献}}",
+    "zoneTime": "{place}时间",
+    "scheduleMonthly": "每月 {day} 日",
+    "scheduleMonthlyLong": "每月 {day} 日，若当月天数不足则为当月最后一天，",
+    "scheduleAt": "{day} {time} {zone}",
+    "scheduleChecked": "{day}，编辑审核后"
   },
   "home": {
     "earlierIssues": "往期",
@@ -1592,7 +1610,6 @@
     "scopeIcon": "范围图标",
     "sortBy": "排序方式",
     "sortIcon": "排序图标",
-    "switchToMode": "切换到{themeToMatch}模式",
     "toggleTheme": "切换主题"
   },
   "takedown": {
