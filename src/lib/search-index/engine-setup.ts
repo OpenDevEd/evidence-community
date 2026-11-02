@@ -25,7 +25,7 @@ type SearchWriterSetup = {
 	prepare(signal: AbortSignal): Promise<{ embedderError: string | null; indexHasRecords: boolean }>;
 	/** How long a rebuild task may wait: every record task also embeds while an embedder is set. */
 	rebuildTaskTimeoutMs: number;
-	/** Whether this engine holds an index of the library with records in it. */
+	/** Whether this engine holds records of the library: in Elasticsearch, in any of its indexes, a stopped rebuild's too. */
 	hasRecords(): Promise<boolean>;
 	/**
 	 * Embeds records written without a vector while the embedder failed; returns how many. Elasticsearch only: Meilisearch
@@ -118,7 +118,8 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 		rebuildTaskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
 		async hasRecords() {
 			try {
-				return (await service.client.count({ index: service.alias })).count > 0;
+				// A rebuild killed before it moved the alias leaves its index unaliased, and only this finds it to delete.
+				return (await service.client.count({ index: `${service.alias}_*`, allow_no_indices: true })).count > 0;
 			} catch (error) {
 				if (error instanceof ElasticsearchErrors.ResponseError && error.statusCode === 404) return false;
 				throw error;
