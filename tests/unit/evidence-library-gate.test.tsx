@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const library = vi.hoisted(() => ({ baseUrl: "https://aied.openscholar.ai" }));
 
+vi.mock("next-intl", async () => ({ ...(await vi.importActual<typeof import("next-intl")>("next-intl")), ...(await (await import("../helpers/next-intl-english")).englishIntl()) }));
 vi.mock("server-only", () => ({}));
 // A route asks for a request scope, which a test has none of.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), connection: async () => {} }));

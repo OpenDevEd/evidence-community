@@ -3,20 +3,28 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 export type DigestSchedule = LibraryServerConfig["notifications"]["schedule"];
 /** When digests come, as readers are told. `checked` is for a library whose digests wait for an editor: the day holds and the time does not. */
-export function describeDigestSchedule(schedule: DigestSchedule, locale: string, checked = false) {
+export function describeDigestSchedule(schedule: DigestSchedule, locale: string, checked = false, words: ScheduleWords = ENGLISH_SCHEDULE) {
   const day = schedule.frequency === "weekly"
     ? new Date(Date.UTC(2026, 0, 4 + schedule.weekday, 12)).toLocaleDateString(locale, {weekday: "long", timeZone: "UTC"})
-    : `Day ${schedule.dayOfMonth} of each month${schedule.dayOfMonth > 28 ? ", or its last day if shorter," : ""}`;
-  return checked ? `${day}, once an editor has checked it` : `${day} at ${schedule.time} ${schedule.timezone}`;
+    : words.monthly(schedule.dayOfMonth, schedule.dayOfMonth > 28);
+  return checked ? words.checked(day) : words.at(day, schedule.time, schedule.timezone);
 }
+
+/** How a schedule is worded: the page passes its language, an email uses English. */
+export type ScheduleWords = {monthly: (day: number, long: boolean) => string; checked: (day: string) => string; at: (day: string, time: string, zone: string) => string};
+const ENGLISH_SCHEDULE: ScheduleWords = {
+  monthly: (day, long) => `Day ${day} of each month${long ? ", or its last day if shorter," : ""}`,
+  checked: (day) => `${day}, once an editor has checked it`,
+  at: (day, time, zone) => `${day} at ${time} ${zone}`,
+};
 
 /**
  * A zone as a reader names it, from its name alone so the server and every browser write the same text: the place for a
  * regional zone, the real offset for a fixed one (IANA's Etc/GMT+5 is five hours behind), and any other zone as configured.
  */
-export function timeZoneLabel(timezone: string) {
+export function timeZoneLabel(timezone: string, regional: (place: string) => string = (place) => `${place} time`) {
   const [area, ...place] = timezone.split("/");
-  if (area.toLowerCase() !== "etc" && place.length) return `${place.join(" ").replaceAll("_", " ")} time`;
+  if (area.toLowerCase() !== "etc" && place.length) return regional(place.join(" ").replaceAll("_", " "));
   const fixed = /^etc\/gmt([+-])(\d+)$/i.exec(timezone);
   if (fixed && fixed[2] !== "0") return `GMT${fixed[1] === "+" ? "-" : "+"}${fixed[2]}`;
   return /^(etc\/)?(utc|uct|gmt(0|[+-]0)?|greenwich|universal|zulu)$/i.test(timezone) ? "UTC" : timezone;

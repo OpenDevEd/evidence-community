@@ -1,5 +1,5 @@
 import { Progress } from "@/components/nextui/Progress";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 
 type ProgressItemProps = {
 	label: string;
@@ -14,6 +14,7 @@ export function ProgressItem({
 	percentage,
 	total,
 }: ProgressItemProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const tArticle = useTranslations("article");
 	
@@ -39,10 +40,10 @@ export function ProgressItem({
 			/>
 			<div className="flex justify-between text-xs text-black/40 dark:text-white/40">
 				<span>
-					{value.toLocaleString()} {t("itemsLowercase")}
+					{value.toLocaleString(locale)} {t("itemsLowercase")}
 				</span>
 				<span>
-					{t("of")} {total.toLocaleString()}
+					{t("of")} {total.toLocaleString(locale)}
 				</span>
 			</div>
 		</div>

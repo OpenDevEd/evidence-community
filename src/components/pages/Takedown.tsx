@@ -12,13 +12,14 @@ import { Link } from "@/i18n/routing";
 import { parseRequestLinks } from "@/lib/utils";
 
 function Footer() {
+	const tLabels = useTranslations("takedown");
 	const t = useTranslations("ui");
 	const { legal } = useLibraryConfig();
 
 	return (<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8">
 		<div className="space-y-4 text-sm">
 			<h2 className="text-lg font-semibold">
-				About Takedown Requests
+				{tLabels("aboutTakedownRequests")}
 			</h2>
 			<p className="opacity-80">
 				{t("takedownRequestsExplanation")}

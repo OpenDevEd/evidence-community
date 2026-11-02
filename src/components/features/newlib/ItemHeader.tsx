@@ -143,11 +143,12 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 }
 
 function ItemHeaderInternal({ item }: { item: Item | undefined }) {
+	const tLabels = useTranslations("item");
 	const { content } = useLibraryConfig();
 	if (!hasAnyTag(item?.tags, content.tags.internal)) return null;
 	return (
 		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
-			{"Available on request"}
+			{tLabels("availableOnRequest")}
 		</Card>
 	);
 }

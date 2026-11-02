@@ -187,9 +187,10 @@ function StaticCitationChip({
 }
 
 function SourcePageLabel({ page }: { page: string }) {
+	const tLabels = useTranslations("toolActivity");
 	return (
 		<span className="inline-flex items-center gap-1.5">
-			<span className="text-black/45 dark:text-white/45">Source</span>
+			<span className="text-black/45 dark:text-white/45">{tLabels("source")}</span>
 			<span
 				aria-hidden="true"
 				className="h-3 w-px bg-black/10 dark:bg-white/15"
@@ -566,12 +567,13 @@ export function PublicationLink({
  * page. Hovering it previews the cited PDF; clicking opens that page.
  */
 export function PageCitation({ href, page }: { href?: string; page: string }) {
+	const tTool = useTranslations("toolActivity");
 	const match = href?.match(pdfHrefPattern);
 	const openAccess = use(CitedPublications)[match?.[1] ?? ""]?.openAccess;
 	if (!href || !match) {
 		return (
 			<StaticCitationChip
-				ariaLabel={`Citation source unavailable at page ${page}`}
+				ariaLabel={tTool("sourceUnavailable", { page })}
 			>
 				<SourcePageLabel page={page} />
 			</StaticCitationChip>
@@ -584,7 +586,7 @@ export function PageCitation({ href, page }: { href?: string; page: string }) {
 				<InlineCitationCardTrigger>
 					<CitationLinkChip
 						href={href}
-						ariaLabel={`Open citation source at page ${page}`}
+						ariaLabel={tTool("openSource", { page })}
 					>
 						<OpenAccessLabel openAccess={openAccess} iconOnly iconClassName="size-3.5" />
 						<SourcePageLabel page={page} />

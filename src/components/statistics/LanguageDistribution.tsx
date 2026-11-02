@@ -1,5 +1,5 @@
 import { Globe02Icon } from "@hugeicons/core-free-icons";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { SectionCard } from "./SectionCard";
 
 type LanguageDistributionProps = {
@@ -7,6 +7,7 @@ type LanguageDistributionProps = {
 };
 
 export function LanguageDistribution({ languageDistribution }: LanguageDistributionProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 
 	return (
@@ -21,7 +22,7 @@ export function LanguageDistribution({ languageDistribution }: LanguageDistribut
 							{lang.language}
 						</div>
 						<div className="text-sm text-black/60 dark:text-white/60">
-							{lang.count.toLocaleString()}
+							{lang.count.toLocaleString(locale)}
 						</div>
 					</div>
 				))}

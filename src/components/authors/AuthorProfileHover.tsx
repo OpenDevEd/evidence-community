@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/nextui/Tooltip";
 import { useReducedMotion } from "framer-motion";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
@@ -20,6 +21,7 @@ export function AuthorProfileHover({
 	details?: ReactNode;
 	children: ReactElement;
 }) {
+	const t = useTranslations("topics");
 	const [open, setOpen] = useState(false);
 	const reducedMotion = useReducedMotion();
 	return (
@@ -87,7 +89,7 @@ export function AuthorProfileHover({
 								/>
 							}
 						>
-							View OpenScholar profile
+							{t("viewOpenscholarProfile")}
 						</Button>
 					</div>
 				</div>

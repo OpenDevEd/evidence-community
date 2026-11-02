@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Spinner } from "@nextui-org/react";
 
 import { Button } from "@/components/nextui/Button";
@@ -15,6 +16,7 @@ export function ItemTopics({
 	topicIds: readonly string[];
 	topics: TopicTree | undefined;
 }) {
+	const t = useTranslations("topics");
 	// The record brings its topic names. The list's copy of a record does not, so it uses the library's tree.
 	const tree = useTopicTree({ enabled: !topics });
 	const names = topics ?? tree.data;
@@ -25,8 +27,8 @@ export function ItemTopics({
 	const byId = new Map(names?.nodes.map((node) => [node.id, node]));
 
 	return (
-		<section id="topics" aria-label="Topics" className="scroll-mt-24">
-			<ItemPropertyRowWrapper title="Topics">
+		<section id="topics" aria-label={t("topics")} className="scroll-mt-24">
+			<ItemPropertyRowWrapper title={t("topics")}>
 			{names ? (
 				<div className="flex flex-wrap gap-2">
 					{ids.flatMap((id) => {
@@ -45,17 +47,17 @@ export function ItemTopics({
 					role="status"
 					className="flex items-center gap-2 text-sm text-black/60 dark:text-white/60"
 				>
-					<span>Could not load topics.</span>
+					<span>{t("couldNotLoadTopics")}</span>
 					<Button
 						size="xs"
 						variant="transparent"
 						onPress={() => void tree.mutate()}
 					>
-						Try again
+						{t("tryAgain")}
 					</Button>
 				</div>
 			) : (
-				<Spinner size="sm" aria-label="Loading topics" />
+				<Spinner size="sm" aria-label={t("loadingTopics")} />
 			)}
 			</ItemPropertyRowWrapper>
 		</section>

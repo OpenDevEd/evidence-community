@@ -1,6 +1,6 @@
 import { NotebookTextIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Pagination } from "@/components/nextui/Pagination";
 import { SectionCard } from "./SectionCard";
@@ -10,6 +10,7 @@ type TopJournalsProps = {
 };
 
 export function TopJournals({ topJournals }: TopJournalsProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const [journalsPage, setJournalsPage] = useState(1);
 	const [journalsSortDescriptor, setJournalsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
@@ -77,7 +78,7 @@ export function TopJournals({ topJournals }: TopJournalsProps) {
 								</TableCell>
 								<TableCell>
 									<span className="font-bold text-success">
-										{journal.count.toLocaleString()}
+										{journal.count.toLocaleString(locale)}
 									</span>
 								</TableCell>
 							</TableRow>

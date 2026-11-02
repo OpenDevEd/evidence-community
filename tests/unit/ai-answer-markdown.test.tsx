@@ -6,10 +6,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-intl", () => ({
-	useTranslations: () => (key: string) => key,
-	useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
-}));
+vi.mock("next-intl", async () => {
+	const english = await (await import("../helpers/next-intl-english")).englishIntl();
+	const byKey = (key: string) => key;
+	return {
+		useTranslations: (namespace: string) => (namespace === "toolActivity" ? english.useTranslations(namespace) : byKey),
+		useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
+	};
+});
 vi.mock("swr", () => ({ default: () => ({ data: undefined, isLoading: false }) }));
 // The citation card reaches the shared fetch helper, which drags the signed-in
 // app in behind it. These tests only need the rendered citation.

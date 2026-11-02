@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ArrowDown01Icon, Cancel01Icon, FilterHorizontalIcon, Tick02Icon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useId, useState, type ReactNode } from "react";
@@ -108,22 +109,23 @@ function FilterSelect({ label, placeholder, options, selected, onChange }: { lab
  * other dropdown as it is.
  */
 function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Checks) {
+	const t = useTranslations("evidenceMap");
 	const inTypes = (kind: number) => !types.size || types.has(kind);
 	const inChecks = (verdict: number) => !verdicts.size || verdicts.has(verdict);
 	const typeOptions = TYPE_ORDER.filter((name) => counts[KINDS.indexOf(name)]).map((name) => {
 		const kind = KINDS.indexOf(name);
-		return { key: kind, name: KIND_PLURAL[name], count: countWhere(counts, (k) => k === kind, inChecks) };
+		return { key: kind, name: t(KIND_PLURAL[name]), count: countWhere(counts, (k) => k === kind, inChecks) };
 	});
 	const checkOptions = VERDICT_ORDER.map((name) => {
 		const verdict = VERDICTS.indexOf(name);
-		return { key: verdict, name: VERDICT[name].label, count: countWhere(counts, inTypes, (v) => v === verdict), icon: <VerdictIcon verdict={verdict} size={14} /> };
+		return { key: verdict, name: t(VERDICT[name].label), count: countWhere(counts, inTypes, (v) => v === verdict), icon: <VerdictIcon verdict={verdict} size={14} /> };
 	});
 	return (
 		<div className="space-y-2">
 			{/* Side by side below 1,280 px, where the top bar must stay short for the map; an option too long for its list wraps. */}
 			<div className="flex gap-2 xl:flex-col">
-				<FilterSelect label="Type" placeholder="Any type" options={typeOptions} selected={types} onChange={onTypes} />
-				<FilterSelect label="Check" placeholder="Any check" options={checkOptions} selected={verdicts} onChange={onVerdicts} />
+				<FilterSelect label={t("type")} placeholder={t("anyType")} options={typeOptions} selected={types} onChange={onTypes} />
+				<FilterSelect label={t("check")} placeholder={t("anyCheck")} options={checkOptions} selected={verdicts} onChange={onVerdicts} />
 			</div>
 		</div>
 	);
@@ -134,8 +136,9 @@ function MapFilter({ counts, types, verdicts, onTypes, onVerdicts }: Checks) {
 const toggleLook = (open: boolean, on: number) => (on ? "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white" : open ? "bg-white/70 shadow-[0_1px_2px_rgb(0_0_0/0.08)] dark:bg-white/[6%]" : "bg-white shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:bg-white/70 dark:bg-secondary-400 dark:hover:bg-white/[6%]");
 
 function FilterToggle({ open, on, onPress, controls }: { open: boolean; on: number; onPress: () => void; controls: string }) {
+	const t = useTranslations("evidenceMap");
 	return (
-		<button type="button" aria-expanded={open} aria-controls={controls} aria-label={on ? `Filter, ${on} on` : "Filter"} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", toggleLook(open, on))}>
+		<button type="button" aria-expanded={open} aria-controls={controls} aria-label={on ? t("filterOn", { on }) : t("filter")} onClick={onPress} className={twMerge("relative grid size-12 shrink-0 place-items-center rounded-2xl outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", toggleLook(open, on))}>
 			<HugeiconsIcon icon={FilterHorizontalIcon} size={20} aria-hidden />
 			{on ? <span aria-hidden className="absolute right-1.5 top-1.5 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-white tabular-nums">{on}</span> : null}
 		</button>
@@ -174,6 +177,7 @@ export function SearchRow({ search, onSearch, onTyped, checks, onResized }: { on
  * chosen, and taking no room, so nothing moves as it comes and goes. Its band is `relative`.
  */
 export function ClearChip({ types, verdicts, onTypes, onVerdicts }: Checks) {
+	const t = useTranslations("evidenceMap");
 	const still = useReducedMotion();
 	// It drops out from behind the band's edge with a little spring, and tucks back up behind it.
 	const hidden = { opacity: 0, y: still ? 0 : -8, scale: still ? 1 : 0.7 };
@@ -184,7 +188,7 @@ export function ClearChip({ types, verdicts, onTypes, onVerdicts }: Checks) {
 				<div className="absolute inset-x-0 bottom-0 z-10 flex translate-y-1/2 justify-center">
 					<motion.button type="button" initial={hidden} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ ...hidden, transition: { duration: still ? 0 : 0.14, ease: [0.4, 0, 1, 1] } }} transition={transition} whileTap={still ? undefined : { scale: 0.92 }} onClick={() => { onTypes(new Set()); onVerdicts(new Set()); }} className="inline-flex h-6 items-center gap-1 rounded-full bg-white pl-1.5 pr-2.5 text-[11px] font-semibold text-accent shadow-[0_2px_8px_-2px_rgb(0_0_0/0.25)] outline-none ring-1 ring-black/[0.06] hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-accent dark:bg-secondary-400 dark:text-white dark:ring-white/10">
 						<HugeiconsIcon icon={Cancel01Icon} size={12} aria-hidden />
-						Clear filters
+						{t("clearFilters")}
 					</motion.button>
 				</div>
 			)}

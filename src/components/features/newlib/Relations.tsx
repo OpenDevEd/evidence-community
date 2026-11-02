@@ -22,6 +22,15 @@ import { Spinner } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
 import { planRelationTabs, type RelationTabKey } from "./relation-tabs";
 
+function RelationTabTitle({ tab }: { tab: { label: string; count: number; isLoading: boolean } }) {
+	return (
+		<div className="flex items-center gap-2">
+			<span>{tab.label}</span>
+			<CountBadge count={tab.count} isLoading={tab.isLoading} />
+		</div>
+	);
+}
+
 function CountBadge({ count, isLoading, className = "" }: { count: number; isLoading: boolean; className?: string }) {
 	return (
 		<span className={twMerge("inline-flex items-center justify-center gap-1 min-w-[1.5rem] h-5 px-1.5 text-xs font-medium rounded-full bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60 transition-size", className)}>
@@ -48,6 +57,7 @@ function RelationsList({
 	currentPage: number;
 	onPageChange: (page: number) => void;
 }) {
+	const tLabels = useTranslations("item");
 	const { profiles } = useAuthorProfiles(items?.flatMap(item => item.creators ?? []));
 	const hasItems = isLoading || items.length > 0;
 
@@ -102,7 +112,7 @@ function RelationsList({
 						<div className="col-span-2">
 							<div className="flex gap-2">
 								<HugeiconsIcon icon={SearchRemoveIcon} className="size-6" />
-								No items found
+								{tLabels("noItemsFound")}
 							</div>
 						</div>
 					)}
@@ -143,6 +153,7 @@ function RelationsSelectTabs({
 	activeTab: string;
 	onTabChange: (key: string) => void;
 }) {
+	const tLabels = useTranslations("item");
 	return (
 		<Select
 			selectedKeys={activeTab ? [activeTab] : []}
@@ -150,7 +161,7 @@ function RelationsSelectTabs({
 				const selectedKey = Array.from(keys)[0] as string;
 				if (selectedKey) onTabChange(selectedKey);
 			}}
-			aria-label="Relations selector"
+			aria-label={tLabels("relationsSelector")}
 			classNames={{
 				base: "w-full max-w-full",
 				trigger: "w-full",
@@ -190,21 +201,17 @@ function RelationsDesktopTabs({
 	activeTab: string;
 	onTabChange: (key: string) => void;
 }) {
+	const tLabels = useTranslations("item");
 	return (
 		<Tabs
 			selectedKey={activeTab}
 			onSelectionChange={(key) => onTabChange(key as string)}
-			aria-label="Relations tabs"
+			aria-label={tLabels("relationsTabs")}
 		>
 			{tabs.map((tab) => (
 				<Tab
 					key={tab.key}
-					title={
-						<div className="flex items-center gap-2">
-							<span>{tab.label}</span>
-							<CountBadge count={tab.count} isLoading={tab.isLoading} />
-						</div>
-					}
+					title={<RelationTabTitle tab={tab} />}
 				/>
 			))}
 		</Tabs>
@@ -240,6 +247,7 @@ export default function Relations({
 	showTabsOnly?: boolean;
 	showContentOnly?: boolean;
 }) {
+	const tLabels = useTranslations("item");
 	const t = useTranslations("ui");
 	const [internalSelectedTab, setInternalSelectedTab] = useState("general");
 	const requestedTab = selectedTab ?? internalSelectedTab;
@@ -343,17 +351,12 @@ export default function Relations({
 			<Tabs
 				selectedKey={activeTab}
 				onSelectionChange={(key) => handleTabChange(key as string)}
-				aria-label="Relations tabs"
+				aria-label={tLabels("relationsTabs")}
 			>
 				{tabs.map((tab) => (
 					<Tab
 						key={tab.key}
-						title={
-							<div className="flex items-center gap-2">
-								<span>{tab.label}</span>
-								<CountBadge count={tab.count} isLoading={tab.isLoading} />
-							</div>
-						}
+						title={<RelationTabTitle tab={tab} />}
 					>
 						<RelationsList
 							keys={tab.keys}

@@ -2,9 +2,9 @@ import type { LibraryHomeConfig } from "@/config/library-config/schema";
 import type { HomeContent, HomeData, StepType } from "./HomePage";
 
 /** What a library shows before anyone answers the Home card: only what is true of every library. */
-export function defaultContent(name: string): HomeContent {
+export function defaultContent(intro: string): HomeContent {
 	return {
-		intro: `**${name}** gathers research in one place, so you can search it, read it and cite it. Every publication comes with its details and, where the licence allows, the full text.`,
+		intro,
 		involvement: { suggestions: true, editors: false },
 	};
 }

@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BarChartIcon, ChartIncreaseIcon, Search01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { motion } from "framer-motion";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
@@ -27,6 +27,7 @@ export function AuthorAnalytics({
 	authorProductivityStats, 
 	authorCollaborationStats 
 }: AuthorAnalyticsProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const [authorsPage, setAuthorsPage] = useState(1);
 	const [authorsSearch, setAuthorsSearch] = useState("");
@@ -97,7 +98,7 @@ export function AuthorAnalytics({
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
 						<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-							{authorProductivityStats.totalAuthors.toLocaleString()}
+							{authorProductivityStats.totalAuthors.toLocaleString(locale)}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalAuthors")}
@@ -108,7 +109,7 @@ export function AuthorAnalytics({
 					</motion.div>
 					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
 						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{authorProductivityStats.authorsWithMultipleWorks.toLocaleString()}
+							{authorProductivityStats.authorsWithMultipleWorks.toLocaleString(locale)}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("prolificAuthors")}
@@ -159,7 +160,7 @@ export function AuthorAnalytics({
 								height: 80,
 							}}
 							formatter={(value: number, name: string, props: any) => [
-								`${value.toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
+								`${value.toLocaleString(locale)} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
 								t("count")
 							]}
 						/>
@@ -192,10 +193,10 @@ export function AuthorAnalytics({
 												</div>
 												<div className="text-xs text-black/60 dark:text-white/60 space-x-3">
 													<span className="text-blue-600 dark:text-blue-400 font-medium">
-														{author.itemCount.toLocaleString()} {t("itemsLowercase")}
+														{author.itemCount.toLocaleString(locale)} {t("itemsLowercase")}
 													</span>
 													<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-														{author.totalCitations.toLocaleString()} {t("citationsLowercase")}
+														{author.totalCitations.toLocaleString(locale)} {t("citationsLowercase")}
 													</span>
 													<span className="text-amber-600 dark:text-amber-400 font-medium">
 														{author.countryCount} {t("countriesLowercase")}
@@ -227,7 +228,7 @@ export function AuthorAnalytics({
 					<div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4 mb-4">
 						<div className="text-sm text-blue-800 dark:text-blue-200">
 							<strong>{t("note")}:</strong> {t("authorTableNote", { count: authorStats.length })}
-							{t("globalStatsNote", { total: authorProductivityStats.totalAuthors.toLocaleString() })}
+							{t("globalStatsNote", { total: authorProductivityStats.totalAuthors.toLocaleString(locale) })}
 						</div>
 					</div>
 					<div className="space-y-4">
@@ -271,12 +272,12 @@ export function AuthorAnalytics({
 										</TableCell>
 										<TableCell>
 											<span className="font-bold text-accent">
-												{author.itemCount.toLocaleString()}
+												{author.itemCount.toLocaleString(locale)}
 											</span>
 										</TableCell>
 										<TableCell>
 											<span className="font-bold text-success">
-												{author.totalCitations.toLocaleString()}
+												{author.totalCitations.toLocaleString(locale)}
 											</span>
 										</TableCell>
 										<TableCell>

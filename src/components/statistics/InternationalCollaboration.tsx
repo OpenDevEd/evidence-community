@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BarChartIcon, Flag02Icon, HierarchyIcon, InformationCircleIcon, Share01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
 import {
@@ -30,6 +30,7 @@ const itemVariants = {
 };
 
 export function InternationalCollaboration({ collaborationStats }: InternationalCollaborationProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
 	const [countriesPage, setCountriesPage] = useState(1);
@@ -98,8 +99,8 @@ export function InternationalCollaboration({ collaborationStats }: International
 						</div>
 						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
 							{t("collaborativeItemsCount", { 
-								collaborative: collaborationStats.collaborativeItems.toLocaleString(),
-								total: collaborationStats.totalItems.toLocaleString()
+								collaborative: collaborationStats.collaborativeItems.toLocaleString(locale),
+								total: collaborationStats.totalItems.toLocaleString(locale)
 							})}
 						</div>
 					</motion.div>
@@ -113,8 +114,8 @@ export function InternationalCollaboration({ collaborationStats }: International
 						</div>
 						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
 							{t("collaborativeItemsCount", { 
-								collaborative: collaborationStats.baseCountry.collaborativeItems.toLocaleString(),
-								total: collaborationStats.baseCountry.totalItems.toLocaleString()
+								collaborative: collaborationStats.baseCountry.collaborativeItems.toLocaleString(locale),
+								total: collaborationStats.baseCountry.totalItems.toLocaleString(locale)
 							})}
 						</div>
 					</motion.div>
@@ -210,7 +211,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 																{t("domestic")}: <span className="font-medium text-amber-600 dark:text-amber-400">{data.domestic}%</span>
 															</div>
 															<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}>
-																{t("totalItemsCount", { count: data.totalItems.toLocaleString() })}
+																{t("totalItemsCount", { count: data.totalItems.toLocaleString(locale) })}
 															</div>
 															<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.6)" }} className="text-xs">
 																<div>{t("international")}: {t("internationalTooltip")}</div>
@@ -332,22 +333,22 @@ export function InternationalCollaboration({ collaborationStats }: International
 										</div>
 									</TableCell>
 									<TableCell>
-										<span className="font-bold text-accent">{country.totalItems.toLocaleString()}</span>
+										<span className="font-bold text-accent">{country.totalItems.toLocaleString(locale)}</span>
 									</TableCell>
 									<TableCell>
-										<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalItems.toLocaleString()}</span>
+										<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalItems.toLocaleString(locale)}</span>
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalRate}%</span>
 									</TableCell>
 									<TableCell>
-										<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentItems.toLocaleString()}</span>
+										<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentItems.toLocaleString(locale)}</span>
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentRate}%</span>
 									</TableCell>
 									<TableCell>
-										<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticItems.toLocaleString()}</span>
+										<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticItems.toLocaleString(locale)}</span>
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticRate}%</span>

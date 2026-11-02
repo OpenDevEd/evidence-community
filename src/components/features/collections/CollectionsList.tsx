@@ -101,6 +101,7 @@ function FacetPicker({
 	/** How many results there are, for each option's share of them. */
 	total?: number;
 }) {
+	const tLabels = useTranslations("statistics");
 	const format = useFormatter();
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
@@ -227,10 +228,10 @@ function FacetPicker({
 										}
 										key={`section-${section}`}
 										className="opacity-100"
-										description={`${items.length} items`}
+										description={tLabels("items3", { length: items.length })}
 										isReadOnly
 									>
-										{section}
+										{tLabels.has(`facet${section}` as never) ? tLabels(`facet${section}` as never) : section}
 									</AutocompleteItem>
 								)}
 								{items

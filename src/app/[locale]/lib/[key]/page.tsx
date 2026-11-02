@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getCachedItemPage, getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { Metadata } from "next";
@@ -39,8 +40,8 @@ export async function generateMetadata(props: {
 
 	if (!data || !data.item) {
 		return {
-			title: "404 - Not Found",
-			description: "404 - Not Found",
+			title: (await getTranslations("ui"))("notFoundTitle"),
+			description: (await getTranslations("ui"))("notFoundTitle"),
 			generator: "new-el",
 			robots: { index: false, follow: false },
 		};

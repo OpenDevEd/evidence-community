@@ -63,23 +63,28 @@ function Paged({page, pages, href, anchor, children}: {page: number; pages: numb
 
 /** Who stands behind an edition: the person who checked it, or that AI wrote it and nobody has. Nothing when the library does not say. */
 function Attribution({ by }: { by: DigestSignature | undefined }) {
+  const tLabels = useTranslations("digests");
   if (by === undefined) return null;
   return by
-    ? <span className="inline-flex items-center gap-1.5"><Face person={by} size={18} />Checked by {by.name}</span>
-    : <span className="inline-flex items-center gap-1.5"><Icon value={AiMagicIcon} size={14} />Written by AI</span>;
+    ? <span className="inline-flex items-center gap-1.5"><Face person={by} size={18} />{tLabels("checkedBy", { name: by.name })}</span>
+    : <span className="inline-flex items-center gap-1.5"><Icon value={AiMagicIcon} size={14} />{tLabels("writtenByAi")}</span>;
 }
 function EditionMeta({ edition }: { edition: DigestEdition }) {
+  const tLabels = useTranslations("digests");
   const locale = useLocale();
   const timezone = useLibraryConfig().notifications.schedule.timezone;
   return <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 text-sm ${muted}`}>
     <Hint content={<PeriodCard period={edition.period} timezone={timezone} />} {...headerHint}><Icon value={Calendar03Icon} size={16} /><time dateTime={edition.period.first}>{edition.period.label}</time></Hint>
-    <Hint content={<CountCard edition={edition} locale={locale} />} {...headerHint}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, locale)}</Hint>
+    <Hint content={<CountCard edition={edition} locale={locale} />} {...headerHint}><Icon value={BookOpen01Icon} size={16} />{publicationCount(edition.publicationCount, tLabels)}</Hint>
     <Attribution by={edition.by} />
   </div>;
 }
 /** The header's hints open below their text, as wide as their cards need. */
 const headerHint = {placement: "bottom-start", contentClassName: HINT_CARD} as const;
 /** A fact the eye should land on inside muted text: full contrast and heavier. */
+type DigestTranslator = ReturnType<typeof useTranslations<"digests">>;
+const Emphasis = (chunks: ReactNode) => <Em>{chunks}</Em>;
+
 function Em({ children }: { children: ReactNode }) {
   return <strong className="font-semibold text-black dark:text-white">{children}</strong>;
 }
@@ -97,28 +102,29 @@ function Steps({ steps }: { steps: Step[] }) {
 }
 /** Which date of a publication puts it in an edition, by what the library's digests cover. */
 const ENTERED_BY = {
-  published: {icon: Calendar03Icon, lead: "Entered by publication date.", text: "The date on the record, usually the day a work first came out online."},
-  added: {icon: Calendar03Icon, lead: "Entered by the day it joined the library.", text: "Whenever it was published."},
+  published: {icon: Calendar03Icon, lead: "enteredByPublicationDate", text: "enteredByPublicationDateText"},
+  added: {icon: Calendar03Icon, lead: "enteredByJoinDate", text: "enteredByJoinDateText"},
 } as const;
 /** Whether the period holds 1 January, the day OpenAlex gives a work it knows only the year of. */
 const holdsNewYear = (period: DigestPeriod) => period.first <= `${period.year}-01-01` && `${period.year}-01-01` <= period.last;
 /** Which date of a publication puts it in the period, in which time zone, and when year-only works count too. */
-function periodFacts(period: DigestPeriod, timezone: string, covers: keyof typeof ENTERED_BY) {
+function periodFacts(period: DigestPeriod, timezone: string, covers: keyof typeof ENTERED_BY, t: DigestTranslator) {
   return [
-    ENTERED_BY[covers],
-    {icon: Globe02Icon, lead: `Days in ${timeZoneLabel(timezone)}.`},
-    covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: "Many 1 January dates are year-only.", text: "OpenAlex dates a work it knows only the year of 1 January, so some of this period's works may have come out later that year."},
+    {icon: ENTERED_BY[covers].icon, lead: t(ENTERED_BY[covers].lead), text: t(ENTERED_BY[covers].text)},
+    {icon: Globe02Icon, lead: t("daysIn", { zone: timeZoneLabel(timezone, (place) => t("zoneTime", { place })) })},
+    covers === "published" && holdsNewYear(period) && {icon: InformationCircleIcon, lead: t("yearOnlyLead"), text: t("yearOnlyText")},
   ];
 }
 /** The first and last day an edition covers, joined by a line, and which date of a publication puts it in. */
 function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: string }) {
+  const t = useTranslations("digests");
   const covers = useLibraryConfig().notifications.digestCovers;
   const end = (label: string, date: string) => <span className="min-w-0"><span className={`block text-xs ${muted}`}>{label}</span><span className="block whitespace-nowrap font-medium tabular-nums">{date}</span></span>;
   return <div className="flex flex-col gap-3">
     <div className="grid grid-cols-[auto_minmax(1.5rem,1fr)_auto] items-end gap-3">
-      {end("First day", period.from)}<span aria-hidden className="mb-2.5 h-0.5 rounded-full bg-accent/40" />{end("Last day", period.to)}
+      {end(t("firstDay"), period.from)}<span aria-hidden className="mb-2.5 h-0.5 rounded-full bg-accent/40" />{end(t("lastDay"), period.to)}
     </div>
-    <Facts rows={periodFacts(period, timezone, covers)} />
+    <Facts rows={periodFacts(period, timezone, covers, t)} />
   </div>;
 }
 /**
@@ -127,13 +133,14 @@ function PeriodCard({ period, timezone }: { period: DigestPeriod; timezone: stri
  * heading all open it.
  */
 function CountCard({ edition, locale }: { edition: DigestEdition; locale: string }) {
+  const tLabels = useTranslations("digests");
   const n = (count: number) => count.toLocaleString(locale);
   const published = useLibraryConfig().notifications.digestCovers === "published";
   const rows = [
-    {count: edition.publicationCount, label: published ? "dated in this period" : "added to the library in this period"},
-    {count: edition.read, label: "read by the AI that wrote the text"},
-    {count: edition.listed, label: "listed in this edition"},
-    {count: edition.cited, label: "cited in the text"},
+    {count: edition.publicationCount, label: published ? tLabels("datedInThisPeriod") : tLabels("addedToTheLibraryInThis")},
+    {count: edition.read, label: tLabels("readByTheAiThatWrote")},
+    {count: edition.listed, label: tLabels("listedInThisEdition")},
+    {count: edition.cited, label: tLabels("citedInTheText")},
   ];
   const hidden = edition.read - edition.listed;
   return <div className="flex flex-col gap-3">
@@ -142,11 +149,11 @@ function CountCard({ edition, locale }: { edition: DigestEdition; locale: string
       <span aria-hidden className="mt-1 block h-1.5 rounded-full bg-black/10 dark:bg-white/15"><span className={twMerge("block h-full rounded-full bg-accent", row.count > 0 && "min-w-[3px]")} style={{width: `${(row.count / edition.publicationCount) * 100}%`}} /></span>
     </li>)}</ul>
     <Facts rows={[
-      {icon: Calendar03Icon, lead: `Counted on ${edition.counted}.`, text: "Works OpenAlex added later are not in it."},
-      {icon: Copy01Icon, lead: "Each paper once.", text: "Records with the same title and first author count as one."},
-      {icon: Cancel01Icon, lead: "Retractions and front matter left out."},
-      edition.read < edition.publicationCount && {icon: FilterHorizontalIcon, lead: "The AI reads at most 1,000 publications or 1.5\u00a0MB.", text: `So it read the ${n(edition.read)} that rank highest.`},
-      hidden > 0 && {icon: Delete02Icon, lead: `${n(hidden)} taken down since.`, text: `So ${n(edition.listed)} are listed.`},
+      {icon: Calendar03Icon, lead: tLabels("countedOn", { date: edition.counted }), text: tLabels("worksOpenalexAddedLaterAreNot")},
+      {icon: Copy01Icon, lead: tLabels("eachPaperOnce"), text: tLabels("recordsWithTheSameTitleAnd")},
+      {icon: Cancel01Icon, lead: tLabels("retractionsLeftOut")},
+      edition.read < edition.publicationCount && {icon: FilterHorizontalIcon, lead: tLabels("aiReadsAtMost"), text: tLabels("soItReadTheThatRank", { value: n(edition.read) })},
+      hidden > 0 && {icon: Delete02Icon, lead: tLabels("takenDownSince", { count: n(hidden) }), text: tLabels("soAreListed", { value: n(edition.listed) })},
     ]} />
   </div>;
 }
@@ -179,13 +186,19 @@ type PreferencesProps = {view: "preferences"; token: Promise<string>; subscriber
 // has. Only the parts that read digest rows wait, each behind its own
 // placeholder. Links between digest pages prefetch the whole page, data
 // included, so an edition opened from the list is already complete.
-const NOT_SENDING = "This library is not sending digests at the moment.";
 
 /** What the library's settings mean for these pages. A library that is not sending digests names no day for the next one, here or beside the choice to subscribe. */
+const scheduleWords = (t: DigestTranslator) => ({
+  monthly: (day: number, long: boolean) => (long ? t("scheduleMonthlyLong", { day }) : t("scheduleMonthly", { day })),
+  checked: (day: string) => t("scheduleChecked", { day }),
+  at: (day: string, time: string, zone: string) => t("scheduleAt", { day, time, zone }),
+});
+
 function useDigestSettings(locale: string): DigestSettings {
+  const t = useTranslations("digests");
   const {identity, notifications} = useLibraryConfig();
   const sending = notifications.enabled && notifications.pausedSince === null;
-  const schedule = sending ? describeDigestSchedule(notifications.schedule, locale, notifications.approval) : NOT_SENDING;
+  const schedule = sending ? describeDigestSchedule(notifications.schedule, locale, notifications.approval, scheduleWords(t)) : t("notSending");
   return {libraryName: identity.name, enabled: notifications.enabled, covers: notifications.digestCovers, sending, approval: notifications.approval, timezone: notifications.schedule.timezone, schedule};
 }
 
@@ -198,7 +211,8 @@ export default function DigestPages(props: ArchiveProps | EditionProps | Prefere
 }
 
 function DigestPreferences({settings, token, subscriber, base}: PreferencesProps & Base) {
-  return <PageContainer className="mx-auto max-w-3xl"><TextLink href={base} back>Digests</TextLink><header className="mb-8 mt-7"><h1 className="text-3xl font-bold">Email preferences</h1><p className={`mt-3 text-sm ${muted}`}>Change your subscriptions to this library.</p></header>
+  const tLabels = useTranslations("digests");
+  return <PageContainer className="mx-auto max-w-3xl"><TextLink href={base} back>{tLabels("digests")}</TextLink><header className="mb-8 mt-7"><h1 className="text-3xl font-bold">{tLabels("emailPreferences")}</h1><p className={`mt-3 text-sm ${muted}`}>{tLabels("changeYourSubscriptionsToThisLibrary")}</p></header>
     <Suspense fallback={<Skeleton className="h-44 rounded-2xl" />}><SubscriberPreferences subscriber={subscriber} token={token} schedule={settings.schedule} /></Suspense>
   </PageContainer>;
 }
@@ -213,19 +227,20 @@ function SubscriberPreferences({subscriber, token: pending, schedule}: {subscrib
 const withRail = "grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12";
 
 function DigestArchive({settings, latest, editions, chart, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
+  const tLabels = useTranslations("digests");
   return <PageContainer className="mx-auto relative z-0 -mt-6 overflow-visible pt-0 lg:pt-0 xl:pt-0">
       <header className={`${styles.hero} relative isolate mb-12 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 -top-[100vh] -z-10 w-screen -translate-x-1/2 bg-card_light dark:bg-card" />
         <div className="max-w-lg">
-          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">Library<br />digests</h1>
-          <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">{settings.covers === "published" ? "Summaries of the publications in this library, one period at a time." : "Summaries of new publications in this library."}</p>
+          <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">{tLabels.rich("libraryDigestsTitle", { br: () => <br /> })}</h1>
+          <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">{settings.covers === "published" ? tLabels("summariesOfThePublicationsInThis") : tLabels("summariesOfNewPublicationsInThis")}</p>
           {settings.sending && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
         </div>
         <Suspense fallback={<Skeleton className={`mx-auto ${coverHeight} w-full max-w-md rounded-2xl`} />}><FeaturedEdition latest={latest} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
       </header>
       <div className={withRail}>
-        <section id="archive" aria-label="Digest archive" className="min-w-0 scroll-mt-8">
-          <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} locale={locale} /></Suspense>
+        <section id="archive" aria-label={tLabels("digestArchive")} className="min-w-0 scroll-mt-8">
+          <Suspense fallback={<ArchiveLoading />}><ArchiveList editions={editions} nextEdition={nextEdition} settings={settings} base={base} /></Suspense>
         </section>
         <aside className="space-y-4 lg:sticky lg:top-8">
           <Suspense fallback={<Skeleton className="h-[19rem] rounded-2xl" />}><EditionsChart chart={chart} base={base} locale={locale} /></Suspense>
@@ -240,22 +255,24 @@ function NextEditionLoading() {
   return <div className={nextEditionRow}><Skeleton className="h-full w-16 rounded-xl" /><div className="space-y-2"><Skeleton className="h-3 w-24 rounded-lg" /><Skeleton className="h-5 w-44 rounded-lg" /><Skeleton className="h-3 w-28 rounded-lg" /></div></div>;
 }
 function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate | null>; settings: DigestSettings}) {
+  const tLabels = useTranslations("digests");
   const next = use(nextEdition);
   if (!next) return null;
   return <div className={nextEditionRow}>
     <time dateTime={next.at} aria-label={next.weekday} className="grid h-full w-16 shrink-0 place-content-center rounded-xl bg-accent/10 text-center text-accent"><span className="block text-2xl font-semibold leading-none tabular-nums">{Number(next.day)}</span><span className="mt-2 block text-xs">{next.month}</span></time>
-    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>Next edition</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : `${next.dayName} at ${next.time}`}</p><TruncatedText text={settings.approval ? "Once an editor has checked it" : timeZoneLabel(settings.timezone)} className={`mt-0.5 text-xs ${muted}`} /></div>
+    <div className="w-0 flex-1"><p className={`truncate text-xs ${muted}`}>{tLabels("nextEdition")}</p><p className="mt-1 truncate font-medium">{settings.approval ? next.dayName : tLabels("at", { dayName: next.dayName, time: next.time })}</p><TruncatedText text={settings.approval ? tLabels("onceAnEditorHasCheckedIt") : timeZoneLabel(settings.timezone, (place) => tLabels("zoneTime", { place }))} className={`mt-0.5 text-xs ${muted}`} /></div>
   </div>;
 }
 
 /** One edition in a list: its date in a gutter, then its title and opening. The archive and an edition's "More digests" share it. */
-function EditionRow({item, base, locale, summary = true}: {item: DigestSummary; base: string; locale: string; summary?: boolean}) {
+function EditionRow({item, base, summary = true}: {item: DigestSummary; base: string; summary?: boolean}) {
+  const tLabels = useTranslations("digests");
   return <Link href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-xl p-4 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-6">
     <PeriodTile period={item.period} />
     <div className="min-w-0">
       <h3 className="font-heading text-xl font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</h3>
       {summary && <MarkdownExcerpt className={`mt-1.5 line-clamp-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt>}
-      <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, locale)}</span><Attribution by={item.by} /></span>
+      <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, tLabels)}</span><Attribution by={item.by} /></span>
     </div>
   </Link>;
 }
@@ -277,13 +294,13 @@ const rowCard = "rounded-2xl bg-card_light p-2 dark:bg-card";
 function ArchiveLoading() {
   return <div className={rowCard}>{[0, 1, 2].map(index => <div key={index} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-6 p-4"><Skeleton className="mx-auto h-10 w-10 rounded-lg" /><div className="space-y-3"><Skeleton className="h-5 w-3/5 rounded-lg" /><Skeleton className="h-3 w-full rounded-lg" /><Skeleton className="h-3 w-24 rounded-lg" /></div></div>)}</div>;
 }
-function ArchiveList({editions, nextEdition, settings, base, locale}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
+function ArchiveList({editions, nextEdition, settings, base}: {editions: Promise<DigestArchivePage>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string}) {
   const {editions: items, page, pages} = use(editions);
   if (!items.length) return <EmptyArchive next={settings.sending ? use(nextEdition) : null} settings={settings} />;
   return <Paged page={page} pages={pages} href={next => next > 1 ? `${base}?page=${next}` : base} anchor="archive"><div className="space-y-8">
     {byYear(items).map(({year, items: ofYear}) => <section key={year} aria-labelledby={`year-${year}`}>
       <SectionTitle className="mb-3 text-xl"><span id={`year-${year}`}>{year}</span></SectionTitle>
-      <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} />)}</div>
+      <div className={rowCard}>{ofYear.map(item => <EditionRow key={item.slug} item={item} base={base} />)}</div>
     </section>)}
   </div></Paged>;
 }
@@ -292,15 +309,17 @@ function ArchiveList({editions, nextEdition, settings, base, locale}: {editions:
 const chartFocus = (pointed: number | null, count: number) => (pointed !== null && pointed < count ? pointed : count - 1);
 /** The Editions card before the first edition: the same parts, so the card below it stays where it is. */
 function EmptyEditionsChart() {
-  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>0</span>} band={<>
+  const tLabels = useTranslations("digests");
+  return <SidebarCard title={tLabels("editions")} aside={<span className={`text-sm tabular-nums ${muted}`}>0</span>} band={<>
     <HeadFigure value="0" label="publications" />
     <div aria-hidden className="h-24 border-b-2 border-dashed border-accent/30" />
   </>}>
-    <div className="-mt-1 h-[4.25rem]"><p className={`text-sm ${muted}`}>No editions yet</p></div>
+    <div className="-mt-1 h-[4.25rem]"><p className={`text-sm ${muted}`}>{tLabels("noEditionsYet")}</p></div>
   </SidebarCard>;
 }
 /** Publications per edition, oldest first, as the library's Years card shows publications per year. Pointing at a bar reads it out; the latest is read out otherwise. */
 function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base: string; locale: string}) {
+  const tLabels = useTranslations("digests");
   const {editions: items, total} = use(chart);
   const [pointed, setPointed] = useState<number | null>(null);
   if (!items.length) return <EmptyEditionsChart />;
@@ -308,10 +327,10 @@ function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base
   const largest = Math.max(...shown.map(item => item.publicationCount));
   const focus = chartFocus(pointed, shown.length);
   const edition = shown[focus];
-  return <SidebarCard title="Editions" aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
+  return <SidebarCard title={tLabels("editions")} aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
     <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
     <div className="flex h-24 items-end gap-1" onMouseLeave={() => setPointed(null)}>
-      {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={`${item.title}, ${publicationCount(item.publicationCount, locale)}`} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={tLabels("label", { title: item.title, value: publicationCount(item.publicationCount, tLabels) })} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className={twMerge("block w-full rounded-t-[3px] transition-colors duration-200 motion-reduce:transition-none", index === focus ? "bg-accent" : "bg-accent/30")} style={{height: barWidth(item.publicationCount, largest)}} />
       </Link>)}
     </div>
@@ -321,11 +340,18 @@ function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base
 }
 
 /** Before the first edition: the first row is kept for it, dated when it is scheduled, and the rows after it wait faintly below. */
+/** A library that sends no digests is not promised an edition. */
+function emptyArchiveWords(next: DigestDate | null, settings: DigestSettings, t: DigestTranslator) {
+  if (!settings.sending) return [t("noEditionsYet"), t("notSending")];
+  const each = settings.covers === "published" ? t("eachDigestPublished") : t("eachDigestAdded");
+  // A send date with nothing to cover is skipped, so the date is only when the first one is due.
+  const first = next ? t("firstDueOn", { weekday: next.weekday }) : t("firstWillAppear");
+  return [t("editionsWillCollectHere"), `${each} ${first}`];
+}
+
 function EmptyArchive({next, settings}: {next: DigestDate | null; settings: DigestSettings}) {
-  // A library that sends no digests is not promised an edition.
-  const [title, text] = settings.sending
-    ? ["Editions will collect here", `${settings.covers === "published" ? "Each digest sums up the publications dated in its period." : "Each digest sums up the publications added since the one before."} ${firstEdition(next)}`]
-    : ["No editions yet", NOT_SENDING];
+  const t = useTranslations("digests");
+  const [title, text] = emptyArchiveWords(next, settings, t);
   const tile = "rounded-xl px-1 py-3 text-center";
   const row = "grid grid-cols-[56px_minmax(0,1fr)] items-start gap-4 rounded-2xl p-5 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-5";
   return <div>
@@ -347,23 +373,19 @@ function EmptyArchive({next, settings}: {next: DigestDate | null; settings: Dige
   </div>;
 }
 
-function firstEdition(next: DigestDate | null) {
-  // A send date with nothing to cover is skipped, so the date is only when the first one is due.
-  return next ? `The first is due on ${next.weekday}, if there are publications to cover by then.` : "The first will appear when there are publications to cover.";
-}
-
 function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionProps & Base) {
+  const tLabels = useTranslations("digests");
   const locale = useLocale();
   return <PageContainer className="mx-auto overflow-clip">
-      <TextLink href={base} back>All digests</TextLink>
+      <TextLink href={base} back>{tLabels("allDigests")}</TextLink>
       {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. */}
       <Suspense fallback={<EditionLoading />}>
         <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} />
         {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
         <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
           <div className="min-w-0 [&>section]:h-full">
-            <SidebarCard title="More digests" aside={<TextLink href={base}>Browse all digests</TextLink>}>
-              <PastDigests earlier={earlier} base={base} locale={locale} />
+            <SidebarCard title={tLabels("moreDigests")} aside={<TextLink href={base}>{tLabels("browseAllDigests")}</TextLink>}>
+              <PastDigests earlier={earlier} base={base} />
             </SidebarCard>
           </div>
           {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
@@ -419,8 +441,9 @@ function EditionHeader({edition}: {edition: DigestEdition}) {
 }
 /** The edition's publications under their heading, with how many of the period's are listed and how they were chosen. */
 function InThisEdition({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
+  const tLabels = useTranslations("digests");
   return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
-    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">In this edition</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)}</CountHint></span></SectionTitle>
+    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">{tLabels("inThisEdition")}</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)}</CountHint></span></SectionTitle>
     <HowChosen edition={edition} locale={locale} />
     <EditionLists edition={edition} records={records} path={path} locale={locale} />
   </section>;
@@ -450,10 +473,11 @@ function useActiveSection(ids: string[]) {
 const railRow = "flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5";
 /** The edition's subjects and its publication list, each with how many publications it cites, the one being read marked. */
 function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition: DigestEdition; listAnchor: string; locale: string}) {
+  const tLabels = useTranslations("digests");
   const active = useActiveSection([...parts.map(part => part.id), "publications"]);
-  const rows = [...parts.map(part => ({id: part.id, href: part.id, title: part.title, count: part.cited, word: "cited"})), {id: "publications", href: listAnchor, title: "In this edition", count: edition.listed, word: "listed"}];
+  const rows = [...parts.map(part => ({id: part.id, href: part.id, title: part.title, count: part.cited, word: "cited"})), {id: "publications", href: listAnchor, title: tLabels("inThisEdition"), count: edition.listed, word: "listed"}];
   if (!parts.length) return null;
-  return <SidebarCard title="Contents">
+  return <SidebarCard title={tLabels("contents")}>
     <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.id}>
       <a href={`#${row.href}`} aria-current={active === row.id ? "location" : undefined} className={twMerge(railRow, active === row.id && "bg-black/5 font-medium text-accent dark:bg-white/5")}>
         <span className="min-w-0 flex-1 leading-5">{row.title}</span>
@@ -485,15 +509,16 @@ function levelList(edition: DigestEdition, level: StudyLevel) {
  * period. A digest listed before types were read has no period counts, and shows what it lists.
  */
 function EditionShare({edition, locale}: {edition: DigestEdition; locale: string}) {
+  const tLabels = useTranslations("digests");
   const rows = typeShares(edition.types);
   const n = (count: number) => count.toLocaleString(locale);
   const unread = share(edition.types.listed, "unread");
-  const label = edition.listed < edition.publicationCount ? `listed of ${n(edition.publicationCount)} in this period` : "listed, every one in this period";
+  const label = edition.listed < edition.publicationCount ? tLabels("listedOf", { total: n(edition.publicationCount) }) : tLabels("listedEvery");
   // The whole figure opens the count's card, beside the rail rather than over it; only its words carry the hint's underline.
   const figure = <Tooltip content={<CountCard edition={edition} locale={locale} />} placement="left" className={headerHint.contentClassName}>
     <div tabIndex={0} className="cursor-help rounded-md outline-none focus-visible:ring-2 focus-visible:ring-accent"><HeadFigure value={n(edition.listed)} label={<span className={HINT_UNDERLINE}>{label}</span>} /></div>
   </Tooltip>;
-  return <SidebarCard title="Publications" band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} figure={figure} />}>
+  return <SidebarCard title={tLabels("publications")} band={<ShareBand rows={rows} unread={unread} listed={edition.listed} total={edition.publicationCount} figure={figure} />}>
     <ShareLevels rows={rows} href={level => levelList(edition, level)} n={n} />
     <UnreadShare listed={unread} period={edition.types.period && share(edition.types.period, "unread")} n={n} />
   </SidebarCard>;
@@ -568,33 +593,33 @@ function UnreadShare({listed, period, n}: {listed: number; period: number | null
 
 /** The score's parts, as `rankPublications` adds them up. */
 const SCORE = [
-  ["+3", "Published in a journal or series on the CWTS Core list, the sources behind the Leiden Ranking"],
-  ["+3", "Open access, so readers without a subscription can read it"],
-  ["+2", "Ten or more references that OpenAlex matched, or +1 for one to nine"],
-  ["+1", "At least one author's institution on record"],
-  ["+2 × ln(1 + n)", "n citations in OpenAlex, about +5 for 10 and +9 for 100"],
-  ["−1", "A dataset or software"],
+  ["+3", "score.coreList"],
+  ["+3", "score.openAccess"],
+  ["+2", "score.references"],
+  ["+1", "score.institution"],
+  ["+2 × ln(1 + n)", "score.citations"],
+  ["−1", "score.dataset"],
 ] as const;
 /** Each question of "How this edition was made" says its answer in a line, so the card reads at a glance while closed. */
 
 /** What the AI read: every publication of the period, or the ones a size limit kept, less any taken down since. */
-function readRows(edition: DigestEdition, n: (count: number) => string) {
+function readRows(edition: DigestEdition, n: (count: number) => string, t: DigestTranslator) {
   // A record hidden after the edition was written leaves its list, so the list can be shorter than what was read.
   const hidden = edition.read - edition.listed;
   return [
     edition.read < edition.publicationCount
-      ? {icon: FilterHorizontalIcon, lead: "At most 1,000 publications or 1.5\u00a0MB of text.", text: `A period with more is cut to the ${n(edition.read)} that rank highest, in the order below.`}
-      : {icon: BookOpen01Icon, lead: "Every publication in the period.", text: "They are listed in the order below."},
-    hidden > 0 && {icon: Delete02Icon, lead: `${n(hidden)} taken down since.`, text: `So ${n(edition.listed)} are listed.`},
+      ? {icon: FilterHorizontalIcon, lead: t("atMost"), text: t("cutToHighest", { count: n(edition.read) })}
+      : {icon: BookOpen01Icon, lead: t("everyPublication"), text: t("listedInOrder")},
+    hidden > 0 && {icon: Delete02Icon, lead: t("takenDownSince", { count: n(hidden) }), text: t("soAreListed", { value: n(edition.listed) })},
   ];
 }
 
 /** How the text was checked, and by whom when the library names who read it. */
-const checkSteps = (by: DigestEdition["by"]): Step[] => [
-  {title: "Written from titles and abstracts", text: "Not from the full papers."},
-  {title: "Checked sentence by sentence", text: "A second AI model, from another company, checks each sentence of the AI's draft about a paper against that paper's title and abstract."},
-  {title: "Corrected or removed", text: "The writer fixes what the check flags, or takes it out."},
-  ...(by ? [{title: `Read by ${by.name}`, text: "Before it was published."}] : []),
+const checkSteps = (by: DigestEdition["by"], t: DigestTranslator): Step[] => [
+  {title: t("check.writtenTitle"), text: t("check.writtenText")},
+  {title: t("check.sentenceTitle"), text: t("check.sentenceText")},
+  {title: t("check.correctedTitle"), text: t("check.correctedText")},
+  ...(by ? [{title: t("check.readByTitle", { name: by.name }), text: t("check.readByText")}] : []),
 ];
 
 /**
@@ -602,38 +627,39 @@ const checkSteps = (by: DigestEdition["by"]): Step[] => [
  * in this order (`reviewStanding`, then an abstract, then the score), what is left out, and how the text was checked.
  */
 function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) {
+  const tLabels = useTranslations("digests");
   const reducedMotion = useReducedMotion();
   const n = (count: number) => count.toLocaleString(locale);
   const cut = edition.read < edition.publicationCount;
   const order: Step[] = [
-    {title: "Reviews and syntheses", text: "Reviews of reviews, meta-analyses, systematic reviews, narrative reviews and bibliometric studies come first. Each paper's study type is the one an AI model read when it entered the library, or an editor's correction."},
-    {title: "An abstract of 200 characters or more", text: "The writer works from abstracts, so papers with one come before papers without."},
-    {title: "A score", text: "Then papers are ranked by the sum of:", extra: <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5">{SCORE.map(([weight, what]) => <Fragment key={weight}>
-      <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{what}</dd>
+    {title: tLabels("reviewsAndSyntheses"), text: tLabels("reviewsOfReviewsMetaAnalysesSystematic")},
+    {title: tLabels("anAbstractOf200CharactersOr"), text: tLabels("theWriterWorksFromAbstractsSo")},
+    {title: tLabels("aScore"), text: tLabels("thenPapersAreRankedByThe"), extra: <dl className="mt-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5">{SCORE.map(([weight, what]) => <Fragment key={weight}>
+      <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{tLabels(what)}</dd>
     </Fragment>)}</dl>},
   ];
   return <div className="mb-10 rounded-2xl bg-card_light px-6 pt-5 pb-1 dark:bg-card">
-    <h3 className="font-heading text-lg font-medium">How this edition was made</h3>
+    <h3 className="font-heading text-lg font-medium">{tLabels("howThisEditionWasMade")}</h3>
     <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
-      <AccordionItem key="read" aria-label="What did the AI read?" title="What did the AI read?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<>The titles and abstracts of <Em>{cut ? n(edition.read) : "all"}</Em> of the period&rsquo;s <Em>{n(edition.publicationCount)}</Em> publications. The text cites <Em>{n(edition.cited)}</Em>{edition.cited > 0 && <>, <Em>{n(edition.citedOpen)}</Em> of them open access</>}.</>}>
-        <Facts rows={readRows(edition, n)} />
+      <AccordionItem key="read" aria-label={tLabels("whatDidTheAiRead")} title={tLabels("whatDidTheAiRead")} motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={tLabels.rich(edition.cited > 0 ? "subtitle.readCited" : "subtitle.read", { em: Emphasis, read: cut ? n(edition.read) : tLabels("subtitle.all"), total: n(edition.publicationCount), cited: n(edition.cited), open: n(edition.citedOpen) })}>
+        <Facts rows={readRows(edition, n, tLabels)} />
       </AccordionItem>
-      <AccordionItem key="order" aria-label="Why these publications, in this order?" title="Why these publications, in this order?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<><Em>Reviews and syntheses</Em> first, then those <Em>with an abstract</Em>, then <Em>by a score</Em>.</>}>
+      <AccordionItem key="order" aria-label={tLabels("whyThesePublicationsInThisOrder")} title={tLabels("whyThesePublicationsInThisOrder")} motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={tLabels.rich("subtitle.order", { em: Emphasis })}>
         <Steps steps={order} />
       </AccordionItem>
-      <AccordionItem key="left-out" aria-label="What is left out?" title="What is left out?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<><Em>Retracted papers</Em>, <Em>journal front matter</Em>, and a <Em>second record</Em> of the same paper.</>}>
+      <AccordionItem key="left-out" aria-label={tLabels("whatIsLeftOut")} title={tLabels("whatIsLeftOut")} motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={tLabels.rich("subtitle.leftOut", { em: Emphasis })}>
         <Facts rows={[
-          {icon: Cancel01Icon, lead: "Retracted papers.", text: "As Retraction Watch reports them through OpenAlex."},
-          {icon: FileRemoveIcon, lead: "Journal front matter.", text: "Pages OpenAlex marks as front matter, such as tables of contents."},
-          {icon: Copy01Icon, lead: "A second record of the same paper.", text: "Two records with the same title, 25 characters or longer, and the same first author's surname count once, such as a preprint and its article."},
+          {icon: Cancel01Icon, lead: tLabels("leftOut.retracted"), text: tLabels("asRetractionWatchReportsThemThrough")},
+          {icon: FileRemoveIcon, lead: tLabels("leftOut.frontMatter"), text: tLabels("pagesOpenalexMarksAsFrontMatter")},
+          {icon: Copy01Icon, lead: tLabels("leftOut.duplicate"), text: tLabels("twoRecordsWithTheSameTitle")},
         ]} />
       </AccordionItem>
-      <AccordionItem key="checked" aria-label="How was the text checked?" title="How was the text checked?" motionProps={{variants: ACCORDION_CONTENT_MOTION}}
-        subtitle={<>A second AI model checks <Em>the AI&rsquo;s draft</Em>, sentence by sentence{edition.by && <>, and <Em>{edition.by.name}</Em> read it before it was published</>}.</>}>
-        <Steps steps={checkSteps(edition.by)} />
+      <AccordionItem key="checked" aria-label={tLabels("howWasTheTextChecked")} title={tLabels("howWasTheTextChecked")} motionProps={{variants: ACCORDION_CONTENT_MOTION}}
+        subtitle={edition.by ? tLabels.rich("subtitle.checkedBy", { em: Emphasis, name: edition.by.name }) : tLabels.rich("subtitle.checked", { em: Emphasis })}>
+        <Steps steps={checkSteps(edition.by, tLabels)} />
       </AccordionItem>
     </Accordion>
   </div>;
@@ -641,15 +667,16 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
 
 /** The edition's publications: its reviews and syntheses first as a list of their own, by type, then the others, each with its own pages. */
 function EditionLists({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
+  const tLabels = useTranslations("digests");
   const {reviews} = edition;
   const list = (anchor: string, keys: string[], page: number, pages: number, href: (next: number) => string) => <Paged page={page} pages={pages} href={href} anchor={anchor}>
     <EditionCards records={records} keys={keys} />
   </Paged>;
   if (!reviews) return list("publications", edition.keys, edition.page, edition.pages, next => address(path, next));
   return <>
-    <ListHeading id="reviews" title="Reviews and syntheses" count={reviews.listed} locale={locale} />
+    <ListHeading id="reviews" title={tLabels("reviewsAndSyntheses")} count={reviews.listed} locale={locale} />
     {list("reviews", reviews.keys, reviews.page, reviews.pages, next => address(path, edition.page, next))}
-    <div className="mt-12"><ListHeading id="other-publications" title="Other publications" count={edition.listed - reviews.listed} locale={locale} /></div>
+    <div className="mt-12"><ListHeading id="other-publications" title={tLabels("otherPublications")} count={edition.listed - reviews.listed} locale={locale} /></div>
     {list("other-publications", edition.keys, edition.page, edition.pages, next => address(path, next, reviews.page))}
   </>;
 }
@@ -672,10 +699,11 @@ function EditionCards({records: {cards, profiles}, keys}: {records: EditionCards
     <div className={cardList}>{listed.map(card => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
   </AuthorProfilesContext>;
 }
-function PastDigests({earlier, base, locale}: {earlier: Promise<DigestSummary[]>; base: string; locale: string}) {
+function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: string;}) {
+  const tLabels = useTranslations("digests");
   const older = use(earlier);
-  if (!older.length) return <p className={`text-sm ${muted}`}>This is the first edition.</p>;
-  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} locale={locale} summary={false} />)}</div>;
+  if (!older.length) return <p className={`text-sm ${muted}`}>{tLabels("thisIsTheFirstEdition")}</p>;
+  return <div className="-mx-4 -my-3">{older.map(item => <EditionRow key={item.slug} item={item} base={base} summary={false} />)}</div>;
 }
 
 function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {

@@ -2,11 +2,17 @@ import { getToolName, type DynamicToolUIPart, type ToolUIPart } from "ai";
 
 export type ResearchToolPart = ToolUIPart | DynamicToolUIPart;
 
+export type ToolMessage = { key: string; values: Record<string, number> };
+
 export type ToolActivitySummary = {
 	toolName: string;
+	/** A message key in `toolActivity`, or the name of a tool with none. */
 	title: string;
 	items: string[];
+	/** The English line the transcript export writes. */
 	detail?: string;
+	/** The same line as a message in `toolActivity`, for the page. */
+	message?: ToolMessage;
 	error?: string;
 	currentResults?: {
 		start?: number;
@@ -60,23 +66,19 @@ function queryResults(output: Record<string, unknown> | undefined) {
 	return { queryCount: results.length, hits };
 }
 
-function plural(count: number, one: string, many: string) {
-	return `${count} ${count === 1 ? one : many}`;
-}
-
 function searchTitle(isListing: boolean, withinResults: boolean, done: boolean) {
-	if (isListing) return done ? "Read current results" : "Reading current results";
+	if (isListing) return done ? "title.readCurrent" : "title.readingCurrent";
 	if (withinResults) {
-		return done ? "Searched current results" : "Searching current results";
+		return done ? "title.searchedCurrent" : "title.searchingCurrent";
 	}
-	return "Library search";
+	return "title.search";
 }
 
 function searchDetail(
 	isListing: boolean,
 	window: ToolActivitySummary["currentResults"],
 	output: Record<string, unknown> | undefined,
-) {
+): { text: string; message: ToolMessage } {
 	if (isListing) {
 		const listed =
 			window?.start !== undefined &&
@@ -84,11 +86,11 @@ function searchDetail(
 			window.start > 0
 				? window.end - window.start + 1
 				: 0;
-		return `${plural(listed, "entry", "entries")} in displayed order`;
+		return { text: `${listed} ${listed === 1 ? "entry" : "entries"} in displayed order`, message: { key: "entriesInOrder", values: { count: listed } } };
 	}
 
 	const { hits, queryCount } = queryResults(output);
-	return `${plural(hits, "result", "results")} across ${plural(queryCount, "query", "queries")}`;
+	return { text: `${hits} ${hits === 1 ? "result" : "results"} across ${queryCount} ${queryCount === 1 ? "query" : "queries"}`, message: { key: "resultsAcross", values: { hits, queries: queryCount } } };
 }
 
 function searchSummary(
@@ -110,7 +112,7 @@ function searchSummary(
 		currentResults: withinResults
 			? currentResultsWindow(output)
 			: undefined,
-		detail: done ? searchDetail(isListing, currentResultsWindow(output), output) : undefined,
+		...(done ? (({ text, message }) => ({ detail: text, message }))(searchDetail(isListing, currentResultsWindow(output), output)) : {}),
 		error,
 	};
 }
@@ -130,7 +132,7 @@ export function toolActivitySummary(
 		const input = isRecord(part.input) ? part.input : undefined;
 		return {
 			toolName,
-			title: "Reading publications",
+			title: "title.readingPublications",
 			items: stringArray(input?.itemKeys),
 			error,
 		};
@@ -140,7 +142,7 @@ export function toolActivitySummary(
 		toolName,
 		title: toolName,
 		items: [],
-		detail: error ? undefined : "No additional details.",
+		...(error ? {} : { detail: "No additional details.", message: { key: "noDetails", values: {} } }),
 		error,
 	};
 }

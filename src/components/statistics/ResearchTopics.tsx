@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Bookmark02Icon, ChartIncreaseIcon, Layers01Icon, Search01Icon, TagsIcon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { motion } from "framer-motion";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
@@ -55,23 +55,24 @@ const TILE_TONES = {
 
 function useTopicLabels(kind: TopicKind) {
 	const t = useTranslations("ui");
+	const tStats = useTranslations("statistics");
 	if (kind === "collections") {
 		return {
 			title: t("collections"),
 			total: t("collections"),
-			topLevel: "Top-level collections",
-			topLevelNote: "Highest collection level",
-			avgItems: "Average items per collection",
-			avgItemsNote: "Publications per collection",
-			distribution: "Collection distribution by level",
+			topLevel: tStats("collectionNotes.topLevel"),
+			topLevelNote: tStats("collectionNotes.topLevelNote"),
+			avgItems: tStats("collectionNotes.avgItems"),
+			avgItemsNote: tStats("collectionNotes.avgItemsNote"),
+			distribution: tStats("collectionNotes.distribution"),
 			countUnit: t("collections").toLowerCase(),
-			topByImpact: "Top collections by impact",
-			topLevelAreas: "Top-level collections",
-			children: "child collections",
+			topByImpact: tStats("collectionNotes.topByImpact"),
+			topLevelAreas: tStats("collectionNotes.topLevel"),
+			children: tStats("collectionNotes.children"),
 			all: t("collections"),
 			search: t("searchCollections"),
-			searchPlaceholder: "Search by collection name or path",
-			table: "Collection statistics",
+			searchPlaceholder: tStats("collectionNotes.searchPlaceholder"),
+			table: tStats("collectionNotes.table"),
 			column: t("collections"),
 		};
 	}
@@ -149,6 +150,7 @@ function TopicOverviewTiles({
 	selectedYear: string;
 	labels: TopicLabels;
 }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const inYear = selectedYear === "all" ? undefined : t("inYear", { year: selectedYear });
 	const { maxDepth, avgItems } = overviewFigures(topics, topicOverview, selectedYear);
@@ -156,14 +158,14 @@ function TopicOverviewTiles({
 		<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 			<OverviewTile
 				tone="blue"
-				value={topics.length.toLocaleString()}
+				value={topics.length.toLocaleString(locale)}
 				label={labels.total}
 				note={t("allHierarchicalLevels")}
 				inYear={inYear}
 			/>
 			<OverviewTile
 				tone="emerald"
-				value={topics.filter(t => t.level === 1).length.toLocaleString()}
+				value={topics.filter(t => t.level === 1).length.toLocaleString(locale)}
 				label={labels.topLevel}
 				note={labels.topLevelNote}
 				inYear={inYear}
@@ -187,6 +189,7 @@ function TopicOverviewTiles({
 }
 
 function LevelDistribution({ topicOverview, labels }: { topicOverview: TopicOverview; labels: TopicLabels }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	return (
 		<motion.div variants={itemVariants} className="space-y-4">
@@ -202,7 +205,7 @@ function LevelDistribution({ topicOverview, labels }: { topicOverview: TopicOver
 					tickFormatter: (value) => `Level ${value}`,
 				}}
 				formatter={(value: number, name: string, props: any) => [
-					`${value.toLocaleString()} ${labels.countUnit} (${props.payload.percentage}%)`,
+					`${value.toLocaleString(locale)} ${labels.countUnit} (${props.payload.percentage}%)`,
 					t("levelNumber", { number: props.payload.level })
 				]}
 			/>
@@ -211,6 +214,7 @@ function LevelDistribution({ topicOverview, labels }: { topicOverview: TopicOver
 }
 
 function TopTopicsByImpact({ topics, labels }: { topics: TopicStats[]; labels: TopicLabels }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	return (
 		<motion.div variants={itemVariants} className="space-y-4">
@@ -242,10 +246,10 @@ function TopTopicsByImpact({ topics, labels }: { topics: TopicStats[]; labels: T
 											{t("levelNumber", { number: topic.level })}
 										</span>
 										<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-											{topic.itemCount.toLocaleString()} {t("itemsLowercase")}
+											{topic.itemCount.toLocaleString(locale)} {t("itemsLowercase")}
 										</span>
 										<span className="text-amber-600 dark:text-amber-400 font-medium">
-											{topic.totalCitations.toLocaleString()} {t("citationsLowercase")}
+											{topic.totalCitations.toLocaleString(locale)} {t("citationsLowercase")}
 										</span>
 									</div>
 								</div>
@@ -267,6 +271,7 @@ function TopTopicsByImpact({ topics, labels }: { topics: TopicStats[]; labels: T
 }
 
 function TopLevelTopics({ topics, labels }: { topics: TopicStats[]; labels: TopicLabels }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	return (
 		<motion.div variants={itemVariants} className="space-y-4">
@@ -294,7 +299,7 @@ function TopLevelTopics({ topics, labels }: { topics: TopicStats[]; labels: Topi
 								</div>
 								<div className="text-xs text-black/60 dark:text-white/60 space-x-3">
 									<span className="text-blue-600 dark:text-blue-400 font-medium">
-										{topic.itemCount.toLocaleString()}
+										{topic.itemCount.toLocaleString(locale)}
 									</span>
 									<span className="text-emerald-600 dark:text-emerald-400 font-medium">
 										{topic.children.length} {labels.children}
@@ -321,6 +326,7 @@ function TopLevelTopics({ topics, labels }: { topics: TopicStats[]; labels: Topi
 }
 
 export function ResearchTopics({ topicStats, topicOverview, topicsByYear, kind = "topics" }: ResearchTopicsProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const labels = useTopicLabels(kind);
 	const [topicsPage, setTopicsPage] = useState(1);
@@ -634,12 +640,12 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear, kind =
 										</TableCell>
 										<TableCell>
 											<span className="font-bold text-accent">
-												{topic.itemCount.toLocaleString()}
+												{topic.itemCount.toLocaleString(locale)}
 											</span>
 										</TableCell>
 										<TableCell>
 											<span className="font-bold text-success">
-												{topic.totalCitations.toLocaleString()}
+												{topic.totalCitations.toLocaleString(locale)}
 											</span>
 										</TableCell>
 										<TableCell>

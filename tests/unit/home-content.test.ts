@@ -53,8 +53,8 @@ describe("home page content", () => {
 	});
 
 	it("gives a library without answers a generated introduction and the suggestion button", () => {
-		expect(defaultContent("Test Library")).toEqual({
-			intro: expect.stringContaining("**Test Library**"),
+		expect(defaultContent("Written for this library")).toEqual({
+			intro: "Written for this library",
 			involvement: { suggestions: true, editors: false },
 		});
 	});

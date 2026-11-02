@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Chain } from "@/components/pages/evidence/data";
 import { stubPanelLayout } from "./panel-layout";
 
+vi.mock("next-intl", async () => ({ ...(await vi.importActual<typeof import("next-intl")>("next-intl")), ...(await (await import("../helpers/next-intl-english")).englishIntl()) }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@/context/LibraryConfigProvider", () => ({ useLibraryConfig: () => ({ theme: { layout: "normal" }, identity: { baseUrl: "https://aied.openscholar.ai" } }) }));
 vi.mock("@/context/FiltersProvider", () => ({ useFiltersContext: () => ({ queryParams: {}, handleSearchChange: vi.fn(), handlePageChange: vi.fn() }) }));

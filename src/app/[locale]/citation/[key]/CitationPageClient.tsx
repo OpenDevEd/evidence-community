@@ -25,7 +25,7 @@ import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import ResourceAuthors from "@/components/features/items/ResourceAuthors";
 import { Pagination } from "@/components/nextui/Pagination";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { useTheme } from "next-themes";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
@@ -88,6 +88,7 @@ function CitationStats({
 	yearDistribution: { year: string; count: number }[];
 	isLoading: boolean;
 }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 
 	const totalFromYears = yearDistribution.reduce(
@@ -112,7 +113,7 @@ function CitationStats({
 	const stats = [
 		{
 			label: t("libraryCitations"),
-			value: libraryCitationCount.toLocaleString(),
+			value: libraryCitationCount.toLocaleString(locale),
 			color: "from-blue-500/10 to-blue-600/5 border-blue-500/20",
 			textColor: "text-blue-600 dark:text-blue-400",
 		},

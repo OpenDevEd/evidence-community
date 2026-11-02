@@ -1,5 +1,5 @@
 import { QuoteUpIcon } from "@hugeicons/core-free-icons";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { SectionCard } from "./SectionCard";
 import { CitationStats } from "./types";
 
@@ -8,6 +8,7 @@ type CitationAnalysisProps = {
 };
 
 export function CitationAnalysis({ citationStats }: CitationAnalysisProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 
 	return (
@@ -15,7 +16,7 @@ export function CitationAnalysis({ citationStats }: CitationAnalysisProps) {
 			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 				<div className="text-center p-6 rounded-xl bg-success/10">
 					<div className="text-3xl font-bold text-success mb-2">
-						{citationStats.itemsWithCitations.toLocaleString()}
+						{citationStats.itemsWithCitations.toLocaleString(locale)}
 					</div>
 					<div className="text-sm text-black/60 dark:text-white/60">
 						{t("itemsWithCitations")}
@@ -31,7 +32,7 @@ export function CitationAnalysis({ citationStats }: CitationAnalysisProps) {
 				</div>
 				<div className="text-center p-6 rounded-xl bg-tertiary/10">
 					<div className="text-3xl font-bold text-tertiary mb-2">
-						{citationStats.maxCitations.toLocaleString()}
+						{citationStats.maxCitations.toLocaleString(locale)}
 					</div>
 					<div className="text-sm text-black/60 dark:text-white/60">
 						{t("highestCitationCount")}
