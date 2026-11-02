@@ -525,6 +525,14 @@ function EditionShare({edition, locale}: {edition: DigestEdition; locale: string
 }
 
 /** How many the edition lists of the period's, and a bar of the listed records by type, those not read yet last. */
+/** How many are listed, and of how many when the period's count is known. */
+function ListedOf({listed, total}: {listed: ReactNode; total: ReactNode}) {
+  const t = useTranslations("digests");
+  const count = (chunks: ReactNode) => <span className="font-semibold">{chunks}</span>;
+  if (total === null) return count(listed);
+  return t.rich("listedRatio", {listed: String(listed), total: String(total), strong: count, muted: (chunks) => <span className={muted}>{chunks}</span>});
+}
+
 function ShareBand({rows, unread, listed, total, figure}: {rows: TypeShare[]; unread: number; listed: number; total: number; figure: ReactNode}) {
   return <>
     {figure}
@@ -566,7 +574,7 @@ function LevelTypes({name, rows, n}: {name: string; rows: TypeShare[]; n: (count
     <ul className="flex flex-col gap-1.5">{rows.map(row => <li key={row.type.key} className="flex items-center gap-2.5">
       <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${studyTone(row.type.key)}`} />
       <span className="min-w-0 flex-1">{t(`types.${row.type.key}.plural`)}</span>
-      <span className="shrink-0 tabular-nums"><span className="font-semibold">{n(row.listed)}</span>{row.period !== null && <span className={muted}> of {n(row.period)}</span>}</span>
+      <span className="shrink-0 tabular-nums"><ListedOf listed={n(row.listed)} total={row.period !== null ? n(row.period) : null} /></span>
     </li>)}</ul>
   </span>;
 }
@@ -576,7 +584,7 @@ function TypeShareRow({tone, label, href, listed, inPeriod, hint}: {tone: string
   const row = <a href={href} className={railRow}>
     <span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${tone}`} />
     <span className="min-w-0 flex-1 truncate">{label}</span>
-    <span className="shrink-0 text-sm tabular-nums"><span className="font-semibold">{listed}</span>{inPeriod !== null && <span className={muted}> of {inPeriod}</span>}</span>
+    <span className="shrink-0 text-sm tabular-nums"><ListedOf listed={listed} total={inPeriod} /></span>
   </a>;
   return <li>{hint ? <Tooltip content={hint} placement="left" className="min-w-64 p-3 text-sm">{row}</Tooltip> : row}</li>;
 }
@@ -587,7 +595,7 @@ function UnreadShare({listed, period, n}: {listed: number; period: number | null
   if (!listed && !period) return null;
   return <p className="mt-4 flex items-baseline justify-between gap-4 border-t border-black/5 pt-3 text-sm dark:border-white/10">
     <span className="flex items-center gap-3 font-medium"><span aria-hidden className={`size-2.5 shrink-0 rounded-[3px] ${UNSETTLED_TONE}`} />{t("notRead")}</span>
-    <span className="tabular-nums"><span className="font-semibold">{n(listed)}</span>{period !== null && <span className={muted}> of {n(period)}</span>}</span>
+    <span className="tabular-nums"><ListedOf listed={n(listed)} total={period !== null ? n(period) : null} /></span>
   </p>;
 }
 

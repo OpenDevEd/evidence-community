@@ -1363,7 +1363,8 @@
     "citedCount": "{count} उद्धृत",
     "listedCount": "{count} सूचीबद्ध",
     "listedOfTotal": "{total} में से {listed}",
-    "publicationsWord": "प्रकाशन"
+    "publicationsWord": "प्रकाशन",
+    "listedRatio": "<muted>{total} में से </muted><strong>{listed}</strong>"
   },
   "home": {
     "earlierIssues": "पिछले अंक",
@@ -1639,7 +1640,9 @@
       "children": "उप-संग्रह",
       "searchPlaceholder": "संग्रह के नाम या पथ से खोजें",
       "table": "संग्रह सांख्यिकी"
-    }
+    },
+    "oneItem": "1 आइटम",
+    "itemsRange": "{range} आइटम"
   },
   "policyPages": {
     "privacy": {

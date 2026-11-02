@@ -27,6 +27,7 @@ export function AuthorAnalytics({
 	authorProductivityStats, 
 	authorCollaborationStats 
 }: AuthorAnalyticsProps) {
+	const tStats = useTranslations("statistics");
   const locale = useLocale();
 	const t = useTranslations("ui");
 	const [authorsPage, setAuthorsPage] = useState(1);
@@ -151,7 +152,7 @@ export function AuthorAnalytics({
 							{t("globalAuthorProductivityDistribution")}
 						</h3>
 						<DistributionBarChart
-							data={authorProductivityStats.productivityDistribution}
+							data={authorProductivityStats.productivityDistribution.map((row) => ({ ...row, range: row.range === "1 item" ? tStats("oneItem") : tStats("itemsRange", { range: row.range.replace(" items", "") }) }))}
 							xAxis={{
 								dataKey: "range",
 								tick: { fontSize: 11 },

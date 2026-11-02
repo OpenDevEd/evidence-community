@@ -1363,7 +1363,8 @@
     "citedCount": "{count} citadas",
     "listedCount": "{count} listadas",
     "listedOfTotal": "{listed} de {total}",
-    "publicationsWord": "publicaciones"
+    "publicationsWord": "publicaciones",
+    "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>"
   },
   "home": {
     "earlierIssues": "Ediciones anteriores",
@@ -1639,7 +1640,9 @@
       "children": "subcolecciones",
       "searchPlaceholder": "Buscar por nombre o ruta de la colección",
       "table": "Estadísticas de colecciones"
-    }
+    },
+    "oneItem": "1 elemento",
+    "itemsRange": "{range} elementos"
   },
   "policyPages": {
     "privacy": {

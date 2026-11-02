@@ -1363,7 +1363,8 @@
     "citedCount": "已引用 {count}",
     "listedCount": "已列出 {count}",
     "listedOfTotal": "{listed} / {total}",
-    "publicationsWord": "篇出版物"
+    "publicationsWord": "篇出版物",
+    "listedRatio": "<strong>{listed}</strong><muted> / {total}</muted>"
   },
   "home": {
     "earlierIssues": "往期",
@@ -1639,7 +1640,9 @@
       "children": "子合集",
       "searchPlaceholder": "按合集名称或路径搜索",
       "table": "合集统计"
-    }
+    },
+    "oneItem": "1 项",
+    "itemsRange": "{range} 项"
   },
   "policyPages": {
     "privacy": {

@@ -1363,7 +1363,8 @@
     "citedCount": "{count} مُستشهد بها",
     "listedCount": "{count} مُدرجة",
     "listedOfTotal": "{listed} من {total}",
-    "publicationsWord": "منشورات"
+    "publicationsWord": "منشورات",
+    "listedRatio": "<strong>{listed}</strong><muted> من {total}</muted>"
   },
   "home": {
     "earlierIssues": "الإصدارات السابقة",
@@ -1639,7 +1640,9 @@
       "children": "مجموعات فرعية",
       "searchPlaceholder": "ابحث باسم المجموعة أو بمسارها",
       "table": "إحصاءات المجموعات"
-    }
+    },
+    "oneItem": "عنصر واحد",
+    "itemsRange": "{range} عناصر"
   },
   "policyPages": {
     "privacy": {

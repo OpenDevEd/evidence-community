@@ -1363,7 +1363,8 @@
     "citedCount": "{count} aangehaal",
     "listedCount": "{count} gelys",
     "listedOfTotal": "{listed} van {total}",
-    "publicationsWord": "publikasies"
+    "publicationsWord": "publikasies",
+    "listedRatio": "<strong>{listed}</strong><muted> van {total}</muted>"
   },
   "home": {
     "earlierIssues": "Vroeëre uitgawes",
@@ -1639,7 +1640,9 @@
       "children": "kindversamelings",
       "searchPlaceholder": "Soek volgens versamelingnaam of pad",
       "table": "Versamelingstatistiek"
-    }
+    },
+    "oneItem": "1 item",
+    "itemsRange": "{range} items"
   },
   "policyPages": {
     "privacy": {
