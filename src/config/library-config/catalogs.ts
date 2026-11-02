@@ -12,6 +12,7 @@ export const PLATFORM_LOCALES = [
 	"pt",
 	"es",
 	"af",
+	"zu",
 ] as const;
 
 export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
