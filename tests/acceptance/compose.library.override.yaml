@@ -33,3 +33,7 @@ networks:
     coolify:
         name: ${EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK:?acceptance project network is required}
         external: true
+    # The shared Elasticsearch creates library-search on a host; the acceptance runner creates this one.
+    library-search:
+        name: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_NETWORK:?acceptance search network is required}
+        external: true

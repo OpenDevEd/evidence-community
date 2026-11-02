@@ -520,6 +520,16 @@ async function requireHttpRedirect(
 	return response;
 }
 
+/** This run's stand-in for a host's `library-search` network, which the shared Elasticsearch creates there. */
+function librarySearchNetwork(baseProject: string) {
+	return `${baseProject}_search`;
+}
+
+function removeNetwork(name: string) {
+	// Already gone is fine.
+	spawnSync("docker", ["network", "rm", name], { cwd: rootDirectory, env: commandEnvironment, stdio: "ignore" });
+}
+
 async function verifyRepositoryComposeStartup(profile: Profile) {
 	const config = structuredClone(profile.config);
 	config.services.database.url =
@@ -530,6 +540,7 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 	const environment = {
 		...commandEnvironment,
 		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
+		EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_NETWORK: librarySearchNetwork(composeProject),
 		LIBRARY_CONFIG_JSON: JSON.stringify(config),
 		MEILISEARCH_MASTER_KEY: config.services.search.meilisearch!.key,
 	};
@@ -564,6 +575,8 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 		"library",
 		"library_compose",
 	);
+	removeNetwork(librarySearchNetwork(composeProject));
+	run("docker", ["network", "create", librarySearchNetwork(composeProject)]);
 	const startedAt = Date.now();
 	try {
 		compose(
@@ -866,10 +879,12 @@ function removeLibraryComposeProject(project: string) {
 			...commandEnvironment,
 			EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: "1",
 			EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${baseProject}_default`,
+			EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_NETWORK: librarySearchNetwork(baseProject),
 			LIBRARY_CONFIG_JSON: "{}",
 			MEILISEARCH_MASTER_KEY: "cleanup",
 		},
 	);
+	removeNetwork(librarySearchNetwork(baseProject));
 }
 
 function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
