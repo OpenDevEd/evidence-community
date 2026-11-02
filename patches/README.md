@@ -44,9 +44,10 @@ removal of the redundant effect.
 Autocomplete keeps focus on the selected option as hierarchical filters expand,
 and falls back to the first enabled option only when the active option is gone.
 This retains first-match selection while searching. Tab picks the active
-option only when the reader typed or moved to it with the arrow keys, so
-tabbing through an empty box leaves its value alone instead of choosing the
-first option the list highlights when it opens. The regression check is
+option only when the reader typed or moved to it with the arrow keys since the
+list opened or since their last pick, so tabbing through a box leaves its value
+alone instead of choosing the first option the list highlights when it opens,
+and tabbing on from a pick doesn't pick it again. The regression check is
 `tests/unit/autocomplete-focus.test.tsx`.
 Non-virtualized lists also use their actual scroll container for keyboard focus,
 so moving through long results scrolls the dropdown instead of the page.
