@@ -14,6 +14,10 @@ vi.mock("@/context/FiltersProvider", () => ({
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: () => true,
 }));
+// An option's figures measure their text, which jsdom can't do. The list around them is what's under test.
+vi.mock("@/components/features/collections/FacetOption", () => ({
+	FacetOption: ({ label }: { label: string }) => label,
+}));
 
 import { YearFilter } from "@/components/features/collections/YearFilter";
 
@@ -30,6 +34,8 @@ it("keeps the year list open when the page scrolls", async () => {
 			root.render(<YearFilter range="2020" onRangeChange={vi.fn()} years={["2025", "2024"]} />);
 		});
 		await act(async () => year().focus());
+		// NextUI loads its animations when a list opens, which must not finish after the test has ended.
+		await vi.dynamicImportSettled();
 		expect(year().getAttribute("aria-expanded")).toBe("true");
 
 		await act(async () => {
