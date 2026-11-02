@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "Citado por, na biblioteca",
     "citesInLibrary": "Cita, na biblioteca",
     "paperNoun": "artigo",
-    "papersNoun": "artigos"
+    "papersNoun": "artigos",
+    "notCheckedCount": "não verificado"
   },
   "item": {
     "affiliations": "Afiliações",

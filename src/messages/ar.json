@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "مستشهَد بها، في المكتبة",
     "citesInLibrary": "تستشهد بها، في المكتبة",
     "paperNoun": "ورقة",
-    "papersNoun": "أوراق"
+    "papersNoun": "أوراق",
+    "notCheckedCount": "لم يُفحص"
   },
   "item": {
     "affiliations": "الانتماءات المؤسسية",

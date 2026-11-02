@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "पुस्तकालय में इनके द्वारा उद्धृत",
     "citesInLibrary": "पुस्तकालय में उद्धृत करता है",
     "paperNoun": "पेपर",
-    "papersNoun": "पेपर"
+    "papersNoun": "पेपर",
+    "notCheckedCount": "जाँचा नहीं गया"
   },
   "item": {
     "affiliations": "संबद्धताएँ",

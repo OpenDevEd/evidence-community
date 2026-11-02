@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "Imenukuliwa na, katika maktaba",
     "citesInLibrary": "Inanukuu, katika maktaba",
     "paperNoun": "karatasi",
-    "papersNoun": "karatasi"
+    "papersNoun": "karatasi",
+    "notCheckedCount": "hazijakaguliwa"
   },
   "item": {
     "affiliations": "Uhusiano wa kitaasisi",

@@ -238,7 +238,7 @@ export function VerdictMeter({ indices, loaded }: { indices: number[]; loaded: L
 			</div>
 			<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
 				{order.map((v) => <li key={v} className="inline-flex items-center gap-1"><VerdictIcon verdict={v} size={13} /><span className="font-semibold tabular-nums">{counts.get(v)}</span><span className={muted}>{t(VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).toLowerCase()}</span></li>)}
-				{unchecked ? <li className={muted}><span className="font-semibold tabular-nums">{unchecked}</span> not checked</li> : null}
+				{unchecked ? <li className={muted}><span className="font-semibold tabular-nums">{unchecked}</span> {t("notCheckedCount")}</li> : null}
 			</ul>
 		</div>
 	);

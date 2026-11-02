@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "在文献库中被引用",
     "citesInLibrary": "在文献库中引用",
     "paperNoun": "篇",
-    "papersNoun": "篇文献"
+    "papersNoun": "篇文献",
+    "notCheckedCount": "未检查"
   },
   "item": {
     "affiliations": "所属机构",

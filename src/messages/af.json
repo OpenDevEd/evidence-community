@@ -1536,7 +1536,8 @@
     "citedByInLibrary": "Aangehaal deur, in die biblioteek",
     "citesInLibrary": "Haal aan, in die biblioteek",
     "paperNoun": "artikel",
-    "papersNoun": "artikels"
+    "papersNoun": "artikels",
+    "notCheckedCount": "nie nagegaan nie"
   },
   "item": {
     "affiliations": "Affiliasies",
