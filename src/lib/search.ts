@@ -124,9 +124,12 @@ type SearchFacetsResult = {
 
 type FacetTotals = Record<string, number>;
 
-/** Fields never sent: PDF full text, which is searched but not shown, and topics when the library has them off. */
+/**
+ * Fields never sent: PDF full text, which is searched but not shown; a record's vector and what made it, which only
+ * Elasticsearch holds; and topics when the library has them off.
+ */
 function hiddenFields(libraryConfig: Pick<LibraryServerConfig, "topics">) {
-	return ["fullTextPDFs", ...(libraryConfig.topics.enabled ? [] : ["topics", "topicAncestors"])];
+	return ["fullTextPDFs", "embedding", "embeddingHash", "embeddingModel", ...(libraryConfig.topics.enabled ? [] : ["topics", "topicAncestors"])];
 }
 
 /** Every public field a search sends. */

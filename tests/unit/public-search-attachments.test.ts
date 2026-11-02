@@ -38,7 +38,7 @@ it("removes hidden and deleted attachments, file note text and PDF full text fro
 	expect(result.items[0].attachmentsData).toEqual([
 		{ key: "VISIBLEA", deleted: 0, tags: [], url: "https://example.org/public.pdf", itemType: "Attachment", note: null },
 	]);
-	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "embedding", "embeddingHash", "embeddingModel", "topics", "topicAncestors"] });
 });
 
 it("gives list results only the attachments the item page shows, without unpublished note text", async () => {
@@ -86,12 +86,12 @@ it("removes hidden and deleted attachments from full batch results used by the a
 	}) as never);
 	const { items } = await response.json();
 	expect(items[0].attachmentsData.map((attachment: { key: string }) => attachment.key)).toEqual(["VISIBLEA"]);
-	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "embedding", "embeddingHash", "embeddingModel", "topics", "topicAncestors"] });
 });
 
-it("never retrieves PDF full text, nor topics when the library has them off", async () => {
+it("never retrieves PDF full text or a record's vector, nor topics when the library has them off", async () => {
 	vi.mocked(getLibraryConfig).mockResolvedValue(libraryConfigSchema.parse(maximalLibraryConfig));
 	service.search.mockResolvedValue(found([]));
 	await getPublicItems({}, { includeHeavyFields: true });
-	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "topics", "topicAncestors"] });
+	expect(sentFields()).toEqual({ excludes: ["fullTextPDFs", "embedding", "embeddingHash", "embeddingModel", "topics", "topicAncestors"] });
 });
