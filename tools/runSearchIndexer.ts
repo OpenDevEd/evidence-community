@@ -37,6 +37,9 @@ import {
 	writeSearchIndexWorkerInstance,
 } from "../src/lib/search-index/worker-instance";
 
+/** How long readers stay on the old engine before the worker tries again a switch that couldn't start. */
+const SWITCH_RETRY_MS = 30 * 60_000;
+
 async function main() {
 	const command = parseSearchIndexCommand(
 		process.argv.slice(2),
@@ -135,6 +138,8 @@ async function main() {
 			rebuildPending = true;
 		}
 		const live = await readSearchEngine(databaseResource.database);
+		// When a switch couldn't start, the worker ends at this time, and its container's restart tries it again.
+		let switchRetryAt: number | null = null;
 		let settled: SettledEngine;
 		let embedderError: string | null;
 		try {
@@ -178,6 +183,7 @@ async function main() {
 		} catch (error) {
 			const readersOn = readersEngineOnFailure(config, live, error, abortController.signal);
 			if (!readersOn) throw error;
+			switchRetryAt = Date.now() + SWITCH_RETRY_MS;
 			embedderError = `The switch to ${writer.engine} failed, so readers stay on ${readersOn}, which this worker keeps current: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`;
 			console.error(`Search index: ${embedderError}`);
 			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
@@ -373,6 +379,10 @@ async function main() {
 				} catch {
 					// The process was asked to stop.
 				}
+			}
+			if (switchRetryAt !== null && Date.now() >= switchRetryAt) {
+				console.log(`Search index: the worker starts over to try the switch to ${writer.engine} again.`);
+				break;
 			}
 		} while (command.watch && !abortController.signal.aborted);
 	} catch (error) {
