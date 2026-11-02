@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "每月 {day} 日",
     "scheduleMonthlyLong": "每月 {day} 日，若当月天数不足则为当月最后一天，",
     "scheduleAt": "{day} {time} {zone}",
-    "scheduleChecked": "{day}，编辑审核后"
+    "scheduleChecked": "{day}，编辑审核后",
+    "citedCount": "已引用 {count}",
+    "listedCount": "已列出 {count}",
+    "listedOfTotal": "{listed} / {total}",
+    "publicationsWord": "篇出版物"
   },
   "home": {
     "earlierIssues": "往期",

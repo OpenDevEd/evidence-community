@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "Day {day} of each month",
     "scheduleMonthlyLong": "Day {day} of each month, or its last day if shorter,",
     "scheduleAt": "{day} at {time} {zone}",
-    "scheduleChecked": "{day}, once an editor has checked it"
+    "scheduleChecked": "{day}, once an editor has checked it",
+    "citedCount": "{count} cited",
+    "listedCount": "{count} listed",
+    "listedOfTotal": "{listed} of {total}",
+    "publicationsWord": "publications"
   },
   "home": {
     "earlierIssues": "Earlier issues",

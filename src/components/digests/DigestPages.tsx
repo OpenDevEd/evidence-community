@@ -311,7 +311,7 @@ const chartFocus = (pointed: number | null, count: number) => (pointed !== null 
 function EmptyEditionsChart() {
   const tLabels = useTranslations("digests");
   return <SidebarCard title={tLabels("editions")} aside={<span className={`text-sm tabular-nums ${muted}`}>0</span>} band={<>
-    <HeadFigure value="0" label="publications" />
+    <HeadFigure value="0" label={tLabels("publicationsWord")} />
     <div aria-hidden className="h-24 border-b-2 border-dashed border-accent/30" />
   </>}>
     <div className="-mt-1 h-[4.25rem]"><p className={`text-sm ${muted}`}>{tLabels("noEditionsYet")}</p></div>
@@ -328,7 +328,7 @@ function EditionsChart({chart, base, locale}: {chart: Promise<DigestChart>; base
   const focus = chartFocus(pointed, shown.length);
   const edition = shown[focus];
   return <SidebarCard title={tLabels("editions")} aside={<span className={`text-sm tabular-nums ${muted}`}>{total.toLocaleString(locale)}</span>} band={<>
-    <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label="publications" />
+    <HeadFigure value={edition.publicationCount.toLocaleString(locale)} label={tLabels("publicationsWord")} />
     <div className="flex h-24 items-end gap-1" onMouseLeave={() => setPointed(null)}>
       {shown.map((item, index) => <Link key={item.slug} href={`${base}/${item.slug}`} prefetch aria-label={tLabels("label", { title: item.title, value: publicationCount(item.publicationCount, tLabels) })} onMouseEnter={() => setPointed(index)} onFocus={() => setPointed(index)} onBlur={() => setPointed(null)} className="flex h-full flex-1 items-end rounded-t-[3px] outline-none focus-visible:ring-2 focus-visible:ring-accent">
         <span className={twMerge("block w-full rounded-t-[3px] transition-colors duration-200 motion-reduce:transition-none", index === focus ? "bg-accent" : "bg-accent/30")} style={{height: barWidth(item.publicationCount, largest)}} />
@@ -443,7 +443,7 @@ function EditionHeader({edition}: {edition: DigestEdition}) {
 function InThisEdition({edition, records, path, locale}: {edition: DigestEdition; records: EditionCardsData; path: string; locale: string}) {
   const tLabels = useTranslations("digests");
   return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
-    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">{tLabels("inThisEdition")}</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{edition.listed.toLocaleString(locale)} of {edition.publicationCount.toLocaleString(locale)}</CountHint></span></SectionTitle>
+    <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">{tLabels("inThisEdition")}</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{tLabels("listedOfTotal", { listed: edition.listed.toLocaleString(locale), total: edition.publicationCount.toLocaleString(locale) })}</CountHint></span></SectionTitle>
     <HowChosen edition={edition} locale={locale} />
     <EditionLists edition={edition} records={records} path={path} locale={locale} />
   </section>;
@@ -475,13 +475,13 @@ const railRow = "flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2 te
 function Contents({parts, edition, listAnchor, locale}: {parts: Part[]; edition: DigestEdition; listAnchor: string; locale: string}) {
   const tLabels = useTranslations("digests");
   const active = useActiveSection([...parts.map(part => part.id), "publications"]);
-  const rows = [...parts.map(part => ({id: part.id, href: part.id, title: part.title, count: part.cited, word: "cited"})), {id: "publications", href: listAnchor, title: tLabels("inThisEdition"), count: edition.listed, word: "listed"}];
+  const rows = [...parts.map(part => ({id: part.id, href: part.id, title: part.title, count: part.cited, word: "citedCount" as const})), {id: "publications", href: listAnchor, title: tLabels("inThisEdition"), count: edition.listed, word: "listedCount" as const}];
   if (!parts.length) return null;
   return <SidebarCard title={tLabels("contents")}>
     <ul className="-mx-3 -my-2 flex flex-col">{rows.map(row => <li key={row.id}>
       <a href={`#${row.href}`} aria-current={active === row.id ? "location" : undefined} className={twMerge(railRow, active === row.id && "bg-black/5 font-medium text-accent dark:bg-white/5")}>
         <span className="min-w-0 flex-1 leading-5">{row.title}</span>
-        <span className={`shrink-0 text-xs tabular-nums ${muted}`}>{row.count.toLocaleString(locale)} {row.word}</span>
+        <span className={`shrink-0 text-xs tabular-nums ${muted}`}>{tLabels(row.word, { count: row.count.toLocaleString(locale) })}</span>
       </a>
     </li>)}</ul>
   </SidebarCard>;
@@ -709,7 +709,10 @@ function PastDigests({earlier, base}: {earlier: Promise<DigestSummary[]>; base: 
 function FeaturedEdition({latest, nextEdition, settings, base, locale}: {latest: Promise<DigestSummary | null>; nextEdition: Promise<DigestDate | null>; settings: DigestSettings; base: string; locale: string}) {
   const edition = use(latest);
   const next = use(nextEdition);
-  return edition
-    ? <DigestCover edition={edition} libraryName={settings.libraryName} href={`${base}/${edition.slug}`} locale={locale} />
-    : <FirstEditionCover libraryName={settings.libraryName} sending={settings.sending} next={settings.sending ? next : null} />;
+  // On a phone the stacked sheets would reach past the screen and let the page scroll sideways.
+  return <div className="max-lg:overflow-x-clip max-lg:[overflow-clip-margin:12px]">
+    {edition
+      ? <DigestCover edition={edition} libraryName={settings.libraryName} href={`${base}/${edition.slug}`} locale={locale} />
+      : <FirstEditionCover libraryName={settings.libraryName} sending={settings.sending} next={settings.sending ? next : null} />}
+  </div>;
 }
