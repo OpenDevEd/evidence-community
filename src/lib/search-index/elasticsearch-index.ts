@@ -38,6 +38,12 @@ export const SEARCHED_KEYWORD_FIELDS: readonly string[] = ["tags", "fullNames"];
 
 const text = { type: "text", analyzer: "library_text" } as const;
 
+/**
+ * A keyword records may fill with a long value, such as a pasted tag. Elasticsearch refuses a whole record with a
+ * keyword over 32,766 bytes; 8,191 characters fit at four bytes each, and a longer value is kept but not indexed.
+ */
+const longKeyword = { type: "keyword", ignore_above: 8_191 } as const;
+
 function definition() {
 	return {
 		settings: {
@@ -70,7 +76,11 @@ function definition() {
 				...Object.fromEntries(
 					FOLDED_KEYWORD_FIELDS.map((field) => [
 						field,
-						{ type: "keyword", normalizer: "sort_key", fields: { ...(SEARCHED_KEYWORD_FIELDS.includes(field) ? { text } : {}), raw: { type: "keyword" } } },
+						{
+							...longKeyword,
+							normalizer: "sort_key",
+							fields: { ...(SEARCHED_KEYWORD_FIELDS.includes(field) ? { text } : {}), raw: longKeyword },
+						},
 					]),
 				),
 				title: {
