@@ -237,7 +237,7 @@ export function VerdictMeter({ indices, loaded }: { indices: number[]; loaded: L
 				{order.map((v) => <span key={v} className="border-r border-white last:border-r-0 dark:border-black/40" style={{ width: `${(100 * counts.get(v)!) / indices.length}%`, background: css(verdictDot(VERDICTS[v])) }} />)}
 			</div>
 			<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-				{order.map((v) => <li key={v} className="inline-flex items-center gap-1"><VerdictIcon verdict={v} size={13} /><span className="font-semibold tabular-nums">{counts.get(v)}</span><span className={muted}>{VERDICT[VERDICTS[v] as keyof typeof VERDICT].label.toLowerCase()}</span></li>)}
+				{order.map((v) => <li key={v} className="inline-flex items-center gap-1"><VerdictIcon verdict={v} size={13} /><span className="font-semibold tabular-nums">{counts.get(v)}</span><span className={muted}>{t(VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).toLowerCase()}</span></li>)}
 				{unchecked ? <li className={muted}><span className="font-semibold tabular-nums">{unchecked}</span> not checked</li> : null}
 			</ul>
 		</div>

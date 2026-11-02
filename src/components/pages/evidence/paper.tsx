@@ -124,7 +124,7 @@ function CheckedHeading({ onClose, back }: { onClose: () => void; back: string }
 				{LINE_KEY.map(({ verdict, label }) => (
 					<li key={verdict} className="flex items-center gap-2">
 						<svg width="22" height="6" aria-hidden className="shrink-0"><line x1="1" y1="3" x2="21" y2="3" stroke={css(edgeColour(verdict, 1))} strokeWidth="2" strokeDasharray={verdict === "broken" ? "5 3" : undefined} /></svg>
-						{label}
+						{t(label)}
 					</li>
 				))}
 			</ul>
