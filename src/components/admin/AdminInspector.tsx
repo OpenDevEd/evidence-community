@@ -617,6 +617,18 @@ function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	return { titleField, countryFocusAfterField };
 }
 
+/** The Item type box's text. The changed marker's revert changes the type from outside the box, so the text follows it. */
+function useItemTypeInput(itemType: string | null) {
+	const label = itemType ? humanizeAdminField(itemType) : "";
+	const [input, setInput] = useState(label);
+	const [shownLabel, setShownLabel] = useState(label);
+	if (label !== shownLabel) {
+		setShownLabel(label);
+		setInput(label);
+	}
+	return [input, setInput] as const;
+}
+
 function MetadataEditor({
 	definitions,
 	detail,
@@ -648,9 +660,7 @@ function MetadataEditor({
 	const countryAbstract = useDeferredValue(payload.abstractNote);
 	const countryPayload = useMemo(() => ({ [titleField]: countryTitle, abstractNote: countryAbstract, countryFocus: payload.countryFocus }), [titleField, countryTitle, countryAbstract, payload.countryFocus]);
 	const selectedItemType = definition?.itemType ?? null;
-	const [itemTypeInput, setItemTypeInput] = useState(
-		selectedItemType ? humanizeAdminField(selectedItemType) : "",
-	);
+	const [itemTypeInput, setItemTypeInput] = useItemTypeInput(selectedItemType);
 	const updateField = onFieldChange;
 
 	return (
@@ -699,7 +709,8 @@ function MetadataEditor({
 					onSelectionChange={(value) => {
 						if (typeof value === "string") {
 							setItemTypeInput(humanizeAdminField(value));
-							onChange({ ...payload, itemType: value });
+							// The box also reports its current type when Tab or a click elsewhere leaves it.
+							if (value !== selectedItemType) onChange({ ...payload, itemType: value });
 						}
 					}}
 				>
@@ -2182,7 +2193,7 @@ export function AdminInspector({
 				>
 					<MetadataEditor
  onFieldChange={changeField}
-						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
+						key={detail.key}
 						definitions={definitions}
 						detail={detail}
 						diff={diff}

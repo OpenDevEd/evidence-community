@@ -3037,6 +3037,35 @@ test("disables every metadata field until editing starts", async ({ page }) => {
 	await expect(creatorRole).not.toHaveAttribute("data-disabled", "true");
 });
 
+test("keeps the form and the draft when Tab leaves an unchanged item type", async ({
+	page,
+}) => {
+	const savedDrafts: Record<string, unknown>[] = [];
+	// The API sends item types capitalized and the list of types keys them in camel case, as a real record does.
+	await mockPublishedBook(page, {
+		initialDraftPayload: { ...publishedPayload, itemType: "Book" },
+		onDraftSave: (payload) => savedDrafts.push(structuredClone(payload)),
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+
+	const itemType = inspector.getByRole("combobox", { name: "Item type" });
+	await itemType.click();
+	await expect(itemType).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("Tab");
+	await expect(itemType).not.toBeFocused();
+
+	// A field filled straight after keeps its focus through the save that follows, and the type stays as it was.
+	const next = page.locator("#admin-inspector-pane input:focus, #admin-inspector-pane textarea:focus");
+	await expect(next).toBeVisible();
+	await page.keyboard.type("x");
+	await expect.poll(() => savedDrafts.length).toBeGreaterThan(0);
+	await expect(inspector.getByText("Saved", { exact: true })).toBeVisible();
+	await expect(next).toBeVisible();
+	expect(savedDrafts.at(-1)?.itemType).toBe("Book");
+});
+
 test("uses controls that preserve every supported metadata value", async ({
 	page,
 }) => {
