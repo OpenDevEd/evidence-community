@@ -27,10 +27,17 @@ const DOCUMENT_ERROR_TYPES = new Set([
 	"strict_dynamic_mapping_exception",
 ]);
 
+/** A failed answer that leaves the index as the write meant it. */
+function alreadyWritten(action: string, item: BulkItem) {
+	// A delete of a record the index doesn't have is done; a missing index is not.
+	if (action === "delete" && item.status === 404) return item.error?.type !== "index_not_found_exception";
+	// The index holds the record from a later read already.
+	return item.status === 409 && item.error?.type === "version_conflict_engine_exception";
+}
+
 /** Whether one bulk answer succeeded, refused the record for its content, or failed in a way a retry can fix. */
 function bulkItemOutcome(action: string, item: BulkItem) {
-	// A delete of a record the index doesn't have is done; a missing index is not.
-	if (!item.error || (action === "delete" && item.status === 404 && item.error.type !== "index_not_found_exception")) return "written";
+	if (!item.error || alreadyWritten(action, item)) return "written";
 	const busyOrBroken = item.status === 429 || item.status >= 500;
 	return !busyOrBroken && DOCUMENT_ERROR_TYPES.has(item.error.type ?? "") ? "refused" : "retry";
 }
@@ -65,12 +72,15 @@ async function writeSearchDocuments(
 	validateMaxDocumentBatchBytes(options.maxDocumentBatchBytes);
 	const { embeddings, embedNew, signal } = options;
 	const documents = embeddings ? await embeddings.attach(plan.documents, signal, { embedNew }) : plan.documents;
+	// Each write carries when its claim began reading, and Elasticsearch keeps the latest: an older read that lands
+	// after a newer one, a deletion included, changes nothing.
+	const versioned = options.readFrom === undefined ? {} : { version: options.readFrom, version_type: "external_gte" };
 	const requests: Array<Array<Record<string, unknown>>> = chunkDocumentsBySerializedBytes(
 		documents,
 		options.maxDocumentBatchBytes,
-	).map((documents) => documents.flatMap((document) => [{ index: { _index: target, _id: String(document.key) } }, document]));
+	).map((documents) => documents.flatMap((document) => [{ index: { _index: target, _id: String(document.key), ...versioned } }, document]));
 	if (plan.deleteKeys.length > 0) {
-		requests.push(plan.deleteKeys.map((key) => ({ delete: { _index: target, _id: key } })));
+		requests.push(plan.deleteKeys.map((key) => ({ delete: { _index: target, _id: key, ...versioned } })));
 	}
 	for (const operations of requests) {
 		throwIfAborted(options.signal);

@@ -114,6 +114,20 @@ describe("search index writes", () => {
 		expect(bulks[1]!.operations).toEqual([{ delete: { _index: "library", _id: "CCCC3333" } }]);
 	});
 
+	it("writes each record as of when its claim began reading, leaving one a later read already wrote", async () => {
+		const { calls, service } = search({
+			aliasExists: true,
+			bulkItems: [{ index: { _id: "AAAA1111", status: 409, error: { type: "version_conflict_engine_exception", reason: "current version is higher" } } }],
+		});
+
+		await applySearchProjectionPlan(elasticsearchWriter(service), plan, 30_000, 1_024, { readFrom: 1_793_000_000_000 });
+
+		const bulks = calls.filter((call) => call.api === "bulk").map((call) => call.request);
+		const versioned = { version: 1_793_000_000_000, version_type: "external_gte" };
+		expect(bulks[0]!.operations).toContainEqual({ index: { _index: "library", _id: "AAAA1111", ...versioned } });
+		expect(bulks[1]!.operations).toEqual([{ delete: { _index: "library", _id: "CCCC3333", ...versioned } }]);
+	});
+
 	it("names the records Elasticsearch refused for their content", async () => {
 		const { service } = search({
 			aliasExists: true,

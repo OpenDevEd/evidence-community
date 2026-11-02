@@ -423,7 +423,7 @@ export async function applySearchProjectionPlan(
 	plan: SearchProjectionPlan,
 	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
 	maxDocumentBatchBytes = DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
-	options: Pick<SearchWriteOptions, "signal" | "onProgress" | "eventIds"> = {},
+	options: Pick<SearchWriteOptions, "signal" | "onProgress" | "eventIds" | "readFrom"> = {},
 ) {
 	const batch = writer.batch({ ...options, taskTimeoutMs, maxDocumentBatchBytes });
 	await batch.add(plan);
@@ -487,6 +487,8 @@ async function indexClaimedEvents(
 		eventIds,
 		maxDocumentBatchBytes: validated.maxDocumentBatchBytes,
 		onProgress: options.onProgress,
+		// Before any record is read: a change committed after this time is one the claim may not have seen.
+		readFrom: Date.now(),
 		signal: options.signal,
 		taskTimeoutMs: validated.taskTimeoutMs,
 	});

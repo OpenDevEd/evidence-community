@@ -25,6 +25,12 @@ export type SearchWriteOptions = {
 	onProgress?: (progress: SearchWriteProgress) => Promise<void>;
 	/** Throws when the claim's leases were lost, so a long wait stops writing for events another worker now holds. */
 	checkLease?: () => void;
+	/**
+	 * When the claim began reading its records, in milliseconds. Elasticsearch keeps each record as the latest read
+	 * found it: claims run side by side, and one still embedding a record it read before a change must not overwrite
+	 * the claim that read the change.
+	 */
+	readFrom?: number;
 };
 
 /** One claim's writes: plans as they are projected, then `finish`, after which readers find every change. */
