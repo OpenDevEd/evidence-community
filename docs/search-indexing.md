@@ -393,6 +393,10 @@ npm run search:index -- --rebuild
 npm run search:index -- --requeue-dead-letters
 ```
 
+Run one worker per library at a time: against a deployed library, stop its
+`search-indexer` container first. Two workers rebuilding at once delete each
+other's new index.
+
 `--watch` polls continuously and stops cleanly on `SIGINT` or `SIGTERM`.
 `--rebuild` streams current top-level items into a new index, moves the alias to
 it, then drains the outbox. Search keeps answering from the old index until the
