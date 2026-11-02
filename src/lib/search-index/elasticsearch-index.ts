@@ -55,8 +55,9 @@ function definition() {
 				// A field that holds a number in one record and text in another keeps the rest of the record.
 				"mapping.ignore_malformed": true,
 				// A deleted record's version is kept this long, so a claim still embedding a record it read before the
-				// deletion can't write it back: an embedder request may take 2 minutes and be tried five times.
-				gc_deletes: "15m",
+				// deletion can't write it back: an embedder request may take 2 minutes and be tried five times, after a
+				// wait for its turn among the requests in flight.
+				gc_deletes: "1h",
 			},
 			analysis: {
 				filter: { title_start: { type: "limit", max_token_count: TITLE_START_WORDS } },
