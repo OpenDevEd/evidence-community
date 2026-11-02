@@ -199,7 +199,8 @@ async function main() {
 					indexed: settled.rebuilt.indexed,
 					rebuild: true,
 					requeued,
-					...(settled.switchedFrom ? { switchedFrom: settled.switchedFrom, oldIndexRemoved: settled.oldIndexRemoved } : {}),
+					...(settled.switchedFrom ? { switchedFrom: settled.switchedFrom } : {}),
+					...(settled.switchedFrom || settled.oldIndexRemoved ? { oldIndexRemoved: settled.oldIndexRemoved } : {}),
 				}),
 			);
 		}
