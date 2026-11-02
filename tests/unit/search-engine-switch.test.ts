@@ -42,7 +42,8 @@ vi.mock("@/lib/search-index/engine-setup", () => ({
 	}),
 }));
 
-import { settleSearchEngine } from "@/lib/search-index/engine-switch";
+import { readersEngineOnFailure, settleSearchEngine } from "@/lib/search-index/engine-switch";
+import { SearchOutboxAbortError } from "@/lib/search-index/writer";
 
 const connection = { host: "http://search", key: "key", index: "library" };
 const both = { services: { search: { engine: "meilisearch", elasticsearch: connection, meilisearch: connection } } };
@@ -149,5 +150,26 @@ describe("a start with readers on the configured engine", () => {
 		world.records.elasticsearch = true;
 		expect(await settle({ live: "meilisearch" })).toMatchObject({ oldIndexRemoved: true });
 		expect(world.steps).toEqual(["wait 10000", "delete elasticsearch"]);
+	});
+});
+
+describe("a configured engine that can't start", () => {
+	const failure = new Error("security_exception: unable to authenticate user [el_library]");
+	const running = new AbortController().signal;
+	const choosingElasticsearch = { services: { search: { ...both.services.search, engine: "elasticsearch" } } } as never;
+
+	it("keeps readers on the engine they search while its connection is still configured", () => {
+		expect(readersEngineOnFailure(choosingElasticsearch, "meilisearch", failure, running)).toBe("meilisearch");
+	});
+
+	it("stops the worker when readers have no other engine to stay on, or the worker is stopping", () => {
+		const elasticsearchOnly = { services: { search: { engine: "elasticsearch", elasticsearch: connection } } } as never;
+		const stopped = new AbortController();
+		stopped.abort();
+		expect(readersEngineOnFailure(choosingElasticsearch, null, failure, running)).toBeNull();
+		expect(readersEngineOnFailure(choosingElasticsearch, "elasticsearch", failure, running)).toBeNull();
+		expect(readersEngineOnFailure(elasticsearchOnly, "meilisearch", failure, running)).toBeNull();
+		expect(readersEngineOnFailure(choosingElasticsearch, "meilisearch", failure, stopped.signal)).toBeNull();
+		expect(readersEngineOnFailure(choosingElasticsearch, "meilisearch", new SearchOutboxAbortError(), running)).toBeNull();
 	});
 });

@@ -23,7 +23,7 @@ import {
 } from "../src/lib/search-index/consumer";
 import { embedderFingerprint } from "../src/lib/embedder";
 import { openSearchWriter } from "../src/lib/search-index/engine-setup";
-import { settleSearchEngine } from "../src/lib/search-index/engine-switch";
+import { readersEngineOnFailure, settleSearchEngine, type SettledEngine } from "../src/lib/search-index/engine-switch";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -134,43 +134,56 @@ async function main() {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
-		const setup = await ensureSearchIndex(writer, {
-			onMissing: async () => {
-				await setSearchIndexRebuildPending(
-					databaseResource.database,
-					true,
-				);
-				rebuildPending = true;
-			},
-			signal: abortController.signal,
-		});
-		// The site and the other workers wait for this worker to leave
-		// "starting", which only needs the migrations and the library's index
-		// with its settings. The embedder and a rebuild can take many minutes
-		// on a large library; search answers from the existing index meanwhile.
-		await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
-		const { embedderError, indexHasRecords } = await engine.prepare(abortController.signal);
-		if (embedderError && indexHasRecords && (rebuildPending || command.rebuild)) {
-			console.error("Search index rebuild stays pending: the embedder step failed and the existing records are kept.");
+		const live = await readSearchEngine(databaseResource.database);
+		let settled: SettledEngine;
+		let embedderError: string | null;
+		try {
+			const setup = await ensureSearchIndex(writer, {
+				onMissing: async () => {
+					await setSearchIndexRebuildPending(
+						databaseResource.database,
+						true,
+					);
+					rebuildPending = true;
+				},
+				signal: abortController.signal,
+			});
+			// The site and the other workers wait for this worker to leave
+			// "starting", which only needs the migrations and the library's index
+			// with its settings. The embedder and a rebuild can take many minutes
+			// on a large library; search answers from the existing index meanwhile.
+			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+			const prepared = await engine.prepare(abortController.signal);
+			embedderError = prepared.embedderError;
+			if (embedderError && prepared.indexHasRecords && (rebuildPending || command.rebuild)) {
+				console.error("Search index rebuild stays pending: the embedder step failed and the existing records are kept.");
+			}
+			// A switch to another engine builds its index before readers move to it (OpenDevEd/new-el#722).
+			settled = await settleSearchEngine({
+				config,
+				database: databaseResource.database,
+				embedderBlocksRebuild: Boolean(embedderError && prepared.indexHasRecords),
+				live,
+				rebuild: shouldRebuildSearchIndex({
+					embedderError,
+					forceRebuild: command.rebuild,
+					indexCreated: setup.created,
+					indexHasRecords: prepared.indexHasRecords,
+					rebuildPending,
+				}),
+				signal: abortController.signal,
+				taskTimeoutMs: engine.rebuildTaskTimeoutMs,
+				writer,
+			});
+		} catch (error) {
+			const readersOn = readersEngineOnFailure(config, live, error, abortController.signal);
+			if (!readersOn) throw error;
+			embedderError = `The switch to ${writer.engine} failed, so readers stay on ${readersOn}, which this worker keeps current: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`;
+			console.error(`Search index: ${embedderError}`);
+			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+			settled = { rebuilt: null, switchedFrom: null, oldIndexRemoved: false, readersOn };
 		}
-		// A switch to another engine builds its index before readers move to it (OpenDevEd/new-el#722).
-		const settled = await settleSearchEngine({
-			config,
-			database: databaseResource.database,
-			embedderBlocksRebuild: Boolean(embedderError && indexHasRecords),
-			live: await readSearchEngine(databaseResource.database),
-			rebuild: shouldRebuildSearchIndex({
-				embedderError,
-				forceRebuild: command.rebuild,
-				indexCreated: setup.created,
-				indexHasRecords,
-				rebuildPending,
-			}),
-			signal: abortController.signal,
-			taskTimeoutMs: engine.rebuildTaskTimeoutMs,
-			writer,
-		});
-		// Changes go to the engine readers search: the old one while a switch waits for its embedder.
+		// Changes go to the engine readers search: the old one while a switch waits for its embedder or can't start.
 		const current = settled.readersOn === writer.engine ? engine : await openSearchWriter(config, settled.readersOn);
 		if (settled.rebuilt) {
 			console.log(

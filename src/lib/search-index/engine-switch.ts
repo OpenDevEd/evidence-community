@@ -6,7 +6,7 @@ import type { Database } from "@/db/database-schema";
 import { OLD_INDEX_GRACE_MS, setSearchEngine, setSearchIndexRebuildPending } from "./bootstrap-state";
 import { rebuildSearchIndex } from "./consumer";
 import { openSearchWriter } from "./engine-setup";
-import type { SearchIndexWriter } from "./writer";
+import { SearchOutboxAbortError, type SearchIndexWriter } from "./writer";
 
 type Rebuilt = Awaited<ReturnType<typeof rebuildSearchIndex>>;
 
@@ -102,6 +102,22 @@ async function switchEngine(input: SettleInput, live: SearchEngineName): Promise
 	const rebuilt = await rebuild(input);
 	await setSearchEngine(input.database, target);
 	return { rebuilt, switchedFrom: live, oldIndexRemoved: await removeOldIndex(input.config, live, input.signal), readersOn: target };
+}
+
+/**
+ * The engine readers stay on, kept current by the worker, when the configured engine can't be set up or built: the one
+ * they search, while its connection is still configured, as during a switch to an Elasticsearch whose login isn't made
+ * yet. The next start tries the configured engine again. Null when the failure stops the worker: readers are on the
+ * configured engine, or the worker is stopping.
+ */
+export function readersEngineOnFailure(
+	config: LibraryServerConfig,
+	live: SearchEngineName | null,
+	error: unknown,
+	signal: AbortSignal,
+): SearchEngineName | null {
+	if (signal.aborted || error instanceof SearchOutboxAbortError) return null;
+	return live !== null && live !== config.services.search.engine && config.services.search[live] ? live : null;
 }
 
 /**
