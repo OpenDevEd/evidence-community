@@ -1363,7 +1363,8 @@
     "citedCount": "{count} zimenukuliwa",
     "listedCount": "{count} zimeorodheshwa",
     "listedOfTotal": "{listed} kati ya {total}",
-    "publicationsWord": "machapisho"
+    "publicationsWord": "machapisho",
+    "listedRatio": "<strong>{listed}</strong><muted> kati ya {total}</muted>"
   },
   "home": {
     "earlierIssues": "Matoleo yaliyotangulia",
@@ -1639,7 +1640,9 @@
       "children": "mikusanyiko midogo",
       "searchPlaceholder": "Tafuta kwa jina au njia ya mkusanyiko",
       "table": "Takwimu za mikusanyiko"
-    }
+    },
+    "oneItem": "kipengee 1",
+    "itemsRange": "vipengee {range}"
   },
   "policyPages": {
     "privacy": {

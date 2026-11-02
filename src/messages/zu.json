@@ -1363,7 +1363,8 @@
     "citedCount": "{count} kubhekisiwe",
     "listedCount": "{count} ohlwini",
     "listedOfTotal": "{listed} kwangu-{total}",
-    "publicationsWord": "izishicilelo"
+    "publicationsWord": "izishicilelo",
+    "listedRatio": "<strong>{listed}</strong><muted> kwangu-{total}</muted>"
   },
   "home": {
     "earlierIssues": "Izinguqulo zangaphambili",
@@ -1639,7 +1640,9 @@
       "children": "iziqoqo ezingaphansi",
       "searchPlaceholder": "Sesha ngegama leqoqo noma indlela",
       "table": "Izibalo zeziqoqo"
-    }
+    },
+    "oneItem": "1 into",
+    "itemsRange": "{range} izinto"
   },
   "policyPages": {
     "privacy": {

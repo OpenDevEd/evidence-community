@@ -1363,7 +1363,8 @@
     "citedCount": "{count} zitiert",
     "listedCount": "{count} aufgeführt",
     "listedOfTotal": "{listed} von {total}",
-    "publicationsWord": "Publikationen"
+    "publicationsWord": "Publikationen",
+    "listedRatio": "<strong>{listed}</strong><muted> von {total}</muted>"
   },
   "home": {
     "earlierIssues": "Frühere Ausgaben",
@@ -1639,7 +1640,9 @@
       "children": "Untersammlungen",
       "searchPlaceholder": "Nach Name oder Pfad der Sammlung suchen",
       "table": "Sammlungsstatistik"
-    }
+    },
+    "oneItem": "1 Eintrag",
+    "itemsRange": "{range} Einträge"
   },
   "policyPages": {
     "privacy": {
