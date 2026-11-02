@@ -81,6 +81,9 @@ it("gives each library a login that reaches only its own indexes, and deletes it
 	expect((await as(secondName, second.password, "PUT", `/${firstName}/_doc/BBBB2222`, { title: "stolen" })).status).toBe(403);
 	expect((await as(secondName, second.password, "PUT", `/${firstName}_2`)).status).toBe(403);
 	expect((await as(firstName, first.password, "PUT", "/unrelated_index")).status).toBe(403);
+	// Nor another library's running searches or index names.
+	expect((await as(secondName, second.password, "GET", "/_tasks?detailed=true")).status).toBe(403);
+	expect((await as(secondName, second.password, "GET", "/_cluster/state/metadata")).status).toBe(403);
 	expect((await as(firstName, "a wrong password", "GET", `/${firstName}/_count`)).status).toBe(401);
 
 	expect(await deleteLibrarySearch({ adminUrl, libraryId: first.libraryId })).toEqual({ outcome: "deleted", deletedIndexes: [`${firstName}_1`] });

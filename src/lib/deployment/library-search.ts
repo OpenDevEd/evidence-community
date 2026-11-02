@@ -41,8 +41,10 @@ export function deriveLibrarySearchName(libraryId: string) {
 }
 
 export function librarySearchRole(name: string) {
+	// No cluster privileges: `monitor` would show every library's running searches (`/_tasks`) and index names
+	// (`/_cluster/state`), and nothing the library runs needs it.
 	return {
-		cluster: ["monitor"],
+		cluster: [],
 		indices: [
 			{
 				names: [name, `${name}_*`],
@@ -168,6 +170,9 @@ export async function deleteLibrarySearch(
 ): Promise<LibrarySearchDeletionResult> {
 	const name = deriveLibrarySearchName(input.libraryId);
 	const request = client(input);
+	// The login goes first, so a worker still running can't make another index after its indexes are listed.
+	const user = expectStatus("delete the library login", await request("DELETE", `/_security/user/${name}`), [200, 404]);
+	const role = expectStatus("delete the library role", await request("DELETE", `/_security/role/${name}`), [200, 404]);
 	// Wildcard deletes are refused by default, so the indexes are named one by one.
 	const resolved = expectStatus(
 		"list the library indexes",
@@ -178,8 +183,6 @@ export async function deleteLibrarySearch(
 	if (deletedIndexes.length) {
 		expectStatus("delete the library indexes", await request("DELETE", `/${deletedIndexes.join(",")}`), [200]);
 	}
-	const user = expectStatus("delete the library login", await request("DELETE", `/_security/user/${name}`), [200, 404]);
-	const role = expectStatus("delete the library role", await request("DELETE", `/_security/role/${name}`), [200, 404]);
 	const found = deletedIndexes.length > 0 || user.status === 200 || role.status === 200;
 	return { outcome: found ? "deleted" : "absent", deletedIndexes };
 }
