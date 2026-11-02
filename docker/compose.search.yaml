@@ -1,7 +1,8 @@
 # One Elasticsearch for every Evidence Library on this host (OpenDevEd/new-el#718). Deploy it once per host,
 # before the libraries: it creates the `library-search` network their web and search-indexer containers join.
-# Each library reaches it as http://elasticsearch:9200 with its own login, which the database provisioner creates
-# and limits to that library's indexes. It has no published port and joins no other network.
+# Each library reaches it as http://evidence-library-elasticsearch:9200 with its own login, which the database
+# provisioner creates and limits to that library's indexes. It has no published port and joins no other network.
+# Libraries also join the shared coolify network, so the name is one no other application there answers to.
 name: evidence-library-search
 
 services:
@@ -18,7 +19,7 @@ services:
             xpack.security.enabled: "true"
             # Only containers on this host's private network reach it, so its HTTP stays plain.
             xpack.security.http.ssl.enabled: "false"
-            # Heap from the measurement in plans/elasticsearch-search/01-size-on-a-real-library.md.
+            # The heap held 2.0 GB with AIED (282,948 records) and Wealth Inequality (56,098) loaded on ode-hitzner-2.
             ES_JAVA_OPTS: "-Xms${ELASTICSEARCH_HEAP:-4g} -Xmx${ELASTICSEARCH_HEAP:-4g}"
             bootstrap.memory_lock: "true"
         ulimits:
@@ -33,7 +34,7 @@ services:
         networks:
             library-search:
                 aliases:
-                    - elasticsearch
+                    - evidence-library-elasticsearch
         healthcheck:
             test:
                 [

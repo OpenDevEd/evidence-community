@@ -77,10 +77,10 @@ export function parseSearchRuntimeHost(value: string) {
 	try {
 		url = new URL(value);
 	} catch {
-		throw new Error("The search runtime host must be an http(s) origin such as http://elasticsearch:9200.");
+		throw new Error("The search runtime host must be an http(s) origin such as http://evidence-library-elasticsearch:9200.");
 	}
 	if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.pathname !== "/" || url.search) {
-		throw new Error("The search runtime host must be an http(s) origin such as http://elasticsearch:9200.");
+		throw new Error("The search runtime host must be an http(s) origin such as http://evidence-library-elasticsearch:9200.");
 	}
 	return url.origin;
 }

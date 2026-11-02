@@ -466,7 +466,10 @@ function requireElasticsearchPorts(elasticsearch: ComposeService) {
 function requireElasticsearchNetwork(elasticsearch: ComposeService) {
 	requireCondition(networkNames(elasticsearch) === JSON.stringify(["library-search"]), "Elasticsearch must join only the shared search network");
 	const network = elasticsearch.networks?.["library-search"];
-	requireCondition(network?.aliases?.includes("elasticsearch"), "Libraries must reach Elasticsearch as elasticsearch");
+	requireCondition(
+		network?.aliases?.includes("evidence-library-elasticsearch"),
+		"Libraries must reach Elasticsearch as evidence-library-elasticsearch",
+	);
 }
 
 function requireElasticsearchLogin(elasticsearch: ComposeService) {
