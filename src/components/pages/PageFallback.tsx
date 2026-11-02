@@ -2,7 +2,6 @@
 
 import { createElement, isValidElement, use, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { usePathname } from "@/i18n/routing";
-import { POLICY_PAGES } from "@/components/pages/policy-pages";
 
 /**
  * A page's own component, from the chunk its page loads anyway, so no page carries another page's code. Once loaded it
@@ -67,9 +66,9 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	citation: (id) => id && <CitationLoading />,
 	statistics: () => <StatisticsPage />,
 	map: () => <Map places={{}} pending />,
-	privacy: () => <PolicyLayoutPlaceholder {...POLICY_PAGES.privacy} />,
-	terms: () => <PolicyLayoutPlaceholder {...POLICY_PAGES.terms} />,
-	"cookie-policy": () => <PolicyLayoutPlaceholder {...POLICY_PAGES["cookie-policy"]} />,
+	privacy: () => <PolicyLayoutPlaceholder page="privacy" />,
+	terms: () => <PolicyLayoutPlaceholder page="terms" />,
+	"cookie-policy": () => <PolicyLayoutPlaceholder page="cookie" />,
 	takedown: () => <Takedown />,
 	gapmaps: () => <GapMaps />,
 	"404": () => <NotFound />,

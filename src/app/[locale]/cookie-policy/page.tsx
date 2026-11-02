@@ -1,6 +1,5 @@
 import { getRuntimeLinkHref } from "@/config/library-config/links";
 import PolicyPage from "@/components/pages/PolicyPage";
-import { POLICY_PAGES } from "@/components/pages/policy-pages";
 import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -12,27 +11,27 @@ import { connection } from "next/server";
 // fallow-ignore-next-line unused-export
 export const instant = false;
 
-const description =
-	"Cookie notice covering cookies and similar browser storage used by the site.";
-
 export async function generateMetadata(): Promise<Metadata> {
 	await connection();
 	const config = await getLibraryConfig();
-	return getPolicyMetadata("Cookie Policy", description, config.identity.name);
+	const t = await getTranslations("policyPages");
+	return getPolicyMetadata(t("cookie.title"), t("cookie.metaDescription"), config.identity.name);
 }
 
 export default async function CookiePolicyPage() {
 	await connection();
 	const config = await getLibraryConfig();
-	const [document, tFooter] = await Promise.all([
+	const [document, tFooter, tPolicy] = await Promise.all([
 		loadPolicyPageDocument(config, "cookiePolicy"),
 		getTranslations("footer"),
+		getTranslations("policyPages"),
 	]);
 
 	return (
 		<PolicyPage
 			content={document!.content}
-			{...POLICY_PAGES["cookie-policy"]}
+			title={tPolicy("cookie.title")}
+			description={tPolicy("cookie.description")}
 			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
 				href: getRuntimeLinkHref(config.legal.privacyPolicy, config.identity.baseUrl),

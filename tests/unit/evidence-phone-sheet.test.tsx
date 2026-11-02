@@ -8,6 +8,7 @@ import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stubPanelLayout } from "./panel-layout";
 
+vi.mock("next-intl", async () => ({ ...(await vi.importActual<typeof import("next-intl")>("next-intl")), ...(await (await import("../helpers/next-intl-english")).englishIntl()) }));
 vi.mock("@/components/features/SearchBar", () => ({ SearchBar: () => <input aria-label="Search" /> }));
 
 const { PhoneSheet } = await import("@/components/pages/evidence/phone-sheet");

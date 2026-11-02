@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { CenterFocusIcon, MinusSignIcon, PlusSignIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "framer-motion";
 import { useState, type ReactNode, type Ref } from "react";
@@ -41,11 +42,12 @@ export type Navigated = { selection: Selection | null; opening: boolean; deep: b
  * from the right, the opened paper or the appraised papers. Back slides it away again, to the list as it was left.
  */
 export function Stack({ list, opened, loaded, more, onHover }: { list: ReactNode; opened: Navigated; loaded: Loaded | null; more: More | null; onHover: OnHover }) {
+	const t = useTranslations("evidenceMap");
 	const { shown, stale } = usePaper(opened.selection, more, opened.opening);
 	const ready = shown && loaded && more ? { shown, loaded, more } : null;
 	const key = ready ? String(ready.shown.selection.index) : "list";
 	const depth = !ready ? 0 : ready.shown.selection.index !== CHECKED && opened.deep ? 2 : 1;
-	return <SlideStack list={list} paneKey={key} depth={depth} label="Paper" pane={ready && <OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />} />;
+	return <SlideStack list={list} paneKey={key} depth={depth} label={t("paper")} pane={ready && <OpenedPaper {...ready} stale={stale} onOpen={opened.onOpen} onClose={opened.onClose} onHover={onHover} back={opened.back} />} />;
 }
 
 /** A list with panes slid over it from the right, as a phone's screens are: `paneKey` names the pane on top and `depth` how deep it is. */
@@ -96,12 +98,13 @@ export function SearchPanel({ ref, filters, onSearch, found, typing, onTyped, lo
 
 /** Zoom, from 1,280 px wide: at the map's bottom left, beside the search panel, where an opened paper never covers it. */
 export function Controls({ graph }: { graph: EvidenceGraph | null }) {
+	const t = useTranslations("evidenceMap");
 	const button = "grid size-9 place-items-center rounded-xl outline-none transition-colors hover:bg-black/[0.05] focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40 dark:hover:bg-white/10";
 	return (
 		<div className={twMerge(PANEL, "fixed bottom-4 left-[calc(24rem+0.5rem)] z-10 hidden flex-col gap-0.5 p-1 xl:flex")}>
-			<Tooltip content="Zoom in" placement="right"><button type="button" aria-label="Zoom in" disabled={!graph} onClick={() => graph?.zoomBy(1.6)} className={button}><HugeiconsIcon icon={PlusSignIcon} size={16} /></button></Tooltip>
-			<Tooltip content="Zoom out" placement="right"><button type="button" aria-label="Zoom out" disabled={!graph} onClick={() => graph?.zoomBy(1 / 1.6)} className={button}><HugeiconsIcon icon={MinusSignIcon} size={16} /></button></Tooltip>
-			<Tooltip content="Show the whole library" placement="right"><button type="button" aria-label="Show the whole library" disabled={!graph} onClick={() => graph?.fitAll()} className={button}><HugeiconsIcon icon={CenterFocusIcon} size={16} /></button></Tooltip>
+			<Tooltip content={t("zoomIn")} placement="right"><button type="button" aria-label={t("zoomIn")} disabled={!graph} onClick={() => graph?.zoomBy(1.6)} className={button}><HugeiconsIcon icon={PlusSignIcon} size={16} /></button></Tooltip>
+			<Tooltip content={t("zoomOut")} placement="right"><button type="button" aria-label={t("zoomOut")} disabled={!graph} onClick={() => graph?.zoomBy(1 / 1.6)} className={button}><HugeiconsIcon icon={MinusSignIcon} size={16} /></button></Tooltip>
+			<Tooltip content={t("showTheWholeLibrary")} placement="right"><button type="button" aria-label={t("showTheWholeLibrary")} disabled={!graph} onClick={() => graph?.fitAll()} className={button}><HugeiconsIcon icon={CenterFocusIcon} size={16} /></button></Tooltip>
 		</div>
 	);
 }
@@ -134,20 +137,22 @@ const either = (names: string[], many: string) => (names.length > 2 ? `${names.l
  * two checks are named; past that they are counted, and the checks shown by their icons alone.
  */
 function FilterSummary({ count, types, verdicts }: { count: number; types: ReadonlySet<number>; verdicts: ReadonlySet<number> }) {
+	const t = useTranslations("evidenceMap");
+	const locale = useLocale();
 	const kinds = [...types].map((kind) => KINDS[kind] as keyof typeof KIND_PLURAL);
-	const named = count === 1 ? kinds.map((kind) => KIND_LABEL[kind]!.toLowerCase()) : kinds.map((kind) => KIND_PLURAL[kind].toLowerCase());
-	const noun = kinds.length > 2 ? `${count === 1 ? "paper" : "papers"} of ${kinds.length} types` : named.length ? either(named, "types") : count === 1 ? "paper" : "papers";
+	const named = count === 1 ? kinds.map((kind) => t(KIND_LABEL[kind]!).toLowerCase()) : kinds.map((kind) => t(KIND_PLURAL[kind]).toLowerCase());
+	const noun = kinds.length > 2 ? t("papersOfTypes", { count, types: kinds.length }) : named.length ? either(named, "types") : count === 1 ? t("paperNoun") : t("papersNoun");
 	const checks = [...verdicts].sort((a, b) => b - a);
 	return (
 		<span className="flex items-center gap-1.5">
-			<strong className="font-semibold tabular-nums">{count.toLocaleString("en-GB")} {noun}</strong>
-			{checks.length > 0 && <span className={muted}>checked as</span>}
+			<strong className="font-semibold tabular-nums">{count.toLocaleString(locale)} {noun}</strong>
+			{checks.length > 0 && <span className={muted}>{t("checkedAs")}</span>}
 			{checks.length > 2
-				? <span className="flex items-center gap-1" aria-label={checks.map((v) => VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).join(", ")}>{checks.map((v) => <VerdictIcon key={v} verdict={v} size={14} />)}</span>
+				? <span className="flex items-center gap-1" aria-label={checks.map((v) => t(VERDICT[VERDICTS[v] as keyof typeof VERDICT].label)).join(", ")}>{checks.map((v) => <VerdictIcon key={v} verdict={v} size={14} />)}</span>
 				: checks.map((v, k) => (
 					<span key={v} className="flex items-center gap-1.5">
-						{k > 0 && <span className={muted}>or</span>}
-						<span className="flex items-center gap-1"><VerdictIcon verdict={v} size={14} />{VERDICT[VERDICTS[v] as keyof typeof VERDICT].label.toLowerCase()}</span>
+						{k > 0 && <span className={muted}>{t("or")}</span>}
+						<span className="flex items-center gap-1"><VerdictIcon verdict={v} size={14} />{t(VERDICT[VERDICTS[v] as keyof typeof VERDICT].label).toLowerCase()}</span>
 					</span>
 				))}
 		</span>
@@ -156,10 +161,11 @@ function FilterSummary({ count, types, verdicts }: { count: number; types: Reado
 
 /** A paper address that is not on the map: said plainly, with the way back. */
 export function Missing({ onClear }: { onClear: () => void }) {
+	const t = useTranslations("evidenceMap");
 	return (
 		// Centred by its wrapper: the notice's own transform is its slide.
 		<div className="fixed left-1/2 top-[12.5rem] z-20 -translate-x-1/2 xl:top-28">
-			<Notice action="Back to the map" onPress={onClear}>That paper is not on this map.</Notice>
+			<Notice action={t("backToMap")} onPress={onClear}>{t("thatPaperIsNotOnThis")}</Notice>
 		</div>
 	);
 }
@@ -170,13 +176,14 @@ export function Missing({ onClear }: { onClear: () => void }) {
  * is fitted below them.
  */
 export function MapStatus({ focus, highlighted, types, verdicts, onShowAll, onClearFilter }: { focus: string | null; highlighted: number | null; types: ReadonlySet<number>; verdicts: ReadonlySet<number>; onShowAll: () => void; onClearFilter: () => void }) {
+	const t = useTranslations("evidenceMap");
 	return (
 		<div className="fixed left-1/2 top-28 z-20 hidden -translate-x-1/2 flex-col items-center gap-2 xl:flex">
 			<AnimatePresence>
-				{focus && <Notice key="focus" action="Show the whole map" onPress={onShowAll}><NoticeChip>Selected</NoticeChip><strong className="font-semibold">{focus}</strong></Notice>}
+				{focus && <Notice key="focus" action={t("showWholeMap")} onPress={onShowAll}><NoticeChip>{t("selected")}</NoticeChip><strong className="font-semibold">{focus}</strong></Notice>}
 				{highlighted !== null && (
-					<Notice key="filter" kind="filter" action="Clear filter" onPress={onClearFilter}>
-						<NoticeChip>Filtered</NoticeChip><FilterSummary count={highlighted} types={types} verdicts={verdicts} />
+					<Notice key="filter" kind="filter" action={t("clearFilter")} onPress={onClearFilter}>
+						<NoticeChip>{t("filtered")}</NoticeChip><FilterSummary count={highlighted} types={types} verdicts={verdicts} />
 					</Notice>
 				)}
 			</AnimatePresence>

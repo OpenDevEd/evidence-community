@@ -21,6 +21,7 @@ export default function ThemeSwitcher({
 	showLabel,
 	toolbar = false,
 }: ThemeSwitcherProps) {
+	const tLabels = useTranslations("searchControls");
 	const mounted = useHydrated();
 	const { resolvedTheme, setTheme } = useTheme();
 	const isEnabled = useLibraryFeature("themeSwitcher");
@@ -35,7 +36,7 @@ export default function ThemeSwitcher({
 	const targetTheme = isDark ? t("lightTheme") : t("darkTheme");
 	const label = mounted
 		? t("switchThemeAriaLabel", { theme: targetTheme })
-		: "Toggle theme";
+		: tLabels("toggleTheme");
 
 	// Menu item variant - for dropdowns and mobile menu
 	if (variant === "menuItem") {
@@ -101,7 +102,7 @@ export default function ThemeSwitcher({
 									: "hidden dark:block"
 							)}
 						>
-							{`Switch to ${themeToMatch} mode`}
+							{tLabels("switchToMode", { themeToMatch })}
 						</span>
 					))}
 				</span>

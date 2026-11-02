@@ -198,6 +198,7 @@ function AuthorAffiliations({
 }: {
 	affiliations: readonly { display_name?: string; country_code?: string }[];
 }) {
+	const tLabels = useTranslations("item");
 	if (affiliations.length === 0) return null;
 	return (
 		<motion.div
@@ -207,7 +208,7 @@ function AuthorAffiliations({
 			transition={{ delay: 0.3 }}
 		>
 			<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
-				Affiliations
+				{tLabels("affiliations")}
 			</h4>
 			{affiliations.map((institution, idx) => (
 				<AuthorAffiliation
@@ -228,6 +229,7 @@ function AuthorAffiliation({
 	institution: { display_name?: string; country_code?: string };
 	index: number;
 }) {
+	const tLabels = useTranslations("item");
 	const link = useInstitutionFilterLink(institution.display_name);
 	return (
 		<LinkWithParams {...link} className="block w-full opacity-100">
@@ -263,7 +265,7 @@ function AuthorAffiliation({
 								/>
 							</div>
 							<span className="text-xs text-black/60 dark:text-white/60">
-								{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
+								{tLabels("label", { value: COUNTRIES[institution.country_code], country_code: institution.country_code })}
 							</span>
 						</motion.div>
 					)}
@@ -692,6 +694,7 @@ export function ItemDetails({ item }: { item: Item | undefined }) {
 }
 
 function ItemTechnical({ item }: { item: Item | undefined }) {
+	const tLabels = useTranslations("item");
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const citationMetrics = item?.citationMetrics ?? [];
@@ -702,7 +705,7 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 			: [
 					{
 						key: `${metric.sourceConnectionKey}:citedBy`,
-						label: `${metric.sourceLabel} ${t("citationsLowercase")}`,
+						label: tLabels("label2", { sourceLabel: metric.sourceLabel, value: t("citationsLowercase") }),
 						value: metric.citedByCount,
 					},
 				]),
@@ -711,7 +714,7 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 			: [
 					{
 						key: `${metric.sourceConnectionKey}:references`,
-						label: `${metric.sourceLabel} ${t("references").toLowerCase()}`,
+						label: tLabels("label2", { sourceLabel: metric.sourceLabel, value: t("references").toLowerCase() }),
 						value: metric.referencedWorksCount,
 					},
 				]),
@@ -924,6 +927,7 @@ function ItemCollection({
 	/** Published records in the collection or its subcollections, as its link shows. */
 	publicationCount: number;
 }) {
+	const tLabels = useTranslations("item");
 	const [referrer] = useQueryState("referrer");
 	const reducedMotion = useReducedMotion();
 	const ancestry = collection.ancestry || [];
@@ -986,7 +990,7 @@ function ItemCollection({
 							</div>
 							{hierarchyNames.length > 0 && (
 								<HierarchyTree
-									label="Collection path"
+									label={tLabels("collectionPath")}
 									levels={fullHierarchy}
 									renderLink={(level, index, className) => (
 										<LinkWithParams {...filterTo(index)} className={className}>
@@ -1011,7 +1015,7 @@ function ItemCollection({
 									/>
 								}
 							>
-								Show publications in this collection
+								{tLabels("showPublicationsInThisCollection")}
 							</Button>
 						</div>
 					</div>
@@ -1044,6 +1048,7 @@ function ItemCollection({
 }
 
 export function ItemCollections({ item }: { item: Item | undefined }) {
+	const tLabels = useTranslations("item");
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const t = useTranslations("ui");
 	// The library-wide counts the sidebar shows: a collection's own records
@@ -1063,7 +1068,7 @@ export function ItemCollections({ item }: { item: Item | undefined }) {
 
 	const groupedCollections = visibleCollections.reduce(
 		(acc, collection) => {
-			const title = collection.title || "Unknown";
+			const title = collection.title || tLabels("unknownCollection");
 			if (!acc[title]) {
 				acc[title] = [];
 			}
@@ -1189,13 +1194,14 @@ function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }
 
 /** For a meta-analysis whose analysed studies are known: how its references split, as Björn counts them (the evidence map). */
 function AnalysedStudies({ itemKey }: { itemKey: string | undefined }) {
+	const tLabels = useTranslations("item");
 	const evidence = useEvidenceRecord(itemKey);
 	if (!evidence?.analysed) return null;
 	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
 	return (
 		<p className="text-black/80 dark:text-white/80">
-			{`Of the works it cites, ${evidence.analysed} are studies it analysed, ${evidence.analysedHere} of them in this library, and ${others} are other works it cites. `}
-			<Link href={`/evidence?paper=${itemKey}`} className="font-medium text-accent hover:underline">See the studies it analysed</Link>
+			{tLabels("ofTheWorksItCitesAre", { analysed: evidence.analysed ?? 0, analysedHere: evidence.analysedHere ?? 0, others })}
+			<Link href={`/evidence?paper=${itemKey}`} className="font-medium text-accent hover:underline">{tLabels("seeTheStudiesItAnalysed")}</Link>
 		</p>
 	);
 }
@@ -1260,6 +1266,7 @@ function useNotesDescription() {
 }
 
 function ItemNotes({ item }: { item: Item | undefined }) {
+	const tLabels = useTranslations("item");
 	const { sourcePublishTags } = useLibraryConfig();
 	const publishTags = recordPublishTags(sourcePublishTags, item?.sourceConnectionKey);
 	const notes = item?.attachmentsData?.filter((attachment) =>
@@ -1276,7 +1283,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 	if (!notes?.length && !links?.length) return null;
 
 	return (
-		<ItemPropertyRowWrapper title={"Notes"}>
+		<ItemPropertyRowWrapper title={tLabels("notes")}>
 			{notesDescription && (
 				<p className="text-black/60 dark:text-white/60">
 					{notesDescription}
@@ -1332,6 +1339,7 @@ export default function ItemPage({
 	data: ItemGetResponse;
 	loading: boolean;
 }) {
+	const tLabels = useTranslations("item");
 	const { topics } = useLibraryConfig();
 	const loading = data?.item ? false : loadingProp;
 
@@ -1363,11 +1371,10 @@ export default function ItemPage({
 								/>
 								<div>
 									<p className="font-semibold">
-										Retracted publication
+										{tLabels("retractedPublication")}
 									</p>
 									<p className="text-sm text-danger/80">
-										This publication has been marked as
-										retracted.
+										{tLabels("thisPublicationHasBeenMarkedAs")}
 									</p>
 								</div>
 							</div>

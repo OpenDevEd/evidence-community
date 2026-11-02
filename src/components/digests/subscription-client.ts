@@ -1,6 +1,6 @@
-export function subscriptionError(error: unknown) {
+export function subscriptionError(error: unknown, fallback = "Could not save your subscription. Please try again.") {
   if (error instanceof Error) return error.message;
-  return typeof error === "string" && error.trim() ? error : "Could not save your subscription. Please try again.";
+  return typeof error === "string" && error.trim() ? error : fallback;
 }
 
 export async function changeSubscription(body: unknown) {

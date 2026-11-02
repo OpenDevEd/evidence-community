@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import * as CollapsiblePrimitive from "@radix-ui/react-collapsible";
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
@@ -19,40 +20,40 @@ const statePresentation: Record<
 	}
 > = {
 	"input-streaming": {
-		label: "Preparing",
+		label: "preparing",
 		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"input-available": {
-		label: "Running",
+		label: "running",
 		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"approval-requested": {
-		label: "Needs approval",
+		label: "needsApproval",
 		icon: AlertCircleIcon,
 		className: "text-amber-600 dark:text-amber-400",
 	},
 	"approval-responded": {
-		label: "Approved",
+		label: "approved",
 		icon: Loading03Icon,
 		className: "text-black/35 dark:text-white/35",
 		busy: true,
 	},
 	"output-available": {
-		label: "Completed",
+		label: "completed",
 		icon: CheckmarkCircle01Icon,
 		className: "text-black/30 dark:text-white/30",
 	},
 	"output-error": {
-		label: "Failed",
+		label: "failed",
 		icon: AlertCircleIcon,
 		className: "text-danger",
 	},
 	"output-denied": {
-		label: "Denied",
+		label: "denied",
 		icon: AlertCircleIcon,
 		className: "text-danger",
 	},
@@ -81,6 +82,7 @@ export function ToolHeader({
 	state: ToolState;
 	icon: ReactNode;
 }) {
+	const t = useTranslations("toolActivity");
 	const presentation = statePresentation[state];
 	const StatusIcon = presentation.icon;
 
@@ -96,7 +98,7 @@ export function ToolHeader({
 				{icon}
 			</span>
 			<span className="min-w-0 truncate font-medium">{title}</span>
-			<span className="sr-only">{presentation.label}</span>
+			<span className="sr-only">{t(presentation.label as never)}</span>
 			<HugeiconsIcon
 				icon={StatusIcon}
 				aria-hidden="true"

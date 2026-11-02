@@ -55,23 +55,24 @@ const TILE_TONES = {
 
 function useTopicLabels(kind: TopicKind) {
 	const t = useTranslations("ui");
+	const tStats = useTranslations("statistics");
 	if (kind === "collections") {
 		return {
 			title: t("collections"),
 			total: t("collections"),
-			topLevel: "Top-level collections",
-			topLevelNote: "Highest collection level",
-			avgItems: "Average items per collection",
-			avgItemsNote: "Publications per collection",
-			distribution: "Collection distribution by level",
+			topLevel: tStats("collectionNotes.topLevel"),
+			topLevelNote: tStats("collectionNotes.topLevelNote"),
+			avgItems: tStats("collectionNotes.avgItems"),
+			avgItemsNote: tStats("collectionNotes.avgItemsNote"),
+			distribution: tStats("collectionNotes.distribution"),
 			countUnit: t("collections").toLowerCase(),
-			topByImpact: "Top collections by impact",
-			topLevelAreas: "Top-level collections",
-			children: "child collections",
+			topByImpact: tStats("collectionNotes.topByImpact"),
+			topLevelAreas: tStats("collectionNotes.topLevel"),
+			children: tStats("collectionNotes.children"),
 			all: t("collections"),
 			search: t("searchCollections"),
-			searchPlaceholder: "Search by collection name or path",
-			table: "Collection statistics",
+			searchPlaceholder: tStats("collectionNotes.searchPlaceholder"),
+			table: tStats("collectionNotes.table"),
 			column: t("collections"),
 		};
 	}

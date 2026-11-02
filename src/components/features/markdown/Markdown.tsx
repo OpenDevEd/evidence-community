@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { BookOpen01Icon } from "@hugeicons/core-free-icons";
 import { visit } from "unist-util-visit";
@@ -208,11 +209,12 @@ function PageCitationSpan({
 }
 
 function SectionHighlight({ children }: { children: ReactNode }) {
+	const t = useTranslations("toolActivity");
 	return (
 		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
 			<HugeiconsIcon icon={BookOpen01Icon} className="text-accent-400" />
 			<span className="dark:text-white/60 text-black/60 text-xs font-normal">
-				Section
+				{t("section")}
 			</span>
 			<span className="dark:text-white text-black text-sm font-medium">
 				{children}

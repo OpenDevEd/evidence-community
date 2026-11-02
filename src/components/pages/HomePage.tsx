@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { animate, MotionConfig, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useHydrated } from "@/hooks/useHydrated";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import useSWR, { preload, useSWRConfig } from "swr";
 import { fetcher } from "@/lib/utils";
 import { useLastFetchedData } from "@/context/Providers";
@@ -204,7 +204,7 @@ const leadFor = (text: string) => (text.length > 180 ? "max-w-[40ch] text-2xl le
 type Part = "publications" | "ai" | "citations" | "digests";
 
 // Dates are formatted in UTC, so the server and every browser print the same day.
-const shortDate = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const SHORT_DATE = { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" } as const;
 /** A conic light spun on the spot; the Ask console draws it behind its question box as a ring and as a glow. */
 const turningLight = <span aria-hidden className="absolute left-1/2 top-1/2 -ml-[80%] -mt-[80%] aspect-square w-[160%] animate-spin bg-[conic-gradient(from_0deg,transparent_0deg,rgb(var(--color-accent-300))_50deg,rgb(var(--color-accent-500))_110deg,transparent_170deg,transparent_360deg)] [animation-duration:5s] motion-reduce:animate-none" />;
 
@@ -214,20 +214,23 @@ const previewItem = "py-2.5 first:pt-0 last:pb-0";
 const previewLink = "group flex gap-6 outline-offset-4";
 
 /** Where each kind of item leads, and what the link says. */
-const destinations: Record<Part, { href: string; label: string } | null> = {
-	publications: { href: "/lib", label: "Browse the library" },
+const destinations = {
+	publications: { href: "/lib", label: "browseTheLibrary" },
 	ai: null,
 	citations: null,
-	digests: { href: "/digests", label: "All digests" },
-};
+	digests: { href: "/digests", label: "allDigests" },
+} as const satisfies Record<Part, { href: string; label: string } | null>;
 
-// ponytail: English only, like the page's other fixed wording; move it to the message catalogs when the page is translated.
-const parts: { shows: Part; title: string; text: string; has: (data: HomeData) => boolean }[] = [
-	{ shows: "publications", title: "Publications", text: "The latest additions, each with its abstract and, where the licence allows, the PDF.", has: (data) => data.recent.length > 0 },
-	{ shows: "ai", title: "Ask the library", text: "Answers come from the publications and their full text, and name their sources.", has: (data) => data.ai },
-	{ shows: "citations", title: "Citations", text: "The publications cited most often. Each page links to what it cites and what cites it.", has: (data) => data.cited.length > 0 },
-	{ shows: "digests", title: "Digests", text: "A regular summary of recent publications.", has: (data) => Boolean(data.digests?.editions.length) },
-];
+const parts = [
+	{ shows: "publications", title: "parts.publications.title", text: "parts.publications.text", has: (data: HomeData) => data.recent.length > 0 },
+	{ shows: "ai", title: "parts.ai.title", text: "parts.ai.text", has: (data: HomeData) => data.ai },
+	{ shows: "citations", title: "parts.citations.title", text: "parts.citations.text", has: (data: HomeData) => data.cited.length > 0 },
+	{ shows: "digests", title: "parts.digests.title", text: "parts.digests.text", has: (data: HomeData) => Boolean(data.digests?.editions.length) },
+] as const satisfies { shows: Part; title: string; text: string; has: (data: HomeData) => boolean }[];
+
+/** The bold parts of a translated sentence. */
+const strong = (chunks: React.ReactNode) => <strong className="font-semibold">{chunks}</strong>;
+type HomeTranslator = ReturnType<typeof useTranslations<"home">>;
 
 function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeData; surface: Tone; questions?: string[] }) {
 	switch (shows) {
@@ -243,6 +246,7 @@ function Preview({ shows, data, surface, questions }: { shows: Part; data: HomeD
 }
 
 function LatestPublications({ data }: { data: HomeData }) {
+	const format = useFormatter();
 	const handOff = use(HandOff);
 	return (
 		<ol className="grid grid-cols-2 gap-x-5 gap-y-8 sm:grid-cols-3 lg:grid-cols-6">
@@ -253,7 +257,7 @@ function LatestPublications({ data }: { data: HomeData }) {
 							<PdfCover src={data.covers[item.key]} alt="" sizes="(min-width: 1024px) 208px, (min-width: 640px) 33vw, 50vw" />
 						</span>
 						<span className="mt-3 line-clamp-3 text-sm font-medium leading-snug transition-colors group-hover:text-accent">{item.title || item.key}</span>
-						{item.datePublished && <span className="mt-1 block text-xs tabular-nums opacity-60">{shortDate.format(new Date(item.datePublished))}</span>}
+						{item.datePublished && <span className="mt-1 block text-xs tabular-nums opacity-60">{format.dateTime(new Date(item.datePublished), SHORT_DATE)}</span>}
 					</Link>
 				</li>
 			))}
@@ -262,6 +266,7 @@ function LatestPublications({ data }: { data: HomeData }) {
 }
 
 function MostCited({ data }: { data: HomeData }) {
+	const format = useFormatter();
 	const handOff = use(HandOff);
 	return (
 		<ol className="grid gap-x-10 gap-y-8 sm:grid-cols-3">
@@ -273,7 +278,7 @@ function MostCited({ data }: { data: HomeData }) {
 							<PdfCover src={data.covers[row.key]} alt="" width={96} title={row.title} />
 						</span>
 						<span className="min-w-0 pt-1">
-							<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{number.format(row.citations)}</span>
+							<span className="block font-heading text-4xl font-semibold leading-none tabular-nums">{format.number(row.citations)}</span>
 							<span className="mt-1 block text-sm opacity-60">{row.citations === 1 ? "citation" : "citations"}</span>
 							<span className="mt-3 line-clamp-3 text-base font-medium leading-snug transition-colors group-hover:text-accent">{row.title}</span>
 						</span>
@@ -285,6 +290,7 @@ function MostCited({ data }: { data: HomeData }) {
 }
 
 function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
+	const tLabels = useTranslations("home");
 	const locale = useLocale();
 	const [latest, ...earlier] = digests?.editions ?? [];
 	if (!digests || !latest) return null;
@@ -295,7 +301,7 @@ function LatestDigests({ digests }: { digests: HomeData["digests"] }) {
 			</div>
 			{earlier.length > 0 && (
 				<div>
-					<h3 className="text-sm font-semibold opacity-75">Earlier issues</h3>
+					<h3 className="text-sm font-semibold opacity-75">{tLabels("earlierIssues")}</h3>
 					<ol className="mt-3">
 						{earlier.map((edition) => (
 							<li key={edition.slug} className="border-b border-[rgb(var(--ink-rgb)/0.1)] py-4 last:border-b-0">
@@ -358,6 +364,7 @@ function HorizonGrid() {
  * built from the library's own topics and countries so they fit whatever it holds.
  */
 function AskPreview({ data, surface, questions }: { data: HomeData; surface: Tone; questions?: string[] }) {
+	const tLabels = useTranslations("home");
 	const router = useRouter();
 	const [question, setQuestion] = useState("");
 	const examples = exampleQuestions(data, (code) => regionNames.of(code) ?? code, questions).filter((example): example is string => Boolean(example));
@@ -381,13 +388,13 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 					<div className="relative overflow-hidden rounded-[18px] p-[3px]">
 						{turningLight}
 						<Input
-							aria-label="Ask the library a question"
+							aria-label={tLabels("askTheLibraryAQuestion")}
 							value={question}
 							onValueChange={setQuestion}
 							onKeyDown={(event) => {
 								if (event.key === "Enter" && !event.nativeEvent.isComposing) submit();
 							}}
-							placeholder="Ask anything about the research here"
+							placeholder={tLabels("askAnythingAboutTheResearchHere")}
 							size="lg"
 							// Solid on hover: the shared field's hover tint would let the turning light show through it. Its own text
 							// colour: it sits on the dark panel, whose white text it would otherwise take on.
@@ -420,9 +427,10 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 
 /** One row per part the library has: what it is on the left, a live look at it on the right, drawn from the library itself. */
 function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; questions?: string[] }) {
+	const tLabels = useTranslations("home");
 	const locale = useLocale();
 	const shown = parts.filter((part) => part.has(data));
-	if (!shown.length) return <p className="text-lg opacity-70">The library’s publications will appear here once they are added.</p>;
+	if (!shown.length) return <p className="text-lg opacity-70">{tLabels("theLibrarySPublicationsWillAppear")}</p>;
 	return (
 		<ul>
 			{shown.map((part) => {
@@ -431,10 +439,10 @@ function Inside({ data, surface, questions }: { data: HomeData; surface: Tone; q
 					<motion.li key={part.shows} {...reveal} className="border-t border-[rgb(var(--ink-rgb)/0.1)] py-12 first:border-t-0 first:pt-0 lg:py-14 lg:first:pt-0">
 						<div className="mb-8 flex flex-wrap items-end justify-between gap-x-10 gap-y-3">
 							<div>
-								<h2 className="text-[1.75rem] font-bold leading-tight tracking-tight lg:text-3xl">{part.title}</h2>
-								<p className="mt-2 max-w-[40rem] text-base leading-7 opacity-75">{part.text}</p>
+								<h2 className="text-[1.75rem] font-bold leading-tight tracking-tight lg:text-3xl">{tLabels(part.title)}</h2>
+								<p className="mt-2 max-w-[40rem] text-base leading-7 opacity-75">{tLabels(part.text)}</p>
 							</div>
-							{destination && <TextLink href={destination.href}>{destination.label}</TextLink>}
+							{destination && <TextLink href={destination.href}>{tLabels(destination.label)}</TextLink>}
 						</div>
 						<Preview shows={part.shows} data={data} surface={surface} questions={questions} />
 					</motion.li>
@@ -465,7 +473,7 @@ function Curation({ curation, statement, heading, data }: { curation: NonNullabl
 
 type Step = NonNullable<NonNullable<HomeContent["curation"]>["steps"]>[number];
 
-const longDay = new Intl.DateTimeFormat("en", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const LONG_DAY = { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" } as const;
 
 /** Timeline columns on wide screens, one per step; below that the steps run down one vertical track. */
 const TIMELINE_COLUMNS: Record<number, string> = { 1: "", 2: "lg:grid-cols-2", 3: "lg:grid-cols-3", 4: "lg:grid-cols-4", 5: "lg:grid-cols-5" };
@@ -482,26 +490,28 @@ type Happening = { when?: string; body?: React.ReactNode; figure?: StepFigureVal
  * library counts of its searches and records. A count shows once it arrives, zero included, so the space kept for it
  * while the figures load is always filled.
  */
-function happened(step: Step, data: Figures | null): Happening {
-	return step.type ? HAPPENINGS[step.type](step, data) : {};
+function happened(step: Step, data: Figures | null, format: Formatter): Happening {
+	return step.type ? HAPPENINGS[step.type](step, data, format) : {};
 }
 
 type Figures = Pick<HomeData, "journey" | "pipeline" | "attachments">;
 
-const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null) => Happening> = {
+type Formatter = ReturnType<typeof useFormatter>;
+
+const HAPPENINGS: Record<StepType, (step: Step, data: Figures | null, format: Formatter) => Happening> = {
 	check: (step, data) => checked(step, data?.journey ?? null),
-	arrival: (_, data) => (data?.journey ? { when: data.journey.submittedAt, body: arrived(data.journey) } : {}),
-	publication: (_, data) => (data?.journey ? published(data.journey) : {}),
-	search: (_, data) => ({ figure: searched(data?.pipeline) }),
-	sync: (_, data) => ({ figure: figureOf(data?.pipeline?.added, "figureAdded") }),
-	duplicates: (_, data) => ({ figure: figureOf(data?.pipeline?.merged, "figureMerged") }),
-	fulltext: (_, data) => ({ figure: figureOf(data?.attachments?.withPdf, "figureFullText") }),
+	arrival: (_, data) => (data?.journey ? { when: data.journey.submittedAt, body: <Arrived reviewed={data.journey.reviewed} /> } : {}),
+	publication: (_, data) => (data?.journey ? { when: data.journey.publishedAt, body: <Published doi={data.journey.doi} /> } : {}),
+	search: (_, data, format) => ({ figure: searched(data?.pipeline, format) }),
+	sync: (_, data, format) => ({ figure: figureOf(data?.pipeline?.added, "figureAdded", format) }),
+	duplicates: (_, data, format) => ({ figure: figureOf(data?.pipeline?.merged, "figureMerged", format) }),
+	fulltext: (_, data, format) => ({ figure: figureOf(data?.attachments?.withPdf, "figureFullText", format) }),
 	text: (step) => ({ figure: step.figure }),
 };
 
-function searched(pipeline: HomeData["pipeline"] | undefined) {
-	if (pipeline?.topics && !pipeline.terms) return figureOf(pipeline.topics, "figureTopics");
-	return figureOf(pipeline?.terms, "figureTerms", pipeline?.topics || undefined);
+function searched(pipeline: HomeData["pipeline"] | undefined, format: Formatter) {
+	if (pipeline?.topics && !pipeline.terms) return figureOf(pipeline.topics, "figureTopics", format);
+	return figureOf(pipeline?.terms, "figureTerms", format, pipeline?.topics || undefined);
 }
 
 /** Stands in for the library's figures while they load, so a counted step keeps the size its line will take. */
@@ -513,12 +523,24 @@ const LOADING_FIGURES: Figures = {
 
 const COUNTED_TYPES = new Set<StepType>(["search", "sync", "duplicates", "fulltext"]);
 
-function figureOf(count: number | undefined, key: FigureKey, topics?: number): StepFigureValue | undefined {
-	return count === undefined ? undefined : { value: number.format(count), label: { key, count, topics } };
+function figureOf(count: number | undefined, key: FigureKey, format: Formatter, topics?: number): StepFigureValue | undefined {
+	return count === undefined ? undefined : { value: format.number(count), label: { key, count, topics } };
 }
 
-function arrived(journey: NonNullable<HomeData["journey"]>) {
-	return journey.reviewed ? <>Arrived for review</> : <>Added to the library</>;
+function Arrived({ reviewed }: { reviewed: boolean }) {
+	const tLabels = useTranslations("home");
+	return <>{reviewed ? tLabels("arrivedForReview") : tLabels("addedToTheLibrary")}</>;
+}
+
+function CheckedBy({ name }: { name: string }) {
+	const tLabels = useTranslations("home");
+	return <span>{tLabels.rich("checkedBy", { name, strong })}</span>;
+}
+
+function Published({ doi }: { doi?: string | null }) {
+	const tLabels = useTranslations("home");
+	if (!doi) return <>{tLabels("published")}</>;
+	return <>{tLabels.rich("publishedWithDoi", { doi, link: (chunks) => <a href={`https://doi.org/${doi}`} className="font-semibold underline decoration-1 underline-offset-4">{chunks}</a> })}</>;
 }
 
 /** Without a review nobody checked the publication on a known day: the step keeps the editor chosen for it, undated. */
@@ -527,14 +549,10 @@ function checked(step: Step, journey: HomeData["journey"]): Happening {
 	const body = editor ? (
 		<span className="flex items-center gap-3">
 			<AuthorAvatar src={editor.photo ?? undefined} alt="" size="md" className="shrink-0" />
-			<span>Checked by <strong className="font-semibold">{editor.name}</strong></span>
+			<CheckedBy name={editor.name} />
 		</span>
 	) : undefined;
 	return { when: journey?.reviewed ? journey.publishedAt : undefined, body };
-}
-
-function published(journey: NonNullable<HomeData["journey"]>): Happening {
-	return { when: journey.publishedAt, body: <>Published{journey.doi && <> with the DOI <a href={`https://doi.org/${journey.doi}`} className="font-semibold underline decoration-1 underline-offset-4">{journey.doi}</a></>}</> };
 }
 
 /**
@@ -542,12 +560,13 @@ function published(journey: NonNullable<HomeData["journey"]>): Happening {
  * a reviewed publication, its first page stands at the start of the track; without one the track carries the steps.
  */
 function Timeline({ steps, data, cover, copy }: { steps: Step[]; data: HomeData | null; cover?: string; copy?: ListItem }) {
+	const format = useFormatter();
 	const journey = data?.journey ?? null;
 	// Until the figures arrive a followed publication is likely, so its cover keeps its place.
 	const covered = journey !== null || !data;
 	// Beside a cover the line always crosses it below its top edge, at the height a row of dates puts it, whether or
 	// not any step has a date.
-	const dated = covered || steps.some((step) => happened(step, data).when);
+	const dated = covered || steps.some((step) => happened(step, data, format).when);
 	const shape = steps.some((step) => step.icon) ? ICON_NODES : PLAIN_NODES;
 	const track = `absolute inset-x-0 hidden h-0.5 rounded-full lg:block ${covered ? "lg:-left-40" : ""} [mask-image:linear-gradient(to_right,black_78%,transparent)] ${dated ? shape.datedTrack : shape.track}`;
 	const timeline = (
@@ -592,7 +611,8 @@ function TimelineCover({ journey, cover, copy }: { journey: HomeData["journey"];
  * each of these is a row shared by every step, so names, figures and words line up across the columns.
  */
 function TimelineStep({ step, data, dated, shape, index, last }: { step: Step; data: HomeData | null; dated: boolean; shape: NodeShape; index: number; last: boolean }) {
-	const { when, body, figure, loading } = shown(step, data);
+	const format = useFormatter();
+	const { when, body, figure, loading } = shown(step, data, format);
 	return (
 		<li className={`relative lg:pl-0 ${shape.indent}`}>
 			{/* Below lg the track runs down the left: each step draws the stretch to the next, the last one fades out. */}
@@ -654,14 +674,15 @@ function StepOutcome({ label, body, hidden }: { label?: StepFigureValue["label"]
 }
 
 /** What a step shows; while the figures load, a counted step lays out an invisible stand-in figure. */
-function shown(step: Step, data: HomeData | null) {
+function shown(step: Step, data: HomeData | null, format: Formatter) {
 	const loading = !data && step.type !== undefined && COUNTED_TYPES.has(step.type);
-	return { ...happened(step, loading ? LOADING_FIGURES : data), loading };
+	return { ...happened(step, loading ? LOADING_FIGURES : data, format), loading };
 }
 
 /** A step's date; an undated step keeps the row empty on wide screens so its node stays on the track. */
 function StepDate({ when }: { when?: string }) {
-	return <p className={`font-heading text-base font-semibold leading-6 tabular-nums lg:h-6 ${when ? "" : "hidden lg:block"}`}>{when ? <time dateTime={when}>{longDay.format(new Date(when))}</time> : null}</p>;
+	const format = useFormatter();
+	return <p className={`font-heading text-base font-semibold leading-6 tabular-nums lg:h-6 ${when ? "" : "hidden lg:block"}`}>{when ? <time dateTime={when}>{format.dateTime(new Date(when), LONG_DAY)}</time> : null}</p>;
 }
 
 /**
@@ -886,14 +907,10 @@ function FooterSeam({ previous }: { previous: Tone }) {
 /** The page's one two-column split: what a thing is on the left, the thing itself on the right. */
 const twoColumns = "grid gap-8 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-20";
 
-const number = new Intl.NumberFormat("en");
-const dateFormat = new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const muted = "opacity-60";
 const rule = "border-t border-[rgb(var(--ink-rgb)/0.1)]";
 const percent = (part: number, whole: number) => Math.round((100 * part) / Math.max(1, whole));
 
-/** The row standing for every publication a view's top rows leave out, those with no value recorded included. */
-const OTHER_OR_NONE = "Other or none";
 
 /** Every band opens with this: its heading, with a note or link on the right. */
 function Heading({ children, note }: { children: React.ReactNode; note?: React.ReactNode }) {
@@ -934,19 +951,18 @@ const reveal = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0
 
 /** A figure that counts up from zero the first time it is seen. The server HTML, and anyone who prefers less motion, get the final value. */
 function CountUp({ text }: { text: string }) {
+	const locale = useLocale();
 	const ref = useRef<HTMLSpanElement>(null);
 	const inView = useInView(ref, seen);
 	const reduce = useLessMotion();
 	useEffect(() => {
 		const node = ref.current;
-		const match = text.match(/\d[\d,]*(?:\.\d+)?/);
-		if (!inView || reduce || !node || !match) return;
-		const decimals = match[0].split(".")[1]?.length ?? 0;
-		const format = new Intl.NumberFormat("en", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-		const [before, after] = [text.slice(0, match.index), text.slice(match.index! + match[0].length)];
-		const controls = animate(0, Number(match[0].replace(/,/g, "")), { duration: 1.4, ease: [0.16, 1, 0.3, 1], onUpdate: (value) => { node.textContent = before + format.format(value) + after; } });
+		const read = readNumber(text, locale);
+		if (!inView || reduce || !node || !read) return;
+		const format = new Intl.NumberFormat(locale, { minimumFractionDigits: read.decimals, maximumFractionDigits: read.decimals });
+		const controls = animate(0, read.value, { duration: 1.4, ease: [0.16, 1, 0.3, 1], onUpdate: (value) => { node.textContent = read.before + format.format(value) + read.after; } });
 		return () => controls.stop();
-	}, [inView, reduce, text]);
+	}, [inView, reduce, text, locale]);
 	return <span ref={ref}>{text}</span>;
 }
 
@@ -976,6 +992,8 @@ function niceCeiling(value: number) {
 
 /** Change over time: one smooth 2px line over a flat wash, two recessive gridlines, and a crosshair that reads out the point under the pointer. Fills its parent's height. */
 function Trend({ points, link, unit, labelEvery = 1, dottedFrom = -1 }: { points: { label: string; value: number }[]; link: Linkage; unit: string; labelEvery?: number; dottedFrom?: number }) {
+	const format = useFormatter();
+	const tLabels = useTranslations("home");
 	const top = niceCeiling(Math.max(...points.map((point) => point.value)));
 	const x = (index: number) => (points.length > 1 ? (100 * index) / (points.length - 1) : 50);
 	const split = dottedFrom >= 0 && points.length > 1 ? x(Math.max(0, dottedFrom - 1)) : null;
@@ -987,10 +1005,10 @@ function Trend({ points, link, unit, labelEvery = 1, dottedFrom = -1 }: { points
 		return Math.max(0, Math.min(points.length - 1, Math.round(((event.clientX - box.left) / box.width) * (points.length - 1))));
 	};
 	return (
-		<div className="flex h-full flex-col" role="img" aria-label={`Publications per ${unit}, ${points[0]?.label} to ${points.at(-1)?.label}`}>
+		<div className="flex h-full flex-col" role="img" aria-label={tLabels("publicationsPerTo", { unit, value: points[0]?.label ?? "", value2: points.at(-1)?.label ?? "" })}>
 			<div className="relative min-h-0 flex-1 cursor-crosshair touch-pan-y" onPointerMove={(event) => link.onPreview(indexAt(event))} onPointerLeave={() => link.onPreview(null)} onClick={(event) => link.onSelect(indexAt(event))}>
 				{[top, top / 2].map((value) => (
-					<div key={value} className={`absolute inset-x-0 ${rule}`} style={{ top: `${y(value)}%` }}><span className={`absolute bottom-1 left-0 text-xs tabular-nums ${muted}`}>{number.format(value)}</span></div>
+					<div key={value} className={`absolute inset-x-0 ${rule}`} style={{ top: `${y(value)}%` }}><span className={`absolute bottom-1 left-0 text-xs tabular-nums ${muted}`}>{format.number(value)}</span></div>
 				))}
 				<TrendLine line={line} split={split} />
 				<div className="absolute inset-x-0 bottom-0 border-t border-[rgb(var(--ink-rgb)/0.25)]" />
@@ -1027,11 +1045,12 @@ function TrendLine({ line, split }: { line: string; split: number | null }) {
 
 /** The crosshair on the point on show, with its value; near an edge the label keeps inside the chart. */
 function Readout({ point, left, top }: { point: { label: string; value: number }; left: number; top: number }) {
+	const format = useFormatter();
 	return (
 		<div className="pointer-events-none absolute inset-y-0" style={{ left: `${left}%` }}>
 			<div className="absolute inset-y-0 -ml-px border-l border-[rgb(var(--ink-rgb)/0.35)]" />
 			<div className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-[var(--band-bg)] bg-accent dark:border-[var(--band-bg-dark)]" style={{ top: `${top}%` }} />
-			<p className={`absolute top-0 whitespace-nowrap bg-[var(--band-bg)] px-2 text-sm dark:bg-[var(--band-bg-dark)] ${left > 75 ? "right-0" : left < 25 ? "left-0" : "-translate-x-1/2"}`}><span className="font-bold tabular-nums">{number.format(point.value)}</span> <span className={muted}>{point.label}</span></p>
+			<p className={`absolute top-0 whitespace-nowrap bg-[var(--band-bg)] px-2 text-sm dark:bg-[var(--band-bg-dark)] ${left > 75 ? "right-0" : left < 25 ? "left-0" : "-translate-x-1/2"}`}><span className="font-bold tabular-nums">{format.number(point.value)}</span> <span className={muted}>{point.label}</span></p>
 		</div>
 	);
 }
@@ -1092,6 +1111,8 @@ function layStrip(areas: number[], box: Rect, horizontal: boolean, thickness: nu
 
 /** Part-to-whole as a treemap in the accent ramp, largest darkest, each cell with its own readable text colour and a 2px gap to its neighbours. The cell on show lifts above the rest instead of wearing an outline. */
 function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; toneOf: (index: number) => Tone; link: Linkage }) {
+	const format = useFormatter();
+	const tLabels = useTranslations("home");
 	const reduce = useLessMotion();
 	const rects = squarify(rows.map((row) => row.count), { x: 0, y: 0, w: 100, h: 100 });
 	return (
@@ -1101,8 +1122,8 @@ function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; to
 				const current = index === link.shown;
 				return (
 					<motion.div key={row.name} className={`absolute motion-reduce:!opacity-100 motion-reduce:![transform:none] ${current ? "z-10" : ""}`} style={{ left: `${rect.x}%`, top: `${rect.y}%`, width: `${rect.w}%`, height: `${rect.h}%` }} initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={seen} transition={{ ...spring, delay: index * 0.04 }}>
-						<button type="button" aria-pressed={current} aria-label={`${row.name}: ${number.format(row.count)}, ${percent(row.count, total)}%`} onPointerEnter={() => link.onPreview(index)} onFocus={() => link.onPreview(index)} onBlur={() => link.onPreview(null)} onClick={() => link.onSelect(index)} className={`absolute flex flex-col justify-end overflow-hidden rounded-xl p-3 text-left outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[rgb(var(--ink-rgb))] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-reduce:transition-none ${toneClass} ${current ? "-inset-0.5 shadow-[0_8px_24px_rgb(0_0_0/0.2)]" : `inset-px ${link.previewing ? "opacity-50" : ""}`}`} style={toneStyle(toneOf(index))}>
-							{rect.w > 12 && rect.h > 16 && <span className={`min-w-0 flex-col ${rect.w > 28 ? "flex" : "hidden sm:flex"}`}><span className="truncate text-sm font-semibold">{row.name}</span><span className="font-heading text-2xl font-semibold leading-none tabular-nums">{number.format(row.count)}<span className="ml-1.5 text-sm font-normal opacity-75">{percent(row.count, total)}%</span></span></span>}
+						<button type="button" aria-pressed={current} aria-label={tLabels("label", { name: row.name, number: format.number(row.count), value: percent(row.count, total) })} onPointerEnter={() => link.onPreview(index)} onFocus={() => link.onPreview(index)} onBlur={() => link.onPreview(null)} onClick={() => link.onSelect(index)} className={`absolute flex flex-col justify-end overflow-hidden rounded-xl p-3 text-left outline-none transition-all duration-200 ease-out focus-visible:ring-2 focus-visible:ring-[rgb(var(--ink-rgb))] focus-visible:ring-offset-2 focus-visible:ring-offset-transparent motion-reduce:transition-none ${toneClass} ${current ? "-inset-0.5 shadow-[0_8px_24px_rgb(0_0_0/0.2)]" : `inset-px ${link.previewing ? "opacity-50" : ""}`}`} style={toneStyle(toneOf(index))}>
+							{rect.w > 12 && rect.h > 16 && <span className={`min-w-0 flex-col ${rect.w > 28 ? "flex" : "hidden sm:flex"}`}><span className="truncate text-sm font-semibold">{row.name}</span><span className="font-heading text-2xl font-semibold leading-none tabular-nums">{format.number(row.count)}<span className="ml-1.5 text-sm font-normal opacity-75">{percent(row.count, total)}%</span></span></span>}
 						</button>
 					</motion.div>
 				);
@@ -1113,6 +1134,7 @@ function Treemap({ rows, total, toneOf, link }: { rows: Row[]; total: number; to
 
 /** The list beside every chart: swatch, name, share and count. Hovering previews a row in the chart, clicking keeps it. */
 function Ranked({ rows, total, toneOf, link }: { rows: Row[]; total?: number; toneOf?: (index: number) => Tone; link: Linkage }) {
+	const format = useFormatter();
 	const list = useRef<HTMLOListElement>(null);
 	// Keep the row on show inside the list's own scroll box without ever scrolling the page.
 	useEffect(() => {
@@ -1131,7 +1153,7 @@ function Ranked({ rows, total, toneOf, link }: { rows: Row[]; total?: number; to
 						{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}
 						<TruncatedText text={row.name} className="flex-1 text-base font-medium" />
 						{total ? <span className={`text-sm tabular-nums ${muted}`}>{percent(row.count, total)}%</span> : null}
-						<span className="w-12 shrink-0 text-right text-lg font-bold tabular-nums">{number.format(row.count)}</span>
+						<span className="w-12 shrink-0 text-right text-lg font-bold tabular-nums">{format.number(row.count)}</span>
 					</button>
 				</li>
 			))}
@@ -1171,6 +1193,8 @@ type View = {
 
 /** One panel for every view: the finding as a sentence, a fixed-height chart beside its list, then publications behind the row on show. Every part has a fixed height, so neither tabs nor rows move the page. */
 function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; surface: Tone }) {
+	const format = useFormatter();
+	const tLabels = useTranslations("home");
 	const [selected, setSelected] = useState(view.initial ?? 0);
 	const [preview, setPreview] = useState<number | null>(null);
 	const shown = preview ?? selected;
@@ -1184,7 +1208,7 @@ function ExplorerPanel({ view, data, surface }: { view: View; data: HomeData; su
 				<div className="flex h-[20rem] min-w-0 items-center lg:h-[24rem]">{view.chart(link)}</div>
 				<div className="h-[16rem] min-w-0 lg:h-[24rem]"><Ranked rows={view.rows} total={view.total} toneOf={view.toneOf} link={link} /></div>
 			</div>
-				<p className={`mt-8 pt-4 text-sm ${rule} ${muted}`}>Counted from the library on {dateFormat.format(data.updated)}.</p>
+				<p className={`mt-8 pt-4 text-sm ${rule} ${muted}`}>{tLabels("countedFromTheLibraryOn", { dateFormat: format.dateTime(data.updated, SHORT_DATE) })}</p>
 			</div>
 			{row.filter && <RowExamples row={row} filter={row.filter} fallback={data.examples[examplesKey(row.filter)]} />}
 			<WhenNear placeholder={null}><WarmRows rows={view.rows} from={view.initial ?? 0} examples={data.examples} /></WhenNear>
@@ -1217,6 +1241,8 @@ function WarmRows({ rows, from, examples }: { rows: Row[]; from: number; example
 
 /** The row's own newest publications, the first of what "See all" opens. */
 function RowExamples({ row, filter, fallback }: { row: Row; filter: string; fallback?: ItemsGetResponse }) {
+	const format = useFormatter();
+	const tLabels = useTranslations("home");
 	const locale = useLocale();
 	// The server sent each tab's first row and the rows around it were fetched ahead, so neither is asked for again.
 	// Any other row shows placeholder cards while it loads, never another row's publications under its name.
@@ -1226,7 +1252,7 @@ function RowExamples({ row, filter, fallback }: { row: Row; filter: string; fall
 			<div className="mb-4 flex items-baseline justify-between gap-6">
 				<h3 className="flex min-w-0 items-center gap-2 text-xl font-medium">{row.flag && <CountryFlag countryCode={row.flag} className="h-3.5 w-5 shrink-0 rounded-[3px]" />}<TruncatedText text={row.name} /></h3>
 				{/* The default prefetch: every row shown would otherwise download its whole filtered list, which few readers open. */}
-				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${filter}`} prefetch={null}>See all {number.format(examples?.totalItems ?? row.count)}</TextLink></div>
+				<div className="shrink-0 whitespace-nowrap text-sm"><TextLink href={`/lib?${filter}`} prefetch={null}>{tLabels("seeAll", { number: format.number(examples?.totalItems ?? row.count) })}</TextLink></div>
 			</div>
 			<PublicationList items={examples?.items ?? (isLoading ? [undefined, undefined] : [])} className="min-h-[27rem] md:min-h-[12rem] [&>li]:min-h-[13.5rem] md:[&>li]:min-h-[12rem]" />
 		</div>
@@ -1237,7 +1263,9 @@ type Fact = { icon: IconSvgElement; value: string; label: string; detail: string
 
 function Facts({ data }: { data: HomeData }) {
 	// A fact whose figure is zero says the library has no such data yet, not something about its publications, so it is left out.
-	const facts = [...shareFacts(data), ...countFacts(data)].filter((fact): fact is Fact => Boolean(fact));
+	const tLabels = useTranslations("home");
+	const format = useFormatter();
+	const facts = [...shareFacts(data, tLabels, format), ...countFacts(data, tLabels, format)].filter((fact): fact is Fact => Boolean(fact));
 	if (facts.length === 0) return null;
 	return (
 		<dl className={`mt-14 grid grid-cols-2 gap-x-8 gap-y-10 pt-12 sm:grid-cols-3 lg:grid-cols-6 ${rule}`}>
@@ -1252,34 +1280,37 @@ function Facts({ data }: { data: HomeData }) {
 }
 
 /** The facts that are a share of the library: the percentage, over how many of all the publications. */
-function shareFacts(data: HomeData) {
-	const share = (icon: IconSvgElement, part: number | undefined, label: string) => part && { icon, value: `${percent(part, data.publications)}%`, label, detail: `${number.format(part)} of ${number.format(data.publications)}` };
+function shareFacts(data: HomeData, tLabels: HomeTranslator, format: Formatter) {
+	const share = (icon: IconSvgElement, part: number | undefined, label: string) => part && { icon, value: `${format.number(percent(part, data.publications) / 100, { style: "percent" })}`, label, detail: tLabels("factOf", { part: format.number(part), whole: format.number(data.publications) }) };
 	return [
-		share(Pdf01Icon, data.attachments?.withPdf, "have the PDF attached"),
-		share(QuoteUpIcon, data.citations?.itemsWith, "are cited by another publication"),
-		share(Globe02Icon, data.collaboration?.collaborative, "are international collaborations"),
+		share(Pdf01Icon, data.attachments?.withPdf, tLabels("factPdf")),
+		share(QuoteUpIcon, data.citations?.itemsWith, tLabels("factCited")),
+		share(Globe02Icon, data.collaboration?.collaborative, tLabels("factCollaboration")),
 	];
 }
 
 /** The facts that are counts, each with its own detail. */
-function countFacts(data: HomeData) {
+function countFacts(data: HomeData, tLabels: HomeTranslator, format: Formatter) {
 	return [
-		data.citations?.total && { icon: Analytics01Icon, value: number.format(data.citations.total), label: "citations in total", detail: `${number.format(data.citations.average)} per publication` },
-		data.citations?.hIndex && { icon: Layers01Icon, value: number.format(data.citations.hIndex), label: "h-index of the library", detail: `most cited has ${number.format(data.citations.max)}` },
-		data.productivity?.multiple && { icon: UserMultipleIcon, value: number.format(data.productivity.multiple), label: "authors with several publications", detail: `${number.format(data.productivity.average)} per author` },
+		data.citations?.total && { icon: Analytics01Icon, value: format.number(data.citations.total), label: tLabels("factCitations"), detail: tLabels("factPerPublication", { value: format.number(data.citations.average) }) },
+		data.citations?.hIndex && { icon: Layers01Icon, value: format.number(data.citations.hIndex), label: tLabels("factHIndex"), detail: tLabels("factMostCited", { value: format.number(data.citations.max) }) },
+		data.productivity?.multiple && { icon: UserMultipleIcon, value: format.number(data.productivity.multiple), label: tLabels("factAuthors"), detail: tLabels("factPerAuthor", { value: format.number(data.productivity.average) }) },
 	];
 }
 
-
-/** Everything the explorer band shows: one tab strip over every measure, the linked panel and the facts row. */
 function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes: MapShape[]; tones: Tones; ramp: Tone[]; today: string }) {
+	const tLabels = useTranslations("home");
+	const tItemType = useTranslations("itemType");
+	const locale = useLocale();
+	const otherType = tLabels("other");
+	const otherOrNone = tLabels("otherOrNone");
 	const [tab, setTab] = useState<string | null>(null);
 	const config = useLibraryConfig();
 	const countries = Object.keys(data.countries).length;
 	const listed = listedRows(data, config, today);
 	const { series, busiest } = listed;
 
-	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));
+	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: tItemType.has(row.itemType as never) ? tItemType(row.itemType as never) : humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));
 	const otherTypes = data.publications - types.reduce((sum, row) => sum + row.count, 0);
 	/**
 	 * The rows plus one for every publication they leave out, so the tiles share out the whole library as the
@@ -1288,35 +1319,35 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	 */
 	const withRest = (rows: Row[]) => {
 		const rest = data.publications - rows.reduce((sum, row) => sum + row.count, 0);
-		return rest > 0 ? [...rows, { name: OTHER_OR_NONE, count: rest }] : rows;
+		return rest > 0 ? [...rows, { name: otherOrNone, count: rest }] : rows;
 	};
 
 	const rampOf = (rows: Row[]) => (index: number) => ramp[Math.round((index * (ramp.length - 1)) / Math.max(1, rows.length - 1))]!;
 	/** A part-to-whole view: treemap in the ramp, shares counted against the library unless the rows are a top list. */
 	const parts = (view: Pick<View, "key" | "title" | "icon" | "reading">, rows: Row[], total?: number): View => ({ ...view, rows, total, toneOf: rampOf(rows), chart: (link) => <Treemap rows={rows} total={total ?? rows.reduce((sum, row) => sum + row.count, 0)} toneOf={rampOf(rows)} link={link} /> });
-	const counted = (row: Row) => <strong>{number.format(row.count)}</strong>;
-
-	const countryRows = listed.countries;
 	const flip = (index: number) => series.length - 1 - index;
+	const countryRows = listed.countries;
+	const reading = (key: Parameters<typeof tLabels.rich>[0], row: Row, values: Record<string, string | number> = {}) => tLabels.rich(key, { strong, count: row.count, name: row.name, percent: percent(row.count, data.publications), ...values });
+
 	const allViews: View[] = [
-		{ key: "years", title: "By year", icon: Calendar03Icon, rows: listed.years, initial: busiest, reading: (row, index) => (index === busiest ? <><strong>{row.name}</strong> was the busiest year, with <strong>{number.format(row.count)}</strong> publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} from <strong>{row.name}</strong></>), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedFrom={series.findIndex((point) => Number(point.label) >= Number(today.slice(0, 4)))} /></div> },
-		parts({ key: "types", title: "By type", icon: Layers01Icon, reading: (row) => (row.name === "Other" ? <>{counted(row)} publications are of <strong>another type</strong></> : <><strong>{percent(row.count, data.publications)}%</strong> are <strong>{plural(row.name)}</strong></>) }, otherTypes > 0 ? [...types, { name: "Other", count: otherTypes }] : types, data.publications),
-		{ key: "countries", title: "By country", icon: Globe02Icon, rows: countryRows, reading: (row, index) => (index === 0 ? <><strong>{row.name}</strong> leads {countries} countries, with {counted(row)} publications</> : <>{counted(row)} {row.count === 1 ? "publication is" : "publications are"} about <strong>{row.name}</strong></>), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
-		parts({ key: "collections", title: "Collections", icon: Folder01Icon, reading: (row) => <><strong>{row.name}</strong> holds {counted(row)} publications, {percent(row.count, data.publications)}% of the library</> }, listed.collections, data.publications),
-		parts({ key: "topics", title: "Topics", icon: Tag01Icon, reading: (row) => <>{counted(row)} publications are about <strong>{row.name.toLowerCase()}</strong></> }, listed.topics),
-		parts({ key: "languages", title: "Languages", icon: LanguageSkillIcon, reading: (row) => (row.name === OTHER_OR_NONE ? <><strong>{percent(row.count, data.publications)}%</strong> are in <strong>another language</strong> or have none recorded</> : <><strong>{percent(row.count, data.publications)}%</strong> are written in <strong>{row.name}</strong></>) }, withRest(data.languages), data.publications),
-		parts({ key: "institutions", title: "Institutions", icon: UniversityIcon, reading: (row) => <>{counted(row)} publications have an author at <strong>{row.name}</strong></> }, listed.institutions),
-		parts({ key: "publishers", title: "Publishers", icon: Building03Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} have <strong>another publisher</strong> or none recorded</> : <><strong>{row.name}</strong> published {counted(row)} of them</>) }, withRest(data.publishers), data.publications),
-		parts({ key: "journals", title: "Journals", icon: Book02Icon, reading: (row) => (row.name === OTHER_OR_NONE ? <>{counted(row)} appeared in <strong>another journal</strong> or none</> : <>{counted(row)} appeared in <strong>{row.name}</strong></>) }, withRest(data.journals), data.publications),
+		{ key: "years", title: tLabels("byYear"), icon: Calendar03Icon, rows: listed.years, initial: busiest, reading: (row, index) => reading(index === busiest ? "reading.busiestYear" : "reading.fromYear", row), chart: (link) => <div className="h-full w-full"><Trend points={series} link={{ ...link, shown: flip(link.shown), onPreview: (index) => link.onPreview(index === null ? null : flip(index)), onSelect: (index) => link.onSelect(flip(index)) }} unit="year" labelEvery={series.length > 14 ? 3 : series.length > 8 ? 2 : 1} dottedFrom={series.findIndex((point) => Number(point.label) >= Number(today.slice(0, 4)))} /></div> },
+		parts({ key: "types", title: tLabels("byType"), icon: Layers01Icon, reading: (row) => reading(row.name === otherType ? "reading.otherType" : "reading.type", row, { name: locale.startsWith("en") ? plural(row.name) : row.name })}, otherTypes > 0 ? [...types, { name: otherType, count: otherTypes }] : types, data.publications),
+		{ key: "countries", title: tLabels("byCountry"), icon: Globe02Icon, rows: countryRows, reading: (row, index) => reading(index === 0 ? "reading.leadingCountry" : "reading.aboutCountry", row, { countries }), chart: (link) => <HomeMap shapes={shapes} countries={data.countries} bubbles className="w-full text-accent" active={countryRows[link.shown]?.flag} dim={link.previewing} onHover={(code) => link.onPreview(code ? countryRows.findIndex((row) => row.flag === code) : null)} onSelect={(code) => link.onSelect(countryRows.findIndex((row) => row.flag === code))} /> },
+		parts({ key: "collections", title: tLabels("collections"), icon: Folder01Icon, reading: (row) => reading("reading.collection", row)}, listed.collections, data.publications),
+		parts({ key: "topics", title: tLabels("topics"), icon: Tag01Icon, reading: (row) => reading("reading.topic", row, { name: row.name.toLowerCase() })}, listed.topics),
+		parts({ key: "languages", title: tLabels("languages"), icon: LanguageSkillIcon, reading: (row) => reading(row.name === otherOrNone ? "reading.otherLanguage" : "reading.language", row)}, withRest(data.languages), data.publications),
+		parts({ key: "institutions", title: tLabels("institutions"), icon: UniversityIcon, reading: (row) => reading("reading.institution", row)}, listed.institutions),
+		parts({ key: "publishers", title: tLabels("publishers"), icon: Building03Icon, reading: (row) => reading(row.name === otherOrNone ? "reading.otherPublisher" : "reading.publisher", row)}, withRest(data.publishers), data.publications),
+		parts({ key: "journals", title: tLabels("journals"), icon: Book02Icon, reading: (row) => reading(row.name === otherOrNone ? "reading.otherJournal" : "reading.journal", row)}, withRest(data.journals), data.publications),
 	];
 	const views = allViews.filter((item) => item.rows.some((row) => row.count > 0));
 	const view = views.find((item) => item.key === tab) ?? views[0];
-	if (!view) return <p className="text-lg opacity-70">Figures about the library will appear here once it has publications.</p>;
+	if (!view) return <p className="text-lg opacity-70">{tLabels("figuresAboutTheLibraryWillAppear")}</p>;
 
 	return (
 		<>
 			{/* The tab strip only. NextUI mounts its own panel after hydration, which made the explorer pop in late and push the page down; the panel below is ours, so it is in the server HTML. */}
-			<Tabs aria-label="Explore the data" color="card" size="lg" selectedKey={view?.key} onSelectionChange={(key) => setTab(String(key))} classNames={{ base: "max-w-full", tabList: "max-w-full overflow-x-auto", tab: "w-auto flex-none md:px-5", panel: "hidden" }}>
+			<Tabs aria-label={tLabels("exploreTheData")} color="card" size="lg" selectedKey={view?.key} onSelectionChange={(key) => setTab(String(key))} classNames={{ base: "max-w-full", tabList: "max-w-full overflow-x-auto", tab: "w-auto flex-none md:px-5", panel: "hidden" }}>
 				{views.map((item) => <Tab key={item.key} title={<span className="flex items-center gap-2"><HugeiconsIcon icon={item.icon} aria-hidden size={16} />{item.title}</span>} />)}
 			</Tabs>
 			<div role="tabpanel" aria-label={view.title} className="pt-4"><ExplorerPanel key={view.key} view={view} data={data} surface={tones.card} /></div>
@@ -1428,6 +1459,7 @@ function HeroBackdrop({ data, shapes }: { data?: Promise<HomeData>; shapes: MapS
 
 /** Name and tagline read as one unit; the intro is supporting text, set apart and softer; then the actions. */
 function HeroText({ name, intro, unseen = false }: { name: string; intro?: React.ReactNode; unseen?: boolean }) {
+	const tLabels = useTranslations("home");
 	const { identity, notifications } = useLibraryConfig();
 	// A library that uploaded its own logo leads its hero with it; the platform's stand-in logo is left in the bar.
 	const ownLogo = hasOwnLogo(identity.assets);
@@ -1445,21 +1477,42 @@ function HeroText({ name, intro, unseen = false }: { name: string; intro?: React
 			</div>
 			{intro && <div className="mt-8 max-w-[34rem] animate-hero-rise text-[17px] leading-7 text-[rgb(var(--ink-rgb)/0.75)] [animation-delay:140ms] motion-reduce:animate-none [&_p]:mb-0 [&_p]:max-w-none [&_p]:text-[length:inherit] [&_p]:leading-[inherit] [&_p]:opacity-100 [&_strong]:text-[rgb(var(--ink-rgb))]">{intro}</div>}
 			<div className="mt-10 flex animate-hero-rise flex-wrap gap-3 [animation-delay:180ms] motion-reduce:animate-none">
-				<Button as={Link} href="/lib" color="accent" variant="solid" size="md" startContent={<HugeiconsIcon icon={Search01Icon} aria-hidden size={18} />}>Explore the library</Button>
+				<Button as={Link} href="/lib" color="accent" variant="solid" size="md" startContent={<HugeiconsIcon icon={Search01Icon} aria-hidden size={18} />}>{tLabels("exploreTheLibrary")}</Button>
 				{/* The digest button offers a subscription, so it goes when the library sends no digests. */}
-				{notifications.enabled ? <Button as={Link} href="/digests" variant="muted" size="md" startContent={<HugeiconsIcon icon={Notification03Icon} aria-hidden size={18} />}>Get the digest</Button> : null}
+				{notifications.enabled ? <Button as={Link} href="/digests" variant="muted" size="md" startContent={<HugeiconsIcon icon={Notification03Icon} aria-hidden size={18} />}>{tLabels("getTheDigest")}</Button> : null}
 			</div>
 		</div>
 	);
 }
 
 /** Each answered question gets a band of its own, in the order the page reads; a blank one drops out and the seams close up. */
+function offeredInvolvement(about: HomeContent, contact: Contact) {
+	return contact.email || contact.page ? about.involvement : undefined;
+}
+
+function headingOf(about: HomeContent, key: keyof NonNullable<HomeContent["headings"]>) {
+	return about.headings?.[key]?.trim();
+}
+
+/** Where a typed number's separators sit in this language: a dot groups thousands in German and marks decimals in English. */
+function readNumber(text: string, locale: string) {
+	const parts = new Intl.NumberFormat(locale).formatToParts(1234567.8);
+	const group = parts.find((part) => part.type === "group")?.value ?? "";
+	const decimal = parts.find((part) => part.type === "decimal")?.value ?? ".";
+	const escape = (mark: string) => mark.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const match = text.match(new RegExp(`\\d[\\d${escape(group)}]*(?:${escape(decimal)}\\d+)?`));
+	if (!match) return null;
+	const plain = match[0].replaceAll(group || "\u0000", "").replace(decimal, ".");
+	return { value: Number(plain), decimals: plain.split(".")[1]?.length ?? 0, before: text.slice(0, match.index), after: text.slice(match.index! + match[0].length) };
+}
+
 function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, shapes }: Props) {
+	const tLabels = useTranslations("home");
 	const t = useTranslations("homePage");
 	const { citations } = useLibraryConfig();
-	const heading = (key: keyof NonNullable<HomeContent["headings"]>) => about.headings?.[key]?.trim() || t(key);
+	const heading = (key: keyof NonNullable<HomeContent["headings"]>) => headingOf(about, key) || t(key);
 	// The ways in are offered only where they lead somewhere: an email, else the contact page.
-	const involvement = contact.email || contact.page ? about.involvement : undefined;
+	const involvement = offeredInvolvement(about, contact);
 	const bands = [
 		{
 			key: "inside",
@@ -1476,7 +1529,7 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 			tone: tones.tint,
 			body: (
 				<>
-					<Heading>Explore the data</Heading>
+					<Heading>{tLabels("exploreTheData")}</Heading>
 					<Suspense fallback={<div className="h-[120rem] lg:h-[71rem]" />}>
 						<WithData data={data}>{(figures) => <motion.div {...reveal}><Explorer data={figures} shapes={shapes} tones={tones} ramp={ramp} today={today} /></motion.div>}</WithData>
 					</Suspense>
@@ -1509,10 +1562,11 @@ function hasTeam(about: HomeContent, involvement: HomeContent["involvement"]) {
 
 /** The owner's closing answer, if any, beside how to cite the library; with citations off, the answer alone at full width. */
 function Cite({ extra, answerText, cites, name, siteUrl, today }: { extra: HomeContent["extra"]; answerText: React.ReactNode; cites: boolean; name: string; siteUrl: string; today: string }) {
+	const tLabels = useTranslations("home");
 	const answer = extra?.text.trim() ? extra.text : undefined;
 	return (
 		<>
-			<Heading>{extra?.title?.trim() || (cites ? "Cite the library" : name)}</Heading>
+			<Heading>{extra?.title?.trim() || (cites ? tLabels("citeTheLibrary") : name)}</Heading>
 			<div className={answer && cites ? twoColumns : ""}>
 				{answer && <div className="max-w-[40rem]">{answerText}</div>}
 				{cites && <CiteSlip name={name} url={siteUrl} today={today} />}

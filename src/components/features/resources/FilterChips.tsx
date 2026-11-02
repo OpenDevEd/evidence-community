@@ -430,7 +430,7 @@ export function FilterChips() {
 								>
 									<Chip
 										key={"institution-" + institution}
-										group={"Institution"}
+										group={t("institution")}
 										title={institution}
 										callback={() =>
 											itemsContext.handleInstitutionSelect?.(
@@ -492,7 +492,7 @@ export function FilterChips() {
 								key={
 									"author-" + itemsContext.queryParams.author
 								}
-								group={"Author"}
+								group={t("author")}
 								title={itemsContext.queryParams.author}
 								callback={() =>
 									itemsContext.handleAuthorSelect?.(

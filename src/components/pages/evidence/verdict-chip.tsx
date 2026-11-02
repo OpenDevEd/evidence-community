@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import type { CSSProperties } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { twMerge } from "@/lib/tw-merge";
@@ -21,12 +22,13 @@ export function VerdictIcon({ verdict, size = 15 }: { verdict: number; size?: nu
 }
 
 export function VerdictChip({ verdict, className }: { verdict: number; className?: string }) {
+	const t = useTranslations("evidenceMap");
 	const name = VERDICTS[verdict];
-	if (name === "notAssessed") return <span className={twMerge("text-xs", muted)}>Not checked yet</span>;
+	if (name === "notAssessed") return <span className={twMerge("text-xs", muted)}>{t("notCheckedYet")}</span>;
 	return (
 		<span style={tones(name)} className={twMerge("inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[color:var(--soft)] px-2 py-1 text-xs font-semibold ring-1 ring-inset ring-[color:var(--ring)] dark:bg-[color:var(--soft-dark)] dark:ring-[color:var(--ring-dark)]", inked, className)}>
 			<HugeiconsIcon icon={VERDICT[name].icon} size={14} aria-hidden className="shrink-0" />
-			{VERDICT[name].label}
+			{t(VERDICT[name].label)}
 		</span>
 	);
 }

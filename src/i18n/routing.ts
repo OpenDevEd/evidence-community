@@ -15,6 +15,8 @@ export const localesNames = {
 	cn: "中文",
 	sw: "Swahili",
 	pt: "Português",
+	es: "Español",
+	af: "Afrikaans",
 } satisfies Record<(typeof PLATFORM_LOCALES)[number], string>;
 
 export const shortLocalesNames = {
@@ -27,6 +29,8 @@ export const shortLocalesNames = {
 	cn: "CN",
 	sw: "SW",
 	pt: "PT",
+	es: "ES",
+	af: "AF",
 } satisfies Record<(typeof PLATFORM_LOCALES)[number], string>;
 
 export const { getPathname, redirect, usePathname } =

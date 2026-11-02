@@ -323,7 +323,10 @@ const PLACEHOLDER_LINES = ["96%", "100%", "92%", "64%", "", "100%", "88%", "97%"
  * The page's two columns while its document is read: the heading it already knows, and placeholders where the date,
  * the other policy's link, the contents and the text go.
  */
-export function PolicyLayoutPlaceholder({ title, description }: { title: string; description: string }) {
+export function PolicyLayoutPlaceholder({ page }: { page: "privacy" | "terms" | "cookie" }) {
+	const t = useTranslations("policyPages");
+	const title = t(`${page}.title`);
+	const description = t(`${page}.description`);
 	return (
 		<main id="main-content" className={styles.page} aria-busy="true">
 			<div className={styles.splitPage}>

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { getCachedItemSmall } from "@/app/api/cache";
@@ -11,6 +12,7 @@ export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
 	const params = await props.params;
+	const t = await getTranslations("ui");
 	const [data, libraryConfig] = await Promise.all([
 		getCachedItemSmall(params.key),
 		getLibraryConfig(),
@@ -18,19 +20,20 @@ export async function generateMetadata(props: {
 
 	if (!data || !data.item) {
 		return {
-			title: "404 - Not Found",
-			description: "404 - Not Found",
+			title: t("notFoundTitle"),
+			description: t("notFoundTitle"),
 		};
 	}
 	
 	const item: Item = data.item;
 	
+	const title = item.title ?? "";
 	return {
-		title: `Citations - ${item.title}`,
-		description: `View citation statistics and citing resources for "${item.title}"`,
+		title: t("citationsTitle", { title }),
+		description: t("citationsDescription", { title }),
 		openGraph: {
-			title: `Citations - ${item.title}`,
-			description: `View citation statistics and citing resources for "${item.title}"`,
+			title: t("citationsTitle", { title }),
+			description: t("citationsDescription", { title }),
 			siteName: libraryConfig.identity.name,
 		},
 	};

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { FlowchartIcon } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -43,18 +44,19 @@ function RowText({ who, year, title, aside }: { who: string; year: number | null
 }
 
 /** A verdict's name for screen readers, before the row's text. */
-const spokenVerdict = (verdict: number) => (verdict ? `${VERDICT[VERDICTS[verdict] as keyof typeof VERDICT].label}: ` : null);
+const spokenVerdict = (verdict: number, t: ReturnType<typeof useTranslations<"evidenceMap">>) => (verdict ? `${t(VERDICT[VERDICTS[verdict] as keyof typeof VERDICT].label)}: ` : null);
 
 /** One paper in a list: its check, who and when, and its title; the whole row opens it on the map. */
 function Row({ index, verdict, label, outside, note, onOpen, onHover, selected }: { index: number; verdict: number; label: Label | undefined; outside: boolean; note?: string; onOpen: () => void; onHover: OnHover; selected?: boolean }) {
-	const aside = [outside ? "Outside the library" : "", note ?? ""].filter(Boolean);
+	const t = useTranslations("evidenceMap");
+	const aside = [outside ? t("outsideLibrary") : "", note ?? ""].filter(Boolean);
 	const enter = () => onHover(index, label), leave = () => onHover(null);
 	return (
 		<li>
 			<button type="button" onClick={onOpen} onPointerEnter={enter} onPointerLeave={leave} onFocus={enter} onBlur={leave} className={twMerge(ROW, selected && "bg-accent/10 dark:bg-accent/15")}>
 				<span className="mt-0.5 flex w-4 justify-center"><VerdictIcon verdict={verdict} /></span>
-				<span className="sr-only">{spokenVerdict(verdict)}</span>
-				<RowText who={label?.who ?? "Unknown author"} year={label?.year} title={label?.title} aside={aside} />
+				<span className="sr-only">{spokenVerdict(verdict, t)}</span>
+				<RowText who={label?.who ?? t("unknownAuthor")} year={label?.year} title={label?.title} aside={aside} />
 			</button>
 		</li>
 	);
@@ -144,14 +146,15 @@ export const fittedBox = (ready: boolean, fits: boolean) => twMerge("relative fl
  * heading it goes untitled, on the sheet's white.
  */
 export function EvidenceIntro({ papers, reviews, checked, titled = true }: { papers: number; reviews: number; checked: Checked; titled?: boolean }) {
+	const t = useTranslations("evidenceMap");
 	const stat = (count: number, name: string) => <span><span className="font-semibold tabular-nums text-foreground dark:text-white">{count.toLocaleString("en-GB")}</span> {name}</span>;
 	return (
 		<div className={twMerge("px-3 pb-2", !titled && "pt-3", titled && "border-b border-black/[0.06] bg-[#e8eaef] pb-3 pt-3 dark:border-white/[0.08] dark:bg-black/25")}>
-			{titled && <h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">Visualise evidence chains</h1>}
+			{titled && <h1 className="mb-0.5 px-1 font-heading text-lg font-semibold leading-tight tracking-tight">{t("visualiseEvidenceChains")}</h1>}
 			<p className={twMerge("flex gap-3 px-1 text-xs", muted)}>{stat(papers, "papers")}{stat(reviews, "reviews")}</p>
 			<button type="button" aria-pressed={checked.open} onClick={checked.onOpen} className={twMerge("mt-2.5 flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-sm font-semibold outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent", checked.open ? "bg-accent text-white" : titled ? "bg-white text-accent shadow-[0_1px_2px_rgb(0_0_0/0.06)] hover:bg-accent/5 dark:bg-secondary-400 dark:text-white dark:hover:bg-white/10" : "bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/20 dark:text-white dark:hover:bg-accent/25")}>
 				<HugeiconsIcon icon={FlowchartIcon} size={16} aria-hidden className="shrink-0" />
-				<span className="min-w-0 flex-1 truncate text-left">Preview appraised papers</span>
+				<span className="min-w-0 flex-1 truncate text-left">{t("previewAppraisedPapers")}</span>
 				<span className={twMerge("rounded-md px-1.5 py-0.5 text-xs tabular-nums", checked.open ? "bg-white/20" : "bg-accent/10 dark:bg-white/15")}>{checked.count}</span>
 			</button>
 		</div>
@@ -160,21 +163,22 @@ export function EvidenceIntro({ papers, reviews, checked, titled = true }: { pap
 
 /** The meta-analyses and reviews a reader starts from, the most worrying checks first, a page at a time; all of it scrolls. */
 export function Chains({ chains, selected, onOpenKey, onHover, heading = true }: { chains: ChainEntry[]; selected: number | null; onOpenKey: (paper: string) => void; onHover: OnHover; heading?: boolean }) {
+	const t = useTranslations("evidenceMap");
 	const { boxRef, listRef, ...fit } = useFittedPages(chains, PAPER_ROW);
 	return (
-		<section ref={boxRef} aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : "Starting points"} className={fittedBox(fit.ready, fit.fits)}>
+		<section ref={boxRef} aria-labelledby={heading ? "evidence-chains" : undefined} aria-label={heading ? undefined : t("startingPoints")} className={fittedBox(fit.ready, fit.fits)}>
 			{heading && (
 				<h2 id="evidence-chains" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
-					Starting points
+					{t("startingPointsHeading")}
 					<span className={twMerge("text-xs font-medium tabular-nums", muted)}>{chains.length}</span>
 				</h2>
 			)}
 			<ol ref={listRef} style={fit.rowStyle} className={twMerge("px-2", FIXED_ROWS, FITTED_ROWS)}>
 				{fit.shown.map((chain) => (
-					<Row key={chain.index} index={chain.index} verdict={chain.verdict} label={chain} outside={chain.outside} note={chain.analyses ? undefined : "Not analysed yet"} onOpen={() => onOpenKey(chain.paper)} onHover={onHover} selected={selected === chain.index} />
+					<Row key={chain.index} index={chain.index} verdict={chain.verdict} label={chain} outside={chain.outside} note={chain.analyses ? undefined : t("notAnalysedYet")} onOpen={() => onOpenKey(chain.paper)} onHover={onHover} selected={selected === chain.index} />
 				))}
 			</ol>
-			<Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label="Pages of starting points" />
+			<Pages total={fit.pages} page={fit.page} onChange={fit.setPage} label={t("pagesOfStartingPoints")} />
 		</section>
 	);
 }
@@ -186,6 +190,7 @@ export function Pages({ total, page, onChange, label, stale }: { total: number; 
 
 /** What the map lights, a search's results or the filter's papers, a page at a time; all of it scrolls. Each opens on the map. */
 export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { found: Found; typing: boolean; loaded: Loaded | null; more: More | null; onOpen: (index: number) => void; onHover: OnHover }) {
+	const t = useTranslations("evidenceMap");
 	// A list that shrinks under the page a reader is on (the next search's answer) shows its last page, not an empty one.
 	const { boxRef, listRef, ready, fits, rowStyle, page, pages, per, shown, setPage } = useFittedPages(found.order, PAPER_ROW);
 	// The next page's lines are fetched while this one is read, so turning the page shows it whole.
@@ -195,13 +200,13 @@ export function ResultList({ found, typing, loaded, more, onOpen, onHover }: { f
 	return (
 		<section ref={boxRef} aria-labelledby="evidence-results" aria-busy={stale || undefined} className={fittedBox(ready, fits)}>
 			<h2 id="evidence-results" className="flex items-baseline justify-between px-5 pb-2 pt-1 text-sm font-semibold">
-				{found.title}
+				{found.title === "Results" ? t("results") : t("filteredList")}
 				<span className={twMerge("text-xs font-medium tabular-nums transition-opacity", muted, stale && "opacity-50")}>{found.order.length.toLocaleString("en-GB")}{found.complete ? "" : "+"}</span>
 			</h2>
 			<ResultRows listRef={listRef} rowStyle={rowStyle} indices={loaded && more ? shown : []} lines={found.lines} stale={stale} loaded={loaded} more={more} onOpen={onOpen} onHover={onHover} />
-			{found.failed && <p role="status" className="px-5 text-sm text-danger">The search didn&apos;t answer. Try again in a moment.</p>}
-			{!stale && !found.failed && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>Nothing on the map matches this {found.title === "Results" ? "search" : "filter"}.</p>}
-			<Pages total={pages} page={page} onChange={setPage} label="Pages of results" stale={stale} />
+			{found.failed && <p role="status" className="px-5 text-sm text-danger">{t("theSearchDidnTAnswerTry")}</p>}
+			{!stale && !found.failed && found.order.length === 0 && <p className={twMerge("px-5 text-sm", muted)}>{found.title === "Results" ? t("noMatchSearch") : t("noMatchFilter")}</p>}
+			<Pages total={pages} page={page} onChange={setPage} label={t("pagesOfResults")} stale={stale} />
 		</section>
 	);
 }
@@ -221,13 +226,14 @@ function ResultRows({ listRef, rowStyle, indices, lines, stale, loaded, more, on
 
 /** How a chain's studies were judged: one bar split by verdict, with each part's count beside its name. */
 export function VerdictMeter({ indices, loaded }: { indices: number[]; loaded: Loaded }) {
+	const t = useTranslations("evidenceMap");
 	const counts = new Map<number, number>();
 	for (const i of indices) counts.set(loaded.points.verdict[i], (counts.get(loaded.points.verdict[i]) ?? 0) + 1);
 	const unchecked = counts.get(0) ?? 0;
 	const order = VERDICT_ORDER.map((name) => VERDICTS.indexOf(name)).filter((v) => counts.get(v));
 	return (
 		<div className="space-y-2">
-			<div className="flex h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10" role="img" aria-label={`${indices.length - unchecked} of ${indices.length} studies checked`}>
+			<div className="flex h-2 overflow-hidden rounded-full bg-black/[0.06] dark:bg-white/10" role="img" aria-label={t("ofStudiesChecked", { value: indices.length - unchecked, length: indices.length })}>
 				{order.map((v) => <span key={v} className="border-r border-white last:border-r-0 dark:border-black/40" style={{ width: `${(100 * counts.get(v)!) / indices.length}%`, background: css(verdictDot(VERDICTS[v])) }} />)}
 			</div>
 			<ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs">

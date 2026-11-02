@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useId, useRef, useState } from "react";
 import useSWR from "swr";
 import { FreeSoloPopover, Spinner } from "@nextui-org/react";
@@ -27,6 +28,12 @@ function directoryUrl(base: string, id: string) {
 	return openScholarUrl(base, `/topics?${new URLSearchParams({ [level]: id })}`);
 }
 
+function TopicWorks({ count }: { count: number | undefined }) {
+	const t = useTranslations("topics");
+	if (count === undefined) return null;
+	return <p className="mt-0.5 text-xs text-black/50 dark:text-white/50">{t("publicationsInOpenalex", { value: count.toLocaleString() })}</p>;
+}
+
 export function TopicHoverCard({
 	publicBaseUrl,
 	topic,
@@ -34,6 +41,8 @@ export function TopicHoverCard({
 	publicBaseUrl: string;
 	topic: Pick<TopicTreeNode, "id" | "name">;
 }) {
+	const t = useTranslations("topics");
+	const levelNames = [t("levels.domain"), t("levels.field"), t("levels.subfield")];
 	const [open, setOpen] = useState(false);
 	const [interactive, setInteractive] = useState(false);
 	const triggerRef = useRef<HTMLButtonElement>(null!);
@@ -60,12 +69,7 @@ export function TopicHoverCard({
 						<h3 className="text-base font-semibold leading-snug">
 							{detail.data?.name ?? topic.name}
 						</h3>
-						{detail.data && (
-							<p className="mt-0.5 text-xs text-black/50 dark:text-white/50">
-								{detail.data.worksCount.toLocaleString()} publications
-								in OpenAlex
-							</p>
-						)}
+						<TopicWorks count={detail.data?.worksCount} />
 					</div>
 				</div>
 				{detail.data ? (
@@ -76,13 +80,13 @@ export function TopicHoverCard({
 							{detail.data.description}
 						</p>
 						<HierarchyTree
-							label="Topic path"
+							label={t("topicPath")}
 							levels={[
 								...detail.data.path.map((node, index) => ({
 									...node,
 									key: node.id,
 									href: directoryUrl(publicBaseUrl, node.id),
-									title: ["Domain", "Field", "Subfield"][index],
+									title: levelNames[index],
 								})),
 								{
 									key: topic.id,
@@ -91,7 +95,7 @@ export function TopicHoverCard({
 										publicBaseUrl,
 										`/topics/${encodeURIComponent(topic.id)}`,
 									),
-									title: "Topic",
+									title: t("topic"),
 								},
 							]}
 							renderLink={(level, _index, className) => (
@@ -108,7 +112,7 @@ export function TopicHoverCard({
 						{detail.data.keywords.length > 0 && (
 							<div
 								className="flex flex-wrap gap-1"
-								aria-label="Keywords"
+								aria-label={t("keywords")}
 							>
 								{detail.data.keywords.slice(0, VISIBLE_KEYWORDS).map((keyword) => (
 									<a
@@ -134,7 +138,7 @@ export function TopicHoverCard({
 										rel="noopener noreferrer"
 										className="rounded-md px-1.5 py-0.5 text-xs text-black/50 transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/50"
 									>
-										+{detail.data.keywords.length - VISIBLE_KEYWORDS} more
+										{t("moreKeywords", { count: detail.data.keywords.length - VISIBLE_KEYWORDS })}
 									</a>
 								)}
 							</div>
@@ -145,18 +149,18 @@ export function TopicHoverCard({
 						role="status"
 						className="space-y-2 text-sm text-black/60 dark:text-white/60"
 					>
-						<p>Could not load topic details from OpenScholar.</p>
+						<p>{t("couldNotLoadTopicDetailsFrom")}</p>
 						<Button
 							size="xs"
 							variant="transparent"
 							onPress={() => void detail.mutate()}
 						>
-							Try again
+							{t("tryAgain")}
 						</Button>
 					</div>
 				) : (
 					<div className="flex min-h-24 items-center justify-center">
-						<Spinner size="sm" aria-label="Loading topic details" />
+						<Spinner size="sm" aria-label={t("loadingTopicDetails")} />
 					</div>
 				)}
 			</div>
@@ -181,7 +185,7 @@ export function TopicHoverCard({
 						/>
 					}
 				>
-					View topic in OpenScholar
+					{t("viewTopicInOpenscholar")}
 				</Button>
 			</div>
 		</div>

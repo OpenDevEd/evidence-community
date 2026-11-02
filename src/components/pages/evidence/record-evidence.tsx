@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { FlowchartIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -40,11 +41,12 @@ const CHIP_HOVER = "transition-shadow group-hover/chip:ring-[color:var(--ink)] d
 
 /** The check on the record, beside its study type. On a record in a chain it opens that chain on the evidence map. */
 export function EvidenceVerdict({ item }: { item: { key?: string } | undefined }) {
+	const t = useTranslations("evidenceMap");
 	const itemKey = item?.key;
 	const record = useEvidenceRecord(itemKey);
 	if (!record?.verdict) return null;
 	if (!record.chain) return <VerdictChip verdict={record.verdict} />;
-	const label = `${VERDICT[VERDICTS[record.verdict] as keyof typeof VERDICT].label}, open its chain`;
+	const label = t("openItsChain", { verdict: t(VERDICT[VERDICTS[record.verdict] as keyof typeof VERDICT].label) });
 	return (
 		<Link href={`/evidence?paper=${itemKey}`} aria-label={label} className={CHIP_CONTROL}>
 			<VerdictChip verdict={record.verdict} className={CHIP_HOVER} />
@@ -66,17 +68,18 @@ function useOnMap(item: { key?: string; links?: { cites: unknown[]; citedBy: unk
  * the library. On a card it is an icon until the card is wide enough for its name, as the card's other actions are.
  */
 export function VisualizeButton({ item, compact = false }: { item: Parameters<typeof useOnMap>[0]; compact?: boolean }) {
+	const t = useTranslations("evidenceMap");
 	if (!useOnMap(item)) return null;
 	return (
 		<Button
 			as={Link}
 			href={`/evidence?paper=${item!.key}`}
 			size="sm"
-			aria-label="Visualize"
+			aria-label={t("visualize")}
 			startContent={<HugeiconsIcon icon={FlowchartIcon} className="size-4" />}
 			className={compact ? "px-0 min-w-0 aspect-square @[720px]:aspect-auto @[720px]:px-3" : undefined}
 		>
-			<span className={compact ? "hidden @[720px]:inline" : undefined}>Visualize</span>
+			<span className={compact ? "hidden @[720px]:inline" : undefined}>{t("visualize")}</span>
 		</Button>
 	);
 }
