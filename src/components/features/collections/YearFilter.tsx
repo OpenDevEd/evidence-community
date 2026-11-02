@@ -64,6 +64,8 @@ function YearPicker({
 			// follows runs before React re-renders, sees no pick, and commits again: it unpicks the year and empties the box.
 			// The list still closes on a click outside, through the popover.
 			shouldCloseOnBlur={false}
+			// Moving through the list with the arrow keys scrolls the page to centre it.
+			popoverProps={{ shouldCloseOnScroll: false }}
 			onInputChange={(year) => onYearChange(year, false)}
 			onSelectionChange={(key) => onYearChange(String(key || ""), true)}
 			inputProps={{
