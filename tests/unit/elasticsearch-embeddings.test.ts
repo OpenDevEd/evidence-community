@@ -139,4 +139,43 @@ describe("records' vectors in Elasticsearch", () => {
 		const writes = client.bulk.mock.calls.map(([{ operations }]) => operations.length);
 		expect(writes).toEqual([1_000, 200]);
 	});
+
+	it("goes on past a page the embedder keeps failing, and comes back to it from the first record", async () => {
+		vi.useFakeTimers();
+		const missing = Array.from({ length: 250 }, (_, index) => ({ key: `R${String(index).padStart(3, "0")}`, title: `Record ${index}` }));
+		const pagesRead: string[] = [];
+		const client = {
+			search: vi.fn(async (body: { size: number; search_after?: string[] }) => {
+				const from = body.search_after ? missing.findIndex(({ key }) => key > body.search_after![0]!) : 0;
+				const page = from < 0 ? [] : missing.slice(from, from + body.size);
+				pagesRead.push(page[0]?.key ?? "none");
+				const hits = page.map(({ key, title }, position) => ({ _id: key, _index: "library_1", _seq_no: position, _primary_term: 1, sort: [key], _source: { title } }));
+				return { hits: { hits } };
+			}),
+			bulk: vi.fn(async ({ operations }: { operations: Array<{ update?: { _id: string } }> }) => ({
+				items: operations.flatMap((operation) => (operation.update ? [{ update: { _id: operation.update._id, status: 200 } }] : [])),
+			})),
+		};
+		const model = {
+			fingerprint: "perplexity-0.6b",
+			capacity: 40,
+			embed: vi.fn(async (texts: readonly string[]) => {
+				if (texts.some((text) => text.includes("'Record 5'"))) throw new Error("500 input is too large to process");
+				return texts.map(() => [1, 1]);
+			}),
+		};
+		const embeddings = elasticsearchEmbeddings({ alias: "library", client } as never, model);
+		expect(await embeddings.embedMissing()).toBe(0);
+		vi.advanceTimersByTime(60_000);
+		expect(await embeddings.embedMissing()).toBe(150);
+		expect(await embeddings.embedMissing()).toBe(0);
+		expect(pagesRead).toEqual(["R000", "R100", "R200", "R000"]);
+	});
+
+	it("sends a vector again when Elasticsearch was too busy to write it", async () => {
+		const { client, service } = library({}, [{ key: "A", title: "Radio lessons" }]);
+		client.bulk.mockResolvedValueOnce({ errors: true, items: [{ update: { _id: "A", status: 429, error: { type: "es_rejected_execution_exception" } } }] } as never);
+		expect(await elasticsearchEmbeddings(service, embedder()).embedMissing()).toBe(1);
+		expect(client.bulk).toHaveBeenCalledTimes(2);
+	});
 });

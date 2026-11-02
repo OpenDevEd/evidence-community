@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 
 import type { estypes } from "@elastic/elasticsearch";
 
@@ -25,7 +26,10 @@ export type ElasticsearchEmbeddings = {
 	 * as in a rebuild, only stored vectors are reused, and `embedMissing` embeds the rest afterwards.
 	 */
 	attach(documents: readonly ItemSearchDocument[], signal?: AbortSignal, options?: { embedNew?: boolean }): Promise<ItemSearchDocument[]>;
-	/** Embeds records written without a vector, for at most `MISSING_TIME_MS`; returns how many it wrote. */
+	/**
+	 * Embeds records written without a vector, starting no new page after `MISSING_TIME_MS`; returns how many it wrote.
+	 * Each pass goes on from where the last one stopped, past a page the embedder failed, until it reaches the last record.
+	 */
 	embedMissing(signal?: AbortSignal): Promise<number>;
 	/** The embedder's last failure, until it answers again. */
 	lastError(): string | null;
@@ -109,22 +113,41 @@ function readMissing(search: SearchService, embedder: Embedder, after: estypes.S
 	return stoppable(request, signal);
 }
 
-/** Updates that succeeded; one refused because a write came meanwhile is that write's. */
-function writtenUpdates(response: estypes.BulkResponse) {
-	const refused = response.items.flatMap((item) => {
-		const answer = item.update;
-		return answer?.error && answer.status !== 409 && answer.status !== 404 ? [`${answer._id}: ${answer.error.type}: ${answer.error.reason ?? ""}`] : [];
-	});
-	if (refused.length > 0) console.error(`Search index: ${refused.length} vector(s) were refused: ${refused.slice(0, 3).join("; ")}`);
-	return response.items.filter((item) => !item.update?.error).length;
+/** Waits before an update Elasticsearch was too busy for is sent again; the vectors cost an embedder's work. */
+const BUSY_RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
+/** Elasticsearch was too busy for the update, rather than refusing it. */
+function busy(status: number | undefined) {
+	return status === 429 || (status ?? 0) >= 500;
+}
+
+/** Writes one request's updates, sending again those Elasticsearch was too busy for; returns how many succeeded. */
+async function writeRequest(search: SearchService, updates: ReadonlyArray<readonly [object, object]>, signal?: AbortSignal) {
+	let pending = updates;
+	let written = 0;
+	for (const wait of [0, ...BUSY_RETRY_DELAYS_MS]) {
+		if (pending.length === 0) break;
+		if (wait > 0) await stoppable(delay(wait, undefined, { signal }), signal);
+		const { items } = await stoppable(search.client.bulk({ operations: pending.flat() }, { signal }), signal);
+		written += items.filter((item) => !item.update?.error).length;
+		const failed = items.flatMap((item, position) => (item.update?.error ? [{ answer: item.update, update: pending[position]! }] : []));
+		// One refused because a write came meanwhile (409) or the record went (404) is that write's.
+		const refused = failed.filter(({ answer }) => answer.status !== 409 && answer.status !== 404 && !busy(answer.status));
+		if (refused.length > 0) {
+			const reasons = refused.slice(0, 3).map(({ answer }) => `${answer._id}: ${answer.error!.type}: ${answer.error!.reason ?? ""}`);
+			console.error(`Search index: ${refused.length} vector(s) were refused: ${reasons.join("; ")}`);
+		}
+		pending = failed.filter(({ answer }) => busy(answer.status)).map(({ update }) => update);
+	}
+	if (pending.length > 0) console.error(`Search index: Elasticsearch was too busy for ${pending.length} vector(s); the backfill embeds them again.`);
+	return written;
 }
 
 /** Writes the updates `WRITE_RECORDS` records a request; returns how many succeeded. */
 async function writeUpdates(search: SearchService, updates: ReadonlyArray<readonly [object, object]>, signal?: AbortSignal) {
 	let written = 0;
 	for (let start = 0; start < updates.length; start += WRITE_RECORDS) {
-		const operations = updates.slice(start, start + WRITE_RECORDS).flat();
-		written += writtenUpdates(await stoppable(search.client.bulk({ operations }, { signal }), signal));
+		written += await writeRequest(search, updates.slice(start, start + WRITE_RECORDS), signal);
 	}
 	return written;
 }
@@ -133,6 +156,8 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 	let lastError: string | null = null;
 	let pausedUntil = 0;
 	let pause = FIRST_PAUSE_MS;
+	// Where the backfill goes on from: a page the embedder keeps failing must not hold up the records after it.
+	let missingAfter: estypes.SortResults | undefined;
 
 	function failed(reason: string) {
 		lastError = reason;
@@ -187,12 +212,13 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 			if (Date.now() < pausedUntil) return 0;
 			const stopAt = Date.now() + MISSING_TIME_MS;
 			let written = 0;
-			let after: estypes.SortResults | undefined;
 			while (Date.now() < stopAt) {
-				const hits = (await readMissing(search, embedder, after, signal)).hits.hits;
-				if (hits.length === 0) break;
+				const hits = (await readMissing(search, embedder, missingAfter, signal)).hits.hits;
+				// At the last record, the next pass starts again from the first, failed pages included.
+				const last = hits.length < missingPage(embedder);
 				const texts = hits.map((hit) => embeddingText(hit._source ?? {}));
 				const vectors = await embed(texts, signal);
+				missingAfter = last ? undefined : hits.at(-1)!.sort;
 				if (!vectors) break;
 				// Only a record unchanged since it was read takes the vector: one written meanwhile has its own.
 				const updates = hits.map((hit, position) => [
@@ -200,8 +226,7 @@ export function elasticsearchEmbeddings(search: SearchService, embedder: Embedde
 					{ doc: embedded(hashOf(embedder.fingerprint, texts[position]!), vectors[position]) },
 				] as const);
 				written += await writeUpdates(search, updates, signal);
-				after = hits.at(-1)!.sort;
-				if (hits.length < missingPage(embedder)) break;
+				if (last) break;
 			}
 			return written;
 		},
