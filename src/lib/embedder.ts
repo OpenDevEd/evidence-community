@@ -76,6 +76,8 @@ export function embedderBatchTexts(value: string | undefined) {
 
 /** A self-hosted model on CPU embeds about 3 records a second, so a batch can take tens of seconds. */
 const REQUEST_TIMEOUT_MS = 120_000;
+/** A text every embedder takes, sent when it refused all of a call's texts. */
+const REQUEST_PROBE_TEXT = "Evidence";
 /** Waits before each retry of a request the service answered busy or failed: 1, 2, 4 and 8 seconds. */
 const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
 
@@ -352,9 +354,11 @@ export function createEmbedder(
 					),
 				)
 			).flat();
-			// Every text refused is a request the embedder can't read, such as a wrong template or model, not bad texts.
+			// Every text refused may be a request the embedder can't read, such as a wrong template or model, rather than
+			// texts it refuses: a short text it refuses too settles which.
 			if (texts.length > 1 && answers.every((vector) => vector === null)) {
-				throw new EmbedderError(`The embedder refused all ${texts.length} texts, so the request itself is likely wrong: ${lastRefusal}`);
+				const [probe] = await embedBatch([REQUEST_PROBE_TEXT], lanes);
+				if (!probe) throw new EmbedderError(`The embedder refused all ${texts.length} texts and a short one, so the request itself is wrong: ${lastRefusal}`);
 			}
 			return answers;
 		},

@@ -88,7 +88,13 @@ describe("calling the library's embedder", () => {
 
 	it("reports a request the embedder refuses for every text as its failure, not as texts it refuses", async () => {
 		vi.stubGlobal("fetch", vi.fn(async () => new Response('{"detail":"unknown field inputs"}', { status: 422 })));
-		await expect(createEmbedder(openRouter)!.embed(["a", "bb"])).rejects.toThrow("refused all 2 texts, so the request itself is likely wrong: 422");
+		await expect(createEmbedder(openRouter)!.embed(["a", "bb"])).rejects.toThrow("refused all 2 texts and a short one, so the request itself is wrong: 422");
+	});
+
+	it("marks every text of a call refused when the embedder takes a short one", async () => {
+		const ok = answering();
+		vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => (String(init.body).includes("too long") ? new Response("input too long", { status: 413 }) : ok(url, init))));
+		expect(await createEmbedder(openRouter)!.embed(["too long one", "too long two"])).toEqual([null, null]);
 	});
 
 	it("keeps header values out of what it reports, and says what an answer that isn't JSON held", async () => {
