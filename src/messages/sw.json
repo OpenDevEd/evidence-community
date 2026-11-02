@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "Siku ya {day} kila mwezi",
     "scheduleMonthlyLong": "Siku ya {day} kila mwezi, au siku ya mwisho ya mwezi ikiwa mwezi ni mfupi zaidi,",
     "scheduleAt": "{day} saa {time} {zone}",
-    "scheduleChecked": "{day}, baada ya mhariri kuikagua"
+    "scheduleChecked": "{day}, baada ya mhariri kuikagua",
+    "citedCount": "{count} zimenukuliwa",
+    "listedCount": "{count} zimeorodheshwa",
+    "listedOfTotal": "{listed} kati ya {total}",
+    "publicationsWord": "machapisho"
   },
   "home": {
     "earlierIssues": "Matoleo yaliyotangulia",

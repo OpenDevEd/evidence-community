@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "اليوم {day} من كل شهر",
     "scheduleMonthlyLong": "اليوم {day} من كل شهر، أو آخر يوم فيه إذا كان أقصر،",
     "scheduleAt": "{day} في الساعة {time} {zone}",
-    "scheduleChecked": "{day}، بعد أن يراجعه محرر"
+    "scheduleChecked": "{day}، بعد أن يراجعه محرر",
+    "citedCount": "{count} مُستشهد بها",
+    "listedCount": "{count} مُدرجة",
+    "listedOfTotal": "{listed} من {total}",
+    "publicationsWord": "منشورات"
   },
   "home": {
     "earlierIssues": "الإصدارات السابقة",

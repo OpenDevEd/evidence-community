@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "हर महीने की {day} तारीख",
     "scheduleMonthlyLong": "हर महीने की {day} तारीख, या अगर महीना छोटा हो तो उसकी आखिरी तारीख,",
     "scheduleAt": "{day} को {time} {zone}",
-    "scheduleChecked": "{day}, संपादक द्वारा जाँचे जाने के बाद"
+    "scheduleChecked": "{day}, संपादक द्वारा जाँचे जाने के बाद",
+    "citedCount": "{count} उद्धृत",
+    "listedCount": "{count} सूचीबद्ध",
+    "listedOfTotal": "{total} में से {listed}",
+    "publicationsWord": "प्रकाशन"
   },
   "home": {
     "earlierIssues": "पिछले अंक",

@@ -1359,7 +1359,11 @@
     "scheduleMonthly": "Dag {day} van elke maand",
     "scheduleMonthlyLong": "Dag {day} van elke maand, of die laaste dag van die maand as dit korter is,",
     "scheduleAt": "{day} om {time} {zone}",
-    "scheduleChecked": "{day}, sodra ’n redakteur dit nagegaan het"
+    "scheduleChecked": "{day}, sodra ’n redakteur dit nagegaan het",
+    "citedCount": "{count} aangehaal",
+    "listedCount": "{count} gelys",
+    "listedOfTotal": "{listed} van {total}",
+    "publicationsWord": "publikasies"
   },
   "home": {
     "earlierIssues": "Vroeëre uitgawes",
