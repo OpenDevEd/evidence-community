@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const world = vi.hoisted(() => ({
 	steps: [] as string[],
 	records: { elasticsearch: false, meilisearch: false } as Record<string, boolean>,
+	/** An index a killed rebuild left, which no reader sees and no count finds. */
+	leftovers: { elasticsearch: false, meilisearch: false } as Record<string, boolean>,
 	rebuildFails: false,
 	removeFails: false,
 	waitAborts: false,
@@ -32,6 +34,10 @@ vi.mock("@/lib/search-index/engine-setup", () => ({
 		hasRecords: async () => {
 			if (world.unreachable === engine) throw new Error(`${engine} is unreachable`);
 			return world.records[engine];
+		},
+		holdsIndex: async () => {
+			if (world.unreachable === engine) throw new Error(`${engine} is unreachable`);
+			return world.records[engine] || world.leftovers[engine];
 		},
 		writer: {
 			remove: async () => {
@@ -63,7 +69,7 @@ function settle(input: { config?: object; live: "elasticsearch" | "meilisearch" 
 }
 
 beforeEach(() => {
-	Object.assign(world, { steps: [], records: { elasticsearch: false, meilisearch: false }, rebuildFails: false, removeFails: false, waitAborts: false, unreachable: "" });
+	Object.assign(world, { steps: [], records: { elasticsearch: false, meilisearch: false }, leftovers: { elasticsearch: false, meilisearch: false }, rebuildFails: false, removeFails: false, waitAborts: false, unreachable: "" });
 });
 
 describe("switching a library to another engine", () => {
@@ -150,6 +156,12 @@ describe("a start with readers on the configured engine", () => {
 		world.records.elasticsearch = true;
 		expect(await settle({ live: "meilisearch" })).toMatchObject({ oldIndexRemoved: true });
 		expect(world.steps).toEqual(["wait 10000", "delete elasticsearch"]);
+	});
+
+	it("deletes an index a killed rebuild left, though no count finds its records, without moving readers to it", async () => {
+		world.leftovers.elasticsearch = true;
+		expect(await settle({ live: null })).toMatchObject({ readersOn: "meilisearch", oldIndexRemoved: true });
+		expect(world.steps).toEqual(["readers to meilisearch", "wait 10000", "delete elasticsearch"]);
 	});
 });
 

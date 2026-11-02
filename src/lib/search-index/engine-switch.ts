@@ -39,6 +39,11 @@ async function holdsRecords(config: LibraryServerConfig, engine: SearchEngineNam
 	return Boolean(config.services.search[engine]) && (await openSearchWriter(config, engine)).hasRecords();
 }
 
+/** Whether the engine holds anything of the library's left to delete, a killed rebuild's index included. */
+async function holdsIndex(config: LibraryServerConfig, engine: SearchEngineName) {
+	return Boolean(config.services.search[engine]) && (await openSearchWriter(config, engine)).holdsIndex();
+}
+
 /** Deletes the old engine's index once readers left it; a failure leaves an unused index, not a broken library. */
 async function removeOldIndex(config: LibraryServerConfig, engine: SearchEngineName, signal: AbortSignal) {
 	if (!config.services.search[engine]) return false;
@@ -59,7 +64,7 @@ async function removeOldIndex(config: LibraryServerConfig, engine: SearchEngineN
  */
 async function removeLeftover(input: SettleInput) {
 	const leftover = otherEngine(input.writer.engine);
-	const holds = await holdsRecords(input.config, leftover).catch((error: unknown) => {
+	const holds = await holdsIndex(input.config, leftover).catch((error: unknown) => {
 		console.error(`Search index: checking for an old ${leftover} index failed: ${error instanceof Error ? error.message : String(error)}`);
 		return false;
 	});

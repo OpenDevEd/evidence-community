@@ -25,8 +25,10 @@ type SearchWriterSetup = {
 	prepare(signal: AbortSignal): Promise<{ embedderError: string | null; indexHasRecords: boolean }>;
 	/** How long a rebuild task may wait: every record task also embeds while an embedder is set. */
 	rebuildTaskTimeoutMs: number;
-	/** Whether this engine holds records of the library: in Elasticsearch, in any of its indexes, a stopped rebuild's too. */
+	/** Whether this engine holds an index of the library with records readers can search. */
 	hasRecords(): Promise<boolean>;
+	/** Whether this engine holds anything of the library's to delete: in Elasticsearch, any of its indexes, a killed rebuild's too. */
+	holdsIndex(): Promise<boolean>;
 	/**
 	 * Embeds records written without a vector while the embedder failed; returns how many. Elasticsearch only: Meilisearch
 	 * embeds by itself.
@@ -82,6 +84,14 @@ async function embedderFailure(service: MeilisearchService, error: unknown, sign
 
 async function meilisearchSetup(config: Config): Promise<SearchWriterSetup> {
 	const service = await new RevisionAwareMeilisearchFactory().get(connection(config, "meilisearch"));
+	const hasRecords = async () => {
+		try {
+			return (await service.index.getStats()).numberOfDocuments > 0;
+		} catch (error) {
+			if (error instanceof MeilisearchApiError && error.cause?.code === "index_not_found") return false;
+			throw error;
+		}
+	};
 	return {
 		writer: meilisearchWriter(service, { taskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS }),
 		async prepare(signal) {
@@ -92,14 +102,9 @@ async function meilisearchSetup(config: Config): Promise<SearchWriterSetup> {
 			);
 		},
 		rebuildTaskTimeoutMs: config.search.embedder ? EMBEDDER_TASK_TIMEOUT_MS : DEFAULT_TASK_TIMEOUT_MS,
-		async hasRecords() {
-			try {
-				return (await service.index.getStats()).numberOfDocuments > 0;
-			} catch (error) {
-				if (error instanceof MeilisearchApiError && error.cause?.code === "index_not_found") return false;
-				throw error;
-			}
-		},
+		hasRecords,
+		// An empty Meilisearch index left behind costs nothing.
+		holdsIndex: hasRecords,
 		embedMissing: async () => 0,
 		embedderError: () => null,
 	};
@@ -118,12 +123,16 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 		rebuildTaskTimeoutMs: DEFAULT_TASK_TIMEOUT_MS,
 		async hasRecords() {
 			try {
-				// A rebuild killed before it moved the alias leaves its index unaliased, and only this finds it to delete.
-				return (await service.client.count({ index: `${service.alias}_*`, allow_no_indices: true })).count > 0;
+				return (await service.client.count({ index: service.alias })).count > 0;
 			} catch (error) {
 				if (error instanceof ElasticsearchErrors.ResponseError && error.statusCode === 404) return false;
 				throw error;
 			}
+		},
+		// A rebuild killed before it moved the alias leaves an index readers can't see, with records a count can't see
+		// either until it is refreshed; only its name finds it.
+		async holdsIndex() {
+			return (await service.client.indices.resolveIndex({ name: `${service.alias}_*` })).indices.length > 0;
 		},
 		embedMissing: async (signal) => (embeddings ? embeddings.embedMissing(signal) : 0),
 		embedderError: () => embeddings?.lastError() ?? null,
