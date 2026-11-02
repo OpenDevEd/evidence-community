@@ -243,6 +243,7 @@ export async function initializeLibraryConfig({
 				};
 			}
 
+			assertKeepsChosenEngine(existing.config, seed);
 			const result = await activateValidatedConfig({
 				active: seed,
 				backupPath,
@@ -301,6 +302,21 @@ async function inspectExistingConfig(
 			updatedAt: error.revision?.updatedAt ?? null,
 		};
 	}
+}
+
+/**
+ * A revision keeps the connection of the engine the active revision chose: readers may search that engine already,
+ * and without its connection they would fall back to the other one, whose index a finished switch deleted
+ * (OpenDevEd/new-el#722). The old `{host, key, index}` shape holds Meilisearch's alone, so it can't replace a revision
+ * that chose Elasticsearch.
+ */
+function assertKeepsChosenEngine(existing: LibraryServerConfig | null, candidate: LibraryServerConfig) {
+	const chosen = existing?.services.search.engine;
+	if (!chosen || candidate.services.search[chosen]) return;
+	throw new LibraryConfigSourceError(`The configuration has no ${chosen} connection, the engine the library chose`, {
+		code: "SEARCH_ENGINE_DROPPED",
+		revision: { revision: candidate.revision, schemaVersion: candidate.schemaVersion, updatedAt: candidate.updatedAt },
+	});
 }
 
 async function activateValidatedConfig({
@@ -417,6 +433,7 @@ export async function activateLibraryConfig({
 				revision: existing.config?.revision ?? null,
 				updatedAt: existing.updatedAt,
 			});
+			assertKeepsChosenEngine(existing.config, active);
 
 			return activateValidatedConfig({
 				active,
@@ -465,6 +482,7 @@ export async function rollbackLibraryConfig({
 					validatedMinimumUpdatedAt,
 				),
 			});
+			assertKeepsChosenEngine(existing.config, active);
 
 			return activateValidatedConfig({
 				active,
@@ -517,6 +535,7 @@ export async function restorePreviousLibraryConfig({
 					existing.updatedAt,
 				),
 			});
+			assertKeepsChosenEngine(existing.config, active);
 			return activateValidatedConfig({
 				active,
 				backupPath: resolvedBackupPath,

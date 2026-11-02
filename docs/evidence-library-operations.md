@@ -453,7 +453,10 @@ Then, for each library:
    `0098` records Meilisearch as the engine readers search for every library
    whose worker has built an index, so readers see no change.
 4. To move the library to Elasticsearch, add the `elasticsearch` connection
-   from its search receipt and set `engine` to `elasticsearch`. The search
+   from its search receipt and set `engine` to `elasticsearch`. Do this only
+   once OpenScholar sends `engine`: the runtime refuses any revision without a
+   connection for the engine the active one chose, so OpenScholar's old shape
+   can no longer publish to a library on Elasticsearch. The search
    worker builds the Elasticsearch index while readers stay on Meilisearch,
    then moves them and deletes the Meilisearch index (`docs/search-indexing.md`,
    "Switching engines"). Records get their vectors after the move: until the

@@ -287,6 +287,29 @@ describe("library configuration activation", () => {
 		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(rollback);
 	});
 
+	it("refuses a revision without the connection of the engine the active one chose, such as the old Meilisearch shape", async () => {
+		const elasticsearch = { host: "http://evidence-library-elasticsearch:9200", key: "search-key", index: "el_minimal" };
+		const onElasticsearch = cloneLibraryConfig(minimalLibraryConfig);
+		onElasticsearch.services.search = { engine: "elasticsearch", elasticsearch } as never;
+		await writeFile(candidatePath, JSON.stringify(onElasticsearch, null, "\t"), "utf8");
+		await activateLibraryConfig({ candidatePath, targetPath });
+		const flat = cloneLibraryConfig(minimalLibraryConfig) as unknown as Record<string, unknown>;
+		Object.assign(flat, { revision: "minimal-2", updatedAt: "2026-07-28T16:05:00Z" });
+		(flat.services as Record<string, unknown>).search = { host: "http://meilisearch:7700", key: "search-key", index: "minimal_library" };
+		const flatPath = path.join(tempDirectory, "flat.json");
+		await writeFile(flatPath, JSON.stringify(flat, null, "\t"), "utf8");
+
+		await expect(activateLibraryConfig({ candidatePath: flatPath, targetPath })).rejects.toMatchObject({ code: "SEARCH_ENGINE_DROPPED" });
+		expect((await validateLibraryConfigFile(targetPath)).services.search.engine).toBe("elasticsearch");
+		// Naming both engines, the library may switch back.
+		const back = cloneLibraryConfig(onElasticsearch);
+		Object.assign(back, { revision: "minimal-3", updatedAt: "2026-07-28T16:10:00Z" });
+		back.services.search = { engine: "meilisearch", elasticsearch, meilisearch: minimalLibraryConfig.services.search.meilisearch } as never;
+		const backPath = path.join(tempDirectory, "back.json");
+		await writeFile(backPath, JSON.stringify(back, null, "\t"), "utf8");
+		await expect(activateLibraryConfig({ candidatePath: backPath, targetPath })).resolves.toMatchObject({ active: { revision: "minimal-3" } });
+	});
+
 	it("rejects changed content that reuses the active revision", async () => {
 		const target = JSON.stringify(minimalLibraryConfig, null, "\t");
 		await writeFile(targetPath, target, "utf8");
