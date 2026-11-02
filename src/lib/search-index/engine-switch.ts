@@ -79,7 +79,12 @@ async function rebuild(input: SettleInput) {
 async function recordedOrExisting(input: SettleInput) {
 	if (input.live !== null) return input.live;
 	const other = otherEngine(input.writer.engine);
-	if (!(await holdsRecords(input.config, other))) return null;
+	// An unreachable other engine can't be searched either, so readers go to the configured one.
+	const holds = await holdsRecords(input.config, other).catch((error: unknown) => {
+		console.error(`Search index: checking the ${other} index for the library's records failed: ${error instanceof Error ? error.message : String(error)}`);
+		return false;
+	});
+	if (!holds) return null;
 	await setSearchEngine(input.database, other);
 	return other;
 }

@@ -116,6 +116,14 @@ describe("a library's first recorded engine", () => {
 		expect(world.steps).toEqual(["readers to meilisearch"]);
 	});
 
+	it("records the configured engine on a first start when the other engine can't be reached", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		world.unreachable = "elasticsearch";
+		expect(await settle({ live: null, rebuild: true })).toMatchObject({ readersOn: "meilisearch" });
+		expect(world.steps).toEqual(["rebuild meilisearch", "pending false", "readers to meilisearch"]);
+		error.mockRestore();
+	});
+
 	it("keeps readers on the other engine's records while the configured engine's new index is built, after any restart", async () => {
 		world.records.elasticsearch = true;
 		expect(await settle({ live: null, rebuild: true })).toMatchObject({ switchedFrom: "elasticsearch" });
