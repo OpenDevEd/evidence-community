@@ -197,6 +197,8 @@ async function main() {
 				}),
 			);
 		}
+		// The line the switch procedure waits for, also when only an old index a stopped switch left was deleted.
+		if (!settled.rebuilt && settled.oldIndexRemoved) console.log(JSON.stringify({ engine: writer.engine, oldIndexRemoved: true }));
 		await writeWorkerState(
 			{
 				currentBatchProgress: null,
