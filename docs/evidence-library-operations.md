@@ -456,7 +456,9 @@ Then, for each library:
    from its search receipt and set `engine` to `elasticsearch`. Do this only
    once OpenScholar sends `engine`: the runtime refuses any revision without a
    connection for the engine the active one chose, so OpenScholar's old shape
-   can no longer publish to a library on Elasticsearch. The search
+   can no longer publish to a library on Elasticsearch, and a redeploy whose
+   `LIBRARY_CONFIG_JSON` lacks it doesn't start (its log names
+   `SEARCH_ENGINE_DROPPED`). The search
    worker builds the Elasticsearch index while readers stay on Meilisearch,
    then moves them and deletes the Meilisearch index (`docs/search-indexing.md`,
    "Switching engines"). Records get their vectors after the move: until the

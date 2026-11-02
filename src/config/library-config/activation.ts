@@ -308,7 +308,8 @@ async function inspectExistingConfig(
  * A revision keeps the connection of the engine the active revision chose: readers may search that engine already,
  * and without its connection they would fall back to the other one, whose index a finished switch deleted
  * (OpenDevEd/new-el#722). The old `{host, key, index}` shape holds Meilisearch's alone, so it can't replace a revision
- * that chose Elasticsearch.
+ * that chose Elasticsearch. It doesn't know which engine readers search: during a switch, the old engine's connection
+ * stays until the worker logs `"oldIndexRemoved":true` (docs/search-indexing.md, "Switching engines").
  */
 function assertKeepsChosenEngine(existing: LibraryServerConfig | null, candidate: LibraryServerConfig) {
 	const chosen = existing?.services.search.engine;
