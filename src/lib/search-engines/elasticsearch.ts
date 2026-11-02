@@ -258,8 +258,9 @@ export function elasticsearchEngine({ alias, client }: SearchService, embedder: 
 	}
 
 	/**
-	 * Words and meaning together, as Meilisearch's hybrid search ranks them: a search by words and one for the nearest
-	 * vectors, with the same filters, in one request, mixed by reciprocal rank fusion with `ratio` going to meaning.
+	 * Words and meaning together, the records Meilisearch's hybrid search finds: a search by words and one for the
+	 * nearest vectors, with the same filters, in one request, mixed by reciprocal rank fusion with `ratio` going to
+	 * meaning. Meilisearch merges the two by weighted score instead, so a record found both ways ranks higher here.
 	 * Without a vector, or when the nearest can't be read, words alone rank them.
 	 */
 	async function searchMixed<T>(request: SearchRequest): Promise<SearchAnswer<T>> {

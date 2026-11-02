@@ -103,6 +103,13 @@ The index is created by the worker from `src/lib/search-index/elasticsearch-inde
 Its version is part of the projection signature, so a changed definition marks
 a rebuild as pending and the worker rebuilds into a new index at its next start.
 
+## Result window
+
+Both engines number the first 10,000 results of a search (page 500 at 20 a
+page); Meilisearch libraries numbered up to 10 million before engines could be
+chosen. Past 10,000, the results page moves only by next and previous, and the
+AI's reading of a reader's current results stops there.
+
 ## Switching engines
 
 Only the chosen engine's index is kept current. `status.searchEngine` names the
@@ -119,8 +126,13 @@ If Meilisearch's embedder fails while its index already holds records, the
 switch waits, and readers and the worker's writes stay on the old engine.
 
 The worker drains no changes while it rebuilds, so readers see changes made
-during a switch only once it completes: minutes without an embedder, longer with
-one, since either engine embeds every record again.
+during a switch only once it completes: minutes, or longer for a switch to
+Meilisearch with an embedder, since Meilisearch embeds every record as it
+indexes it. A switch to Elasticsearch writes the records without vectors and
+moves readers once every record is there; the backfill embeds them afterwards,
+and until it finishes Similar Resources answers 503 and AI search ranks by
+words alone (about 17 minutes for AIED on OpenRouter, 28 hours on a 16-core CPU
+model).
 
 To switch, publish a configuration revision that changes only
 `services.search.engine` and keeps the old engine's connection. Remove the old
@@ -194,8 +206,8 @@ Writing records:
 - A record written again with the same text keeps its vector. A rebuild only
   copies the vectors of the index readers search and calls no embedder: it takes
   minutes, and a stopped rebuild loses no embedding work.
-- After each outbox pass, the worker embeds records that have no vector, for at
-  most 30 s, then drains the outbox again. What it embedded stays when it stops.
+- After each outbox pass, the worker embeds records that have no vector,
+  starting no new page after 30 s, then drains the outbox again. What it embedded stays when it stops.
   This fills a library after a rebuild that changed records' text, after an
   embedder change, after a switch from Meilisearch, and on its first build. A
   model served from 16 CPU cores embedded 2.8 AIED records a second, about a day
@@ -206,7 +218,9 @@ Writing records:
   one core, so writing, not the embedder, set the speed.
 - Changing `search.embedder` rebuilds the index, so no vector of the old
   embedder stays; the worker then embeds every record with the new one. With
-  `null`, records are written without a vector.
+  `null`, records are written without a vector. Header values don't count, as
+  they can hold a key, so choose the model in the request template: a change
+  to a header's value keeps the old vectors.
 - When the embedder fails, records are written without a vector, so word search
   stays current, and the worker records the error as `lastError`. It leaves the
   embedder alone for a minute, doubling up to 30 minutes, and the backfill
@@ -290,8 +304,10 @@ Searching:
   a library rebuilds after changing its embedder, questions embedded by the new
   one find no old vectors and rank by words.
 - Both mix the two orders by reciprocal rank fusion, Elastic's formula:
-  `weight / (60 + rank)`, summed for each record. Facet counts come from the
-  word results.
+  `weight / (60 + rank)`, summed for each record. Meilisearch instead merges
+  the two lists by weighted score and keeps each record once at its better one,
+  so a record found both ways ranks higher here than on Meilisearch. Facet
+  counts come from the word results.
 
 Vectors need memory beside the heap, for each library on the host
 ([Elasticsearch: approximate kNN memory](https://www.elastic.co/docs/deploy-manage/production-guidance/optimize-performance/approximate-knn-search)).
@@ -405,11 +421,15 @@ web app, search worker, source-sync worker, source-writeback worker,
 publication worker, private Meilisearch, and private Redis. The source workers
 remain idle when no source is configured.
 
-Use `http://meilisearch:7700` as the runtime search host and set the runtime
-search key and `MEILISEARCH_MASTER_KEY` to the same private value. Meilisearch
-has no public port and joins only the private application network. The five
+On Meilisearch, use `http://meilisearch:7700` as the runtime search host and
+set the runtime search key and `MEILISEARCH_MASTER_KEY` to the same private
+value. Meilisearch has no public port and joins only the private application
+network. On Elasticsearch, use the host, index and login from the library's
+search receipt (`http://evidence-library-elasticsearch:9200`). The five
 runtime containers also join the external deployment network to reach shared
-PostgreSQL. Automatic destination-network attachment must stay off.
+PostgreSQL, and `web` and `search-indexer` join `library-search`, the shared
+Elasticsearch's network, which must exist on the host
+(`docs/evidence-library-operations.md`, "Run the shared Elasticsearch"). Automatic destination-network attachment must stay off.
 Meilisearch runs with `MEILI_UPGRADE_DB`, so a newer pinned image migrates the
 existing search data in place when it starts. It also runs with
 `MEILI_EXPERIMENTAL_LEGACY_SEARCH`: Meilisearch's newer search path

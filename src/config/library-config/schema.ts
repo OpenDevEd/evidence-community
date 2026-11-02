@@ -1389,7 +1389,7 @@ const elasticsearchConnectionSchema = searchConnectionSchema(/^[a-z0-9][a-z0-9_-
 /**
  * The engine the library chooses, which needs its connection, and the other engine's connection while a switch to
  * the chosen one is built. The search worker builds the chosen engine's index; readers keep the one whose index is
- * complete until it is (plans/elasticsearch-search/09).
+ * complete until it is (docs/search-indexing.md, "Switching engines").
  */
 const chosenEngineSchema = z.discriminatedUnion("engine", [
 	z
