@@ -86,6 +86,19 @@ describe("calling the library's embedder", () => {
 		expect(fetch).toHaveBeenCalledTimes(3);
 	});
 
+	it("reports a request the embedder refuses for every text as its failure, not as texts it refuses", async () => {
+		vi.stubGlobal("fetch", vi.fn(async () => new Response('{"detail":"unknown field inputs"}', { status: 422 })));
+		await expect(createEmbedder(openRouter)!.embed(["a", "bb"])).rejects.toThrow("refused all 2 texts, so the request itself is likely wrong: 422");
+	});
+
+	it("keeps header values out of what it reports, and says what an answer that isn't JSON held", async () => {
+		const withHeader = { ...openRouter, apiKey: undefined, headers: { "x-api-key": "header-secret-123" } };
+		vi.stubGlobal("fetch", vi.fn(async () => new Response("unknown key header-secret-123", { status: 401 })));
+		await expect(createEmbedder(withHeader)!.embed(["a"])).rejects.toThrow("unknown key [header]");
+		vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>Bad gateway</html>", { status: 200 })));
+		await expect(createEmbedder(openRouter)!.embed(["a"])).rejects.toThrow("isn't JSON: <html>Bad gateway</html>");
+	});
+
 	it("tries again after the service answers busy", async () => {
 		const ok = answering();
 		const fetch = vi.fn(async (url: string, init: RequestInit) => (fetch.mock.calls.length === 1 ? new Response("slow down", { status: 429 }) : ok(url, init)));

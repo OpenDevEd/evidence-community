@@ -194,6 +194,23 @@ function unanswered(error: unknown) {
 	return { failure: `the request couldn't be sent (${error instanceof Error ? error.name : "error"}); check the embedder's URL, key and headers`, retry: false };
 }
 
+/** How long a busy service asks to be left alone (`Retry-After`, in seconds or as a date). */
+function retryAfterMs(header: string | null) {
+	if (!header) return undefined;
+	const seconds = Number(header);
+	if (Number.isFinite(seconds)) return seconds * 1_000;
+	const at = Date.parse(header);
+	return Number.isNaN(at) ? undefined : Math.max(0, at - Date.now());
+}
+
+/**
+ * The wait before another try: the step, spread so that requests failed together don't come back together, or longer
+ * when the service asks, up to a minute.
+ */
+function retryWait(step: number, askedMs: number | undefined) {
+	return Math.min(Math.max(step * (0.5 + Math.random()), askedMs ?? 0), 60_000);
+}
+
 async function post(call: Call, signal: AbortSignal | undefined) {
 	const response = await fetch(call.url, {
 		method: "POST",
@@ -201,16 +218,32 @@ async function post(call: Call, signal: AbortSignal | undefined) {
 		body: JSON.stringify(call.body),
 		signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
-	if (response.ok) return { answer: (await response.json()) as unknown };
-	const failure = `${response.status} ${(await response.text().catch(() => "")).slice(0, 300)}`;
-	return { failure, retry: retryable(response.status), refused: refusesTexts(response.status) };
+	const text = await response.text().catch(() => "");
+	if (response.ok) {
+		try {
+			return { answer: JSON.parse(text) as unknown };
+		} catch {
+			return { failure: `${response.status} with an answer that isn't JSON: ${text.slice(0, 300)}`, retry: false };
+		}
+	}
+	const failure = `${response.status} ${text.slice(0, 300)}`;
+	return { failure, retry: retryable(response.status), refused: refusesTexts(response.status), retryAfter: retryAfterMs(response.headers.get("retry-after")) };
 }
 
+/** The text without the embedder's secrets: its key, and its header values, which can hold one. */
+function scrubbed(text: string, secrets: Secrets) {
+	const withoutKey = secrets.key ? text.replaceAll(secrets.key, "[key]") : text;
+	return secrets.headerValues.reduce((result, value) => result.replaceAll(value, "[header]"), withoutKey);
+}
+
+type Secrets = { key: string | undefined; headerValues: readonly string[] };
+
 /** One request, tried again after a busy answer, a server error or a lost connection. */
-async function send(call: Call, signal: AbortSignal | undefined, secret: string | undefined) {
-	let outcome: Awaited<ReturnType<typeof post>> | ReturnType<typeof unanswered> = { failure: "", retry: true };
-	for (const wait of [0, ...RETRY_DELAYS_MS]) {
-		if (wait > 0) await delay(wait, undefined, { signal });
+async function send(call: Call, signal: AbortSignal | undefined, secrets: Secrets) {
+	type Outcome = Awaited<ReturnType<typeof post>> | ReturnType<typeof unanswered>;
+	let outcome: Outcome = { failure: "", retry: true };
+	for (const [attempt, step] of [0, ...RETRY_DELAYS_MS].entries()) {
+		if (attempt > 0) await delay(retryWait(step, "retryAfter" in outcome ? outcome.retryAfter : undefined), undefined, { signal });
 		signal?.throwIfAborted();
 		outcome = await post(call, signal).catch((error: unknown) => {
 			if (signal?.aborted) throw error;
@@ -220,14 +253,14 @@ async function send(call: Call, signal: AbortSignal | undefined, secret: string 
 	}
 	if ("answer" in outcome) return outcome.answer;
 	// An answer can quote what it was sent; the key never goes further.
-	const failure = secret ? outcome.failure.replaceAll(secret, "[key]") : outcome.failure;
+	const failure = scrubbed(outcome.failure, secrets);
 	if ("refused" in outcome && outcome.refused) throw new RefusedTexts(failure);
 	throw new EmbedderError(`The embedder failed: ${failure}`);
 }
 
 /**
  * What makes an embedder's vectors: everything but its key and the values of its headers, which can hold secrets.
- * Header names count, as a header can choose the model.
+ * Header names count, as a header can choose the model; a change to a header's value keeps the old vectors.
  */
 export function embedderFingerprint(embedder: EmbedderConfiguration) {
 	const { source, dimensions } = embedder;
@@ -270,6 +303,13 @@ export function createEmbedder(
 	const call = (texts: readonly string[]) => (configuration.source === "openAi" ? openAiCall(configuration, texts) : restCall(configuration, texts));
 	const batchSize = textsPerRequest(configuration, batchTexts);
 	const inTurn = limiter(parallelRequests);
+	// Header values short enough to turn up in ordinary words can't be a secret worth hiding.
+	const secrets: Secrets = {
+		key: configuration.apiKey,
+		headerValues: Object.values(configuration.source === "rest" ? (configuration.headers ?? {}) : {}).filter((value) => value.length >= 8),
+	};
+	// What the embedder said when it last refused texts, for a call where it refused them all.
+	let lastRefusal = "";
 
 	/** Vectors for one batch; a refused batch is split in halves to find the texts the embedder refuses. */
 	const embedBatch = async (texts: readonly string[], signal: AbortSignal): Promise<Array<number[] | null>> => {
@@ -277,15 +317,17 @@ export function createEmbedder(
 		try {
 			const answer = await inTurn(() => {
 				signal.throwIfAborted();
-				return send(request, signal, configuration.apiKey);
+				return send(request, signal, secrets);
 			});
 			const vectors = request.read(answer);
 			if (vectors.length !== texts.length || !vectors.every((vector) => isVector(vector, configuration.dimensions))) {
-				throw new EmbedderError(`The embedder answered ${vectors.length} vector(s) for ${texts.length} text(s), or a vector that isn't ${configuration.dimensions ?? "a list of"} numbers.`);
+				const said = scrubbed(JSON.stringify(answer).slice(0, 300), secrets);
+				throw new EmbedderError(`The embedder answered ${vectors.length} vector(s) for ${texts.length} text(s), or a vector that isn't ${configuration.dimensions ?? "a list of"} numbers: ${said}`);
 			}
 			return vectors as number[][];
 		} catch (error) {
 			if (!(error instanceof RefusedTexts)) throw error;
+			lastRefusal = error.message;
 			if (texts.length === 1) return [null];
 			const half = Math.ceil(texts.length / 2);
 			const [first, second] = await Promise.all([embedBatch(texts.slice(0, half), signal), embedBatch(texts.slice(half), signal)]);
@@ -300,15 +342,21 @@ export function createEmbedder(
 			// The first failure stops the call's other requests, which would only fail the same way.
 			const stop = new AbortController();
 			const lanes = signal ? AbortSignal.any([signal, stop.signal]) : stop.signal;
-			const answers = await Promise.all(
-				batches(texts, batchSize).map((batch) =>
-					embedBatch(batch, lanes).catch((error: unknown) => {
-						stop.abort();
-						throw error;
-					}),
-				),
-			);
-			return answers.flat();
+			const answers = (
+				await Promise.all(
+					batches(texts, batchSize).map((batch) =>
+						embedBatch(batch, lanes).catch((error: unknown) => {
+							stop.abort();
+							throw error;
+						}),
+					),
+				)
+			).flat();
+			// Every text refused is a request the embedder can't read, such as a wrong template or model, not bad texts.
+			if (texts.length > 1 && answers.every((vector) => vector === null)) {
+				throw new EmbedderError(`The embedder refused all ${texts.length} texts, so the request itself is likely wrong: ${lastRefusal}`);
+			}
+			return answers;
 		},
 	};
 }
