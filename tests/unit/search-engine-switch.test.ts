@@ -23,7 +23,7 @@ vi.mock("@/lib/search-index/consumer", () => ({
 	},
 }));
 vi.mock("@/lib/search-index/bootstrap-state", () => ({
-	LIVE_ENGINE_TTL_MS: 5_000,
+	OLD_INDEX_GRACE_MS: 10_000,
 	setSearchEngine: async (_database: unknown, engine: string) => void world.steps.push(`readers to ${engine}`),
 	setSearchIndexRebuildPending: async (_database: unknown, pending: boolean) => void world.steps.push(`pending ${pending}`),
 }));

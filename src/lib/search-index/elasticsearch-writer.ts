@@ -1,7 +1,10 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { errors as ElasticsearchErrors, type estypes } from "@elastic/elasticsearch";
 
 import type { SearchService } from "@/lib/elasticsearch-factory";
 
+import { OLD_INDEX_GRACE_MS } from "./bootstrap-state";
 import type { ElasticsearchEmbeddings } from "./elasticsearch-embeddings";
 import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
 import type { SearchProjectionPlan } from "./projection";
@@ -201,6 +204,16 @@ async function mergeSegments(search: SearchService, target: string, signal?: Abo
 	await search.client.indices.forcemerge({ index: target, max_num_segments: segments, wait_for_completion: false }, { signal });
 }
 
+/** Deletes the index readers left once searches already running on it finish, then merges the new one's segments. */
+async function tidyUp(search: SearchService, replaced: string | null, target: string, signal?: AbortSignal) {
+	if (replaced !== null) {
+		// A stop during the wait deletes it at once.
+		await delay(OLD_INDEX_GRACE_MS, undefined, { signal }).catch(() => undefined);
+		await deleteIndexes(search, [replaced]);
+	}
+	await mergeSegments(search, target, signal);
+}
+
 /**
  * Fills a new index with every record and moves the alias to it in one step, so readers keep searching the old index
  * until the new one is complete. A failed or stopped rebuild deletes its new index; any one a crash left behind is
@@ -228,8 +241,7 @@ async function rebuildSearchIndex(
 	}
 	// Readers already search the new index; tidying up after it can fail without undoing that.
 	try {
-		await deleteIndexes(search, replaced === null ? [] : [replaced], options.signal);
-		await mergeSegments(search, target, options.signal);
+		await tidyUp(search, replaced, target, options.signal);
 	} catch (error) {
 		console.error(`Search index: tidying up after the rebuild failed: ${error instanceof Error ? error.message : String(error)}`);
 	}

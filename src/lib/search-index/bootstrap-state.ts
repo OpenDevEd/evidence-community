@@ -38,6 +38,12 @@ export function shouldRebuildSearchIndex(input: {
 /** How long a reader process trusts the engine it last read; a switch reaches every reader within this. */
 export const LIVE_ENGINE_TTL_MS = 5_000;
 
+/**
+ * Readers that read the engine or index just before it moved keep searching the old index until their cache expires,
+ * and a search they started may still be running. An old index stays this long after readers move.
+ */
+export const OLD_INDEX_GRACE_MS = 2 * LIVE_ENGINE_TTL_MS;
+
 /** The engine whose index holds every record, which readers search; null before the library's first build. */
 export async function readSearchEngine(database: Database): Promise<SearchEngineName | null> {
 	const [row] = await database.select({ engine: status.searchEngine }).from(status).where(eq(status.id, 1)).limit(1);

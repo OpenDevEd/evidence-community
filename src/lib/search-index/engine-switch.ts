@@ -3,18 +3,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { LibraryServerConfig, SearchEngineName } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 
-import { LIVE_ENGINE_TTL_MS, setSearchEngine, setSearchIndexRebuildPending } from "./bootstrap-state";
+import { OLD_INDEX_GRACE_MS, setSearchEngine, setSearchIndexRebuildPending } from "./bootstrap-state";
 import { rebuildSearchIndex } from "./consumer";
 import { openSearchWriter } from "./engine-setup";
 import type { SearchIndexWriter } from "./writer";
 
 type Rebuilt = Awaited<ReturnType<typeof rebuildSearchIndex>>;
-
-/**
- * Readers that read the engine just before it moved keep searching the old index until their cache expires, and a
- * search they started may still be running. The old index stays this long after readers move.
- */
-const OLD_INDEX_GRACE_MS = 2 * LIVE_ENGINE_TTL_MS;
 
 type SettleInput = {
 	config: LibraryServerConfig;

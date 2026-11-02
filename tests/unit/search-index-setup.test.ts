@@ -12,6 +12,9 @@ import { SEARCH_INDEX_VERSION } from "@/lib/search-index/elasticsearch-index";
 import { elasticsearchWriter } from "@/lib/search-index/elasticsearch-writer";
 import type { SearchProjectionPlan } from "@/lib/search-index/projection";
 
+// The old index's grace period passes at once.
+vi.mock("node:timers/promises", () => ({ setTimeout: async () => undefined }));
+
 type Call = { api: string; request: Record<string, unknown> };
 
 function notFound() {
