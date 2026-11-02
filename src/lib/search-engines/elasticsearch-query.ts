@@ -3,7 +3,7 @@ import type { estypes } from "@elastic/elasticsearch";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import type { FacetDistribution, SearchFilter } from "@/lib/search-engine";
 import { FULL_TEXT_PDF_ATTRIBUTE, SOURCES_FIELD, TITLE_START_WORDS } from "@/lib/search-filter-constants";
-import { SEARCHED_KEYWORD_FIELDS } from "@/lib/search-index/elasticsearch-index";
+import { FOLDED_KEYWORD_FIELDS, SEARCHED_KEYWORD_FIELDS } from "@/lib/search-index/elasticsearch-index";
 
 /**
  * A search request as Elasticsearch runs it (OpenDevEd/new-el#721): filters as query clauses, the text query ranked as
@@ -187,8 +187,8 @@ export function sortClauses(sort: readonly string[] | undefined, options: { text
 }
 
 /**
- * Counts for each facet, in the order readers see them. Tags and names count ignoring case and accents, as
- * Meilisearch counted them; each value is named as most of its records spell it.
+ * Counts for each facet, in the order readers see them. Tags, names and institutions count ignoring case and accents,
+ * as Meilisearch counted them; each value is named as most of its records spell it.
  */
 export function facetAggregations(facets: readonly string[]): Record<string, estypes.AggregationsAggregationContainer> {
 	return Object.fromEntries(
@@ -196,7 +196,7 @@ export function facetAggregations(facets: readonly string[]): Record<string, est
 			facet,
 			{
 				terms: { field: facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } },
-				...(SEARCHED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
+				...(FOLDED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
 			},
 		]),
 	);

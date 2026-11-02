@@ -17,7 +17,6 @@ const KEYWORD_FIELDS = [
 	"itemType",
 	"studyType",
 	"studyTypeShown",
-	INSTITUTION_FILTER_FIELD,
 	"country",
 	"authorCountry",
 	"collections",
@@ -29,9 +28,12 @@ const KEYWORD_FIELDS = [
 ];
 
 /**
- * Keywords readers also search. Filters match them ignoring case and accents, as Meilisearch's filters do; facets
- * count their `.raw` values, which keep the spelling records have.
+ * Keywords filters match ignoring case and accents, as Meilisearch's filters do; facets count their `.raw` values,
+ * which keep the spelling records have. Records spell one institution in more than one way.
  */
+export const FOLDED_KEYWORD_FIELDS: readonly string[] = ["tags", "fullNames", INSTITUTION_FILTER_FIELD];
+
+/** Folded keywords readers also search, through their `.text` field. */
 export const SEARCHED_KEYWORD_FIELDS: readonly string[] = ["tags", "fullNames"];
 
 const text = { type: "text", analyzer: "library_text" } as const;
@@ -63,7 +65,10 @@ function definition() {
 			properties: {
 				...Object.fromEntries(KEYWORD_FIELDS.map((field) => [field, { type: "keyword" }])),
 				...Object.fromEntries(
-					SEARCHED_KEYWORD_FIELDS.map((field) => [field, { type: "keyword", normalizer: "sort_key", fields: { text, raw: { type: "keyword" } } }]),
+					FOLDED_KEYWORD_FIELDS.map((field) => [
+						field,
+						{ type: "keyword", normalizer: "sort_key", fields: { ...(SEARCHED_KEYWORD_FIELDS.includes(field) ? { text } : {}), raw: { type: "keyword" } } },
+					]),
 				),
 				title: {
 					...text,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { fieldIn, fieldNotEquals, fieldPresent, yearRange } from "@/lib/search-engine";
 import { facetAggregations, facetDistribution, filterClause, sortClauses, textQuery } from "@/lib/search-engines/elasticsearch-query";
 
@@ -130,9 +131,10 @@ describe("facet counts", () => {
 		});
 	});
 
-	it("counts tags and names ignoring case and accents, each named as most of its records spell it", () => {
-		expect(facetAggregations(["tags"])).toMatchObject({
+	it("counts tags, names and institutions ignoring case and accents, each named as most of its records spell it", () => {
+		expect(facetAggregations(["tags", INSTITUTION_FILTER_FIELD])).toMatchObject({
 			tags: { terms: { field: "tags" }, aggs: { spelling: { terms: { field: "tags.raw", size: 1 } } } },
+			[INSTITUTION_FILTER_FIELD]: { aggs: { spelling: { terms: { field: `${INSTITUTION_FILTER_FIELD}.raw`, size: 1 } } } },
 		});
 		expect(
 			facetDistribution({
