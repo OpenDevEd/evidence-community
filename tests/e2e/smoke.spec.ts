@@ -1038,6 +1038,26 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", {
 });
 
 
+test("the country map answers the pointer after Back, resized while away", async ({ page }) => {
+	test.skip(process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP !== "true", "This library has no country map.");
+	const reachable = () => page.evaluate(() => [...document.querySelectorAll("svg [role='button']")].some((shape) => {
+		const box = shape.getBoundingClientRect();
+		return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === shape;
+	}));
+	await page.goto("/en-GB/map", { waitUntil: "domcontentloaded" });
+	await dismissConsent(page);
+	await page.locator("button").filter({ hasText: /^\s*\d+\s*\D/ }).first().click();
+	await expect(page).toHaveURL(url => url.searchParams.has("country"));
+	await expect.poll(reachable).toBe(true);
+	await page.locator("a[href]:not([href^='#']):not([href*='/map'])").filter({ visible: true }).first().click();
+	await expect(page).not.toHaveURL(/\/map/);
+	// The map's slide can't run while the page is kept for Back, so no transition ends it.
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goBack();
+	await expect(page).toHaveURL(/\/map/);
+	await expect.poll(reachable).toBe(true);
+});
+
 test("only opens the country map when its page is enabled", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
