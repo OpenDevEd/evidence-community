@@ -52,6 +52,13 @@ and tabbing on from a pick doesn't pick it again. The regression check is
 Non-virtualized lists also use their actual scroll container for keyboard focus,
 so moving through long results scrolls the dropdown instead of the page.
 
+Listbox brings the highlighted row into view in a virtualized list, one over 50
+options. React Aria only scrolls to a row that is drawn, so End, PageDown and a
+held value far down the list left the highlight out of sight, and Enter picked a
+row nobody could see. A mouse hover doesn't scroll. Rows are placed with `top`
+instead of a transform: inside a modal React Aria reads `offsetTop`, which was 0
+for every row, so each arrow key scrolled the list back to its start.
+
 `tests/e2e/admin.spec.ts` covers tooltip cleanup, nested selects, adjacent
 popovers, dropdown-to-dialog transitions, Tabs inside dialogs, and touch input
 under `overlay lifecycle`. These tests use the real admin components and mock
