@@ -912,7 +912,7 @@ test("tells someone without a role which organisation to ask", async ({ page }) 
 	await signInAs(page.context(), "user_acceptance_outsider");
 	await page.goto("/admin");
 	await expect(page.getByRole("heading", { name: "You cannot open this admin area" })).toBeVisible();
-	await expect(page.getByText("Ask an admin of Acceptance organisation to add you to the team that runs this library.")).toBeVisible();
+	await expect(page.getByText("Ask an admin of Acceptance organisation to add you to the team that runs this community.")).toBeVisible();
 	await expect(page.getByRole("button", { name: "Create Item" })).toHaveCount(0);
 });
 
@@ -2342,14 +2342,14 @@ test("returns to the open draft after finishing link selection in a narrow windo
 	await expect(title).toBeEnabled();
 
 	await inspector.getByRole("button", { name: "Add to References" }).click();
-	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect(page.getByRole("grid", { name: "Community records" })).toBeVisible();
 	await page.locator('[data-admin-link-pick-banner="cites"]').getByRole("button", { name: "Done" }).click();
 	await expect(title).toBeVisible();
 	await expect(title).toHaveValue(publishedPayload.title);
 
 	await inspector.getByRole("button", { name: "Related", exact: true }).click();
 	await inspector.getByRole("button", { name: "Add to Related" }).click();
-	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect(page.getByRole("grid", { name: "Community records" })).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(title).toBeVisible();
 	await expect(title).toHaveValue(publishedPayload.title);
@@ -2364,11 +2364,11 @@ test("shows matching records after choosing a navigation filter in a narrow wind
 	const paneToggle = page.locator('button[aria-label="Filters"]:not([aria-haspopup])');
 	await paneToggle.click();
 	await navigation.getByRole("button", { name: /Review queue/ }).click();
-	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect(page.getByRole("grid", { name: "Community records" })).toBeVisible();
 	await expect.poll(() => new URL(page.url()).searchParams.get("review")).toBe("pending");
 	await paneToggle.click();
 	await navigation.getByRole("button", { name: "Created", exact: true }).click();
-	await expect(page.getByRole("grid", { name: "Library records" })).toBeVisible();
+	await expect(page.getByRole("grid", { name: "Community records" })).toBeVisible();
 	await expect.poll(() => new URL(page.url()).searchParams.get("review")).toBeNull();
 });
 
@@ -5096,7 +5096,7 @@ test("chunks a 500-record keyboard selection through the batch contract", async 
 		onBatchRequest: (body) => batchRequests.push(body),
 	});
 	await page.goto("/admin");
-	const grid = page.getByRole("grid", { name: "Library records" });
+	const grid = page.getByRole("grid", { name: "Community records" });
 	await expect(grid).toHaveAttribute("aria-rowcount", "501");
 	await grid.focus();
 	await grid.press("Meta+A");
@@ -5200,7 +5200,7 @@ test("virtualizes large record sets while keeping rows horizontal and key column
 	).toBeVisible();
 
 	const scroll = page.locator("[data-admin-item-table-scroll]");
-	const table = page.getByRole("grid", { name: "Library records" });
+	const table = page.getByRole("grid", { name: "Community records" });
 	await expect(table).toHaveAttribute("aria-multiselectable", "true");
 	await expect(table).toHaveAttribute("aria-rowcount", "501");
 	await expect(table.getByRole("rowgroup")).toHaveCount(2);
@@ -5298,7 +5298,7 @@ test("navigates one stable grid tab stop through virtualized cells", async ({
 	});
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto("/admin");
-	const grid = page.getByRole("grid", { name: "Library records" });
+	const grid = page.getByRole("grid", { name: "Community records" });
 	const firstTitleCell = page.locator(
 		`#admin-item-grid-cell-${publishedItemKey}-title`,
 	);
@@ -5548,7 +5548,7 @@ test("keeps unavailable drag controls out of keyboard widget mode", async ({
 	await batchStarted;
 
 	try {
-		const grid = page.getByRole("grid", { name: "Library records" });
+		const grid = page.getByRole("grid", { name: "Community records" });
 		await grid.focus();
 		await expect(
 			page.getByRole("button", {
@@ -5589,7 +5589,7 @@ test("announces an initial record-list failure from the grid status row", async 
 	await expect(
 		errorState.getByRole("button", { name: "Try again" }),
 	).toHaveAttribute("tabindex", "-1");
-	const grid = page.getByRole("grid", { name: "Library records" });
+	const grid = page.getByRole("grid", { name: "Community records" });
 	await grid.focus();
 	await grid.press("ArrowDown");
 	await grid.press("F2");

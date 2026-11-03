@@ -227,7 +227,7 @@ it("refuses text a digest cannot hold, with the reason", async () => {
   await withIsolatedPublicationDatabase(async (db, client) => {
     const id = await publishedEdition(db, client);
     const save = (markdown: string, more: object = {}) => saveDigestDraft(db, config, { id, expectedRevision: 0, words: { ...edited, markdown, ...more } }, creator);
-    await expect(save("See [the paper](https://example.org/paper).")).rejects.toThrow("must point to a publication in this library");
+    await expect(save("See [the paper](https://example.org/paper).")).rejects.toThrow("must point to a publication in this community");
     await expect(save("![chart](/chart.png)")).rejects.toThrow("cannot hold images");
     await expect(save("<script>alert(1)</script>")).rejects.toThrow("Remove the HTML");
     await expect(save("x".repeat(50_001))).rejects.toThrow("Keep the digest's text under 50,000 characters.");

@@ -1135,7 +1135,7 @@ test("keeps the whole-library export total independent of the search", { tag: "@
 	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }).first()).toBeVisible();
 	const button = page.getByRole("button", { name: "Download", exact: true });
 	await button.click();
-	const wholeLibrary = page.getByRole("radio", { name: /^Whole library/ });
+	const wholeLibrary = page.getByRole("radio", { name: /^Whole community/ });
 	const count = Number((await wholeLibrary.ariaSnapshot()).match(/\(([\d,]+)\)/)?.[1].replaceAll(",", ""));
 	expect(count).toBeGreaterThan(0);
 	await wholeLibrary.check();
