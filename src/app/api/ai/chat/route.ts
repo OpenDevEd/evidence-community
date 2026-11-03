@@ -134,7 +134,7 @@ async function resolveReaderList(
 	const readerList = searchContext?.readerList;
 	if (!readerList) return undefined;
 	if (!config.features.readerAccounts) {
-		throw new AIError("INVALID_REQUEST", "This library has no reader lists.", 400);
+		throw new AIError("INVALID_REQUEST", "This community has no reader lists.", 400);
 	}
 	const viewer = await getSignedInReader(request.headers, config);
 	const list = await readReaderListKeys(await getDatabaseForConfig(config), readerList, viewer?.id ?? null);

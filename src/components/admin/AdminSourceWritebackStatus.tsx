@@ -42,7 +42,7 @@ const appearance = {
 	disabled: {
 		className: "text-black/45 dark:text-white/45",
 		description:
-			"Writeback is disabled for this source in the library configuration.",
+			"Writeback is disabled for this source in the community configuration.",
 		icon: CloudOffIcon,
 		label: "Writeback off",
 		spin: false,
@@ -341,7 +341,7 @@ export function AdminSourcesWritebackStatus({
 			>
 				{!restriction && sources.length === 0 && (
 					<p className="py-1 text-xs leading-5 text-black/60 dark:text-white/60">
-						This record is not connected to any source. Changes stay in this library{manageAction ? " unless you connect one with Manage" : ""}.
+						This record is not connected to any source. Changes stay in this community{manageAction ? " unless you connect one with Manage" : ""}.
 					</p>
 				)}
 

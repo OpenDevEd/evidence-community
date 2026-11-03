@@ -47,14 +47,14 @@ export type Refusal = { error: string; message: string; status: number };
 const refusal = (error: string, message: string, status: number): Refusal => ({ error, message, status });
 
 export const refusals = {
-	contract: refusal("contract", `This library speaks contract ${OPENSCHOLAR_CONTRACT}: send it in OpenScholar-Contract.`, 400),
+	contract: refusal("contract", `This community speaks contract ${OPENSCHOLAR_CONTRACT}: send it in OpenScholar-Contract.`, 400),
 	invalid: (message: string) => refusal("invalid_request", message, 400),
 	notFound: refusal("not_found", "There is no such collection.", 404),
 	private: refusal("private", "This collection is private.", 403),
-	readerAccountsOff: refusal("reader_accounts_off", "This library has no reader accounts.", 403),
+	readerAccountsOff: refusal("reader_accounts_off", "This community has no reader accounts.", 403),
 	tooMany: refusal("too_many", `A source gives at most ${RESOLVE_MAX_KEYS.toLocaleString("en")} records at once.`, 413),
-	indexChanged: refusal("index_changed", "The library's search changed while it was read. Ask again.", 409),
-	notReader: refusal("not_reader", "This person has never signed in to this library.", 404),
+	indexChanged: refusal("index_changed", "The community's search changed while it was read. Ask again.", 409),
+	notReader: refusal("not_reader", "This person has never signed in to this community.", 404),
 	role: refusal("role", "Only the collection's owner and its editors can change it.", 403),
 	owner: refusal("role", "Only the collection's owner can delete it.", 403),
 	changed: (message: string) => refusal("changed", message, 409),

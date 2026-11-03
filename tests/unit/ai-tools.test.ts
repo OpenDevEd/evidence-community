@@ -219,7 +219,7 @@ describe("searching the library for the assistant", () => {
 				queries: ["radio"],
 				withinCurrentResults: true,
 			}),
-		).rejects.toThrow(/no current library result set/i);
+		).rejects.toThrow(/no current community result set/i);
 	});
 
 	it("lists the reader's own results in their own order", async () => {

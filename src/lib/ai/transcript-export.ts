@@ -35,7 +35,7 @@ const TOOL_TITLES: Record<string, string> = {
 	"title.readingCurrent": "Reading current results",
 	"title.searchedCurrent": "Searched current results",
 	"title.searchingCurrent": "Searching current results",
-	"title.search": "Library search",
+	"title.search": "Community search",
 	"title.readingPublications": "Reading publications",
 };
 

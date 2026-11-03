@@ -76,7 +76,7 @@ async function assertAssignableCollection(db: Database, collectionKey: string) {
 		)
 		.limit(1);
 	if (!target) {
-		throw new AdminValidationError("Choose an active library collection.", {
+		throw new AdminValidationError("Choose an active community collection.", {
 			collectionKey:
 				"Records can only be assigned to an active collection.",
 		});

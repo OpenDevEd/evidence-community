@@ -48,7 +48,7 @@ test("reads uploaded PDFs on the worker, imports each once, attaches its PDF, an
 	});
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		await expect(startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [{ name: "huge.pdf", size: MAX_PDF_BYTES + 1 }], instructions: "" })).rejects.toThrow("larger than the library takes");
+		await expect(startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [{ name: "huge.pdf", size: MAX_PDF_BYTES + 1 }], instructions: "" })).rejects.toThrow("larger than the community takes");
 		const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: ["Credits FCDO"], collections: [], createdBy: EDITOR, files: [pdfFile("report.pdf"), pdfFile("lost.pdf")], instructions: "" });
 		await expect(startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile("other.pdf")], instructions: "" })).rejects.toThrow("Another import is open");
 
@@ -238,7 +238,7 @@ test("doesn't read a PDF larger than the library takes", async () => {
 		await confirmPdfImportUpload(db, storage, started.files[0]!.id);
 		await runPdfImportCycle(db, storage, small);
 		// It fails for good at once: trying again can't make it smaller.
-		expect((await pdfImportStatus(db)).import!.files[0]).toMatchObject({ message: expect.stringContaining("larger than the library takes"), state: "failed" });
+		expect((await pdfImportStatus(db)).import!.files[0]).toMatchObject({ message: expect.stringContaining("larger than the community takes"), state: "failed" });
 		expect(readImportPdf).not.toHaveBeenCalled();
 	});
 });

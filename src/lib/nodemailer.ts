@@ -161,7 +161,7 @@ export async function sendNotificationEmail(config: LibraryServerConfig, message
   headers?: Record<string, string>;
 }) {
   const transporter = await getEmailTransportForConfig(config);
-  if (!transporter || !config.email.smtp.from) throw new Error("Library email is not configured");
+  if (!transporter || !config.email.smtp.from) throw new Error("Community email is not configured");
   const address = config.contact.email ?? config.email.smtp.from;
   return transporter.sendMail({ from: { name: config.identity.name, address }, replyTo: address, ...message });
 }

@@ -127,8 +127,8 @@ export function researchRequestContextText(
 			? `Current publication: ${JSON.stringify(context.currentPublication)}.`
 			: "There is no current publication.",
 		context.searchContext
-			? `Current library result set: <current-library-search>${librarySearchContextSummary(context.searchContext)}</current-library-search>.`
-			: "There is no current library result set.",
+			? `Current community result set: <current-library-search>${librarySearchContextSummary(context.searchContext)}</current-library-search>.`
+			: "There is no current community result set.",
 		"</request_context>",
 	].join("\n");
 }

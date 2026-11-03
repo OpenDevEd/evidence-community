@@ -231,7 +231,7 @@ export function resolveNativeCollectionMoveIntent(
 			"Choose another collection position.",
 			{
 				targetCollection:
-					"Choose an active collection created in this library.",
+					"Choose an active collection created in this community.",
 			},
 		);
 	}
@@ -413,7 +413,7 @@ export async function createNativeCollection(db: Database, input: unknown) {
 			NATIVE_CONNECTION_KEY,
 			null,
 			values.parentCollection,
-			"Choose an active collection created in this library.",
+			"Choose an active collection created in this community.",
 		);
 
 		const key = await reserveCollectionIdentity(transaction, {
@@ -545,7 +545,7 @@ export async function moveNativeCollection(
 			NATIVE_CONNECTION_KEY,
 			collectionKey,
 			move.parentCollection,
-			"Choose an active collection created in this library.",
+			"Choose an active collection created in this community.",
 		);
 
 		const positionUpdates = planNativeCollectionPosition(

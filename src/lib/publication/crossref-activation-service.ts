@@ -119,7 +119,7 @@ function requireCrossrefConfig(config: PublicationConfig) {
 	const crossref = config.services.publication.crossref;
 	if (!crossref.enabled) {
 		throw new CrossrefActivationConfigurationError(
-			"Crossref publishing is not configured for this library.",
+			"Crossref publishing is not configured for this community.",
 		);
 	}
 	if (

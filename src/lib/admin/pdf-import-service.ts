@@ -161,7 +161,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
  */
 export async function startPdfImport(db: Database, storage: EvidenceFileStorage, maxPdfBytes: number, input: { checks: string[]; collections: string[]; createdBy: string; files: { name: string; size: number }[]; instructions: string }) {
 	const oversized = input.files.find(({ size }) => size > maxPdfBytes);
-	if (oversized) throw new AdminValidationError(`${oversized.name} is larger than the library takes (${Math.floor(maxPdfBytes / 1024 / 1024)} MB).`);
+	if (oversized) throw new AdminValidationError(`${oversized.name} is larger than the community takes (${Math.floor(maxPdfBytes / 1024 / 1024)} MB).`);
 	const started = await db.transaction(async (transaction) => {
 		const [open] = await transaction.select({ id: pdfImport.id }).from(pdfImport).where(isNull(pdfImport.closedAt)).limit(1);
 		if (open) throw new AdminValidationError("Another import is open. Finish or discard it first.");

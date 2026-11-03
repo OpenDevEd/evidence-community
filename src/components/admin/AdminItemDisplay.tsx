@@ -56,9 +56,9 @@ export function AdminItemDisplay({
 	const iconFor = (key: (typeof ITEM_DISPLAY_OPTIONS)[number]["key"]) =>
 		key === "hidden" && !hidden ? ViewIcon : displayIcons[key];
 	return (
-		<section id="admin-library-display" aria-label="Library display">
+		<section id="admin-library-display" aria-label="Community display">
 			<AdminStatusAccordion
-				title="Library display"
+				title="Community display"
 				summary={
 					<span className="flex flex-wrap gap-x-3 gap-y-1">
 						{ITEM_DISPLAY_OPTIONS.filter(
@@ -160,9 +160,9 @@ export function AttachmentDisplay({ tags, readOnly, onChange, publishTags }: {
 	const hidden = hasAnyTag(tags, content.tags.hidden);
 	const unpublished = Boolean(publishTags) && !hasAnyTag(tags, publishTags ?? []);
 	return (
-		<section aria-label="Library display">
+		<section aria-label="Community display">
 			<AdminStatusAccordion
-				title="Library display"
+				title="Community display"
 				summary={
 					<span className="inline-flex items-center gap-1">
 						<HugeiconsIcon icon={hidden || unpublished ? displayIcons.hidden : ViewIcon} size={12} />
@@ -339,8 +339,8 @@ function ReaderPreview({ tags, title }: { tags: string[]; title: string }) {
 					size={13}
 				/>
 				{previewHidden
-					? "Not listed in the library"
-					: "Visible in the library"}
+					? "Not listed in the community"
+					: "Visible in the community"}
 			</div>
 			<div
 				className={`transition-opacity motion-reduce:transition-none ${previewHidden ? "opacity-35" : "opacity-100"}`}

@@ -764,7 +764,7 @@ describe("admin publication view", () => {
 		});
 
 		expect(view.providers.crossref.blockers).toContain(
-			"The configured DOI prefix or namespace does not match the namespace already used by this library",
+			"The configured DOI prefix or namespace does not match the namespace already used by this community",
 		);
 	});
 

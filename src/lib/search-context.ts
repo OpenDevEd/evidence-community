@@ -115,7 +115,7 @@ export function librarySearchContextSummary(
 ): string {
 	return JSON.stringify({
 		query: context.search,
-		scope: context.scope || "library default",
+		scope: context.scope || "community default",
 		sort: context.sort,
 		yearRange: context.range || undefined,
 		institutions: context.institution,
@@ -128,7 +128,7 @@ export function librarySearchContextSummary(
 		itemTypes: context.type,
 		studyTypes: context.study,
 		tagFilters: context.tags,
-		collectionsMatch: context.match || "library default",
+		collectionsMatch: context.match || "community default",
 		readerList: context.readerList
 			? context.readerList.collectionId
 				? "one of this reader's collections, as shown on their profile"

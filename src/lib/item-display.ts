@@ -4,7 +4,7 @@ import { hasAnyTag } from "./tags";
 export const ITEM_DISPLAY_OPTIONS = [
 	{
 		key: "hidden",
-		label: "Hide from library",
+		label: "Hide from community",
 		description: "Exclude this item from public pages and search.",
 	},
 	{

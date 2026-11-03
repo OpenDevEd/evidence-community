@@ -122,14 +122,14 @@ async function readAdminPermission(
 ) {
 	const authorization = await authorizeAdminRequest(request.headers, permission);
 	if (authorization.status === "authorized") return { session: authorization.session, denied: null };
-  if (authorization.status === "unavailable") return { session: null, denied: NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify library access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS }) };
+  if (authorization.status === "unavailable") return { session: null, denied: NextResponse.json({ error: { code: "access_unavailable", message: "Unable to verify community access. Try again shortly." } }, { status: 503, headers: ADMIN_RESPONSE_HEADERS }) };
 	if (authorization.status === "forbidden") {
 		return { session: null, denied: adminForbiddenResponse(permission) };
 	}
 	if (authorization.status === "no_access") {
 		return { session: null, denied: adminError({
 			code: "forbidden",
-			message: "You do not have access to this library's admin area.",
+			message: "You do not have access to this community's admin area.",
 			status: 403,
 		}) };
 	}
@@ -142,7 +142,7 @@ async function readAdminPermission(
 
 export function adminForbiddenResponse(permission: AdminPermission) {
   return adminError({code: "forbidden", status: 403,
-    message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a library Owner can do this."});
+    message: permission === ADMIN_PUBLISH_PERMISSION ? "An Editor or Owner must publish this change." : "Only a community Owner can do this."});
 }
 
 export async function handleAdminResponse(

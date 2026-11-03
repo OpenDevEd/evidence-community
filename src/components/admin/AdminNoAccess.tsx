@@ -15,8 +15,8 @@ export function AdminNoAccess({ organisationName }: { organisationName: string |
 			<h1 className="text-2xl font-semibold text-foreground dark:text-white">You cannot open this admin area</h1>
 			<p className="text-black/65 dark:text-white/65">
 				{organisationName
-					? `Ask an admin of ${organisationName} to add you to the team that runs this library.`
-					: "Ask an admin of the organisation that runs this library to add you to its team."}
+					? `Ask an admin of ${organisationName} to add you to the team that runs this community.`
+					: "Ask an admin of the organisation that runs this community to add you to its team."}
 			</p>
 			<Button
 				isLoading={signingOut}

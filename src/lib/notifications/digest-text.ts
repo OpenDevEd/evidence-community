@@ -35,7 +35,7 @@ function refusedMarkup(token: Token): string | null {
   if (PLAIN.has(token.type)) return null;
   if (NESTED.has(token.type)) return first("tokens" in token ? token.tokens : undefined);
   if (token.type === "heading") return token.depth === 2 ? first(token.tokens) : "Use one level of heading.";
-  if (token.type === "link") return CITATION.test(token.href) ? first(token.tokens) : "A link must point to a publication in this library.";
+  if (token.type === "link") return CITATION.test(token.href) ? first(token.tokens) : "A link must point to a publication in this community.";
   return REFUSED[token.type] ?? "Use headings, paragraphs, bold and citations only.";
 }
 const first = (tokens: Token[] | undefined): string | null => (tokens ?? []).map(refused).find(reason => reason !== null) ?? null;

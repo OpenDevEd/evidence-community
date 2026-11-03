@@ -72,7 +72,7 @@ export function ReviewPublicationProgress({ snapshot }: { snapshot: Pick<AdminRe
 	const state = useAdminPublication(snapshot.key, String(snapshot.reviewRevision));
 	const providers = state.publication ? [state.publication.providers.crossref, state.publication.providers.zenodo].filter((provider) => provider.exact.targetActive) : [];
 	const steps: ProgressStep[] = [
-		{ label: "Publish in library", detail: "The submitted version is public. Later draft edits stay private.", state: "done", status: "Done" },
+		{ label: "Publish in community", detail: "The submitted version is public. Later draft edits stay private.", state: "done", status: "Done" },
 		...providers.map(providerStep),
 	];
 	const requestError = state.actionError ?? state.error;

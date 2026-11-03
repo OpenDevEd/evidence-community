@@ -8,7 +8,7 @@ type Context = { params: Promise<{ key: string }> };
 
 const REFUSED = {
 	invalid_subject: { message: "Send the subject to try, up to 1,000 characters.", status: 400 },
-	no_key: { message: "The library has no OpenRouter key to read records with.", status: 409 },
+	no_key: { message: "The community has no OpenRouter key to read records with.", status: 409 },
 	not_found: { message: "No source has this key.", status: 404 },
 } as const;
 

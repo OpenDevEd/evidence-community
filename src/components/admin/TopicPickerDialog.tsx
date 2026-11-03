@@ -413,7 +413,7 @@ export function TopicPickerDialog({
 						<h2 className="text-lg font-semibold">Choose topics</h2>
 						<p className="mt-1 text-xs leading-relaxed text-black/50 dark:text-white/50">
 							Topics come from the OpenAlex list of research
-							areas, shared by every library.
+							areas, shared by every community.
 						</p>
 					</div>
 					<Button

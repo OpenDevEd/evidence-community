@@ -44,7 +44,7 @@ function InstructionsEditor({ flow }: { flow: ImportFlowState }) {
 	const shared = "col-start-1 row-start-1 whitespace-pre-wrap break-words px-4 py-3 text-sm leading-6";
 	return (
 		<div>
-			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Given to the AI with every PDF it reads, and kept for the library&rsquo;s next import. They win over how it works by default, but never make it invent facts.</p>
+			<p className="mb-3 text-xs leading-5 text-black/50 dark:text-white/50">Given to the AI with every PDF it reads, and kept for the community&rsquo;s next import. They win over how it works by default, but never make it invent facts.</p>
 			<div className="overflow-hidden rounded-xl bg-card_light shadow-sm ring-1 ring-black/[0.07] transition-shadow focus-within:ring-2 focus-within:ring-focus dark:bg-white/[0.05] dark:ring-white/[0.08]">
 				<div className="grid min-h-[8.5rem]">
 					<span aria-hidden className={`${shared} invisible`}>{`${text || INSTRUCTIONS_EXAMPLE} `}</span>
@@ -110,7 +110,7 @@ function Settings({ flow }: { flow: ImportFlowState }) {
 						<ListEditor
 							addLabel="Add a check"
 							busy={flow.busy}
-							intro={`Up to ${PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on. The library's next import starts from these.`}
+							intro={`Up to ${PDF_IMPORT_MAX_CRITERIA}. The AI answers each one for every PDF, with the quote and page it rests on. The community's next import starts from these.`}
 							itemLabel="Check"
 							items={flow.checks}
 							max={PDF_IMPORT_MAX_CRITERIA}
@@ -198,7 +198,7 @@ function PdfUpload({ flow }: { flow: ImportFlowState }) {
 					<PdfRows busy={flow.busy} files={flow.pdfs} onFilesChange={flow.setPdfs} perPage={8} />
 				</>
 			) : (
-				<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. The library's AI reads each one.`} label="PDFs" onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what="PDFs" />
+				<Dropzone accept={PDF_ACCEPT} busy={flow.busy} hint={`Up to ${PDF_IMPORT_MAX_FILES} PDFs, 50 MB each. The community's AI reads each one.`} label="PDFs" onFiles={(chosen) => flow.setPdfs(withNew(flow.pdfs, chosen))} what="PDFs" />
 			)}
 		</>
 	);

@@ -14,7 +14,7 @@ async function openPreferences(page: Page) {
 	if (!token) throw new Error("PLAYWRIGHT_SUBSCRIPTION_TOKEN is required for the seeded subscriber.");
 	await page.goto(`/digests/preferences?token=${token}`);
 	await dismissConsent(page);
-	for (const name of ["Library digests", "New publications"]) {
+	for (const name of ["Community digests", "New publications"]) {
 		const control = page.getByRole("switch", {name, exact: true});
 		await expect(control).toBeEnabled();
 		if (!await control.isChecked()) await clickPreferenceTitle(page, name);
@@ -24,8 +24,8 @@ async function openPreferences(page: Page) {
 
 test("preference titles and keyboard input control the actual switches", async ({page}) => {
 	await openPreferences(page);
-	const digest = page.getByRole("switch", {name: "Library digests", exact: true});
-	await clickPreferenceTitle(page, "Library digests");
+	const digest = page.getByRole("switch", {name: "Community digests", exact: true});
+	await clickPreferenceTitle(page, "Community digests");
 	await expect(digest).not.toBeChecked();
 	await digest.focus();
 	await page.keyboard.press("Space");
@@ -42,12 +42,12 @@ test("pending saves lock preferences and unsubscribe until the request fails", a
 	});
 	await page.getByRole("button", {name: "Save preferences", exact: true}).click();
 	try {
-		for (const name of ["Library digests", "New publications"]) await expect(page.getByRole("switch", {name, exact: true})).toBeDisabled();
+		for (const name of ["Community digests", "New publications"]) await expect(page.getByRole("switch", {name, exact: true})).toBeDisabled();
 		await expect(page.getByRole("button", {name: "Unsubscribe from all", exact: true})).toBeDisabled();
 	} finally {release();}
 	await expect(page.getByRole("region", {name: "Email updates", exact: true}).getByRole("alert")).toHaveText(/\S/u);
 	await expect(page.getByRole("button", {name: "Save preferences", exact: true})).toBeEnabled();
-	await expect(page.getByRole("switch", {name: "Library digests", exact: true})).toBeEnabled();
+	await expect(page.getByRole("switch", {name: "Community digests", exact: true})).toBeEnabled();
 });
 
 for (const failure of ["offline", "proxy error", "html success", "empty success", "invalid success"] as const) {
@@ -68,9 +68,9 @@ for (const failure of ["offline", "proxy error", "html success", "empty success"
 		const alert = page.getByRole("region", {name: "Email updates", exact: true}).getByRole("alert");
 		await expect(alert).toHaveText(/\S/u);
 		await expect(alert).not.toContainText(/wire-error|<html>/u);
-		const digest = page.getByRole("switch", {name: "Library digests", exact: true});
+		const digest = page.getByRole("switch", {name: "Community digests", exact: true});
 		await expect(digest).toBeChecked();
-		await clickPreferenceTitle(page, "Library digests");
+		await clickPreferenceTitle(page, "Community digests");
 		await expect(alert).toHaveCount(0);
 		shouldFail = false;
 		await page.getByRole("button", {name: "Save preferences", exact: true}).click();

@@ -103,7 +103,7 @@ describe("the library result set the assistant can see", () => {
 		expect(
 			JSON.parse(librarySearchContextSummary(context({ scope: "" })))
 				.scope,
-		).toBe("library default");
+		).toBe("community default");
 	});
 });
 
@@ -125,12 +125,12 @@ describe("reading further into the current results", () => {
 
 		expect(() =>
 			currentResultsOffset(context({ search: "school meals" }), cursor),
-		).toThrow(/current library search changed/i);
+		).toThrow(/current community search changed/i);
 	});
 
 	it("refuses a cursor someone tampered with", () => {
 		expect(() => currentResultsOffset(context(), "not-a-cursor")).toThrow(
-			/current library search changed/i,
+			/current community search changed/i,
 		);
 	});
 });

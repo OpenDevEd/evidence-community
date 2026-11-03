@@ -1088,7 +1088,7 @@ export function AdminItemTable({
 					ref={gridRef}
 					aria-activedescendant={activeCellId}
 					aria-colcount={visibleColumnCount}
-					aria-label="Library records"
+					aria-label="Community records"
 					aria-multiselectable="true"
 					aria-rowcount={
 						tableRows.length > 0 ? tableRows.length + 1 : 2

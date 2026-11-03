@@ -498,7 +498,7 @@ export async function commitImportRecords(
 					id: record.id,
 					message:
 						record.state === "existing"
-							? "This record is already in the library."
+							? "This record is already in the community."
 							: "This record repeats an earlier record of the import.",
 					outcome: "skipped",
 				};

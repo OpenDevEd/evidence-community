@@ -121,9 +121,9 @@ describe("resolveWritebackDialogOptions", () => {
 				option.status,
 			]),
 		).toEqual([
-			["off", false, true, { text: "Turned off in library settings", tone: "warn" }],
-			["paused", false, true, { text: "Paused in library settings", tone: "warn" }],
-			["gone", false, true, { text: "Removed from library settings", tone: "warn" }],
+			["off", false, true, { text: "Turned off in community settings", tone: "warn" }],
+			["paused", false, true, { text: "Paused in community settings", tone: "warn" }],
+			["gone", false, true, { text: "Removed from community settings", tone: "warn" }],
 		]);
 	});
 

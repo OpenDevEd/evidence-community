@@ -84,7 +84,7 @@ async function assertSourceFits(
 			existing.externalScopeKey !== values.externalScopeKey)
 	) {
 		throw new SourceConfigurationConflictError(
-			`Source ${source.key} already points to a different library.`,
+			`Source ${source.key} already points to a different community.`,
 		);
 	}
 	await assertOpenAlexApproval(transaction, source);

@@ -18,9 +18,9 @@ export type WritebackDialogOption = {
 };
 
 const blockedHelper: Record<string, string> = {
-	"source-disabled": "Turned off in library settings",
-	"source-paused": "Paused in library settings",
-	"source-removed": "Removed from library settings",
+	"source-disabled": "Turned off in community settings",
+	"source-paused": "Paused in community settings",
+	"source-removed": "Removed from community settings",
 	"unsupported-provider": "This source type does not support writeback",
 };
 
@@ -87,7 +87,7 @@ export function writebackDialogText(mode: WritebackDialogMode) {
 				confirm: "Unpublish",
 				here: "Removed from the public page and search",
 				intro:
-					"It leaves this library either way. Switch on any source whose copy should be removed as well.",
+					"It leaves this community either way. Switch on any source whose copy should be removed as well.",
 				title: "Unpublish this record",
 			};
 		case "manage":
@@ -95,7 +95,7 @@ export function writebackDialogText(mode: WritebackDialogMode) {
 				confirm: "Save",
 				here: "Public page and search",
 				intro:
-					"This library always keeps it. Switch on the sources that should receive future updates.",
+					"This community always keeps it. Switch on the sources that should receive future updates.",
 				title: "Sources for this record",
 			};
 	}

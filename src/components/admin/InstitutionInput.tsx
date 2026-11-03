@@ -210,8 +210,8 @@ function useInstitutionSearch({
 	);
 	const sections: Section[] = [
 		{
-			key: `${SECTION_KEY}library`,
-			title: "In this library",
+			key: `${SECTION_KEY}community`,
+			title: "In this community",
 			items: options.filter((option) => option.kind === "library"),
 		},
 		{

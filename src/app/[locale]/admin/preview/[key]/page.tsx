@@ -84,7 +84,7 @@ async function DraftPreview(props: Props) {
 			</PreviewMessage>
 		);
 	}
-	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public library.</PreviewMessage>;
+	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public community.</PreviewMessage>;
 	return (
 		<LookOnly>
 			<ItemPage data={await withTopicNames(withoutFullText({ item }))} loading={false} />

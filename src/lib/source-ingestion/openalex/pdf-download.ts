@@ -6,7 +6,7 @@ const PDF_HEADER = Buffer.from("%PDF-");
 // Other copies are tried only while the record has spent less than this; a page waits for its slowest record.
 const FALLBACK_BUDGET_MS = 60_000;
 // Unpaywall asks callers to name themselves by email; this is the platform's.
-const UNPAYWALL_EMAIL = "contact@opendeved.net";
+const UNPAYWALL_EMAIL = "support@openscholar.ai";
 
 /** A PDF may carry a short preamble before its header, so the header is looked for in the first kilobyte. */
 export const isPdf = (bytes: Uint8Array) => {
