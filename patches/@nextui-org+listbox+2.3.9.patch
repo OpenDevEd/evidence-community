@@ -1,0 +1,252 @@
+diff --git a/node_modules/@nextui-org/listbox/dist/chunk-O4QA3BPM.mjs b/node_modules/@nextui-org/listbox/dist/chunk-O4QA3BPM.mjs
+index b1d38dc..e1c7ae1 100644
+--- a/node_modules/@nextui-org/listbox/dist/chunk-O4QA3BPM.mjs
++++ b/node_modules/@nextui-org/listbox/dist/chunk-O4QA3BPM.mjs
+@@ -9,6 +9,7 @@ import {
+ // src/virtualized-listbox.tsx
+ import { useMemo as useMemo2, useRef as useRef2, useState } from "react";
+ import { mergeProps } from "@react-aria/utils";
++import { getInteractionModality } from "@react-aria/interactions";
+ import { useVirtualizer } from "@tanstack/react-virtual";
+ import { isEmpty } from "@nextui-org/shared-utils";
+ 
+@@ -218,6 +219,42 @@ var VirtualizedListbox = (props) => {
+     estimateSize: (i) => itemSizes[i]
+   });
+   const virtualItems = rowVirtualizer.getVirtualItems();
++  // React Aria scrolls to the highlighted row only once it's drawn, so End, PageDown or a held value far down the list
++  // would leave the highlight out of sight, and Enter would pick a row nobody can see. A mouse over the list moves the
++  // highlight too, and must not scroll it.
++  const focusedKey = state.selectionManager.focusedKey;
++  useEffect(() => {
++    var _a;
++    if (focusedKey == null || ((_a = parentRef.current) == null ? void 0 : _a.matches(":hover")) && getInteractionModality() === "pointer")
++      return;
++    let rowTop = 0;
++    let found = false;
++    for (const item of state.collection) {
++      if (item.key === focusedKey) {
++        found = item.type !== "section";
++        break;
++      }
++      if (item.type !== "section") {
++        rowTop += itemHeight;
++        continue;
++      }
++      const children = [...item.childNodes];
++      const place = children.findIndex((child) => child.key === focusedKey);
++      if (place >= 0) {
++        rowTop += (place + 1) * itemHeight;
++        found = true;
++        break;
++      }
++      rowTop += (children.length + 1) * itemHeight;
++    }
++    const list = parentRef.current;
++    if (!found || !list)
++      return;
++    if (rowTop < list.scrollTop)
++      list.scrollTop = rowTop;
++    else if (rowTop + itemHeight > list.scrollTop + list.clientHeight)
++      list.scrollTop = rowTop + itemHeight - list.clientHeight;
++  }, [focusedKey]);
+   const { getBaseProps: getBasePropsScrollShadow } = useScrollShadow({ ...scrollShadowProps });
+   const renderRow = (virtualItem) => {
+     var _a;
+@@ -236,11 +273,10 @@ var VirtualizedListbox = (props) => {
+     };
+     const virtualizerStyle = {
+       position: "absolute",
+-      top: 0,
++      top: virtualItem.start,
+       left: 0,
+       width: "100%",
+-      height: `${virtualItem.size}px`,
+-      transform: `translateY(${virtualItem.start}px)`
++      height: `${virtualItem.size}px`
+     };
+     if (item.type === "section") {
+       return /* @__PURE__ */ jsx(
+diff --git a/node_modules/@nextui-org/listbox/dist/index.js b/node_modules/@nextui-org/listbox/dist/index.js
+index d762e47..da856c0 100644
+--- a/node_modules/@nextui-org/listbox/dist/index.js
++++ b/node_modules/@nextui-org/listbox/dist/index.js
+@@ -670,6 +670,42 @@ var VirtualizedListbox = (props) => {
+     estimateSize: (i) => itemSizes[i]
+   });
+   const virtualItems = rowVirtualizer.getVirtualItems();
++  // React Aria scrolls to the highlighted row only once it's drawn, so End, PageDown or a held value far down the list
++  // would leave the highlight out of sight, and Enter would pick a row nobody can see. A mouse over the list moves the
++  // highlight too, and must not scroll it.
++  const focusedKey = state.selectionManager.focusedKey;
++  (0, import_react7.useEffect)(() => {
++    var _a;
++    if (focusedKey == null || ((_a = parentRef.current) == null ? void 0 : _a.matches(":hover")) && (0, import_interactions.getInteractionModality)() === "pointer")
++      return;
++    let rowTop = 0;
++    let found = false;
++    for (const item of state.collection) {
++      if (item.key === focusedKey) {
++        found = item.type !== "section";
++        break;
++      }
++      if (item.type !== "section") {
++        rowTop += itemHeight;
++        continue;
++      }
++      const children = [...item.childNodes];
++      const place = children.findIndex((child) => child.key === focusedKey);
++      if (place >= 0) {
++        rowTop += (place + 1) * itemHeight;
++        found = true;
++        break;
++      }
++      rowTop += (children.length + 1) * itemHeight;
++    }
++    const list = parentRef.current;
++    if (!found || !list)
++      return;
++    if (rowTop < list.scrollTop)
++      list.scrollTop = rowTop;
++    else if (rowTop + itemHeight > list.scrollTop + list.clientHeight)
++      list.scrollTop = rowTop + itemHeight - list.clientHeight;
++  }, [focusedKey]);
+   const { getBaseProps: getBasePropsScrollShadow } = useScrollShadow({ ...scrollShadowProps });
+   const renderRow = (virtualItem) => {
+     var _a;
+@@ -688,11 +724,10 @@ var VirtualizedListbox = (props) => {
+     };
+     const virtualizerStyle = {
+       position: "absolute",
+-      top: 0,
++      top: virtualItem.start,
+       left: 0,
+       width: "100%",
+-      height: `${virtualItem.size}px`,
+-      transform: `translateY(${virtualItem.start}px)`
++      height: `${virtualItem.size}px`
+     };
+     if (item.type === "section") {
+       return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+diff --git a/node_modules/@nextui-org/listbox/dist/listbox.js b/node_modules/@nextui-org/listbox/dist/listbox.js
+index 92844f2..a849b33 100644
+--- a/node_modules/@nextui-org/listbox/dist/listbox.js
++++ b/node_modules/@nextui-org/listbox/dist/listbox.js
+@@ -665,6 +665,42 @@ var VirtualizedListbox = (props) => {
+     estimateSize: (i) => itemSizes[i]
+   });
+   const virtualItems = rowVirtualizer.getVirtualItems();
++  // React Aria scrolls to the highlighted row only once it's drawn, so End, PageDown or a held value far down the list
++  // would leave the highlight out of sight, and Enter would pick a row nobody can see. A mouse over the list moves the
++  // highlight too, and must not scroll it.
++  const focusedKey = state.selectionManager.focusedKey;
++  (0, import_react7.useEffect)(() => {
++    var _a;
++    if (focusedKey == null || ((_a = parentRef.current) == null ? void 0 : _a.matches(":hover")) && (0, import_interactions.getInteractionModality)() === "pointer")
++      return;
++    let rowTop = 0;
++    let found = false;
++    for (const item of state.collection) {
++      if (item.key === focusedKey) {
++        found = item.type !== "section";
++        break;
++      }
++      if (item.type !== "section") {
++        rowTop += itemHeight;
++        continue;
++      }
++      const children = [...item.childNodes];
++      const place = children.findIndex((child) => child.key === focusedKey);
++      if (place >= 0) {
++        rowTop += (place + 1) * itemHeight;
++        found = true;
++        break;
++      }
++      rowTop += (children.length + 1) * itemHeight;
++    }
++    const list = parentRef.current;
++    if (!found || !list)
++      return;
++    if (rowTop < list.scrollTop)
++      list.scrollTop = rowTop;
++    else if (rowTop + itemHeight > list.scrollTop + list.clientHeight)
++      list.scrollTop = rowTop + itemHeight - list.clientHeight;
++  }, [focusedKey]);
+   const { getBaseProps: getBasePropsScrollShadow } = useScrollShadow({ ...scrollShadowProps });
+   const renderRow = (virtualItem) => {
+     var _a;
+@@ -683,11 +719,10 @@ var VirtualizedListbox = (props) => {
+     };
+     const virtualizerStyle = {
+       position: "absolute",
+-      top: 0,
++      top: virtualItem.start,
+       left: 0,
+       width: "100%",
+-      height: `${virtualItem.size}px`,
+-      transform: `translateY(${virtualItem.start}px)`
++      height: `${virtualItem.size}px`
+     };
+     if (item.type === "section") {
+       return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+diff --git a/node_modules/@nextui-org/listbox/dist/virtualized-listbox.js b/node_modules/@nextui-org/listbox/dist/virtualized-listbox.js
+index 57dbddd..efcd5ee 100644
+--- a/node_modules/@nextui-org/listbox/dist/virtualized-listbox.js
++++ b/node_modules/@nextui-org/listbox/dist/virtualized-listbox.js
+@@ -572,6 +572,42 @@ var VirtualizedListbox = (props) => {
+     estimateSize: (i) => itemSizes[i]
+   });
+   const virtualItems = rowVirtualizer.getVirtualItems();
++  // React Aria scrolls to the highlighted row only once it's drawn, so End, PageDown or a held value far down the list
++  // would leave the highlight out of sight, and Enter would pick a row nobody can see. A mouse over the list moves the
++  // highlight too, and must not scroll it.
++  const focusedKey = state.selectionManager.focusedKey;
++  (0, import_react6.useEffect)(() => {
++    var _a;
++    if (focusedKey == null || ((_a = parentRef.current) == null ? void 0 : _a.matches(":hover")) && (0, import_interactions.getInteractionModality)() === "pointer")
++      return;
++    let rowTop = 0;
++    let found = false;
++    for (const item of state.collection) {
++      if (item.key === focusedKey) {
++        found = item.type !== "section";
++        break;
++      }
++      if (item.type !== "section") {
++        rowTop += itemHeight;
++        continue;
++      }
++      const children = [...item.childNodes];
++      const place = children.findIndex((child) => child.key === focusedKey);
++      if (place >= 0) {
++        rowTop += (place + 1) * itemHeight;
++        found = true;
++        break;
++      }
++      rowTop += (children.length + 1) * itemHeight;
++    }
++    const list = parentRef.current;
++    if (!found || !list)
++      return;
++    if (rowTop < list.scrollTop)
++      list.scrollTop = rowTop;
++    else if (rowTop + itemHeight > list.scrollTop + list.clientHeight)
++      list.scrollTop = rowTop + itemHeight - list.clientHeight;
++  }, [focusedKey]);
+   const { getBaseProps: getBasePropsScrollShadow } = useScrollShadow({ ...scrollShadowProps });
+   const renderRow = (virtualItem) => {
+     var _a;
+@@ -590,11 +626,10 @@ var VirtualizedListbox = (props) => {
+     };
+     const virtualizerStyle = {
+       position: "absolute",
+-      top: 0,
++      top: virtualItem.start,
+       left: 0,
+       width: "100%",
+-      height: `${virtualItem.size}px`,
+-      transform: `translateY(${virtualItem.start}px)`
++      height: `${virtualItem.size}px`
+     };
+     if (item.type === "section") {
+       return /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
