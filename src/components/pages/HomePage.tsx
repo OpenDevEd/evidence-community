@@ -33,6 +33,7 @@ import type { ListItem } from "@/app/api/item/types";
 import type { LibraryHomeConfig } from "@/config/library-config/schema";
 import HomeMap, { type MapShape } from "./HomeMap";
 import { examplesKey, listedRows, type Row } from "./home-explorer";
+import { intlLocale } from "@/i18n/intl-locale";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -363,7 +364,7 @@ function HorizonGrid() {
 function useCountryName() {
 	const locale = useLocale();
 	return useMemo(() => {
-		const names = new Intl.DisplayNames([locale], { type: "region" });
+		const names = new Intl.DisplayNames([intlLocale(locale)], { type: "region" });
 		return (code: string) => names.of(code) ?? code;
 	}, [locale]);
 }
