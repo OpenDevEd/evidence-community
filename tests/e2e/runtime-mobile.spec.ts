@@ -21,7 +21,7 @@ const expectedSourceCitationCount =
 	process.env.PLAYWRIGHT_EXPECTED_SOURCE_CITATION_COUNT ?? "";
 const expectedLibraryCitationLabel =
 	process.env.PLAYWRIGHT_EXPECTED_LIBRARY_CITATION_LABEL ??
-	"Citations in this library";
+	"Citations in this community";
 
 test("switches citation statistics between library links and source metrics on mobile", async ({
 	page,
