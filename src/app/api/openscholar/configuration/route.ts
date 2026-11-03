@@ -58,7 +58,7 @@ function jsonError(code: string, message: string, status: number) {
 function isConfigurationConflict(error: unknown): error is Error {
 	return (
 		error instanceof Error &&
-		(error.message.includes("Another community configuration operation") ||
+		(error.message.includes("Another library configuration operation") ||
 			error.message.includes("preserved configuration"))
 	);
 }
