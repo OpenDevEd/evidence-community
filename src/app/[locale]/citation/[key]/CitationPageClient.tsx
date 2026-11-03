@@ -26,6 +26,7 @@ import ItemTitle from "@/components/features/newlib/ItemTitle";
 import ResourceAuthors from "@/components/features/items/ResourceAuthors";
 import { Pagination } from "@/components/nextui/Pagination";
 import { useTranslations, useLocale } from "next-intl";
+import { intlLocale } from "@/i18n/intl-locale";
 import { useTheme } from "next-themes";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
@@ -102,7 +103,7 @@ function CitationStats({
 	).length;
 	const avgPerYear =
 		yearsWithCitations > 0
-			? (totalFromYears / yearsWithCitations).toLocaleString(locale, ONE_DECIMAL)
+			? (totalFromYears / yearsWithCitations).toLocaleString(intlLocale(locale), ONE_DECIMAL)
 			: "0";
 	const peakYear =
 		yearDistribution.length > 0
@@ -520,7 +521,7 @@ function CitationsCountryChart({
 				const total = (
 					context.chart.data.datasets[0].data as number[]
 				).reduce((a, b) => a + b, 0);
-				const percentage = ((rawValue / total) * 100).toLocaleString(locale, ONE_DECIMAL);
+				const percentage = ((rawValue / total) * 100).toLocaleString(intlLocale(locale), ONE_DECIMAL);
 
 				// Find the original country code from the index since labels are now full names
 				const countryCode =
@@ -667,7 +668,7 @@ function CitationsCountryChart({
 								const percentage = (
 									(item.count / totalCitations) *
 									100
-								).toLocaleString(locale, ONE_DECIMAL);
+								).toLocaleString(intlLocale(locale), ONE_DECIMAL);
 								const isUnknown = item.country === "UNKNOWN";
 								const countryName = isUnknown
 									? t("globalOrUnspecified")
