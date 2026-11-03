@@ -53,7 +53,7 @@ async function recordFailure(db: Database, delivery: Delivery, owned: OwnedDeliv
   const attempts = delivery.attempts + 1;
   const {uncertain, retry} = smtpFailure(error, sending, attempts);
   await db.update(notificationDelivery).set({ status: uncertain ? "uncertain" : retry ? "queued" : "failed", attempts, nextAttemptAt: retry ? new Date(Date.now() + Math.min(3_600_000, 60_000 * 2 ** attempts)) : null, sendStartedAt: uncertain ? new Date() : null, leaseToken: null, leaseExpiresAt: null, lastError: String(error).slice(0, 2000) }).where(owned);
-  console.error("Library email delivery failed", { messageKey: delivery.messageKey, error: String(error), uncertain });
+  console.error("Community email delivery failed", { messageKey: delivery.messageKey, error: String(error), uncertain });
 }
 
 async function sendClaimedDelivery(db: Database, config: LibraryServerConfig, delivery: Delivery, owned: OwnedDelivery) {

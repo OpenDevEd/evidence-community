@@ -52,6 +52,6 @@ Most browsers also let you inspect or delete stored site data in their privacy s
 
 ## **Get in touch**
 
-For questions about our use of cookies and similar storage, email contact@opendeved.net.
+For questions about our use of cookies and similar storage, email support@openscholar.ai.
 
 **Last updated**: September 12, 2026

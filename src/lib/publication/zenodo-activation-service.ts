@@ -164,7 +164,7 @@ function requireZenodoConfig(config: PublicationConfig) {
 	const zenodo = config.services.publication.zenodo;
 	if (!zenodo.enabled) {
 		throw new ZenodoActivationConfigurationError(
-			"Zenodo publishing is not configured for this library.",
+			"Zenodo publishing is not configured for this community.",
 		);
 	}
 	if (!zenodo.token) {

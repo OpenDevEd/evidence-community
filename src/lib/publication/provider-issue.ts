@@ -54,7 +54,7 @@ const PATH_TEXT: readonly (readonly [RegExp, (provider: Provider) => string])[] 
 	[/^creators\.\d+$/u, (provider) => `${provider} needs a name for every creator ${dependsOn(provider)}`],
 	[/^language$/u, (provider) => `${provider} needs the language as an ISO 639 code, such as en, ${dependsOn(provider)}`],
 	[/^license$/u, (provider) => `Zenodo doesn't accept this licence. Choose another licence ${dependsOn(provider)}`],
-	[/^identifiers\./u, (provider) => `${provider} can't use this library's DOI prefix. Check the library's DOI settings.`],
+	[/^identifiers\./u, (provider) => `${provider} can't use this community's DOI prefix. Check the community's DOI settings.`],
 ];
 
 function issueText(

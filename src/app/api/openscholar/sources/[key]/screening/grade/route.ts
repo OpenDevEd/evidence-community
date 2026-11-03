@@ -8,8 +8,8 @@ type Context = { params: Promise<{ key: string }> };
 
 const REFUSED = {
 	invalid_subject: { message: "Send the subject to grade against as a string of up to 1,000 characters, or no body.", status: 400 },
-	no_key: { message: "The library has no OpenRouter key to read records with.", status: 409 },
-	not_ready: { message: "The library is still applying this subject. Try again in a minute.", status: 409 },
+	no_key: { message: "The community has no OpenRouter key to read records with.", status: 409 },
+	not_ready: { message: "The community is still applying this subject. Try again in a minute.", status: 409 },
 	subject_changed: { message: "The source screens against another subject now. Ask again for that one.", status: 409 },
 	not_screening: { message: "This source does not screen its records.", status: 409 },
 } as const;

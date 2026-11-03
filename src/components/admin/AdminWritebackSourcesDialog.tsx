@@ -114,7 +114,7 @@ function WritebackDialogForm({
 							<HugeiconsIcon icon={Home01Icon} aria-hidden size={16} />
 						</span>
 						<div className="min-w-0 flex-1">
-							<p className="truncate text-sm font-medium">This library</p>
+							<p className="truncate text-sm font-medium">This community</p>
 							<p className="text-xs text-black/55 dark:text-white/55">
 								{text.here}
 							</p>

@@ -26,7 +26,7 @@ export type ResolvedAIModel = {
 function unavailable(modelId: unknown): AIError {
 	return new AIError(
 		"MODEL_UNAVAILABLE",
-		`This library does not offer the model ${String(modelId)}.`,
+		`This community does not offer the model ${String(modelId)}.`,
 		400,
 	);
 }

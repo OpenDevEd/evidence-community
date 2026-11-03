@@ -443,8 +443,8 @@ test("saves library display switches as tags and keeps the published preview unc
 	await expect(title).toBeEditable();
 	const menu = inspector.getByRole("button", { name: "Record status and sources" });
 	await menu.click();
-	const display = page.getByRole("region", { name: "Library display", exact: true });
-	const trigger = display.getByRole("button", { name: /^Library display/ });
+	const display = page.getByRole("region", { name: "Community display", exact: true });
+	const trigger = display.getByRole("button", { name: /^Community display/ });
 	await expect(trigger).toHaveAttribute("aria-expanded", "false");
 	await expect(page.getByRole("region", { name: "Connected sources" }).getByRole("button", { name: /^Sources/ })).toHaveAttribute("aria-expanded", "false");
 	await trigger.click();

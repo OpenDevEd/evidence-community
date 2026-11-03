@@ -1427,7 +1427,7 @@ function SourcePdfReason({ sourcePdf }: { sourcePdf: NonNullable<AdminItemDetail
 	if (!sourcePdf.applied)
 		return <p className="mt-1 text-black/45 dark:text-white/45">Changes on the next import</p>;
 	if (sourcePdf.choice === "withhold")
-		return <p className="mt-1 text-black/45 dark:text-white/45">Taken down in this library</p>;
+		return <p className="mt-1 text-black/45 dark:text-white/45">Taken down in this community</p>;
 	return (
 		<p className="mt-1 flex flex-wrap items-center gap-1 text-black/45 dark:text-white/45">
 			Publishes when tagged

@@ -30,7 +30,7 @@ export function ReviewTabs({ flow }: { flow: ImportFlowState }) {
 	const tabs: { count: number; id: ReviewFilter; label: string }[] = [
 		{ count: counts.total, id: "all", label: "All" },
 		{ count: counts.ready, id: "ready", label: "Ready" },
-		{ count: counts.existing, id: "existing", label: "In the library" },
+		{ count: counts.existing, id: "existing", label: "In the community" },
 		{ count: counts.attention, id: "attention", label: "Needs attention" },
 		...(flow.batch?.kind === "pdfs" ? [{ count: counts.improve, id: "improve" as const, label: "Checks to improve" }] : []),
 	];
@@ -369,7 +369,7 @@ function TagsPart({ edited }: PartProps) {
 function CitesPart({ row }: PartProps) {
 	if (!row.cites.length) return null;
 	return (
-		<Setting icon={QuoteDownIcon} summary={countSummary(row.cites.length, "record", "records", "")} title="Cites in the library">
+		<Setting icon={QuoteDownIcon} summary={countSummary(row.cites.length, "record", "records", "")} title="Cites in the community">
 			<CitedList cites={row.cites} />
 		</Setting>
 	);

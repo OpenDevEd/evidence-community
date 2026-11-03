@@ -91,8 +91,8 @@ export function screeningExportContent(
 	const fields = results.fields;
 	const headers = [
 		"Title",
-		"Evidence Library key",
-		"Evidence Library URL",
+		"Evidence Community key",
+		"Evidence Community URL",
 		...fields.map(({ label, type }) => `${label} (${type})`),
 	];
 	const rows = Object.entries(results.result).map(([resourceId, result]) => {

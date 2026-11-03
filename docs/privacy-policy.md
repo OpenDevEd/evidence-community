@@ -6,7 +6,7 @@ Open Development & Education is the data controller for the personal information
 
 # **Contact details**
 
-Email: contact@opendeved.net
+Email: support@openscholar.ai
 
 # **What we collect and why**
 
@@ -118,7 +118,7 @@ Depending on the information and lawful basis, you may have the right to:
 
 Withdrawing consent does not affect processing that was lawful before withdrawal. It is as easy to withdraw analytics consent as to give it: open **Cookie settings** in the footer and save different choices or decline.
 
-Contact us at contact@opendeved.net to make a rights request. We normally respond within one month. Some rights have legal limits and may not apply in every case.
+Contact us at support@openscholar.ai to make a rights request. We normally respond within one month. Some rights have legal limits and may not apply in every case.
 
 We do not use analytics profiles to make decisions that have legal or similarly significant effects on you.
 
@@ -132,7 +132,7 @@ Our [Cookie Policy](/cookie-policy) explains the essential and optional browser 
 
 # **How to complain**
 
-Contact us first at contact@opendeved.net so we can try to resolve your concern.
+Contact us first at support@openscholar.ai so we can try to resolve your concern.
 
 You can also complain to the Information Commissioner's Office:
 

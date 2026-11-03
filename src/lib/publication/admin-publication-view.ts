@@ -610,7 +610,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		(snapshot.namespace.prefix !== publicationConfig.crossref.prefix ||
 			snapshot.namespace.suffixNamespace !==
 				publicationConfig.crossref.suffixNamespace)
-			? "The configured DOI prefix or namespace does not match the namespace already used by this library"
+			? "The configured DOI prefix or namespace does not match the namespace already used by this community"
 			: null;
 	const canonicalManagedMismatch =
 		managedCrossref &&
@@ -779,7 +779,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	const crossrefBlockers = unique([
 		...sharedBlockers,
 		!publicationConfig.crossref.enabled
-			? "Crossref publishing is not configured for this library"
+			? "Crossref publishing is not configured for this community"
 			: null,
 		namespaceMismatch,
 		canonicalManagedMismatch,
@@ -793,7 +793,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		fileError,
 		archivedDoiMismatch,
 		!publicationConfig.zenodo.enabled
-			? "Zenodo publishing is not configured for this library"
+			? "Zenodo publishing is not configured for this community"
 			: null,
 		zenodoJournals.length > 1
 			? "More than one unfinished Zenodo publication exists for this record"

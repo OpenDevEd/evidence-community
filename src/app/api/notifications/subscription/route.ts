@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     if (value instanceof Response) return value;
     return await applyMutation(request, await getLibraryConfig(), value);
   } catch (error) {
-    console.error("Library subscription request failed", error);
+    console.error("Community subscription request failed", error);
     return json({error: "Could not save your subscription. Please try again."}, 503);
   }
 }

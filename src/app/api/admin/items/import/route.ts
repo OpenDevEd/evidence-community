@@ -23,7 +23,7 @@ async function requireTranslationUrl() {
 		.translationUrl;
 	if (!translationUrl) {
 		throw new AdminValidationError(
-			"Importing records needs a Zotero Translation Server. Add one to the library configuration first.",
+			"Importing records needs a Zotero Translation Server. Add one to the community configuration first.",
 		);
 	}
 	return translationUrl;

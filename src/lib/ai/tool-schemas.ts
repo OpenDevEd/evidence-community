@@ -95,7 +95,7 @@ export function createResearchToolSchemas(mode: ResearchMode) {
 					.boolean()
 					.default(false)
 					.describe(
-						"Restrict to the user's current library result set. With no queries, returns the window's entries in the user's own sort order, with their positions.",
+						"Restrict to the user's current community result set. With no queries, returns the window's entries in the user's own sort order, with their positions.",
 					),
 				// Providers in strict mode send every property, so this is a
 				// plain default and is ignored outside withinCurrentResults —

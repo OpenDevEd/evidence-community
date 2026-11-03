@@ -391,10 +391,10 @@ it("manages attachment system tags through the display toggle, not chips", async
 		container.querySelector<HTMLButtonElement>('[aria-label="Record status and sources"]')!.click(),
 	);
 	await act(async () =>
-		document.querySelector<HTMLButtonElement>('[data-admin-status-accordion="Library display"] button')!.click(),
+		document.querySelector<HTMLButtonElement>('[data-admin-status-accordion="Community display"] button')!.click(),
 	);
 	const hideSwitch = [...document.querySelectorAll<HTMLLabelElement>("label")]
-		.find((label) => label.textContent?.includes("Hide from library"))
+		.find((label) => label.textContent?.includes("Hide from community"))
 		?.querySelector<HTMLInputElement>('input[type="checkbox"]');
 	expect(hideSwitch?.checked).toBe(true);
 	await act(async () => hideSwitch!.click());

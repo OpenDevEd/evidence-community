@@ -50,7 +50,7 @@ function resolveRange(
 		value,
 		issue: filters.years.enabled
 			? "range must be a year, or two years in order, such as 2020 or 2020-2024."
-			: "This library has no year filter.",
+			: "This community has no year filter.",
 	};
 }
 
@@ -63,7 +63,7 @@ function resolveOffered(
 	if (offered) return { value: values ?? [] };
 	return {
 		value: [],
-		...(values?.length ? { issue: `This library has no ${filter} filter.` } : {}),
+		...(values?.length ? { issue: `This community has no ${filter} filter.` } : {}),
 	};
 }
 
@@ -89,7 +89,7 @@ function resolveCountry(
 	if (unknown.length === 0) return filter;
 	return {
 		value: filter.value.filter(isKnownPlace),
-		issue: `${name} takes two-letter codes such as QA, or a region as the library lists it. Unknown: ${unknown.join(", ")}.`,
+		issue: `${name} takes two-letter codes such as QA, or a region as the community lists it. Unknown: ${unknown.join(", ")}.`,
 	};
 }
 

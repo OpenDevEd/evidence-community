@@ -144,7 +144,7 @@ describe("the library's home page", () => {
 		const added = "2026-06-02T00:00:00.000Z";
 		await render({ email: null, page: false }, { ...data, journey: { ...data.journey!, reviewed: false, reviewer: null, submittedAt: added, publishedAt: added } });
 
-		expect(container.textContent).toContain("Added to the library");
+		expect(container.textContent).toContain("Added to the community");
 		expect(container.textContent).not.toContain("Arrived for review");
 		// Only its arrival is dated: nobody checked it on a known day.
 		expect([...container.querySelectorAll("ol time")].map((time) => time.getAttribute("dateTime"))).toEqual([added]);

@@ -1482,7 +1482,7 @@ export default function AdminWorkbench({
 			title: "Unpublish record?",
 			confirmLabel: "Unpublish record",
 			message:
-				"It will leave the public library and remain recoverable here.",
+				"It will leave the public community and remain recoverable here.",
 			danger: true,
 			action: async () => {
 				const result = await unpublishAdminItem(recordKey);
@@ -1841,7 +1841,7 @@ export default function AdminWorkbench({
 		setConfirmDialog({
 			title: `Delete ${collection.name}?`,
 			message:
-				"This deletes the collection and its active descendants. Records stay in the library. Restore only brings back collections deleted by this action.",
+				"This deletes the collection and its active descendants. Records stay in the community. Restore only brings back collections deleted by this action.",
 			confirmLabel: "Delete",
 			danger: true,
 			action: async () => {
@@ -2088,7 +2088,7 @@ export default function AdminWorkbench({
 					changedLabels: ["draft updated", "drafts updated"],
 					emptyMessage: "No records were changed",
 					successDescription:
-						"Submit the drafts for review to update the public library.",
+						"Submit the drafts for review to update the public community.",
 				},
 				failures,
 			);
@@ -2123,7 +2123,7 @@ export default function AdminWorkbench({
 			title: `Remove ${keys.length} ${keys.length === 1 ? "record" : "records"}?`,
 			confirmLabel: keys.length === 1 ? "Remove record" : "Remove records",
 			message:
-				"Unpublished drafts will be deleted. Published records will leave the public library. Records synced from external sources are skipped.",
+				"Unpublished drafts will be deleted. Published records will leave the public community. Records synced from external sources are skipped.",
 			danger: true,
 			action: async () => {
 				for (const key of keys) {
@@ -2229,13 +2229,13 @@ export default function AdminWorkbench({
 
 	return (
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
-			<h1 className="sr-only">Library administration</h1>
+			<h1 className="sr-only">Community administration</h1>
 			<header
 				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
 				data-admin-region="toolbar"
 			>
 				<Link
-					aria-label="Open library"
+					aria-label="Open community"
 					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-[120px] items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus xl:mr-1 xl:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
@@ -2291,7 +2291,7 @@ export default function AdminWorkbench({
 				</div>
 				<div
 					role="group"
-					aria-label="Library panels"
+					aria-label="Community panels"
 					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:min-w-72 xl:hidden dark:bg-white/[0.035]"
 				>
 					{[
@@ -2341,7 +2341,7 @@ export default function AdminWorkbench({
 				<div className="hidden flex-1 xl:block" />
 				<div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1">
 					<div
-						aria-label="Library tools"
+						aria-label="Community tools"
 						className="flex h-10 items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.035]"
 						role="group"
 					>

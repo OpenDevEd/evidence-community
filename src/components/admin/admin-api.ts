@@ -957,7 +957,7 @@ export async function reserveAdminCrossrefDoi(key: string) {
  return (await requestJson<{reservation: CrossrefReservation}>(`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/reserve`, {method: "POST"})).reservation;
 }
 
-const ADMIN_NETWORK_ERROR_MESSAGE = "Can't reach the library right now. Check your connection and try again.";
+const ADMIN_NETWORK_ERROR_MESSAGE = "Can't reach the community right now. Check your connection and try again.";
 
 /** `fetch` rejects with a `TypeError` when the browser cannot reach the server
  * ("Failed to fetch" in Chromium, "NetworkError when attempting to fetch resource."

@@ -54,7 +54,7 @@ describe("what the reader sees the assistant doing", () => {
 	it("names the step and its outcome before anything is expanded", async () => {
 		await render(searchPart());
 
-		expect(container.textContent).toContain("Library search");
+		expect(container.textContent).toContain("Community search");
 		expect(container.textContent).toContain("Completed");
 	});
 
