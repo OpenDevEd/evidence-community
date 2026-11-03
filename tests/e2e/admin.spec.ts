@@ -3210,6 +3210,10 @@ test("shows draft differences with the published value and a revert action", asy
 	await page.getByRole("button", { name: "Revert to published" }).click();
 	await expect(title).toHaveValue("Published book");
 	await expect(titleMarker).toHaveCount(0);
+	// The marker leaves with the change: focus stays beside its field, not on the page.
+	await expect(inspector.locator(":focus")).toContainText("Title");
+	await page.keyboard.press("Tab");
+	await expect(title).toBeFocused();
 
 	const collectionsGroup = inspector.getByRole("group", {
 		name: "Collections",
