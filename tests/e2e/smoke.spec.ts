@@ -1038,7 +1038,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", {
 });
 
 
-test("the country map answers the pointer after Back, resized while away", async ({ page }) => {
+test("the country map answers the pointer after Back, resized while away", { tag: "@smoke" }, async ({ page }) => {
 	test.skip(process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP !== "true", "This library has no country map.");
 	const reachable = () => page.evaluate(() => [...document.querySelectorAll("svg [role='button']")].some((shape) => {
 		const box = shape.getBoundingClientRect();
@@ -1046,7 +1046,8 @@ test("the country map answers the pointer after Back, resized while away", async
 	}));
 	await page.goto("/en-GB/map", { waitUntil: "domcontentloaded" });
 	await dismissConsent(page);
-	await page.locator("button").filter({ hasText: /^\s*\d+\s*\D/ }).first().click();
+	// Far from the middle of the map, so choosing it slides the map.
+	await page.getByRole("button", { name: "Fiji", exact: true }).press("Enter");
 	await expect(page).toHaveURL(url => url.searchParams.has("country"));
 	await expect.poll(reachable).toBe(true);
 	await page.locator("a[href]:not([href^='#']):not([href*='/map'])").filter({ visible: true }).first().click();
