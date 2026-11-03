@@ -67,7 +67,7 @@ import {
 	PopoverTrigger,
 } from "@nextui-org/react";
 import { Spinner } from "@/components/nextui/Spinner";
-import { type ReactNode, type SetStateAction, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ReactNode, type SetStateAction, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -198,6 +198,7 @@ function ChangedMarker({
 	publishedValue: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const marker = useRef<HTMLSpanElement>(null);
 	return (
 		<Popover
 			isOpen={open}
@@ -206,7 +207,7 @@ function ChangedMarker({
 			onOpenChange={setOpen}
 		>
 			<Tooltip content={`${label} differs from the published value`}>
-				<span className="inline-flex">
+				<span className="inline-flex" ref={marker}>
 					<PopoverTrigger>
 						<button
 							aria-label={`Changed: show published ${label}`}
@@ -233,9 +234,17 @@ function ChangedMarker({
 					</div>
 					<Button
 						className="mt-2.5 px-2.5 font-medium"
-						onPress={() => {
+						onPress={(press) => {
+							// The marker leaves with the change, and the popover would hand focus back to it, so focus would fall to the
+							// page. Its row holds it instead, so Tab goes on to the field; a field's own box would open its list.
+							const row = marker.current?.parentElement;
 							onRevert();
 							setOpen(false);
+							requestAnimationFrame(() => {
+								if (!row) return;
+								row.tabIndex = -1;
+								row.focus({ focusVisible: press.pointerType === "keyboard" });
+							});
 						}}
 						size="xs"
 						startContent={
