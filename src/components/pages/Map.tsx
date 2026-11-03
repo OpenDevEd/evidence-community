@@ -573,6 +573,8 @@ async function jsonOf(response: Response) {
 
 /** How long a zoom button's glide takes, in milliseconds. */
 const GLIDE = 320;
+/** The sideways slide to a chosen country: `duration-500` on the stage. */
+const SLIDE = 500;
 /** The zoom buttons' way into d3-zoom, set while the globe is on the page. */
 type Zoomer = { zoomBy: (k: number) => void; reset: () => void };
 
@@ -610,6 +612,13 @@ function GlobeView({ view, world, offset, zoomerRef, renderCountry, overlay }: {
 	// Without motion there is no slide to wait for: it has settled already, also if motion comes back later.
 	if (still && settledAt !== offset) setSettledAt(offset);
 	const sliding = settledAt !== offset;
+	// A slide that never runs or is cut short sends no `transitionend`: the map moved while the page was kept for Back, or Back and
+	// Forward crossed mid-slide. Without this timer the map would ignore the pointer until a reload.
+	useEffect(() => {
+		if (!sliding) return;
+		const timer = setTimeout(() => setSettledAt(offset), SLIDE + 50);
+		return () => clearTimeout(timer);
+	}, [sliding, offset]);
 	const drawn = useMemo(() => {
 		const draw = geoPath(view.projection);
 		return { sea: draw(SPHERE) ?? "", graticule: draw(GRATICULE) ?? "", antarctica: world.antarctica.map((geo) => draw(geo) ?? ""), countries: world.countries.map((geo) => draw(geo) ?? "") };
