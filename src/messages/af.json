@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> het <strong>{count, number}</strong> daarvan uitgegee",
       "otherJournal": "<strong>{count, number}</strong> is in <strong>’n ander joernaal</strong> of in geen joernaal nie",
       "journal": "<strong>{count, number}</strong> is in <strong>{name}</strong> verskyn"
-    }
+    },
+    "exampleAbout": "Wat sê die bewyse oor {topic}?",
+    "exampleStudied": "Wat is in {country} bestudeer?",
+    "exampleApproaches": "Watter benaderings tot {topic} is getoets?"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "Visualiseer bewysketting",

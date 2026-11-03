@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> ilichapisha <strong>{count, number}</strong> kati yake",
       "otherJournal": "<strong>{count, number}</strong> zilionekana katika <strong>jarida jingine</strong> au katika hakuna jarida",
       "journal": "<strong>{count, number}</strong> zilionekana katika <strong>{name}</strong>"
-    }
+    },
+    "exampleAbout": "Ushahidi unasema nini kuhusu {topic}?",
+    "exampleStudied": "Nini kimefanyiwa utafiti nchini {country}?",
+    "exampleApproaches": "Ni mbinu zipi za {topic} zimejaribiwa?"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "Onyesha minyororo ya ushahidi kwa picha",

@@ -1443,7 +1443,10 @@
       "publisher": "نشرت <strong>{name}</strong> <strong>{count, number}</strong> منها",
       "otherJournal": "<strong>{count, number}</strong> ظهرت في <strong>دورية أخرى</strong> أو في لا دورية",
       "journal": "<strong>{count, number}</strong> ظهرت في <strong>{name}</strong>"
-    }
+    },
+    "exampleAbout": "ماذا تقول الأدلة عن {topic}؟",
+    "exampleStudied": "ما الذي دُرس في {country}؟",
+    "exampleApproaches": "ما الأساليب المتعلقة بـ{topic} التي جرى اختبارها؟"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "عرض سلاسل الأدلة بصريًا",
