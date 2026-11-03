@@ -55,6 +55,8 @@ ChartJS.register(
 import { useState, useEffect, useRef, useMemo } from "react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 
+const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
+
 function visibleExternalTooltip<T extends { visible: boolean }>(
 	context: any,
 	setState: (update: (previous: T) => T) => void,
@@ -100,7 +102,7 @@ function CitationStats({
 	).length;
 	const avgPerYear =
 		yearsWithCitations > 0
-			? (totalFromYears / yearsWithCitations).toFixed(1)
+			? (totalFromYears / yearsWithCitations).toLocaleString(locale, ONE_DECIMAL)
 			: "0";
 	const peakYear =
 		yearDistribution.length > 0
@@ -468,6 +470,7 @@ function CitationsCountryChart({
 	isLoading: boolean;
 }) {
 	const t = useTranslations("ui");
+	const locale = useLocale();
 	const { resolvedTheme: theme } = useTheme();
 
 	const [tooltipState, setTooltipState] = useState({
@@ -517,7 +520,7 @@ function CitationsCountryChart({
 				const total = (
 					context.chart.data.datasets[0].data as number[]
 				).reduce((a, b) => a + b, 0);
-				const percentage = ((rawValue / total) * 100).toFixed(1);
+				const percentage = ((rawValue / total) * 100).toLocaleString(locale, ONE_DECIMAL);
 
 				// Find the original country code from the index since labels are now full names
 				const countryCode =
@@ -546,7 +549,7 @@ function CitationsCountryChart({
 				});
 			}),
 		}),
-		[countryDistribution, theme],
+		[countryDistribution, theme, locale],
 	);
 
 	const totalCitations = countryDistribution.reduce(
@@ -664,7 +667,7 @@ function CitationsCountryChart({
 								const percentage = (
 									(item.count / totalCitations) *
 									100
-								).toFixed(1);
+								).toLocaleString(locale, ONE_DECIMAL);
 								const isUnknown = item.country === "UNKNOWN";
 								const countryName = isUnknown
 									? t("globalOrUnspecified")
