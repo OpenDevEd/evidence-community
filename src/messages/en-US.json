@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> published <strong>{count, number}</strong> of them",
       "otherJournal": "<strong>{count, number}</strong> appeared in <strong>another journal</strong> or none",
       "journal": "<strong>{count, number}</strong> appeared in <strong>{name}</strong>"
-    }
+    },
+    "exampleAbout": "What does the evidence say about {topic}?",
+    "exampleStudied": "What has been studied in {country}?",
+    "exampleApproaches": "Which approaches to {topic} have been tested?"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "Visualise evidence chains",

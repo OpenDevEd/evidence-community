@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> ushicilele ezingu-<strong>{count, number}</strong> kuzo",
       "otherJournal": "<strong>{count, number}</strong> zavela kwelinye <strong>ijenali</strong> noma azikho",
       "journal": "<strong>{count, number}</strong> zavela ku-<strong>{name}</strong>"
-    }
+    },
+    "exampleAbout": "Ubufakazi buthini nge-{topic}?",
+    "exampleStudied": "Yini efundwe e-{country}?",
+    "exampleApproaches": "Yiziphi izindlela ze-{topic} ezihloliwe?"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "Bona amaketanga obufakazi",

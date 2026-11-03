@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> 出版了其中 <strong>{count, number}</strong> 篇",
       "otherJournal": "<strong>{count, number}</strong> 篇发表于<strong>其他期刊</strong>或未记录",
       "journal": "<strong>{count, number}</strong> 篇发表于 <strong>{name}</strong>"
-    }
+    },
+    "exampleAbout": "关于{topic}，证据说明了什么？",
+    "exampleStudied": "在{country}开展了哪些研究？",
+    "exampleApproaches": "针对{topic}测试过哪些方法？"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "可视化证据链",

@@ -53,17 +53,24 @@ function inSentence(name: string) {
 	return /^\p{Lu}[^\p{Lu}]*$/u.test(name) ? name.toLowerCase() : name;
 }
 
+/** The sentences a made question is built from. OpenScholar's Home card shows them in English. */
+const ENGLISH_QUESTIONS = {
+	about: (topic: string) => `What does the evidence say about ${topic}?`,
+	studied: (country: string) => `What has been studied in ${country}?`,
+	approaches: (topic: string) => `Which approaches to ${topic} have been tested?`,
+};
+
 /**
  * The Ask box's three example questions, slot by slot: an owner's question where they wrote one, otherwise one made
  * from the library's topics (its collections when it has none) and the country it studies most. A slot the library
  * has nothing for stays empty. The Home card shows the made ones as placeholders.
  */
-export function exampleQuestions(facts: Pick<HomeData, "topics" | "collections" | "countries">, countryName: (code: string) => string, owners: string[] = []) {
+export function exampleQuestions(facts: Pick<HomeData, "topics" | "collections" | "countries">, countryName: (code: string) => string, owners: string[] = [], sentences = ENGLISH_QUESTIONS) {
 	const topics = facts.topics.length > 0 ? facts.topics : facts.collections.map((collection) => ({ name: collection.title }));
 	const country = Object.entries(facts.countries).sort((a, b) => b[1] - a[1])[0]?.[0];
 	return [
-		topics[0] && `What does the evidence say about ${inSentence(topics[0].name)}?`,
-		country && `What has been studied in ${countryName(country)}?`,
-		topics[1] && `Which approaches to ${inSentence(topics[1].name)} have been tested?`,
+		topics[0] && sentences.about(inSentence(topics[0].name)),
+		country && sentences.studied(countryName(country)),
+		topics[1] && sentences.approaches(inSentence(topics[1].name)),
 	].map((made, index) => owners[index]?.trim() || made || undefined);
 }

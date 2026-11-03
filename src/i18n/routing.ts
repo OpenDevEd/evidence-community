@@ -13,7 +13,7 @@ export const localesNames = {
 	hi: "हिंदी",
 	fr: "Français",
 	cn: "中文",
-	sw: "Swahili",
+	sw: "Kiswahili",
 	pt: "Português",
 	es: "Español",
 	af: "Afrikaans",

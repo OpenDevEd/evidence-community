@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, Suspense, use, useCallback, useEffect, useId, useRef, useState } from "react";
+import { createContext, Suspense, use, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { animate, MotionConfig, motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { useHydrated } from "@/hooks/useHydrated";
@@ -32,7 +32,8 @@ import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
 import type { LibraryHomeConfig } from "@/config/library-config/schema";
 import HomeMap, { type MapShape } from "./HomeMap";
-import { examplesKey, listedRows, regionNames, type Row } from "./home-explorer";
+import { examplesKey, listedRows, type Row } from "./home-explorer";
+import { intlLocale } from "@/i18n/intl-locale";
 import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -359,6 +360,15 @@ function HorizonGrid() {
 	);
 }
 
+/** A country's name in the page's language, from its two-letter code. */
+function useCountryName() {
+	const locale = useLocale();
+	return useMemo(() => {
+		const names = new Intl.DisplayNames([intlLocale(locale)], { type: "region" });
+		return (code: string) => names.of(code) ?? code;
+	}, [locale]);
+}
+
 /**
  * The assistant, ready to use: a question box that opens the library with the question asked, and three examples
  * built from the library's own topics and countries so they fit whatever it holds.
@@ -367,7 +377,12 @@ function AskPreview({ data, surface, questions }: { data: HomeData; surface: Ton
 	const tLabels = useTranslations("home");
 	const router = useRouter();
 	const [question, setQuestion] = useState("");
-	const examples = exampleQuestions(data, (code) => regionNames.of(code) ?? code, questions).filter((example): example is string => Boolean(example));
+	const countryName = useCountryName();
+	const examples = exampleQuestions(data, countryName, questions, {
+		about: (topic) => tLabels("exampleAbout", { topic }),
+		studied: (country) => tLabels("exampleStudied", { country }),
+		approaches: (topic) => tLabels("exampleApproaches", { topic }),
+	}).filter((example): example is string => Boolean(example));
 	const submit = () => {
 		if (!question.trim()) return;
 		handOverQuestion(question.trim());
@@ -1307,7 +1322,8 @@ function Explorer({ data, shapes, tones, ramp, today }: { data: HomeData; shapes
 	const [tab, setTab] = useState<string | null>(null);
 	const config = useLibraryConfig();
 	const countries = Object.keys(data.countries).length;
-	const listed = listedRows(data, config, today);
+	const countryName = useCountryName();
+	const listed = listedRows(data, config, today, countryName);
 	const { series, busiest } = listed;
 
 	const types = [...data.itemTypes].sort((a, b) => b.count - a.count).slice(0, 6).map((row) => ({ name: tItemType.has(row.itemType as never) ? tItemType(row.itemType as never) : humanType(row.itemType).replace(/^./, (first) => first.toUpperCase()), count: row.count }));

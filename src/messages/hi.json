@@ -1443,7 +1443,10 @@
       "publisher": "<strong>{name}</strong> ने उनमें से <strong>{count, number}</strong> प्रकाशित किए",
       "otherJournal": "<strong>{count, number}</strong> <strong>किसी अन्य पत्रिका</strong> में छपे, या किसी में नहीं",
       "journal": "<strong>{count, number}</strong> <strong>{name}</strong> में छपे"
-    }
+    },
+    "exampleAbout": "{topic} के बारे में साक्ष्य क्या कहते हैं?",
+    "exampleStudied": "{country} में क्या अध्ययन किया गया है?",
+    "exampleApproaches": "{topic} के किन तरीकों का परीक्षण किया गया है?"
   },
   "evidenceMap": {
     "visualiseEvidenceChains": "साक्ष्य श्रृंखलाओं का दृश्य",
