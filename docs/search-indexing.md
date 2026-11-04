@@ -243,6 +243,9 @@ Writing records:
   OpenAI 128 of 64, shared by everything it embeds. Set
   `SEARCH_EMBEDDER_PARALLEL_REQUESTS` (1 to 512) and
   `SEARCH_EMBEDDER_BATCH_TEXTS` (1 to 512) on the search worker to change them.
+  The library's Compose file doesn't pass them: Coolify saves an unset
+  `${NAME:-}` as null, OpenScholar then refuses all of the application's
+  variables, and it removes any variable it doesn't manage.
   The defaults suit the platform's OpenRouter embedder. A model on a few CPU
   cores needs about 8 requests of 10 texts, and OpenAI's lower tiers fewer
   requests than 128: at the defaults their requests run out of time or are

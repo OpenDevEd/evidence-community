@@ -154,6 +154,13 @@ function requireVerifierDockerAccess(model: ComposeModel) {
 	);
 }
 
+/** Coolify saves `${NAME:-}` as a null value, and Openscholar then refuses all of the application's variables. */
+function requireNoEmptyDefaults(root: string) {
+	const compose = readFileSync(resolve(root, "docker/compose.library.yaml"), "utf8");
+	const emptyDefaults = compose.match(/\$\{\w+:-\}/gu);
+	requireCondition(!emptyDefaults, `Compose variables have an empty default: ${emptyDefaults?.join(", ")}`);
+}
+
 function requireExpectedServices(model: ComposeModel) {
 	const services = model.services ?? {};
 	const serviceNames = Object.keys(services).sort();
@@ -504,6 +511,7 @@ function requireSharedSearch(model: ComposeModel) {
 
 function main() {
 	const root = resolve(import.meta.dirname, "..");
+	requireNoEmptyDefaults(root);
 	const libraryConfig = loadLibraryConfig(root);
 	const model = renderLibraryCompose(root, libraryConfig);
 	const { serviceNames, services } = requireExpectedServices(model);
