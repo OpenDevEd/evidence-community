@@ -125,6 +125,18 @@ export function readersEngineOnFailure(
 	return live !== null && live !== config.services.search.engine && config.services.search[live] ? live : null;
 }
 
+/** How long a worker keeps readers on another engine before it starts over to try the switch again. */
+const SWITCH_RETRY_MS = 30 * 60_000;
+
+/**
+ * When the worker ends so that its container's restart tries the switch again: while readers stay on another engine than
+ * the configured one, as when the switch waits for its embedder or couldn't start. Null once readers are on the configured
+ * engine.
+ */
+export function switchRetryAt(readersOn: SearchEngineName, configured: SearchEngineName, now = Date.now()) {
+	return readersOn === configured ? null : now + SWITCH_RETRY_MS;
+}
+
 /**
  * Brings the library's readers onto the engine its configuration chooses (OpenDevEd/new-el#722). On a switch, the
  * configured engine's index is built while readers keep the old engine; then readers move, and the old index is

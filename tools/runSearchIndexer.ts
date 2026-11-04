@@ -23,7 +23,7 @@ import {
 } from "../src/lib/search-index/consumer";
 import { embedderFingerprint } from "../src/lib/embedder";
 import { openSearchWriter } from "../src/lib/search-index/engine-setup";
-import { readersEngineOnFailure, settleSearchEngine, type SettledEngine } from "../src/lib/search-index/engine-switch";
+import { readersEngineOnFailure, settleSearchEngine, switchRetryAt, type SettledEngine } from "../src/lib/search-index/engine-switch";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -36,9 +36,6 @@ import {
 	resolveSearchIndexWorkerInstancePath,
 	writeSearchIndexWorkerInstance,
 } from "../src/lib/search-index/worker-instance";
-
-/** How long readers stay on the old engine before the worker tries again a switch that couldn't start. */
-const SWITCH_RETRY_MS = 30 * 60_000;
 
 async function main() {
 	const command = parseSearchIndexCommand(
@@ -138,8 +135,6 @@ async function main() {
 			rebuildPending = true;
 		}
 		const live = await readSearchEngine(databaseResource.database);
-		// When a switch couldn't start, the worker ends at this time, and its container's restart tries it again.
-		let switchRetryAt: number | null = null;
 		let settled: SettledEngine;
 		let embedderError: string | null;
 		try {
@@ -183,14 +178,15 @@ async function main() {
 		} catch (error) {
 			const readersOn = readersEngineOnFailure(config, live, error, abortController.signal);
 			if (!readersOn) throw error;
-			switchRetryAt = Date.now() + SWITCH_RETRY_MS;
 			embedderError = `The switch to ${writer.engine} failed, so readers stay on ${readersOn}, which this worker keeps current: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`;
 			console.error(`Search index: ${embedderError}`);
 			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
 			settled = { rebuilt: null, switchedFrom: null, oldIndexRemoved: false, readersOn };
 		}
+		// While a switch waits for its embedder or couldn't start, the worker ends at this time to try it again.
+		const retrySwitchAt = switchRetryAt(settled.readersOn, writer.engine);
 		// Changes go to the engine readers search: the old one while a switch waits for its embedder or can't start.
-		const current = settled.readersOn === writer.engine ? engine : await openSearchWriter(config, settled.readersOn);
+		const current =settled.readersOn === writer.engine ? engine : await openSearchWriter(config, settled.readersOn);
 		if (settled.rebuilt) {
 			console.log(
 				JSON.stringify({
@@ -381,7 +377,7 @@ async function main() {
 					// The process was asked to stop.
 				}
 			}
-			if (switchRetryAt !== null && Date.now() >= switchRetryAt) {
+			if (retrySwitchAt !== null && Date.now() >= retrySwitchAt) {
 				console.log(`Search index: the worker starts over to try the switch to ${writer.engine} again.`);
 				break;
 			}

@@ -125,9 +125,9 @@ readers stay on the engine that holds its records until the new index is built.
 If Meilisearch's embedder fails while its index already holds records, the
 switch waits, and readers and the worker's writes stay on the old engine. So
 they do when the configured engine can't be set up or built, such as an
-Elasticsearch login not made yet: the worker keeps the old engine current,
-reports the failure as its last error, and starts over every 30 minutes to try
-the switch again.
+Elasticsearch login not made yet. In both cases the worker keeps the old engine
+current, reports the failure as its last error, and starts over every 30
+minutes to try the switch again.
 
 The worker drains no changes while it rebuilds, so readers see changes made
 during a switch only once it completes: minutes, or longer for a switch to

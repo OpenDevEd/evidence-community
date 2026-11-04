@@ -48,7 +48,7 @@ vi.mock("@/lib/search-index/engine-setup", () => ({
 	}),
 }));
 
-import { readersEngineOnFailure, settleSearchEngine } from "@/lib/search-index/engine-switch";
+import { readersEngineOnFailure, settleSearchEngine, switchRetryAt } from "@/lib/search-index/engine-switch";
 import { SearchOutboxAbortError } from "@/lib/search-index/writer";
 
 const connection = { host: "http://search", key: "key", index: "library" };
@@ -91,9 +91,12 @@ describe("switching a library to another engine", () => {
 		expect(world.steps).toEqual(["rebuild meilisearch", "pending false", "readers to meilisearch", "wait 10000"]);
 	});
 
-	it("waits for a broken embedder with readers, and writes, on the old engine", async () => {
-		expect(await settle({ live: "elasticsearch", embedderBlocksRebuild: true })).toMatchObject({ rebuilt: null, readersOn: "elasticsearch" });
+	it("waits for a broken embedder with readers, and writes, on the old engine, and tries again in 30 minutes", async () => {
+		const settled = await settle({ live: "elasticsearch", embedderBlocksRebuild: true });
+		expect(settled).toMatchObject({ rebuilt: null, readersOn: "elasticsearch" });
 		expect(world.steps).toEqual([]);
+		expect(switchRetryAt(settled.readersOn, "meilisearch", 0)).toBe(30 * 60_000);
+		expect(switchRetryAt((await settle({ live: "elasticsearch" })).readersOn, "meilisearch", 0)).toBeNull();
 	});
 
 	it("warns, and writes to the new engine, when the configuration has no old connection left", async () => {
