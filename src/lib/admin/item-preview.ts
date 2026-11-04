@@ -1,4 +1,4 @@
-import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import type { Item } from "@/app/api/item/types";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -25,6 +25,9 @@ type PreviewFiles = {
  */
 export async function previewItem(db: Database, rootKey: string, config: LibraryServerConfig, reviewId?: string) {
 	let preview: Item | undefined;
+	// Any error rolls a transaction back. The built app holds several copies of drizzle-orm, so the error from
+	// `transaction.rollback()` can be a class `instanceof` doesn't know; this one is recognised as itself.
+	const discard = new Error("Discard the draft preview");
 	try {
 		await db.transaction(async (transaction) => {
 			const files = reviewId
@@ -32,10 +35,10 @@ export async function previewItem(db: Database, rootKey: string, config: Library
 				: await publishWorkingDrafts(transaction, rootKey, config);
 			await showUnpublishedFiles(transaction, files, reviewId);
 			[preview] = await projectPublicItems(transaction, [rootKey], config);
-			transaction.rollback();
+			throw discard;
 		});
 	} catch (error) {
-		if (!(error instanceof TransactionRollbackError)) throw error;
+		if (error !== discard) throw error;
 	}
 	return preview ?? null;
 }

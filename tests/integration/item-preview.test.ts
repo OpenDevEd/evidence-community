@@ -1,5 +1,10 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
+// A built app holds several copies of drizzle-orm, so its errors aren't always the classes a module imports.
+vi.mock("drizzle-orm", async (importOriginal) => ({
+	...(await importOriginal<typeof import("drizzle-orm")>()),
+	TransactionRollbackError: class AnotherCopyOfTransactionRollbackError extends Error {},
+}));
 import { count, eq } from "drizzle-orm";
 import { itemDraft, outbox } from "@opendeved/evidence-library-core";
 import { libraryConfigSchema } from "@/config/library-config/schema";
