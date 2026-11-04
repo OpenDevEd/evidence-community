@@ -2683,13 +2683,15 @@ export default function AdminWorkbench({
 							onRetry={() => void loadItems()}
 							onPreferencesChange={setItemTablePreferences}
 							onResetPreferences={resetItemTablePreferences}
-							onSelect={(key) => {
+							onSelect={(key, clicks = 1) => {
 								if (activeLinkPick) {
 									// A row click toggles the link, same as its checkbox.
 									if (pickedLinkKeys?.has(key)) removeLinkKeys(activeLinkPick, [key]);
 									else addLinkKeys(activeLinkPick, [key]);
 									return;
 								}
+								// The second click of a double click on a popover that just closed over this row isn't a choice of it.
+								if (clicks > 1) return;
 								setLinkPick(null);
 								setSelectedKey(key);
 								setMobilePane("inspector");
