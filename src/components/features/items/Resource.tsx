@@ -175,7 +175,7 @@ function citationRow({ t, key, links, source, resourceHref, there }: CountContex
 
 type CountRow = {
 	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
-	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
+	here: string; there: string | null | undefined; /** The total opens a page of this library, not Openscholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
 // A narrow card drops the words; the tooltip and screen readers still get them.
 const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";

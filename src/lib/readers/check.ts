@@ -24,7 +24,7 @@ function readDiscovery(config: LibraryServerConfig) {
 	if (!discovery) {
 		discovery = fetch(url, { cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
 			.then(async (response) => {
-				if (!response.ok) throw new Error(`OpenScholar discovery answered HTTP ${response.status}`);
+				if (!response.ok) throw new Error(`Openscholar discovery answered HTTP ${response.status}`);
 				return discoverySchema.parse(await response.json());
 			});
 		discoveries.set(url, discovery);
@@ -52,7 +52,7 @@ async function refreshReaderProfile({ auth, config, database, userId }: ReaderCh
 		headers: { Authorization: `Bearer ${accessToken}` },
 		signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
 	});
-	if (!response.ok) throw new Error(`OpenScholar user info answered HTTP ${response.status}`);
+	if (!response.ok) throw new Error(`Openscholar user info answered HTTP ${response.status}`);
 	const profile = userInfoSchema.parse(await response.json());
 	await database
 		.update(readerUser)
@@ -76,7 +76,7 @@ async function readOpenScholarReaderStatus(config: LibraryServerConfig, clerkUse
 		headers: { "Content-Type": "application/json", Authorization: `Bearer ${machineCredential}` },
 		body: JSON.stringify({ libraryId, clerkUserId }),
 	});
-	if (!response.ok) throw new Error(`OpenScholar reader status answered HTTP ${response.status}`);
+	if (!response.ok) throw new Error(`Openscholar reader status answered HTTP ${response.status}`);
 	return readerStatusSchema.parse(await response.json()).status;
 }
 
@@ -95,9 +95,9 @@ async function reportReaderSeen(config: LibraryServerConfig, clerkUserId: string
 			headers: { "Content-Type": "application/json", Authorization: `Bearer ${machineCredential}`, "OpenScholar-Contract": "1" },
 			body: JSON.stringify({ libraryId, clerkUserId }),
 		});
-		if (!response.ok) console.warn("[library sources] OpenScholar refused a reader report", { libraryId, clerkUserId, status: response.status });
+		if (!response.ok) console.warn("[library sources] Openscholar refused a reader report", { libraryId, clerkUserId, status: response.status });
 	} catch (error) {
-		console.warn("[library sources] could not report a reader to OpenScholar", { libraryId, clerkUserId, error: String(error) });
+		console.warn("[library sources] could not report a reader to Openscholar", { libraryId, clerkUserId, error: String(error) });
 	}
 }
 
@@ -141,12 +141,12 @@ export async function checkReaderSoon(check: ReaderCheck) {
 			const status = await readOpenScholarReaderStatus(config, clerkUserId);
 			if (status === "deleted") {
 				await deleteReaderByClerkUserId(database, clerkUserId);
-				console.info("Removed a reader whose OpenScholar account was deleted", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId });
+				console.info("Removed a reader whose Openscholar account was deleted", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId });
 				return;
 			}
-			console.warn("Reader check could not refresh an active OpenScholar account", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, status, error: String(refreshError) });
+			console.warn("Reader check could not refresh an active Openscholar account", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, status, error: String(refreshError) });
 		} catch (statusError) {
-			console.warn("Reader check could not reach OpenScholar; the session stays", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, refreshError: String(refreshError), statusError: String(statusError) });
+			console.warn("Reader check could not reach Openscholar; the session stays", { libraryId: config.authentication.openScholar.libraryId, clerkUserId: clerkUserId, refreshError: String(refreshError), statusError: String(statusError) });
 		}
 	}
 }

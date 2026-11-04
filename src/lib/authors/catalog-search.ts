@@ -18,6 +18,6 @@ export function authorCatalogRequest(service: OpenScholarService, body: object, 
 /** The library's author profiles matching a name, for linking a record's authors to them, searched as one of the library's people. */
 export async function searchAuthorProfiles(service: OpenScholarService, { clerkUserId, search }: { clerkUserId: string; search: string }, signal?: AbortSignal) {
 	const response = await authorCatalogRequest(service, { clerkUserId, operation: "search", paginationOpts: { cursor: null, numItems: 5 }, search }, signal);
-	if (!response.ok) throw new Error(`OpenScholar's author profiles answered HTTP ${response.status}`);
+	if (!response.ok) throw new Error(`Openscholar's author profiles answered HTTP ${response.status}`);
 	return parseAuthorPage({ ...(await response.json()), profileBaseUrl: new URL(service.libraryUrl).origin }).profiles;
 }

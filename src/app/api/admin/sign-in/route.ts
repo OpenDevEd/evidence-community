@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 		return new NextResponse(null, { status: response.status, headers: { "Cache-Control": "no-store" } });
 	}
 	const { url } = (await response.json()) as { url?: string };
-	if (!url) throw new Error("OpenScholar sign-in returned no authorization address");
+	if (!url) throw new Error("Openscholar sign-in returned no authorization address");
 	const redirect = NextResponse.redirect(url, 307);
 	for (const setCookie of response.headers.getSetCookie()) redirect.headers.append("set-cookie", setCookie);
 	redirect.headers.set("Cache-Control", "no-store");

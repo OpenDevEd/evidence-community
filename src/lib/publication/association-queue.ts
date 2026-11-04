@@ -47,6 +47,6 @@ export async function postOpenScholarAssociation(
     method: "POST", headers: {"Content-Type": "application/json", Authorization: `Bearer ${service.machineCredential}`}, body: JSON.stringify(body),
     signal: AbortSignal.any([AbortSignal.timeout(10000), ...(signal ? [signal] : [])]),
   });
-  if (!response.ok) throw new Error(`OpenScholar ${label} returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) throw new Error(`Openscholar ${label} returned ${response.status}: ${(await response.text()).slice(0, 500)}`);
   return response;
 }

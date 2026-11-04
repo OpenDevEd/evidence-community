@@ -10,8 +10,8 @@ export class OpenScholarCollectionGoneError extends Error {
 	) {
 		super(
 			code === "owner_left"
-				? `The person who added OpenScholar collection ${collectionId} left the organisation`
-				: `OpenScholar collection ${collectionId} no longer exists`,
+				? `The person who added Openscholar collection ${collectionId} left the organisation`
+				: `Openscholar collection ${collectionId} no longer exists`,
 		);
 		this.name = "OpenScholarCollectionGoneError";
 	}
@@ -96,5 +96,5 @@ export async function readOpenScholarCollection(
 			unresolved: items.length - ids.length,
 		};
 	}
-	throw new Error(`OpenScholar collection ${collectionId} kept changing while it was read`);
+	throw new Error(`Openscholar collection ${collectionId} kept changing while it was read`);
 }

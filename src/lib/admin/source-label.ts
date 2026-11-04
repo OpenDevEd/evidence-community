@@ -2,7 +2,7 @@ import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 
 const PROVIDER_NAMES: Record<string, string> = {
 	openalex: "OpenAlex",
-	openscholar: "OpenScholar",
+	openscholar: "Openscholar",
 	zotero: "Zotero",
 };
 

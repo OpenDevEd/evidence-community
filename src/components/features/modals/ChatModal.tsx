@@ -480,7 +480,7 @@ function ChatWindowTopBar({
 	return (
 		<>
 			{/* Institution branding: the navbar's logo, including its home
-			    link. OpenScholar is credited under the composer. */}
+			    link. Openscholar is credited under the composer. */}
 			<div className="pointer-events-none absolute left-4 top-4 z-30 flex h-12 items-center sm:left-6 sm:top-5 [&_img]:max-h-10 [&_img]:w-auto">
 				<div className="pointer-events-auto">
 					<Logo />
@@ -657,7 +657,7 @@ function ChatModalContent({
 					{(onClose) => (
 						<>
 							{/* Institution branding: the navbar's logo, including its
-							    home link. OpenScholar is credited under the composer. */}
+							    home link. Openscholar is credited under the composer. */}
 							<ChatWindowTopBar
 								conversationStarted={conversationStarted}
 								getTranscriptContent={getTranscriptContent}

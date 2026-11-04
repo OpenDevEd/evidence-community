@@ -10,12 +10,12 @@ Library-specific facts, commands, and deployment boundaries.
 - This repository owns the public library, `/admin`, records, drafts,
   revisions, collections, files, runtime configuration, search indexing,
   source imports, Zotero sync and writeback, and runtime workers.
-- `OpenDevEd/openalex-count` on `dev` owns OpenScholar research features,
+- `OpenDevEd/openalex-count` on `dev` owns Openscholar research features,
   accounts, billing, and Evidence Library setup and management.
 - Cross-repository calls use an authenticated, versioned, retry-safe API. Do
-  not rebuild OpenScholar research tools here.
+  not rebuild Openscholar research tools here.
 - There is no production for this product yet. This work prepares for a future
-  production release through OpenScholar `main`.
+  production release through Openscholar `main`.
 
 ## Off limits: the `coolify` branch and its tenants
 

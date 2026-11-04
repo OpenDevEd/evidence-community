@@ -118,7 +118,7 @@ describe("the signed-in reader's menu", () => {
 		const items = menuText().join(" | ");
 		expect(items).toContain("Reader");
 		expect(items).toContain("Add your name");
-		expect(items).toContain("Signed in with OpenScholar");
+		expect(items).toContain("Signed in with Openscholar");
 		press("Sign out");
 		expect(session.signOut).toHaveBeenCalledTimes(1);
 	});

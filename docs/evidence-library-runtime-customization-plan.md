@@ -6,7 +6,7 @@ Make one Evidence Library build capable of rendering every approved library
 configuration. Changing a library must require publishing a configuration
 revision, not rebuilding the application.
 
-This plan implements the configuration boundary locally first. OpenScholar is
+This plan implements the configuration boundary locally first. Openscholar is
 not involved.
 
 ## Local source of truth
@@ -388,7 +388,7 @@ Verification: both libraries and a live revision change pass using the same
 
 ## Out of scope
 
-- OpenScholar UI or APIs.
+- Openscholar UI or APIs.
 - Supabase upload flows.
 - Central multi-library persistence or provisioning.
 - DNS, deployment creation, billing, quotas, or organizations.

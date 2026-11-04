@@ -8,10 +8,10 @@ Use the existing Clerk identity, Convex projections, library credential and admi
 
 ## Verification and delivery
 
-- [ ] Implement the connected OpenScholar/runtime permission contract.
+- [ ] Implement the connected Openscholar/runtime permission contract.
 - [ ] Verify cross-library isolation, invitations and role revocation with focused tests.
 - [ ] Exercise real configuration, invitation and admin flows in Zen using computer use against isolated development services.
 - [ ] Run one Fable 5.1 review of the complete access part via Claude Code. Fix findings and verify locally without a second review.
-- [ ] Pass required CI on each final PR head before merging into OpenScholar dev and Evidence Library main. Do not push production branches.
+- [ ] Pass required CI on each final PR head before merging into Openscholar dev and Evidence Library main. Do not push production branches.
 
 Issue scope: OpenDevEd/openalex-count#174 and #46. Editorial review and snapshots are the next part; this access work must not expose Creator publication routes in the interim. Product documentation is deferred.

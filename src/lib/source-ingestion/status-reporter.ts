@@ -67,7 +67,7 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 			});
 			if (!response.ok) {
 				const body = (await response.text().catch(() => "")).slice(0, 500);
-				throw new Error(`OpenScholar answered ${response.status}${body ? `: ${body}` : ""}`);
+				throw new Error(`Openscholar answered ${response.status}${body ? `: ${body}` : ""}`);
 			}
 			sent = snapshot;
 			lastProblem = null;
