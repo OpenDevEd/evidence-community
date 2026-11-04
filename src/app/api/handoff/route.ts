@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 	try {
 		return NextResponse.json({ url: await createOpenScholarHandoff(config, handoff.data, reader?.clerkUserId ?? null) }, { headers: READER_RESPONSE_HEADERS });
 	} catch (error) {
-		console.error("[library sources] a hand-off to OpenScholar failed", { from: handoff.data.from, error: String(error) });
-		return NextResponse.json({ error: "OpenScholar didn't answer. Try again in a moment." }, { status: 502, headers: READER_RESPONSE_HEADERS });
+		console.error("[library sources] a hand-off to Openscholar failed", { from: handoff.data.from, error: String(error) });
+		return NextResponse.json({ error: "Openscholar didn't answer. Try again in a moment." }, { status: 502, headers: READER_RESPONSE_HEADERS });
 	}
 }

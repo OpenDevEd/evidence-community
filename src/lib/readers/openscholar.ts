@@ -21,7 +21,7 @@ export function openScholarProfileName(profile: ProfileName) {
  * sign in as this reader. The library has no use for the real address.
  */
 export function openScholarReader(profile: OpenScholarProfile) {
-	if (typeof profile.sub !== "string" || !profile.sub) throw new Error("OpenScholar sent a profile without a user ID");
+	if (typeof profile.sub !== "string" || !profile.sub) throw new Error("Openscholar sent a profile without a user ID");
 	return {
 		email: `${profile.sub}@readers.openscholar.invalid`,
 		emailVerified: true,

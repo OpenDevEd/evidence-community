@@ -22,7 +22,7 @@ export function PoweredByOpenScholar({ className }: { className?: string }) {
 			{t("poweredBy")}
 			<OpenScholar className="size-[1.3em] shrink-0" aria-hidden />
 			<span className="font-semibold">
-				OpenScholar<span className="font-medium opacity-70">.ai</span>
+				Openscholar<span className="font-medium opacity-70">.ai</span>
 			</span>
 		</a>
 	);

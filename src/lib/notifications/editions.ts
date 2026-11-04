@@ -424,7 +424,7 @@ async function requestDigest(config: LibraryServerConfig, edition: typeof notifi
   if (response.status === 429) return { wait: digestWait(response), started: false };
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`OpenScholar digest generation returned ${response.status}: ${body.slice(0, 500)}`);
+    throw new Error(`Openscholar digest generation returned ${response.status}: ${body.slice(0, 500)}`);
   }
   const output: unknown = await response.json();
   return z.object({ digest: digestResponseSchema }).parse(output).digest;

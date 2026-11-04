@@ -74,7 +74,7 @@ export default async function AdminPage({
 
 	const config = await getLibraryConfig();
 	const authorization = await authorizeAdminRequest(await headers(), ADMIN_CONTENT_PERMISSION, config);
-	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
+	if (authorization.status === "unavailable") throw new Error("Openscholar access verification is temporarily unavailable");
 	if (authorization.status === "no_access") return <AdminNoAccess organisationName={authorization.organisationName} />;
 	if (authorization.status !== "authorized") {
 		// The proxy sends a request without a session cookie to sign-in first;

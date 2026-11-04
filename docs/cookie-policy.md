@@ -12,7 +12,7 @@ This storage is needed for the site to work or remember a choice you asked it to
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
 | `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the community they apply to, the policy versions, and when you made the choice.       | 180 days                           |
 | `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
-| `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your OpenScholar account and tie the return from OpenScholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
+| `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your Openscholar account and tie the return from Openscholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
 
 ## **Product analytics storage (optional)**

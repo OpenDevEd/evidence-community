@@ -44,7 +44,7 @@ export function OpenInOpenScholar({ handoff, label, appearance = "default" }: { 
 			else window.location.assign(url);
 		} catch (error) {
 			tab?.close();
-			console.error("[library sources] opening in OpenScholar failed", error);
+			console.error("[library sources] opening in Openscholar failed", error);
 			toast({ type: "error", title: t("openInOpenScholarFailed"), description: t("tryAgainLater") });
 		} finally {
 			opening.current = false;

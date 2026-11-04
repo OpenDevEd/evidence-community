@@ -1,17 +1,17 @@
-# OpenScholar collection source
+# Openscholar collection source
 
-An OpenScholar collection source follows one collection a person keeps in
-OpenScholar. The library reads which works the collection holds from
-OpenScholar, and reads the works themselves from OpenAlex through the same
+An Openscholar collection source follows one collection a person keeps in
+Openscholar. The library reads which works the collection holds from
+Openscholar, and reads the works themselves from OpenAlex through the same
 import engine as an OpenAlex search.
 
 ## Configuration
 
-OpenScholar writes the source into `LIBRARY_CONFIG_JSON`:
+Openscholar writes the source into `LIBRARY_CONFIG_JSON`:
 
 - `key`: `openscholar-<collectionId>`;
 - `provider`: `openscholar`;
-- `collectionId`: the OpenScholar collection;
+- `collectionId`: the Openscholar collection;
 - `apiKey`: the OpenAlex key that reads its works;
 - `enabled`: whether the source is followed;
 - `settings`: `name`, `apiKeyMode` and `downloadPdfs`, the settings every
@@ -20,9 +20,9 @@ OpenScholar writes the source into `LIBRARY_CONFIG_JSON`:
 The collection is the scope, so a library holds each collection once. The
 source takes its name from the collection on every sync.
 
-## OpenScholar endpoint
+## Openscholar endpoint
 
-`POST /api/v1/evidence-libraries/source-collections/items` on the OpenScholar
+`POST /api/v1/evidence-libraries/source-collections/items` on the Openscholar
 HTTP host, with the library's machine credential as a bearer token:
 
 ```json

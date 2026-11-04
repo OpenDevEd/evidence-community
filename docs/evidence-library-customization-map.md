@@ -15,7 +15,7 @@ or `NEXT_PUBLIC_*` variables.
 | Public projection | `src/config/library-config/public.ts` | `LibraryConfigProvider` |
 | Example document | `config/library.example.json` | Operators and tests |
 | Health check | `/api/library-config/health` | Deployment health checks |
-| OpenScholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | OpenScholar configuration pickers; bearer token is `authentication.openScholar.machineCredential`; both answer one page at a time (see below) |
+| Openscholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | Openscholar configuration pickers; bearer token is `authentication.openScholar.machineCredential`; both answer one page at a time (see below) |
 
 `LIBRARY_CONFIG_PATH` selects the document. It is deployment plumbing, not a
 library customization value. In production the path is required. The same
@@ -31,7 +31,7 @@ container image can be started repeatedly with different mounted documents.
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
-| `footer` | Sections, links, social links, attribution, disclaimer, "Powered by OpenScholar" link | Bounded unique IDs and validated links; `poweredBy` defaults to `true` |
+| `footer` | Sections, links, social links, attribution, disclaimer, "Powered by Openscholar" link | Bounded unique IDs and validated links; `poweredBy` defaults to `true` |
 | `contact` | Review email, phone, address, PayPal link | Valid email/URL and bounded plain text |
 | `legal` | Privacy, cookie, and terms links; optional owner-written page text (`privacyMarkdown`, `cookieMarkdown`, `termsMarkdown`) | Internal paths or stable external URLs; page text is Markdown up to 200 000 characters, `{{SITE_HOST}}` is replaced with the library host, and `termsOfService` defaults to `/terms` when `termsMarkdown` is set |
 | `localization` | Enabled locales, default, detection, priority | Platform locale catalog; default and priority must be enabled |
@@ -47,7 +47,7 @@ container image can be started repeatedly with different mounted documents.
 | `services` | PostgreSQL, Meilisearch, Zotero translation, and the OpenAlex key (`services.openAlex.apiKey`) that looks up the open access of records from other sources by DOI | Valid service URLs and bounded credentials/index; without the OpenAlex key nothing is looked up |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |
-| `authentication` | OpenScholar service access, sign-in and session signing | OpenScholar site, library ID, library page, account page, machine credential, the library's Clerk OAuth client (issuer, client ID, secret) and the session secret are all required; OpenScholar writes them |
+| `authentication` | Openscholar service access, sign-in and session signing | Openscholar site, library ID, library page, account page, machine credential, the library's Clerk OAuth client (issuer, client ID, secret) and the session secret are all required; Openscholar writes them |
 | `email` | Contact/takedown recipients and SMTP | Complete credential pairs and valid transport settings |
 | `generation` | Sitemap and legacy-redirect route availability | Runtime booleans |
 | `processing` | Structure, PDF, and shared processing rules | Platform condition/action catalogs |
@@ -58,7 +58,7 @@ markers, and write-only paths. Custom refinements and cross-field dependencies
 remain authoritative in `src/config/library-config/schema.ts`; external tools
 must run `npm run config:validate -- <path>` before activation.
 
-## OpenScholar read API
+## Openscholar read API
 
 Both routes need `Authorization: Bearer <authentication.openScholar.machineCredential>`
 and answer one page at a time. A request without parameters returns the first
@@ -72,7 +72,7 @@ page.
 
 `hasChildren` is true when a live collection sits under the row in the same
 source. The site shows a configured collection as a heading over its
-sub-collections, so OpenScholar offers only rows with `hasChildren`.
+sub-collections, so Openscholar offers only rows with `hasChildren`.
 
 `query` matches anywhere in the name and ignores case; PostgreSQL folds the
 case of the search and of the stored name together, so a name such as

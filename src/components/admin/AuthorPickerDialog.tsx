@@ -98,8 +98,8 @@ export function AuthorPickerDialog({
 						</h2>
 						<p className="mt-1 text-xs leading-relaxed text-black/50 dark:text-white/50">
 							{creating
-								? "Add their name now. Configure their profile in OpenScholar."
-								: "Link an OpenScholar profile to keep this creator up to date."}
+								? "Add their name now. Configure their profile in Openscholar."
+								: "Link an Openscholar profile to keep this creator up to date."}
 						</p>
 					</div>
 					<Button
@@ -150,7 +150,7 @@ export function AuthorPickerDialog({
 							<Input
 								color="filled"
 								autoFocus
-								aria-label="Search OpenScholar authors"
+								aria-label="Search Openscholar authors"
 								maxLength={200}
 								placeholder="Search authors by name"
 								value={search}

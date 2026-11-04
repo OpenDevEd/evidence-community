@@ -13,7 +13,7 @@ export class OpenScholarServiceError extends Error {
 		readonly code: string | null,
 		options?: ErrorOptions,
 	) {
-		super(status === null ? "OpenScholar could not be reached" : `OpenScholar returned ${status}${code ? ` (${code})` : ""}`, options);
+		super(status === null ? "Openscholar could not be reached" : `Openscholar returned ${status}${code ? ` (${code})` : ""}`, options);
 		this.name = "OpenScholarServiceError";
 	}
 }

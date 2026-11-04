@@ -141,7 +141,7 @@ download or upload.
 
 ## Dedicated live verification
 
-The live verifier is intentionally limited to the OpenScholar Zotero
+The live verifier is intentionally limited to the Openscholar Zotero
 playground and loopback PostgreSQL, Supabase, and Meilisearch services. It
 reconciles the deterministic fixture, runs the real source adapter, drains the
 local outbox using its normal claim protocol, and verifies source identities,

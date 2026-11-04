@@ -736,7 +736,7 @@ for (const profileAvailable of [true, false]) {
 				await expect(author.locator("img")).toHaveAttribute("src", "/favicon.ico");
 				await page.mouse.move(0, 0);
 				await author.hover();
-				await expect(page.getByRole("link", { name: "View OpenScholar profile", exact: true })).toHaveAttribute("href", profileUrl);
+				await expect(page.getByRole("link", { name: "View Openscholar profile", exact: true })).toHaveAttribute("href", profileUrl);
 			}
 			if (expectedAuthorFilter) {
 				await author.click();

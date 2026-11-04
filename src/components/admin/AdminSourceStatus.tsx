@@ -1021,7 +1021,7 @@ function sourceSubtitle(source: AdminSource) {
 		return source.scopeKind === "group" ? `Zotero group ${source.externalScopeKey}` : "Zotero library";
 	}
 	if (source.provider === "openalex") return "OpenAlex search";
-	return source.provider === "openscholar" ? "OpenScholar collection" : sourceProviderName(source.provider);
+	return source.provider === "openscholar" ? "Openscholar collection" : sourceProviderName(source.provider);
 }
 
 /** Status version: the polled issue counts, and a run ending, since an import can swap issues without changing a count. */

@@ -142,14 +142,14 @@ export function CreatorCard({
 				options={[
 					{
 						key: "profile",
-						label: "OpenScholar",
+						label: "Openscholar",
 						content: (
 							<>
 								<OpenScholar
 									aria-hidden
 									className="size-4 shrink-0"
 								/>
-								OpenScholar
+								Openscholar
 							</>
 						),
 					},
@@ -565,7 +565,7 @@ function UnselectedCreator({
 					Choose an author
 				</span>
 				<span className="mt-1 block text-xs leading-relaxed text-black/45 dark:text-white/45">
-					Find a profile on OpenScholar
+					Find a profile on Openscholar
 				</span>
 			</span>
 		</button>

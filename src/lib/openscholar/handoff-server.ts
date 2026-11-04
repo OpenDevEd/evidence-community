@@ -24,8 +24,8 @@ export async function createOpenScholarHandoff(config: LibraryServerConfig, hand
 	});
 	if (response.status !== 201) {
 		const body = (await response.text().catch(() => "")).slice(0, 500);
-		console.warn("[library sources] OpenScholar refused a hand-off", { libraryId, clerkUserId, from: handoff.from, status: response.status, body });
-		throw new Error(`OpenScholar answered HTTP ${response.status} to a hand-off`);
+		console.warn("[library sources] Openscholar refused a hand-off", { libraryId, clerkUserId, from: handoff.from, status: response.status, body });
+		throw new Error(`Openscholar answered HTTP ${response.status} to a hand-off`);
 	}
 	return answerSchema.parse(await response.json()).url;
 }

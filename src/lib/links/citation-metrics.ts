@@ -65,7 +65,7 @@ export async function getSourceCitationMetricsForKeys(
 			// These are OpenAlex's own counts, whichever search imported the work.
 			// Readers see them under OpenScholar's name, where the full lists open.
 			sourceLabel: openAlex
-				? "OpenScholar"
+				? "Openscholar"
 				: sourceDisplayLabel({
 						key: row.sourceConnectionKey,
 						provider: row.provider,

@@ -28,8 +28,8 @@ Revised by the user on 2026-08-21. The earlier single-gateway decision (Cloudfla
 - There is no single mandatory gateway. Each library connects to models through exactly one of three credential paths:
     1. **Direct provider keys** — the library supplies its own API keys for a limited set of supported providers.
     2. **OpenRouter key** — the library supplies its own OpenRouter API key.
-    3. **OpenScholar credits** — requests run through the OpenScholar API endpoint so usage bills to the owner's OpenScholar account under its unified billing handling.
-- All three paths select models from the same stored OpenScholar model list. The server validates every request's provider/model against that stored list and rejects anything not on it; never trust a client-supplied model identifier.
+    3. **Openscholar credits** — requests run through the Openscholar API endpoint so usage bills to the owner's Openscholar account under its unified billing handling.
+- All three paths select models from the same stored Openscholar model list. The server validates every request's provider/model against that stored list and rejects anything not on it; never trust a client-supplied model identifier.
 - Provider API keys live in the library runtime manifest (the same pattern as `search.embedder`), never in client-visible configuration or environment variables.
 - Test deployments use path 2 (the library's own OpenRouter key).
 - Do not build cross-model fallback. If the selected model request fails, return a controlled error.
@@ -37,19 +37,19 @@ Revised by the user on 2026-08-21. The earlier single-gateway decision (Cloudfla
 
 ### Path 3 design (confirmed by the user on 2026-08-21)
 
-OpenScholar already has a credits-billed OpenAI-compatible gateway (`/api/wallet/v1/chat/completions` in `openalex-count`, Bearer wallet keys) and a public model catalog (`GET /api/wallet/v1/models`, no auth). Path 3 adds a shared-secret mode for Evidence Libraries instead of using per-library API keys:
+Openscholar already has a credits-billed OpenAI-compatible gateway (`/api/wallet/v1/chat/completions` in `openalex-count`, Bearer wallet keys) and a public model catalog (`GET /api/wallet/v1/models`, no auth). Path 3 adds a shared-secret mode for Evidence Libraries instead of using per-library API keys:
 
-- **True proxy.** The Evidence Library sends the complete request — messages, tool definitions, and inline PDFs — to an OpenScholar endpoint. OpenScholar calls the provider through its own provider configuration and streams the reply back. Everything travels through the proxy; the stream bytes pass through untouched.
-- **Shared-secret authentication, no per-library keys.** One secret is distributed to both applications' server-side configuration. Each request also carries the calling library's identity. OpenScholar resolves that library to its owning account and bills it.
-- **Reuse the existing billing pipeline unchanged**: reserve an estimated cost, stream, settle actual token usage at OpenScholar's pricing markup, against the owner's credit balance. Never kill a stream mid-token; enforce hard step/token caps instead.
-- **Account-level quota in OpenScholar** sits on top of the library's own per-IP limiter. The two limiters protect different things and stay separate.
+- **True proxy.** The Evidence Library sends the complete request — messages, tool definitions, and inline PDFs — to an Openscholar endpoint. Openscholar calls the provider through its own provider configuration and streams the reply back. Everything travels through the proxy; the stream bytes pass through untouched.
+- **Shared-secret authentication, no per-library keys.** One secret is distributed to both applications' server-side configuration. Each request also carries the calling library's identity. Openscholar resolves that library to its owning account and bills it.
+- **Reuse the existing billing pipeline unchanged**: reserve an estimated cost, stream, settle actual token usage at Openscholar's pricing markup, against the owner's credit balance. Never kill a stream mid-token; enforce hard step/token caps instead.
+- **Account-level quota in Openscholar** sits on top of the library's own per-IP limiter. The two limiters protect different things and stay separate.
 - **Model list stays public.** Libraries fetch `GET /api/wallet/v1/models`, cache it with a last-known-good fallback, and all three paths validate provider/model against it server-side.
-- The existing wallet-key gateway remains for its current consumers but is not used by Evidence Libraries. Once the shared-secret mode exists, it is the only supported way libraries use OpenScholar credits.
+- The existing wallet-key gateway remains for its current consumers but is not used by Evidence Libraries. Once the shared-secret mode exists, it is the only supported way libraries use Openscholar credits.
 - Implementation is split across repositories: the shared-secret endpoint and library→owner resolution live in `openalex-count`; the client lives here. Paths 1 and 2 must not wait on it.
 
 Model selection, revised by the user on 2026-09-11:
 
-- OpenScholar's synced OpenRouter catalog supplies available model ids and names. Do not keep a code-defined list of selectable or hidden models.
+- Openscholar's synced OpenRouter catalog supplies available model ids and names. Do not keep a code-defined list of selectable or hidden models.
 - Owners choose the models their library offers. Assembly includes the selected models' display metadata in runtime configuration. The public projection includes names, never credentials.
 - Runtime schema and request parsing validate model-id syntax. Request resolution also requires an enabled provider with that exact model in the library's selection.
 - Hand-written runtime configurations can use provider model ids directly and omit display metadata.
