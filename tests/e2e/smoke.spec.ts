@@ -128,7 +128,7 @@ const expectedSourceCitationCount =
 	process.env.PLAYWRIGHT_EXPECTED_SOURCE_CITATION_COUNT ?? "";
 const expectedLibraryCitationLabel =
 	process.env.PLAYWRIGHT_EXPECTED_LIBRARY_CITATION_LABEL ??
-	"Citations in this library";
+	"Citations in this community";
 
 test("switches citation statistics between library links and source metrics", async ({
 	page,
@@ -736,7 +736,7 @@ for (const profileAvailable of [true, false]) {
 				await expect(author.locator("img")).toHaveAttribute("src", "/favicon.ico");
 				await page.mouse.move(0, 0);
 				await author.hover();
-				await expect(page.getByRole("link", { name: "View OpenScholar profile", exact: true })).toHaveAttribute("href", profileUrl);
+				await expect(page.getByRole("link", { name: "View Openscholar profile", exact: true })).toHaveAttribute("href", profileUrl);
 			}
 			if (expectedAuthorFilter) {
 				await author.click();
@@ -1038,6 +1038,27 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", {
 });
 
 
+test("the country map answers the pointer after Back, resized while away", { tag: "@smoke" }, async ({ page }) => {
+	test.skip(process.env.PLAYWRIGHT_EXPECTED_COUNTRY_MAP !== "true", "This library has no country map.");
+	const reachable = () => page.evaluate(() => [...document.querySelectorAll("svg [role='button']")].some((shape) => {
+		const box = shape.getBoundingClientRect();
+		return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === shape;
+	}));
+	await page.goto("/en-GB/map", { waitUntil: "domcontentloaded" });
+	await dismissConsent(page);
+	// Far from the middle of the map, so choosing it slides the map.
+	await page.getByRole("button", { name: "Fiji", exact: true }).press("Enter");
+	await expect(page).toHaveURL(url => url.searchParams.has("country"));
+	await expect.poll(reachable).toBe(true);
+	await page.locator("a[href]:not([href^='#']):not([href*='/map'])").filter({ visible: true }).first().click();
+	await expect(page).not.toHaveURL(/\/map/);
+	// The map's slide can't run while the page is kept for Back, so no transition ends it.
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goBack();
+	await expect(page).toHaveURL(/\/map/);
+	await expect.poll(reachable).toBe(true);
+});
+
 test("only opens the country map when its page is enabled", async ({ page }) => {
 	const errors: string[] = [];
 	page.on("pageerror", error => errors.push(error.message));
@@ -1114,7 +1135,7 @@ test("keeps the whole-library export total independent of the search", { tag: "@
 	await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true }).first()).toBeVisible();
 	const button = page.getByRole("button", { name: "Download", exact: true });
 	await button.click();
-	const wholeLibrary = page.getByRole("radio", { name: /^Whole library/ });
+	const wholeLibrary = page.getByRole("radio", { name: /^Whole community/ });
 	const count = Number((await wholeLibrary.ariaSnapshot()).match(/\(([\d,]+)\)/)?.[1].replaceAll(",", ""));
 	expect(count).toBeGreaterThan(0);
 	await wholeLibrary.check();

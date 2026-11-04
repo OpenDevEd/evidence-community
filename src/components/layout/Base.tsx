@@ -96,7 +96,7 @@ export default async function Base({
 	const dir = getLangDir(locale);
 	// Only the library's own fonts are set on the page, so only those are preloaded.
 	const fontVariables = themeGoogleFonts(libraryConfig.theme).map((family) => PLATFORM_FONTS[family].variable);
-	const fallback = { contactForm: isEmailChannelEnabled(serverConfig, "contact"), home: homePlaceholderContent(serverConfig) };
+	const fallback = { contactForm: isEmailChannelEnabled(serverConfig, "contact"), home: homePlaceholderContent(serverConfig, (await getTranslations({ locale, namespace: "homePage" }))("defaultIntro", { name: serverConfig.identity.name })) };
 	return (
 		<html lang={locale} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
 			<body>

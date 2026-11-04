@@ -58,7 +58,7 @@ export function currentResultsOffset(
 		return parsed.offset as number;
 	} catch {
 		throw new Error(
-			"The current library search changed. Start again from its first results.",
+			"The current community search changed. Start again from its first results.",
 		);
 	}
 }

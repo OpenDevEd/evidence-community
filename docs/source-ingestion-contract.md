@@ -29,10 +29,10 @@ Library databases and deployments are not migrated or modified.
 - The built-in native connection is exactly `native`.
 - Zotero connections are declared in `LIBRARY_CONFIG_JSON`. Both source
   workers reconcile those declarations before their first sweep.
-- The manifest supports Zotero groups, OpenAlex queries and OpenScholar
+- The manifest supports Zotero groups, OpenAlex queries and Openscholar
   collections. Other provider types remain database model capabilities until
   their manifest contracts are built.
-- OpenAlex queries and OpenScholar collections are both sources of OpenAlex
+- OpenAlex queries and Openscholar collections are both sources of OpenAlex
   works (`src/lib/source-providers.ts`). A library keeps one record per work
   across all of them, and none of them writes back. See
   `docs/openscholar-source-adapter.md`.
@@ -112,7 +112,7 @@ Library databases and deployments are not migrated or modified.
   publishing that draft clears the tombstone and emits a new upsert revision.
   A linked tombstone marks every editable provider field dirty so writeback can
   recreate a remotely deleted record rather than silently diverging.
-- OpenScholar creates a short-lived, one-time admin code. The browser sends
+- Openscholar creates a short-lived, one-time admin code. The browser sends
   only that opaque code to the Evidence Library. The Evidence Library redeems
   it with its own machine credential, then signs the returned user,
   organization, library, and owner/editor role into its HTTP-only cookie.
@@ -260,7 +260,7 @@ for active parent items; a tombstoned parent remains a deletion.
 ## Source synchronization
 
 - `SourceAdapterRegistry` dispatches each connection by provider. The runtime
-  ships with the Zotero, OpenAlex and OpenScholar adapters; Mendeley, DSpace,
+  ships with the Zotero, OpenAlex and Openscholar adapters; Mendeley, DSpace,
   and EPrints plug into the same interface without changing orchestration or
   canonical writes.
 - `sourceConnection` is the source registry and schedule input. A sweep selects

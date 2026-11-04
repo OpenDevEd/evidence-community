@@ -1,3 +1,4 @@
+import { useLocale } from "next-intl";
 import { motion } from "framer-motion";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 import { Card } from "@/components/nextui/Card";
@@ -15,6 +16,9 @@ const itemVariants = {
 	show: { y: 0, opacity: 1 },
 };
 
+const TONE_BACKGROUND: Record<string, string> = { accent: "bg-accent/20", success: "bg-success/20", tertiary: "bg-tertiary/20" };
+const TONE_ICON: Record<string, string> = { accent: "text-accent", success: "text-success", tertiary: "text-tertiary" };
+
 export function StatCard({
 	title,
 	value,
@@ -22,6 +26,7 @@ export function StatCard({
 	icon,
 	color = "accent",
 }: StatCardProps) {
+  const locale = useLocale();
 	return (
 		<motion.div variants={itemVariants}>
 			<Card
@@ -30,25 +35,11 @@ export function StatCard({
 			>
 				<div className="flex items-center gap-4 w-full justify-center">
 					<div
-						className={`p-3 rounded-2xl ${color === "accent"
-								? "bg-accent/20"
-								: color === "success"
-								? "bg-success/20"
-								: color === "tertiary"
-								? "bg-tertiary/20"
-								: "bg-white/10 dark:bg-white/5"
-						}`}
+						className={`p-3 rounded-2xl ${TONE_BACKGROUND[color] ?? "bg-white/10 dark:bg-white/5"}`}
 					>
 						<HugeiconsIcon
 							icon={icon}
-							className={`size-6 ${color === "accent"
-									? "text-accent"
-									: color === "success"
-									? "text-success"
-									: color === "tertiary"
-									? "text-tertiary"
-									: "text-black/60 dark:text-white/60"
-							}`}
+							className={`size-6 ${TONE_ICON[color] ?? "text-black/60 dark:text-white/60"}`}
 						/>
 					</div>
 					<div className="flex-1">
@@ -57,7 +48,7 @@ export function StatCard({
 						</h3>
 						<p className="text-2xl font-bold text-black dark:text-white">
 							{typeof value === "number"
-								? value.toLocaleString()
+								? value.toLocaleString(locale)
 								: value}
 						</p>
 						{subtitle && (

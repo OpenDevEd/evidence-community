@@ -443,17 +443,17 @@ test("saves library display switches as tags and keeps the published preview unc
 	await expect(title).toBeEditable();
 	const menu = inspector.getByRole("button", { name: "Record status and sources" });
 	await menu.click();
-	const display = page.getByRole("region", { name: "Library display", exact: true });
-	const trigger = display.getByRole("button", { name: /^Library display/ });
+	const display = page.getByRole("region", { name: "Community display", exact: true });
+	const trigger = display.getByRole("button", { name: /^Community display/ });
 	await expect(trigger).toHaveAttribute("aria-expanded", "false");
 	await expect(page.getByRole("region", { name: "Connected sources" }).getByRole("button", { name: /^Sources/ })).toHaveAttribute("aria-expanded", "false");
 	await trigger.click();
-	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+	for (const name of ["Hide from community", "Available on request", "Coming soon"]) {
 		await display.getByRole("switch", { name, exact: true }).check();
 	}
 	await expect.poll(async () => (await (await page.request.get(`/api/admin/items/${key}`)).json()).item.draft.payload.tags).toEqual(expect.arrayContaining(["hidden-record", "internal-only", "coming-soon"]));
 	await display.getByRole("button", { name: /^Preview published revision/ }).click();
-	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+	for (const name of ["Hide from community", "Available on request", "Coming soon"]) {
 		await expect(display.getByRole("switch", { name, exact: true })).toBeChecked();
 	}
 	await expect(display.getByRole("region", { name: "Reader preview" }).getByText("Available on request", { exact: true })).toHaveCount(0);
@@ -464,7 +464,7 @@ test("saves library display switches as tags and keeps the published preview unc
 	await page.reload();
 	await menu.click();
 	await trigger.click();
-	for (const name of ["Hide from library", "Available on request", "Coming soon"]) {
+	for (const name of ["Hide from community", "Available on request", "Coming soon"]) {
 		await expect(display.getByRole("switch", { name, exact: true })).toBeChecked();
 		await display.getByRole("switch", { name, exact: true }).uncheck();
 	}

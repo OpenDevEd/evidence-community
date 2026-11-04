@@ -73,14 +73,14 @@ function errorResponse(
 	if (error instanceof LibraryConfigSourceError) {
 		return jsonError(
 			"invalid_configuration",
-			"The submitted library configuration is invalid.",
+			"The submitted community configuration is invalid.",
 			error.code === "FILE_TOO_LARGE" ? 413 : 400,
 		);
 	}
 	console.error(`OpenScholar configuration ${operation} failed.`, error);
 	return jsonError(
 		"internal_error",
-		"The library configuration could not be changed.",
+		"The community configuration could not be changed.",
 		500,
 	);
 }

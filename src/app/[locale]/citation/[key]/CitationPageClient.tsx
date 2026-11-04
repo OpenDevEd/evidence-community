@@ -25,7 +25,8 @@ import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import ResourceAuthors from "@/components/features/items/ResourceAuthors";
 import { Pagination } from "@/components/nextui/Pagination";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
+import { intlLocale } from "@/i18n/intl-locale";
 import { useTheme } from "next-themes";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
@@ -54,6 +55,8 @@ ChartJS.register(
 );
 import { useState, useEffect, useRef, useMemo } from "react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+
+const ONE_DECIMAL = { minimumFractionDigits: 1, maximumFractionDigits: 1 };
 
 function visibleExternalTooltip<T extends { visible: boolean }>(
 	context: any,
@@ -88,6 +91,7 @@ function CitationStats({
 	yearDistribution: { year: string; count: number }[];
 	isLoading: boolean;
 }) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 
 	const totalFromYears = yearDistribution.reduce(
@@ -99,7 +103,7 @@ function CitationStats({
 	).length;
 	const avgPerYear =
 		yearsWithCitations > 0
-			? (totalFromYears / yearsWithCitations).toFixed(1)
+			? (totalFromYears / yearsWithCitations).toLocaleString(intlLocale(locale), ONE_DECIMAL)
 			: "0";
 	const peakYear =
 		yearDistribution.length > 0
@@ -112,7 +116,7 @@ function CitationStats({
 	const stats = [
 		{
 			label: t("libraryCitations"),
-			value: libraryCitationCount.toLocaleString(),
+			value: libraryCitationCount.toLocaleString(locale),
 			color: "from-blue-500/10 to-blue-600/5 border-blue-500/20",
 			textColor: "text-blue-600 dark:text-blue-400",
 		},
@@ -467,6 +471,7 @@ function CitationsCountryChart({
 	isLoading: boolean;
 }) {
 	const t = useTranslations("ui");
+	const locale = useLocale();
 	const { resolvedTheme: theme } = useTheme();
 
 	const [tooltipState, setTooltipState] = useState({
@@ -516,7 +521,7 @@ function CitationsCountryChart({
 				const total = (
 					context.chart.data.datasets[0].data as number[]
 				).reduce((a, b) => a + b, 0);
-				const percentage = ((rawValue / total) * 100).toFixed(1);
+				const percentage = ((rawValue / total) * 100).toLocaleString(intlLocale(locale), ONE_DECIMAL);
 
 				// Find the original country code from the index since labels are now full names
 				const countryCode =
@@ -545,7 +550,7 @@ function CitationsCountryChart({
 				});
 			}),
 		}),
-		[countryDistribution, theme],
+		[countryDistribution, theme, locale],
 	);
 
 	const totalCitations = countryDistribution.reduce(
@@ -663,7 +668,7 @@ function CitationsCountryChart({
 								const percentage = (
 									(item.count / totalCitations) *
 									100
-								).toFixed(1);
+								).toLocaleString(intlLocale(locale), ONE_DECIMAL);
 								const isUnknown = item.country === "UNKNOWN";
 								const countryName = isUnknown
 									? t("globalOrUnspecified")

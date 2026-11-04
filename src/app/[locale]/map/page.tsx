@@ -47,7 +47,7 @@ async function countsOf(params: Parameters<typeof getPublicFacets>[0], mode: Cou
 		const facets = await getPublicFacets(params);
 		return (facets.facetDistribution?.[`${modeField(mode)}_uncategorized`] ?? {}) as Counts;
 	} catch (error) {
-		console.error("Map page: the library's country counts could not be read", error);
+		console.error("Map page: the community's country counts could not be read", error);
 		return undefined;
 	}
 }

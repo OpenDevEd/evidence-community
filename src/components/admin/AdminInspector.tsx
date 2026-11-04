@@ -67,7 +67,7 @@ import {
 	PopoverTrigger,
 } from "@nextui-org/react";
 import { Spinner } from "@/components/nextui/Spinner";
-import { type ReactNode, type SetStateAction, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { type ReactNode, type SetStateAction, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
@@ -198,6 +198,7 @@ function ChangedMarker({
 	publishedValue: React.ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const marker = useRef<HTMLSpanElement>(null);
 	return (
 		<Popover
 			isOpen={open}
@@ -206,7 +207,7 @@ function ChangedMarker({
 			onOpenChange={setOpen}
 		>
 			<Tooltip content={`${label} differs from the published value`}>
-				<span className="inline-flex">
+				<span className="inline-flex" ref={marker}>
 					<PopoverTrigger>
 						<button
 							aria-label={`Changed: show published ${label}`}
@@ -233,9 +234,17 @@ function ChangedMarker({
 					</div>
 					<Button
 						className="mt-2.5 px-2.5 font-medium"
-						onPress={() => {
+						onPress={(press) => {
+							// The marker leaves with the change, and the popover would hand focus back to it, so focus would fall to the
+							// page. Its row holds it instead, so Tab goes on to the field; a field's own box would open its list.
+							const row = marker.current?.parentElement;
 							onRevert();
 							setOpen(false);
+							requestAnimationFrame(() => {
+								if (!row) return;
+								row.tabIndex = -1;
+								row.focus({ focusVisible: press.pointerType === "keyboard" });
+							});
 						}}
 						size="xs"
 						startContent={
@@ -617,6 +626,18 @@ function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	return { titleField, countryFocusAfterField };
 }
 
+/** The Item type box's text. The changed marker's revert changes the type from outside the box, so the text follows it. */
+function useItemTypeInput(itemType: string | null) {
+	const label = itemType ? humanizeAdminField(itemType) : "";
+	const [input, setInput] = useState(label);
+	const [shownLabel, setShownLabel] = useState(label);
+	if (label !== shownLabel) {
+		setShownLabel(label);
+		setInput(label);
+	}
+	return [input, setInput] as const;
+}
+
 function MetadataEditor({
 	definitions,
 	detail,
@@ -648,9 +669,7 @@ function MetadataEditor({
 	const countryAbstract = useDeferredValue(payload.abstractNote);
 	const countryPayload = useMemo(() => ({ [titleField]: countryTitle, abstractNote: countryAbstract, countryFocus: payload.countryFocus }), [titleField, countryTitle, countryAbstract, payload.countryFocus]);
 	const selectedItemType = definition?.itemType ?? null;
-	const [itemTypeInput, setItemTypeInput] = useState(
-		selectedItemType ? humanizeAdminField(selectedItemType) : "",
-	);
+	const [itemTypeInput, setItemTypeInput] = useItemTypeInput(selectedItemType);
 	const updateField = onFieldChange;
 
 	return (
@@ -699,7 +718,8 @@ function MetadataEditor({
 					onSelectionChange={(value) => {
 						if (typeof value === "string") {
 							setItemTypeInput(humanizeAdminField(value));
-							onChange({ ...payload, itemType: value });
+							// The box also reports its current type when Tab or a click elsewhere leaves it.
+							if (value !== selectedItemType) onChange({ ...payload, itemType: value });
 						}
 					}}
 				>
@@ -1407,7 +1427,7 @@ function SourcePdfReason({ sourcePdf }: { sourcePdf: NonNullable<AdminItemDetail
 	if (!sourcePdf.applied)
 		return <p className="mt-1 text-black/45 dark:text-white/45">Changes on the next import</p>;
 	if (sourcePdf.choice === "withhold")
-		return <p className="mt-1 text-black/45 dark:text-white/45">Taken down in this library</p>;
+		return <p className="mt-1 text-black/45 dark:text-white/45">Taken down in this community</p>;
 	return (
 		<p className="mt-1 flex flex-wrap items-center gap-1 text-black/45 dark:text-white/45">
 			Publishes when tagged
@@ -2182,7 +2202,7 @@ export function AdminInspector({
 				>
 					<MetadataEditor
  onFieldChange={changeField}
-						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
+						key={detail.key}
 						definitions={definitions}
 						detail={detail}
 						diff={diff}

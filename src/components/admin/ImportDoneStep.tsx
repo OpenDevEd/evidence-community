@@ -67,7 +67,7 @@ function DoneSummary({ flow, view }: { flow: ImportFlowState; view: PublishView 
 		<SettingsGroup>
 			<SummaryRow icon={CheckmarkCircle02Icon} title="Drafts created" tone="text-emerald-700 dark:text-emerald-400" value={view.drafts.length} />
 			<PdfsAttached view={view} />
-			{view.existing ? <SummaryRow icon={Copy01Icon} title="Already in the library" value={view.existing} /> : null}
+			{view.existing ? <SummaryRow icon={Copy01Icon} title="Already in the community" value={view.existing} /> : null}
 			{view.failed ? <SummaryRow icon={AlertCircleIcon} title="Not imported" tone="text-danger" value={view.failed} /> : null}
 			<DoiRoute flow={flow} view={view} />
 		</SettingsGroup>

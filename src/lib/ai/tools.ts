@@ -368,10 +368,10 @@ function modeFilters(mode: ResearchMode, filters: SearchFilters | undefined) {
 }
 
 const SEARCH_TOOL_DESCRIPTION =
-	"Search the Evidence Library for candidate publications. Submit related query variations together so they run in parallel. Results contain discovery metadata and abstracts, not page-verifiable evidence. Before relying on a publication's substantive claims, use readPublications and cite its exact PDF page. Each hit says whether it has a PDF (hasPdf); only those can be read. Use filters.pdfOnly to return only publications with a PDF. When the request context says a current result set is available and the user refers to it, set withinCurrentResults=true: with no queries this lists one 200-entry window of those results in the user's own order (positions, keys, titles, creators, years) — use it for questions about the list itself such as counts, order, or the first/last/Nth entry (window='last' for the end of the list); with queries it searches only inside that window. At most one window per user message; to continue later, pass the nextCursor returned by the previous call.";
+	"Search the Evidence Community for candidate publications. Submit related query variations together so they run in parallel. Results contain discovery metadata and abstracts, not page-verifiable evidence. Before relying on a publication's substantive claims, use readPublications and cite its exact PDF page. Each hit says whether it has a PDF (hasPdf); only those can be read. Use filters.pdfOnly to return only publications with a PDF. When the request context says a current result set is available and the user refers to it, set withinCurrentResults=true: with no queries this lists one 200-entry window of those results in the user's own order (positions, keys, titles, creators, years) — use it for questions about the list itself such as counts, order, or the first/last/Nth entry (window='last' for the end of the list); with queries it searches only inside that window. At most one window per user message; to continue later, pass the nextCursor returned by the previous call.";
 
 const READ_TOOL_DESCRIPTION =
-	"Read the complete visible PDF attachments for selected Evidence Library publications. Use this before making evidence claims so every claim can identify both its publication source and exact PDF page. Use publication keys returned by searchLibrary and submit multiple keys together to read them in parallel. Prefer two or three of the most relevant publications per call: all the PDFs read in one answer share about 20 MB, the most recent reads first. A PDF that does not fit, or could not be downloaded, is named as unavailable and must not be cited.";
+	"Read the complete visible PDF attachments for selected Evidence Community publications. Use this before making evidence claims so every claim can identify both its publication source and exact PDF page. Use publication keys returned by searchLibrary and submit multiple keys together to read them in parallel. Prefer two or three of the most relevant publications per call: all the PDFs read in one answer share about 20 MB, the most recent reads first. A PDF that does not fit, or could not be downloaded, is named as unavailable and must not be cited.";
 
 export function createResearchTools(
 	mode: ResearchMode,
@@ -392,7 +392,7 @@ export function createResearchTools(
 	) => {
 		if (!searchContext) {
 			throw new Error(
-				"There is no current library result set for this conversation.",
+				"There is no current community result set for this conversation.",
 			);
 		}
 

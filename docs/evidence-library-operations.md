@@ -54,7 +54,7 @@ RUNTIME_IMAGE="ghcr.io/opendeved/evidence-library-runtime@sha256:<digest>" \
 Every service gets the label
 `org.opendeved.evidence-library.release=$SOURCE_COMMIT`. Keep **Include Source
 Commit in Build** off and **Escape special characters in labels** off.
-OpenScholar manages both settings, writes `SOURCE_COMMIT` as a Coolify
+Openscholar manages both settings, writes `SOURCE_COMMIT` as a Coolify
 environment value, and checks the saved values after every application update.
 Coolify escapes dollar signs in labels by default; leaving that setting on
 stores the Compose expression as text instead of the release commit. Enabling
@@ -77,7 +77,7 @@ rewrite it.
 The workflow has four jobs. `select` checks the commit and finds the previous
 release. `publish` builds the image on the release runner while `notes` writes
 the release notes on a light runner. `release` waits for both and creates the
-GitHub Release `runtime-<commit>`. OpenScholar offers only commits that have a
+GitHub Release `runtime-<commit>`. Openscholar offers only commits that have a
 release, so a failed build or failed notes never reach a library owner. Rerun
 the workflow to retry; an existing image is reused and the notes are written
 again.
@@ -90,10 +90,10 @@ title and body with the workflow token, asks `openai/gpt-6-luna` through
 OpenRouter at maximum reasoning for a strict JSON answer, and prints the
 release body. The `OPENROUTER_API_KEY` repository secret is the only setup.
 
-The body has a fixed shape that OpenScholar parses: the first line is a
+The body has a fixed shape that Openscholar parses: the first line is a
 one-sentence summary and every `- ` line is one note. Other lines, such as the
 image reference, are ignored. Edit the release body in GitHub to fix wording;
-OpenScholar picks the change up on its next check. When nothing is visible to
+Openscholar picks the change up on its next check. When nothing is visible to
 owners the body says "Behind-the-scenes improvements and maintenance."
 
 For release recovery, run **Runtime image** from GitHub Actions and enter the
@@ -164,7 +164,7 @@ and one application can return at most 24 containers. Bad Docker data and proxy
 errors return the fixed `runtime_inspection_failed` response. Docker error text
 never reaches the caller.
 
-OpenScholar also uses six fixed route operations:
+Openscholar also uses six fixed route operations:
 
 | Path                               | Effect                                                                                                               |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -198,7 +198,7 @@ with
 `runtime_web_route_missing` when the label is absent, instead of writing a
 dangling route. An empty list deletes the file. If 20 seconds have passed
 since the request arrived, it changes nothing and answers 503
-`runtime_route_deadline`. OpenScholar stops waiting after 30 seconds, so a late
+`runtime_route_deadline`. Openscholar stops waiting after 30 seconds, so a late
 write could otherwise replace a newer host set.
 
 Its routers use priority 100000. The temporary guard route uses 200000 and wins
@@ -248,14 +248,14 @@ replaced. A first activation has no old site, so it serves the maintenance
 response until the replacement passes readiness.
 
 The verifier is a host control-plane service. Its bearer-protected endpoint
-must remain private to OpenScholar because its Docker proxy permissions can
+must remain private to Openscholar because its Docker proxy permissions can
 create and remove guard containers and connect them to networks.
 
 ## Delete library volumes
 
 Deploy one fixed volume deleter on the development Coolify server from
 `docker/compose.volume-deleter.yaml`. The service receives a public HTTPS
-domain because hosted OpenScholar actions must reach it. Set one environment
+domain because hosted Openscholar actions must reach it. Set one environment
 value:
 
 | Variable                                | Value                                    |
@@ -288,7 +288,7 @@ Unexpected Docker responses, timeouts and an unconfirmed deletion return the
 fixed `volume_deletion_failed` response. Docker response text never reaches
 the caller.
 
-OpenScholar calls this service after deleting the matching Coolify
+Openscholar calls this service after deleting the matching Coolify
 application. A `volume_in_use` or `volume_deletion_failed` result keeps the
 library teardown pending for retry. Teardown is complete only after the
 service confirms both derived volumes and the private network are absent.
@@ -299,7 +299,7 @@ library or unknown container blocks cleanup. Other networks stay unchanged.
 ## Create a library database
 
 Libraries share one PostgreSQL server, but each library has its own database
-and login. OpenScholar creates them through the database provisioner. Build the
+and login. Openscholar creates them through the database provisioner. Build the
 small provisioner image from its named Docker target:
 
 ```bash
@@ -325,7 +325,7 @@ POST /v1/library-databases/reconcile
 Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
 Content-Type: application/json
 
-{"libraryId":"<OpenScholar Evidence Library ID>","password":"<saved database password>"}
+{"libraryId":"<Openscholar Evidence Library ID>","password":"<saved database password>"}
 ```
 
 The request accepts only `libraryId` and `password`. The service derives the
@@ -336,7 +336,7 @@ A successful request returns:
 
 ```json
 {
-	"libraryId": "<same OpenScholar Evidence Library ID>",
+	"libraryId": "<same Openscholar Evidence Library ID>",
 	"outcome": "created",
 	"databaseName": "el_...",
 	"loginName": "el_..._user",
@@ -344,7 +344,7 @@ A successful request returns:
 }
 ```
 
-`libraryId` is the exact ID from the request so OpenScholar can bind the receipt
+`libraryId` is the exact ID from the request so Openscholar can bind the receipt
 to the setup operation. `outcome` is `created` for a new database, `matched`
 when the saved request already matches PostgreSQL, and `updated` when
 reconciliation repairs a safe existing database. Error responses use the bounded
@@ -365,7 +365,7 @@ POST /v1/library-databases/delete
 Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
 Content-Type: application/json
 
-{"libraryId":"<OpenScholar Evidence Library ID>"}
+{"libraryId":"<Openscholar Evidence Library ID>"}
 ```
 
 The request accepts only `libraryId`. The service derives the database and
@@ -538,29 +538,29 @@ Every library uses the normal Compose file and a public HTTPS origin. Set
 to HTTPS and route the hostname to the `web` service on port `3000`.
 
 Every deployed library must configure `authentication.openScholar` with its
-OpenScholar Convex site origin, Evidence Library ID, OpenScholar page for the
+Openscholar Convex site origin, Evidence Library ID, Openscholar page for the
 library (`libraryUrl`), the account page readers and admins use (`accountUrl`),
 its `els_` machine credential, and its own Clerk OAuth application (`oauth`:
 issuer, client ID and client secret). It must also set `authentication.secret`,
 which signs session cookies and encrypts the OAuth tokens the library stores.
-OpenScholar writes all of these; the runtime configuration is invalid when any
+Openscholar writes all of these; the runtime configuration is invalid when any
 is missing.
 
-Readers and admins sign in with their OpenScholar account. The library uses
-Better Auth with OpenScholar's Clerk instance as its OAuth and OpenID Connect
+Readers and admins sign in with their Openscholar account. The library uses
+Better Auth with Openscholar's Clerk instance as its OAuth and OpenID Connect
 provider. Public pages never redirect: only the Sign in button starts sign-in.
 
 Opening `/admin` without a session cookie answers `307` to the library's own
 `/api/admin/sign-in?return=<path>`, which starts the OAuth flow (PKCE and a
 state cookie) and comes back to `/api/auth/callback/openscholar`, then to the
 admin path. Sessions last 30 days and extend while in use. The admin role is
-not stored in the session: each admin request asks OpenScholar's
+not stored in the session: each admin request asks Openscholar's
 `admin-session/check` by Clerk user ID, and the answer is reused for about a
 minute. Someone signed in without a role sees which organisation to ask.
 
 While a reader is active the library refreshes their Clerk token and copies
 their name and avatar at most every 15 minutes. If that fails it asks
-OpenScholar's `reader-status`; only `deleted` removes the reader. OpenScholar
+Openscholar's `reader-status`; only `deleted` removes the reader. Openscholar
 also calls `DELETE /api/v1/openscholar/readers/{clerkUserId}` with the machine
 credential when an account is deleted.
 
@@ -585,7 +585,7 @@ Workers do not read the admin cookie or copy its user identity into work. Search
 source sync, source writeback, and publication workers claim saved PostgreSQL
 work and use the library's runtime service credentials.
 
-After deployment, create a fresh code in OpenScholar and check the redirect,
+After deployment, create a fresh code in Openscholar and check the redirect,
 HTTPS certificate, reload persistence, logout, code replay rejection, and one
 real PDF upload. In the browser, `window.isSecureContext` must be true and
 `crypto.subtle` must exist.
@@ -747,7 +747,7 @@ A library is ready only when all of these checks pass:
 4. `GET /api/library-config/health` returns `200`, reports `state: "active"`,
    reports the requested `active.revision`, and has no rejected revision.
 5. The public library URL returns a successful HTTP response, and `/admin`
-   answers with a redirect to the configured OpenScholar page.
+   answers with a redirect to the configured Openscholar page.
 
 The source workers intentionally have no container health check. An idle source
 worker has no active connection lease to refresh. Its running container is the
@@ -773,7 +773,7 @@ curl --include --silent --output /dev/null --write-out '%{http_code} %{redirect_
 
 ## Activate a change without restarting
 
-OpenScholar normally activates a complete configuration through the running
+Openscholar normally activates a complete configuration through the running
 library. The request uses the machine credential from the currently active
 configuration:
 
@@ -851,7 +851,7 @@ npm run config:activate -- --rollback \
   --minimum-updated-at 2026-07-27T12:30:00.000Z
 ```
 
-OpenScholar can restore the immediately preserved revision without inventing a
+Openscholar can restore the immediately preserved revision without inventing a
 new revision identifier:
 
 ```http
@@ -888,12 +888,12 @@ automatically before the next operation.
   file is named after the library short name.
 - `features.homePage` gives the library a front page at `/`. While it is off,
   `/` redirects to `/lib`, and the sitemap leaves `/` out.
-- `home` holds the front page's answers from OpenScholar's Home card: the
+- `home` holds the front page's answers from Openscholar's Home card: the
   introduction, the curation statement and up to five typed steps, the team
   sentence and the people shown, up to three example questions, the publication
   the steps follow, the involvement buttons, a closing section and renamed
   headings. Longer answers are Markdown limited to bold, italic, links and
-  bulleted lists. OpenScholar fills in each person's name and photo when the
+  bulleted lists. Openscholar fills in each person's name and photo when the
   library is published, plus a `directory` of every owner and editor that names
   whoever approved the followed publication; the directory never reaches the
   browser. Without `home` the page shows a generated introduction and the
@@ -950,7 +950,7 @@ npm run test:acceptance
 
 `npm run test:acceptance` first starts the repository Compose deployment with
 all seven services. It checks real Compose state and health, the active
-revision, the public site, and the `/admin` redirect to OpenScholar. The rest of
+revision, the public site, and the `/admin` redirect to Openscholar. The rest of
 the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
 workers, and local HTTPS fixtures for external services. It runs every desktop
 and mobile browser check, including the complete mocked Crossref and Zenodo
@@ -974,7 +974,7 @@ containers running.
 
 Real-service checks that call the deployed admin HTTP API sign in through the
 library's real flow with a development Clerk test user who has a role in that
-library's OpenScholar organisation. Set the development Clerk keys and the test
+library's Openscholar organisation. Set the development Clerk keys and the test
 user once:
 
 ```bash
@@ -1015,7 +1015,7 @@ npm run test:zenodo-sandbox-live
 npm run test:publication-sandbox-lifecycle
 ```
 
-Check the target in OpenScholar and type its origin separately into
+Check the target in Openscholar and type its origin separately into
 `PUBLICATION_SANDBOX_CONFIRM`. The lifecycle check also needs Playwright's
 Chromium browser (`npx playwright install chromium`).
 
@@ -1154,7 +1154,7 @@ changed is not rewritten: the rewrite route answers with the reason.
 
 This release replaces `notifications.weekly` with `notifications.schedule` and
 renames the subscriber preference and edition stream to `digest`. Migration
-`0058` preserves subscriber tokens, editions and cutoffs. OpenScholar owner
+`0058` preserves subscriber tokens, editions and cutoffs. Openscholar owner
 configuration version 5 converts saved weekly schedules when creating a new
 revision; frozen revisions stay unchanged. For a runtime upgrade, prepare and
 validate a new configuration with `frequency: "weekly"` and the existing clock

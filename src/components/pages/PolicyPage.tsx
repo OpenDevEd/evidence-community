@@ -1,4 +1,5 @@
 import { lexer, type Token } from "marked";
+import { useLocale } from "next-intl";
 import { Link } from "@/i18n/routing";
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
@@ -8,8 +9,8 @@ import remarkGfm from "remark-gfm";
 import PolicyLayout from "./PolicyLayout";
 import PolicyEmailCopyButton from "./PolicyEmailCopyButton";
 
-function formatLastUpdated(lastUpdated: Date) {
-	return new Intl.DateTimeFormat("en-GB", {
+function formatLastUpdated(lastUpdated: Date, locale: string) {
+	return new Intl.DateTimeFormat(locale, {
 		day: "2-digit",
 		month: "long",
 		year: "numeric",
@@ -268,6 +269,7 @@ export default function PolicyPage({
 	};
 	contactEmail?: string;
 }) {
+	const locale = useLocale();
 	const { intro, chapters, definitions, level } = readChapters(content);
 	const render = (text: string, chapterLevel?: number) =>
 		text.trim() ? (
@@ -289,7 +291,7 @@ export default function PolicyPage({
 			key={title}
 			title={title}
 			description={description}
-			updated={formatLastUpdated(lastUpdated)}
+			updated={formatLastUpdated(lastUpdated, locale)}
 			updatedISO={lastUpdated.toISOString()}
 			contactEmail={contactEmail}
 			otherPolicyLink={otherPolicyLink}

@@ -1,15 +1,12 @@
+import { getTranslations } from "next-intl/server";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
 import NotFound from "@/components/layout/NotFound";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-	title: "404 - Not Found",
-	description: "404 - Not Found",
-	robots: {
-		index: false,
-		follow: false,
-	},
-};
+export async function generateMetadata(): Promise<Metadata> {
+	const t = await getTranslations("ui");
+	return { title: t("notFoundTitle"), description: t("notFoundTitle"), robots: { index: false, follow: false } };
+}
 
 export default function NotFoundRoutePage() {
 	return (

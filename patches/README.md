@@ -43,10 +43,21 @@ The old Popover accessibility-hiding workaround is superseded by upstream's
 removal of the redundant effect.
 Autocomplete keeps focus on the selected option as hierarchical filters expand,
 and falls back to the first enabled option only when the active option is gone.
-This retains first-match selection while searching. The regression check is
+This retains first-match selection while searching. Tab picks the active
+option only when the reader typed or moved to it with the arrow keys since the
+list opened or since their last pick, so tabbing through a box leaves its value
+alone instead of choosing the first option the list highlights when it opens,
+and tabbing on from a pick doesn't pick it again. The regression check is
 `tests/unit/autocomplete-focus.test.tsx`.
 Non-virtualized lists also use their actual scroll container for keyboard focus,
 so moving through long results scrolls the dropdown instead of the page.
+
+Listbox brings the highlighted row into view in a virtualized list, one over 50
+options. React Aria only scrolls to a row that is drawn, so End, PageDown and a
+held value far down the list left the highlight out of sight, and Enter picked a
+row nobody could see. A mouse hover doesn't scroll. Rows are placed with `top`
+instead of a transform: inside a modal React Aria reads `offsetTop`, which was 0
+for every row, so each arrow key scrolled the list back to its start.
 
 `tests/e2e/admin.spec.ts` covers tooltip cleanup, nested selects, adjacent
 popovers, dropdown-to-dialog transitions, Tabs inside dialogs, and touch input

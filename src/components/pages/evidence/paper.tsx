@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { ArrowLeft01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -36,25 +37,29 @@ function Scrolling({ heading, lists }: { heading: ReactNode; lists: ReactNode })
 
 /** Who, when and where, or, for a library record the search did not return, that it couldn't be loaded. */
 function Byline({ record, label, missing }: { record: ListItem | null | undefined; label: Label | undefined; missing: boolean }) {
+	const t = useTranslations("evidenceMap");
 	// Said, so a broken connection never looks like an empty paper.
-	if (missing) return <p role="status" className="mt-1 text-sm text-danger">This record couldn&apos;t be loaded. Try again in a moment.</p>;
+	if (missing) return <p role="status" className="mt-1 text-sm text-danger">{t("thisRecordCouldnTBeLoaded")}ment.</p>;
 	const parts = [whoOf(record) ?? label?.who, yearOf(record) ?? label?.year, record?.publicationTitle];
 	return <p className={twMerge("mt-1 min-h-4 text-xs", muted)}>{parts.filter(Boolean).join(", ")}</p>;
 }
 
 /** Where the paper is read: its record in this library, or its DOI. */
 function PaperLink({ itemKey, doi }: { itemKey: string | null; doi: string | undefined }) {
-	if (itemKey) return <Link href={`/lib/${itemKey}`} className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">Open record<HugeiconsIcon icon={ArrowUpRight01Icon} size={14} /></Link>;
-	if (doi) return <a href={`https://doi.org/${doi}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10">Open DOI<HugeiconsIcon icon={ArrowUpRight01Icon} size={14} /></a>;
+	const t = useTranslations("evidenceMap");
+	if (itemKey) return <Link href={`/lib/${itemKey}`} className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-1.5 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2">{t("openRecord")}<HugeiconsIcon icon={ArrowUpRight01Icon} size={14} /></Link>;
+	if (doi) return <a href={`https://doi.org/${doi}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-xl bg-black/[0.06] px-3 py-1.5 text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-accent dark:bg-white/10">{t("openDoi")}<HugeiconsIcon icon={ArrowUpRight01Icon} size={14} /></a>;
 	return null;
 }
 
 /** The opened paper's heading: what it is, its check, its title, who wrote it, and where to read it. */
 function PaperHeading({ index, record, loaded, more, onClose, back }: { index: number; record: ListItem | null | undefined; loaded: Loaded; more: More; onClose: () => void; back: string }) {
+	const t = useTranslations("evidenceMap");
 	const key = more.keyOf(index), label = more.labels.get(index);
 	// A library record the search no longer returns (unpublished, hidden, or the search unreachable): no link to a page that fails.
 	const missing = Boolean(key && record === null);
-	const kind = KIND_LABEL[KINDS[loaded.points.kind[index]]];
+	const kindKey = KIND_LABEL[KINDS[loaded.points.kind[index]]];
+	const kind = kindKey ? t(kindKey) : null;
 	return (
 		<>
 			<div className="px-5 pt-3"><BackButton to={back} onBack={onClose} /></div>
@@ -90,11 +95,11 @@ export function OpenedPaper({ shown, stale, loaded, more, onOpen, onClose, onHov
 	);
 }
 
-const LEVEL_NAME = { 1: "Primary studies", 2: "Meta-analyses and reviews", 3: "Reviews of reviews" } as const;
+const LEVEL_NAME = { 1: "levels.1", 2: "levels.2", 3: "levels.3" } as const;
 const LINE_KEY = [
-	{ verdict: "broken", label: "From a broken study" },
-	{ verdict: "validated", label: "From a study that is validated, validated with caveats, or repairable" },
-	{ verdict: "notAssessed", label: "From a study not validated yet" },
+	{ verdict: "broken", label: "lineKey.broken" },
+	{ verdict: "validated", label: "lineKey.validated" },
+	{ verdict: "notAssessed", label: "lineKey.notAssessed" },
 ] as const;
 
 /** Checked papers drawn on the map, by level: a methods reference or a paper joined to nothing on it has no place there. */
@@ -109,16 +114,17 @@ function checkedByLevel(loaded: Loaded) {
 }
 
 function CheckedHeading({ onClose, back }: { onClose: () => void; back: string }) {
+	const t = useTranslations("evidenceMap");
 	return (
 		<div className="px-5 pb-3 pt-3">
 			<BackButton to={back} onBack={onClose} />
-			<h2 className="pt-2 text-base font-semibold leading-snug">Appraised papers</h2>
-			<p className={twMerge("mt-1 text-xs", muted)}>Every checked paper joined to another, from the studies on the left to the reviews of reviews on the right.</p>
+			<h2 className="pt-2 text-base font-semibold leading-snug">{t("appraisedPapers")}</h2>
+			<p className={twMerge("mt-1 text-xs", muted)}>{t("everyCheckedPaperJoinedToAnother")}</p>
 			<ul className="mt-3 space-y-1.5 text-xs">
 				{LINE_KEY.map(({ verdict, label }) => (
 					<li key={verdict} className="flex items-center gap-2">
 						<svg width="22" height="6" aria-hidden className="shrink-0"><line x1="1" y1="3" x2="21" y2="3" stroke={css(edgeColour(verdict, 1))} strokeWidth="2" strokeDasharray={verdict === "broken" ? "5 3" : undefined} /></svg>
-						{label}
+						{t(label)}
 					</li>
 				))}
 			</ul>
@@ -126,13 +132,9 @@ function CheckedHeading({ onClose, back }: { onClose: () => void; back: string }
 	);
 }
 
-/** How many of a column's checked papers are joined to another, and how many of its papers are not checked yet. */
-function joinedLine(joined: number, checked: number, unchecked: number) {
-	return `${joined} of the ${checked} checked are joined to another${unchecked ? `, with ${unchecked} not checked yet` : ""}.`;
-}
-
 /** The whole graph of checked papers: its three columns, what the line colours mean, and every paper in it. */
 function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }: Opened & { onClose: () => void; back: string }) {
+	const t = useTranslations("evidenceMap");
 	const layers = selection.chain?.layers ?? [];
 	const members = layers.flat();
 	const records = useLines(members, more);
@@ -142,8 +144,8 @@ function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }
 		const level = levelOf(loaded.points.kind[layer[0]]) as 1 | 2 | 3;
 		const joined = layer.filter((i) => loaded.points.verdict[i]).length;
 		return (
-			<Section key={level} title={LEVEL_NAME[level]} count={layer.length}>
-				<p className={twMerge("px-5 pb-1 text-xs", muted)}>{joinedLine(joined, checkedAt.get(level) ?? 0, layer.length - joined)}</p>
+			<Section key={level} title={t(LEVEL_NAME[level])} count={layer.length}>
+				<p className={twMerge("px-5 pb-1 text-xs", muted)}>{layer.length - joined ? t("joinedUnchecked", { joined, checked: checkedAt.get(level) ?? 0, unchecked: layer.length - joined }) : t("joined", { joined, checked: checkedAt.get(level) ?? 0 })}</p>
 				<ol className="px-2">{layer.map(row)}</ol>
 			</Section>
 		);
@@ -159,6 +161,7 @@ function CheckedBody({ selection, loaded, more, onOpen, onClose, onHover, back }
 
 /** A paper's chain as lists: the studies it analyses with their checks, what those analyse, and what analyses it. */
 function ChainDetail({ selection, loaded, more, onOpen, onHover }: Opened) {
+	const t = useTranslations("evidenceMap");
 	const chain = selection.chain!;
 	const at = chain.layers.findIndex((layer) => layer[0] === chain.focus);
 	// Columns from the left: what its studies analysed, its studies, the paper, what analyses it, what analyses those.
@@ -166,7 +169,7 @@ function ChainDetail({ selection, loaded, more, onOpen, onHover }: Opened) {
 	const analysed = below[0] ?? [];
 	const records = useLines(chain.layers.flat(), more);
 	const list = (indices: number[]) => <ol className="px-2">{indices.map((i) => <PaperRow key={i} index={i} label={lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}</ol>;
-	const sections: [string, number[] | undefined, number][] = [["Studies it analyses", below[0], Infinity], ["Studies those analyse", below[1], 30], ["Analysed by", above[0], Infinity], ["Reviews of those", above[1], Infinity]];
+	const sections: [string, number[] | undefined, number][] = [[t("sections.analyses"), below[0], Infinity], [t("sections.thoseAnalyse"), below[1], 30], [t("sections.analysedBy"), above[0], Infinity], [t("sections.reviews"), above[1], Infinity]];
 	return (
 		<>
 			{analysed.length > 0 && <div className="px-5 pt-3"><VerdictMeter indices={analysed} loaded={loaded} /></div>}
@@ -177,14 +180,15 @@ function ChainDetail({ selection, loaded, more, onOpen, onHover }: Opened) {
 
 /** A paper's citations in the library, both ways, the most cited first. */
 function Around({ selection, loaded, more, onOpen, onHover }: Opened) {
+	const t = useTranslations("evidenceMap");
 	const top = (list: number[]) => [...list].sort((a, b) => loaded.points.cites[b] - loaded.points.cites[a]).slice(0, 8);
 	const records = useLines([...top(selection.citedBy), ...top(selection.cites)], more);
-	if (!selection.cites.length && !selection.citedBy.length) return <p className={twMerge("px-5 pt-3 text-sm", muted)}>No citations to or from other papers in the library.</p>;
+	if (!selection.cites.length && !selection.citedBy.length) return <p className={twMerge("px-5 pt-3 text-sm", muted)}>{t("noCitationsToOrFromOther")}</p>;
 	const section = (title: string, list: number[]) => (list.length ? <Section title={title} count={list.length}><ol className="px-2">{top(list).map((i) => <PaperRow key={i} index={i} label={lineOf(i, more, records)} loaded={loaded} onOpen={onOpen} onHover={onHover} />)}</ol></Section> : null);
 	return (
 		<>
-			{section("Cited by, in the library", selection.citedBy)}
-			{section("Cites, in the library", selection.cites)}
+			{section(t("citedByInLibrary"), selection.citedBy)}
+			{section(t("citesInLibrary"), selection.cites)}
 		</>
 	);
 }

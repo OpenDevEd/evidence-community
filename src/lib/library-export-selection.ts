@@ -20,7 +20,7 @@ async function prepareReaderList(config: LibraryServerConfig, readerList: Librar
 	async function readerState(includeKeys: boolean) {
 		checkAborted();
 		if (!readerList) return undefined;
-		if (!config.features.readerAccounts) throw new LibraryExportError("exportInvalid", "This library has no reader lists.", 400);
+		if (!config.features.readerAccounts) throw new LibraryExportError("exportInvalid", "This community has no reader lists.", 400);
 		const viewer = await getSignedInReader(request.headers, config);
 		const read = includeKeys ? readReaderListKeys : readReaderListRevision;
 		const result = await read(await getDatabaseForConfig(config), readerList, viewer?.id ?? null);

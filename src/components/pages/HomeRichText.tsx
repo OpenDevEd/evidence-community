@@ -46,7 +46,7 @@ export function homeRich(about: HomeContent, baseUrl: string): HomeRich {
  * What the home page's placeholder needs from the server, null while the library has none. The browser's copy of the
  * settings gives it the rest of the hero, but not the intro, which sets how tall the hero is.
  */
-export function homePlaceholderContent(config: LibraryServerConfig) {
+export function homePlaceholderContent(config: LibraryServerConfig, defaultIntro: string) {
 	if (!isLibraryFeatureEnabled(config.features, "homePage")) return null;
-	return { intro: homeRich({ intro: (config.home ?? defaultContent(config.identity.name)).intro }, config.identity.baseUrl).intro };
+	return { intro: homeRich({ intro: (config.home ?? defaultContent(defaultIntro)).intro }, config.identity.baseUrl).intro };
 }

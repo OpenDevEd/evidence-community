@@ -81,7 +81,7 @@ export async function reconcileOpenAlexMemberships(db: Database, args: Withdrawa
     const keys = missing.rows.map(row => row.itemKey);
     if (!keys.length) return 0;
     await withdrawItems(tx, args, keys, provider === "openscholar"
-      ? "This edited record is no longer in the connected OpenScholar collection."
+      ? "This edited record is no longer in the connected Openscholar collection."
       : "This edited record no longer matches any connected OpenAlex search.");
     return keys.length;
   });

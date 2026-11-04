@@ -468,7 +468,7 @@ function Trail({ digest }: { digest: AdminDigest }) {
 }
 
 const NOTE_SHOWN = "A few words of your own, shown above the digest with the name of whoever publishes it";
-const NOTE_HIDDEN = "Not shown to readers: the library does not name who checks its digests";
+const NOTE_HIDDEN = "Not shown to readers: the community does not name who checks its digests";
 
 function Fields({ session, words, locked, attribution }: { session: DigestSession; words: Words; locked: boolean; attribution: boolean }) {
 	return <>

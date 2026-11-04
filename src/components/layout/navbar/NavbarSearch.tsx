@@ -198,6 +198,7 @@ function SuggestionRow({
 }
 
 export default function NavbarSearch() {
+	const tLabels = useTranslations("searchControls");
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const tSorts = useTranslations("sorts");
@@ -624,11 +625,11 @@ export default function NavbarSearch() {
 
 					{/* Scope */}
 					<Select
-						aria-label="Search scope"
+						aria-label={tLabels("searchScope")}
 						startContent={
 							<DropDownIcon
 								Icon={BookSearchIcon}
-								label="Scope icon"
+								label={tLabels("scopeIcon")}
 							/>
 						}
 						color="tertiary"
@@ -637,7 +638,7 @@ export default function NavbarSearch() {
 						items={scopeOptions}
 						selectorIcon={<div className="hidden"></div>}
 						classNames={scopeSelectClassNames}
-						label="Search scope"
+						label={tLabels("searchScope")}
 						labelPlacement="outside"
 					>
 						{(item: any) => (
@@ -652,11 +653,11 @@ export default function NavbarSearch() {
 
 					{/* Sort */}
 					<Select
-						aria-label="Sort by"
+						aria-label={tLabels("sortBy")}
 						startContent={
 							<DropDownIcon
 								Icon={Sorting01Icon}
-								label="Sort icon"
+								label={tLabels("sortIcon")}
 							/>
 						}
 						selectedKeys={[sort]}
@@ -664,7 +665,7 @@ export default function NavbarSearch() {
 						items={SORT_OPTIONS}
 						selectorIcon={<div className="hidden"></div>}
 						classNames={selectClassNames}
-						label="Sort by"
+						label={tLabels("sortBy")}
 						labelPlacement="outside"
 					>
 						{(item: any) => (

@@ -114,7 +114,7 @@ const ISSUE_TYPES: IssueType[] = [
 		key: "pdf-not-stored",
 		kind: "pdf",
 		title: "PDF could not be stored",
-		next: "The PDF was downloaded but the library could not save it. The next import tries again.",
+		next: "The PDF was downloaded but the community could not save it. The next import tries again.",
 		codes: ["openalex_pdf_storage_failed"],
 	},
 	{

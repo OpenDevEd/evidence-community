@@ -1,7 +1,7 @@
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Building02Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
@@ -26,6 +26,7 @@ export function InstitutionsTable({
 	availableYears, 
 	authorCountries 
 }: InstitutionsTableProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const [institutionsPage, setInstitutionsPage] = useState(1);
 	const [institutionsSearch, setInstitutionsSearch] = useState("");
@@ -198,7 +199,7 @@ export function InstitutionsTable({
 							<CountryFlag countryCode={topCountry.countryCode} className="w-5 h-3" />
 							<span className="text-sm font-medium text-black dark:text-white">
 								{topCountry.countryName || topCountry.countryCode || t("unknownCountry")} (
-								{topCountry.itemCount.toLocaleString()}{" "}
+								{topCountry.itemCount.toLocaleString(locale)}{" "}
 								{t("itemsLowercase")})
 							</span>
 						</div>
@@ -254,12 +255,12 @@ export function InstitutionsTable({
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-accent">
-											{institution.itemCount.toLocaleString()}
+											{institution.itemCount.toLocaleString(locale)}
 										</span>
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-success">
-											{institution.totalCitations.toLocaleString()}
+											{institution.totalCitations.toLocaleString(locale)}
 										</span>
 									</TableCell>
 									<TableCell>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { FilterIcon, Pdf01Icon, Search01Icon, Wrench01Icon } from "@hugeicons/core-free-icons";
 
@@ -11,6 +12,8 @@ import {
 } from "@/lib/ai/tool-activity";
 
 function SearchDetails({ part }: { part: ResearchToolPart }) {
+	const tActivity = useTranslations("toolActivity");
+	const t = useTranslations("toolActivity");
 	const summary = toolActivitySummary(part);
 
 	return (
@@ -23,16 +26,16 @@ function SearchDetails({ part }: { part: ResearchToolPart }) {
 							className="size-3"
 							aria-hidden="true"
 						/>
-						Current results only
+						{t("currentResultsOnly")}
 					</span>
 					<span>
 						{summary.currentResults.start !== undefined &&
 						summary.currentResults.end !== undefined &&
 						summary.currentResults.total !== undefined
 							? summary.currentResults.end === 0
-								? "No results in this window"
-								: `${summary.currentResults.start}–${summary.currentResults.end} of ${summary.currentResults.total}`
-							: "Inspecting up to 200 results"}
+								? t("noResultsInThisWindow")
+								: t("of", { start: summary.currentResults.start, end: summary.currentResults.end, total: summary.currentResults.total })
+							: t("inspectingUpTo200Results")}
 					</span>
 				</div>
 			)}
@@ -51,9 +54,9 @@ function SearchDetails({ part }: { part: ResearchToolPart }) {
 					))}
 				</ul>
 			)}
-			{summary.detail && (
+			{summary.message && (
 				<p className="text-xs text-black/40 dark:text-white/40">
-					{summary.detail}
+					{tActivity(summary.message.key as never, summary.message.values as never)}
 				</p>
 			)}
 			{summary.error && <p className="text-danger">{summary.error}</p>}
@@ -87,6 +90,7 @@ function PublicationDetails({ part }: { part: ResearchToolPart }) {
 }
 
 export function ToolActivity({ part }: { part: ResearchToolPart }) {
+	const tActivity = useTranslations("toolActivity");
 	const summary = toolActivitySummary(part);
 	const icon =
 		summary.toolName === "searchLibrary" ? (
@@ -99,7 +103,7 @@ export function ToolActivity({ part }: { part: ResearchToolPart }) {
 
 	return (
 		<Tool>
-			<ToolHeader title={summary.title} state={part.state} icon={icon} />
+			<ToolHeader title={tActivity.has(summary.title as never) ? tActivity(summary.title as never) : summary.title} state={part.state} icon={icon} />
 			<ToolContent>
 				{summary.toolName === "searchLibrary" ? (
 					<SearchDetails part={part} />
@@ -108,7 +112,7 @@ export function ToolActivity({ part }: { part: ResearchToolPart }) {
 				) : summary.error ? (
 					<p className="text-danger">{summary.error}</p>
 				) : (
-					<p>{summary.detail}</p>
+					<p>{summary.message && tActivity(summary.message.key as never, summary.message.values as never)}</p>
 				)}
 			</ToolContent>
 		</Tool>

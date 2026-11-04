@@ -62,7 +62,7 @@ const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	searchFocusRequest: 0,
 	requestSearchFocus: () => {},
 	getInlineChat: () => {
-		throw new Error("The library chat is only available inside its page.");
+		throw new Error("The community chat is only available inside its page.");
 	},
 });
 

@@ -1,3 +1,4 @@
+import { useLocale } from "next-intl";
 import type { ComponentProps } from "react";
 import { useTheme } from "next-themes";
 import {
@@ -36,6 +37,7 @@ const tooltipColors = {
 
 /** A bar per category counting its entries, in a card. */
 export function DistributionBarChart({ data, xAxis, formatter }: DistributionBarChartProps) {
+  const locale = useLocale();
 	const { resolvedTheme: theme } = useTheme();
 	const colors = tooltipColors[theme === "dark" ? "dark" : "light"];
 
@@ -57,7 +59,7 @@ export function DistributionBarChart({ data, xAxis, formatter }: DistributionBar
 							className="text-black/60 dark:text-white/60"
 							tick={{ fontSize: 12 }}
 							axisLine={false}
-							tickFormatter={(value) => value.toLocaleString()}
+							tickFormatter={(value) => value.toLocaleString(locale)}
 						/>
 						<Tooltip
 							contentStyle={{

@@ -142,7 +142,7 @@ describe("OpenScholar configuration route", () => {
 		expect(await response.json()).toEqual({
 			error: {
 				code: "internal_error",
-				message: "The library configuration could not be changed.",
+				message: "The community configuration could not be changed.",
 			},
 		});
 		expect(log).toHaveBeenCalledWith(

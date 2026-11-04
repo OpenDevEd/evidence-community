@@ -97,7 +97,7 @@ export async function syncOpenScholarCollection(
 		const due = openAlexWorksAreDue(connection.syncCursor, { version: collection.version, downloadPdfs: config.downloadPdfs }, new Date());
 		if (!due) return { unchanged: true, version: collection.version };
 		collection = await read(null);
-		if (collection.unchanged) throw new Error(`OpenScholar collection ${collectionId} answered without its items`);
+		if (collection.unchanged) throw new Error(`Openscholar collection ${collectionId} answered without its items`);
 	}
 	const result = await syncOpenAlexWorks(
 		context,

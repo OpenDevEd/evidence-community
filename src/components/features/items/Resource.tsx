@@ -152,15 +152,15 @@ function referenceRow({ t, key, links, source, resourceHref, there }: CountConte
 	};
 }
 /** A meta-analysis's analysed studies: how many the library holds of all it analysed, opening its chain on the evidence map. */
-function analysedRow({ key }: CountContext, evidence: EvidenceRecord): CountRow {
+function analysedRow({ t, key }: CountContext, evidence: EvidenceRecord): CountRow {
 	const others = (evidence.reviews ?? 0) + (evidence.other ?? 0);
 	return {
 		id: "analysed", icon: ArrowUpRight01Icon, tone: "reference", colour: "text-violet-700 dark:text-violet-300",
 		held: evidence.analysedHere ?? 0, total: evidence.analysed ?? null,
 		// Both numbers open the chain: it lists every study it analysed, the ones outside the library too.
 		here: `/evidence?paper=${key}`, there: `/evidence?paper=${key}`, thereInside: true,
-		label: (count) => (count === 1 ? "analysed study" : "analysed studies"),
-		words: (held, total) => `${held} of the ${total ?? held} studies it analysed are in this library; it also cites ${others} other works`,
+		label: (count) => t("analysedStudyLabel", { count }),
+		words: (held, total) => t("analysedWords", { held, total: total ?? held, others }),
 	};
 }
 function citationRow({ t, key, links, source, resourceHref, there }: CountContext): CountRow {
@@ -175,7 +175,7 @@ function citationRow({ t, key, links, source, resourceHref, there }: CountContex
 
 type CountRow = {
 	id: string; icon: typeof ArrowUpRight01Icon; tone: "reference" | "library"; colour: string; held: number; total: number | null;
-	here: string; there: string | null | undefined; /** The total opens a page of this library, not OpenScholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
+	here: string; there: string | null | undefined; /** The total opens a page of this library, not Openscholar. */ thereInside?: boolean; label: (count: number) => string; words: (held: number, total: number | null) => string;
 };
 // A narrow card drops the words; the tooltip and screen readers still get them.
 const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
@@ -200,13 +200,14 @@ function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: Co
 }
 
 function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string }) {
+	const tLabels = useTranslations("item");
 	const text = all.toLocaleString(locale);
 	return <>
 		<span className="opacity-60">{of}</span>
 		{count.there && count.thereInside ? (
-			<Link href={count.there} aria-label={`${text} ${count.label(all)}`} className={COUNT_NUMBER}>{text}</Link>
+			<Link href={count.there} aria-label={tLabels("label3", { text, count: count.label(all) })} className={COUNT_NUMBER}>{text}</Link>
 		) : count.there ? (
-			<a href={count.there} target="_blank" rel="noreferrer" aria-label={`${text} ${count.label(all)}, ${onOpenAlex(text)}`} className={COUNT_NUMBER}>{text}</a>
+			<a href={count.there} target="_blank" rel="noreferrer" aria-label={tLabels("label4", { text, count: count.label(all), value: onOpenAlex(text) })} className={COUNT_NUMBER}>{text}</a>
 		) : (
 			<span className="font-semibold tabular-nums">{text}</span>
 		)}
@@ -451,6 +452,7 @@ function ResourceDate({ item, format }: { item: Item | ListItem | undefined; for
 
 /** The record's in-progress, internal and retracted marks. */
 function ResourceFlags({ item, t }: { item: Item | ListItem | undefined; t: ArticleProps["t"] }) {
+	const tLabels = useTranslations("item");
 	const { content } = useLibraryConfig();
 	return (
 		<>
@@ -467,7 +469,7 @@ function ResourceFlags({ item, t }: { item: Item | ListItem | undefined; t: Arti
 			{hasTag(item?.tags, "Retracted") && (
 				<span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-danger bg-danger/10 px-4 py-1 font-medium text-danger @[720px]:w-auto">
 					<HugeiconsIcon icon={Alert02Icon} className="size-4" />
-					Retracted publication
+					{tLabels("retractedPublication")}
 				</span>
 			)}
 		</>

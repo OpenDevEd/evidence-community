@@ -48,7 +48,7 @@ export default async function Home({ params }: Props) {
 				duplicates: t("stepDuplicates"),
 				fulltext: t("stepFullText"),
 			})
-		: defaultContent(config.identity.name);
+		: defaultContent(t("defaultIntro", { name: config.identity.name }));
 	// Not awaited: the page renders now and each part built from these figures streams in when they arrive.
 	const data = loadHomeData(locale, config);
 	const { shapes } = await getWorldMap();

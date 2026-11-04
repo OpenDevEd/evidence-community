@@ -5,10 +5,16 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("next-intl", () => ({
-	useTranslations: () => (key: string) => key,
-	useLocale: () => "en",
-}));
+vi.mock("next-intl", async () => {
+	const english = await (await import("../helpers/next-intl-english")).englishIntl();
+	const byKey = Object.assign((key: string) => key, { has: () => false });
+	return {
+		...(await vi.importActual<typeof import("next-intl")>("next-intl")),
+		...english,
+		// `home` holds whole sentences, so it reads in English; the rest come back by key.
+		useTranslations: (namespace: string) => (namespace === "home" ? english.useTranslations(namespace) : byKey),
+	};
+});
 vi.mock("@/i18n/routing", () => ({
 	Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => <a href={href} {...props}>{children}</a>,
 	useRouter: () => ({ push: vi.fn() }),
@@ -138,7 +144,7 @@ describe("the library's home page", () => {
 		const added = "2026-06-02T00:00:00.000Z";
 		await render({ email: null, page: false }, { ...data, journey: { ...data.journey!, reviewed: false, reviewer: null, submittedAt: added, publishedAt: added } });
 
-		expect(container.textContent).toContain("Added to the library");
+		expect(container.textContent).toContain("Added to the community");
 		expect(container.textContent).not.toContain("Arrived for review");
 		// Only its arrival is dated: nobody checked it on a known day.
 		expect([...container.querySelectorAll("ol time")].map((time) => time.getAttribute("dateTime"))).toEqual([added]);

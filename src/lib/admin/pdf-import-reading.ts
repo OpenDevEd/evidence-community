@@ -152,7 +152,7 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
 	const [owner] = await db.select().from(pdfImport).where(eq(pdfImport.id, file.importId));
 	const bytes = await storage.downloadPrivate(file.objectPath!);
 	const limit = config.services.storage.maxPdfBytes;
-	if (bytes.byteLength > limit) throw new UnreadablePdfError(`This PDF is larger than the library takes (${Math.floor(limit / 1024 / 1024)} MB).`);
+	if (bytes.byteLength > limit) throw new UnreadablePdfError(`This PDF is larger than the community takes (${Math.floor(limit / 1024 / 1024)} MB).`);
 	// The file is known before the AI is asked, so a PDF the library or this import already has costs no read.
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	const pdf = await readPdfProperties(bytes);

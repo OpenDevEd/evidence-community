@@ -10,9 +10,9 @@ This storage is needed for the site to work or remember a choice you asked it to
 
 | **Name**                | **Owner**               | **Purpose**                                                                                                                          | **Expires**                        |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the library they apply to, the policy versions, and when you made the choice.       | 180 days                           |
+| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the community they apply to, the policy versions, and when you made the choice.       | 180 days                           |
 | `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
-| `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your OpenScholar account and tie the return from OpenScholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
+| `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your Openscholar account and tie the return from Openscholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
 
 ## **Product analytics storage (optional)**
@@ -40,18 +40,18 @@ Turning session replay off stops new replay recording without turning off ordina
 
 The browser does not load PostHog or Google Analytics and does not create a browser analytics profile. The site may send a small set of same-site aggregate events to its own server. These events contain only fixed categories and counts, such as a page path without its query string, result totals, or the type of file action. They do not include browser identifiers, free-text searches, document content, AI conversations, or user-provided text.
 
-The server groups these aggregate events by library and day before sending them to PostHog. It does not pass the visitor's IP address or create a person profile for them.
+The server groups these aggregate events by community and day before sending them to PostHog. It does not pass the visitor's IP address or create a person profile for them.
 
 ## **Managing your choices**
 
 Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
 
-If the built-in analytics policy or this library’s policy version changes, or if you move to a different library with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
+If the built-in analytics policy or this community’s policy version changes, or if you move to a different community with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
 
 Most browsers also let you inspect or delete stored site data in their privacy settings.
 
 ## **Get in touch**
 
-For questions about our use of cookies and similar storage, email contact@opendeved.net.
+For questions about our use of cookies and similar storage, email support@openscholar.ai.
 
 **Last updated**: September 12, 2026

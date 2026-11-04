@@ -53,11 +53,12 @@ export function SortComponent({
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
 }) {
+	const t = useTranslations("searchControls");
 	const tSorts = useTranslations("sorts");
 
 	return (
 		<Select
-			startContent={<DropDownIcon label="Sort icon" Icon={Sorting01Icon} />}
+			startContent={<DropDownIcon label={t("sortIcon")} Icon={Sorting01Icon} />}
 			selectedKeys={
 				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
@@ -79,7 +80,7 @@ export function SortComponent({
 						}
 					: oneLineSelectClassNames
 			}
-			label={"Sort by"}
+			label={t("sortBy")}
 			labelPlacement="outside"
 		>
 			{(item: any) => {
@@ -98,6 +99,7 @@ export function ScopeComponent({
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
 }) {
+	const t = useTranslations("searchControls");
 	const tScopes = useTranslations("scopes");
 	const { search } = useLibraryConfig();
 	const scopeOptions = useMemo(
@@ -108,7 +110,7 @@ export function ScopeComponent({
 	return (
 		<Select
 			startContent={
-				<DropDownIcon label="Scope icon" Icon={BookSearchIcon} />
+				<DropDownIcon label={t("scopeIcon")} Icon={BookSearchIcon} />
 			}
 			color="tertiary"
 			selectedKeys={
@@ -134,7 +136,7 @@ export function ScopeComponent({
 				),
 				label: twMerge("", genericSelectClassNames.label),
 			}}
-			label={"Search scope"}
+			label={t("searchScope")}
 			labelPlacement="outside"
 		>
 			{(item: any) => {

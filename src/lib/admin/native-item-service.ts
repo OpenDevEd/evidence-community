@@ -128,7 +128,7 @@ async function validateTopicChange(
   const after = topicList(next.topics);
   if (JSON.stringify([...before].sort()) === JSON.stringify([...after].sort())) return;
   const config = options.writebackConfig;
-  if (!config?.topics?.enabled && !publishingSavedDraft) throw new AdminValidationError("Topics are turned off for this library.", {topics: "Enable Topics in library configuration before changing them."});
+  if (!config?.topics?.enabled && !publishingSavedDraft) throw new AdminValidationError("Topics are turned off for this community.", {topics: "Enable Topics in community configuration before changing them."});
   if (!after.length) return;
   if (!config?.authentication) throw new AdminValidationError("The topic catalog is not configured.");
   await assertCatalogTopics(database, after, config.authentication);

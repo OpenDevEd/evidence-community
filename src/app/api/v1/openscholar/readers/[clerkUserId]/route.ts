@@ -21,6 +21,6 @@ export async function DELETE(request: Request, props: { params: Promise<{ clerkU
 		return NextResponse.json({ error: { code: "invalid_request", message: "A Clerk user ID is required." } }, { status: 400, headers: ADMIN_RESPONSE_HEADERS });
 	}
 	const deleted = await deleteReaderByClerkUserId(await getDatabaseForConfig(config), clerkUserId);
-	console.info("OpenScholar reader deletion", { libraryId: config.authentication.openScholar.libraryId, clerkUserId, deleted });
+	console.info("Openscholar reader deletion", { libraryId: config.authentication.openScholar.libraryId, clerkUserId, deleted });
 	return new NextResponse(null, { status: deleted ? 204 : 404, headers: ADMIN_RESPONSE_HEADERS });
 }

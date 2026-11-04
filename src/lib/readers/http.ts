@@ -107,6 +107,6 @@ export async function forOpenScholar(
 		const known = refusal ? INVITATION_REFUSALS[refusal] : undefined;
 		if (known) return NextResponse.json({ error: known[1], code: refusal }, { status: known[0], headers: READER_RESPONSE_HEADERS });
 		console.error(`${label} failed`, { libraryId: access.config.authentication.openScholar.libraryId, readerId: access.reader.id, error });
-		return readerError(503, "OpenScholar can't be reached. Try again.");
+		return readerError(503, "Openscholar can't be reached. Try again.");
 	}
 }

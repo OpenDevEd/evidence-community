@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
@@ -15,7 +15,15 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: () => false,
 }));
 vi.mock("@/components/nextui/Input", () => ({
-	Input: ({ label }: { label: string }) => <input aria-label={label} />,
+	Input: ({
+		label,
+		defaultValue,
+		onChange,
+	}: {
+		label: string;
+		defaultValue: string;
+		onChange: React.ChangeEventHandler<HTMLInputElement>;
+	}) => <input aria-label={label} defaultValue={defaultValue} onChange={onChange} />,
 }));
 vi.mock("@/components/nextui/Switch", () => ({
 	Switch: ({
@@ -40,6 +48,7 @@ vi.mock("@/components/nextui/Switch", () => ({
 }));
 vi.mock("framer-motion", () => ({
 	AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+	useIsPresent: () => true,
 	motion: {
 		div: ({
 			children,
@@ -72,6 +81,10 @@ describe("the publication year filter", () => {
 		root = createRoot(container);
 	});
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	async function render({
 		range = "",
 		onRangeChange = vi.fn(),
@@ -82,12 +95,22 @@ describe("the publication year filter", () => {
 		await act(async () => {
 			root.render(
 				<YearFilter
-					key={range}
 					range={range}
 					onRangeChange={onRangeChange}
 					years={[]}
 				/>,
 			);
+		});
+	}
+
+	const box = (label: string) =>
+		container.querySelector<HTMLInputElement>(`[aria-label="${label}"]`);
+
+	async function type(label: string, value: string) {
+		const input = box(label);
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+			input?.dispatchEvent(new Event("input", { bubbles: true }));
 		});
 	}
 
@@ -134,5 +157,69 @@ describe("the publication year filter", () => {
 
 		await render({ range: "", onRangeChange });
 		expect(container.querySelector('[aria-label="year"]')).not.toBeNull();
+	});
+
+	it("keeps Year Range on when a cleared Year is switched to a range", async () => {
+		const onRangeChange = vi.fn();
+		await render({ range: "2020", onRangeChange });
+
+		await type("year", "");
+		await toggle();
+		expect(onRangeChange).toHaveBeenLastCalledWith("", null);
+
+		await render({ range: "", onRangeChange });
+		expect(container.querySelector('[aria-label="from"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="to"]')).not.toBeNull();
+	});
+
+	it("turns Year Range on for a range typed into the Year box", async () => {
+		vi.useFakeTimers();
+		const onRangeChange = vi.fn();
+		await render({ onRangeChange });
+
+		await type("year", "2020-2024");
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(onRangeChange).toHaveBeenCalledWith("2020-2024", null);
+
+		await render({ range: "2020-2024", onRangeChange });
+		expect(container.querySelector<HTMLInputElement>('input[role="switch"]')?.checked).toBe(true);
+		expect(box("from")?.value).toBe("2020");
+		expect(box("to")?.value).toBe("2024");
+	});
+
+	it("drops a typed year that is still waiting when the range changes elsewhere, even back to the same range", async () => {
+		vi.useFakeTimers();
+		const onRangeChange = vi.fn();
+		await render({ range: "2020-2024", onRangeChange });
+
+		await type("from", "2021");
+		await render({ range: "", onRangeChange });
+		expect(box("year")?.value).toBe("");
+		await render({ range: "2020-2024", onRangeChange });
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+
+		expect(onRangeChange).not.toHaveBeenCalled();
+		expect(box("from")?.value).toBe("2020");
+	});
+
+	it("keeps the focus in a box once its typed year applies", async () => {
+		vi.useFakeTimers();
+		const onRangeChange = vi.fn();
+		await render({ range: "2020-", onRangeChange });
+
+		box("to")?.focus();
+		await type("to", "2024");
+		await act(async () => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(onRangeChange).toHaveBeenCalledWith("2020", "2024");
+
+		await render({ range: "2020-2024", onRangeChange });
+		expect(document.activeElement).toBe(box("to"));
+		expect(box("to")?.value).toBe("2024");
 	});
 });

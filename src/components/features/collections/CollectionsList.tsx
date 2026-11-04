@@ -101,6 +101,7 @@ function FacetPicker({
 	/** How many results there are, for each option's share of them. */
 	total?: number;
 }) {
+	const tLabels = useTranslations("statistics");
 	const format = useFormatter();
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
@@ -227,10 +228,10 @@ function FacetPicker({
 										}
 										key={`section-${section}`}
 										className="opacity-100"
-										description={`${items.length} items`}
+										description={tLabels("items3", { length: items.length })}
 										isReadOnly
 									>
-										{section}
+										{tLabels.has(`facet${section}` as never) ? tLabels(`facet${section}` as never) : section}
 									</AutocompleteItem>
 								)}
 								{items
@@ -993,7 +994,7 @@ function FilterCard({ facetDistribution, range, onRangeChange, queryParams, hand
 	return (
 		// Nothing hangs under it when there is no tree, so it rounds its own foot.
 		<section className={twMerge("w-full sm:rounded-t-2xl flex flex-col gap-2 p-6", SIDEBAR_GREY, !slot && "rounded-b-2xl")}>
-			{filters.years.enabled && <YearFilter key={range} range={range} onRangeChange={onRangeChange} years={years} counts={facetDistribution?.year} />}
+			{filters.years.enabled && <YearFilter range={range} onRangeChange={onRangeChange} years={years} counts={facetDistribution?.year} />}
 			<FiltersList
 				queryParams={queryParams}
 				handleCountrySelect={handleCountrySelect}

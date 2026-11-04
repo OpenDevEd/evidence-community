@@ -61,7 +61,7 @@ export function rowStatus(row: ImportRow, result: AdminImportCommitResult | unde
 	if (Object.keys(needs).length) return { icon: AlertCircleIcon, label: needsText(needs), tone: "attention" };
 	const states = {
 		attention: { icon: AlertCircleIcon, label: "Needs attention", tone: "attention" },
-		existing: { icon: Copy01Icon, label: "In the library", tone: "neutral" },
+		existing: { icon: Copy01Icon, label: "In the community", tone: "neutral" },
 		ready: { icon: Tick02Icon, label: "Ready", tone: "ready" },
 		repeated: { icon: Copy01Icon, label: "Repeated", tone: "neutral" },
 		unresolved: { icon: AlertCircleIcon, label: "Not found", tone: "attention" },

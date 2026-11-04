@@ -35,7 +35,7 @@ export async function requireOpenScholarBearer(request: Request, machineCredenti
 		{
 			error: {
 				code: "unauthorized",
-				message: "Use the library's machine credential as a bearer token.",
+				message: "Use the community's machine credential as a bearer token.",
 			},
 		},
 		{ headers: ADMIN_RESPONSE_HEADERS, status: 401 },

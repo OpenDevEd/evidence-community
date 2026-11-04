@@ -7,8 +7,6 @@ import { serializeSearchParams } from "@/lib/searchParams";
 /** A row of the explorer. `filter` is the listing's query for its publications, where the listing can filter by it. */
 export type Row = { name: string; count: number; filter?: string; flag?: string };
 
-export const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-
 /** The library's switches that decide which rows can open a filtered listing. */
 type Listing = { filters: { years: { enabled: boolean }; institution: { mode: string } }; search: { country: boolean } };
 
@@ -25,7 +23,7 @@ function yearSeries(data: Pick<HomeData, "years">, thisYear: number) {
 }
 
 /** The rows of every view that can open a filtered listing; years run newest first and open on the busiest one. */
-export function listedRows(data: Figures, { filters, search }: Listing, today: string) {
+export function listedRows(data: Figures, { filters, search }: Listing, today: string, countryName: (code: string) => string = (code) => code) {
 	/** The listing's query for one of its filters, or nothing where the library has that filter switched off. */
 	const listing = (on: boolean, params: { collections?: string[]; country?: string[]; institution?: string[]; range?: string; topics?: string[] }) => (on ? serializeSearchParams(params).slice(1) : undefined);
 	const series = yearSeries(data, Number(today.slice(0, 4)));
@@ -35,7 +33,7 @@ export function listedRows(data: Figures, { filters, search }: Listing, today: s
 		/** The busiest year's place in the newest-first list. */
 		busiest: series.length - 1 - peak,
 		years: series.map((point): Row => ({ name: point.label, count: point.value, filter: listing(filters.years.enabled, { range: point.label }) })).reverse(),
-		countries: Object.entries(data.countries).sort((a, b) => b[1] - a[1]).map(([code, count]): Row => ({ name: regionNames.of(code) ?? code, count, flag: code, filter: listing(search.country && Boolean(data.countryPaths[code]), { country: [data.countryPaths[code]!] }) })),
+		countries: Object.entries(data.countries).sort((a, b) => b[1] - a[1]).map(([code, count]): Row => ({ name: countryName(code), count, flag: code, filter: listing(search.country && Boolean(data.countryPaths[code]), { country: [data.countryPaths[code]!] }) })),
 		collections: data.collections.map((collection): Row => ({ name: collection.title, count: collection.count, filter: listing(true, { collections: [collection.key] }) })),
 		topics: data.topics.map((row): Row => ({ ...row, filter: listing(true, { topics: [row.key] }) })),
 		institutions: data.institutions.map((row): Row => ({ ...row, filter: listing(filters.institution.mode !== "hidden", { institution: [row.name] }) })),

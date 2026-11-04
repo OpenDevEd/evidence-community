@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useFiltersContext } from "@/context/FiltersProvider";
@@ -22,6 +23,7 @@ import { useAddress, useEvidenceGraph, useLighting, useOpened } from "./use-evid
  * on top, coloured by their checks. Search lights papers up; opening one moves its chain into columns in front of the map.
  */
 export default function EvidenceMap({ chains, checkCounts, papers }: { chains: ChainEntry[]; checkCounts: CheckCounts; papers: number }) {
+	const t = useTranslations("evidenceMap");
 	const { theme, smallLayout, stage, labels, searchPanel } = usePageLook();
 	const filters = useFiltersContext();
 	const [types, setTypes] = useState<ReadonlySet<number>>(new Set());
@@ -40,7 +42,7 @@ export default function EvidenceMap({ chains, checkCounts, papers }: { chains: C
 	useRefitOnNotice(graph, highlighted !== null);
 	const { lists, paper, checks, checked } = panelProps({ filters, found, typing, onTyped, loaded, more, chains, now, graph, shown, checkCounts, types, setTypes, verdicts, setVerdicts });
 	// The opened paper as both layouts show it, slid over their list with a back arrow to it.
-	const opened = { ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title) };
+	const opened = { ...paper, deep: Boolean(address.paper && address.view), back: backTo(address, found?.title, t) };
 	// A new search goes back from an opened paper to its results, even one whose point the map has not found yet.
 	const onSearch = (text: string) => { filters.handleSearchChange(text); if (address.paper || address.view) now.showAll(); };
 	// The stage's colour is set by class, which the theme sets before the first paint: the server cannot know a reader's theme.
@@ -68,11 +70,12 @@ function usePageLook() {
 }
 
 /** Where closing the opened paper goes back to, by name: the appraised papers it was opened from, the results or the filter's papers, or the starting points. */
-const backTo = ({ paper, view }: ReturnType<typeof useAddress>, list: Found["title"] | undefined) => (paper && view ? "Appraised papers" : list ?? "Starting points");
+const backTo = ({ paper, view }: ReturnType<typeof useAddress>, list: Found["title"] | undefined, t: ReturnType<typeof useTranslations<"evidenceMap">>) => (paper && view ? t("appraisedPapers") : list ? (list === "Results" ? t("results") : t("filteredList")) : t("startingPointsHeading"));
 
 /** Where cosmos.gl draws the map, with the canvas for its names over it; it fades in once drawn, or says it cannot be. */
 function Stage({ stage, labels, drawn, failed, incomplete }: { stage: RefObject<HTMLDivElement | null>; labels: RefObject<HTMLCanvasElement | null>; drawn: boolean; failed: boolean; incomplete: boolean }) {
-	const problem = incomplete ? "Part of the map's data didn't load. Reload the page to try again." : failed ? "This device could not draw the map. Search and the lists still work." : null;
+	const t = useTranslations("evidenceMap");
+	const problem = incomplete ? t("partialData") : failed ? t("cannotDraw") : null;
 	return (
 		<>
 			<div className={twMerge("absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none", drawn ? "opacity-100" : "opacity-0")} aria-hidden>
@@ -109,9 +112,10 @@ function useGraphFollows(graph: EvidenceGraph | null, failed: boolean, now: Retu
 
 /** What the map has brought to the front, by name: the opened paper, or every checked paper. */
 function useFocusName(now: ReturnType<typeof useOpened>, shown: Selection | null, more: More | null) {
+	const t = useTranslations("evidenceMap");
 	const opened = useOpenedName(now.index, more);
 	if (!shown) return null;
-	if (now.target === CHECKED) return "Appraised papers";
+	if (now.target === CHECKED) return t("appraisedPapers");
 	const label = (now.index !== null && more?.labels.get(now.index)) || opened;
 	return label ? nameOf(label) : null;
 }

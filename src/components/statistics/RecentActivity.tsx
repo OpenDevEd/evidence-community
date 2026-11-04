@@ -1,5 +1,5 @@
 import { Activity01Icon } from "@hugeicons/core-free-icons";
-import { useTranslations, useFormatter } from "next-intl";
+import { useTranslations, useFormatter, useLocale } from "next-intl";
 import { SectionCard } from "./SectionCard";
 
 type RecentActivityProps = {
@@ -7,6 +7,7 @@ type RecentActivityProps = {
 };
 
 export function RecentActivity({ recentActivity }: RecentActivityProps) {
+  const locale = useLocale();
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
 
@@ -32,7 +33,7 @@ export function RecentActivity({ recentActivity }: RecentActivityProps) {
 							)}
 						</span>
 						<span className="font-bold text-tertiary">
-							{activity.count.toLocaleString()}
+							{activity.count.toLocaleString(locale)}
 						</span>
 					</div>
 				))}

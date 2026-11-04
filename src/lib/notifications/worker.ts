@@ -15,7 +15,7 @@ export async function runNotificationCycle(db: Database, config: LibraryServerCo
     return null;
   } catch (error) {
     if (signal?.aborted) throw signal.reason;
-    console.error("Library notification cycle failed", error);
+    console.error("Community notification cycle failed", error);
     return error instanceof Error ? error.message : String(error);
   }
 }

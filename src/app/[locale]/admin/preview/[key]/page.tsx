@@ -35,7 +35,7 @@ function PreviewMessage({ children }: { children: ReactNode }) {
 /** Whether this admin may preview. An access check outage is an error to retry, not a missing page. */
 async function canPreview() {
 	const authorization = await authorizeAdminRequest(await headers(), ADMIN_CONTENT_PERMISSION);
-	if (authorization.status === "unavailable") throw new Error("OpenScholar access verification is temporarily unavailable");
+	if (authorization.status === "unavailable") throw new Error("Openscholar access verification is temporarily unavailable");
 	return authorization.status === "authorized";
 }
 
@@ -84,7 +84,7 @@ async function DraftPreview(props: Props) {
 			</PreviewMessage>
 		);
 	}
-	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public library.</PreviewMessage>;
+	if (!item) return <PreviewMessage>After publishing, this record would be hidden from the public community.</PreviewMessage>;
 	return (
 		<LookOnly>
 			<ItemPage data={await withTopicNames(withoutFullText({ item }))} loading={false} />

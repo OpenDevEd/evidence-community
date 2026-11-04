@@ -100,12 +100,12 @@ type Failure = Extract<SourceStatus, { state: "failed" }>["failure"];
 
 /** What a failure means and what to do, with the provider's name filled in. */
 const FAILURE_MESSAGES: Record<Failure["code"], (name: string) => string> = {
-	access_denied: (name) => `${name} refused the saved key. Update it in the library's configuration.`,
-	owner_left: () => "The person who added this collection left the organisation, so its records were withdrawn. Remove the source in the library's configuration.",
+	access_denied: (name) => `${name} refused the saved key. Update it in the community's configuration.`,
+	owner_left: () => "The person who added this collection left the organisation, so its records were withdrawn. Remove the source in the community's configuration.",
 	not_found: (name) => `${name} no longer finds this source, or the saved key cannot see it.`,
-	missing_key: () => "No API key is saved for this source. Add one in the library's configuration.",
-	invalid_query: (name) => `${name} rejected the search. Edit it in the library's configuration.`,
-	too_large: () => "This source has more records than the library allows.",
+	missing_key: () => "No API key is saved for this source. Add one in the community's configuration.",
+	invalid_query: (name) => `${name} rejected the search. Edit it in the community's configuration.`,
+	too_large: () => "This source has more records than the community allows.",
 	rate_limited: (name) => `${name} is limiting requests. The import tries again every minute.`,
 	unavailable: (name) => `${name} could not be reached. The import tries again every minute.`,
 	interrupted: () => "The import stopped before it finished. It starts again on its own.",
@@ -114,7 +114,7 @@ const FAILURE_MESSAGES: Record<Failure["code"], (name: string) => string> = {
 
 /** A paused source never runs, so a failure that would retry on its own waits for it to resume. */
 const RETRIES_ON_ITS_OWN = new Set<Failure["code"]>(["rate_limited", "unavailable", "interrupted"]);
-const PAUSED_MESSAGE = "The source is paused, so the import does not try again. Resume it in the library's configuration.";
+const PAUSED_MESSAGE = "The source is paused, so the import does not try again. Resume it in the community's configuration.";
 
 type PhaseState = "running" | "done" | "failed" | "waiting";
 
@@ -570,7 +570,7 @@ function IssueRecord({
 		<>
 			<TruncatedText text={row.title} className={`text-[13px] font-medium leading-5 ${muted ? "text-black/55 dark:text-white/55" : ""}`} />
 			<span className="flex min-w-0 items-center gap-2 text-[11px] leading-4 text-black/50 dark:text-white/50">
-				<span className="truncate">{row.itemKey ? row.meta : "Not in the library"}</span>
+				<span className="truncate">{row.itemKey ? row.meta : "Not in the community"}</span>
 				{row.detail ? (
 					<Tooltip content={row.message}>
 						<span className="min-w-0 max-w-[60%] shrink-0 truncate rounded bg-black/[0.05] px-1.5 font-medium text-black/65 dark:bg-white/[0.08] dark:text-white/70">
@@ -1021,7 +1021,7 @@ function sourceSubtitle(source: AdminSource) {
 		return source.scopeKind === "group" ? `Zotero group ${source.externalScopeKey}` : "Zotero library";
 	}
 	if (source.provider === "openalex") return "OpenAlex search";
-	return source.provider === "openscholar" ? "OpenScholar collection" : sourceProviderName(source.provider);
+	return source.provider === "openscholar" ? "Openscholar collection" : sourceProviderName(source.provider);
 }
 
 /** Status version: the polled issue counts, and a run ending, since an import can swap issues without changing a count. */

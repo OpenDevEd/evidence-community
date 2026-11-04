@@ -2,10 +2,12 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { NextIntlClientProvider } from "next-intl";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { ToolActivity } from "@/components/features/ai/ToolActivity";
 import type { ResearchToolPart } from "@/lib/ai/tool-activity";
+import messages from "@/messages/en-US.json";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -38,7 +40,7 @@ describe("what the reader sees the assistant doing", () => {
 
 	async function render(part: ResearchToolPart) {
 		await act(async () => {
-			root.render(<ToolActivity part={part} />);
+			root.render(<NextIntlClientProvider locale="en-US" messages={messages}><ToolActivity part={part} /></NextIntlClientProvider>);
 		});
 	}
 
@@ -52,7 +54,7 @@ describe("what the reader sees the assistant doing", () => {
 	it("names the step and its outcome before anything is expanded", async () => {
 		await render(searchPart());
 
-		expect(container.textContent).toContain("Library search");
+		expect(container.textContent).toContain("Community search");
 		expect(container.textContent).toContain("Completed");
 	});
 

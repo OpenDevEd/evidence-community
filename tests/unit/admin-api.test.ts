@@ -262,7 +262,7 @@ describe("admin API client", () => {
 					JSON.stringify({
 						error: {
 							code: "forbidden",
-							message: "Only a library Owner can do this.",
+							message: "Only a community Owner can do this.",
 						},
 					}),
 					{
@@ -465,14 +465,14 @@ describe("admin API client", () => {
 		const caught = await getAdminLibrary().catch((error: unknown) => error);
 
 		expect(adminErrorMessage(caught, "Admin operation failed")).toBe(
-			"Can't reach the library right now. Check your connection and try again.",
+			"Can't reach the community right now. Check your connection and try again.",
 		);
 	});
 
 	it("recognises Firefox and Safari network failures", () => {
 		for (const text of ["NetworkError when attempting to fetch resource.", "Load failed"]) {
 			expect(adminErrorMessage(new TypeError(text), "Admin operation failed")).toBe(
-				"Can't reach the library right now. Check your connection and try again.",
+				"Can't reach the community right now. Check your connection and try again.",
 			);
 		}
 	});

@@ -84,14 +84,14 @@ async function assertSourceFits(
 			existing.externalScopeKey !== values.externalScopeKey)
 	) {
 		throw new SourceConfigurationConflictError(
-			`Source ${source.key} already points to a different library.`,
+			`Source ${source.key} already points to a different community.`,
 		);
 	}
 	await assertOpenAlexApproval(transaction, source);
 	if (!values.externalScopeKey) return;
 	const scoped = currentByScope.get(`${source.provider}:${values.externalScopeKey}`);
 	if (scoped && scoped.key !== source.key) {
-		const scope = source.provider === "zotero" ? "Zotero group" : "OpenScholar collection";
+		const scope = source.provider === "zotero" ? "Zotero group" : "Openscholar collection";
 		throw new SourceConfigurationConflictError(
 			`${scope} ${values.externalScopeKey} already belongs to source ${scoped.key}.`,
 		);

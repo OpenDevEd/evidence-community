@@ -51,7 +51,7 @@ describe("what the assistant is told about this request", () => {
 		);
 
 		expect(text).toContain("There is no current publication.");
-		expect(text).toContain("There is no current library result set.");
+		expect(text).toContain("There is no current community result set.");
 	});
 
 	it("spots a context that changed since the last message", () => {

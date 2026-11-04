@@ -29,6 +29,16 @@ export type ChatTranscriptLabels = {
 };
 
 
+/** Transcripts are written in English, whatever language the page is in. */
+const TOOL_TITLES: Record<string, string> = {
+	"title.readCurrent": "Read current results",
+	"title.readingCurrent": "Reading current results",
+	"title.searchedCurrent": "Searched current results",
+	"title.searchingCurrent": "Searching current results",
+	"title.search": "Community search",
+	"title.readingPublications": "Reading publications",
+};
+
 function absoluteUrl(href: string, origin?: string) {
 	if (!origin || !href.startsWith("/")) return href;
 	return new URL(href, origin).toString();
@@ -156,7 +166,7 @@ function htmlToolActivity(
 	});
 	return [
 		'<section class="tool-activity">',
-		`<h3>Tool: ${escapeHtml(summary.title)}</h3>`,
+		`<h3>Tool: ${escapeHtml(TOOL_TITLES[summary.title] ?? summary.title)}</h3>`,
 		items.length ? `<ul>${items.join("")}</ul>` : "",
 		summary.detail ? `<p>${escapeHtml(summary.detail)}</p>` : "",
 		summary.error

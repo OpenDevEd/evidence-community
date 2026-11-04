@@ -6,7 +6,7 @@ Open Development & Education is the data controller for the personal information
 
 # **Contact details**
 
-Email: contact@opendeved.net
+Email: support@openscholar.ai
 
 # **What we collect and why**
 
@@ -24,7 +24,7 @@ Our lawful basis is **legitimate interests**. Running a reliable and secure publ
 
 ## **Product analytics after consent**
 
-If you allow product analytics, we use PostHog and Google Analytics to understand how the library is used and where it needs improvement. We may process:
+If you allow product analytics, we use PostHog and Google Analytics to understand how the community is used and where it needs improvement. We may process:
 
 - A pseudonymous browser and session identifier
 - Browser, device, screen, operating system, timezone, and approximate location information
@@ -51,7 +51,7 @@ Our lawful basis is **consent**. Session replay can only be enabled with product
 
 If you decline product analytics, the browser does not load PostHog or Google Analytics and does not create a browser analytics profile. The site may send a limited event to its own server for fixed categories and counts, such as a page path without its query string, result totals, or an action type.
 
-These events do not contain a browser identifier, visitor IP address, free-text search, document content, AI conversation, or user-provided text. The server groups them under one identifier for the library and day, disables person-profile creation, and then sends the aggregate event to PostHog.
+These events do not contain a browser identifier, visitor IP address, free-text search, document content, AI conversation, or user-provided text. The server groups them under one identifier for the community and day, disables person-profile creation, and then sends the aggregate event to PostHog.
 
 Our lawful basis is **legitimate interests**. We need basic, low-risk totals to keep the service reliable and understand whether core features are being used. We reduce the privacy impact by removing browser identity and content and by grouping all declined visitors together.
 
@@ -76,7 +76,7 @@ We receive information:
 
 - Directly from you when you contact us, sign in, or change analytics choices
 - From your browser and network when you use the site
-- From your interactions with the library
+- From your interactions with the community
 - From PostHog and Google Analytics after consent
 - From our hosting, security, database, and authentication services when they operate the site
 
@@ -84,10 +84,10 @@ We receive information:
 
 We use service providers only for the jobs described below:
 
-- **PostHog analytics** include consented product analytics, optional masked session replay, and limited server-side aggregate events. The library’s hosting provider processes them when PostHog is self-hosted; **PostHog Inc.** processes them when PostHog Cloud is used.
+- **PostHog analytics** include consented product analytics, optional masked session replay, and limited server-side aggregate events. The community’s hosting provider processes them when PostHog is self-hosted; **PostHog Inc.** processes them when PostHog Cloud is used.
 - **Google LLC** processes consented traffic and usage analytics. It may also provide Google sign-in when that option is enabled.
 - **Cloudflare, Inc.** may deliver the site and provide bot protection, abuse prevention, and rate limiting.
-- **Our hosting and database providers** store and serve the application, account, and operational data. The active host may be Vercel, DigitalOcean, or another provider selected by the library operator.
+- **Our hosting and database providers** store and serve the application, account, and operational data. The active host may be Vercel, DigitalOcean, or another provider selected by the community operator.
 - **Configured authentication providers** process login and session information when login is enabled.
 
 These providers act under contracts and may use infrastructure outside the UK. Where information is transferred internationally, we use an applicable UK adequacy regulation, the UK Extension to the EU-US Data Privacy Framework where the recipient participates, or approved contractual safeguards. Contact us for more information or a copy of the relevant safeguards.
@@ -118,7 +118,7 @@ Depending on the information and lawful basis, you may have the right to:
 
 Withdrawing consent does not affect processing that was lawful before withdrawal. It is as easy to withdraw analytics consent as to give it: open **Cookie settings** in the footer and save different choices or decline.
 
-Contact us at contact@opendeved.net to make a rights request. We normally respond within one month. Some rights have legal limits and may not apply in every case.
+Contact us at support@openscholar.ai to make a rights request. We normally respond within one month. Some rights have legal limits and may not apply in every case.
 
 We do not use analytics profiles to make decisions that have legal or similarly significant effects on you.
 
@@ -132,7 +132,7 @@ Our [Cookie Policy](/cookie-policy) explains the essential and optional browser 
 
 # **How to complain**
 
-Contact us first at contact@opendeved.net so we can try to resolve your concern.
+Contact us first at support@openscholar.ai so we can try to resolve your concern.
 
 You can also complain to the Information Commissioner's Office:
 
@@ -154,7 +154,7 @@ Website: [ico.org.uk/make-a-complaint](https://ico.org.uk/make-a-complaint/)
 
 # **Changes to this notice**
 
-We review this notice when our use of information changes. A change to the built-in analytics policy or this library’s analytics policy version makes the site ask for consent again.
+We review this notice when our use of information changes. A change to the built-in analytics policy or this community’s analytics policy version makes the site ask for consent again.
 
 # **Last updated**
 

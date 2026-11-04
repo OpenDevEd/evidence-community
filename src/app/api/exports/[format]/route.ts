@@ -118,12 +118,12 @@ async function exportResponse(
 async function serveExport(request: Request, context: { params: Promise<{ format: string }> }) {
 	try {
 		const parsed = libraryExportRequestSchema.safeParse(request.method === "POST" ? await request.json().catch(() => null) : { scope: "library" });
-		if (!parsed.success) throw new LibraryExportError("exportInvalid", "Choose a valid library or results export.", 400);
+		if (!parsed.success) throw new LibraryExportError("exportInvalid", "Choose a valid community or results export.", 400);
 		return await exportResponse(request, context, parsed.data);
 	} catch (error) {
 		if (error instanceof LibraryExportError) return Response.json({ error: error.message, code: error.code }, { status: error.status, headers: { "Cache-Control": "private, no-store" } });
 		if (request.signal.aborted) return new Response(null, { status: 499 });
-		console.error("Library export failed", { path: new URL(request.url).pathname, error });
+		console.error("Community export failed", { path: new URL(request.url).pathname, error });
 		return Response.json({ error: "Unable to export these records." }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
 	}
 }

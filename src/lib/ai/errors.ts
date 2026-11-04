@@ -38,7 +38,7 @@ export function normalizeAIError(
 	if (error instanceof DrizzleQueryError) {
 		return new AIError(
 			"LIBRARY_UNAVAILABLE",
-			"The library couldn't read its records just now. Try again in a moment.",
+			"The community couldn't read its records just now. Try again in a moment.",
 			503,
 		);
 	}

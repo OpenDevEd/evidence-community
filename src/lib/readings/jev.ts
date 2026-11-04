@@ -35,7 +35,7 @@ export async function askJev(
 ) {
 	const response = await request(DECISIONS_URL, {
 		method: "POST",
-		headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "OpenScholar Evidence Library" },
+		headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", "X-Title": "Openscholar Evidence Community" },
 		body: JSON.stringify({ model: JEV_MODEL, state, questions }),
 		signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TIMEOUT_MS)]) : AbortSignal.timeout(TIMEOUT_MS),
 	});

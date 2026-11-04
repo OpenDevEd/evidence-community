@@ -78,7 +78,7 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 				label: "Contact",
 				email: "reader@example.org",
 				description:
-					"I’m looking for research on classroom feedback and would like to suggest a publication for the library.\n\nCould you let me know how to share it with your editors?",
+					"I’m looking for research on classroom feedback and would like to suggest a publication for the community.\n\nCould you let me know how to share it with your editors?",
 			},
 			{
 				id: "takedown",
@@ -95,7 +95,7 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 		})),
 		{
 			id: "digest",
-			label: "Library digest",
+			label: "Community digest",
 			subject: digest.subject,
 			html: digest.html,
 		},

@@ -3,6 +3,7 @@ import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next-intl/server", async (original) => ({ ...(await original<typeof import("next-intl/server")>()), getTranslations: async () => (key: string) => key }));
 vi.mock("@/lib/actions", () => ({}));
 
 const boundary = vi.hoisted(() => ({ item: vi.fn(), config: vi.fn() }));

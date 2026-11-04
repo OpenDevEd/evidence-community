@@ -15,6 +15,7 @@ type OverviewStatsProps = {
 };
 
 export function OverviewStats({ stats }: OverviewStatsProps) {
+	const tLabels = useTranslations("statistics");
 	const t = useTranslations("ui");
 	const selectedCitationMeasure = stats.citationMeasure.options.find(
 		(option) => option.key === stats.citationMeasure.selectedKey,
@@ -38,7 +39,7 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 				<StatCard
 					title={citationTitle}
 					value={stats.citationStats.totalCitations}
-					subtitle={`${stats.citationStats.citationPercentage}% ${t("haveCitations")}`}
+					subtitle={tLabels("label3", { citationPercentage: stats.citationStats.citationPercentage, value: t("haveCitations") })}
 					icon={QuoteUpIcon}
 					color="success"
 				/>
@@ -52,7 +53,7 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 				<StatCard
 					title={t("uniqueCreators")}
 					value={stats.creatorStats.uniqueCreators}
-					subtitle={`${t("avg")} ${stats.creatorStats.avgCreatorsPerItem.toFixed(1)} ${t("perItem")}`}
+					subtitle={tLabels("label4", { value: t("avg"), value2: stats.creatorStats.avgCreatorsPerItem.toFixed(1), value3: t("perItem") })}
 					icon={UserGroupIcon}
 					color="card"
 				/>
@@ -70,7 +71,7 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 				<StatCard
 					title={t("attachments")}
 					value={stats.attachmentStats.totalAttachments}
-					subtitle={`${stats.attachmentStats.attachmentPercentage}% ${t("ofItemsHaveAttachments")}`}
+					subtitle={tLabels("label5", { attachmentPercentage: stats.attachmentStats.attachmentPercentage, value: t("ofItemsHaveAttachments") })}
 					icon={Attachment01Icon}
 					color="success"
 				/>

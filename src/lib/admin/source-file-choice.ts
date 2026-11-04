@@ -99,7 +99,7 @@ export async function stageSourcePdf(db: Database, config: LibraryServerConfig, 
 	// Read before the lock: it checks the file is there and how large it is.
 	const { bytes, sourceConnectionKey } = await downloadSourcePdf(db, config, itemKey);
 	if (!zoteroSource(config, sourceConnectionKey)?.settings.downloadPdfs)
-		throw new AdminValidationError("This source adds no PDFs. Turn on its PDFs in the library's settings first.");
+		throw new AdminValidationError("This source adds no PDFs. Turn on its PDFs in the community's settings first.");
 	await db.transaction(async (transaction) => {
 		const row = await lockSourcePdf(transaction, itemKey);
 		if (row.published) throw new AdminValidationError("This PDF is already published.");
