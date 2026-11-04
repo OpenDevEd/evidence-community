@@ -129,6 +129,12 @@ Elasticsearch login not made yet. In both cases the worker keeps the old engine
 current, reports the failure as its last error, and starts over every 30
 minutes to try the switch again.
 
+A record the engine refuses, such as a value its mapping can't hold, fails the
+whole rebuild, and the worker's last error names the record and the reason. A
+switch then waits as above. A rebuild of the engine readers already search
+fails at each start, and readers keep the index as it was until the record is
+fixed.
+
 The worker drains no changes while it rebuilds, so readers see changes made
 during a switch only once it completes: minutes, or longer for a switch to
 Meilisearch with an embedder, since Meilisearch embeds every record as it
@@ -367,6 +373,14 @@ If port 57710 is taken, pick another one for both steps:
 EMBEDDER_TEST_MEILI_PORT=57730 docker compose -f tests/embedder/compose.yaml up -d --wait
 SEARCH_ENGINE=meilisearch MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
 ```
+
+### Comparing the engines
+
+`npm run search:compare` loads one library's records into Elasticsearch and runs
+the 50 reader searches in `tools/search-comparison/aied-queries.json` on an
+engine. `aied-meilisearch-baseline.json` holds what Meilisearch answered for
+them on AIED before EL-32, the reference for Elasticsearch's ranking
+(OpenDevEd/new-el#717). `tools/compareSearchEngines.ts` lists the commands.
 
 ## Local operation
 
