@@ -1471,7 +1471,10 @@ export function AdminItemTable({
 									aria-selected={row.original.bulkSelected}
 									className={`group absolute left-0 top-0 flex w-full cursor-pointer transition-colors after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-30 after:h-px after:bg-black/[0.06] after:content-[''] hover:bg-black/[0.055] dark:after:bg-black/30 dark:hover:bg-white/[0.07] ${rowBackground}`}
 									data-record-key={row.original.key}
-									onClick={() => onSelect(row.original.key)}
+									onClick={(event) => {
+										// The second click of a double click on a popover that just closed over this row isn't a choice of it.
+										if (event.detail < 2) onSelect(row.original.key);
+									}}
 									style={{
 										height: virtualRow.size,
 										transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
