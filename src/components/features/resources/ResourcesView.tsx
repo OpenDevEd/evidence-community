@@ -357,7 +357,7 @@ function NumberedPager({ numbered, totalPages }: { numbered: number; totalPages:
 	const loaded = itemsData?.currentPage === page;
 	const next = page === numbered && numbered < totalPages && loaded ? itemsData?.cursors?.next : null;
 	return (
-		<div className="flex items-center gap-4">
+		<div className="flex flex-wrap items-center justify-center gap-4">
 			<Pagination
 				showControls
 				page={page}
@@ -398,7 +398,8 @@ function PaginationControls({ className }: { className?: string }) {
 			>
 				<Skeleton
 					isLoaded={totalPages > 0}
-					className="w-full h-14 rounded-2xl flex items-center justify-center"
+					// At least one row: past page 500 on a phone the pager takes two.
+					className="w-full min-h-14 rounded-2xl flex items-center justify-center"
 				>
 					{totalPages > 0 &&
 						(itemsContext.queryParams.page > numbered ? (
