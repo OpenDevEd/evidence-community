@@ -23,6 +23,11 @@ export function isEmbedderUnavailable(error: unknown) {
 	);
 }
 
+/** Adding or changing an embedder makes Meilisearch re-embed every record. */
+export const EMBEDDER_TASK_TIMEOUT_MS = 60 * 60 * 1_000;
+/** A re-embed can run for a long time; ask Meilisearch about it every 2 s. */
+export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
+
 /**
  * Embedder name that older indexes used. It is always removed so a library
  * never keeps two embedders for the same records.
@@ -50,6 +55,50 @@ export const PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE = [
 	"{% if doc.tags %}Keywords: {{doc.tags | join: ', '}}.{% endif %}",
 	"{% if doc.year %}Published in {{doc.year}}.{% endif %}",
 ].join(" ");
+
+/** Liquid's `if`: only a missing value, null and false are false; empty text and empty lists are true. */
+function present(value: unknown) {
+	return value !== undefined && value !== null && value !== false;
+}
+
+function printed(value: unknown): string {
+	if (Array.isArray(value)) return value.map(printed).join("");
+	return value === undefined || value === null ? "" : String(value);
+}
+
+function joined(value: unknown) {
+	return Array.isArray(value) ? value.map(printed).join(", ") : printed(value);
+}
+
+/** The text cut to `maxBytes` of UTF-8, at a whole character. */
+function cutToBytes(text: string, maxBytes: number) {
+	if (Buffer.byteLength(text, "utf8") <= maxBytes) return text;
+	let bytes = 0;
+	let end = 0;
+	for (const character of text) {
+		bytes += Buffer.byteLength(character, "utf8");
+		if (bytes > maxBytes) break;
+		end += character.length;
+	}
+	return text.slice(0, end);
+}
+
+/**
+ * The text embedded for a record in Elasticsearch: `PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE` rendered as Meilisearch's
+ * Liquid renders it, cut to the same byte limit (OpenDevEd/new-el#720). Change it with the template, and bump
+ * `SEARCH_PROJECTION_VERSION`: the rebuild that follows embeds every record whose text changed.
+ */
+export function embeddingText(document: Record<string, unknown>) {
+	const { title, abstractNote, fullNames, tags, year } = document;
+	const text = [
+		`A research record${present(title) ? ` titled '${printed(title)}'` : ""}.`,
+		present(abstractNote) ? `Abstract: ${printed(abstractNote)}.` : "",
+		present(fullNames) ? `Authors: ${joined(fullNames)}.` : "",
+		present(tags) ? `Keywords: ${joined(tags)}.` : "",
+		present(year) ? `Published in ${printed(year)}.` : "",
+	].join(" ");
+	return cutToBytes(text, PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES);
+}
 
 function withoutUndefined<T extends object>(value: T): T {
 	return Object.fromEntries(

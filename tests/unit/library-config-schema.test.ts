@@ -357,6 +357,34 @@ describe("reusable field schemas", () => {
 	});
 });
 
+describe("search engine settings", () => {
+	function withSearch(search: Record<string, unknown>) {
+		const config: any = cloneLibraryConfig();
+		config.services.search = search;
+		return libraryConfigSchema.safeParse(config);
+	}
+	const meilisearch = { host: "https://search.example.org", key: "key", index: "Library_1" };
+	const elasticsearch = { host: "https://search.example.org", key: "key", index: "library_1" };
+
+	it("needs the chosen engine's connection, and keeps the other one while a switch is built", () => {
+		expect(withSearch({ engine: "elasticsearch", meilisearch }).success).toBe(false);
+		expect(withSearch({ engine: "meilisearch", meilisearch, elasticsearch }).success).toBe(true);
+	});
+
+	it("reads the Meilisearch connection alone, which OpenScholar writes until it names the engine, as Meilisearch", () => {
+		const parsed = withSearch(meilisearch);
+		expect(parsed.success).toBe(true);
+		expect(parsed.data?.services.search).toEqual({ engine: "meilisearch", meilisearch });
+		expect(withSearch({ ...meilisearch, unknown: true }).success).toBe(false);
+	});
+
+	it("takes only an index name Elasticsearch can create", () => {
+		for (const index of ["Library_1", "-library", "_library"]) {
+			expect(withSearch({ engine: "elasticsearch", elasticsearch: { ...elasticsearch, index } }).success).toBe(false);
+		}
+	});
+});
+
 describe("strict field groups", () => {
 	it.each([
 		["identity", (config: any) => (config.identity.unknown = true)],

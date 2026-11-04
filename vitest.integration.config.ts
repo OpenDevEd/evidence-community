@@ -10,6 +10,9 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		include: [
+			"tests/integration/computed-cache.test.ts",
+			"tests/integration/item-redirects.test.ts",
+			"tests/integration/library-search-provisioning.test.ts",
 			"tests/integration/library-export-selection.test.ts",
 			"tests/integration/zotero-pdf-review.test.ts",
 			"tests/integration/topic-review.test.ts",

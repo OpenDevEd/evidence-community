@@ -34,6 +34,6 @@ export type OpenScholarHandoff = z.infer<typeof handoffSchema>;
 
 /** The search these results are, as the search page writes it: its words, filters and order, without the page. */
 export function searchOf(params: Parameters<typeof listingParams>[0]) {
-	const { page: _page, ...search } = listingParams(params);
+	const { page: _page, after: _after, before: _before, ...search } = listingParams(params);
 	return serializeSearchParams(search).replace(/^\?/u, "");
 }

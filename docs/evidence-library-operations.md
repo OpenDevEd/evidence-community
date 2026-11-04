@@ -43,8 +43,8 @@ directly with Docker. They do not apply to the Compose path.
 Run Compose from the repository root with the immutable image reference:
 
 ```bash
-MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
-LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
+MEILISEARCH_MASTER_KEY=example-meilisearch-key \
+LIBRARY_CONFIG_JSON="$(jq -c '.services.search = {engine: "meilisearch", meilisearch: {host: "http://meilisearch:7700", key: "example-meilisearch-key", index: "example_library"}}' config/library.example.json)" \
 SOURCE_COMMIT="$(git rev-parse HEAD)" \
 RUNTIME_IMAGE="ghcr.io/opendeved/evidence-library-runtime@sha256:<digest>" \
   docker compose --project-directory . \
@@ -314,6 +314,8 @@ The container reads these values only from its environment:
 | `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL`         | PostgreSQL administrator URL used to create databases, logins, and extensions      |
 | `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST`      | Internal PostgreSQL host and optional port written into each library's runtime URL |
 | `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes                                                |
+| `EVIDENCE_LIBRARY_SEARCH_ADMIN_URL`           | The shared Elasticsearch with its administrator login, `http://elastic:<password>@evidence-library-elasticsearch:9200` |
+| `EVIDENCE_LIBRARY_SEARCH_RUNTIME_HOST`        | Where libraries reach that Elasticsearch, written into each search receipt: `http://evidence-library-elasticsearch:9200` |
 | `PORT`                                        | HTTP port, default `3000`                                                          |
 
 `GET /health` returns `{"status":"ok"}`. Database setup uses this endpoint:
@@ -399,6 +401,135 @@ The check creates two temporary databases, confirms reconciliation ran every
 Drizzle migration, proves both cross-library connections fail, checks
 `created`, `matched`, and `updated`, rejects a conflicting owner, and removes
 its test databases and logins.
+
+## Copy old-key redirects out of Meilisearch
+
+From the release with OpenDevEd/new-el#716 on, an old record key redirects
+from the library's `itemRedirect` table in PostgreSQL instead of Meilisearch's
+`redirects` index. The table starts empty, so old-key links stop redirecting
+until the copy runs. Run it in each library's `search-indexer` container (its
+Coolify terminal, or `docker exec`) right after that release, while the
+library's `services.search` still names its Meilisearch:
+
+```bash
+npm run -s search:copy-redirects
+```
+
+It prints `{"indexFound":true,"read":...,"copied":...,"otherLibraries":...,"unreadable":...}`.
+`copied` counts this library's redirects. `otherLibraries` counts documents of
+other libraries sharing the index, which it leaves alone. `unreadable` counts
+documents that name no record key; check them if it isn't 0.
+`"indexFound":false` means the library never had redirects. Running it again
+changes nothing. Copy every library before it moves to Elasticsearch
+(OpenDevEd/new-el#722): after that the copy can't reach Meilisearch.
+
+## Upgrade to a chosen search engine
+
+From the release with OpenDevEd/new-el#722 on, `services.search` names the
+library's engine and holds each engine's connection:
+
+```json
+"search": {"engine": "meilisearch", "meilisearch": {"host": "http://meilisearch:7700", "key": "<key>", "index": "<index>"}}
+```
+
+Until OpenScholar writes `engine`, this runtime reads the old
+`{host, key, index}` shape as a library on Meilisearch, so libraries upgrade
+with the configuration they have. The old shape goes once OpenScholar sends
+`engine` for every library. An older runtime rejects the new shape.
+
+On each library host, before this runtime:
+
+1. Deploy the shared Elasticsearch ("Run the shared Elasticsearch" below).
+   Every library's Compose file joins its `library-search` network, so even a
+   library that stays on Meilisearch fails to start on a host without it.
+2. Set `EVIDENCE_LIBRARY_SEARCH_ADMIN_URL` and
+   `EVIDENCE_LIBRARY_SEARCH_RUNTIME_HOST` on the database provisioner and attach
+   it to `library-search`. Without them the provisioner refuses to start, and
+   setting up a new library's database stops with it.
+
+Then, for each library:
+
+3. Deploy this runtime with the library's configuration as it is. Migration
+   `0098` records Meilisearch as the engine readers search for every library
+   whose worker has built an index, so readers see no change.
+4. To move the library to Elasticsearch, add the `elasticsearch` connection
+   from its search receipt and set `engine` to `elasticsearch`. Do this only
+   once OpenScholar sends `engine`: the runtime refuses any revision without a
+   connection for the engine the active one chose, so OpenScholar's old shape
+   can no longer publish to a library on Elasticsearch, and a redeploy whose
+   `LIBRARY_CONFIG_JSON` lacks it doesn't start (its log names
+   `SEARCH_ENGINE_DROPPED`). The search
+   worker builds the Elasticsearch index while readers stay on Meilisearch,
+   then moves them and deletes the Meilisearch index (`docs/search-indexing.md`,
+   "Switching engines"). Records get their vectors after the move: until the
+   backfill finishes, Similar Resources answers 503 and AI search ranks by
+   words alone (about 17 minutes for AIED on OpenRouter, 28 hours on a 16-core
+   CPU model).
+
+Rollback: deploy the previous image with the previous configuration revision.
+This runtime saves the library's active configuration in the new shape; the
+older runtime finds that file invalid and starts from the revision it is given.
+A library still on Meilisearch notices nothing, before or after rolling forward
+again. A library that had moved to Elasticsearch has no Meilisearch index left;
+the older worker refills it from PostgreSQL, and search finds only the records
+indexed so far until it finishes. Rolling forward rebuilds its Elasticsearch
+index on its own, since the projection signature the older worker stored differs
+(`drizzle/rollback/0098_search-engine.sql`).
+
+## Run the shared Elasticsearch
+
+Every library on a host searches one Elasticsearch, deployed once per host from
+`docker/compose.search.yaml` as its own Coolify application, before the
+libraries. It builds `docker/elasticsearch.Dockerfile` (Elasticsearch 9.5.5 on
+the free Basic licence, with the ICU plugin), keeps its data in the
+`elasticsearch-data` volume, publishes no port, and creates the
+`library-search` network. Each library's `web` and `search-indexer` containers
+join that network and reach it as
+`http://evidence-library-elasticsearch:9200`, a name no other application on
+the shared `coolify` network answers to; the other workers don't. Set
+`ELASTICSEARCH_ADMIN_PASSWORD`, and `ELASTICSEARCH_HEAP` (4 GB by default: the
+heap held 2.0 GB with AIED's 282,948 records and Wealth Inequality's 56,098
+loaded together). Leave memory beside the heap for every library's vectors:
+about `records × dimensions × 4` bytes each, 1.2 GB for AIED at 1,024
+dimensions (`docs/search-indexing.md`, Embedder). Set `vm.max_map_count` to at
+least 262144 on the host (`sysctl -w vm.max_map_count=262144`, and in
+`/etc/sysctl.d/` to keep it): single-node mode skips the check that would
+otherwise refuse to start below it, and the index fails under load instead.
+
+`ELASTIC_PASSWORD` sets the `elastic` password on the first start only. To
+change it later, change it in Elasticsearch first
+(`POST /_security/user/elastic/_password`), then `ELASTICSEARCH_ADMIN_PASSWORD`
+and the provisioner's `EVIDENCE_LIBRARY_SEARCH_ADMIN_URL`; otherwise the health
+check and the provisioner get 401.
+
+The database provisioner joins `library-search` too and creates each library's
+login with the same token and request as its database:
+
+```http
+POST /v1/library-search/reconcile
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>","password":"<saved search key>"}
+```
+
+It answers `{"libraryId":"...","outcome":"created","host":"http://evidence-library-elasticsearch:9200","index":"el_..."}`.
+The login, its role, and the library's search alias share the name of the
+library's database. The role reaches only that alias and the indexes named
+`<name>_*` behind it, which the library's search worker creates and swaps. A
+retry with the same password answers `matched`; a new password or a role changed
+by hand answers `updated`. `POST /v1/library-search/delete` with only
+`libraryId` deletes the library's indexes, login, and role, and answers `absent`
+once they are gone. Failures answer `search_reconciliation_failed` without
+Elasticsearch's details.
+
+Prove the login rules against a real Elasticsearch (the test starts its own
+container unless `EVIDENCE_LIBRARY_TEST_ELASTICSEARCH_ADMIN_URL` names one):
+
+```bash
+DATABASE_URL_POST=postgresql://... npx vitest run --config vitest.integration.config.ts \
+  tests/integration/library-search-provisioning.test.ts
+```
 
 ## HTTPS and admin access
 

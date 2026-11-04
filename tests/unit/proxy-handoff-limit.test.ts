@@ -6,7 +6,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next-intl/middleware", () => ({ default: () => () => NextResponse.next() }));
 const mocks = vi.hoisted(() => ({ loadLibraryConfig: vi.fn(), consume: vi.fn() }));
 vi.mock("@/config/library-config/source", () => ({ loadLibraryConfig: mocks.loadLibraryConfig }));
-vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: vi.fn() }));
+vi.mock("@/lib/item-redirects", () => ({ readItemRedirect: vi.fn() }));
 vi.mock("@/lib/ai/rate-limit", async (original) => ({ ...(await original<typeof import("@/lib/ai/rate-limit")>()), consumeAIRateLimit: mocks.consume }));
 
 import proxy from "@/proxy";

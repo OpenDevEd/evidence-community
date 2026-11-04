@@ -18,6 +18,13 @@ export const searchParamsLoader = {
 	page: parseAsInteger.withDefault(1).withOptions({
 		scroll: true,
 	}),
+	/** Past the pages readers reach by number, where the page continues: after this cursor, or before it, reading back. */
+	after: parseAsString.withDefault("").withOptions({
+		scroll: true,
+	}),
+	before: parseAsString.withDefault("").withOptions({
+		scroll: true,
+	}),
 	sort: parseAsString.withDefault(SORT_OPTIONS[0].key),
 	search: parseAsString.withDefault(""),
 	scope: parseAsString.withDefault(""),
@@ -72,7 +79,7 @@ type SearchParams = inferParserType<typeof searchParamsLoader>;
 const FILTER_PARAMS = ["range", "institution", "country", "author_country", "author", "collections", "topics", "sources", "type", "study", "tags", "match"] as const;
 export const RESULT_PARAMS = ["search", "scope", ...FILTER_PARAMS] as const;
 /** The params that never change which results come back. */
-const OTHER_PARAMS = ["referrer", "page", "sort", "collectionId", "error", "message"] as const;
+const OTHER_PARAMS = ["referrer", "page", "after", "before", "sort", "collectionId", "error", "message"] as const;
 type Unsorted = Exclude<keyof SearchParams, (typeof RESULT_PARAMS)[number] | (typeof OTHER_PARAMS)[number]>;
 // A param in neither list stops this compiling, and the error says where it goes.
 const everyParamSorted: [Unsorted] extends [never] ? true : `Add ${Unsorted} to FILTER_PARAMS or OTHER_PARAMS in searchParams.tsx` = true;
@@ -95,5 +102,5 @@ export function resultParams(params: SearchParams) {
 
 /** What a results list is asked for: the results, their order and the page. Where the reader came from and page notices stay on the page. */
 export function listingParams(params: SearchParams) {
-	return { ...resultParams(params), sort: params.sort, page: params.page };
+	return { ...resultParams(params), sort: params.sort, page: params.page, after: params.after, before: params.before };
 }

@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
 	resolveIdleLastError,
-	resolveRebuildTaskTimeoutMs,
 	shouldRebuildSearchIndex,
 } from "@/lib/search-index/bootstrap-state";
-import { EMBEDDER_TASK_TIMEOUT_MS } from "@/lib/search-index/consumer";
 
 describe("search index bootstrap", () => {
 	it.each([
@@ -66,18 +64,6 @@ describe("search index worker embedder state", () => {
 				processedEvents: 0,
 			}),
 		).toBe("SearchIndexTaskError: embedding failed");
-	});
-
-	it("gives rebuild document tasks the embedding wait whenever an embedder is configured", () => {
-		const embedder = {
-			source: "openAi" as const,
-			model: "text-embedding-3-small",
-			apiKey: "key",
-		};
-		expect(resolveRebuildTaskTimeoutMs({ embedder })).toBe(
-			EMBEDDER_TASK_TIMEOUT_MS,
-		);
-		expect(resolveRebuildTaskTimeoutMs({ embedder: null })).toBeUndefined();
 	});
 
 	it("does not wipe an index that has records when the embedder step failed", () => {

@@ -2,18 +2,12 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
 import {
-	MeilisearchApiError,
-	MeilisearchTaskTimeOutError,
-	type Index,
-	type Meilisearch,
-	type Task,
-} from "meilisearch";
-import {
 	and,
 	asc,
 	count,
 	eq,
 	gt,
+	gte,
 	inArray,
 	isNotNull,
 	isNull,
@@ -27,13 +21,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
-import type { MeilisearchService } from "@/lib/meilisearch-factory";
-import {
-	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
-	PDF_PRESENCE_ATTRIBUTE,
-	SEARCH_RESULT_LIMIT,
-	SOURCES_FIELD,
-} from "@/lib/search-filter-constants";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 import {
 	generateFullSearchProjectionPlans,
@@ -41,11 +29,14 @@ import {
 	type SearchProjectionPlan,
 } from "./projection";
 import {
-	buildEmbedderSettings,
-	type SearchEmbedderConfiguration,
-} from "./embedder-settings";
-import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
-import type { LibraryServerConfig } from "@/config/library-config/schema";
+	SearchIndexDocumentError,
+	SearchOutboxAbortError,
+	throwIfAborted,
+	type SearchIndexWriter,
+	type SearchWriteOptions,
+} from "./writer";
+
+export { SearchIndexDocumentError, SearchIndexWriteError, SearchOutboxAbortError } from "./writer";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -53,14 +44,7 @@ const DEFAULT_MAX_ATTEMPTS = 15;
 const DEFAULT_RETRY_BASE_MS = 5_000;
 const DEFAULT_RETRY_MAX_MS = 60 * 60 * 1_000;
 const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1_000;
-/** Adding or changing an embedder makes Meilisearch re-embed every record. */
-export const EMBEDDER_TASK_TIMEOUT_MS = 60 * 60 * 1_000;
-/** A re-embed can run for a long time; ask Meilisearch about it every 2 s. */
-export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
-const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
-/** Queued rebuild batches; each holds an open file in Meilisearch. */
-const REBUILD_TASKS_IN_FLIGHT = 500;
 /** Events one drain claim takes; a large import indexes in fewer, bigger batches. */
 const DRAIN_BATCH_SIZE = 5_000;
 /** Claims one drain works on at once. */
@@ -71,10 +55,10 @@ type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
 	config: LibraryServerConfig;
-	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
-	index: Index;
+	/** Where the library's records go, in the engine it searches. */
+	writer: SearchIndexWriter;
 	leaseDurationMs?: number;
 	maxDocumentBatchBytes?: number;
 	maxAttempts?: number;
@@ -111,25 +95,6 @@ export class SearchOutboxLeaseLostError extends Error {
 			cause === undefined ? undefined : { cause },
 		);
 		this.name = "SearchOutboxLeaseLostError";
-	}
-}
-
-export class SearchOutboxAbortError extends Error {
-	constructor() {
-		super("Search outbox processing was aborted");
-		this.name = "SearchOutboxAbortError";
-	}
-}
-
-export class SearchIndexTaskError extends Error {
-	readonly task: Task;
-
-	constructor(task: Task) {
-		super(
-			`Meilisearch task ${task.uid} ${task.status}: ${task.error?.message ?? "unknown error"}`,
-		);
-		this.name = "SearchIndexTaskError";
-		this.task = task;
 	}
 }
 
@@ -223,25 +188,6 @@ function errorMessage(error: unknown) {
 	).slice(0, MAX_ERROR_LENGTH);
 }
 
-function throwIfAborted(signal?: AbortSignal) {
-	if (signal?.aborted) throw new SearchOutboxAbortError();
-}
-
-async function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal) {
-	throwIfAborted(signal);
-	if (!signal) return promise;
-	return new Promise<T>((resolve, reject) => {
-		const abort = () => reject(new SearchOutboxAbortError());
-		signal.addEventListener("abort", abort, { once: true });
-		Promise.resolve(promise)
-			.then(resolve, reject)
-			.finally(() => {
-				signal.removeEventListener("abort", abort);
-			});
-	});
-}
-
-/** No other event for the same entity holds an unexpired lease. */
 function noActiveEntityLease(transaction: DatabaseTransaction, claimedAt: Date) {
 	const leasedEntity = alias(outbox, "leasedEntity");
 	return notExists(
@@ -284,7 +230,10 @@ async function claimEvents(
 				and(
 					isNull(outbox.processedAt),
 					isNull(outbox.deadLetteredAt),
-					lte(outbox.nextAttemptAt, claimedAt),
+					// A new event's nextAttemptAt is PostgreSQL's now(), in microseconds; claimedAt
+					// has milliseconds. Due by either clock, an event inserted this millisecond is
+					// claimed now rather than on the next poll.
+					lte(outbox.nextAttemptAt, sql`greatest(${claimedAt.toISOString()}::timestamptz, now())`),
 					or(
 						isNull(outbox.leaseExpiresAt),
 						lte(outbox.leaseExpiresAt, claimedAt),
@@ -468,199 +417,17 @@ async function failEvents(
 	return lost;
 }
 
-async function waitForSuccessfulTask(
-	taskPromise: ReturnType<Index["addDocuments"]>,
-	taskTimeoutMs: number,
-	options: {
-		batchClient?: Meilisearch["batches"];
-		eventIds?: number[];
-		onProgress?: SearchOutboxConsumerOptions["onProgress"];
-		pollIntervalMs?: number;
-		signal?: AbortSignal;
-		taskClient?: Index["tasks"];
-	} = {},
-) {
-	const pollIntervalMs =
-		options.pollIntervalMs ?? DEFAULT_TASK_POLL_INTERVAL_MS;
-	if (!options.taskClient) {
-		const task = await taskPromise.waitTask({
-			interval: 50,
-			timeout: taskTimeoutMs,
-		});
-		if (task.status !== "succeeded") throw new SearchIndexTaskError(task);
-		return task;
-	}
-	const enqueued = await abortable(taskPromise, options.signal);
-	const eventIds = options.eventIds ?? [];
-	let lastProgressSignature = "";
-	const reportProgress = async (progress: SearchOutboxProgress) => {
-		const signature = JSON.stringify(progress);
-		if (signature === lastProgressSignature) return;
-		lastProgressSignature = signature;
-		await options.onProgress?.(progress);
-	};
-	await reportProgress({
-		batchProgress: null,
-		batchUid: null,
-		eventIds,
-		stage: "waiting",
-		taskUid: enqueued.taskUid,
-	});
-	// The timeout is for a task that stopped moving. A task in a long batch
-	// waits as long as its batch makes progress, and a queued task as long as
-	// the batch Meilisearch is running does. A failed progress read keeps the
-	// last one, so it never counts as movement.
-	let deadline = Date.now() + taskTimeoutMs;
-	let lastState = "";
-	let movement = "";
-	while (Date.now() <= deadline) {
-		throwIfAborted(options.signal);
-		const task = await abortable(
-			options.taskClient.getTask(enqueued.taskUid, {
-				signal: options.signal,
-			}),
-			options.signal,
-		);
-		let batchProgress: number | null = null;
-		if (options.batchClient && (task.batchUid !== null || task.status === "enqueued")) {
-			try {
-				if (task.batchUid !== null) {
-					const batch = await abortable(
-						options.batchClient.getBatch(task.batchUid),
-						options.signal,
-					);
-					batchProgress = batch.progress?.percentage ?? null;
-					movement = `${task.batchUid}:${batchProgress}`;
-				} else {
-					const { results } = await abortable(
-						options.batchClient.getBatches({ statuses: ["processing"], limit: 1 }),
-						options.signal,
-					);
-					movement = `running:${results[0]?.uid}:${results[0]?.progress?.percentage}`;
-				}
-			} catch (error) {
-				if (error instanceof SearchOutboxAbortError) throw error;
-				// Batch telemetry is optional; task status remains authoritative.
-			}
-		}
-		const state = `${task.status}:${task.batchUid}:${movement}`;
-		if (state !== lastState) {
-			lastState = state;
-			deadline = Date.now() + taskTimeoutMs;
-		}
-		if (task.status === "enqueued" || task.status === "processing") {
-			await reportProgress({
-				batchProgress,
-				batchUid: task.batchUid,
-				eventIds,
-				stage: task.status === "enqueued" ? "waiting" : "indexing",
-				taskUid: task.uid,
-			});
-			try {
-				await delay(pollIntervalMs, undefined, {
-					signal: options.signal,
-				});
-			} catch (error) {
-				if (options.signal?.aborted) throw new SearchOutboxAbortError();
-				throw error;
-			}
-			continue;
-		}
-		await reportProgress({
-			batchProgress:
-				task.status === "succeeded" && task.batchUid !== null
-					? 100
-					: batchProgress,
-			batchUid: task.batchUid,
-			eventIds,
-			stage: "indexing",
-			taskUid: task.uid,
-		});
-		if (task.status === "succeeded") return task;
-		throw new SearchIndexTaskError(task);
-	}
-	throw new MeilisearchTaskTimeOutError(enqueued.taskUid, taskTimeoutMs);
-}
-
+/** Writes one projection plan to the library's index, searchable once this returns. */
 export async function applySearchProjectionPlan(
-	index: Index,
+	writer: SearchIndexWriter,
 	plan: SearchProjectionPlan,
 	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
 	maxDocumentBatchBytes = DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
-	progressOptions: {
-		batchClient?: Meilisearch["batches"];
-		eventIds?: number[];
-		onProgress?: SearchOutboxConsumerOptions["onProgress"];
-		signal?: AbortSignal;
-	} = {},
+	options: Pick<SearchWriteOptions, "signal" | "onProgress" | "eventIds" | "readFrom"> = {},
 ) {
-	for (const task of await queueSearchProjectionPlan(
-		index,
-		plan,
-		maxDocumentBatchBytes,
-		progressOptions.signal,
-	)) {
-		await waitForSuccessfulTask(task, taskTimeoutMs, {
-			...progressOptions,
-			taskClient: index.tasks,
-		});
-	}
-}
-
-/** Sends a plan's Meilisearch tasks without waiting for them to finish. */
-async function queueSearchProjectionPlan(
-	index: Index,
-	plan: SearchProjectionPlan,
-	maxDocumentBatchBytes: number,
-	signal?: AbortSignal,
-) {
-	if (
-		!Number.isSafeInteger(maxDocumentBatchBytes) ||
-		maxDocumentBatchBytes < 1_024
-	) {
-		throw new Error(
-			"maxDocumentBatchBytes must be an integer of at least 1,024",
-		);
-	}
-	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
-	for (const documents of chunkDocumentsBySerializedBytes(
-		plan.documents,
-		maxDocumentBatchBytes,
-	)) {
-		tasks.push(index.addDocuments(documents, { primaryKey: "key" }));
-		await abortable(tasks.at(-1)!, signal);
-	}
-	if (plan.deleteKeys.length > 0) {
-		tasks.push(index.deleteDocuments(plan.deleteKeys));
-		await abortable(tasks.at(-1)!, signal);
-	}
-	return tasks;
-}
-
-function chunkDocumentsBySerializedBytes(
-	documents: SearchProjectionPlan["documents"],
-	maxBytes: number,
-) {
-	const chunks: Array<SearchProjectionPlan["documents"]> = [];
-	let chunk: SearchProjectionPlan["documents"] = [];
-	let chunkBytes = 2;
-	for (const document of documents) {
-		const documentBytes = Buffer.byteLength(
-			JSON.stringify(document),
-			"utf8",
-		);
-		const nextBytes =
-			chunkBytes + documentBytes + (chunk.length > 0 ? 1 : 0);
-		if (chunk.length > 0 && nextBytes > maxBytes) {
-			chunks.push(chunk);
-			chunk = [];
-			chunkBytes = 2;
-		}
-		chunk.push(document);
-		chunkBytes += documentBytes + (chunk.length > 1 ? 1 : 0);
-	}
-	if (chunk.length > 0) chunks.push(chunk);
-	return chunks;
+	const batch = writer.batch({ ...options, taskTimeoutMs, maxDocumentBatchBytes });
+	await batch.add(plan);
+	await batch.finish();
 }
 
 type ValidatedConsumerOptions = ReturnType<typeof validateOptions>;
@@ -703,9 +470,8 @@ async function markBatchFailed(
 }
 
 /**
- * Projects the claimed events and indexes them. Every plan is sent before any
- * is awaited, so Meilisearch indexes a large claim in one batch instead of
- * repeating its per-batch work.
+ * Projects the claimed events and writes each plan as soon as it is built. The last write waits until readers can
+ * find the change, so acknowledging the events afterwards means the change is searchable.
  */
 async function indexClaimedEvents(
 	options: SearchOutboxConsumerOptions,
@@ -714,7 +480,18 @@ async function indexClaimedEvents(
 	heartbeatFailure: () => unknown,
 ) {
 	const eventIds = events.map(({ id }) => id);
-	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
+	const batch = options.writer.batch({
+		checkLease: () => {
+			if (heartbeatFailure()) throw heartbeatFailure();
+		},
+		eventIds,
+		maxDocumentBatchBytes: validated.maxDocumentBatchBytes,
+		onProgress: options.onProgress,
+		// Before any record is read: a change committed after this time is one the claim may not have seen.
+		readFrom: Date.now(),
+		signal: options.signal,
+		taskTimeoutMs: validated.taskTimeoutMs,
+	});
 	let deleteCount = 0;
 	let documentCount = 0;
 	for await (const plan of generateSearchProjectionPlans(
@@ -732,27 +509,19 @@ async function indexClaimedEvents(
 			validated.leaseDurationMs,
 			validated.workerId,
 		);
-		tasks.push(
-			...(await queueSearchProjectionPlan(
-				options.index,
-				plan,
-				validated.maxDocumentBatchBytes,
-				options.signal,
-			)),
-		);
+		await options.onProgress?.({
+			batchProgress: null,
+			batchUid: null,
+			eventIds,
+			// `indexing` names an engine task; until a writer reports one, the claim is still being projected.
+			stage: "projecting",
+			taskUid: null,
+		});
+		await batch.add(plan);
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
 	}
-	for (const task of tasks) {
-		if (heartbeatFailure()) throw heartbeatFailure();
-		await waitForSuccessfulTask(task, validated.taskTimeoutMs, {
-			batchClient: options.batchClient,
-			eventIds,
-			onProgress: options.onProgress,
-			signal: options.signal,
-			taskClient: options.index.tasks,
-		});
-	}
+	await batch.finish();
 	return { deleteCount, documentCount };
 }
 
@@ -821,7 +590,7 @@ async function processClaimedEvents(
 		if (
 			deferBatchTaskFailure &&
 			!heartbeatFailure &&
-			failure instanceof SearchIndexTaskError
+			failure instanceof SearchIndexDocumentError
 		) {
 			throw failure;
 		}
@@ -867,11 +636,11 @@ export async function processNextSearchOutboxBatch(
 			),
 		];
 	} catch (error) {
-		if (!(error instanceof SearchIndexTaskError && events.length > 1)) {
+		if (!(error instanceof SearchIndexDocumentError && events.length > 1)) {
 			throw error;
 		}
-		// Meilisearch rejected a document. Halving the claim finds it in about
-		// 2 x log2(n) tasks instead of one task per event.
+		// Elasticsearch rejected a record. Halving the claim finds the event behind
+		// it in about 2 x log2(n) writes instead of one write per event.
 		const outcome: IsolationOutcome = { failure: undefined, results: [] };
 		await isolateRejectedEvents(options, events, validated, outcome);
 		if (outcome.failure) throw outcome.failure;
@@ -910,7 +679,7 @@ async function isolateRejectedEvents(
 						),
 					);
 				} catch (error) {
-					if (half.length > 1 && error instanceof SearchIndexTaskError) {
+					if (half.length > 1 && error instanceof SearchIndexDocumentError) {
 						await isolateRejectedEvents(options, half, validated, outcome);
 					} else {
 						outcome.failure ??= error;
@@ -973,8 +742,8 @@ export async function drainSearchOutbox(
 	) {
 		throw new Error("maxEvents must be an integer between 1 and 1,000,000");
 	}
-	// Several claims run at once, so one is projected while Meilisearch
-	// indexes another. Claims never share an entity (see claimEvents).
+	// Several claims run at once, so one is projected while Elasticsearch
+	// writes another. Claims never share an entity (see claimEvents).
 	const drain = { failed: false, reserved: 0, results: [] as SearchOutboxProcessResult[] };
 	const lanes = await Promise.allSettled(
 		Array.from({ length: DRAIN_CONCURRENCY }, (_, lane) =>
@@ -1076,161 +845,15 @@ export async function requeueSearchOutboxDeadLetters(
 	return rows;
 }
 
-export async function ensureSearchIndex(
-	service: MeilisearchService,
+/** Makes sure the library has an index with this runtime's settings, creating the first one when it has none. */
+export function ensureSearchIndex(
+	writer: SearchIndexWriter,
 	options: {
 		onMissing?: () => Promise<void>;
 		signal?: AbortSignal;
-		taskTimeoutMs?: number;
 	} = {},
 ) {
-	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
-	let created = false;
-	throwIfAborted(options.signal);
-	try {
-		await abortable(
-			service.client.getRawIndex(service.indexName),
-			options.signal,
-		);
-	} catch (error) {
-		if (!(
-			error instanceof MeilisearchApiError &&
-			error.cause?.code === "index_not_found"
-		)) {
-			throw error;
-		}
-		await options.onMissing?.();
-		throwIfAborted(options.signal);
-		try {
-			await waitForSuccessfulTask(
-				service.client.createIndex(service.indexName, {
-					primaryKey: "key",
-				}),
-				taskTimeoutMs,
-				{
-					signal: options.signal,
-					taskClient: service.index.tasks,
-				},
-			);
-			created = true;
-		} catch (creationError) {
-			if (!(
-				creationError instanceof SearchIndexTaskError &&
-				creationError.task.error?.code === "index_already_exists"
-			)) {
-				throw creationError;
-			}
-		}
-	}
-
-	await waitForSuccessfulTask(
-		service.index.updateSettings({
-			faceting: {
-				maxValuesPerFacet: 10_000,
-				sortFacetValuesBy: {
-					collectionsAncestry: "count",
-					country: "count",
-					authorCountry: "count",
-					[SOURCES_FIELD]: "count",
-					topicAncestors: "count",
-					studyType: "count",
-					studyTypeShown: "count",
-					fullNames: "count",
-					[INSTITUTION_FILTER_FIELD]: "count",
-				},
-			},
-			// Only `year` is range-filtered, and nothing searches inside facet
-			// values. Leaving the other features off saves Meilisearch work on
-			// every indexing task; facet counts are unaffected.
-			facetSearch: false,
-			filterableAttributes: [
-				{
-					attributePatterns: ["year"],
-					features: {
-						facetSearch: false,
-						filter: { equality: true, comparison: true },
-					},
-				},
-				{
-					attributePatterns: [
-						"itemType",
-						"studyType",
-						"studyTypeShown",
-						"deleted",
-						"tags",
-						INSTITUTION_FILTER_FIELD,
-						"country",
-						"authorCountry",
-						"fullNames",
-						"collections",
-						"collectionsAncestry",
-						"topicAncestors",
-						"key",
-						"provider",
-						"sourceConnectionKey",
-						SOURCES_FIELD,
-						FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
-						PDF_PRESENCE_ATTRIBUTE,
-					],
-					features: {
-						facetSearch: false,
-						filter: { equality: true, comparison: false },
-					},
-				},
-			],
-			// Every result stays reachable and counted for libraries above a
-			// million records; deep pages stay fast on the legacy search path.
-			pagination: { maxTotalHits: SEARCH_RESULT_LIMIT },
-			searchableAttributes: ["*"],
-			sortableAttributes: [
-				"citationCount",
-				"dateSortKey",
-				"fullNames",
-				"title",
-				"year",
-				"dateAdded",
-				"updatedAt",
-			],
-		}),
-		taskTimeoutMs,
-		{
-			// A new sortable or filterable field makes Meilisearch reindex every record; its progress keeps the wait going.
-			batchClient: service.client.batches,
-			signal: options.signal,
-			taskClient: service.index.tasks,
-		},
-	);
-	return { created };
-}
-
-/**
- * Writes the library's embedder to the index under the platform name and
- * waits for Meilisearch to finish embedding. `null` removes it.
- */
-export async function applySearchIndexEmbedder(
-	service: MeilisearchService,
-	embedder: SearchEmbedderConfiguration,
-	options: {
-		batchClient?: Meilisearch["batches"];
-		onProgress?: SearchOutboxConsumerOptions["onProgress"];
-		signal?: AbortSignal;
-		taskTimeoutMs?: number;
-	} = {},
-) {
-	throwIfAborted(options.signal);
-	return waitForSuccessfulTask(
-		service.index.updateSettings({
-			embedders: buildEmbedderSettings(embedder),
-		}),
-		options.taskTimeoutMs ?? EMBEDDER_TASK_TIMEOUT_MS,
-		{
-			batchClient: options.batchClient,
-			onProgress: options.onProgress,
-			pollIntervalMs: EMBEDDER_TASK_POLL_INTERVAL_MS,
-			signal: options.signal,
-			taskClient: service.index.tasks,
-		},
-	);
+	return writer.ensure(options);
 }
 
 /**
@@ -1267,7 +890,7 @@ export async function outboxBacklogForRebuild(database: Database) {
  */
 export async function rebuildForOutboxBacklog(
 	database: Database,
-	service: MeilisearchService,
+	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
 	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
 ) {
@@ -1275,7 +898,7 @@ export async function rebuildForOutboxBacklog(
 		.select({ id: outbox.id })
 		.from(outbox)
 		.where(and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)));
-	const rebuilt = await rebuildSearchIndex(database, service, config, options);
+	const rebuilt = await rebuildSearchIndex(database, writer, config, options);
 	const acknowledgedAt = new Date();
 	let acknowledged = 0;
 	for (const ids of chunkValues(
@@ -1309,9 +932,16 @@ export async function rebuildForOutboxBacklog(
 	return { ...rebuilt, acknowledged };
 }
 
+/**
+ * Rebuilds the library's search from every record. Readers keep finding the old records until the new ones are
+ * complete: Elasticsearch fills a new index and moves the alias to it, Meilisearch replaces records in place.
+ *
+ * While the rebuild reads records, a worker may write a change to the old records and acknowledge its event after the
+ * rebuild read that record. Those events are put back afterwards, so the drain writes the change again.
+ */
 export async function rebuildSearchIndex(
 	database: Database,
-	service: MeilisearchService,
+	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
 	options: {
 		maxDocumentBatchBytes?: number;
@@ -1319,100 +949,27 @@ export async function rebuildSearchIndex(
 		taskTimeoutMs?: number;
 	} = {},
 ) {
-	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
-	const maxDocumentBatchBytes =
-		options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES;
-	await ensureSearchIndex(service, options);
-	// Records are replaced in place, not deleted first: search keeps answering
-	// during the rebuild, and Meilisearch keeps the embedding of every record
-	// whose embedded text did not change. Whatever is left afterwards is
-	// removed.
-	const staleKeys = await readIndexedKeys(service.index, options.signal);
-	// Batches are sent ahead of the ones Meilisearch is still indexing, so it
-	// can index them together instead of repeating its per-batch work for
-	// each one. Meilisearch keeps a file open for every queued batch, so at
-	// most REBUILD_TASKS_IN_FLIGHT wait at once.
-	const tasks: Array<ReturnType<Index["addDocuments"]>> = [];
-	const waitForOldestTask = () =>
-		waitForSuccessfulTask(tasks.shift()!, taskTimeoutMs, {
-			batchClient: service.client.batches,
-			signal: options.signal,
-			taskClient: service.index.tasks,
-		});
-	let indexed = 0;
-	for await (const plan of generateFullSearchProjectionPlans(
-		database,
-		config,
-		500,
-		options.signal,
-	)) {
-		throwIfAborted(options.signal);
-		for (const documents of chunkDocumentsBySerializedBytes(
-			plan.documents,
-			maxDocumentBatchBytes,
-		)) {
-			await queueRebuildTask(
-				service.index.addDocuments(documents, { primaryKey: "key" }),
-				tasks,
-				waitForOldestTask,
-				options.signal,
-			);
-		}
-		for (const document of plan.documents) staleKeys.delete(document.key);
-		indexed += plan.documents.length;
-	}
-	while (tasks.length > 0) await waitForOldestTask();
-	if (staleKeys.size > 0) {
-		await waitForSuccessfulTask(
-			service.index.deleteDocuments([...staleKeys]),
-			taskTimeoutMs,
-			{ signal: options.signal, taskClient: service.index.tasks },
-		);
-		// A running worker may have indexed one of these records after it was
-		// published again during the rebuild. Reading PostgreSQL only after the
-		// delete puts any such record back; a later publish has its own event.
-		for await (const plan of generateSearchProjectionPlans(
-			database,
-			config,
-			[...staleKeys].map((entityKey) => ({ entityKey, entityType: "item" })),
-			500,
-			options.signal,
-		)) {
-			await applySearchProjectionPlan(
-				service.index,
-				plan,
-				taskTimeoutMs,
-				maxDocumentBatchBytes,
-				{ signal: options.signal },
-			);
-		}
-	}
-	return { deleted: staleKeys.size, indexed };
+	throwIfAborted(options.signal);
+	const startedAt = new Date();
+	const rebuilt = await writer.rebuild(generateFullSearchProjectionPlans(database, config, 500, options.signal), {
+		maxDocumentBatchBytes: options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
+		signal: options.signal,
+		taskTimeoutMs: options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS,
+		reproject: (keys) =>
+			generateSearchProjectionPlans(database, config, keys.map((entityKey) => ({ entityKey, entityType: "item" })), 500, options.signal),
+	});
+	return { ...rebuilt, redrained: await redrainEventsAcknowledgedSince(database, startedAt) };
 }
 
-async function queueRebuildTask(
-	task: ReturnType<Index["addDocuments"]>,
-	tasks: Array<ReturnType<Index["addDocuments"]>>,
-	waitForOldestTask: () => Promise<unknown>,
-	signal?: AbortSignal,
-) {
-	await abortable(task, signal);
-	tasks.push(task);
-	if (tasks.length >= REBUILD_TASKS_IN_FLIGHT) await waitForOldestTask();
-}
-
-async function readIndexedKeys(index: Index, signal?: AbortSignal) {
-	const keys = new Set<string>();
-	for (let offset = 0; ; offset += 1_000) {
-		const page = await abortable(
-			index.getDocuments<{ key: string }>({
-				fields: ["key"],
-				limit: 1_000,
-				offset,
-			}),
-			signal,
+async function redrainEventsAcknowledgedSince(database: Database, since: Date) {
+	const acknowledged = await database
+		.select({ id: outbox.id })
+		.from(outbox)
+		.where(and(gte(outbox.processedAt, since), isNull(outbox.deadLetteredAt)));
+	for (const ids of chunkValues(acknowledged.map(({ id }) => id), 10_000)) {
+		await updateInKeyOrder(database, ids, (transaction) =>
+			transaction.update(outbox).set({ processedAt: null }).where(inArray(outbox.id, ids)),
 		);
-		for (const document of page.results) keys.add(document.key);
-		if (page.results.length < 1_000) return keys;
 	}
+	return acknowledged.length;
 }

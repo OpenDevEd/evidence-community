@@ -331,7 +331,8 @@ async function verifyLiveWriteback() {
 	const config = await loadLibraryConfig();
 	assertLoopbackServiceUrl("Database URL", config.services.database.url);
 	assertLoopbackServiceUrl("Storage URL", config.services.storage.url);
-	assertLoopbackServiceUrl("Search URL", config.services.search.host);
+	const search = config.services.search;
+	assertLoopbackServiceUrl("Search URL", search[search.engine]!.host);
 
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,

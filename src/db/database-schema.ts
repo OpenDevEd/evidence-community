@@ -7,10 +7,12 @@ import * as collectionRelations from "./schema/relations/collection";
 import * as itemRelations from "./schema/relations/item";
 import * as itemToCollectionRelations from "./schema/relations/itemToCollection";
 import * as collectionTable from "./schema/tables/collection";
+import * as computedCacheTable from "./schema/tables/computedCache";
 import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
 import * as itemTable from "./schema/tables/item";
 import * as itemCitationMetricTable from "./schema/tables/itemCitationMetric";
 import * as itemOpenAccessLookupTable from "./schema/tables/itemOpenAccessLookup";
+import * as itemRedirectTable from "./schema/tables/itemRedirect";
 import * as institutionCountryTable from "./schema/tables/institutionCountry";
 import * as itemInstitutionTable from "./schema/tables/itemInstitution";
 import * as itemLinkTable from "./schema/tables/itemLink";
@@ -36,7 +38,9 @@ export const schema = {
 	...itemTable,
 	...itemCitationMetricTable,
 	...itemOpenAccessLookupTable,
+	...itemRedirectTable,
 	...collectionTable,
+	...computedCacheTable,
 	...sourceTables,
 	...publicationTables,
 	...itemToCollectionTable,

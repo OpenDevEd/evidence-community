@@ -12,13 +12,21 @@ import {
 	searchIndexWorker,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { Meilisearch, MeilisearchApiError } from "meilisearch";
+import type { Client } from "@elastic/elasticsearch";
 
 import {
 	DatabaseOperationAbortedError,
 	withCancellableDatabaseTransaction,
 } from "../src/db/cancellable-transaction";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import {
+	createRefusingIndex,
+	createTestLibraryLogin,
+	deleteTestLibrary,
+	elasticsearchAdmin,
+	readTestDocument,
+	testDocumentMissing,
+} from "../tests/helpers/elasticsearch-test-library";
 import { item } from "../src/db/schema/tables/item";
 import { status as libraryStatus } from "../src/db/schema/tables/status";
 import {
@@ -256,20 +264,6 @@ async function terminateChild(child: ReturnType<typeof spawn> | null) {
 	}
 }
 
-async function deleteIndexIfPresent(client: Meilisearch, indexName: string) {
-	try {
-		await client.deleteIndex(indexName).waitTask();
-	} catch (error) {
-		if (
-			error instanceof MeilisearchApiError &&
-			error.cause?.code === "index_not_found"
-		) {
-			return;
-		}
-		throw error;
-	}
-}
-
 async function main() {
 	const adminResource = createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const replacementWorkerId = `${workerId}-replacement`;
@@ -284,7 +278,7 @@ async function main() {
 		null;
 	let migration: ReturnType<typeof runCommand> | null = null;
 	let temporaryDirectory: string | null = null;
-	let meilisearch: Meilisearch | null = null;
+	let admin: Client | null = null;
 	let worker: ReturnType<typeof runTool> | null = null;
 	let browserFailureWorker: ReturnType<typeof runTool> | null = null;
 	let stalledWorker: ReturnType<typeof runTool> | null = null;
@@ -313,13 +307,15 @@ async function main() {
 		) as {
 			services: {
 				database: { url: string };
-				search: { host: string; index: string; key: string };
+				search: { engine: string; elasticsearch?: { host: string; index: string; key: string } };
 			};
 		};
 		const isolatedDatabaseUrl = new URL(verifiedDatabaseUrl);
 		isolatedDatabaseUrl.pathname = `/${isolatedDatabaseName}`;
 		isolatedConfig.services.database.url = isolatedDatabaseUrl.toString();
-		isolatedConfig.services.search.index = isolatedIndexName;
+		assert(isolatedConfig.services.search.elasticsearch, "The library configuration needs an Elasticsearch connection");
+		isolatedConfig.services.search.engine = "elasticsearch";
+		isolatedConfig.services.search.elasticsearch.index = isolatedIndexName;
 
 		const isolatedConfigPath = `${temporaryDirectory}/library.json`;
 		await writeFile(isolatedConfigPath, JSON.stringify(isolatedConfig));
@@ -355,12 +351,13 @@ async function main() {
 			.update(libraryStatus)
 			.set({ databaseUpdatedAt: new Date() })
 			.where(eq(libraryStatus.id, 1));
-		meilisearch = new Meilisearch({
-			apiKey: isolatedConfig.services.search.key,
-			host: isolatedConfig.services.search.host,
-		});
-		await deleteIndexIfPresent(meilisearch, isolatedIndexName);
-		await deleteIndexIfPresent(meilisearch, failedIndexName);
+		const adminUrl = process.env.ELASTICSEARCH_ADMIN_URL;
+		assert(adminUrl, "ELASTICSEARCH_ADMIN_URL is required to create the test libraries' search logins");
+		admin = elasticsearchAdmin(adminUrl);
+		for (const alias of [isolatedIndexName, failedIndexName]) {
+			await deleteTestLibrary(admin, alias);
+			await createTestLibraryLogin(admin, alias, isolatedConfig.services.search.elasticsearch.key);
+		}
 
 		await database.delete(outbox).where(eq(outbox.entityKey, itemKey));
 		await database.delete(item).where(eq(item.key, itemKey));
@@ -739,16 +736,11 @@ async function main() {
 			`Publish did not return its indexing receipt: ${JSON.stringify(published)}`,
 		);
 		const observedStages = new Set<string>();
-		let observedTask = false;
 		await waitFor(
 			async () => {
 				const state = await getSearchIndexWorker(database, workerId);
 				if (!state) return false;
 				observedStages.add(state.stage);
-				observedTask ||=
-					(state.stage === "waiting" || state.stage === "indexing") &&
-					state.currentTaskUid !== null &&
-					state.currentEventCount > 0;
 				return Boolean(
 					state.stage === "idle" &&
 					state.lastCompletedAt &&
@@ -758,13 +750,12 @@ async function main() {
 			"The worker did not complete and durably report the queued event",
 			10,
 		);
+		// Elasticsearch writes report no task, so the claim reads as projecting until it is written.
 		assert(
-			observedStages.has("projecting") && observedTask,
+			observedStages.has("projecting"),
 			`Durable worker progress was incomplete: ${[...observedStages].join(",")}`,
 		);
-		const indexedDocument = await meilisearch
-			.index(isolatedIndexName)
-			.getDocument<{ title: string }>(created.draft.itemKey);
+		const indexedDocument = await readTestDocument<{ title: string }>(admin, isolatedIndexName, created.draft.itemKey);
 		assert(
 			indexedDocument.title === "Worker progress verification",
 			"The worker reported completion before the document was searchable",
@@ -801,9 +792,7 @@ async function main() {
 			republished.indexingReceipts,
 			"The edited publication receipt never became indexed",
 		);
-		const updatedDocument = await meilisearch
-			.index(isolatedIndexName)
-			.getDocument<{ title: string }>(created.draft.itemKey);
+		const updatedDocument = await readTestDocument<{ title: string }>(admin, isolatedIndexName, created.draft.itemKey);
 		assert(
 			updatedDocument.title === "Worker progress verification updated",
 			"The indexed document did not reflect the edited metadata",
@@ -818,18 +807,10 @@ async function main() {
 			unpublished.indexingReceipts,
 			"The unpublish receipt never became indexed",
 		);
-		try {
-			await meilisearch
-				.index(isolatedIndexName)
-				.getDocument(created.draft.itemKey);
-			throw new Error("The unpublished document remained searchable");
-		} catch (error) {
-			assert(
-				error instanceof MeilisearchApiError &&
-					error.cause?.code === "document_not_found",
-				"The unpublished document lookup failed unexpectedly",
-			);
-		}
+		assert(
+			await testDocumentMissing(admin, isolatedIndexName, created.draft.itemKey),
+			"The unpublished document remained searchable",
+		);
 
 		const createDraft = async (payload: Record<string, unknown>) => {
             const result = await requestJson<{draft: {itemKey: string}}>(baseUrl, "/api/admin/items/drafts", {body: JSON.stringify(payload), method: "POST"});
@@ -908,12 +889,12 @@ async function main() {
 			"The reparenting receipt set did not finish indexing",
 		);
 		const [oldParentDocument, newParentDocument] = await Promise.all([
-			meilisearch.index(isolatedIndexName).getDocument<{
+			readTestDocument<{
 				attachmentsData: Array<{ key: string }>;
-			}>(oldParent.draft.itemKey),
-			meilisearch.index(isolatedIndexName).getDocument<{
+			}>(admin, isolatedIndexName, oldParent.draft.itemKey),
+			readTestDocument<{
 				attachmentsData: Array<{ key: string }>;
-			}>(newParent.draft.itemKey),
+			}>(admin, isolatedIndexName, newParent.draft.itemKey),
 		]);
 		assert(
 			!oldParentDocument.attachmentsData.some(
@@ -1237,9 +1218,7 @@ async function main() {
 			"Search updated",
 			timeoutMs,
 		);
-		const browserIndexedDocument = await meilisearch
-			.index(isolatedIndexName)
-			.getDocument<{ title: string }>(browserPublishDraft.draft.itemKey);
+		const browserIndexedDocument = await readTestDocument<{ title: string }>(admin, isolatedIndexName, browserPublishDraft.draft.itemKey);
 		assert(
 			browserIndexedDocument.title === browserPublishTitle,
 			"The admin UI reported completion before its document was searchable",
@@ -1274,16 +1253,12 @@ async function main() {
 			"The stopped worker unexpectedly passed its health check",
 		);
 
-		const failedIndexTask = await meilisearch
-			.createIndex(failedIndexName, { primaryKey: "id" })
-			.waitTask();
-		assert(
-			failedIndexTask.status === "succeeded",
-			"The deliberately incompatible Meilisearch index was not created",
-		);
+		// Every record written to this index is refused for its content, so the
+		// event fails for real on each attempt until it is dead-lettered.
+		await createRefusingIndex(admin, failedIndexName);
 		const browserFailureConfigPath = `${temporaryDirectory}/browser-failure-library.json`;
 		const browserFailureConfig = structuredClone(isolatedConfig);
-		browserFailureConfig.services.search.index = failedIndexName;
+		browserFailureConfig.services.search.elasticsearch!.index = failedIndexName;
 		await writeFile(
 			browserFailureConfigPath,
 			JSON.stringify(browserFailureConfig),
@@ -1360,7 +1335,7 @@ async function main() {
 					failed.attempts >= expectedAttempts &&
 					(expectedAttempts < 15 || failed.deadLetteredAt),
 				);
-			}, `The real Meilisearch task failure did not reach attempt ${expectedAttempts}`);
+			}, `The refused write did not reach attempt ${expectedAttempts}`);
 			if (expectedAttempts < 15) {
 				await database
 					.update(outbox)
@@ -1462,9 +1437,7 @@ async function main() {
 			"Search updated",
 			timeoutMs,
 		);
-		const retriedDocument = await meilisearch
-			.index(isolatedIndexName)
-			.getDocument<{ title: string }>(browserRetryDraft.draft.itemKey);
+		const retriedDocument = await readTestDocument<{ title: string }>(admin, isolatedIndexName, browserRetryDraft.draft.itemKey);
 		assert(
 			retriedDocument.title === browserRetryTitle,
 			"The browser retry reported completion before the document was searchable",
@@ -1500,7 +1473,7 @@ async function main() {
 		);
 		const stalledConfigPath = `${temporaryDirectory}/stalled-library.json`;
 		const stalledConfig = structuredClone(isolatedConfig);
-		stalledConfig.services.search.host = `http://127.0.0.1:${stalledAddress.port}`;
+		stalledConfig.services.search.elasticsearch!.host = `http://127.0.0.1:${stalledAddress.port}`;
 		await writeFile(stalledConfigPath, JSON.stringify(stalledConfig));
 		stalledWorker = runTool("tools/runSearchIndexer.ts", [], {
 			...env,
@@ -1540,7 +1513,7 @@ async function main() {
 
 		const failedConfigPath = `${temporaryDirectory}/failure-library.json`;
 		const failedConfig = structuredClone(isolatedConfig);
-		failedConfig.services.search.host = "http://127.0.0.1:1";
+		failedConfig.services.search.elasticsearch!.host = "http://127.0.0.1:1";
 		await writeFile(failedConfigPath, JSON.stringify(failedConfig));
 		failedWorker = runTool("tools/runSearchIndexer.ts", [], {
 			...env,
@@ -1576,13 +1549,10 @@ async function main() {
 		if (stalledSearchServer) {
 			await attemptCleanup(() => closeServer(stalledSearchServer!));
 		}
-		if (meilisearch) {
-			await attemptCleanup(() =>
-				deleteIndexIfPresent(meilisearch!, isolatedIndexName),
-			);
-			await attemptCleanup(() =>
-				deleteIndexIfPresent(meilisearch!, failedIndexName),
-			);
+		if (admin) {
+			await attemptCleanup(() => deleteTestLibrary(admin!, isolatedIndexName));
+			await attemptCleanup(() => deleteTestLibrary(admin!, failedIndexName));
+			await attemptCleanup(() => admin!.close());
 		}
 		if (resource) {
 			await attemptCleanup(() => resource!.dispose());
@@ -1637,7 +1607,7 @@ async function main() {
 			adminBrowserRetryIsolation: true,
 			chromium: true,
 			currentProductionBuild: true,
-			realMeilisearchTaskFailure: true,
+			realRefusedWrite: true,
 			publishEditDeleteIndexed: true,
 			workerId,
 		}),

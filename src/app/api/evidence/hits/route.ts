@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 	url.searchParams.delete("limit");
 	const query = await readPublicRequest(new NextRequest(url), { paged: false, perPage: false, includeHeavyFields: false });
 	if (query instanceof NextResponse) return query;
-	const [{ keys, total }, { byKey }] = await Promise.all([getPublicItemKeys(query.params, limit), mapPoints()]);
+	const [{ keys, total }, { byKey }] = await Promise.all([getPublicItemKeys(query.params, limit, request.signal), mapPoints()]);
 	const onMap = keys.filter((key) => byKey.has(key));
 	const records = await getPublicItemsByKeys(onMap.slice(0, LINED));
 	const lines = records.map((record) => { const { who, year, title } = labelOfRecord(record); return [byKey.get(record.key)!, who, year, title ?? null]; });

@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
 		},
 	} as { item: Record<string, unknown> } | null,
 	search: vi.fn(),
+	engineSearch: vi.fn(),
+	engine: "meilisearch",
 }));
 
 vi.mock("server-only", () => ({}));
@@ -35,6 +37,7 @@ vi.mock("@/app/api/cache", () => ({
 	getCachedItemSmall: vi.fn(async () => mocks.item),
 }));
 vi.mock("@/app/api/item/[key]/route", () => ({ getItem: vi.fn() }));
+vi.mock("@/lib/search-engines", () => ({ getSearchEngine: vi.fn(async () => ({ name: mocks.engine, search: mocks.engineSearch })) }));
 vi.mock("@/lib/meilisearch", () => ({
 	getMeilisearchForConfig: vi.fn(async () => ({
 		index: { search: mocks.search },
@@ -43,6 +46,7 @@ vi.mock("@/lib/meilisearch", () => ({
 
 import { GET } from "@/app/api/similar/[key]/route";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
+import { SearchMeaningUnavailableError } from "@/lib/search-engine";
 
 function meilisearchError(code: string) {
 	return new MeilisearchApiError(new Response(null, { status: 400 }), {
@@ -63,6 +67,8 @@ function request(key = "ABCDEFGH") {
 describe("Similar Resources route", () => {
 	beforeEach(() => {
 		mocks.search.mockReset();
+		mocks.engineSearch.mockReset();
+		mocks.engine = "meilisearch";
 		mocks.config.features.relatedResources = true;
 		mocks.config.search.embedder = {
 			source: "openAi",
@@ -97,6 +103,30 @@ describe("Similar Resources route", () => {
 		};
 		expect(options.hybrid.embedder).toBe(PLATFORM_SEARCH_EMBEDDER);
 		expect(options.filter).toContain("key != ABCDEFGH");
+	});
+
+	it("searches Elasticsearch near the record's stored vector, mixed with words from its description, leaving it out", async () => {
+		mocks.engine = "elasticsearch";
+		mocks.engineSearch.mockResolvedValue({ hits: [{ key: "ZYXWVUTS", title: "Radio lessons" }], total: 1 });
+
+		const response = await request();
+
+		expect(await response.json()).toMatchObject({ hits: [{ key: "ZYXWVUTS" }] });
+		expect(mocks.search).not.toHaveBeenCalled();
+		expect(mocks.engineSearch).toHaveBeenCalledWith(
+			expect.objectContaining({
+				size: 6,
+				semantic: { ratio: 0.7, like: "ABCDEFGH" },
+				filters: expect.arrayContaining([{ not: { field: "key", equals: "ABCDEFGH" } }]),
+			}),
+		);
+	});
+
+	it("answers 503 while the record has no vector in Elasticsearch", async () => {
+		mocks.engine = "elasticsearch";
+		mocks.engineSearch.mockRejectedValue(new SearchMeaningUnavailableError("ABCDEFGH"));
+
+		expect((await request()).status).toBe(503);
 	});
 
 	it.each(["invalid_search_embedder", "vector_embedding_error"])(

@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
 import { sql } from "drizzle-orm";
-import type { Index } from "meilisearch";
+import type { SearchIndexWriter } from "@/lib/search-index/writer";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
@@ -30,7 +30,7 @@ it("renews a worker's leases while an import locks the same search events in key
 			database: db,
 			// Never reached: the worker is stopped before it indexes.
 			config: {} as LibraryServerConfig,
-			index: {} as Index,
+			writer: {} as SearchIndexWriter,
 			workerId: "search-worker",
 			heartbeatIntervalMs: 100,
 			leaseDurationMs: 60_000,

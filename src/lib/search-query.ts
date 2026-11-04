@@ -75,9 +75,21 @@ export const offersSources = (config: Pick<SearchQueryConfig, "filters" | "sourc
 const isKnownPlace = (place: string) =>
 	Object.hasOwn(COUNTRIES, place) || findEntryByPath(place) !== null;
 
-/** The last page that can hold a result, which depends on how many a page holds. */
-export const lastReachablePage = (perPage: number) =>
-	Math.ceil(SEARCH_RESULT_LIMIT / perPage);
+/** The last page a page number reaches on its own, which depends on how many a page holds. */
+export const lastNumberedPage = (perPage: number) =>
+	Math.max(1, Math.floor(SEARCH_RESULT_LIMIT / perPage));
+
+/**
+ * The page a search opens on. A page past the numbered ones needs the cursor that places it; a cursor on a numbered
+ * page places nothing and is dropped. A page that cannot be reached opens on the first.
+ */
+function resolvePage(params: SearchParams, perPage: number) {
+	const page = Number(params.page);
+	const cursor = params.after || params.before;
+	if (!Number.isInteger(page) || page < 1) return { page: 1, after: "", before: "" };
+	if (page <= lastNumberedPage(perPage)) return { page, after: "", before: "" };
+	return cursor ? { page, after: params.after ?? "", before: params.before ?? "" } : { page: 1, after: "", before: "" };
+}
 
 function resolveCountry(
 	places: string[] | undefined,
@@ -103,7 +115,6 @@ export function resolveSearchQuery<P extends SearchParams>(
 	config: SearchQueryConfig,
 	perPage: number = ITEMS_PER_PAGE,
 ) {
-	const page = Number(params.page);
 	const resolved = {
 		sort: resolveSort(params.sort),
 		scope: resolveScope(params.scope, config.search),
@@ -136,11 +147,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			topics: resolved.topics.value,
 			sources: resolved.sources.value,
 			study: resolved.study.value,
-			// A page that cannot hold a result opens on the first.
-			page:
-				Number.isInteger(page) && page >= 1 && page <= lastReachablePage(perPage)
-					? page
-					: 1,
+			...resolvePage(params, perPage),
 		},
 		issues: Object.entries(resolved).flatMap(
 			([parameter, { issue }]): QueryIssue[] =>

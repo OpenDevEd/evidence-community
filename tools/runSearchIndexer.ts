@@ -4,26 +4,26 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	prepareSearchProjection,
+	readSearchEngine,
 	resolveIdleLastError,
-	resolveRebuildTaskTimeoutMs,
 	setSearchIndexRebuildPending,
 	shouldRebuildSearchIndex,
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
 	outboxBacklogForRebuild,
-	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildForOutboxBacklog,
-	rebuildSearchIndex,
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
+import { embedderFingerprint } from "../src/lib/embedder";
+import { openSearchWriter } from "../src/lib/search-index/engine-setup";
+import { readersEngineOnFailure, settleSearchEngine, switchRetryAt, type SettledEngine } from "../src/lib/search-index/engine-switch";
 import {
 	createSearchIndexWorkerStateReporter,
 	registerSearchIndexWorker,
@@ -115,135 +115,93 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
-		const meilisearchFactory = new RevisionAwareMeilisearchFactory();
-		const service = await meilisearchFactory.get({
-			configuration: config.services.search,
-			revision: config.revision,
-			updatedAt: config.updatedAt,
-		});
+		// The engine the library's configuration chooses (OpenDevEd/new-el#722).
+		const engine = await openSearchWriter(config, config.services.search.engine);
+		const writer = engine.writer;
 		const requeued = command.requeueDeadLetters
 			? (await requeueSearchOutboxDeadLetters(databaseResource.database))
 					.length
 			: 0;
 		let rebuildPending = await prepareSearchProjection(
 			databaseResource.database,
+			writer.engine,
 			config.topics.enabled,
 			config.search.fullText,
 			config.content.tags.hidden,
+			config.search.embedder ? embedderFingerprint(config.search.embedder) : null,
 		);
 		if (command.rebuild && !rebuildPending) {
 			await setSearchIndexRebuildPending(databaseResource.database, true);
 			rebuildPending = true;
 		}
-		// Deep result pages are fast only on Meilisearch's legacy search path
-		// (MEILI_EXPERIMENTAL_LEGACY_SEARCH, which a stored flag can override).
-		const features = await service.client.getExperimentalFeatures();
-		if ((features as { legacySearch?: boolean | null }).legacySearch !== true) {
-			console.warn(
-				"Search index: Meilisearch's legacy search path is off, so deep result pages will be slow. Set MEILI_EXPERIMENTAL_LEGACY_SEARCH=true and check GET /experimental-features.",
-			);
-		}
-		const setup = await ensureSearchIndex(service, {
-			onMissing: async () => {
-				await setSearchIndexRebuildPending(
-					databaseResource.database,
-					true,
-				);
-				rebuildPending = true;
-			},
-			signal: abortController.signal,
-		});
-		// The site and the other workers wait for this worker to leave
-		// "starting", which only needs the migrations and the index with its
-		// settings, so a new sort field works. The embedder and rebuild below
-		// can take many minutes on a large library; search answers from the
-		// existing records meanwhile.
-		await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
-		let embedderError: string | null = null;
+		const live = await readSearchEngine(databaseResource.database);
+		let settled: SettledEngine;
+		let embedderError: string | null;
 		try {
-			// The worker reads as idle here. The stored worker state cannot
-			// describe a settings task (it requires outbox events for
-			// "waiting"/"indexing"), so progress goes to the log instead.
-			let lastEmbedderStage = "";
-			await applySearchIndexEmbedder(service, config.search.embedder, {
-				batchClient: service.client.batches,
-				onProgress: async (progress) => {
-					const line = `${progress.stage} task ${progress.taskUid ?? "?"}${
-						progress.batchProgress === null
-							? ""
-							: ` ${progress.batchProgress}%`
-					}`;
-					if (line === lastEmbedderStage) return;
-					lastEmbedderStage = line;
-					console.log(`Search index embedder: ${line}`);
+			const setup = await ensureSearchIndex(writer, {
+				onMissing: async () => {
+					await setSearchIndexRebuildPending(
+						databaseResource.database,
+						true,
+					);
+					rebuildPending = true;
 				},
 				signal: abortController.signal,
 			});
-			console.log(
-				config.search.embedder
-					? "Search index embedder: ready"
-					: "Search index embedder: removed",
-			);
-		} catch (error) {
-			if (
-				error instanceof SearchOutboxAbortError &&
-				abortController.signal.aborted
-			) {
-				throw error;
+			// The site and the other workers wait for this worker to leave
+			// "starting", which only needs the migrations and the library's index
+			// with its settings. The embedder and a rebuild can take many minutes
+			// on a large library; search answers from the existing index meanwhile.
+			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+			const prepared = await engine.prepare(abortController.signal);
+			embedderError = prepared.embedderError;
+			if (embedderError && prepared.indexHasRecords && (rebuildPending || command.rebuild)) {
+				console.error("Search index rebuild stays pending: the embedder step failed and the existing records are kept.");
 			}
-			// A broken embedder must not stop record indexing. The next worker
-			// start retries it, and Similar Resources stays unavailable until then.
-			embedderError =
-				error instanceof Error
-					? `${error.name}: ${error.message}`
-					: String(error);
-			console.error(`Search index embedder failed: ${embedderError}`);
-		}
-		const indexHasRecords = embedderError
-			? (await service.index.getStats()).numberOfDocuments > 0
-			: false;
-		if (
-			embedderError &&
-			indexHasRecords &&
-			(rebuildPending || command.rebuild)
-		) {
-			console.error(
-				"Search index rebuild stays pending: the embedder step failed and the existing records are kept.",
-			);
-		}
-		if (
-			shouldRebuildSearchIndex({
-				embedderError,
-				forceRebuild: command.rebuild,
-				indexCreated: setup.created,
-				indexHasRecords,
-				rebuildPending,
-			})
-		) {
-			const plan = await rebuildSearchIndex(
-				databaseResource.database,
-				service,
+			// A switch to another engine builds its index before readers move to it (OpenDevEd/new-el#722).
+			settled = await settleSearchEngine({
 				config,
-				{
-					signal: abortController.signal,
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
-				},
-			);
-			await setSearchIndexRebuildPending(
-				databaseResource.database,
-				false,
-			);
+				database: databaseResource.database,
+				embedderBlocksRebuild: Boolean(embedderError && prepared.indexHasRecords),
+				live,
+				rebuild: shouldRebuildSearchIndex({
+					embedderError,
+					forceRebuild: command.rebuild,
+					indexCreated: setup.created,
+					indexHasRecords: prepared.indexHasRecords,
+					rebuildPending,
+				}),
+				signal: abortController.signal,
+				taskTimeoutMs: engine.rebuildTaskTimeoutMs,
+				writer,
+			});
+		} catch (error) {
+			const readersOn = readersEngineOnFailure(config, live, error, abortController.signal);
+			if (!readersOn) throw error;
+			embedderError = `The switch to ${writer.engine} failed, so readers stay on ${readersOn}, which this worker keeps current: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`;
+			console.error(`Search index: ${embedderError}`);
+			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+			settled = { rebuilt: null, switchedFrom: null, oldIndexRemoved: false, readersOn };
+		}
+		// While a switch waits for its embedder or couldn't start, the worker ends at this time to try it again.
+		const retrySwitchAt = switchRetryAt(settled.readersOn, writer.engine);
+		// Changes go to the engine readers search: the old one while a switch waits for its embedder or can't start.
+		const current =settled.readersOn === writer.engine ? engine : await openSearchWriter(config, settled.readersOn);
+		if (settled.rebuilt) {
 			console.log(
 				JSON.stringify({
-					deleted: plan.deleted,
-					indexed: plan.indexed,
+					deleted: settled.rebuilt.deleted,
+					engine: writer.engine,
+					indexed: settled.rebuilt.indexed,
 					rebuild: true,
 					requeued,
+					...(settled.switchedFrom ? { switchedFrom: settled.switchedFrom } : {}),
+					...(settled.switchedFrom || settled.oldIndexRemoved ? { oldIndexRemoved: settled.oldIndexRemoved } : {}),
 				}),
 			);
 		}
+		// The line the switch procedure waits for, also when only an old index a stopped switch left was deleted.
+		if (!settled.rebuilt && settled.oldIndexRemoved) console.log(JSON.stringify({ engine: writer.engine, oldIndexRemoved: true }));
 		await writeWorkerState(
 			{
 				currentBatchProgress: null,
@@ -277,14 +235,9 @@ async function main() {
 			);
 			const rebuilt = await rebuildForOutboxBacklog(
 				databaseResource.database,
-				service,
+				current.writer,
 				config,
-				{
-					signal: abortController.signal,
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
-				},
+				{ signal: abortController.signal, taskTimeoutMs: current.rebuildTaskTimeoutMs },
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
 			return rebuilt.acknowledged;
@@ -314,9 +267,7 @@ async function main() {
 				}
 				const results = await drainSearchOutbox({
 					config,
-					batchClient: service.client.batches,
 					database: databaseResource.database,
-					index: service.index,
 					maxEvents: command.maxEvents,
 					onProgress: async (progress) => {
 						try {
@@ -344,12 +295,18 @@ async function main() {
 							);
 						}
 					},
+					writer: current.writer,
 					signal: abortController.signal,
 					// A drain claim can wait behind other claims' embeddings.
-					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
-						embedder: config.search.embedder,
-					}),
+					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
+				});
+				// Records written while the embedder failed get their vectors once it answers again. A failure here
+				// leaves the drain's result standing; the next pass tries again.
+				const embedded = await current.embedMissing(abortController.signal).catch((error: unknown) => {
+					if (error instanceof SearchOutboxAbortError && abortController.signal.aborted) throw error;
+					console.error(`Search index: embedding records without a vector failed: ${error instanceof Error ? `${error.name}: ${error.message}` : error}`);
+					return 0;
 				});
 				const previousProgress = reporter.current();
 				await writeWorkerState(
@@ -363,10 +320,10 @@ async function main() {
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
 						lastError: resolveIdleLastError({
-							embedderError,
+							embedderError: embedderError ?? current.embedderError(),
 							previousLastError:
 								previousProgress.lastError ?? null,
-							processedEvents: results.length + acknowledged,
+							processedEvents: results.length + acknowledged + embedded,
 						}),
 						stage: "idle",
 					},
@@ -419,6 +376,10 @@ async function main() {
 				} catch {
 					// The process was asked to stop.
 				}
+			}
+			if (retrySwitchAt !== null && Date.now() >= retrySwitchAt) {
+				console.log(`Search index: the worker starts over to try the switch to ${writer.engine} again.`);
+				break;
 			}
 		} while (command.watch && !abortController.signal.aborted);
 	} catch (error) {

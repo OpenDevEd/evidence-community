@@ -1,3 +1,7 @@
+/**
+ * Checks Meilisearch's embedder on a local Meilisearch with a stand-in embedder: no paid service is called. Run it
+ * with `SEARCH_ENGINE=meilisearch npm run test:search-embedder`; without it, the command checks Elasticsearch.
+ */
 import assert from "node:assert/strict";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -6,11 +10,8 @@ import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
 import { PLATFORM_SEARCH_EMBEDDER } from "../src/config/library-config/catalogs";
 import type { MeilisearchService } from "../src/lib/meilisearch-factory";
-import {
-	applySearchIndexEmbedder,
-	ensureSearchIndex,
-} from "../src/lib/search-index/consumer";
 import type { SearchEmbedderConfiguration } from "../src/lib/search-index/embedder-settings";
+import { applySearchIndexEmbedder, meilisearchWriter } from "../src/lib/search-index/meilisearch-writer";
 
 const meilisearchHost =
 	process.env.MEILISEARCH_HOST ?? "http://127.0.0.1:57710";
@@ -66,11 +67,9 @@ function startStub(
 
 function service(client: Meilisearch, indexName: string): MeilisearchService {
 	return {
-		cacheIndex: client.index("cache"),
 		client,
 		index: client.index(indexName),
 		indexName,
-		redirectsIndex: client.index("redirects"),
 	};
 }
 
@@ -226,7 +225,7 @@ async function runIndex(
 ) {
 	const target = service(client, indexName);
 	await deleteIndexIfPresent(client, indexName);
-	await ensureSearchIndex(target);
+	await meilisearchWriter(target, { taskTimeoutMs: 60_000 }).ensure({});
 	await successfulTask(target.index.addDocuments(documents(indexName)));
 
 	// 1. Enable

@@ -107,17 +107,19 @@ export function useFilters() {
 			fetcher,
 		);
 
+	// A page past the numbered ones comes with the cursor of the page next to it.
 	const handlePageChange = useCallback(
-		(newPage: number) => {
-			setParams({ page: newPage }, returnToListTop());
+		(newPage: number, cursor: { after?: string; before?: string } = {}) => {
+			setParams({ page: newPage, after: cursor.after ?? null, before: cursor.before ?? null }, returnToListTop());
 		},
 		[setParams],
 	);
 
+	// A cursor places a record in one order only.
 	const handleSortChange = useCallback(
 		(sort: Set<string>) => {
 			const value = sort.values().next().value;
-			if (value) setParams({ sort: value });
+			if (value) setParams({ sort: value, after: null, before: null });
 		},
 		[setParams],
 	);

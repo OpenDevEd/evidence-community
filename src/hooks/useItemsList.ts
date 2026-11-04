@@ -15,7 +15,7 @@ import { useFiltersContext } from "@/context/FiltersProvider";
  */
 function useItemsResults(
 	params: any,
-	handlePageChange: (page: number) => void,
+	handlePageChange: (page: number, cursor?: { after?: string; before?: string }) => void,
 	userData?: any
 ) {
 	const pathname = usePathname();
@@ -50,7 +50,11 @@ function useItemsResults(
 		onSuccess: (data) => {
 			// A list with no results has no pages; its last page is still page 1.
 			const last = Math.max(1, data.totalPages);
-			if (last < params.page) {
+			// Past the numbered pages, a cursor that places no record in this order (after a new sort, say)
+			// answers the first page, and the address follows it.
+			if (data.currentPage !== params.page) {
+				handlePageChange(data.currentPage);
+			} else if (last < params.page) {
 				handlePageChange(last);
 			}
 			setLastFetchedData(data);

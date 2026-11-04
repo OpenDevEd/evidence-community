@@ -520,18 +520,29 @@ async function requireHttpRedirect(
 	return response;
 }
 
+/** This run's stand-in for a host's `library-search` network, which the shared Elasticsearch creates there. */
+function librarySearchNetwork(baseProject: string) {
+	return `${baseProject}_search`;
+}
+
+function removeNetwork(name: string) {
+	// Already gone is fine.
+	spawnSync("docker", ["network", "rm", name], { cwd: rootDirectory, env: commandEnvironment, stdio: "ignore" });
+}
+
 async function verifyRepositoryComposeStartup(profile: Profile) {
 	const config = structuredClone(profile.config);
 	config.services.database.url =
 		"postgresql://library:library@postgres:5432/library_compose";
-	config.services.search.host = "http://meilisearch:7700";
+	config.services.search.meilisearch!.host = "http://meilisearch:7700";
 	// The production alias, which only this stack's private network carries.
 	config.services.redis = { url: "redis://evidence-library-redis:6379" };
 	const environment = {
 		...commandEnvironment,
 		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
+		EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_NETWORK: librarySearchNetwork(composeProject),
 		LIBRARY_CONFIG_JSON: JSON.stringify(config),
-		MEILISEARCH_MASTER_KEY: config.services.search.key,
+		MEILISEARCH_MASTER_KEY: config.services.search.meilisearch!.key,
 	};
 	const compose = (...args: string[]) =>
 		run(
@@ -564,6 +575,8 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 		"library",
 		"library_compose",
 	);
+	removeNetwork(librarySearchNetwork(composeProject));
+	run("docker", ["network", "create", librarySearchNetwork(composeProject)]);
 	const startedAt = Date.now();
 	try {
 		compose(
@@ -866,10 +879,12 @@ function removeLibraryComposeProject(project: string) {
 			...commandEnvironment,
 			EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: "1",
 			EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${baseProject}_default`,
+			EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_NETWORK: librarySearchNetwork(baseProject),
 			LIBRARY_CONFIG_JSON: "{}",
 			MEILISEARCH_MASTER_KEY: "cleanup",
 		},
 	);
+	removeNetwork(librarySearchNetwork(baseProject));
 }
 
 function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
@@ -1128,7 +1143,7 @@ async function enqueue(
 }
 
 async function seedSearch(profile: Profile) {
-	const indexUid = profile.config.services.search.index;
+	const indexUid = profile.config.services.search.meilisearch!.index;
 	const amber = profile.name === "amber";
 	const colorName = amber ? "Amber" : "Indigo";
 	const institution = amber ? "Amber Institute" : "Indigo Lab";
@@ -1356,15 +1371,6 @@ function seedRedirectNotes(profile: Profile) {
 	postgresScalar(profile.name, statements.join("; "));
 }
 
-async function seedSharedSearchIndexes(profile: Profile) {
-	for (const index of [
-		{ uid: "cache", primaryKey: "id" },
-		{ uid: "redirects", primaryKey: "id" },
-	]) {
-		await enqueue(profile, "/indexes", "POST", index);
-	}
-}
-
 function postgresScalar(database: Profile["name"], sql: string) {
 	return captureCompose(
 		"exec",
@@ -1406,7 +1412,7 @@ async function waitForOutboxProcessed(
 
 async function readMeilisearchDocument(profile: Profile, key: string) {
 	const response = await fetch(
-		`http://127.0.0.1:${profile.meilisearchPort}/indexes/${profile.config.services.search.index}/documents/${key}`,
+		`http://127.0.0.1:${profile.meilisearchPort}/indexes/${profile.config.services.search.meilisearch!.index}/documents/${key}`,
 		{ headers: { Authorization: "Bearer acceptance-master-key" } },
 	);
 	if (response.status === 404) return null;
@@ -3284,7 +3290,6 @@ async function startAcceptanceInfrastructure(profiles: Profile[]) {
 		"postgres",
 		...profiles.map((profile) => `${profile.name}-meilisearch`),
 	);
-	for (const profile of profiles) await seedSharedSearchIndexes(profile);
 }
 
 // The deployment Compose check starts its own library stack beside this one

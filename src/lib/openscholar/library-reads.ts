@@ -16,11 +16,10 @@ import { requireOpenScholarBearer } from "@/lib/admin/openscholar-bearer";
 import { buildPublicLibraryKeysQuery, readPublicLibraryStatus } from "@/lib/library-export-records";
 import { LibraryExportError } from "@/lib/library-export-request";
 import { readSearchKeys } from "@/lib/library-export-selection";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { meilisearchIn } from "@/lib/meilisearch-filter";
 import { publicParentVisibility } from "@/lib/public-item-visibility";
 import { readCollectionFor, readerIdOfClerkUser, readReaderListKeys } from "@/lib/readers/data";
-import { getMainAttributes, publicRecordFilters } from "@/lib/search";
+import { publicFields, publicRecordFilters, searchRecords } from "@/lib/search";
+import { fieldIn } from "@/lib/search-engine";
 import { getCachedCollections } from "@/app/api/cache";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { loadSearchParams } from "@/lib/searchParams";
@@ -235,9 +234,19 @@ export async function resolveSource(
  * finds (its sub-collections' too), which is what resolving it reads.
  */
 export async function readLibraryOverview(config: LibraryServerConfig, database: Database) {
-	const [status, collections, { index }] = await Promise.all([readPublicLibraryStatus(database, config), getCachedCollections(config), getMeilisearchForConfig(config)]);
-	const counted = await index.search("", { limit: 0, facets: ["collectionsAncestry"], filter: publicRecordFilters(config.content.tags.hidden) });
-	const records = counted.facetDistribution?.collectionsAncestry ?? {};
+	const [status, collections, counted] = await Promise.all([
+		readPublicLibraryStatus(database, config),
+		getCachedCollections(config),
+		searchRecords(config, {
+			text: "",
+			fields: [],
+			filters: publicRecordFilters(config.content.tags.hidden),
+			size: 0,
+			exactTotal: false,
+			facets: ["collectionsAncestry"],
+		}),
+	]);
+	const records = counted.facets.collectionsAncestry ?? {};
 	return {
 		records: Number(status?.totalItems ?? 0),
 		collections: collections
@@ -256,11 +265,17 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 	// Public now in the database, and in the index, which may still hold a record hidden or deleted since.
 	const unique = await publicKeys(config, database, keys);
 	if (!unique.length) return { records: [], unread: [] };
-	const { index } = await getMeilisearchForConfig(config);
 	// The index keeps hidden and deleted records too: a record hidden since the source was resolved isn't read.
-	const found = await index.search("", { filter: [meilisearchIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)], limit: unique.length, attributesToRetrieve: await getMainAttributes(config) });
+	const found = await searchRecords(config, {
+		text: "",
+		fields: [],
+		filters: [fieldIn("key", unique), ...publicRecordFilters(config.content.tags.hidden)],
+		size: unique.length,
+		exactTotal: false,
+		returned: publicFields(config),
+	});
 	const rules = publicTagRules(config);
-	const byKey = new Map(found.hits.map((hit) => [String(hit.key), hit]));
+	const byKey = new Map(found.hits.map((record) => [String(record.key), record]));
 	const records: OpenScholarRecord[] = [];
 	const unread: string[] = [];
 	let bytes = 0;

@@ -1368,6 +1368,57 @@ const publicationServicesSchema = z
 		}
 	});
 
+/** The search engines a library can search (OpenDevEd/new-el#722). */
+export type SearchEngineName = "elasticsearch" | "meilisearch";
+
+/** Where one engine keeps the library's search, and the login or key that reaches it. */
+function searchConnectionSchema(index: RegExp) {
+	return z
+		.object({
+			host: serviceUrlSchema,
+			key: secretSchema(1, 512),
+			index: z.string().trim().min(1).max(128).regex(index),
+		})
+		.strict();
+}
+
+const meilisearchConnectionSchema = searchConnectionSchema(/^[A-Za-z0-9_-]+$/u);
+/** Elasticsearch names an index in lowercase, not starting with `_`, `-` or `+`. */
+const elasticsearchConnectionSchema = searchConnectionSchema(/^[a-z0-9][a-z0-9_-]*$/u);
+
+/**
+ * The engine the library chooses, which needs its connection, and the other engine's connection while a switch to
+ * the chosen one is built. The search worker builds the chosen engine's index; readers keep the one whose index is
+ * complete until it is (docs/search-indexing.md, "Switching engines").
+ */
+const chosenEngineSchema = z.discriminatedUnion("engine", [
+	z
+		.object({
+			engine: z.literal("elasticsearch"),
+			elasticsearch: elasticsearchConnectionSchema,
+			meilisearch: meilisearchConnectionSchema.optional(),
+		})
+		.strict(),
+	z
+		.object({
+			engine: z.literal("meilisearch"),
+			elasticsearch: elasticsearchConnectionSchema.optional(),
+			meilisearch: meilisearchConnectionSchema,
+		})
+		.strict(),
+]);
+
+/**
+ * Before libraries chose an engine, `services.search` was the Meilisearch connection alone. OpenScholar takes this
+ * schema only from merged new-el, so it keeps writing that shape until then; it reads as Meilisearch until OpenScholar
+ * writes `engine` for every library, and is dropped after (widen, migrate, narrow).
+ */
+const meilisearchOnlySchema = meilisearchConnectionSchema.transform(
+	(meilisearch): z.output<typeof chosenEngineSchema> => ({ engine: "meilisearch", meilisearch }),
+);
+
+const searchServiceSchema = z.union([chosenEngineSchema, meilisearchOnlySchema]);
+
 const servicesSchema = z
 	.object({
 		redis: z
@@ -1381,18 +1432,7 @@ const servicesSchema = z
 				url: postgresUrlSchema,
 			})
 			.strict(),
-		search: z
-			.object({
-				host: serviceUrlSchema,
-				key: secretSchema(1, 512),
-				index: z
-					.string()
-					.trim()
-					.min(1)
-					.max(128)
-					.regex(/^[A-Za-z0-9_-]+$/u),
-			})
-			.strict(),
+		search: searchServiceSchema,
 		storage: z
 			.object({
 				url: serviceUrlSchema,

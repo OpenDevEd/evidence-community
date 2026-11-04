@@ -19,12 +19,8 @@ const requestHeaders = vi.hoisted(() => ({ current: new Headers() }));
 vi.mock("next/headers", () => ({ headers: async () => requestHeaders.current }));
 // Reading a session schedules an account check after the response, and the reader's routes wait for a request, neither of which is under test here.
 vi.mock("next/server", async (importOriginal) => ({ ...(await importOriginal<typeof import("next/server")>()), after: vi.fn(), connection: async () => {} }));
-const search = vi.hoisted(() => ({
-	search: vi.fn(),
-	getDisplayedAttributes: async () => ["*"],
-	getStats: async () => ({ fieldDistribution: { key: 1, title: 1 } }),
-}));
-vi.mock("@/lib/meilisearch", () => ({ getMeilisearchForConfig: async () => ({ index: search }) }));
+const search = vi.hoisted(() => ({ search: vi.fn() }));
+vi.mock("@/lib/search-engines", () => ({ getSearchEngine: async () => ({ name: "meilisearch", search: search.search }) }));
 
 import { GET } from "@/app/api/user/items/[id]/route";
 import { POST as toggleItem } from "@/app/api/reader/collections/[id]/items/route";
@@ -47,7 +43,7 @@ let signedInHeaders: (clerkUserId?: string) => Headers;
 beforeEach(() => {
 	// A copy, so each test database gets its own auth instance.
 	vi.mocked(getLibraryConfig).mockResolvedValue({ ...config });
-	search.search.mockReset().mockImplementation(async () => ({ estimatedTotalHits: 0, hits: [] }));
+	search.search.mockReset().mockImplementation(async () => ({ hits: [], total: 0, facets: {}, first: null, last: null }));
 });
 
 function readList(collectionId: string, clerkUserId?: string) {
@@ -113,7 +109,7 @@ it("refuses someone else's private collection, empty or not, without searching t
 it("lists only a private collection's own records to its owner", async () => {
 	await withCollections(async ({ savedPrivate, itemKey }) => {
 		expect((await readList(savedPrivate, OWNER_CLERK_ID)).status).toBe(200);
-		expect(search.search.mock.lastCall?.[1].filter).toContainEqual(`key IN ["${itemKey}"]`);
+		expect(search.search.mock.lastCall?.[0].filters).toContainEqual({ field: "key", in: [itemKey] });
 	});
 });
 
@@ -121,7 +117,7 @@ it("lists a private collection to someone it is shared with, and to nobody once 
 	await withCollections(async ({ savedPrivate, itemKey }) => {
 		await share(savedPrivate, "viewer");
 		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(200);
-		expect(search.search.mock.lastCall?.[1].filter).toContainEqual(`key IN ["${itemKey}"]`);
+		expect(search.search.mock.lastCall?.[0].filters).toContainEqual({ field: "key", in: [itemKey] });
 		expect((await leave(savedPrivate, OTHER_CLERK_ID, OTHER)).status).toBe(204);
 		expect((await readList(savedPrivate, OTHER_CLERK_ID)).status).toBe(403);
 	});

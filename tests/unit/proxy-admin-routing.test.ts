@@ -15,8 +15,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/config/library-config/source", () => ({
 	loadLibraryConfig: mocks.loadLibraryConfig,
 }));
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: vi.fn(),
+vi.mock("@/lib/item-redirects", () => ({
+	readItemRedirect: vi.fn(),
 }));
 
 import proxy from "@/proxy";

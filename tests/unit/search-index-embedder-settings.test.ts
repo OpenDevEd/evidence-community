@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import {
 	buildEmbedderSettings,
+	embeddingText,
 	PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE,
 	PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES,
 } from "@/lib/search-index/embedder-settings";
@@ -102,5 +103,30 @@ describe("search index embedder settings", () => {
 				`{% if doc.${field} %}`,
 			);
 		}
+	});
+});
+
+describe("the text embedded for a record in Elasticsearch", () => {
+	// Each expected text is what Meilisearch 1.54.3 rendered from the platform template for the same record, through its
+	// experimental render route: Liquid prints empty text and empty lists, and skips only missing, null and false values.
+	it.each([
+		[
+			"every field",
+			{ title: "Mobile phones and literacy", abstractNote: "We study SMS lessons.", fullNames: ["Amina Okafor", "Li Wei"], tags: ["literacy", "mobile learning"], year: "2021" },
+			"A research record titled 'Mobile phones and literacy'. Abstract: We study SMS lessons.. Authors: Amina Okafor, Li Wei. Keywords: literacy, mobile learning. Published in 2021.",
+		],
+		["no field", { key: "X" }, "A research record.    "],
+		["empty values", { title: "", abstractNote: null, fullNames: [], tags: [], year: 0 }, "A research record titled ''.  Authors: . Keywords: . Published in 0."],
+		["false and empty text", { title: false, abstractNote: "", tags: ["a"], year: 2020 }, "A research record. Abstract: .  Keywords: a. Published in 2020."],
+	])("renders a record with %s as Meilisearch does", (_name, record, text) => {
+		expect(embeddingText(record)).toBe(text);
+	});
+
+	it("cuts a long text to the byte limit at a whole character", () => {
+		const text = embeddingText({ abstractNote: "é".repeat(PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES) });
+		expect(Buffer.byteLength(text, "utf8")).toBeLessThanOrEqual(PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES);
+		expect(Buffer.byteLength(text, "utf8")).toBeGreaterThan(PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES - 2);
+		expect(text).not.toContain("\uFFFD");
+		expect(text.endsWith("é")).toBe(true);
 	});
 });

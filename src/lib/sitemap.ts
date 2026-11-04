@@ -1,7 +1,8 @@
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { getDatabaseForConfig } from "@/db";
+import { readPublicLibraryStatus } from "@/lib/library-export-records";
 import { buildSiteUrl } from "@/lib/site-url";
 import { cacheLife, cacheTag } from "next/cache";
 
@@ -12,10 +13,8 @@ async function getSitemapPageCountCached(
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('sitemap-total-' + configRevision)
-	const { index } = await getMeilisearchForConfig(config);
-	const stats = await index.getStats();
-	const total = stats.numberOfDocuments;
-	return Math.max(1, Math.ceil(total / SITEMAP_SIZE));
+	const status = await readPublicLibraryStatus(await getDatabaseForConfig(config), config);
+	return Math.max(1, Math.ceil(Number(status?.totalItems ?? 0) / SITEMAP_SIZE));
 }
 
 export async function getSitemapPageCount(

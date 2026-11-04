@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getDatabaseForConfig } from "@/db";
 import { getPublicItemLinks } from "@/lib/links/item-links";
 import {
@@ -12,7 +11,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { filterPublicAttachments } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
-import { getMainAttributes } from "@/lib/search";
+import { publicFields, readSearchDocument, searchKeys } from "@/lib/search";
 
 export type CitationYearData = {
 	year: string;
@@ -36,10 +35,7 @@ async function getSourceItem(
 	libraryConfig: LibraryServerConfig,
 ): Promise<Item | null> {
 	try {
-		const { index } = await getMeilisearchForConfig(libraryConfig);
-		const result = await index.getDocument(key, {
-			fields: await getMainAttributes(libraryConfig),
-		});
+		const result = await readSearchDocument(libraryConfig, key);
 		const { tags } = libraryConfig.content;
 
 		if (!result || result.deleted || hasAnyTag(result.tags, tags.hidden)) {
@@ -48,9 +44,7 @@ async function getSourceItem(
 
 		return { ...result, attachmentsData: filterPublicAttachments(result.attachmentsData, publicTagRules(libraryConfig), result.sourceConnectionKey) } as Item;
 	} catch (error: any) {
-		if (error?.response?.status !== 404) {
-			console.warn("Error fetching source item from meilisearch:", error);
-		}
+		console.warn("Error fetching source item from search:", error);
 		return null;
 	}
 }
@@ -75,36 +69,25 @@ async function getCitingItems(
 		};
 
 	try {
-		const { index } = await getMeilisearchForConfig(libraryConfig);
-
-		const offset = (page - 1) * perPage;
-
-		const result = await index.search("", {
-			filter: `key IN [${keys.map((k) => `"${k}"`).join(", ")}]`,
-			limit: perPage,
-			offset: offset,
+		const result = await searchKeys(libraryConfig, keys, { number: page, size: perPage }, {
+			returned: publicFields(libraryConfig),
 			facets: ["country", "year"],
-			attributesToRetrieve: await getMainAttributes(libraryConfig),
 		});
+		const counts = result.facets;
 
 		const { tags } = libraryConfig.content;
-		const filteredItems = (result.hits as Item[])
+		const filteredItems = (result.hits as unknown as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
 			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }));
 
 		return {
 			items: filteredItems,
-			countryDistribution: result.facetDistribution?.["country"] || {},
-			yearDistribution: result.facetDistribution?.["year"] || {},
-			totalHits: result.estimatedTotalHits || result.hits.length,
+			countryDistribution: counts.country ?? {},
+			yearDistribution: counts.year ?? {},
+			totalHits: result.total,
 		};
 	} catch (error: any) {
-		if (error?.response?.status !== 404) {
-			console.warn(
-				"Error fetching citing items from meilisearch:",
-				error,
-			);
-		}
+		console.warn("Error fetching citing items from search:", error);
 		return {
 			items: [],
 			countryDistribution: {},

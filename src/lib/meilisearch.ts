@@ -23,8 +23,10 @@ export function getMeilisearchForConfig(
 		"revision" | "services" | "updatedAt"
 	>,
 ) {
+	const configuration = config.services.search.meilisearch;
+	if (!configuration) throw new Error("This library has no Meilisearch connection.");
 	return meilisearchFactory.get({
-		configuration: config.services.search,
+		configuration,
 		revision: config.revision,
 		updatedAt: config.updatedAt,
 	});

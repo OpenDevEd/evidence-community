@@ -204,25 +204,42 @@ it("shows the latest source conflict when an overlapping query supplies the upda
 
 it("rebuilds existing search documents when topic visibility changes and retains the request across failures", async () => {
   await withIsolatedPublicationDatabase(async db => {
-    expect(await prepareSearchProjection(db, false, true, [])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", false, true, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, true, [])).toBe(false);
-    expect(await prepareSearchProjection(db, true, true, [])).toBe(true);
-    expect(await prepareSearchProjection(db, true, true, [])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", false, true, [])).toBe(false);
+    expect(await prepareSearchProjection(db, "meilisearch", true, true, [])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", true, true, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, true, true, [])).toBe(false);
-    expect(await prepareSearchProjection(db, false, true, [])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", true, true, [])).toBe(false);
+    expect(await prepareSearchProjection(db, "meilisearch", false, true, [])).toBe(true);
     // Switching full-text search adds or removes page text, so it rebuilds too.
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false, [])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, [])).toBe(true);
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false, [])).toBe(false);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, [])).toBe(false);
     // Hidden tags decide which records have a PDF, so changing them rebuilds too.
-    expect(await prepareSearchProjection(db, false, false, ["hidden"])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(true);
     // An index an older runtime built keeps its old documents unless it rebuilds.
     await db.update(status).set({searchProjectionSignature: JSON.stringify({topics: false, fullText: false})}).where(eq(status.id, 1));
     await setSearchIndexRebuildPending(db, false);
-    expect(await prepareSearchProjection(db, false, false, ["hidden"])).toBe(true);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(true);
+    // A Meilisearch library keeps the signature it stored before engines were configurable, so upgrading doesn't
+    // rebuild it; Elasticsearch adds its index definition.
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 11, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"])).toBe(true);
+    // In Elasticsearch the worker makes the vectors, so another embedder, or none, rebuilds; Meilisearch embeds itself.
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-a")).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-a")).toBe(false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-b")).toBe(true);
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], null)).toBe(true);
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 11, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
+    await setSearchIndexRebuildPending(db, false);
+    expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"], "model-a")).toBe(false);
   });
 });
 

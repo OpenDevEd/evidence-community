@@ -18,11 +18,12 @@ import type { Database } from "../src/db/database-schema";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemFilePublication } from "../src/db/schema/source";
 import { item } from "../src/db/schema/tables/item";
-import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
+import { RevisionAwareSearchFactory } from "../src/lib/elasticsearch-factory";
 import {
 	drainSearchOutbox,
 	ensureSearchIndex,
 } from "../src/lib/search-index/consumer";
+import { elasticsearchWriter } from "../src/lib/search-index/elasticsearch-writer";
 import { runSourceConnection } from "../src/lib/source-ingestion/orchestrator";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
 import {
@@ -153,12 +154,19 @@ async function countRows(
 	return result?.count ?? 0;
 }
 
+/** The Elasticsearch connection the search worker writes through. */
+function searchConnection(config: Awaited<ReturnType<typeof loadLibraryConfig>>) {
+	const connection = config.services.search.elasticsearch;
+	if (!connection) throw new Error("The verifier needs the library's Elasticsearch connection.");
+	return connection;
+}
+
 async function verifyPipeline() {
 	parseLiveVerifierCommand(process.argv.slice(2));
 	const config = await loadLibraryConfig();
 	assertLoopbackServiceUrl("Database URL", config.services.database.url);
 	assertLoopbackServiceUrl("Storage URL", config.services.storage.url);
-	assertLoopbackServiceUrl("Search URL", config.services.search.host);
+	assertLoopbackServiceUrl("Search URL", searchConnection(config).host);
 
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
@@ -194,17 +202,16 @@ async function verifyPipeline() {
 			workerId: `zotero-live-verifier:${process.pid}`,
 		});
 
-		const search = await new RevisionAwareMeilisearchFactory().get({
-			configuration: config.services.search,
+		const search = await new RevisionAwareSearchFactory().get({
+			configuration: searchConnection(config),
 			revision: config.revision,
 			updatedAt: config.updatedAt,
 		});
-		await ensureSearchIndex(search);
+		await ensureSearchIndex(elasticsearchWriter(search));
 		const indexedBatches = await drainSearchOutbox({
 			config,
-			batchClient: search.client.batches,
 			database,
-			index: search.index,
+			writer: elasticsearchWriter(search),
 			maxEvents: 100_000,
 			workerId: `zotero-live-verifier-index:${process.pid}`,
 		});
@@ -320,7 +327,7 @@ async function verifyPipeline() {
 				const remoteKey = seed.fixtureItems[fixtureId]!;
 				const key = items.get(remoteKey);
 				assert(key, `Canonical identity is missing for ${fixtureId}`);
-				return search.index.getDocument<Record<string, unknown>>(key);
+				return (await search.client.get<Record<string, unknown>>({ index: search.alias, id: key }))._source!;
 			}),
 		);
 		for (const [index, document] of documents.entries()) {

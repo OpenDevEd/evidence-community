@@ -1,0 +1,365 @@
+[
+	{
+		"id": "plain-01",
+		"params": {
+			"search": "intelligent tutoring systems"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-02",
+		"params": {
+			"search": "chatgpt"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-03",
+		"params": {
+			"search": "large language models"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-04",
+		"params": {
+			"search": "learning analytics"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-05",
+		"params": {
+			"search": "automated essay scoring"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-06",
+		"params": {
+			"search": "knowledge tracing"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-07",
+		"params": {
+			"search": "adaptive learning"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-08",
+		"params": {
+			"search": "educational data mining"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-09",
+		"params": {
+			"search": "student dropout prediction"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-10",
+		"params": {
+			"search": "automated feedback"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-11",
+		"params": {
+			"search": "programming education"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-12",
+		"params": {
+			"search": "computational thinking"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-13",
+		"params": {
+			"search": "MOOC"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-14",
+		"params": {
+			"search": "conversational agents"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-15",
+		"params": {
+			"search": "affective computing"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-16",
+		"params": {
+			"search": "teacher dashboard"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-17",
+		"params": {
+			"search": "explainable artificial intelligence"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-18",
+		"params": {
+			"search": "algorithmic bias fairness"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-19",
+		"params": {
+			"search": "self-regulated learning"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-20",
+		"params": {
+			"search": "collaborative learning"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-21",
+		"params": {
+			"search": "question generation"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-22",
+		"params": {
+			"search": "math word problems"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-23",
+		"params": {
+			"search": "reading comprehension"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-24",
+		"params": {
+			"search": "virtual reality"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-25",
+		"params": {
+			"search": "academic integrity generative AI"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "plain-26",
+		"params": {
+			"search": "eye tracking"
+		},
+		"note": "topic search, default scope"
+	},
+	{
+		"id": "typo-01",
+		"params": {
+			"search": "inteligent tutoring"
+		},
+		"note": "one missing letter"
+	},
+	{
+		"id": "typo-02",
+		"params": {
+			"search": "machne learning"
+		},
+		"note": "one missing letter"
+	},
+	{
+		"id": "typo-03",
+		"params": {
+			"search": "learnin analytics"
+		},
+		"note": "one missing letter"
+	},
+	{
+		"id": "prefix-01",
+		"params": {
+			"search": "generat"
+		},
+		"note": "half-typed word"
+	},
+	{
+		"id": "prefix-02",
+		"params": {
+			"search": "tutor"
+		},
+		"note": "half-typed word"
+	},
+	{
+		"id": "lang-es",
+		"params": {
+			"search": "aprendizaje automático"
+		},
+		"note": "Spanish, with an accent"
+	},
+	{
+		"id": "lang-zh",
+		"params": {
+			"search": "教育"
+		},
+		"note": "Chinese, no spaces between words"
+	},
+	{
+		"id": "lang-ar",
+		"params": {
+			"search": "تعليم"
+		},
+		"note": "Arabic"
+	},
+	{
+		"id": "scope-title",
+		"params": {
+			"search": "transformers",
+			"scope": "title"
+		},
+		"note": "title only"
+	},
+	{
+		"id": "scope-authors",
+		"params": {
+			"search": "Baker",
+			"scope": "authors"
+		},
+		"note": "author names"
+	},
+	{
+		"id": "scope-documents",
+		"params": {
+			"search": "transformer architecture",
+			"scope": "documents"
+		},
+		"note": "PDF full text"
+	},
+	{
+		"id": "scope-everywhere",
+		"params": {
+			"search": "rubric",
+			"scope": "everywhere"
+		},
+		"note": "metadata and full text"
+	},
+	{
+		"id": "filter-type",
+		"params": {
+			"search": "chatgpt",
+			"type": [
+				"JournalArticle"
+			]
+		},
+		"note": "one item type"
+	},
+	{
+		"id": "filter-range",
+		"params": {
+			"search": "large language models",
+			"range": "2023-2025"
+		},
+		"note": "year range"
+	},
+	{
+		"id": "filter-year",
+		"params": {
+			"search": "intelligent tutoring",
+			"range": "2015"
+		},
+		"note": "one year"
+	},
+	{
+		"id": "sort-newest",
+		"params": {
+			"search": "chatgpt",
+			"sort": "desc"
+		},
+		"note": "newest first"
+	},
+	{
+		"id": "sort-cited",
+		"params": {
+			"search": "knowledge tracing",
+			"sort": "mostCited"
+		},
+		"note": "most cited first"
+	},
+	{
+		"id": "sort-title",
+		"params": {
+			"search": "learning analytics",
+			"sort": "titleAZ"
+		},
+		"note": "title A-Z"
+	},
+	{
+		"id": "sort-author",
+		"params": {
+			"search": "feedback",
+			"sort": "authorAZ"
+		},
+		"note": "author A-Z"
+	},
+	{
+		"id": "browse-all",
+		"params": {},
+		"note": "no search: the library's first page"
+	},
+	{
+		"id": "browse-newest",
+		"params": {
+			"sort": "desc"
+		},
+		"note": "no search, newest first"
+	},
+	{
+		"id": "page-2",
+		"params": {
+			"search": "learning analytics",
+			"page": 2
+		},
+		"note": "second page"
+	},
+	{
+		"id": "page-50",
+		"params": {
+			"search": "machine learning",
+			"page": 50
+		},
+		"note": "page 50"
+	},
+	{
+		"id": "page-500",
+		"params": {
+			"page": 500
+		},
+		"note": "page 500: results 9,981-10,000, the deepest offset Elasticsearch allows by default"
+	}
+]

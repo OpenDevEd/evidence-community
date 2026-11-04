@@ -8,6 +8,8 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
 	Alert02Icon,
+	ArrowLeft01Icon,
+	ArrowRight01Icon,
 	CodeSquareIcon,
 	Delete02Icon,
 	Download01Icon,
@@ -45,6 +47,7 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Pagination } from "@/components/nextui/Pagination";
 import { ITEMS_PER_PAGE } from "@/constants/items";
+import { lastNumberedPage } from "@/lib/search-query";
 import Resource from "../items/Resource";
 import { CacheContext, CacheContextType } from "@/context/Providers";
 import {
@@ -308,15 +311,82 @@ function ContentActions() {
 	);
 }
 
+/**
+ * Pages past the numbered ones: the first page, the pages either side, and where the reader is. Each side is reached
+ * from the cursor this page's results gave, so it waits until they have loaded.
+ */
+function CursorPager({ numbered }: { numbered: number }) {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+	const { itemsData, queryParams, handlePageChange } = use(ItemsContext);
+	const page = queryParams.page;
+	const cursors = itemsData?.currentPage === page ? itemsData.cursors : undefined;
+	const goBack = () =>
+		page - 1 <= numbered ? handlePageChange(page - 1) : handlePageChange(page - 1, { before: cursors?.previous ?? undefined });
+	return (
+		<div className="flex flex-wrap items-center justify-center gap-3">
+			<Button onPress={() => handlePageChange(1)}>{t("pageNumber", { page: format.number(1) })}</Button>
+			<Button
+				isDisabled={!cursors?.previous}
+				onPress={goBack}
+				startContent={<HugeiconsIcon icon={ArrowLeft01Icon} className="size-5 rtl:rotate-180" />}
+			>
+				{t("previous")}
+			</Button>
+			<span aria-current="page" className="px-2 font-medium tabular-nums">
+				{t("pageNumber", { page: format.number(page) })}
+			</span>
+			<Button
+				isDisabled={!cursors?.next}
+				onPress={() => handlePageChange(page + 1, { after: cursors?.next ?? undefined })}
+				endContent={<HugeiconsIcon icon={ArrowRight01Icon} className="size-5 rtl:rotate-180" />}
+			>
+				{t("next")}
+			</Button>
+		</div>
+	);
+}
+
+/** The numbered pages, and past the last of them while more results follow, the way on to the next page. */
+function NumberedPager({ numbered, totalPages }: { numbered: number; totalPages: number }) {
+	const t = useTranslations("ui");
+	const { itemsData, queryParams, handlePageChange, config } = use(ItemsContext);
+	const isDesktop = useBreakpoint("xl");
+	const page = queryParams.page;
+	// The cursor is this page's own once its results have loaded.
+	const loaded = itemsData?.currentPage === page;
+	const next = page === numbered && numbered < totalPages && loaded ? itemsData?.cursors?.next : null;
+	return (
+		<div className="flex flex-wrap items-center justify-center gap-4">
+			<Pagination
+				showControls
+				page={page}
+				onChange={(newPage) => handlePageChange(newPage)}
+				siblings={config.paginationSiblings || (isDesktop ? 3 : 0)}
+				total={numbered}
+			/>
+			{next && (
+				<Button
+					onPress={() => handlePageChange(page + 1, { after: next })}
+					endContent={<HugeiconsIcon icon={ArrowRight01Icon} className="size-5 rtl:rotate-180" />}
+				>
+					{t("next")}
+				</Button>
+			)}
+		</div>
+	);
+}
+
 function PaginationControls({ className }: { className?: string }) {
 	const itemsContext = use(ItemsContext);
 	const totalPages = itemsContext.itemsData?.totalPages || 0;
+	// Page numbers reach the first 10,000 results; past them a reader moves with next and previous.
+	const numbered = Math.min(totalPages, lastNumberedPage(itemsContext.itemsData?.perPage ?? ITEMS_PER_PAGE));
 	const actuallyNoData =
 		(!itemsContext.isItemsLoading &&
 			itemsContext.itemsData &&
 			itemsContext.itemsData.items.length === 0) ||
 		itemsContext.itemsError;
-	const isDesktop = useBreakpoint("xl");
 
 	return (
 		!actuallyNoData && (
@@ -328,20 +398,15 @@ function PaginationControls({ className }: { className?: string }) {
 			>
 				<Skeleton
 					isLoaded={totalPages > 0}
-					className="w-full h-14 rounded-2xl flex items-center justify-center"
+					// At least one row: past page 500 on a phone the pager takes two.
+					className="w-full min-h-14 rounded-2xl flex items-center justify-center"
 				>
-					{totalPages > 0 && (
-						<Pagination
-							showControls
-							page={itemsContext.queryParams.page}
-							onChange={itemsContext.handlePageChange}
-							siblings={
-								itemsContext.config.paginationSiblings ||
-								(isDesktop ? 3 : 0)
-							}
-							total={totalPages}
-						/>
-					)}
+					{totalPages > 0 &&
+						(itemsContext.queryParams.page > numbered ? (
+							<CursorPager numbered={numbered} />
+						) : (
+							<NumberedPager numbered={numbered} totalPages={totalPages} />
+						))}
 				</Skeleton>
 			</div>
 		)

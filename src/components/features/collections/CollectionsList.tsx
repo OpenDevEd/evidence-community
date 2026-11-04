@@ -21,7 +21,7 @@ import { Autocomplete } from "../../nextui/Autocomplete";
 import { createContext, Fragment, type ReactNode, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
-import { FacetDistribution } from "meilisearch";
+import type { FacetDistribution } from "@/lib/search-engine";
 import { useFormatter, useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";

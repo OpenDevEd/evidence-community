@@ -1,7 +1,7 @@
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { useState, useMemo, useCallback } from "react";
-import { CategoriesDistribution, FacetDistribution } from "meilisearch";
+import type { CategoriesDistribution, FacetDistribution } from "@/lib/search-engine";
 
 export type FacetListItem = {
     key: string;

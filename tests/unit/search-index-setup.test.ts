@@ -1,219 +1,203 @@
-import {
-	MeilisearchApiError,
-	type Index,
-	type Meilisearch,
-	type Task,
-} from "meilisearch";
+import { errors } from "@elastic/elasticsearch";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MeilisearchService } from "@/lib/meilisearch-factory";
+import type { SearchService } from "@/lib/elasticsearch-factory";
 import {
-	applySearchIndexEmbedder,
-	EMBEDDER_TASK_POLL_INTERVAL_MS,
-	EMBEDDER_TASK_TIMEOUT_MS,
+	applySearchProjectionPlan,
 	ensureSearchIndex,
-	SearchIndexTaskError,
+	SearchIndexDocumentError,
+	SearchIndexWriteError,
 } from "@/lib/search-index/consumer";
+import { SEARCH_INDEX_VERSION } from "@/lib/search-index/elasticsearch-index";
+import { elasticsearchWriter } from "@/lib/search-index/elasticsearch-writer";
+import type { SearchProjectionPlan } from "@/lib/search-index/projection";
 
-function succeededTask(uid: number): Task {
-	return {
-		batchUid: null,
-		canceledBy: null,
-		details: {},
-		duration: "PT0S",
-		enqueuedAt: "2026-08-14T10:00:00.000Z",
-		error: null,
-		finishedAt: "2026-08-14T10:00:00.000Z",
-		indexUid: "items",
-		startedAt: "2026-08-14T10:00:00.000Z",
-		status: "succeeded",
-		type: "indexCreation",
-		uid,
-	};
+// The old index's grace period passes at once.
+vi.mock("node:timers/promises", () => ({ setTimeout: async () => undefined }));
+
+type Call = { api: string; request: Record<string, unknown> };
+
+function notFound() {
+	return new errors.ResponseError({
+		body: { error: { type: "aliases_not_found_exception" }, status: 404 },
+		statusCode: 404,
+		headers: {},
+		warnings: null,
+		meta: {} as never,
+	});
 }
 
-function service(
-	indexExists: boolean,
-	events: string[] = [],
-	options: {
-		settingsCalls?: unknown[];
-		taskStatus?: Task["status"];
-	} = {},
-): MeilisearchService {
-	let taskUid = 0;
-	const nextTask = () => Promise.resolve({ taskUid: ++taskUid });
-	const index = {
-		tasks: {
-			getTask: async (uid: number) => ({
-				...succeededTask(uid),
-				status: options.taskStatus ?? "succeeded",
-				error:
-					options.taskStatus === "failed"
-						? {
-								code: "vector_embedding_error",
-								link: "",
-								message: "embedding failed",
-								type: "invalid_request",
-							}
-						: null,
-			}),
-		},
-		updateSettings: (settings: unknown) => {
-			options.settingsCalls?.push(settings);
-			return nextTask();
-		},
-	} as unknown as Index;
+/** A stand-in for the Elasticsearch client: it records requests and answers bulk writes with `bulkItems`. */
+function search(options: { aliasExists: boolean; bulkItems?: Array<Record<string, unknown>>; aliasMoveTimesOut?: boolean }) {
+	const calls: Call[] = [];
+	let aliased = "library_1793000000000";
+	const record = (api: string) => async (request: Record<string, unknown>) => {
+		calls.push({ api, request });
+		return {};
+	};
 	const client = {
-		createIndex: () => {
-			events.push("create");
-			return nextTask();
+		bulk: async (request: Record<string, unknown>) => {
+			calls.push({ api: "bulk", request });
+			const items = options.bulkItems ?? [];
+			return { errors: items.some((item) => Object.values(item)[0] && (Object.values(item)[0] as { error?: unknown }).error), items };
 		},
-		getRawIndex: async () => {
-			if (indexExists) return { uid: "items" };
-			throw new MeilisearchApiError(new Response(null, { status: 404 }), {
-				code: "index_not_found",
-				link: "https://www.meilisearch.com/docs/reference/errors/error_codes#index-not-found",
-				message: "Index items not found.",
-				type: "invalid_request",
-			});
+		indices: {
+			getAlias: async (request: Record<string, unknown>) => {
+				calls.push({ api: "getAlias", request });
+				if (!options.aliasExists) throw notFound();
+				return { [aliased]: { aliases: { library: {} } } };
+			},
+			create: record("create"),
+			updateAliases: async (request: { actions: Array<{ add?: { index: string } }> }) => {
+				calls.push({ api: "updateAliases", request });
+				aliased = request.actions.find((action) => action.add)?.add?.index ?? aliased;
+				// Elasticsearch moved the alias, but the answer never reached the worker.
+				if (options.aliasMoveTimesOut) throw new Error("Request timed out");
+				return {};
+			},
+			refresh: record("refresh"),
+			putSettings: record("putSettings"),
+			delete: record("delete"),
+			forcemerge: record("forcemerge"),
+			stats: async () => ({ _all: { primaries: { store: { size_in_bytes: 12 * 1024 ** 3 } } } }),
+			resolveIndex: async () => ({ indices: [{ name: "library_1793000000000" }, { name: "library_1792000000000" }] }),
 		},
-	} as unknown as Meilisearch;
-	return {
-		cacheIndex: index,
-		client,
-		index,
-		indexName: "items",
-		redirectsIndex: index,
 	};
+	return { calls, service: { alias: "library", client } as unknown as SearchService };
 }
+
+// Only the keys matter to the writer; the rest of a search document passes through unchanged.
+const plan = {
+	documents: [{ key: "AAAA1111", title: "One" }, { key: "BBBB2222", title: "Two" }],
+	deleteKeys: ["CCCC3333"],
+} as unknown as SearchProjectionPlan;
 
 describe("search index setup", () => {
-	it("reports a newly created index", async () => {
+	it("creates the first index behind the library's alias after marking the rebuild", async () => {
 		const events: string[] = [];
-		await expect(
-			ensureSearchIndex(service(false, events), {
-				onMissing: async () => {
-					events.push("mark-pending");
-				},
-			}),
-		).resolves.toEqual({
+		const { calls, service } = search({ aliasExists: false });
+
+		await expect(ensureSearchIndex(elasticsearchWriter(service), { onMissing: async () => void events.push("mark-pending") })).resolves.toEqual({
 			created: true,
 		});
-		expect(events).toEqual(["mark-pending", "create"]);
-	});
 
-	it("reports an existing index", async () => {
-		await expect(ensureSearchIndex(service(true))).resolves.toEqual({
-			created: false,
+		const create = calls.find((call) => call.api === "create")!;
+		expect(events).toEqual(["mark-pending"]);
+		expect(create.request.index).toMatch(/^library_\d+$/);
+		expect((create.request.mappings as { _meta: unknown })._meta).toEqual({ version: SEARCH_INDEX_VERSION });
+		expect(calls.find((call) => call.api === "updateAliases")!.request).toEqual({
+			actions: [{ add: { index: create.request.index, alias: "library", is_write_index: true } }],
 		});
 	});
 
-	it("waits for a settings task as long as Meilisearch makes progress, and gives up once it stalls", async () => {
-		// The task is queued for its first five polls, then in batch 7 until the tenth.
-		const run = (progressFor: (poll: number) => number | Error) => {
-			const target = service(true);
-			let polls = 0;
-			(target.index as unknown as { tasks: unknown }).tasks = {
-				getTask: async (uid: number) => {
-					polls++;
-					return {
-						...succeededTask(uid),
-						batchUid: polls <= 5 ? null : 7,
-						status: polls <= 5 ? "enqueued" : polls < 10 ? "processing" : "succeeded",
-					};
-				},
-			};
-			const progress = async () => {
-				const value = progressFor(polls);
-				if (value instanceof Error) throw value;
-				return { uid: 6, progress: { percentage: value } };
-			};
-			(target.client as unknown as { batches: unknown }).batches = {
-				getBatch: progress,
-				getBatches: async () => ({ results: [await progress()] }),
-			};
-			return ensureSearchIndex(target, { taskTimeoutMs: 300 });
-		};
+	it("leaves an existing index alone", async () => {
+		const { calls, service } = search({ aliasExists: true });
 
-		// Ten polls 100 ms apart take three times the timeout.
-		await expect(run((poll) => poll)).resolves.toEqual({ created: false });
-		await expect(run(() => 10)).rejects.toMatchObject({ name: "MeilisearchTaskTimeOutError" });
-		// A failed progress read is not progress.
-		await expect(run((poll) => (poll % 2 ? new Error("unavailable") : 10))).rejects.toMatchObject({
-			name: "MeilisearchTaskTimeOutError",
-		});
+		await expect(ensureSearchIndex(elasticsearchWriter(service))).resolves.toEqual({ created: false });
+		expect(calls.map((call) => call.api)).toEqual(["getAlias"]);
 	});
 });
 
-describe("search index embedder", () => {
-	const restEmbedder = {
-		source: "rest" as const,
-		url: "http://embedder.internal:8080/embed",
-		request: { input: "{{text}}" },
-		response: { embedding: "{{embedding}}" },
-	};
+describe("search index writes", () => {
+	it("writes records and deletions through the alias, then makes them searchable once", async () => {
+		const { calls, service } = search({ aliasExists: true, bulkItems: [{ delete: { _id: "CCCC3333", status: 404, error: { type: "not_found" } } }] });
 
-	it("polls the embedder task at the slow interval", async () => {
-		vi.useFakeTimers();
-		try {
-			const getTask = vi.fn();
-			let calls = 0;
-			getTask.mockImplementation(async (uid: number) => ({
-				...succeededTask(uid),
-				status: ++calls < 3 ? "processing" : "succeeded",
-			}));
-			const target = service(true);
-			(target.index as unknown as { tasks: { getTask: unknown } }).tasks =
-				{
-					getTask,
-				};
-			const pending = applySearchIndexEmbedder(target, restEmbedder);
-			await vi.advanceTimersByTimeAsync(
-				EMBEDDER_TASK_POLL_INTERVAL_MS - 1,
-			);
-			expect(getTask).toHaveBeenCalledTimes(1);
-			await vi.advanceTimersByTimeAsync(
-				EMBEDDER_TASK_POLL_INTERVAL_MS * 2,
-			);
-			await pending;
-			expect(getTask).toHaveBeenCalledTimes(3);
-		} finally {
-			vi.useRealTimers();
-		}
+		await applySearchProjectionPlan(elasticsearchWriter(service), plan, 30_000, 1_024);
+
+		expect(calls.map((call) => call.api)).toEqual(["bulk", "bulk", "refresh"]);
+		const bulks = calls.filter((call) => call.api === "bulk").map((call) => call.request);
+		// A missing alias fails the write rather than create an index under its name.
+		expect(bulks.map((request) => request.require_alias)).toEqual([true, true]);
+		expect(bulks[0]!.operations).toEqual([
+			{ index: { _index: "library", _id: "AAAA1111" } },
+			plan.documents[0],
+			{ index: { _index: "library", _id: "BBBB2222" } },
+			plan.documents[1],
+		]);
+		expect(bulks[1]!.operations).toEqual([{ delete: { _index: "library", _id: "CCCC3333" } }]);
 	});
 
-	it("sends only the embedders setting and returns the task", async () => {
-		const settingsCalls: unknown[] = [];
-		const result = await applySearchIndexEmbedder(
-			service(true, [], { settingsCalls }),
-			restEmbedder,
-		);
-		expect(result.status).toBe("succeeded");
-		expect(settingsCalls).toHaveLength(1);
-		expect(Object.keys(settingsCalls[0] as object)).toEqual(["embedders"]);
-		expect(
-			(settingsCalls[0] as { embedders: Record<string, unknown> })
-				.embedders,
-		).toHaveProperty("default.source", "rest");
+	it("writes each record as of when its claim began reading, leaving one a later read already wrote", async () => {
+		const { calls, service } = search({
+			aliasExists: true,
+			bulkItems: [{ index: { _id: "AAAA1111", status: 409, error: { type: "version_conflict_engine_exception", reason: "current version is higher" } } }],
+		});
+
+		await applySearchProjectionPlan(elasticsearchWriter(service), plan, 30_000, 1_024, { readFrom: 1_793_000_000_000 });
+
+		const bulks = calls.filter((call) => call.api === "bulk").map((call) => call.request);
+		const versioned = { version: 1_793_000_000_000, version_type: "external_gte" };
+		expect(bulks[0]!.operations).toContainEqual({ index: { _index: "library", _id: "AAAA1111", ...versioned } });
+		expect(bulks[1]!.operations).toEqual([{ delete: { _index: "library", _id: "CCCC3333", ...versioned } }]);
 	});
 
-	it("removes the embedder when the library has none", async () => {
-		const settingsCalls: unknown[] = [];
-		await applySearchIndexEmbedder(
-			service(true, [], { settingsCalls }),
-			null,
-		);
-		expect(settingsCalls[0]).toEqual({
-			embedders: { default: null, openai: null },
+	it("names the records Elasticsearch refused for their content", async () => {
+		const { service } = search({
+			aliasExists: true,
+			bulkItems: [
+				{ index: { _id: "AAAA1111", status: 201 } },
+				{ index: { _id: "BBBB2222", status: 400, error: { type: "document_parsing_exception", reason: "failed to parse field [year]" } } },
+			],
+		});
+
+		const failure = applySearchProjectionPlan(elasticsearchWriter(service), { ...plan, deleteKeys: [] });
+		await expect(failure).rejects.toBeInstanceOf(SearchIndexDocumentError);
+		await expect(failure).rejects.toMatchObject({
+			failures: [{ key: "BBBB2222", reason: "document_parsing_exception: failed to parse field [year]" }],
 		});
 	});
 
-	it("throws the task error when Meilisearch rejects the embedder", async () => {
-		await expect(
-			applySearchIndexEmbedder(
-				service(true, [], { taskStatus: "failed" }),
-				restEmbedder,
-			),
-		).rejects.toBeInstanceOf(SearchIndexTaskError);
+	it("retries a deletion when the index itself is missing", async () => {
+		const { service } = search({
+			aliasExists: true,
+			bulkItems: [{ delete: { _id: "CCCC3333", status: 404, error: { type: "index_not_found_exception", reason: "no such index [library]" } } }],
+		});
+
+		await expect(applySearchProjectionPlan(elasticsearchWriter(service), { ...plan, documents: [] })).rejects.toBeInstanceOf(SearchIndexWriteError);
+	});
+
+	it("retries the whole write when Elasticsearch is overloaded", async () => {
+		const { service } = search({
+			aliasExists: true,
+			bulkItems: [{ index: { _id: "AAAA1111", status: 429, error: { type: "es_rejected_execution_exception", reason: "queue full" } } }],
+		});
+
+		await expect(applySearchProjectionPlan(elasticsearchWriter(service), { ...plan, deleteKeys: [] })).rejects.toBeInstanceOf(SearchIndexWriteError);
+	});
+});
+
+describe("an Elasticsearch rebuild", () => {
+	const rebuildOptions = { maxDocumentBatchBytes: 1_024 * 1_024, taskTimeoutMs: 30_000, reproject: async function* () {} };
+	async function* plans() {
+		yield { documents: plan.documents, deleteKeys: [] } as unknown as SearchProjectionPlan;
+	}
+
+	it("deletes what an earlier rebuild left behind, swaps the alias, then merges into segments Elasticsearch still merges", async () => {
+		const { calls, service } = search({ aliasExists: true });
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).resolves.toMatchObject({ indexed: 2, deleted: 2 });
+		const deletes = calls.filter((call) => call.api === "delete").map((call) => call.request.index);
+		expect(deletes).toEqual([["library_1792000000000"], ["library_1793000000000"]]);
+		// 12 GiB merges into three segments of at most 5 GiB.
+		expect(calls.find((call) => call.api === "forcemerge")?.request).toMatchObject({ max_num_segments: 3, wait_for_completion: false });
+	});
+
+	it("keeps its new index when the alias moved though the request failed, as readers search it", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const { calls, service } = search({ aliasExists: true, aliasMoveTimesOut: true });
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).rejects.toThrow("Request timed out");
+		const created = calls.find((call) => call.api === "create")?.request.index;
+		expect(calls.filter((call) => call.api === "delete").map((call) => call.request.index)).not.toContainEqual(created);
+		error.mockRestore();
+	});
+
+	it("deletes its half-built index when a write fails, and leaves readers on the old one", async () => {
+		const { calls, service } = search({
+			aliasExists: true,
+			bulkItems: [{ index: { _id: "AAAA1111", status: 503, error: { type: "unavailable_shards_exception", reason: "no shard" } } }],
+		});
+		await expect(elasticsearchWriter(service).rebuild(plans(), rebuildOptions)).rejects.toBeInstanceOf(SearchIndexWriteError);
+		const created = calls.find((call) => call.api === "create")?.request.index;
+		expect(calls.filter((call) => call.api === "delete").map((call) => call.request.index)).toContainEqual(created);
+		expect(calls.some((call) => call.api === "updateAliases")).toBe(false);
 	});
 });

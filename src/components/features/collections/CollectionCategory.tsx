@@ -10,7 +10,7 @@ import { AnimatePresence } from "framer-motion";
 import { Collection } from "@/app/api/collections/types";
 import { MAX_COLLAPSED_HEIGHT } from "@/constants/collections";
 import CollectionHierarchy from "./CollectionHierarchy";
-import { FacetDistribution } from "meilisearch";
+import type { FacetDistribution } from "@/lib/search-engine";
 import { useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
 

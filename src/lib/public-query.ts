@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { ITEMS_PER_PAGE, MAX_ITEMS_PER_PAGE } from "@/constants/items";
 import {
-	lastReachablePage,
+	lastNumberedPage,
 	resolveSearchQuery,
 	type QueryIssue,
 	type SearchQueryConfig,
@@ -22,7 +22,7 @@ type EndpointOptions = {
 function endpointNames(options: EndpointOptions) {
 	return new Set<string>([
 		...RESULT_PARAMS,
-		...(options.paged ? ["page", "sort"] : []),
+		...(options.paged ? ["page", "after", "before", "sort"] : []),
 		...(options.perPage ? ["perPage"] : []),
 		...(options.includeHeavyFields ? ["includeHeavyFields"] : []),
 	]);
@@ -90,10 +90,11 @@ export function readPublicQuery(
 		includeHeavyFields: heavy === "true",
 		issues: [
 			...nameIssues(searchParams, names),
+			// A page past the numbered ones is reached from a cursor a page of results gave.
 			...numberIssue(
 				"page",
 				given("page"),
-				lastReachablePage(perPage ?? ITEMS_PER_PAGE),
+				given("after") || given("before") ? Number.MAX_SAFE_INTEGER : lastNumberedPage(perPage ?? ITEMS_PER_PAGE),
 			),
 			...perPageIssues,
 			...(heavy === null || heavy === "true" || heavy === "false"

@@ -8,6 +8,7 @@ import {
 	createLibraryDatabaseProvisionerServer,
 	type LibraryDatabaseHttpDeleter,
 	type LibraryDatabaseHttpReconciler,
+	type LibrarySearchHttpReconciler,
 } from "@/lib/deployment/library-database-provisioner-http";
 
 const token = "test-provisioner-token-with-at-least-32-bytes";
@@ -21,6 +22,12 @@ const receipt = {
 	loginName: "el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f_user",
 	databaseUrl:
 		"postgresql://el_user:password@postgres.internal:5432/el_database",
+};
+
+const searchReceipt = {
+	outcome: "created" as const,
+	host: "http://elasticsearch:9200",
+	index: receipt.databaseName,
 };
 
 async function closeServer(server: Server) {
@@ -38,11 +45,14 @@ async function withServer<T>(
 		databaseName: receipt.databaseName,
 		loginName: receipt.loginName,
 	}),
+	reconcileSearch: LibrarySearchHttpReconciler = async () => searchReceipt,
 ) {
 	const server = createLibraryDatabaseProvisionerServer({
 		onError: () => undefined,
 		reconcile,
 		remove,
+		reconcileSearch,
+		removeSearch: async () => ({ outcome: "deleted", deletedIndexes: [`${searchReceipt.index}_1793000000000`] }),
 		token,
 	});
 	server.listen(0, "127.0.0.1");
@@ -335,6 +345,67 @@ describe("library database provisioner HTTP contract", () => {
 				expect(body).not.toContain(leakedPassword);
 				expect(body).not.toContain(leakedAdminUrl);
 				expect(body).not.toContain(token);
+			},
+		);
+	});
+	it("reconciles and deletes the library's search login through the same contract", async () => {
+		const reconcileSearch: LibrarySearchHttpReconciler = async (request) => {
+			expect(request).toEqual(validBody);
+			return searchReceipt;
+		};
+		await withServer(
+			reconcileReceipt(),
+			async (baseUrl) => {
+				const reconciled = await fetch(`${baseUrl}/v1/library-search/reconcile`, authorizedJson(validBody));
+				expect(reconciled.status).toBe(200);
+				expect(await reconciled.json()).toEqual({ libraryId: validBody.libraryId, ...searchReceipt });
+
+				const deleted = await fetch(`${baseUrl}/v1/library-search/delete`, authorizedJson({ libraryId: validBody.libraryId }));
+				expect(deleted.status).toBe(200);
+				expect(await deleted.json()).toEqual({
+					libraryId: validBody.libraryId,
+					outcome: "deleted",
+					deletedIndexes: [`${searchReceipt.index}_1793000000000`],
+				});
+
+				const unauthorized = await fetch(`${baseUrl}/v1/library-search/reconcile`, {
+					...authorizedJson(validBody),
+					headers: { Authorization: "Bearer wrong", "Content-Type": "application/json" },
+				});
+				expect(unauthorized.status).toBe(401);
+
+				const callerChosenIndex = await fetch(
+					`${baseUrl}/v1/library-search/reconcile`,
+					authorizedJson({ ...validBody, index: "another_library" }),
+				);
+				expect(callerChosenIndex.status).toBe(400);
+			},
+			undefined,
+			reconcileSearch,
+		);
+	});
+
+	it("does not expose search secrets in an unexpected failure", async () => {
+		const leakedAdminUrl = "http://elastic:secret@elasticsearch:9200";
+		await withServer(
+			reconcileReceipt(),
+			async (baseUrl) => {
+				const response = await fetch(`${baseUrl}/v1/library-search/reconcile`, authorizedJson(validBody));
+				const body = await response.text();
+
+				expect(response.status).toBe(500);
+				expect(JSON.parse(body)).toEqual({
+					error: {
+						code: "search_reconciliation_failed",
+						message: "The library search login could not be reconciled.",
+					},
+				});
+				expect(body).not.toContain(leakedAdminUrl);
+				expect(body).not.toContain(validBody.password);
+			},
+			undefined,
+			async () => {
+				throw new Error(`${leakedAdminUrl} ${validBody.password}`);
 			},
 		);
 	});

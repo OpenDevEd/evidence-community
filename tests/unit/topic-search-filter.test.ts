@@ -36,12 +36,8 @@ describe("topic search filters", () => {
 			nodes,
 		);
 
-		expect(request.finalFilters).toContain(
-			'topicAncestors IN ["T12260","T13565"]',
-		);
-		expect(request.facetFilters).not.toContain(
-			'topicAncestors IN ["T12260","T13565"]',
-		);
+		expect(request.finalFilters).toContainEqual({ field: "topicAncestors", in: ["T12260", "T13565"] });
+		expect(request.facetFilters).not.toContainEqual({ field: "topicAncestors", in: ["T12260", "T13565"] });
 	});
 
 	it("matches nothing for a topic the library does not have, where no filter would match everything", () => {
@@ -51,7 +47,7 @@ describe("topic search filters", () => {
 			nodes,
 		);
 
-		expect(request.finalFilters).toContain('topicAncestors IN ["T999"]');
+		expect(request.finalFilters).toContainEqual({ field: "topicAncestors", in: ["T999"] });
 	});
 
 	it("ignores topic URL state when the feature is disabled", () => {
@@ -61,10 +57,8 @@ describe("topic search filters", () => {
 			nodes,
 		);
 
-		expect(
-			request.finalFilters.some((filter) =>
-				filter.startsWith("topicAncestors"),
-			),
-		).toBe(false);
+		expect(request.finalFilters).not.toContainEqual(
+			expect.objectContaining({ field: "topicAncestors" }),
+		);
 	});
 });

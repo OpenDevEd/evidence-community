@@ -6,7 +6,6 @@ import {
 	outbox,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
@@ -20,36 +19,28 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
 import { NATIVE_COLLECTION_SORT_ORDER_STEP } from "../src/lib/admin/native-collection-service";
-import type { MeilisearchService } from "../src/lib/meilisearch-factory";
 import {
 	applySearchProjectionPlan,
 	drainSearchOutbox,
-	ensureSearchIndex,
 	processNextSearchOutboxBatch,
 	processNextSearchOutboxEvent,
 	requeueSearchOutboxDeadLetters,
 	rebuildForOutboxBacklog,
 	rebuildSearchIndex,
-	SearchIndexTaskError,
+	SearchIndexDocumentError,
 	SearchOutboxAbortError,
 	SearchOutboxLeaseLostError,
 	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
-import {
-	generateSearchProjectionPlans,
-	type SearchProjectionPlan,
-} from "../src/lib/search-index/projection";
-import { FULL_TEXT_PDF_FILTER } from "../src/lib/search-filter-constants";
+import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
 import { PLATFORM_SEARCH_SCOPE_OPTIONS } from "../src/config/library-config/catalogs";
+import { outboxVerifierEngine } from "./search-outbox-engines";
 
 const libraryConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
-const meilisearchHost =
-	process.env.MEILISEARCH_HOST ?? "http://127.0.0.1:57700";
-const meilisearchKey = process.env.MEILISEARCH_KEY ?? "local-search-key";
 
 const parentKey = "SRCH2345";
 const keptKey = "LEAS2345";
@@ -71,45 +62,15 @@ const entityKeys = [
 ];
 const backlogKey = "BKLG2345";
 entityKeys.push(backlogKey);
+// Stays public through the rebuild race check, so that rebuild has a record to write.
+const raceKey = "RACE2345";
+entityKeys.push(raceKey);
 const tagName = "search-e2e";
 const goodIndexName = `search_outbox_e2e_${process.pid}`;
 const badIndexName = `search_outbox_bad_e2e_${process.pid}`;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
-}
-
-function service(client: Meilisearch, indexName: string): MeilisearchService {
-	return {
-		cacheIndex: client.index("cache"),
-		client,
-		index: client.index(indexName),
-		indexName,
-		redirectsIndex: client.index("redirects"),
-	};
-}
-
-async function successfulTask(taskPromise: { waitTask: () => Promise<Task> }) {
-	const task = await taskPromise.waitTask();
-	assert(
-		task.status === "succeeded",
-		`Meilisearch setup task ${task.uid} failed: ${task.error?.message}`,
-	);
-}
-
-async function deleteIndexIfPresent(client: Meilisearch, indexName: string) {
-	try {
-		await client.getRawIndex(indexName);
-		await successfulTask(client.deleteIndex(indexName));
-	} catch (error) {
-		if (
-			error instanceof MeilisearchApiError &&
-			error.cause?.code === "index_not_found"
-		) {
-			return;
-		}
-		throw error;
-	}
 }
 
 async function cleanupDatabase(
@@ -145,12 +106,7 @@ async function verify() {
 		"select pg_advisory_lock(hashtextextended('search-index-verifier', 0))",
 	);
 	const database = resource.database;
-	const client = new Meilisearch({
-		apiKey: meilisearchKey,
-		host: meilisearchHost,
-	});
-	const goodService = service(client, goodIndexName);
-	const badService = service(client, badIndexName);
+	const engine = outboxVerifierEngine(goodIndexName, badIndexName);
 	const delayedExistingEvents: Array<{
 		id: number;
 		nextAttemptAt: Date;
@@ -158,16 +114,8 @@ async function verify() {
 
 	try {
 		await cleanupDatabase(database);
-		await Promise.all([
-			deleteIndexIfPresent(client, goodIndexName),
-			deleteIndexIfPresent(client, badIndexName),
-		]);
-		await ensureSearchIndex(goodService);
-		await successfulTask(
-			client.createIndex(badIndexName, {
-				primaryKey: "id",
-			}),
-		);
+		await engine.reset();
+		await engine.prepare();
 
 		const pending = await database
 			.select({
@@ -353,10 +301,9 @@ async function verify() {
 		const observedProgress: SearchOutboxProgress[] = [];
 		const initialBatch = await drainSearchOutbox({
  config: libraryConfig,
-			batchClient: client.batches,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			maxEvents: 2,
 			onProgress: async (progress) => {
@@ -371,19 +318,14 @@ async function verify() {
 				initialBatch[0].documentCount === 1,
 			`Bulk outbox delivery did not coalesce parent and child events: ${JSON.stringify(initialBatch)}`,
 		);
+		// Meilisearch reports the task that indexes the claim; an Elasticsearch write has no task to report.
 		assert(
 			observedProgress[0]?.stage === "projecting" &&
-				observedProgress.some(({ stage }) => stage === "waiting") &&
-				observedProgress.some(
-					({ batchProgress, batchUid, stage, taskUid }) =>
-						stage === "indexing" &&
-						batchProgress === 100 &&
-						batchUid !== null &&
-						taskUid !== null,
-				),
-			"The consumer did not expose real Meilisearch task progress",
+				(engine.name === "elasticsearch" ||
+					observedProgress.some(({ eventIds, stage, taskUid }) => stage === "indexing" && eventIds.length === 2 && taskUid !== null)),
+			`The consumer did not report the claimed events' progress: ${JSON.stringify(observedProgress)}`,
 		);
-		const initialDocument = await goodService.index.getDocument<{
+		const initialDocument = await engine.readDocument<{
             country: string[];
 			attachmentsData: Array<{ key: string; tags: string[] }>;
 			collections: string[];
@@ -442,39 +384,22 @@ async function verify() {
 			({ key }) => key === "documents",
 		);
 		assert(fullTextScope, "The full-text search scope is missing");
-		const fullTextOptions = {
-			attributesToSearchOn: [...fullTextScope.attributesToSearchOn],
-			filter: FULL_TEXT_PDF_FILTER,
-		};
-		const fullTextResult = await goodService.index.search(
-			"Second page text",
-			fullTextOptions,
-		);
+		const fullTextFields = fullTextScope.attributesToSearchOn;
 		assert(
-			fullTextResult.hits.length === 1 &&
-				fullTextResult.hits[0]?.key === parentKey,
+			(await engine.searchKeys("Second page text", fullTextFields, true)).join(",") === parentKey,
 			"Full-text search did not return the publication containing the matching PDF page",
 		);
-		const metadataOnlyResult = await goodService.index.search(
-			"Initial indexed report",
-			fullTextOptions,
-		);
 		assert(
-			metadataOnlyResult.hits.length === 0,
+			(await engine.searchKeys("Initial indexed report", fullTextFields, true)).length === 0,
 			"Full-text-only search matched metadata outside the PDF",
 		);
 		const textlessKey = "TEXTLESS2345";
-		await successfulTask(goodService.index.addDocuments([
-			{ ...initialDocument, key: textlessKey, fullTextPDFs: [] },
-		]));
-		const withText = await goodService.index.search("Initial indexed report", {
-			filter: FULL_TEXT_PDF_FILTER,
-		});
+		await engine.addDocuments([{ ...initialDocument, key: textlessKey, fullTextPDFs: [] }]);
 		assert(
-			withText.hits.length === 1 && withText.hits[0]?.key === parentKey,
+			(await engine.searchKeys("Initial indexed report", ["title"], true)).join(",") === parentKey,
 			"Requiring PDF text did not exclude a matching record without extracted pages",
 		);
-		await successfulTask(goodService.index.deleteDocument(textlessKey));
+		await engine.deleteDocument(textlessKey);
 		assert(
 			initialDocument.publicationIdentifiers.crossref.doi ===
 				"10.53832/search.000001" &&
@@ -517,7 +442,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-standalone",
 		});
@@ -527,16 +452,7 @@ async function verify() {
 		);
 		// A parentless attachment is not a public record, so it must stay out
 		// of the search index even when its own event is processed.
-		try {
-			await goodService.index.getDocument(reparentedKey);
-			throw new Error("A parentless attachment was indexed on its own");
-		} catch (error) {
-			assert(
-				error instanceof MeilisearchApiError &&
-					error.cause?.code === "document_not_found",
-				`The standalone attachment check failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-			);
-		}
+		assert(await engine.documentMissing(reparentedKey), "A parentless attachment was indexed on its own");
 		await database
 			.update(item)
 			.set({ parentItem: parentKey, revision: 2 })
@@ -551,7 +467,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-reparent",
 		});
@@ -561,17 +477,8 @@ async function verify() {
 				reparentResult.documentCount === 1,
 			`The re-parent event produced the wrong projection: ${JSON.stringify(reparentResult)}`,
 		);
-		try {
-			await goodService.index.getDocument(reparentedKey);
-			throw new Error("The standalone document survived re-parenting");
-		} catch (error) {
-			assert(
-				error instanceof MeilisearchApiError &&
-					error.cause?.code === "document_not_found",
-				`Re-parent cleanup failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-			);
-		}
-		const reparentedParent = await goodService.index.getDocument<{
+		assert(await engine.documentMissing(reparentedKey), "The standalone document survived re-parenting");
+		const reparentedParent = await engine.readDocument<{
 			attachmentsData: Array<{ key: string }>;
 		}>(parentKey);
 		assert(
@@ -580,33 +487,25 @@ async function verify() {
 			),
 			"The re-parented child was not embedded in its parent",
 		);
-		const tasksBeforeSizedBatch = await client.tasks.getTasks({
-			indexUids: [goodIndexName],
-			limit: 1,
-		});
 		const sizedBatchKeys = ["BTCH2345", "BTCH2346", "BTCH2347"];
 		const sizedBatchDocuments = sizedBatchKeys.map((key) => ({
 			...reparentedParent,
 			abstractNote: "x".repeat(2_000),
 			key,
 		})) as unknown as SearchProjectionPlan["documents"];
+		const counted = engine.intercept(async () => undefined);
 		await applySearchProjectionPlan(
-			goodService.index,
+			counted.writer,
 			{ deleteKeys: [], documents: sizedBatchDocuments },
 			10_000,
 			1_024,
 		);
-		const tasksAfterSizedBatch = await client.tasks.getTasks({
-			indexUids: [goodIndexName],
-			limit: 1,
-		});
 		assert(
-			tasksAfterSizedBatch.total - tasksBeforeSizedBatch.total ===
-				sizedBatchDocuments.length,
+			counted.writeCalls() === sizedBatchDocuments.length,
 			"Serialized-size batching did not split oversized batches",
 		);
 		await applySearchProjectionPlan(
-			goodService.index,
+			engine.writer(),
 			{ deleteKeys: sizedBatchKeys, documents: [] },
 			10_000,
 		);
@@ -633,19 +532,19 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				index: badService.index,
+				writer: engine.refusingWriter(),
 				leaseDurationMs: 1_000,
 				retryBaseMs: 100,
 				taskTimeoutMs: 10_000,
 				workerId: "search-e2e-failure",
 			});
 			throw new Error(
-				"The invalid Meilisearch task unexpectedly succeeded",
+				"The refused write unexpectedly succeeded",
 			);
 		} catch (error) {
 			assert(
-				error instanceof SearchIndexTaskError,
-				"The worker did not surface the terminal Meilisearch task failure",
+				error instanceof SearchIndexDocumentError,
+				"The worker did not report the record Elasticsearch refused",
 			);
 		}
 		const [failedEvent] = await database
@@ -656,9 +555,9 @@ async function verify() {
 			failedEvent?.processedAt === null &&
 				failedEvent.deadLetteredAt === null &&
 				failedEvent.attempts === 1 &&
-				failedEvent.lastError?.includes("SearchIndexTaskError") &&
+				/SearchIndex(Document|Task)Error/u.test(failedEvent.lastError ?? "") &&
 				failedEvent.leaseOwner === null,
-			"A failed task was acknowledged or did not become retryable",
+			"A refused write was acknowledged or did not become retryable",
 		);
 		await database
 			.update(outbox)
@@ -668,11 +567,11 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-retry",
 		});
-		const retriedDocument = await goodService.index.getDocument<{
+		const retriedDocument = await engine.readDocument<{
 			title: string;
 		}>(parentKey);
 		assert(
@@ -699,7 +598,7 @@ async function verify() {
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 100,
-				index: badService.index,
+				writer: engine.refusingWriter(),
 				leaseDurationMs: 1_000,
 				maxAttempts: 1,
 				retryBaseMs: 100,
@@ -708,7 +607,7 @@ async function verify() {
 			throw new Error("The poison event unexpectedly succeeded");
 		} catch (error) {
 			assert(
-				error instanceof SearchIndexTaskError,
+				error instanceof SearchIndexDocumentError,
 				`The poison event failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
 			);
 		}
@@ -738,7 +637,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-requeued",
 		});
@@ -760,11 +659,11 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-collection",
 		});
-		const movedDocument = await goodService.index.getDocument<{
+		const movedDocument = await engine.readDocument<{
 			collectionsAncestry: string[];
 			revision: number;
 			title: string;
@@ -791,20 +690,11 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-delete",
 		});
-		try {
-			await goodService.index.getDocument(parentKey);
-			throw new Error("The tombstoned document remains searchable");
-		} catch (error) {
-			assert(
-				error instanceof MeilisearchApiError &&
-					error.cause?.code === "document_not_found",
-				`The tombstone check failed for an unexpected reason: ${String(error)}`,
-			);
-		}
+		assert(await engine.documentMissing(parentKey), "The tombstoned document remains searchable");
 
 		await database
 			.update(item)
@@ -825,7 +715,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-restore",
 		});
@@ -870,7 +760,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-contender",
 		});
@@ -883,7 +773,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement",
 		});
@@ -891,11 +781,11 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-serialized-follower",
 		});
-		const recoveredDocument = await goodService.index.getDocument<{
+		const recoveredDocument = await engine.readDocument<{
 			revision: number;
 			title: string;
 		}>(parentKey);
@@ -930,13 +820,14 @@ async function verify() {
 		});
 		const interruptedProcessing = processNextSearchOutboxEvent({
  config: libraryConfig,
-			batchClient: client.batches,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
+			// Hold the worker while Meilisearch indexes the claim; an Elasticsearch write reports no task, so hold it
+			// just before the write.
 			onProgress: async ({ stage }) => {
-				if (stage === "waiting") {
+				if (stage === (engine.name === "meilisearch" ? "indexing" : "projecting")) {
 					reportWaitingReached();
 					await waitingProgressHeld;
 				}
@@ -949,7 +840,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-replacement-generation",
 		});
@@ -980,34 +871,15 @@ async function verify() {
 			"Shutdown did not release the active event without penalizing it",
 		);
 
-		const progressWithoutBatchTelemetry: SearchOutboxProgress[] = [];
-		let unavailableBatchTelemetryCalls = 0;
 		await processNextSearchOutboxEvent({
- config: libraryConfig,
-			batchClient: {
-				getBatch: async () => {
-					unavailableBatchTelemetryCalls += 1;
-					throw new Error("batch telemetry unavailable");
-				},
-			} as unknown as Meilisearch["batches"],
+			config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
-			onProgress: async (progress) => {
-				progressWithoutBatchTelemetry.push(progress);
-			},
-			workerId: "search-e2e-no-batch-telemetry",
+			workerId: "search-e2e-after-shutdown",
 		});
-		assert(
-			unavailableBatchTelemetryCalls > 0 &&
-				progressWithoutBatchTelemetry.some(
-					({ stage, taskUid }) =>
-						stage === "indexing" && taskUid !== null,
-				),
-			"Task progress disappeared when batch telemetry was unavailable",
-		);
-		const recoveredAfterShutdown = await goodService.index.getDocument<{
+		const recoveredAfterShutdown = await engine.readDocument<{
 			revision: number;
 			title: string;
 		}>(parentKey);
@@ -1017,74 +889,72 @@ async function verify() {
 			"The event released during shutdown was not retryable",
 		);
 
-		// The rebuild replaces records in place, so a document with no
-		// PostgreSQL record must be removed by the rebuild itself.
+		// The rebuild fills a new index from PostgreSQL, so a document with no
+		// PostgreSQL record is left behind with the old index.
 		const orphanKey = `${parentKey}ORPHAN`;
-		await successfulTask(
-			goodService.index.addDocuments([
-				{ key: orphanKey, title: "Orphaned search copy" },
-			]),
-		);
-		const rebuilt = await rebuildSearchIndex(database, goodService, libraryConfig, {
+		await engine.addDocuments([{ key: orphanKey, title: "Orphaned search copy" }]);
+		const rebuilt = await rebuildSearchIndex(database, engine.writer(), libraryConfig, {
 			taskTimeoutMs: 60_000,
 		});
 		assert(
 			rebuilt.indexed >= 1,
 			"The full rebuild omitted the canonical item",
 		);
-		await goodService.index.getDocument(parentKey);
-		try {
-			await goodService.index.getDocument(orphanKey);
-			throw new Error("The full rebuild kept a record PostgreSQL no longer has");
-		} catch (error) {
-			assert(
-				error instanceof MeilisearchApiError &&
-					error.cause?.code === "document_not_found",
-				`The orphan check failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
-			);
-		}
+		await engine.readDocument(parentKey);
+		assert(await engine.documentMissing(orphanKey), "The full rebuild kept a record PostgreSQL no longer has");
 
 		// A record unpublished when the rebuild reads it, then published again
-		// and indexed by a running worker before the rebuild's cleanup, must
-		// stay in search.
+		// and indexed into the old index by a running worker before the alias
+		// moves, must be indexed again into the new index.
+		await database.insert(itemIdentity).values({ key: raceKey, sourceConnectionKey: "native", sourceRecordKey: raceKey });
+		await database.insert(item).values({
+			itemType: "Report",
+			key: raceKey,
+			sourceConnectionKey: "native",
+			sourceRecordKey: raceKey,
+			title: "Public through the rebuild",
+		});
 		await database
 			.update(item)
 			.set({ deleted: 1, deletedAt: new Date(), revision: 9 })
 			.where(eq(item.key, parentKey));
-		const republishBeforeCleanup = new Proxy(goodService.index, {
-			get(target, property) {
-				if (property === "deleteDocuments") {
-					return async (keys: string[]) => {
-						await database
-							.update(item)
-							.set({ deleted: 0, deletedAt: null, revision: 10 })
-							.where(eq(item.key, parentKey));
-						for await (const plan of generateSearchProjectionPlans(
-							database,
-							libraryConfig,
-							[{ entityKey: parentKey, entityType: "item" }],
-						)) {
-							await applySearchProjectionPlan(target, plan);
-						}
-						return target.deleteDocuments(keys);
-					};
-				}
-				const value = Reflect.get(target, property);
-				return typeof value === "function" ? value.bind(target) : value;
-			},
+		let republishedDuringRebuild = false;
+		const rebuildWithRepublish = engine.intercept(async () => {
+			if (republishedDuringRebuild) return;
+			republishedDuringRebuild = true;
+			await database
+				.update(item)
+				.set({ deleted: 0, deletedAt: null, revision: 10 })
+				.where(eq(item.key, parentKey));
+			await database.insert(outbox).values({ entityKey: parentKey, entityType: "item", operation: "upsert", revision: 10 });
+			await processNextSearchOutboxEvent({
+				config: libraryConfig,
+				database,
+				heartbeatIntervalMs: 100,
+				writer: engine.writer(),
+				leaseDurationMs: 1_000,
+				workerId: "search-e2e-during-rebuild",
+			});
 		});
-		await rebuildSearchIndex(
-			database,
-			{ ...goodService, index: republishBeforeCleanup },
-			libraryConfig,
-			{ taskTimeoutMs: 60_000 },
+		const raced = await rebuildSearchIndex(database, rebuildWithRepublish.writer, libraryConfig, { taskTimeoutMs: 60_000 });
+		assert(
+			republishedDuringRebuild && raced.redrained >= 1,
+			"The rebuild did not put back an event acknowledged while it ran",
 		);
-		const republished = await goodService.index.getDocument<{
+		await processNextSearchOutboxEvent({
+			config: libraryConfig,
+			database,
+			heartbeatIntervalMs: 100,
+			writer: engine.writer(),
+			leaseDurationMs: 1_000,
+			workerId: "search-e2e-after-rebuild",
+		});
+		const republished = await engine.readDocument<{
 			revision: number;
 		}>(parentKey);
 		assert(
 			republished.revision === 10,
-			"The full rebuild removed a record published again during the rebuild",
+			"The full rebuild lost a record published again during the rebuild",
 		);
 
 		// A backlog rebuild acknowledges the events waiting before it and
@@ -1111,27 +981,17 @@ async function verify() {
 			title: "Written during the rebuild",
 		});
 		let lateEventId: number | undefined;
-		const writeDuringRebuild = new Proxy(goodService.index, {
-			get(target, property) {
-				if (property === "addDocuments") {
-					return async (...args: Parameters<typeof target.addDocuments>) => {
-						if (lateEventId === undefined) {
-							const [lateEvent] = await database
-								.insert(outbox)
-								.values({ entityKey: backlogKey, entityType: "item", operation: "upsert", revision: 1 })
-								.returning({ id: outbox.id });
-							lateEventId = lateEvent?.id;
-						}
-						return target.addDocuments(...args);
-					};
-				}
-				const value = Reflect.get(target, property);
-				return typeof value === "function" ? value.bind(target) : value;
-			},
+		const writeDuringRebuild = engine.intercept(async () => {
+			if (lateEventId !== undefined) return;
+			const [lateEvent] = await database
+				.insert(outbox)
+				.values({ entityKey: backlogKey, entityType: "item", operation: "upsert", revision: 1 })
+				.returning({ id: outbox.id });
+			lateEventId = lateEvent?.id;
 		});
 		const backlogRebuild = await rebuildForOutboxBacklog(
 			database,
-			{ ...goodService, index: writeDuringRebuild },
+			writeDuringRebuild.writer,
 			libraryConfig,
 			{ taskTimeoutMs: 60_000 },
 		);
@@ -1143,7 +1003,7 @@ async function verify() {
 			"The backlog rebuild did not acknowledge the event waiting before it",
 		);
 		assert(
-			(await goodService.index.getDocument<{ title: string }>(parentKey)).title === "Backlog report",
+			(await engine.readDocument<{ title: string }>(parentKey)).title === "Backlog report",
 			"The backlog rebuild did not index the waiting event's change",
 		);
 		assert(
@@ -1210,27 +1070,19 @@ async function verify() {
 			])
 			.returning();
 		assert(keptEvent && stolenEvent, "The lease-loss events were not created");
-		const stealingIndex = new Proxy(goodService.index, {
-			get(target, property, receiver) {
-				if (property === "addDocuments") {
-					return async () => {
-						await database
-							.update(outbox)
-							.set({ leaseOwner: "search-e2e-thief" })
-							.where(eq(outbox.id, stolenEvent.id));
-						throw new Error("search host went away");
-					};
-				}
-				const value = Reflect.get(target, property, receiver);
-				return typeof value === "function" ? value.bind(target) : value;
-			},
+		const stealing = engine.intercept(async () => {
+			await database
+				.update(outbox)
+				.set({ leaseOwner: "search-e2e-thief" })
+				.where(eq(outbox.id, stolenEvent.id));
+			throw new Error("search host went away");
 		});
 		try {
 			await processNextSearchOutboxBatch({
  config: libraryConfig,
 				database,
 				heartbeatIntervalMs: 30_000,
-				index: stealingIndex,
+				writer: stealing.writer,
 				leaseDurationMs: 60_000,
 				retryBaseMs: 100,
 				workerId: "search-e2e-lease-loss",
@@ -1261,7 +1113,7 @@ async function verify() {
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
-			index: goodService.index,
+			writer: engine.writer(),
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-lease-loss-retry",
 		});
@@ -1294,11 +1146,12 @@ async function verify() {
 				expiredLeaseRecovery: true,
 				fullRebuild: true,
 				gracefulActiveShutdown: true,
+				engine: engine.name,
 				index: goodIndexName,
 				leaseLossIsolation: true,
+				rebuildRace: true,
 				reparentCleanup: true,
-				retryAfterTaskFailure: true,
-				taskProgressWithoutBatchTelemetry: true,
+				retryAfterRefusedWrite: true,
 			}),
 		);
 	} finally {
@@ -1309,10 +1162,7 @@ async function verify() {
 				.set({ nextAttemptAt: event.nextAttemptAt })
 				.where(eq(outbox.id, event.id));
 		}
-		await Promise.all([
-			deleteIndexIfPresent(client, goodIndexName),
-			deleteIndexIfPresent(client, badIndexName),
-		]);
+		await engine.reset();
 		await testLock.query(
 			"select pg_advisory_unlock(hashtextextended('search-index-verifier', 0))",
 		);

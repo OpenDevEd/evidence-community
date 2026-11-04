@@ -61,10 +61,10 @@ it("exports an ordered multi-page search from public database records and detect
 		const config = libraryConfigSchema.parse(maximalLibraryConfig);
 		config.content.tags.hidden = ["hidden"];
 		config.topics.enabled = true;
-		config.services.search = { host, key: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY ?? "", index: `export_${randomUUID().replaceAll("-", "")}` };
+		config.services.search = { engine: "meilisearch", meilisearch: { host, key: process.env.EVIDENCE_LIBRARY_TEST_MEILI_KEY ?? "", index: `export_${randomUUID().replaceAll("-", "")}` } };
 		vi.mocked(getDatabaseForConfig).mockResolvedValue(database);
 		vi.mocked(getLibraryConfig).mockResolvedValue(config);
-		const index = client.index(config.services.search.index);
+		const index = client.index(config.services.search.meilisearch!.index);
 		await successful(client.createIndex(index.uid, { primaryKey: "key" }));
 		try {
 			const keys = Array.from({ length: 503 }, () => generateCanonicalRecordKey()).sort();

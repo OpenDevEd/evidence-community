@@ -232,9 +232,12 @@
 			"url": "postgresql://library:password@database:5432/library"
 		},
 		"search": {
-			"host": "https://search.example.org",
-			"key": "example-search-key",
-			"index": "example_library"
+			"engine": "elasticsearch",
+			"elasticsearch": {
+				"host": "https://search.example.org",
+				"key": "example-search-key",
+				"index": "example_library"
+			}
 		},
 		"storage": {
 			"url": "https://storage.example.org",

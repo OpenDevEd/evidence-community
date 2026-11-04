@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	getLibraryConfig: vi.fn(),
-	getMeilisearchForConfig: vi.fn(),
+	getDatabaseForConfig: vi.fn(),
+	readPublicLibraryStatus: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -13,8 +14,11 @@ vi.mock("next/cache", () => ({
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: mocks.getLibraryConfig,
 }));
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: mocks.getMeilisearchForConfig,
+vi.mock("@/db", () => ({
+	getDatabaseForConfig: mocks.getDatabaseForConfig,
+}));
+vi.mock("@/lib/library-export-records", () => ({
+	readPublicLibraryStatus: mocks.readPublicLibraryStatus,
 }));
 
 import { SITEMAP_SIZE } from "@/constants/misc";
@@ -36,26 +40,23 @@ beforeEach(() => {
 });
 
 describe("runtime sitemap page count", () => {
-	it("does not touch Meilisearch when sitemap publication is disabled", async () => {
+	it("does not read the library when sitemap publication is disabled", async () => {
 		await expect(
 			getSitemapPageCount(config(false)),
 		).resolves.toBe(0);
 		expect(
-			mocks.getMeilisearchForConfig,
+			mocks.readPublicLibraryStatus,
 		).not.toHaveBeenCalled();
 	});
 
-	it("counts configured-index shards when sitemap publication is enabled", async () => {
-		const getStats = vi.fn().mockResolvedValue({
-			numberOfDocuments: SITEMAP_SIZE + 1,
-		});
-		mocks.getMeilisearchForConfig.mockResolvedValue({
-			index: { getStats },
+	it("counts shards of the library's public records when sitemap publication is enabled", async () => {
+		mocks.readPublicLibraryStatus.mockResolvedValue({
+			totalItems: SITEMAP_SIZE + 1,
 		});
 
 		await expect(
 			getSitemapPageCount(config(true)),
 		).resolves.toBe(2);
-		expect(getStats).toHaveBeenCalledOnce();
+		expect(mocks.readPublicLibraryStatus).toHaveBeenCalledOnce();
 	});
 });

@@ -2,8 +2,11 @@ import { MetadataRoute } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
+import { getDatabaseForConfig } from "@/db";
+import { buildPublicLibraryKeysQuery } from "@/lib/library-export-records";
+import { searchKeys } from "@/lib/search";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
 import {
@@ -32,14 +35,36 @@ export async function generateSitemaps() {
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
 
+/**
+ * One sitemap's records with what their entries show. PostgreSQL decides which records each sitemap holds, in key
+ * order; the search copy adds their cover images. A failed search is tried again, waiting longer each time.
+ */
+async function readSitemapRecords(libraryConfig: LibraryServerConfig, identifier: number) {
+	const keys = (await buildPublicLibraryKeysQuery(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE)).map((row) => row.key);
+	if (keys.length === 0) return [];
+	const maxRetries = 10;
+	for (let attempt = 1; ; attempt++) {
+		try {
+			const response = await searchKeys(libraryConfig, keys, { number: 1, size: keys.length }, {
+				exactTotal: false,
+				returned: { only: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"] },
+			});
+			return response.hits;
+		} catch (error) {
+			if (attempt === maxRetries) {
+				console.error(`Failed to fetch documents after ${maxRetries} attempts:`, error);
+				throw error;
+			}
+			await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+		}
+	}
+}
+
 export default async function sitemap(props: {
 	id: Promise<number>
 }): Promise<MetadataRoute.Sitemap> {
 	// Resolve the active library and its documents at request time.
 	await connection();
-	const maxRetries = 10;
-	let attempt = 0;
-	let items;
 
 	const identifier = Number(await props.id);
 	const libraryConfig = await getLibraryConfig();
@@ -49,30 +74,7 @@ export default async function sitemap(props: {
 
 	const { localization } = libraryConfig;
 	const baseUrl = libraryConfig.identity.baseUrl;
-	const { index } = await getMeilisearchForConfig(libraryConfig);
-
-	while (attempt < maxRetries) {
-		try {
-			items = await index.getDocuments({
-				limit: SITEMAP_SIZE,
-				fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
-				offset: identifier * SITEMAP_SIZE,
-			});
-			break; // Success - exit the loop
-		} catch (error) {
-			attempt++;
-			if (attempt === maxRetries) {
-				console.error(`Failed to fetch documents after ${maxRetries} attempts:`, error);
-				throw error; // Re-throw if all retries failed
-			}
-			// Wait for 1 second before retrying (exponential backoff)
-			await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
-		}
-	}
-
-	if (!items) {
-		return [];
-	}
+	const records = await readSitemapRecords(libraryConfig, identifier);
 
 	let policyEntries: MetadataRoute.Sitemap = [];
 	let gapmapEntries: MetadataRoute.Sitemap = [];
@@ -123,7 +125,7 @@ export default async function sitemap(props: {
 		}));
 	}
 
-	const itemEntries = items.results.map((item: any) => ({
+	const itemEntries = records.map((item: any) => ({
 		url: buildLocalizedSiteUrl(
 				`/lib/${item.key}`,
 				localization.defaultLocale,
