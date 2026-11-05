@@ -245,6 +245,13 @@ jobs:
           fi
           git log --first-parent --format='%H%x1f%s%x1f%b%x1e' "$range" \
             | node .github/scripts/release-notes.mjs > "$RUNNER_TEMP/release-notes.md"
+          # Openscholar's releases page warns about these. A migration is a new
+          # file directly under drizzle/; drizzle/rollback/ doesn't count.
+          database_changes=0
+          if [ -n "$PREVIOUS_COMMIT" ]; then
+            database_changes="$(git diff --name-only --diff-filter=A "$PREVIOUS_COMMIT" "$RUNTIME_COMMIT" -- ':(glob)drizzle/*.sql' | wc -l | tr -d ' ')"
+          fi
+          printf '\nDatabase changes: %s\n' "$database_changes" >> "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md"
           {
             echo 'body<<END_OF_RELEASE_NOTES'
@@ -252,6 +259,8 @@ jobs:
             echo 'END_OF_RELEASE_NOTES'
           } >> "$GITHUB_OUTPUT"
 
+  # Published as a prerelease: shared dev offers it at once, and production
+  # only after it's promoted on Openscholar's community releases page.
   release:
     name: Record the release
     needs:
@@ -283,7 +292,7 @@ jobs:
             --arg commit "$RUNTIME_COMMIT" \
             --arg name "Runtime ${RUNTIME_COMMIT:0:7}" \
             --arg body "$body" \
-            '{tag_name: $tag, target_commitish: $commit, name: $name, body: $body}' \
+            '{tag_name: $tag, target_commitish: $commit, name: $name, body: $body, prerelease: true}' \
             | curl --fail --silent --show-error \
               --request POST \
               --header 'Accept: application/vnd.github+json' \
