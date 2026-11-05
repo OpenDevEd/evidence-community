@@ -101,8 +101,9 @@ function FixURL(url: string | null) {
 
 /**
  * A record's references (what it cites) and citations (who cites it), each as "held of total": how many this
- * library holds, and how many OpenAlex lists in all. The first number opens the library's list, the second the
- * whole list in OpenScholar. A direction with nothing on either side is left out.
+ * library holds, and how many OpenAlex lists in all, or the total alone when the library holds none. The first number
+ * opens the library's list, the second the whole list in OpenScholar. A direction with nothing on either side is left
+ * out.
  */
 function CitationCounts({
 	itemData,
@@ -191,19 +192,20 @@ function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: Co
 		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
 			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
 				<HugeiconsIcon icon={icon} className="size-3.5" />
-				{held > 0 ? <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link> : <span className="font-semibold tabular-nums">{held}</span>}
-				{all !== null && <CountTotal all={all} count={count} locale={locale} of={of} onOpenAlex={onOpenAlex} />}
+				{held > 0 && <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link>}
+				{all !== null && <CountTotal all={all} count={count} locale={locale} of={held > 0 ? of : null} onOpenAlex={onOpenAlex} />}
 				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
 			</span>
 		</CountTooltip>
 	);
 }
 
-function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string }) {
+/** The source's total. It stands alone when the library holds none of them, where "0 of 12" would read as a broken count. */
+function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count: CountRow; locale: string; of: string | null; onOpenAlex: (all: string) => string }) {
 	const tLabels = useTranslations("item");
 	const text = all.toLocaleString(locale);
 	return <>
-		<span className="opacity-60">{of}</span>
+		{of && <span className="opacity-60">{of}</span>}
 		{count.there && count.thereInside ? (
 			<Link href={count.there} aria-label={tLabels("label3", { text, count: count.label(all) })} className={COUNT_NUMBER}>{text}</Link>
 		) : count.there ? (
