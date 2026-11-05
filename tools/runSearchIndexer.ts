@@ -117,14 +117,13 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
-		// The index holds an index-only library's records and the database doesn't, so a rebuild would empty it. The
-		// index says so itself, for a configuration that has lost the setting.
-		if (isIndexOnly(config) || (await indexHoldsTheRecords(config))) {
+		// The index holds an index-only library's records and the database doesn't, so a rebuild would empty it.
+		const leaveTheIndexAlone = async () => {
 			console.log("Search index: this library is index-only, so the worker leaves its index alone");
 			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
 			if (command.watch && !abortController.signal.aborted) await once(abortController.signal, "abort");
-			return;
-		}
+		};
+		if (isIndexOnly(config)) return await leaveTheIndexAlone();
 		// The engine the library's configuration chooses (OpenDevEd/new-el#722).
 		const engine = await openSearchWriter(config, config.services.search.engine);
 		const writer = engine.writer;
@@ -148,6 +147,9 @@ async function main() {
 		let settled: SettledEngine;
 		let embedderError: string | null;
 		try {
+			// The index says so itself, for a configuration that has lost the setting. Elasticsearch failing to answer takes
+			// the same path as failing below, which keeps readers on the engine that works.
+			if (await indexHoldsTheRecords(config)) return await leaveTheIndexAlone();
 			const setup = await ensureSearchIndex(writer, {
 				onMissing: async () => {
 					await setSearchIndexRebuildPending(

@@ -117,8 +117,9 @@ describe("index-only records", () => {
 			config.features.downloads = true;
 			config.features.atomFeed = true;
 			config.generation.sitemap = true;
+			Object.assign(config, { navigation: { links: [{ id: "numbers", label: "Numbers", href: "/statistics", icon: "LibraryIcon" }] } });
 
-			expect(refusedPaths(config)).toEqual(expect.arrayContaining(["features.downloads", "features.atomFeed", "generation.sitemap"]));
+			expect(refusedPaths(config)).toEqual(expect.arrayContaining(["features.downloads", "features.atomFeed", "generation.sitemap", "navigation.links"]));
 		});
 
 		it("asks nothing of a library that isn't index-only", () => {
@@ -131,22 +132,39 @@ describe("index-only records", () => {
 	});
 
 	describe("the index that holds its records", () => {
-		const config = { revision: "1", updatedAt: "2026-11-05T00:00:00Z", services: { search: { engine: "elasticsearch", elasticsearch: {} } } } as never;
+		const configOn = (engine: string) => ({ revision: "1", updatedAt: "2026-11-05T00:00:00Z", services: { search: { engine, elasticsearch: {} } } }) as never;
+		const config = configOn("elasticsearch");
 
-		it("says so to the search worker, and a normal index doesn't", async () => {
+		it("says so to the search worker, even before an alias reaches it, and a normal index doesn't", async () => {
 			getMapping.mockResolvedValueOnce({ library_2: { mappings: { _meta: { version: "1", indexOnly: true } } } });
 			await expect(indexHoldsTheRecords(config)).resolves.toBe(true);
+			expect(getMapping).toHaveBeenLastCalledWith({ index: "library_*" });
 
 			getMapping.mockResolvedValueOnce({ library_1: { mappings: { _meta: { version: "1" } } } });
 			await expect(indexHoldsTheRecords(config)).resolves.toBe(false);
 		});
 
 		it("is none of a new library's concern yet", async () => {
-			getMapping.mockResolvedValueOnce({ error: "index_not_found_exception", status: 404 });
+			getMapping.mockResolvedValueOnce({});
 			await expect(indexHoldsTheRecords(config)).resolves.toBe(false);
 		});
 
-		it("is never asked about in a library on another engine", async () => {
+		it("still stops a library that moved to another engine in the configuration", async () => {
+			getMapping.mockResolvedValueOnce({ library_2: { mappings: { _meta: { indexOnly: true } } } });
+			await expect(indexHoldsTheRecords(configOn("meilisearch"))).resolves.toBe(true);
+		});
+
+		it("doesn't hold up a library on another engine whose Elasticsearch can't answer yet", async () => {
+			getMapping.mockRejectedValueOnce(new Error("no login yet"));
+			await expect(indexHoldsTheRecords(configOn("meilisearch"))).resolves.toBe(false);
+		});
+
+		it("leaves a failed read to the worker in a library on Elasticsearch", async () => {
+			getMapping.mockRejectedValueOnce(new Error("no answer"));
+			await expect(indexHoldsTheRecords(config)).rejects.toThrow("no answer");
+		});
+
+		it("is never asked about in a library with no Elasticsearch", async () => {
 			getMapping.mockClear();
 			await expect(indexHoldsTheRecords({ services: { search: { engine: "meilisearch" } } } as never)).resolves.toBe(false);
 			expect(getMapping).not.toHaveBeenCalled();
