@@ -43,20 +43,22 @@ async function inTurn<const T extends readonly (() => Promise<unknown>)[]>(
 	return results as { -readonly [K in keyof T]: Awaited<ReturnType<T[K]>> };
 }
 
+/** Figures older than this are recounted behind the ones shown, so a library that grows every night catches up. */
+const STATISTICS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 export async function getComprehensiveStats(
 	requestedCitationMeasure?: string,
 ): Promise<ComprehensiveStats> {
 	const { config, key, compute, citationMeasure } = await statisticsRequest(requestedCitationMeasure);
-	return { ...(await withComputedCache(config, key, compute)), citationMeasure };
+	return { ...(await withComputedCache(config, key, compute, { maxAgeMs: STATISTICS_MAX_AGE_MS })), citationMeasure };
 }
 
 /**
  * The cached statistics, or null while they are counted in the background: for a page that shows without them.
- * Figures older than a day are recounted behind the ones shown, so a library that grows every night catches up.
  */
 export async function peekComprehensiveStats(): Promise<ComprehensiveStats | null> {
 	const { config, key, compute, citationMeasure } = await statisticsRequest();
-	const stats = await peekComputedCache(config, key, compute, { maxAgeMs: 24 * 60 * 60 * 1000 });
+	const stats = await peekComputedCache(config, key, compute, { maxAgeMs: STATISTICS_MAX_AGE_MS });
 	return stats && { ...stats, citationMeasure };
 }
 

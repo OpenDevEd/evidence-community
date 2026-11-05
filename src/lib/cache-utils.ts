@@ -71,13 +71,30 @@ function computeOnce<T>(database: Database, key: string, compute: () => Promise<
 	return run;
 }
 
+function computeBehind<T>(database: Database, key: string, compute: () => Promise<T>) {
+	computeOnce(database, key, compute).catch((error: unknown) => {
+		console.error(`Cache: computing ${key} failed`, error);
+	});
+}
+
+function isOld(cached: Cached<unknown>, maxAgeMs: number | undefined) {
+	return maxAgeMs !== undefined && Date.now() - cached.computedAt > maxAgeMs;
+}
+
+/**
+ * The cached value, or the wait for one compute to make it. A value older than `maxAgeMs` still answers while a fresh
+ * one is computed behind it.
+ */
 export async function withComputedCache<T>(
 	libraryConfig: LibraryServerConfig,
 	key: string,
 	compute: () => Promise<T>,
+	{ maxAgeMs }: { maxAgeMs?: number } = {},
 ): Promise<T> {
 	const { database, cached } = await cachedValue<T>(libraryConfig, key);
-	return cached ? cached.value : computeOnce(database, key, compute);
+	if (!cached) return computeOnce(database, key, compute);
+	if (isOld(cached, maxAgeMs)) computeBehind(database, key, compute);
+	return cached.value;
 }
 
 /**
@@ -92,11 +109,6 @@ export async function peekComputedCache<T>(
 	{ maxAgeMs }: { maxAgeMs?: number } = {},
 ): Promise<T | null> {
 	const { database, cached } = await cachedValue<T>(libraryConfig, key);
-	const stale = cached && maxAgeMs !== undefined && Date.now() - cached.computedAt > maxAgeMs;
-	if (!cached || stale) {
-		computeOnce(database, key, compute).catch((error: unknown) => {
-			console.error(`Cache: computing ${key} failed`, error);
-		});
-	}
+	if (!cached || isOld(cached, maxAgeMs)) computeBehind(database, key, compute);
 	return cached ? cached.value : null;
 }
