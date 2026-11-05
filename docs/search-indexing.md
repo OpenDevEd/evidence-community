@@ -167,6 +167,14 @@ SEARCH_ENGINE=meilisearch MEILISEARCH_URL=http://127.0.0.1:7700 \
   DATABASE_URL_POST=postgresql://... npm run test:search-index
 ```
 
+## Reading Openscholar's search engine
+
+An OpenAlex source can read Openscholar's own search engine instead of OpenAlex. Its API key chooses that, written
+`openscholar-search:<key>:<Access client id>:<Access client secret>`. The source's query is the engine's OQL. The
+engine holds no update dates or year counts to read by, so the source reads every work on each run, as one stream. A
+record keeps OpenAlex's id; a work without one is left out, as is a second work under the same id. Records have no
+references, because the engine names them by its own ids.
+
 ## Embedder
 
 Similar Resources, AI search, and chat rank by meaning as well as words when the
