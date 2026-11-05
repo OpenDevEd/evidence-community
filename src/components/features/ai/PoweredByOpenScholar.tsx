@@ -15,7 +15,7 @@ export function PoweredByOpenScholar({ className }: { className?: string }) {
 			target="_blank"
 			rel="noopener noreferrer"
 			className={twMerge(
-				"inline-flex items-center gap-1.5 text-[11px] text-black/40 transition-colors hover:text-black/70 dark:text-white/40 dark:hover:text-white/70",
+				"inline-flex max-w-full flex-wrap items-center gap-1.5 text-[11px] text-black/40 transition-colors hover:text-black/70 dark:text-white/40 dark:hover:text-white/70",
 				className,
 			)}
 		>

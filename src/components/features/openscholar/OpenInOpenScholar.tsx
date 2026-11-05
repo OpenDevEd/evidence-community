@@ -52,7 +52,7 @@ export function OpenInOpenScholar({ handoff, label, appearance = "default" }: { 
 	};
 	return (
 		<Button
-			{...(header ? { size: "sm" as const, variant: "transparent" as const, className: "h-8 min-w-0 gap-1.5 rounded-2xl px-2.5 text-sm text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10" } : {})}
+			{...(header ? { size: "sm" as const, variant: "transparent" as const, className: "h-8 min-w-0 gap-1.5 rounded-2xl px-2.5 text-sm text-black/65 hover:bg-black/5 dark:text-white/65 dark:hover:bg-white/10" } : { className: "h-auto min-h-12 max-w-full whitespace-normal py-2" })}
 			endContent={<OpenScholar aria-hidden className={header ? "size-4 shrink-0" : "size-5 shrink-0"} />}
 			onPress={open}
 		>

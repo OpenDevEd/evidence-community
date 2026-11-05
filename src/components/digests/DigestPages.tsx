@@ -224,14 +224,14 @@ function SubscriberPreferences({subscriber, token: pending, schedule}: {subscrib
 }
 
 /** Content beside a 320 px rail, as the library page lays out its results and sidebar. */
-const withRail = "grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12";
+const withRail = "grid grid-cols-[minmax(0,1fr)] items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-12";
 
 function DigestArchive({settings, latest, editions, chart, nextEdition, base, locale}: ArchiveProps & Base & {locale: string}) {
   const tLabels = useTranslations("digests");
   return <PageContainer className="mx-auto relative z-0 -mt-6 overflow-visible pt-0 lg:pt-0 xl:pt-0">
-      <header className={`${styles.hero} relative isolate mb-12 grid items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
+      <header className={`${styles.hero} relative isolate mb-12 grid grid-cols-[minmax(0,1fr)] items-center gap-8 px-0 pb-12 pt-16 lg:grid-cols-[1fr_0.9fr] lg:gap-14 lg:pb-16 lg:pt-20`}>
         <div aria-hidden="true" className="pointer-events-none absolute bottom-0 left-1/2 -top-[100vh] -z-10 w-screen -translate-x-1/2 bg-card_light dark:bg-card" />
-        <div className="max-w-lg">
+        <div className="min-w-0 max-w-lg break-words">
           <h1 className="text-5xl font-bold leading-[1.05] tracking-tight sm:text-6xl">{tLabels.rich("libraryDigestsTitle", { br: () => <br /> })}</h1>
           <p className="mt-5 max-w-sm text-base leading-7 text-black/60 dark:text-white/60">{settings.covers === "published" ? tLabels("summariesOfThePublicationsInThis") : tLabels("summariesOfNewPublicationsInThis")}</p>
           {settings.sending && <Suspense fallback={<NextEditionLoading />}><NextEdition nextEdition={nextEdition} settings={settings} /></Suspense>}
@@ -267,9 +267,10 @@ function NextEdition({nextEdition, settings}: {nextEdition: Promise<DigestDate |
 /** One edition in a list: its date in a gutter, then its title and opening. The archive and an edition's "More digests" share it. */
 function EditionRow({item, base, summary = true}: {item: DigestSummary; base: string; summary?: boolean}) {
   const tLabels = useTranslations("digests");
-  return <Link href={`${base}/${item.slug}`} prefetch className="group grid grid-cols-[3.5rem_minmax(0,1fr)] items-start gap-4 rounded-xl p-4 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-6">
-    <PeriodTile period={item.period} />
-    <div className="min-w-0">
+  return <Link href={`${base}/${item.slug}`} prefetch className="group flex flex-wrap items-start gap-4 rounded-xl p-4 outline-none transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:bg-white/5 sm:gap-6">
+    <div className="w-14 shrink-0 sm:w-[4.5rem]"><PeriodTile period={item.period} /></div>
+    {/* At large text the words go under the tile, where they have the row's width. */}
+    <div className="min-w-[min(9rem,100%)] flex-1">
       <h3 className="font-heading text-xl font-medium leading-snug transition-colors group-hover:text-accent">{item.title}</h3>
       {summary && <MarkdownExcerpt className={`mt-1.5 line-clamp-2 text-sm leading-6 ${muted}`}>{item.summary}</MarkdownExcerpt>}
       <span className={`mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs ${muted}`}><span className="inline-flex items-center gap-1.5"><Icon value={BookOpen01Icon} size={14} />{publicationCount(item.publicationCount, tLabels)}</span><Attribution by={item.by} /></span>
@@ -278,7 +279,7 @@ function EditionRow({item, base, summary = true}: {item: DigestSummary; base: st
 }
 /** An edition's days as a tile: the first to the last day it covers over their month. */
 function PeriodTile({period}: {period: DigestPeriod}) {
-  return <time dateTime={period.first} aria-label={period.label} className="pt-0.5 text-center"><span className="block whitespace-nowrap font-heading text-2xl font-semibold leading-none tabular-nums sm:text-[1.65rem]">{period.days}</span><span className={`mt-1.5 block text-xs ${muted}`}>{period.months}</span></time>;
+  return <time dateTime={period.first} aria-label={period.label} className="block pt-0.5 text-center"><span className="block whitespace-nowrap font-heading text-2xl font-semibold leading-none tabular-nums sm:text-[1.65rem]">{period.days}</span><span className={`mt-1.5 block text-xs ${muted}`}>{period.months}</span></time>;
 }
 /** Editions under the year their period ends in, each year one card of rows. */
 function byYear(items: DigestSummary[]) {
