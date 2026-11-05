@@ -6,10 +6,19 @@ import { computedCache } from "@/db/schema/tables/computedCache";
 
 type Cached<T> = { value: T; computedAt: number };
 
-/** Computes running now, by cache key, so concurrent callers share one instead of each starting their own. */
-const computing = new Map<string, Promise<unknown>>();
-/** The last value this process computed or read, by cache key: it still answers while a write is in flight or failed. */
-const remembered = new Map<string, Cached<unknown>>();
+type Store = {
+	/** Computes running now, by cache key, so concurrent callers share one instead of each starting their own. */
+	computing: Map<string, Promise<unknown>>;
+	/** The last value this process computed or read, by cache key: it still answers while a write is in flight or failed. */
+	remembered: Map<string, Cached<unknown>>;
+};
+
+// On globalThis, not in the module: Next bundles route handlers and pages separately, each with its own copy of this
+// module, and a count the health check starts must be the one the pages wait for and read.
+const { computing, remembered }: Store = ((globalThis as { __computedCache?: Store }).__computedCache ??= {
+	computing: new Map(),
+	remembered: new Map(),
+});
 
 async function cachedValue<T>(libraryConfig: LibraryServerConfig, key: string) {
 	const database = await getDatabaseForConfig(libraryConfig);
@@ -62,13 +71,30 @@ function computeOnce<T>(database: Database, key: string, compute: () => Promise<
 	return run;
 }
 
+function computeBehind<T>(database: Database, key: string, compute: () => Promise<T>) {
+	computeOnce(database, key, compute).catch((error: unknown) => {
+		console.error(`Cache: computing ${key} failed`, error);
+	});
+}
+
+function isOld(cached: Cached<unknown>, maxAgeMs: number | undefined) {
+	return maxAgeMs !== undefined && Date.now() - cached.computedAt > maxAgeMs;
+}
+
+/**
+ * The cached value, or the wait for one compute to make it. A value older than `maxAgeMs` still answers while a fresh
+ * one is computed behind it.
+ */
 export async function withComputedCache<T>(
 	libraryConfig: LibraryServerConfig,
 	key: string,
 	compute: () => Promise<T>,
+	{ maxAgeMs }: { maxAgeMs?: number } = {},
 ): Promise<T> {
 	const { database, cached } = await cachedValue<T>(libraryConfig, key);
-	return cached ? cached.value : computeOnce(database, key, compute);
+	if (!cached) return computeOnce(database, key, compute);
+	if (isOld(cached, maxAgeMs)) computeBehind(database, key, compute);
+	return cached.value;
 }
 
 /**
@@ -83,11 +109,6 @@ export async function peekComputedCache<T>(
 	{ maxAgeMs }: { maxAgeMs?: number } = {},
 ): Promise<T | null> {
 	const { database, cached } = await cachedValue<T>(libraryConfig, key);
-	const stale = cached && maxAgeMs !== undefined && Date.now() - cached.computedAt > maxAgeMs;
-	if (!cached || stale) {
-		computeOnce(database, key, compute).catch((error: unknown) => {
-			console.error(`Cache: computing ${key} failed`, error);
-		});
-	}
+	if (!cached || isOld(cached, maxAgeMs)) computeBehind(database, key, compute);
 	return cached ? cached.value : null;
 }

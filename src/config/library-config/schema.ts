@@ -2412,6 +2412,8 @@ export const publicLibraryConfigSchema = z
 		legal: legalSchema,
 		localization: localizationSchema,
 		search: publicSearchSchema,
+		/** The results page numbers reach, which depends on the search engines the library has connections to. */
+		resultLimit: z.number().int().positive(),
 		filters: filtersSchema,
 		topics: z.object({ enabled: z.boolean().default(false) }).strict().default({ enabled: false }),
 		content: contentSchema,

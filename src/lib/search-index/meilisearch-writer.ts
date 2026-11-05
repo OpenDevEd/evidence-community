@@ -7,6 +7,7 @@ import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import {
 	FULL_TEXT_PDF_PRESENCE_ATTRIBUTE,
 	PDF_PRESENCE_ATTRIBUTE,
+	SEARCH_RESULT_LIMITS,
 	SOURCES_FIELD,
 } from "@/lib/search-filter-constants";
 
@@ -33,12 +34,6 @@ import {
 const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 /** Queued rebuild batches; each holds an open file in Meilisearch. */
 const REBUILD_TASKS_IN_FLIGHT = 500;
-/**
- * Results Meilisearch counts and pages to: every result stays reachable for libraries above a million records.
- * Elasticsearch pages by number only through the first 10,000 (`SEARCH_RESULT_LIMIT`).
- */
-const MEILISEARCH_RESULT_LIMIT = 10_000_000;
-
 type EnqueuedTask = ReturnType<Index["addDocuments"]>;
 
 /** A Meilisearch task that failed. The claim is split until the event behind it is found, as for a refused record. */
@@ -220,7 +215,7 @@ function indexSettings(): Settings {
 				features: { facetSearch: false, filter: { equality: true, comparison: false } },
 			},
 		],
-		pagination: { maxTotalHits: MEILISEARCH_RESULT_LIMIT },
+		pagination: { maxTotalHits: SEARCH_RESULT_LIMITS.meilisearch },
 		searchableAttributes: ["*"],
 		sortableAttributes: ["citationCount", "dateSortKey", "fullNames", "title", "year", "dateAdded", "updatedAt"],
 	};

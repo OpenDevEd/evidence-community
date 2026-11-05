@@ -6,7 +6,7 @@ import {
   buildLocalizedSiteUrl,
 } from "@/lib/language-alternates";
 import { getItemsPaginationMeta } from "@/lib/search";
-import { lastNumberedPage } from "@/lib/search-query";
+import { lastNumberedPage, resultLimitOf } from "@/lib/search-query";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
@@ -65,7 +65,7 @@ export async function libraryMetadata(props: {
     Boolean(libraryConfig.exports.atom);
 
   // Links name numbered pages only: past them, a page needs the cursor its neighbour's results give.
-  const numbered = lastNumberedPage(paginationMeta.perPage);
+  const numbered = lastNumberedPage(paginationMeta.perPage, resultLimitOf(libraryConfig));
   const pageUrl = (target: number) => {
     const url = new URL(currentUrl);
     url.searchParams.set("page", String(target));

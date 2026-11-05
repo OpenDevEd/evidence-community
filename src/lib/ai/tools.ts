@@ -7,7 +7,8 @@ import { abstractPlainText } from "@/lib/abstract-text";
 import { resolveSearchRequest, resolveSearchTopicNodes, searchRecords } from "@/lib/search";
 import { fieldEquals, fieldIn } from "@/lib/search-engine";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import { PDF_PRESENCE_ATTRIBUTE, SEARCH_RESULT_LIMIT } from "@/lib/search-filter-constants";
+import { PDF_PRESENCE_ATTRIBUTE } from "@/lib/search-filter-constants";
+import { resultLimitOf } from "@/lib/search-query";
 import { publicationToolModelOutput } from "./attachments";
 import { PDF_HANDOFF_TEXT } from "./prompt-context";
 import {
@@ -297,15 +298,16 @@ async function loadCurrentResultsWindow(
 	// there.
 	const last = !cursor && window === "last";
 	const requested = currentResultsOffset(searchContext, cursor);
+	const resultLimit = resultLimitOf(config);
 	const result = await searchRecords<Record<string, unknown>>(config, {
 		text: compiled.search,
 		fields: compiled.attributesToSearchOn,
 		// A reader's list is exactly the records the chat route allowed.
 		filters: readerListKeys ? [...compiled.finalFilters, fieldIn("key", readerListKeys)] : compiled.finalFilters,
 		sort: compiled.sortOption,
-		size: last ? CURRENT_RESULTS_WINDOW_SIZE : Math.max(0, Math.min(CURRENT_RESULTS_WINDOW_SIZE, SEARCH_RESULT_LIMIT - requested)),
+		size: last ? CURRENT_RESULTS_WINDOW_SIZE : Math.max(0, Math.min(CURRENT_RESULTS_WINDOW_SIZE, resultLimit - requested)),
 		returned: { only: [...SEARCH_ATTRIBUTES] },
-		...(last ? { fromEnd: true } : { from: Math.min(requested, SEARCH_RESULT_LIMIT) }),
+		...(last ? { fromEnd: true } : { from: Math.min(requested, resultLimit) }),
 	});
 	const total = result.total;
 	const ordered = result.hits;
@@ -320,7 +322,7 @@ async function loadCurrentResultsWindow(
 		searchHitToListEntry(hit, offset + hitIndex + 1),
 	);
 	const end = offset + keys.length;
-	const hasMore = end < Math.min(total, SEARCH_RESULT_LIMIT);
+	const hasMore = end < Math.min(total, resultLimit);
 
 	return {
 		keys,

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import { SEARCH_RESULT_LIMIT } from "@/lib/search-filter-constants";
+import { SEARCH_RESULT_LIMITS } from "@/lib/search-filter-constants";
 
 export const CURRENT_RESULTS_WINDOW_SIZE = 200;
 
@@ -41,11 +41,12 @@ export function currentResultsOffset(
 			Buffer.from(cursor, "base64url").toString("utf8"),
 		) as Partial<CurrentResultsCursor>;
 		// Offsets need not be window-aligned: the "last" window starts at
-		// total - 200. Integrity comes from the search fingerprint.
+		// total - 200. Integrity comes from the search fingerprint. The furthest any
+		// engine reaches: the read stops at the limit of the library it is on.
 		const validOffset =
 			Number.isInteger(parsed.offset) &&
 			(parsed.offset ?? -1) >= 0 &&
-			(parsed.offset ?? 0) <= SEARCH_RESULT_LIMIT;
+			(parsed.offset ?? 0) <= SEARCH_RESULT_LIMITS.meilisearch;
 
 		if (
 			parsed.version !== 1 ||

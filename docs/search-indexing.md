@@ -105,10 +105,12 @@ a rebuild as pending and the worker rebuilds into a new index at its next start.
 
 ## Result window
 
-Both engines number the first 10,000 results of a search (page 500 at 20 a
-page); Meilisearch libraries numbered up to 10 million before engines could be
-chosen. Past 10,000, the results page moves only by next and previous, and the
-AI's reading of a reader's current results stops there.
+A library on Meilisearch numbers every result of a search, up to the 10 million
+its worker sets as `maxTotalHits`. A library on Elasticsearch numbers the first
+10,000 (page 500 at 20 a page), its `index.max_result_window`: past that the
+results page moves only by next and previous, and the AI's reading of a reader's
+current results stops there. A library with connections to both engines, as during
+a switch, keeps to Elasticsearch's limit, since its readers can be on either.
 
 ## Switching engines
 

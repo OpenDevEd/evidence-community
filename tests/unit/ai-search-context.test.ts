@@ -120,6 +120,10 @@ describe("reading further into the current results", () => {
 		expect(currentResultsOffset(context())).toBe(0);
 	});
 
+	it("continues past 10,000 results, which a library on Meilisearch reaches", () => {
+		expect(currentResultsOffset(context(), createCurrentResultsCursor(context(), 20_000))).toBe(20_000);
+	});
+
 	it("refuses a cursor from a search the user has since changed", () => {
 		const cursor = createCurrentResultsCursor(context(), 200);
 

@@ -57,6 +57,11 @@ describe("where a page starts", () => {
 		expect(pagePosition(501, 20, { before: next }, relevance)).toEqual({ page: 501, start: { before: [1.25, "NEXTKEY1"] } });
 	});
 
+	it("is an offset on any page of a library searching Meilisearch, which pages that far by itself", () => {
+		const offsets = searchOrder("meilisearch", { text: "tutoring" });
+		expect(pagePosition(600, 20, {}, offsets)).toEqual({ page: 600, start: { from: 11_980 } });
+	});
+
 	it("is the first page when the cursor belongs to another order", () => {
 		expect(pagePosition(501, 20, { after: next }, newest)).toEqual({ page: 1, start: { from: 0 } });
 	});

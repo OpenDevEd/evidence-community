@@ -97,3 +97,23 @@ it("still answers from memory when the cache write fails, and tries again after 
 	expect(compute).toHaveBeenCalledTimes(2);
 	error.mockRestore();
 });
+
+it("shares a value between the module's copies, as Next bundles route handlers and pages apart", async () => {
+	expect(await withComputedCache(config, "bundled", async () => ({ count: 8 }))).toEqual({ count: 8 });
+	stored.delete("bundled");
+	vi.resetModules();
+	const otherBundle = await import("@/lib/cache-utils");
+	const compute = vi.fn(async () => ({ count: 9 }));
+	expect(await otherBundle.peekComputedCache(config, "bundled", compute)).toEqual({ count: 8 });
+	expect(compute).not.toHaveBeenCalled();
+});
+
+it("recounts an old value behind a caller that waits for values, so a saved one can't last forever", async () => {
+	vi.useFakeTimers({ toFake: ["Date"] });
+	const compute = vi.fn().mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 2 });
+	expect(await withComputedCache(config, "waited", compute, { maxAgeMs: 60_000 })).toEqual({ count: 1 });
+	vi.setSystemTime(Date.now() + 61_000);
+	expect(await withComputedCache(config, "waited", compute, { maxAgeMs: 60_000 })).toEqual({ count: 1 });
+	await vi.waitFor(async () => expect(await withComputedCache(config, "waited", compute, { maxAgeMs: 60_000 })).toEqual({ count: 2 }));
+	expect(compute).toHaveBeenCalledTimes(2);
+});
