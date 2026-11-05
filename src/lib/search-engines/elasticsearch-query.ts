@@ -199,11 +199,11 @@ export function facetAggregations(facets: readonly string[], limit?: number): Re
 				facet,
 				{
 					terms: {
-						field: facet,
+						// Reading a folded value's spelling from `.raw` one value at a time takes minutes on a large library.
+						field: FOLDED_KEYWORD_FIELDS.includes(facet) ? `${facet}.raw` : facet,
 						size: limit ?? FACET_VALUES,
 						order: limit !== undefined || COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" },
 					},
-					...(FOLDED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
 				},
 			],
 			...(limit === undefined ? [] : [[`${DISTINCT}${facet}`, { cardinality: { field: facet } }]]),
@@ -211,11 +211,24 @@ export function facetAggregations(facets: readonly string[], limit?: number): Re
 	);
 }
 
-type Bucket = { key: string | number; key_as_string?: string; doc_count: number; spelling?: { buckets?: Array<{ key: string }> } };
+type Bucket = { key: string | number; key_as_string?: string; doc_count: number };
 
-/** A value's name: as most of its records spell it, else as Elasticsearch keys it (an index from before `.raw`). */
-function bucketName(bucket: Bucket) {
-	return bucket.spelling?.buckets?.[0]?.key ?? bucket.key_as_string ?? String(bucket.key);
+const bucketName = (bucket: Bucket) => bucket.key_as_string ?? String(bucket.key);
+
+/** What the index's `sort_key` normalizer makes of a value: its spellings count as one value. */
+const foldedName = (name: string) => name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** A folded facet's counts: each value once, as most of its records spell it, with all its spellings added up. */
+function foldedCounts(buckets: readonly Bucket[]) {
+	const values = new Map<string, { name: string; most: number; count: number }>();
+	for (const bucket of buckets) {
+		const name = bucketName(bucket);
+		const value = values.get(foldedName(name)) ?? { name, most: 0, count: 0 };
+		if (bucket.doc_count > value.most) Object.assign(value, { name, most: bucket.doc_count });
+		value.count += bucket.doc_count;
+		values.set(foldedName(name), value);
+	}
+	return Object.fromEntries([...values.values()].map(({ name, count }) => [name, count]));
 }
 
 /** The facet counts an answer's aggregations hold. */
@@ -223,7 +236,9 @@ export function facetDistribution(aggregations: Record<string, unknown> | undefi
 	return Object.fromEntries(
 		Object.entries(aggregations ?? {}).filter(([facet]) => !facet.startsWith(DISTINCT)).map(([facet, result]) => [
 			facet,
-			Object.fromEntries(((result as { buckets?: Bucket[] }).buckets ?? []).map((bucket) => [bucketName(bucket), bucket.doc_count])),
+			FOLDED_KEYWORD_FIELDS.includes(facet)
+				? foldedCounts((result as { buckets?: Bucket[] }).buckets ?? [])
+				: Object.fromEntries(((result as { buckets?: Bucket[] }).buckets ?? []).map((bucket) => [bucketName(bucket), bucket.doc_count])),
 		]),
 	);
 }

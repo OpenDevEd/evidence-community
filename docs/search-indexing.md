@@ -183,7 +183,8 @@ A read-only library that holds millions of records can skip the database: `servi
 engine is Elasticsearch, and records live only in the index. PostgreSQL stays empty, and readers read records, the record
 count and the engine from Elasticsearch. Such a library has no admin, drafts, collections or statistics, and no sources.
 Its configuration must leave off everything that finds records in the database: reader accounts, collections, downloads,
-the Atom feed, the home page, AI features, notifications and the sitemap. OpenScholar's reads of the community come up
+the Atom feed, the home page, AI search, deep research, related resources, notifications and the sitemap. Ask AI stays
+available, because it reads records from the index. OpenScholar's reads of the community come up
 empty too, because they go through its database.
 
 The search worker leaves the index alone, because a rebuild reads the database and would empty it. Two things hold that
