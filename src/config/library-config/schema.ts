@@ -1873,7 +1873,6 @@ const FEATURES_NEEDING_THE_DATABASE = [
 	"downloads",
 	"atomFeed",
 	"homePage",
-	"ai",
 	"aiSearch",
 	"deepResearch",
 	"relatedResources",
