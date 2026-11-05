@@ -15,6 +15,8 @@ type ReporterOptions = {
 	libraryId: string;
 	machineCredential: string;
 	read: () => Promise<SourceStatus[]>;
+	/** The community's public records, each counted once however many sources hold it. */
+	countRecords: () => Promise<number>;
 	fetch?: typeof fetch;
 	now?: () => Date;
 	log?: (message: string) => void;
@@ -45,7 +47,8 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 		// Timed before the read, so a slow read cannot pass for a newer one.
 		const observedAt = now().toISOString();
 		const sources = (await options.read()).map(trimFailure);
-		const snapshot = JSON.stringify(sources);
+		const records = await options.countRecords();
+		const snapshot = JSON.stringify({ records, sources });
 		if (snapshot === sent) {
 			lastProblem = null;
 			return true;
@@ -55,6 +58,7 @@ export function createSourceStatusReporter(options: ReporterOptions) {
 				body: JSON.stringify({
 					libraryId: options.libraryId,
 					observedAt,
+					records,
 					sources,
 					version: 1,
 				}),

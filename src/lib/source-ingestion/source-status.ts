@@ -506,9 +506,32 @@ export async function hasSourceActivity(database: Database, now = new Date()) {
 	return waiting !== undefined;
 }
 
+/** A record the public library shows, by the search projection's rule. Hidden tags come lowercased. */
+function isPublicRecord(database: Database, hiddenTags: string[]) {
+	return and(
+		sql`coalesce(${item.deleted}, 0) = 0`,
+		isNull(item.parentItem),
+		notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
+		notExists(database.select({ itemKey: itemReading.itemKey }).from(itemReading).where(and(eq(itemReading.itemKey, item.key), eq(itemReading.screenedOut, true)))),
+		hiddenTags.length > 0
+			? notExists(
+					database
+						.select({ itemKey: itemToTag.itemKey })
+						.from(itemToTag)
+						.where(
+							and(
+								eq(itemToTag.itemKey, item.key),
+								inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
+							),
+						),
+				)
+			: undefined,
+	);
+}
+
 /**
- * Records each source has in the public library, by the search projection's
- * rule. Counted only for the sources that show it: this reads every record.
+ * Records each source has in the public library. Counted only for the sources
+ * that show it: this reads every record.
  */
 async function countSearchable(
 	database: Database,
@@ -528,27 +551,36 @@ async function countSearchable(
 				inArray(itemSourceLink.sourceConnectionKey, sourceKeys),
 				// A record the source withdrew stays public through another source.
 				eq(itemSourceLink.remoteDeleted, false),
-				sql`coalesce(${item.deleted}, 0) = 0`,
-				isNull(item.parentItem),
-				notInArray(sql`lower(${item.itemType}::text)`, [...PARENT_REQUIRED_ITEM_TYPES]),
-				notExists(database.select({ itemKey: itemReading.itemKey }).from(itemReading).where(and(eq(itemReading.itemKey, item.key), eq(itemReading.screenedOut, true)))),
-				hiddenTags.length > 0
-					? notExists(
-							database
-								.select({ itemKey: itemToTag.itemKey })
-								.from(itemToTag)
-								.where(
-									and(
-										eq(itemToTag.itemKey, item.key),
-										inArray(sql`lower(${itemToTag.tagName})`, hiddenTags),
-									),
-								),
-						)
-					: undefined,
+				isPublicRecord(database, hiddenTags),
 			),
 		)
 		.groupBy(itemSourceLink.sourceConnectionKey);
 	return new Map(rows.map((row) => [row.key, row.count]));
+}
+
+/**
+ * The community's public records, each once however many of its sources hold
+ * it: the number its search shows. It reads every record, so a count is reused
+ * for a minute; reports come every few seconds while a source imports.
+ */
+export function publicRecordCounter(
+	database: Database,
+	options: { hiddenTags: readonly string[]; now?: () => number },
+) {
+	const now = options.now ?? Date.now;
+	const hiddenTags = options.hiddenTags.map((name) => name.toLowerCase());
+	let last: { count: number; countedAt: number } | null = null;
+	return async () => {
+		if (!last || now() - last.countedAt >= SEARCHABLE_MAX_AGE_MS) {
+			const countedAt = now();
+			const [row] = await database
+				.select({ count: sql<number>`count(*)::int` })
+				.from(item)
+				.where(isPublicRecord(database, hiddenTags));
+			last = { count: row?.count ?? 0, countedAt };
+		}
+		return last.count;
+	};
 }
 
 
