@@ -1,4 +1,4 @@
-import { errors as ElasticsearchErrors } from "@elastic/elasticsearch";
+import { errors as ElasticsearchErrors, type estypes } from "@elastic/elasticsearch";
 import { MeilisearchApiError } from "meilisearch";
 
 import type { LibraryServerConfig, SearchEngineName } from "@/config/library-config/schema";
@@ -140,6 +140,19 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 }
 
 /** The writer for one of the library's engines, with what that engine sets up before it is written to. */
+/**
+ * Whether one of the library's indexes says it holds the only copy of the records, so that a rebuild or a switch to
+ * another engine would empty the library. That includes an index a load is still filling, which no alias reaches yet.
+ */
+export async function indexHoldsTheRecords(config: Config) {
+	if (!config.services.search.elasticsearch) return false;
+	const { alias, client } = await new RevisionAwareSearchFactory().get(connection(config, "elasticsearch"));
+	const read = client.indices.getMapping({ index: `${alias}_*` });
+	// A library on another engine keeps going without an answer: its Elasticsearch may not be ready for it yet.
+	const indexes = config.services.search.engine === "elasticsearch" ? await read : await read.catch((): estypes.IndicesGetMappingResponse => ({}));
+	return Object.values(indexes).some((index) => index?.mappings?._meta?.indexOnly === true);
+}
+
 export function openSearchWriter(config: Config, engine: SearchEngineName) {
 	return engine === "meilisearch" ? meilisearchSetup(config) : elasticsearchSetup(config);
 }

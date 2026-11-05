@@ -1,3 +1,4 @@
+import { isIndexOnly } from "@/lib/search-index/index-only";
 import { createHash, randomUUID } from "node:crypto";
 import { open, readFile, stat, unlink } from "node:fs/promises";
 import path from "node:path";
@@ -312,6 +313,13 @@ async function inspectExistingConfig(
  * stays until the worker logs `"oldIndexRemoved":true` (docs/search-indexing.md, "Switching engines").
  */
 function assertKeepsChosenEngine(existing: LibraryServerConfig | null, candidate: LibraryServerConfig) {
+	// The search worker would rebuild an index that holds the only copy of the records from an empty database.
+	if (existing && isIndexOnly(existing) && !isIndexOnly(candidate)) {
+		throw new LibraryConfigSourceError("The configuration turns off index-only, and the database holds none of this library's records", {
+			code: "INDEX_ONLY_DROPPED",
+			revision: { revision: candidate.revision, schemaVersion: candidate.schemaVersion, updatedAt: candidate.updatedAt },
+		});
+	}
 	const chosen = existing?.services.search.engine;
 	if (!chosen || candidate.services.search[chosen]) return;
 	throw new LibraryConfigSourceError(`The configuration has no ${chosen} connection, the engine the library chose`, {

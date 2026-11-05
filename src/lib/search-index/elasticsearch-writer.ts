@@ -46,7 +46,7 @@ function bulkItemOutcome(action: string, item: BulkItem) {
 }
 
 /** Checks one bulk answer: a refused record throws `SearchIndexDocumentError`, an overload or server error a retry. */
-function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
+export function checkBulkItems(items: ReadonlyArray<Record<string, BulkItem>>) {
 	const rejected: Array<{ key: string; reason: string }> = [];
 	for (const entry of items) {
 		const [action, item] = Object.entries(entry)[0]!;
@@ -197,7 +197,7 @@ async function swapAlias(search: SearchService, target: string, signal?: AbortSi
  * the size Elasticsearch still merges, since the index keeps taking writes. Elasticsearch merges in the background, as
  * a large library's merge can take far longer than a rebuild may wait.
  */
-async function mergeSegments(search: SearchService, target: string, signal?: AbortSignal) {
+export async function mergeSegments(search: SearchService, target: string, signal?: AbortSignal) {
 	const stats = await search.client.indices.stats({ index: target, metric: "store" }, { signal });
 	const bytes = stats._all.primaries?.store?.size_in_bytes ?? 0;
 	const segments = Math.max(1, Math.ceil(bytes / MERGED_SEGMENT_BYTES));

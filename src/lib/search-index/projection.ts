@@ -88,7 +88,7 @@ function readingFields(row: (Parameters<typeof studyReadingOf>[0] & { contentHas
 	return { studyType: reading.type, studyTypeShown, reading };
 }
 
-function uniqueSorted(values: Iterable<string>) {
+export function uniqueSorted(values: Iterable<string>) {
 	return [...new Set(values)].sort();
 }
 
@@ -155,7 +155,7 @@ export function creatorFullName(creator: { name?: string | null; firstName?: str
 	return creator.name?.trim() || [creator.firstName, creator.lastName].filter(Boolean).join(" ").trim();
 }
 
-function creatorNames(creators: ItemRow["creators"]) {
+export function creatorNames(creators: ItemRow["creators"]) {
 	return uniqueSorted((creators ?? []).map(creatorFullName).filter(Boolean));
 }
 
@@ -224,7 +224,7 @@ async function authorCountriesByItem(
 	return (itemKey: string) => [...(countries.get(itemKey) ?? [])].sort();
 }
 
-function cleanRow(row: ItemRow) {
+export function cleanRow(row: ItemRow) {
 	return Object.fromEntries(
 		Object.entries(row)
 			.filter(
@@ -264,7 +264,7 @@ function searchableValues(value: unknown): string[] {
 	return [];
 }
 
-function metadataSearchValues(row: ItemRow) {
+export function metadataSearchValues(row: ItemRow) {
 	return uniqueSorted(
 		Object.entries(cleanRow(row)).flatMap(([field, value]) =>
 			NON_METADATA_SEARCH_FIELDS.has(field)
@@ -758,23 +758,25 @@ export async function projectPublicItems(
 	);
 	return keys.flatMap((key) => {
 		const document = documents.get(key);
-		if (
-			!document ||
-			hasAnyTag(document.tags, config.content.tags.hidden)
-		)
-			return [];
-		const result = document as unknown as Item;
-		result.attachmentsData = filterPublicAttachments(
-			result.attachmentsData,
-			publicTagRules(config),
-			result.sourceConnectionKey,
-		);
-		const attachmentKeys = new Set(
-			result.attachmentsData?.map((attachment) => attachment.key),
-		);
-		result.fullTextPDFs = result.fullTextPDFs?.filter(
-			(attachment) => attachmentKeys.has(attachment.key),
-		);
-		return [result];
+		const result = document ? publicItemFrom(document, config) : null;
+		return result ? [result] : [];
 	});
+}
+
+/** A search document as readers get it: null when it is hidden, and without attachments they can't see. */
+export function publicItemFrom(document: Pick<ItemSearchDocument, "tags">, config: LibraryServerConfig): Item | null {
+	if (hasAnyTag(document.tags, config.content.tags.hidden)) return null;
+	const result = document as unknown as Item;
+	result.attachmentsData = filterPublicAttachments(
+		result.attachmentsData,
+		publicTagRules(config),
+		result.sourceConnectionKey,
+	);
+	const attachmentKeys = new Set(
+		result.attachmentsData?.map((attachment) => attachment.key),
+	);
+	result.fullTextPDFs = result.fullTextPDFs?.filter(
+		(attachment) => attachmentKeys.has(attachment.key),
+	);
+	return result;
 }

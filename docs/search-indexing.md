@@ -175,6 +175,33 @@ engine holds no update dates or year counts to read by, so the source reads ever
 record keeps OpenAlex's id; a work without one is left out, as is a second work under the same id. Records have no
 references, because the engine names them by its own ids.
 
+## Index-only libraries
+
+A read-only library that holds millions of records can skip the database: `services.search.indexOnly` is `true`, the
+engine is Elasticsearch, and records live only in the index. PostgreSQL stays empty, and readers read records, the record
+count and the engine from Elasticsearch. Such a library has no admin, drafts, collections or statistics, and no sources.
+Its configuration must leave off everything that finds records in the database: reader accounts, collections, downloads,
+the Atom feed, the home page, AI features, notifications and the sitemap. OpenScholar's reads of the community come up
+empty too, because they go through its database.
+
+The search worker leaves the index alone, because a rebuild reads the database and would empty it. Two things hold that
+in place: activating a configuration that turns `indexOnly` off is refused, and the index itself says it holds the only
+copy of the records, so a worker that lost the setting still stops. Change a record by loading it again, not through
+the worker.
+
+`npm run search:load-index-only` builds the index from gzipped JSON lines of OpenAlex works, without the API or the
+database. Run it in the library's network, in four steps, all but the first with `--files <folder> --state <folder>`:
+`--prepare`, then `--links`, then one `--part <i>/<n>` per process, then `--finish`. `--links` reads every file once to
+find which works cite each other, because a part sees only its own files; this is what fills a record's References and
+Citations lists. Run it again when the files change. A part remembers each finished
+file under `--state`, per index, so a stopped load carries on. It stops when Elasticsearch fails or is too busy, goes on
+past a damaged file, and exits non-zero whenever a file or record didn't load, naming the first of each kind. Run it
+again to try the unfinished files; a record refused in a finished file stays out. Keys come from OpenAlex's ids, so
+loading a work again replaces it.
+
+`--finish` refuses until every file has finished loading into the new index, and until `--accept-refused` accepts any
+records that didn't load. It then moves readers to it and merges its segments. The index readers left stays, and `--finish` prints its name, so a person can check the new one and delete it.
+
 ## Embedder
 
 Similar Resources, AI search, and chat rank by meaning as well as words when the

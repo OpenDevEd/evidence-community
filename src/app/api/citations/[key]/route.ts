@@ -10,6 +10,7 @@ import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { isIndexOnly } from "@/lib/search-index/index-only";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { publicFields, readSearchDocument, searchKeys } from "@/lib/search";
 
@@ -47,6 +48,19 @@ async function getSourceItem(
 		console.warn("Error fetching source item from search:", error);
 		return null;
 	}
+}
+
+/** An index-only library keeps a record's links and source totals on the record, and its database holds neither. */
+async function readCitationLinks(item: Item, libraryConfig: LibraryServerConfig, hiddenTags: readonly string[]) {
+	if (isIndexOnly(libraryConfig)) {
+		return { citedByKeys: item.links?.citedBy ?? [], sourceCitationMetrics: item.citationMetrics ?? [] };
+	}
+	const database = await getDatabaseForConfig(libraryConfig);
+	const [{ citedBy: citedByKeys }, sourceCitationMetrics] = await Promise.all([
+		getPublicItemLinks(database, item.key, { hiddenTags }),
+		getSourceCitationMetrics(database, item.key),
+	]);
+	return { citedByKeys, sourceCitationMetrics };
 }
 
 async function getCitingItems(
@@ -129,26 +143,22 @@ export async function GET(
 
 	// Records listed on this page are library links. Source-reported totals are
 	// returned separately because the two sets overlap and cannot be combined.
-	const linksDb = await getDatabaseForConfig(libraryConfig);
-	const [{ citedBy: citedByKeys }, sourceCitationMetrics] = await Promise.all(
-		[
-			getPublicItemLinks(linksDb, key, { hiddenTags }),
-			getSourceCitationMetrics(linksDb, key),
-		],
-	);
-	const libraryCitationCount = citedByKeys.length;
+	const { citedByKeys, sourceCitationMetrics } = await readCitationLinks(sourceItem, libraryConfig, hiddenTags);
 
 	// Fetch citing items with pagination and facets
 	const {
 		items: paginatedItems,
 		countryDistribution: rawCountryDistribution,
 		yearDistribution: rawYearDistribution,
+		totalHits,
 	} = await getCitingItems(
 		citedByKeys,
 			page,
 			perPage,
 			libraryConfig,
 		);
+	// An index-only record lists every citer, hidden ones and ones a load refused too; the database leaves those out.
+	const libraryCitationCount = isIndexOnly(libraryConfig) ? totalHits : citedByKeys.length;
 
 	// Format year distribution
 	const yearDistribution = Object.entries(rawYearDistribution)

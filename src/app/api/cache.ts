@@ -3,6 +3,8 @@ import { getDatabase, getDatabaseForConfig } from "@/db";
 import { getItem, withoutFullText } from "./item/[key]/route";
 import { and, eq, sql } from "drizzle-orm";
 import { outbox } from "@opendeved/evidence-library-core";
+import { isIndexOnly } from "@/lib/search-index/index-only";
+import { readIndexedStatus } from "@/lib/search-index/index-only-read";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
@@ -109,8 +111,10 @@ async function readCachedPublicItem(key: string, _configRevision: string, _versi
 }
 
 export const getCachedItemSmall = cache(async (key: string) => {
-	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
-	return readCachedPublicItem(key, config.revision, version);
+	const config = await getLibraryConfig();
+	// Nothing tells an index-only library's cache that a load replaced a record, and reading the index is quick.
+	if (isIndexOnly(config)) return withoutFullText(await getItem(key));
+	return readCachedPublicItem(key, config.revision, await readItemVersion(key));
 });
 
 /** A record as its page draws it: a placeholder until its citation is read, and its stored topic names. */
@@ -127,6 +131,8 @@ export async function getCachedItemPage(key: string) {
 export async function getCachedStatus(): Promise<PublicLibraryStatus> {
 	const config = await getLibraryConfig();
 	return staleWhileRevalidate(`status:${config.revision}`, 60_000, async () =>
-		readPublicLibraryStatus(await getDatabaseForConfig(config), config),
+		isIndexOnly(config)
+			? readIndexedStatus(config)
+			: readPublicLibraryStatus(await getDatabaseForConfig(config), config),
 	);
 }

@@ -55,6 +55,7 @@
 		"search:embedder-speed": "tsx ./tools/timeSearchEmbedder.ts",
 		"search:index:health": "tsx ./tools/checkSearchIndexerHealth.ts",
 		"search:copy-redirects": "tsx ./tools/copyMeilisearchRedirects.ts",
+		"search:load-index-only": "tsx --conditions=react-server ./tools/loadIndexOnlyLibrary.ts",
 		"search:compare": "tsx --conditions=react-server ./tools/compareSearchEngines.ts",
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
 		"test:search-embedder": "tsx ./tools/verifyElasticsearchEmbedder.ts",

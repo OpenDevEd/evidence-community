@@ -5,6 +5,7 @@ import { getSearchForConfig } from "@/lib/elasticsearch";
 import { createEmbedder } from "@/lib/embedder";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import type { SearchEngine } from "@/lib/search-engine";
+import { isIndexOnly } from "@/lib/search-index/index-only";
 
 import { elasticsearchEngine } from "./elasticsearch";
 import { readLiveSearchEngine } from "./live-engine";
@@ -28,7 +29,8 @@ function engineFor<S extends object>(service: S, create: (service: S) => SearchE
  * has no connection left, they search the configured one.
  */
 export async function getSearchEngine(config: Pick<LibraryServerConfig, "revision" | "search" | "services" | "updatedAt">): Promise<SearchEngine> {
-	const live = await readLiveSearchEngine(config);
+	// An index-only library's database holds no record of which engine is built.
+	const live = isIndexOnly(config) ? null : await readLiveSearchEngine(config);
 	const engine = live && config.services.search[live] ? live : config.services.search.engine;
 	// Elasticsearch's engine keeps nothing between searches; made for each one, it has the configuration's embedder.
 	return engine === "meilisearch"
