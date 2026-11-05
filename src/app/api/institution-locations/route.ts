@@ -11,6 +11,7 @@ import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 import { chunkValues } from "@/lib/chunk-values";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getPublicFacets } from "@/lib/search";
+import { isIndexOnly } from "@/lib/search-index/index-only";
 
 type Location = [longitude: number, latitude: number, city: string, country: string];
 
@@ -45,8 +46,10 @@ async function locationsOf(database: Database, keys: string[]): Promise<[string,
 export async function GET() {
 	await connection();
 	const database = await getDatabase();
-	const [publicKeys, authorKeys] = await Promise.all([publicInstitutions(), authorInstitutions(database)]);
+	// An index-only library's institutions all come from its authors, and it has no records in the database to ask.
+	const authorsOnly = !isIndexOnly(await getLibraryConfig());
+	const [publicKeys, authorKeys] = await Promise.all([publicInstitutions(), authorsOnly ? authorInstitutions(database) : null]);
 	const located: [string, Location][] = [];
-	for (const keys of chunkValues([...publicKeys].filter((key) => authorKeys.has(key)), 1_000)) located.push(...(await locationsOf(database, keys)));
+	for (const keys of chunkValues([...publicKeys].filter((key) => authorKeys?.has(key) ?? true), 1_000)) located.push(...(await locationsOf(database, keys)));
 	return NextResponse.json(Object.fromEntries(located), { headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL } });
 }
