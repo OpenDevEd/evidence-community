@@ -99,68 +99,88 @@ async function* linesOf(stream: AsyncIterable<Buffer>) {
 	if (rest) yield rest;
 }
 
+type Tally = { works: number; refused: number; failed: number; reasons: Map<string, number> };
+
+function count(tally: Tally, reason: string) {
+	tally.reasons.set(reason, (tally.reasons.get(reason) ?? 0) + 1);
+}
+
+/** Bulk writes, a few at a time; a write waits only when as many as that are running. */
+function createWriter(search: Search, index: string, tally: Tally) {
+	const writes = new Set<Promise<void>>();
+	const noteProblems = (items: { index?: { error?: { type: string } } }[]) => {
+		for (const problem of items.flatMap((entry) => entry.index?.error ?? [])) {
+			tally.failed++;
+			count(tally, `index: ${problem.type}`);
+		}
+	};
+	return {
+		async write(operations: object[]) {
+			const task = search.client.bulk({ index, operations, refresh: false }).then(({ items }) => noteProblems(items));
+			const held = task.finally(() => writes.delete(held));
+			writes.add(held);
+			if (writes.size >= IN_FLIGHT) await Promise.race(writes);
+		},
+		drain: () => Promise.all(writes),
+	};
+}
+
+function operationsFor(line: string, loadedAt: Date, tally: Tally) {
+	try {
+		const document = documentFromWork(JSON.parse(line), { sourceConnectionKey: SOURCE, loadedAt });
+		tally.works++;
+		return [{ index: { _id: document.key } }, document];
+	} catch (error) {
+		tally.refused++;
+		count(tally, (error instanceof Error ? error.message : String(error)).slice(0, 80));
+		return [];
+	}
+}
+
+/** Loads one file, up to the part's limit, and says whether it reached the file's end. */
+async function loadFile(path: string, limit: number, loadedAt: Date, tally: Tally, writer: ReturnType<typeof createWriter>, report: () => void) {
+	let batch: object[] = [];
+	for await (const line of linesOf(createReadStream(path).pipe(createGunzip()))) {
+		if (tally.works >= limit) break;
+		batch.push(...operationsFor(line, loadedAt, tally));
+		if (batch.length < BATCH * 2) continue;
+		await writer.write(batch);
+		batch = [];
+		if ((tally.works / BATCH) % 100 === 0) report();
+	}
+	if (batch.length) await writer.write(batch);
+	await writer.drain();
+	return tally.works < limit;
+}
+
 async function load(search: Search) {
 	const [part, parts] = (values.part ?? "").split("/").map(Number);
-	if (!values.files || !values.state || part === undefined || !parts) {
-		throw new Error("A load needs --part <i>/<n>, --files and --state");
-	}
-	mkdirSync(values.state, { recursive: true });
+	const { files: folder, state } = values;
+	if (!folder || !state || part === undefined || !parts) throw new Error("A load needs --part <i>/<n>, --files and --state");
+	mkdirSync(state, { recursive: true });
 	const limit = values.limit ? Number(values.limit) : Infinity;
 	const index = await target(search);
-	const files = readdirSync(values.files).filter((name) => name.endsWith(".jsonl.gz")).sort();
-	const mine = files.filter((_, position) => position % parts === part);
+	const mine = readdirSync(folder)
+		.filter((name) => name.endsWith(".jsonl.gz"))
+		.sort()
+		.filter((_, position) => position % parts === part);
 	const loadedAt = new Date();
 	const started = Date.now();
-	const tally = { works: 0, refused: 0, failed: 0 };
-	const reasons = new Map<string, number>();
-	const writes = new Set<Promise<void>>();
-	const write = (lines: object[]) => {
-		const task = search.client.bulk({ index, operations: lines, refresh: false }).then(({ errors, items }) => {
-			if (!errors) return;
-			for (const entry of items) {
-				const problem = entry.index?.error;
-				if (!problem) continue;
-				tally.failed++;
-				reasons.set(`index: ${problem.type}`, (reasons.get(`index: ${problem.type}`) ?? 0) + 1);
-			}
-		});
-		const held = task.finally(() => writes.delete(held));
-		writes.add(held);
-		return writes.size >= IN_FLIGHT ? Promise.race(writes) : Promise.resolve();
-	};
+	const tally: Tally = { works: 0, refused: 0, failed: 0, reasons: new Map() };
+	const writer = createWriter(search, index, tally);
 	const report = () => {
 		const seconds = (Date.now() - started) / 1000;
-		console.log(JSON.stringify({ part, ...tally, perSecond: Math.round(tally.works / seconds), minutes: Math.round(seconds / 6) / 10 }));
+		const { works, refused, failed } = tally;
+		console.log(JSON.stringify({ part, works, refused, failed, perSecond: Math.round(works / seconds), minutes: Math.round(seconds / 6) / 10 }));
 	};
 	for (const file of mine) {
-		const done = join(values.state, `${file}.done`);
+		const done = join(state, `${file}.done`);
 		if (existsSync(done)) continue;
-		let batch: object[] = [];
-		for await (const line of linesOf(createReadStream(join(values.files, file)).pipe(createGunzip()))) {
-			if (tally.works >= limit) break;
-			try {
-				const document = documentFromWork(JSON.parse(line), { sourceConnectionKey: SOURCE, loadedAt });
-				batch.push({ index: { _id: document.key } }, document);
-				tally.works++;
-			} catch (error) {
-				tally.refused++;
-				const reason = (error instanceof Error ? error.message : String(error)).slice(0, 80);
-				reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
-			}
-			if (batch.length >= BATCH * 2) {
-				await write(batch);
-				batch = [];
-				if ((tally.works / BATCH) % 100 === 0) report();
-			}
-		}
-		if (batch.length) await write(batch);
-		await Promise.all(writes);
-		if (tally.works >= limit) break;
+		if (!(await loadFile(join(folder, file), limit, loadedAt, tally, writer, report))) break;
 		writeFileSync(done, new Date().toISOString());
 	}
-	await Promise.all(writes);
 	report();
-	console.log(JSON.stringify({ part, reasons: Object.fromEntries([...reasons].sort((a, b) => b[1] - a[1]).slice(0, 10)) }));
+	console.log(JSON.stringify({ part, reasons: Object.fromEntries([...tally.reasons].sort((a, b) => b[1] - a[1]).slice(0, 10)) }));
 }
 
 async function main() {
