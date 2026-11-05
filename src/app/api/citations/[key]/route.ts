@@ -144,19 +144,21 @@ export async function GET(
 	// Records listed on this page are library links. Source-reported totals are
 	// returned separately because the two sets overlap and cannot be combined.
 	const { citedByKeys, sourceCitationMetrics } = await readCitationLinks(sourceItem, libraryConfig, hiddenTags);
-	const libraryCitationCount = citedByKeys.length;
 
 	// Fetch citing items with pagination and facets
 	const {
 		items: paginatedItems,
 		countryDistribution: rawCountryDistribution,
 		yearDistribution: rawYearDistribution,
+		totalHits,
 	} = await getCitingItems(
 		citedByKeys,
 			page,
 			perPage,
 			libraryConfig,
 		);
+	// An index-only record lists every citer, hidden ones and ones a load refused too; the database leaves those out.
+	const libraryCitationCount = isIndexOnly(libraryConfig) ? totalHits : citedByKeys.length;
 
 	// Format year distribution
 	const yearDistribution = Object.entries(rawYearDistribution)

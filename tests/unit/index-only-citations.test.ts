@@ -48,6 +48,13 @@ describe("a record's citing records", () => {
 		expect(mocks.database).not.toHaveBeenCalled();
 	});
 
+	it("count only the citers readers can see in an index-only library", async () => {
+		mocks.config.mockResolvedValue(configFor({ engine: "elasticsearch", indexOnly: true }));
+		mocks.readSearchDocument.mockResolvedValue({ ...record, links: { ...record.links, citedBy: ["EFGH6789", "REFUSED2"] } });
+
+		await expect(read()).resolves.toMatchObject({ libraryCitationCount: 1 });
+	});
+
 	it("come from the database in any other library", async () => {
 		mocks.config.mockResolvedValue(configFor({ engine: "elasticsearch" }));
 		mocks.links.mockResolvedValue({ cites: [], citedBy: ["EFGH6789", "JKLM2345"], related: [] });
