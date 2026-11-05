@@ -24,6 +24,8 @@ export function filterClause(filter: SearchFilter): Query {
 
 /** Values each facet can count, as many as a filter lists. */
 const FACET_VALUES = 10_000;
+/** Names the aggregation that counts a limited facet's values. */
+const DISTINCT = "distinct:";
 
 /** Facets listed by how many results have each value; the rest are listed by value. */
 const COUNT_ORDERED_FACETS = new Set([
@@ -190,14 +192,21 @@ export function sortClauses(sort: readonly string[] | undefined, options: { text
  * Counts for each facet, in the order readers see them. Tags, names and institutions count ignoring case and accents,
  * as Meilisearch counted them; each value is named as most of its records spell it.
  */
-export function facetAggregations(facets: readonly string[]): Record<string, estypes.AggregationsAggregationContainer> {
+export function facetAggregations(facets: readonly string[], limit?: number): Record<string, estypes.AggregationsAggregationContainer> {
 	return Object.fromEntries(
-		facets.map((facet) => [
-			facet,
-			{
-				terms: { field: facet, size: FACET_VALUES, order: COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" } },
-				...(FOLDED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
-			},
+		facets.flatMap((facet) => [
+			[
+				facet,
+				{
+					terms: {
+						field: facet,
+						size: limit ?? FACET_VALUES,
+						order: limit !== undefined || COUNT_ORDERED_FACETS.has(facet) ? { _count: "desc" } : { _key: "asc" },
+					},
+					...(FOLDED_KEYWORD_FIELDS.includes(facet) ? { aggs: { spelling: { terms: { field: `${facet}.raw`, size: 1 } } } } : {}),
+				},
+			],
+			...(limit === undefined ? [] : [[`${DISTINCT}${facet}`, { cardinality: { field: facet } }]]),
 		]),
 	);
 }
@@ -212,10 +221,19 @@ function bucketName(bucket: Bucket) {
 /** The facet counts an answer's aggregations hold. */
 export function facetDistribution(aggregations: Record<string, unknown> | undefined): FacetDistribution {
 	return Object.fromEntries(
-		Object.entries(aggregations ?? {}).map(([facet, result]) => [
+		Object.entries(aggregations ?? {}).filter(([facet]) => !facet.startsWith(DISTINCT)).map(([facet, result]) => [
 			facet,
 			Object.fromEntries(((result as { buckets?: Bucket[] }).buckets ?? []).map((bucket) => [bucketName(bucket), bucket.doc_count])),
 		]),
+	);
+}
+
+/** How many values each limited facet has, from an answer's aggregations. */
+export function facetDistinctCounts(aggregations: Record<string, unknown> | undefined) {
+	return Object.fromEntries(
+		Object.entries(aggregations ?? {})
+			.filter(([facet]) => facet.startsWith(DISTINCT))
+			.map(([facet, result]) => [facet.slice(DISTINCT.length), (result as { value: number }).value]),
 	);
 }
 

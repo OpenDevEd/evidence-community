@@ -4,7 +4,7 @@ import type { SearchService } from "@/lib/elasticsearch-factory";
 import type { Embedder } from "@/lib/embedder";
 import { SearchMeaningUnavailableError, type SearchAnswer, type SearchEngine, type SearchRequest } from "@/lib/search-engine";
 
-import { facetAggregations, facetDistribution, filterClause, searchQuery, sortClauses } from "./elasticsearch-query";
+import { facetAggregations, facetDistinctCounts, facetDistribution, filterClause, searchQuery, sortClauses } from "./elasticsearch-query";
 import { fuseRanks } from "./rank-fusion";
 
 /** Elasticsearch answers no page that ends past this many results; a deeper page is read from a point in time. */
@@ -47,7 +47,7 @@ function searchBody(request: SearchRequest): Omit<estypes.SearchRequest, "index"
 		track_total_hits: request.exactTotal ?? true,
 		...(place ? { search_after: [...place] } : request.fromEnd ? {} : { from: request.from ?? 0 }),
 		...returnedFields(request.returned),
-		...(request.facets?.length ? { aggs: facetAggregations(request.facets) } : {}),
+		...(request.facets?.length ? { aggs: facetAggregations(request.facets, request.facetLimit) } : {}),
 	};
 }
 
@@ -62,6 +62,7 @@ function answerOf<T>(request: SearchRequest, response: estypes.SearchResponse<T>
 		hits: hits.map(recordOf),
 		total: totalOf(response),
 		facets: facetDistribution(response.aggregations),
+		...(request.facetLimit === undefined ? {} : { distinct: facetDistinctCounts(response.aggregations) }),
 		first: hits[0]?.sort ?? null,
 		last: hits.at(-1)?.sort ?? null,
 	};

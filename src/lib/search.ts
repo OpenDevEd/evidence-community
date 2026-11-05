@@ -632,6 +632,8 @@ export async function getItemsPaginationMeta(
 
 /** How many people the sidebar ranks. */
 const TOP_AUTHORS = 10;
+/** Names counted to rank the top authors: past this many, a library of 400,000 authors takes over 30 seconds to count. */
+const AUTHORS_RANKED = 100;
 
 export type AuthorActivity = {
 	name: string;
@@ -672,7 +674,14 @@ async function readTopAuthors(
 	cacheTag("library");
 	const topicNodes = await resolveSearchTopicNodes(searchParams, libraryConfig);
 	const { search, finalFilters, attributesToSearchOn } = resolveSearchRequest(searchParams, libraryConfig, topicNodes);
-	const ranked = await searchRecords(libraryConfig, { text: search, fields: attributesToSearchOn, filters: finalFilters, size: 0, facets: ["fullNames"] });
+	const ranked = await searchRecords(libraryConfig, {
+		text: search,
+		fields: attributesToSearchOn,
+		filters: finalFilters,
+		size: 0,
+		facets: ["fullNames"],
+		facetLimit: AUTHORS_RANKED,
+	});
 	const everyone = ranked.facets.fullNames ?? {};
 	const top = Object.entries(everyone)
 		.filter(([name]) => name.trim().length > 1)
@@ -707,7 +716,7 @@ async function readTopAuthors(
 			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
 		};
 	});
-	return { authorCount: Object.keys(everyone).length, authors, combined: all?.facets.year ?? {} };
+	return { authorCount: ranked.distinct?.fullNames ?? Object.keys(everyone).length, authors, combined: all?.facets.year ?? {} };
 }
 
 /** The profile a result links an author to, found by the name the index files them under. */
