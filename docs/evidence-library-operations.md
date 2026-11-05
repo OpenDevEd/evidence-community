@@ -77,10 +77,16 @@ rewrite it.
 The workflow has four jobs. `select` checks the commit and finds the previous
 release. `publish` builds the image on the release runner while `notes` writes
 the release notes on a light runner. `release` waits for both and creates the
-GitHub Release `runtime-<commit>`. Openscholar offers only commits that have a
-release, so a failed build or failed notes never reach a library owner. Rerun
-the workflow to retry; an existing image is reused and the notes are written
-again.
+GitHub Release `runtime-<commit>` as a prerelease. Openscholar offers only
+commits that have a release, so a failed build or failed notes never reach a
+library owner. Rerun the workflow to retry; an existing image is reused and the
+notes are written again.
+
+Shared dev offers a prerelease as soon as it's published. Production offers a
+release only after it's promoted on Openscholar's community releases page
+(`/settings/admin/community-releases`), which clears GitHub's prerelease flag.
+Communities move from that page one at a time, smallest first. Updates only go
+forward; going back is done by hand on the server.
 
 ### Release notes
 
@@ -92,7 +98,9 @@ release body. The `OPENROUTER_API_KEY` repository secret is the only setup.
 
 The body has a fixed shape that Openscholar parses: the first line is a
 one-sentence summary and every `- ` line is one note. Other lines, such as the
-image reference, are ignored. Edit the release body in GitHub to fix wording;
+image reference, are ignored, except `Database changes: <count>`, the migrations
+added since the previous release, which the releases page shows. Edit the
+release body in GitHub to fix wording;
 Openscholar picks the change up on its next check. When nothing is visible to
 owners the body says "Behind-the-scenes improvements and maintenance."
 
