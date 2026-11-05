@@ -86,6 +86,11 @@ export type SearchRequest = {
 	returned?: { only: readonly string[] } | { except: readonly string[] };
 	/** Facets to count values of across all the results. */
 	facets?: readonly string[];
+	/**
+	 * Counts only each facet's most common values, and how many it has in `distinct`: counting every value of a facet
+	 * with hundreds of thousands of them takes Elasticsearch longer than a request may. Meilisearch counts them all.
+	 */
+	facetLimit?: number;
 	/** False when a count past the results asked for isn't needed. */
 	exactTotal?: boolean;
 	/** Stops the search, as when the reader who asked has gone. */
@@ -113,6 +118,8 @@ export type SearchAnswer<T> = {
 	hits: T[];
 	total: number;
 	facets: FacetDistribution;
+	/** How many values each facet has, about, for a search with a `facetLimit`. */
+	distinct?: Record<string, number>;
 	/** The places of the first and last hit, for a cursor to the pages either side. */
 	first: SearchPlace | null;
 	last: SearchPlace | null;
