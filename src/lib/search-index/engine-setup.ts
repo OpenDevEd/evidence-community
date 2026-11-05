@@ -140,6 +140,14 @@ async function elasticsearchSetup(config: Config): Promise<SearchWriterSetup> {
 }
 
 /** The writer for one of the library's engines, with what that engine sets up before it is written to. */
+/** Whether the library's index says it holds the only copy of the records, so that a rebuild would empty the library. */
+export async function indexHoldsTheRecords(config: Config) {
+	if (config.services.search.engine !== "elasticsearch") return false;
+	const { alias, client } = await new RevisionAwareSearchFactory().get(connection(config, "elasticsearch"));
+	const indexes = await client.indices.getMapping({ index: alias }, { ignore: [404] });
+	return Object.values(indexes).some((index) => index?.mappings?._meta?.indexOnly === true);
+}
+
 export function openSearchWriter(config: Config, engine: SearchEngineName) {
 	return engine === "meilisearch" ? meilisearchSetup(config) : elasticsearchSetup(config);
 }

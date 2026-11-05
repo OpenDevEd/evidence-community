@@ -50,7 +50,8 @@ export type LibraryConfigSourceErrorCode =
 	| "INVALID_CONFIG"
 	| "REVISION_REUSED"
 	| "REVISION_NOT_NEWER"
-	| "SEARCH_ENGINE_DROPPED";
+	| "SEARCH_ENGINE_DROPPED"
+	| "INDEX_ONLY_DROPPED";
 
 type LibraryConfigSourceErrorOptions = {
 	code: LibraryConfigSourceErrorCode;

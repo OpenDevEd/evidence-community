@@ -287,6 +287,23 @@ describe("library configuration activation", () => {
 		expect(await readFile(`${targetPath}.previous`, "utf8")).toBe(rollback);
 	});
 
+	it("refuses a revision that turns index-only off, because the database holds none of the records", async () => {
+		const elasticsearch = { host: "http://evidence-library-elasticsearch:9200", key: "search-key", index: "el_minimal" };
+		const indexOnly = cloneLibraryConfig(minimalLibraryConfig);
+		indexOnly.services.search = { engine: "elasticsearch", elasticsearch, indexOnly: true } as never;
+		Object.assign(indexOnly, { sources: [], collections: [], features: { collections: false }, generation: { sitemap: false } });
+		await writeFile(candidatePath, JSON.stringify(indexOnly, null, "\t"), "utf8");
+		await activateLibraryConfig({ candidatePath, targetPath });
+
+		const lost = cloneLibraryConfig(indexOnly);
+		Object.assign(lost, { revision: "minimal-2", updatedAt: "2026-07-28T16:05:00Z" });
+		lost.services.search = { engine: "elasticsearch", elasticsearch } as never;
+		const lostPath = path.join(tempDirectory, "lost.json");
+		await writeFile(lostPath, JSON.stringify(lost, null, "\t"), "utf8");
+
+		await expect(activateLibraryConfig({ candidatePath: lostPath, targetPath })).rejects.toMatchObject({ code: "INDEX_ONLY_DROPPED" });
+	});
+
 	it("refuses a revision without the connection of the engine the active one chose, such as the old Meilisearch shape", async () => {
 		const elasticsearch = { host: "http://evidence-library-elasticsearch:9200", key: "search-key", index: "el_minimal" };
 		const onElasticsearch = cloneLibraryConfig(minimalLibraryConfig);

@@ -24,7 +24,7 @@ import {
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
 import { embedderFingerprint } from "../src/lib/embedder";
-import { openSearchWriter } from "../src/lib/search-index/engine-setup";
+import { indexHoldsTheRecords, openSearchWriter } from "../src/lib/search-index/engine-setup";
 import { readersEngineOnFailure, settleSearchEngine, switchRetryAt, type SettledEngine } from "../src/lib/search-index/engine-switch";
 import {
 	createSearchIndexWorkerStateReporter,
@@ -117,11 +117,12 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
-		// The index holds an index-only library's records and the database doesn't, so a rebuild would empty it.
-		if (isIndexOnly(config)) {
+		// The index holds an index-only library's records and the database doesn't, so a rebuild would empty it. The
+		// index says so itself, for a configuration that has lost the setting.
+		if (isIndexOnly(config) || (await indexHoldsTheRecords(config))) {
 			console.log("Search index: this library is index-only, so the worker leaves its index alone");
 			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
-			await once(abortController.signal, "abort");
+			if (command.watch && !abortController.signal.aborted) await once(abortController.signal, "abort");
 			return;
 		}
 		// The engine the library's configuration chooses (OpenDevEd/new-el#722).
