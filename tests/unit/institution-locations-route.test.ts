@@ -4,6 +4,7 @@ vi.mock("server-only", () => ({}));
 const mocks = vi.hoisted(() => ({ config: vi.fn(), facets: vi.fn(), authors: vi.fn(), places: vi.fn() }));
 vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), connection: async () => {} }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: mocks.config }));
+vi.mock("@/config/library-config/search", () => ({ everyRecordScope: () => "" }));
 vi.mock("@/lib/search", () => ({ getPublicFacets: mocks.facets }));
 vi.mock("@/db", () => ({
 	getDatabase: async () => ({
@@ -15,7 +16,7 @@ vi.mock("@/db", () => ({
 import { GET } from "@/app/api/institution-locations/route";
 
 const place = (key: string) => ({ key, longitude: 32.57, latitude: 0.33, city: "Kampala", country: "UG" });
-const search = (extra: object) => ({ search: {}, services: { search: { engine: "elasticsearch", ...extra } } });
+const search = (extra: object) => ({ services: { search: { engine: "elasticsearch", ...extra } } });
 
 describe("the map's institution locations", () => {
 	beforeEach(() => {
