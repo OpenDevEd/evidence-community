@@ -131,22 +131,20 @@ describe("facet counts", () => {
 		});
 	});
 
-	it("counts tags, names and institutions ignoring case and accents, each named as most of its records spell it", () => {
-		expect(facetAggregations(["tags", INSTITUTION_FILTER_FIELD])).toMatchObject({
-			tags: { terms: { field: "tags" }, aggs: { spelling: { terms: { field: "tags.raw", size: 1 } } } },
-			[INSTITUTION_FILTER_FIELD]: { aggs: { spelling: { terms: { field: `${INSTITUTION_FILTER_FIELD}.raw`, size: 1 } } } },
+	it("counts tags, names and institutions from their spellings, with no second lookup for each value", () => {
+		expect(facetAggregations(["tags", INSTITUTION_FILTER_FIELD])).toEqual({
+			tags: { terms: { field: "tags.raw", size: 10_000, order: { _key: "asc" } } },
+			[INSTITUTION_FILTER_FIELD]: { terms: { field: `${INSTITUTION_FILTER_FIELD}.raw`, size: 10_000, order: { _count: "desc" } } },
 		});
+	});
+
+	it("adds up a value's spellings, ignoring case and accents, under the one most records use", () => {
 		expect(
 			facetDistribution({
-				tags: {
-					buckets: [
-						{ key: "oecd", doc_count: 8, spelling: { buckets: [{ key: "OECD", doc_count: 5 }] } },
-						// An index from before the spelling was kept names the value as it is filtered.
-						{ key: "policy brief", doc_count: 2, spelling: { buckets: [] } },
-					],
-				},
+				tags: { buckets: [{ key: "OECD", doc_count: 5 }, { key: "oecd", doc_count: 3 }, { key: "policy brief", doc_count: 2 }] },
+				[INSTITUTION_FILTER_FIELD]: { buckets: [{ key: "Universite de Dakar", doc_count: 1 }, { key: "Universit\u00e9 de Dakar", doc_count: 4 }] },
 			}),
-		).toEqual({ tags: { OECD: 8, "policy brief": 2 } });
+		).toEqual({ tags: { OECD: 8, "policy brief": 2 }, [INSTITUTION_FILTER_FIELD]: { "Universit\u00e9 de Dakar": 5 } });
 	});
 
 	it("reads each value's count, naming true and false as words", () => {
@@ -162,14 +160,14 @@ describe("facet counts", () => {
 	it("counts only a limited facet's most common values, and how many it has", () => {
 		const aggregations = facetAggregations(["fullNames"], 100);
 
-		expect(aggregations.fullNames).toMatchObject({ terms: { field: "fullNames", size: 100, order: { _count: "desc" } } });
+		expect(aggregations.fullNames).toMatchObject({ terms: { field: "fullNames.raw", size: 100, order: { _count: "desc" } } });
 		expect(aggregations["distinct:fullNames"]).toEqual({ cardinality: { field: "fullNames" } });
 		expect(facetAggregations(["fullNames"])).not.toHaveProperty("distinct:fullNames");
 	});
 
 	it("reads a limited facet's values and count apart", () => {
 		const answer = {
-			fullNames: { buckets: [{ key: "a. author", doc_count: 3, spelling: { buckets: [{ key: "A. Author" }] } }] },
+			fullNames: { buckets: [{ key: "A. Author", doc_count: 3 }] },
 			"distinct:fullNames": { value: 390707 },
 		};
 
