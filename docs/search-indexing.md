@@ -196,10 +196,11 @@ find which works cite each other, because a part sees only its own files; this i
 Citations lists. Run it again when the files change. A part remembers each finished
 file under `--state`, per index, so a stopped load carries on. It stops when Elasticsearch fails or is too busy, goes on
 past a damaged file, and exits non-zero whenever a file or record didn't load, naming the first of each kind. Run it
-again to try the unfinished files. Keys come from OpenAlex's ids, so loading a work again replaces it.
+again to try the unfinished files; a record refused in a finished file stays out. Keys come from OpenAlex's ids, so
+loading a work again replaces it.
 
-`--finish` refuses until every file has finished loading into the new index. It then moves readers to it and merges its
-segments. The index readers left stays, and `--finish` prints its name, so a person can check the new one and delete it.
+`--finish` refuses until every file has finished loading into the new index, and until `--accept-refused` accepts any
+records that didn't load. It then moves readers to it and merges its segments. The index readers left stays, and `--finish` prints its name, so a person can check the new one and delete it.
 
 ## Embedder
 
