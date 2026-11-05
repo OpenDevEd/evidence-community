@@ -5,6 +5,11 @@ export function hasContactDetails(contact: LibraryPublicConfig["contact"]) {
 	return Boolean(contact.email || contact.phone || contact.address);
 }
 
+/** The statistics page is on only while the header or footer links to it. */
+export function linksToStatistics({ navigation, footer }: Pick<LibraryServerConfig, "navigation" | "footer">) {
+	return hasRuntimeNavigationPath(navigation.links, "/statistics") || footer.sections.some((section) => hasRuntimeLinkPath(section.links, "/statistics"));
+}
+
 export function getRuntimePageAvailability(config: LibraryServerConfig) {
 	const { legal, identity: { baseUrl } } = config;
 	return {
@@ -12,7 +17,6 @@ export function getRuntimePageAvailability(config: LibraryServerConfig) {
 		"/map": config.features.countryFocus,
 		"/contact": hasContactDetails(config.contact) || Boolean(config.email.contactRecipient),
 		"/takedown": Boolean(config.email.takedownRecipient),
-		// The statistics page is on only while the header or footer links to it.
-		"/statistics": hasRuntimeNavigationPath(config.navigation.links, "/statistics") || config.footer.sections.some((section) => hasRuntimeLinkPath(section.links, "/statistics")),
+		"/statistics": linksToStatistics(config),
 	};
 }

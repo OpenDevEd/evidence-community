@@ -50,6 +50,7 @@ import {
 } from "./primitives";
 import { generateColorRamp, parseHexColor, type RgbaColor } from "./theme";
 import { policyRedirectIssues } from "@/lib/legal-links";
+import { linksToStatistics } from "./pages";
 import { OPEN_ACCESS_LABELS } from "@/lib/open-access";
 
 export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
@@ -1886,7 +1887,7 @@ function refuseWhatNeedsRecordsInTheDatabase(
 		features: Record<(typeof FEATURES_NEEDING_THE_DATABASE)[number], boolean>;
 		notifications: { enabled: boolean };
 		generation: { sitemap: boolean };
-	},
+	} & Parameters<typeof linksToStatistics>[0],
 	context: z.RefinementCtx,
 ) {
 	if (config.services.search.indexOnly !== true) return;
@@ -1899,6 +1900,7 @@ function refuseWhatNeedsRecordsInTheDatabase(
 	}
 	if (config.notifications.enabled) refuse(["notifications", "enabled"]);
 	if (config.generation.sitemap) refuse(["generation", "sitemap"]);
+	if (linksToStatistics(config)) refuse(["navigation", "links"]);
 }
 
 const generationSchema = z
