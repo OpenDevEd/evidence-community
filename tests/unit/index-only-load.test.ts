@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 import { indexOnlyKey } from "@/lib/search-index/index-only-document";
 import { linesOf } from "@/lib/search-index/index-only-files";
 import { buildLinks } from "@/lib/search-index/index-only-links";
-import { finishIndex, loadPart, type LoadOptions, type LoadSearch, prepareIndex } from "@/lib/search-index/index-only-load";
+import { finishIndex, loadPart, loadSearchFor, type LoadOptions, type LoadSearch, prepareIndex, runLoadStep } from "@/lib/search-index/index-only-load";
 
 const work = (id: number, title = `Work ${id}`, references: number[] = []) =>
 	JSON.stringify({
@@ -271,6 +271,29 @@ describe("loading an index-only library", () => {
 
 		expect(updateAliases).not.toHaveBeenCalled();
 		expect(existsSync(join(state, "library_2", "a.jsonl.gz.done"))).toBe(true);
+	});
+
+	it("runs the step it is given, and every step but the first needs its folders", async () => {
+		file("a.jsonl.gz", [work(1)]);
+		const { search, create, updateAliases } = fakeSearch();
+		const step = { shards: "2", part: "0/1", files: folder, state, limit: "Infinity", signal: new AbortController().signal };
+
+		await expect(runLoadStep(search, { ...step, prepare: true })).resolves.toMatchObject({ complete: true });
+		await expect(runLoadStep(search, { ...step, links: true })).resolves.toMatchObject({ works: 1, complete: true });
+		await expect(runLoadStep(search, step)).resolves.toMatchObject({ works: 1, complete: true });
+		await expect(runLoadStep(search, { ...step, finish: true })).resolves.toMatchObject({ finished: "library_2", complete: true });
+		await expect(runLoadStep(search, { ...step, files: "", finish: true })).rejects.toThrow("need --files and --state");
+
+		expect(create).toHaveBeenCalledOnce();
+		expect(updateAliases).toHaveBeenCalledOnce();
+	});
+
+	it("signs in only for a library that is index-only", () => {
+		const elasticsearch = { host: "http://elasticsearch:9200", key: "key", index: "library" };
+		const config = (indexOnly: boolean) => ({ services: { search: { engine: "elasticsearch", indexOnly, elasticsearch } } }) as never;
+
+		expect(loadSearchFor(config(true)).alias).toBe("library");
+		expect(() => loadSearchFor(config(false))).toThrow("isn't index-only");
 	});
 
 	it("won't finish an empty folder or an empty index", async () => {

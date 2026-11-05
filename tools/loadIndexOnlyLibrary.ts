@@ -13,12 +13,8 @@
  */
 import { parseArgs } from "node:util";
 
-import { Client } from "@elastic/elasticsearch";
-
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
-import { isIndexOnly } from "../src/lib/search-index/index-only";
-import { finishIndex, loadPart, type LoadSearch, prepareIndex } from "../src/lib/search-index/index-only-load";
-import { buildLinks } from "../src/lib/search-index/index-only-links";
+import { loadSearchFor, runLoadStep } from "../src/lib/search-index/index-only-load";
 
 const { values } = parseArgs({
 	options: {
@@ -36,29 +32,13 @@ const { values } = parseArgs({
 const stop = new AbortController();
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => stop.abort());
 
-function step(search: LoadSearch) {
-	const { files, part, state } = values;
-	if (values.prepare) return prepareIndex(search, Number(values.shards));
-	if (!files || !state) throw new Error("--links, --part and --finish need --files and --state");
-	if (values.links) return buildLinks(files, state);
-	if (values.finish) return finishIndex(search, { files, state });
-	return loadPart(search, { part, files, state, limit: Number(values.limit), signal: stop.signal });
-}
-
 async function main() {
 	const { config, close } = await openLibraryConfigProcess();
-	const connection = config.services.search.elasticsearch;
-	if (!isIndexOnly(config) || !connection) throw new Error("This library isn't index-only");
-	const client = new Client({
-		node: connection.host,
-		auth: { username: connection.index, password: connection.key },
-		requestTimeout: 300_000,
-		maxRetries: 5,
-	});
-	const result = await step({ alias: connection.index, client });
+	const search = loadSearchFor(config);
+	const result = await runLoadStep(search, { ...values, signal: stop.signal });
 	console.log(JSON.stringify(result));
-	if ("complete" in result && !result.complete) process.exitCode = 1;
-	await client.close();
+	process.exitCode = result.complete ? 0 : 1;
+	await search.client.close();
 	close();
 }
 

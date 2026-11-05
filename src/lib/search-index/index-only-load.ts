@@ -1,13 +1,15 @@
-import type { estypes } from "@elastic/elasticsearch";
+import { Client, type estypes } from "@elastic/elasticsearch";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { SearchService } from "@/lib/elasticsearch-factory";
 import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
 import { checkBulkItems, mergeSegments } from "./elasticsearch-writer";
+import { isIndexOnly } from "./index-only";
 import { documentFromWork } from "./index-only-document";
 import { dataFiles, fileLines } from "./index-only-files";
-import { openLinks } from "./index-only-links";
+import { buildLinks, openLinks } from "./index-only-links";
 import { SearchIndexDocumentError } from "./writer";
 
 const BATCH = 1_000;
@@ -18,6 +20,15 @@ const SOURCE = "server-files";
 export type LoadSearch = SearchService;
 export type LoadFiles = { files: string; state: string };
 export type LoadOptions = LoadFiles & { part: string; limit?: number; signal?: AbortSignal };
+type LoadStep = LoadFiles & { prepare?: boolean; links?: boolean; finish?: boolean; shards: string; part: string; limit: string; signal: AbortSignal };
+
+/** The library's login, for a load: a full bulk request may take longer than a reader's search is allowed. */
+export function loadSearchFor(config: LibraryServerConfig): LoadSearch {
+	const connection = config.services.search.elasticsearch;
+	if (!isIndexOnly(config) || !connection) throw new Error("This library isn't index-only");
+	const auth = { username: connection.index, password: connection.key };
+	return { alias: connection.index, client: new Client({ node: connection.host, auth, requestTimeout: 300_000, maxRetries: 5 }) };
+}
 
 /** The index being loaded: the newest behind the login, whether or not the alias reaches it yet. */
 async function target({ alias, client }: LoadSearch) {
@@ -233,4 +244,14 @@ export async function loadPart(search: LoadSearch, { part, files, state, limit =
 	const reasons = [...tally.reasons].sort((a, b) => b[1].records - a[1].records).slice(0, 10);
 	const complete = tally.failed === 0 && tally.damaged.length === 0 && !signal?.aborted;
 	return { ...tally, reasons: Object.fromEntries(reasons), complete };
+}
+
+/** Runs the step the command line named; `complete` is false when a person has to look at the result. */
+export async function runLoadStep(search: LoadSearch, step: LoadStep) {
+	const { files, part, state, signal } = step;
+	if (step.prepare) return { ...(await prepareIndex(search, Number(step.shards))), complete: true };
+	if (!files || !state) throw new Error("--links, --part and --finish need --files and --state");
+	if (step.links) return { ...(await buildLinks(files, state)), complete: true };
+	if (step.finish) return { ...(await finishIndex(search, { files, state })), complete: true };
+	return loadPart(search, { part, files, state, limit: Number(step.limit), signal });
 }
