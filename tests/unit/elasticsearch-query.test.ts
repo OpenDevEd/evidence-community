@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { fieldIn, fieldNotEquals, fieldPresent, yearRange } from "@/lib/search-engine";
-import { facetAggregations, facetDistribution, filterClause, sortClauses, textQuery } from "@/lib/search-engines/elasticsearch-query";
+import { facetAggregations, facetDistinctCounts, facetDistribution, filterClause, sortClauses, textQuery } from "@/lib/search-engines/elasticsearch-query";
 
 const relevance = sortClauses(undefined, { text: "tutoring" });
 
@@ -157,5 +157,23 @@ describe("facet counts", () => {
 			}),
 		).toEqual({ country: { KE: 4, QA: 1 }, hasPdf: { true: 2 } });
 		expect(facetDistribution(undefined)).toEqual({});
+	});
+
+	it("counts only a limited facet's most common values, and how many it has", () => {
+		const aggregations = facetAggregations(["fullNames"], 100);
+
+		expect(aggregations.fullNames).toMatchObject({ terms: { field: "fullNames", size: 100, order: { _count: "desc" } } });
+		expect(aggregations["distinct:fullNames"]).toEqual({ cardinality: { field: "fullNames" } });
+		expect(facetAggregations(["fullNames"])).not.toHaveProperty("distinct:fullNames");
+	});
+
+	it("reads a limited facet's values and count apart", () => {
+		const answer = {
+			fullNames: { buckets: [{ key: "a. author", doc_count: 3, spelling: { buckets: [{ key: "A. Author" }] } }] },
+			"distinct:fullNames": { value: 390707 },
+		};
+
+		expect(facetDistribution(answer)).toEqual({ fullNames: { "A. Author": 3 } });
+		expect(facetDistinctCounts(answer)).toEqual({ fullNames: 390707 });
 	});
 });
