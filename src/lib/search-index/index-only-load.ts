@@ -1,29 +1,23 @@
-import { createReadStream, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import type { estypes } from "@elastic/elasticsearch";
+import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pipeline } from "node:stream";
 import { createGunzip } from "node:zlib";
 
+import type { SearchService } from "@/lib/elasticsearch-factory";
 import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
+import { checkBulkItems, mergeSegments } from "./elasticsearch-writer";
 import { documentFromWork } from "./index-only-document";
+import { SearchIndexDocumentError } from "./writer";
 
 const BATCH = 1_000;
 const IN_FLIGHT = 3;
+const REPORT_EVERY = 100_000;
 const SOURCE = "server-files";
 
-type BulkItem = { index?: { error?: { type: string } } };
-type IndexClient = {
-	bulk(request: { index: string; operations: object[]; refresh: boolean }): Promise<{ items: BulkItem[] }>;
-	count(request: { index: string }): Promise<{ count: number }>;
-	indices: {
-		create(request: object): Promise<unknown>;
-		exists(request: { index: string }): Promise<boolean>;
-		get(request: { index: string }): Promise<Record<string, unknown>>;
-		putSettings(request: object): Promise<unknown>;
-		refresh(request: { index: string }): Promise<unknown>;
-		updateAliases(request: object): Promise<unknown>;
-	};
-};
-export type LoadSearch = { alias: string; client: IndexClient };
-export type LoadOptions = { part: string; files: string; state: string; limit?: number };
+export type LoadSearch = SearchService;
+export type LoadFiles = { files: string; state: string };
+export type LoadOptions = LoadFiles & { part: string; limit?: number; signal?: AbortSignal };
 
 /** The index being loaded: the newest behind the login, whether or not the alias reaches it yet. */
 async function target({ alias, client }: LoadSearch) {
@@ -32,31 +26,65 @@ async function target({ alias, client }: LoadSearch) {
 	return newest;
 }
 
-/** Creates the index a load fills, with refresh off until it is full. */
+/**
+ * Creates the index a load fills, with refresh off until it is full. It says it holds the only copy of the records,
+ * so the search worker leaves it alone even for a configuration that has lost `indexOnly`.
+ */
 export async function prepareIndex({ alias, client }: LoadSearch, shards: number) {
 	const { settings, mappings } = searchIndexDefinition();
 	const index = newSearchIndexName(alias);
 	await client.indices.create({
 		index,
-		settings: { ...settings, index: { ...(settings as { index?: object }).index, number_of_shards: shards, refresh_interval: "-1" } },
-		mappings,
+		settings: { ...settings, index: { ...settings.index, number_of_shards: shards, refresh_interval: "-1" } } as estypes.IndicesIndexSettings,
+		mappings: { ...mappings, _meta: { ...mappings._meta, indexOnly: true } } as estypes.MappingTypeMapping,
 	});
 	return { prepared: index };
 }
 
-/** Turns refresh on and moves the library's alias to the loaded index. */
-export async function finishIndex({ alias, client }: LoadSearch) {
-	const index = await target({ alias, client });
+function dataFiles(folder: string) {
+	return readdirSync(folder)
+		.filter((name) => name.endsWith(".jsonl.gz"))
+		.sort();
+}
+
+const markerOf = (markers: string, file: string) => join(markers, `${file}.done`);
+
+/** What every file's load counted. It throws unless each of them finished loading into this index. */
+function readLoadedFiles(files: string, markers: string) {
+	const names = dataFiles(files);
+	const missing = names.filter((name) => !existsSync(markerOf(markers, name)));
+	if (names.length === 0 || missing.length > 0) {
+		throw new Error(`${missing.length} of ${names.length} files aren't loaded into this index: ${missing.slice(0, 5).join(", ")}`);
+	}
+	const total = { works: 0, refused: 0, failed: 0 };
+	for (const name of names) {
+		const loaded = JSON.parse(readFileSync(markerOf(markers, name), "utf8")) as typeof total;
+		total.works += loaded.works;
+		total.refused += loaded.refused;
+		total.failed += loaded.failed;
+	}
+	return total;
+}
+
+/**
+ * Turns refresh on and moves the library's alias to the loaded index, once every file has loaded into it. The index
+ * readers leave stays, and its name comes back, for a person to delete after checking the new one.
+ */
+export async function finishIndex(search: LoadSearch, { files, state }: LoadFiles) {
+	const { alias, client } = search;
+	const index = await target(search);
+	const loaded = readLoadedFiles(files, join(state, index));
 	await client.indices.putSettings({ index, settings: { index: { refresh_interval: "1s" } } });
 	await client.indices.refresh({ index });
+	const { count: records } = await client.count({ index });
+	if (records === 0) throw new Error(`${index} holds no records`);
 	const live = (await client.indices.exists({ index: alias })) ? Object.keys(await client.indices.get({ index: alias })) : [];
+	const replaced = live.filter((name) => name !== index);
 	await client.indices.updateAliases({
-		actions: [
-			...live.filter((name) => name !== index).map((name) => ({ remove: { index: name, alias } })),
-			{ add: { index, alias, is_write_index: true } },
-		],
+		actions: [...replaced.map((name) => ({ remove: { index: name, alias } })), { add: { index, alias, is_write_index: true } }],
 	});
-	return { finished: index, records: (await client.count({ index: alias })).count };
+	await mergeSegments(search, index);
+	return { finished: index, records, ...loaded, replaced };
 }
 
 /** A file's lines. Node's readline also ends a line at U+2028 and U+2029, which a record's text can hold. */
@@ -71,86 +99,149 @@ export async function* linesOf(stream: AsyncIterable<Buffer>) {
 	if (rest) yield rest;
 }
 
-type Tally = { works: number; refused: number; failed: number; reasons: Map<string, number> };
+type Tally = { works: number; refused: number; failed: number; damaged: string[]; reasons: Map<string, { records: number; first: string }> };
 
-function count(tally: Tally, reason: string) {
-	tally.reasons.set(reason, (tally.reasons.get(reason) ?? 0) + 1);
+function note(tally: Tally, reason: string, record: string) {
+	const seen = tally.reasons.get(reason);
+	if (seen) seen.records++;
+	else tally.reasons.set(reason, { records: 1, first: record });
 }
 
-/** Bulk writes, a few at a time; a write waits only when as many as that are running. */
-function createWriter(search: LoadSearch, index: string, tally: Tally) {
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
+
+/** Counts the records Elasticsearch refused. An overload or server error throws: the part has to stop and run again. */
+function noteRefused(items: Parameters<typeof checkBulkItems>[0], tally: Tally) {
+	try {
+		checkBulkItems(items);
+	} catch (error) {
+		if (!(error instanceof SearchIndexDocumentError)) throw error;
+		tally.failed += error.failures.length;
+		for (const { key, reason } of error.failures) note(tally, `index: ${reason.slice(0, 80)}`, key);
+	}
+}
+
+/** Bulk writes, a few at a time; a write waits only when as many as that are running. The first failure stops the part. */
+function createWriter({ client }: LoadSearch, index: string, tally: Tally) {
 	const writes = new Set<Promise<void>>();
-	const noteProblems = (items: BulkItem[]) => {
-		for (const problem of items.flatMap((entry) => entry.index?.error ?? [])) {
-			tally.failed++;
-			count(tally, `index: ${problem.type}`);
-		}
+	let failure: Error | undefined;
+	const throwFailure = () => {
+		if (failure) throw failure;
 	};
 	return {
+		throwFailure,
 		async write(operations: object[]) {
-			const task = search.client.bulk({ index, operations, refresh: false }).then(({ items }) => noteProblems(items));
+			throwFailure();
+			const task = client
+				.bulk({ index, operations, refresh: false })
+				.then(({ items }) => noteRefused(items as Parameters<typeof checkBulkItems>[0], tally))
+				.catch((error: unknown) => {
+					failure ??= error instanceof Error ? error : new Error(String(error));
+				});
 			const held = task.finally(() => writes.delete(held));
 			writes.add(held);
 			if (writes.size >= IN_FLIGHT) await Promise.race(writes);
+			throwFailure();
 		},
-		drain: () => Promise.all(writes),
+		async drain() {
+			await Promise.all(writes);
+			throwFailure();
+		},
 	};
 }
 
-function operationsFor(line: string, loadedAt: Date, tally: Tally) {
-	try {
-		const document = documentFromWork(JSON.parse(line), { sourceConnectionKey: SOURCE, loadedAt });
-		tally.works++;
-		return [{ index: { _id: document.key } }, document];
-	} catch (error) {
-		tally.refused++;
-		count(tally, (error instanceof Error ? error.message : String(error)).slice(0, 80));
-		return [];
-	}
-}
-
-/** Loads one file, up to the part's limit, and says whether it reached the file's end. */
-async function loadFile(path: string, limit: number, loadedAt: Date, tally: Tally, writer: ReturnType<typeof createWriter>, report: () => void) {
-	let batch: object[] = [];
-	for await (const line of linesOf(createReadStream(path).pipe(createGunzip()))) {
-		if (tally.works >= limit) break;
-		batch.push(...operationsFor(line, loadedAt, tally));
-		if (batch.length < BATCH * 2) continue;
-		await writer.write(batch);
-		batch = [];
-		if ((tally.works / BATCH) % 100 === 0) report();
-	}
-	if (batch.length) await writer.write(batch);
-	await writer.drain();
-	return tally.works < limit;
-}
-
-function myFiles(folder: string, part: string) {
-	const [mine, parts] = part.split("/").map(Number);
-	if (mine === undefined || !parts) throw new Error("A part is written <i>/<n>");
-	return readdirSync(folder)
-		.filter((name) => name.endsWith(".jsonl.gz"))
-		.sort()
-		.filter((_, position) => position % parts === mine);
-}
-
-/** Loads one part's files. It skips the files `state` marks done, and prints its progress. */
-export async function loadPart(search: LoadSearch, { part, files, state, limit = Infinity }: LoadOptions) {
-	const mine = myFiles(files, part);
-	mkdirSync(state, { recursive: true });
-	const loadedAt = new Date();
+function createProgress(part: string, tally: Tally) {
 	const started = Date.now();
-	const tally: Tally = { works: 0, refused: 0, failed: 0, reasons: new Map() };
-	const writer = createWriter(search, await target(search), tally);
-	const report = () => {
+	let next = REPORT_EVERY;
+	const print = () => {
 		const seconds = (Date.now() - started) / 1000;
 		const { works, refused, failed } = tally;
 		console.log(JSON.stringify({ part, works, refused, failed, perSecond: Math.round(works / seconds), minutes: Math.round(seconds / 6) / 10 }));
 	};
-	for (const file of mine.filter((name) => !existsSync(join(state, `${name}.done`)))) {
-		if (!(await loadFile(join(files, file), limit, loadedAt, tally, writer, report))) break;
-		writeFileSync(join(state, `${file}.done`), new Date().toISOString());
+	return {
+		print,
+		tick() {
+			if (tally.works < next) return;
+			next += REPORT_EVERY;
+			print();
+		},
+	};
+}
+
+type Run = {
+	limit: number;
+	loadedAt: Date;
+	tally: Tally;
+	writer: ReturnType<typeof createWriter>;
+	progress: ReturnType<typeof createProgress>;
+	signal?: AbortSignal;
+};
+
+function operationsFor(line: string, file: string, { loadedAt, tally }: Run) {
+	let record = "a line that isn't JSON";
+	try {
+		const work = JSON.parse(line) as { id?: unknown };
+		record = String(work.id);
+		const document = documentFromWork(work, { sourceConnectionKey: SOURCE, loadedAt });
+		tally.works++;
+		return [{ index: { _id: document.key } }, document];
+	} catch (error) {
+		tally.refused++;
+		note(tally, messageOf(error).slice(0, 80), `${file}: ${record}`);
+		return [];
 	}
-	report();
-	return { ...tally, reasons: Object.fromEntries([...tally.reasons].sort((a, b) => b[1] - a[1]).slice(0, 10)) };
+}
+
+/** Loads one file and says whether it reached the file's end, not a limit or a stop. */
+async function loadFile(folder: string, file: string, run: Run) {
+	const { limit, signal, tally, writer, progress } = run;
+	const stopped = () => tally.works >= limit || signal?.aborted === true;
+	const lines = pipeline(createReadStream(join(folder, file)), createGunzip(), () => {});
+	let batch: object[] = [];
+	for await (const line of linesOf(lines)) {
+		if (stopped()) break;
+		batch.push(...operationsFor(line, file, run));
+		if (batch.length < BATCH * 2) continue;
+		await writer.write(batch);
+		batch = [];
+		progress.tick();
+	}
+	if (batch.length) await writer.write(batch);
+	await writer.drain();
+	return !stopped();
+}
+
+function myFiles(folder: string, part: string) {
+	const [mine = 0, parts = 0] = part.split("/").map(Number);
+	if (!/^\d+\/\d+$/.test(part) || mine >= parts) throw new Error("A part is written <i>/<n>, with i from 0 to n-1");
+	return dataFiles(folder).filter((_, position) => position % parts === mine);
+}
+
+/**
+ * Loads one part's files into the index being loaded, skipping those it has already finished. A damaged file doesn't
+ * stop the others, and a failed write stops the part; neither file counts as finished, so running the part again
+ * tries it again.
+ */
+export async function loadPart(search: LoadSearch, { part, files, state, limit = Infinity, signal }: LoadOptions) {
+	const mine = myFiles(files, part);
+	const index = await target(search);
+	const markers = join(state, index);
+	mkdirSync(markers, { recursive: true });
+	const tally: Tally = { works: 0, refused: 0, failed: 0, damaged: [], reasons: new Map() };
+	const writer = createWriter(search, index, tally);
+	const progress = createProgress(part, tally);
+	const run = { limit, loadedAt: new Date(), tally, writer, progress, signal };
+	for (const file of mine.filter((name) => !existsSync(markerOf(markers, name)))) {
+		const { works, refused, failed } = tally;
+		try {
+			if (!(await loadFile(files, file, run))) break;
+			writeFileSync(markerOf(markers, file), JSON.stringify({ works: tally.works - works, refused: tally.refused - refused, failed: tally.failed - failed }));
+		} catch (error) {
+			writer.throwFailure();
+			tally.damaged.push(`${file}: ${messageOf(error)}`);
+		}
+	}
+	progress.print();
+	const reasons = [...tally.reasons].sort((a, b) => b[1].records - a[1].records).slice(0, 10);
+	const complete = tally.failed === 0 && tally.damaged.length === 0 && !signal?.aborted;
+	return { ...tally, reasons: Object.fromEntries(reasons), complete };
 }

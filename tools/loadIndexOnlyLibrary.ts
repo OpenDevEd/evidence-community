@@ -4,10 +4,11 @@
  *
  *   npm run search:load-index-only -- --prepare --shards 4
  *   npm run search:load-index-only -- --part 0/8 --files <folder> --state <folder>   (one process per part)
- *   npm run search:load-index-only -- --finish
+ *   npm run search:load-index-only -- --finish --files <folder> --state <folder>
  *
- * A part prints its progress, skips the files --state marks done, and reports works it couldn't use. `--limit` stops a
- * part after that many works, to measure a load.
+ * A part prints its progress, skips the files it has finished, reports works it couldn't use, and exits non-zero when
+ * a file or record didn't load: run it again. `--limit` stops a part after that many works, to measure a load. Finish
+ * refuses until every file has loaded, and names the index readers left, which stays until a person deletes it.
  */
 import { parseArgs } from "node:util";
 
@@ -29,10 +30,15 @@ const { values } = parseArgs({
 	},
 });
 
+const stop = new AbortController();
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => stop.abort());
+
 function step(search: LoadSearch) {
+	const { files, part, state } = values;
 	if (values.prepare) return prepareIndex(search, Number(values.shards));
-	if (values.finish) return finishIndex(search);
-	return loadPart(search, { part: values.part, files: values.files, state: values.state, limit: Number(values.limit) });
+	if (!files || !state) throw new Error("--part and --finish need --files and --state");
+	if (values.finish) return finishIndex(search, { files, state });
+	return loadPart(search, { part, files, state, limit: Number(values.limit), signal: stop.signal });
 }
 
 async function main() {
@@ -45,12 +51,14 @@ async function main() {
 		requestTimeout: 300_000,
 		maxRetries: 5,
 	});
-	console.log(JSON.stringify(await step({ alias: connection.index, client: client as unknown as LoadSearch["client"] })));
+	const result = await step({ alias: connection.index, client });
+	console.log(JSON.stringify(result));
+	if ("complete" in result && !result.complete) process.exitCode = 1;
 	await client.close();
 	close();
 }
 
 main().catch((error: unknown) => {
 	console.error(error instanceof Error ? error.message : String(error));
-	process.exitCode = 1;
+	process.exit(1);
 });

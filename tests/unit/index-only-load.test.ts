@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
@@ -13,6 +13,7 @@ function fakeSearch(bulkItems: object[] = []) {
 	const bulks: object[][] = [];
 	const updateAliases = vi.fn(async () => ({}));
 	const create = vi.fn(async () => ({}));
+	const forcemerge = vi.fn(async () => ({}));
 	const search = {
 		alias: "library",
 		client: {
@@ -23,6 +24,8 @@ function fakeSearch(bulkItems: object[] = []) {
 			count: async () => ({ count: 3 }),
 			indices: {
 				create,
+				forcemerge,
+				stats: async () => ({ _all: { primaries: { store: { size_in_bytes: 1 } } } }),
 				exists: async () => true,
 				get: async ({ index }: { index: string }) => (index === "library" ? { library_1: {} } : { library_1: {}, library_2: {} }),
 				putSettings: async () => ({}),
@@ -31,7 +34,7 @@ function fakeSearch(bulkItems: object[] = []) {
 			},
 		},
 	} as unknown as LoadSearch;
-	return { search, bulks, updateAliases, create };
+	return { search, bulks, updateAliases, create, forcemerge };
 }
 
 describe("loading an index-only library", () => {
@@ -86,7 +89,7 @@ describe("loading an index-only library", () => {
 		const result = await loadPart(next.search, { part: "0/1", files: folder, state });
 
 		expect(result.works).toBe(1);
-		expect(readdirSync(state).sort()).toEqual(["a.jsonl.gz.done", "b.jsonl.gz.done", "c.jsonl.gz.done"]);
+		expect(readdirSync(join(state, "library_2")).sort()).toEqual(["a.jsonl.gz.done", "b.jsonl.gz.done", "c.jsonl.gz.done"]);
 	});
 
 	it("gives each part its share of the files", async () => {
@@ -105,38 +108,131 @@ describe("loading an index-only library", () => {
 		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state, limit: 2 });
 
 		expect(result.works).toBe(2);
-		expect(readdirSync(state)).toEqual([]);
+		expect(readdirSync(join(state, "library_2"))).toEqual([]);
 	});
 
-	it("counts a record Elasticsearch refuses", async () => {
+	it("loads a new index in full, whatever an earlier index finished", async () => {
+		file("a.jsonl.gz", [work(1)]);
+		await loadPart(fakeSearch().search, { part: "0/1", files: folder, state });
+
+		const { search } = fakeSearch();
+		search.client.indices.get = (async () => ({ library_3: {} })) as never;
+		const result = await loadPart(search, { part: "0/1", files: folder, state });
+
+		expect(result.works).toBe(1);
+	});
+
+	it("counts a record Elasticsearch refuses, and says which, and that the part isn't complete", async () => {
+		file("a.jsonl.gz", [work(1)]);
+		const refused = { index: { _id: "ABCD2345", status: 400, error: { type: "mapper_parsing_exception", reason: "bad date" } } };
+
+		const result = await loadPart(fakeSearch([refused]).search, { part: "0/1", files: folder, state });
+
+		expect(result).toMatchObject({
+			failed: 1,
+			complete: false,
+			reasons: { "index: mapper_parsing_exception: bad date": { records: 1, first: "ABCD2345" } },
+		});
+	});
+
+	it("stops the part when Elasticsearch is too busy, and leaves the file to run again", async () => {
+		file("a.jsonl.gz", [work(1)]);
+		const busy = { index: { _id: "ABCD2345", status: 429, error: { type: "es_rejected_execution_exception", reason: "queue full" } } };
+
+		await expect(loadPart(fakeSearch([busy]).search, { part: "0/1", files: folder, state })).rejects.toThrow("queue full");
+
+		expect(readdirSync(join(state, "library_2"))).toEqual([]);
+	});
+
+	it("keeps a write's failure, however many writes finish after it", async () => {
+		file("a.jsonl.gz", Array.from({ length: 2_500 }, (_, position) => work(position + 1)));
+		const { search } = fakeSearch();
+		search.client.bulk = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("connection lost"))
+			.mockResolvedValue({ items: [] }) as never;
+
+		await expect(loadPart(search, { part: "0/1", files: folder, state })).rejects.toThrow("connection lost");
+
+		expect(readdirSync(join(state, "library_2"))).toEqual([]);
+	});
+
+	it("carries on past a damaged file, and leaves it to run again", async () => {
+		writeFileSync(join(folder, "a.jsonl.gz"), gzipSync(work(1)).subarray(0, 12));
+		file("b.jsonl.gz", [work(2)]);
+
+		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state });
+
+		expect(result).toMatchObject({ works: 1, complete: false, damaged: [expect.stringContaining("a.jsonl.gz")] });
+		expect(readdirSync(join(state, "library_2"))).toEqual(["b.jsonl.gz.done"]);
+	});
+
+	it("stops between records when asked, without marking the file done", async () => {
 		file("a.jsonl.gz", [work(1)]);
 
-		const result = await loadPart(fakeSearch([{ index: { error: { type: "mapper_parsing_exception" } } }]).search, {
-			part: "0/1",
-			files: folder,
-			state,
-		});
+		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state, signal: AbortSignal.abort() });
 
-		expect(result).toMatchObject({ failed: 1, reasons: { "index: mapper_parsing_exception": 1 } });
+		expect(result).toMatchObject({ works: 0, complete: false });
+		expect(readdirSync(join(state, "library_2"))).toEqual([]);
 	});
 
 	it("refuses a part it can't read, and a load with no index to fill", async () => {
-		await expect(loadPart(fakeSearch().search, { part: "one", files: folder, state })).rejects.toThrow("written <i>/<n>");
+		for (const part of ["one", "2/2", "1/0", "1.5/2", "-1/2"]) {
+			await expect(loadPart(fakeSearch().search, { part, files: folder, state })).rejects.toThrow("written <i>/<n>");
+		}
 		const { search } = fakeSearch();
-		search.client.indices.get = async () => ({});
+		search.client.indices.get = (async () => ({})) as never;
 		await expect(loadPart(search, { part: "0/1", files: folder, state })).rejects.toThrow("run --prepare first");
 	});
 
-	it("creates its index with refresh off, and moves the alias to it when full", async () => {
-		const { search, updateAliases, create } = fakeSearch();
+	it("creates its index with refresh off, saying it holds the only copy of the records", async () => {
+		const { search, create } = fakeSearch();
 
 		await prepareIndex(search, 4);
-		const finished = await finishIndex(search);
 
-		expect(create).toHaveBeenCalledWith(expect.objectContaining({ settings: expect.objectContaining({ index: expect.objectContaining({ number_of_shards: 4, refresh_interval: "-1" }) }) }));
-		expect(finished).toEqual({ finished: "library_2", records: 3 });
+		expect(create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				settings: expect.objectContaining({ index: expect.objectContaining({ number_of_shards: 4, refresh_interval: "-1" }) }),
+				mappings: expect.objectContaining({ _meta: expect.objectContaining({ indexOnly: true }) }),
+			}),
+		);
+	});
+
+	it("moves the alias to the full index, merges it, and names the index readers left", async () => {
+		file("a.jsonl.gz", [work(1), work(2)]);
+		const { search, updateAliases, forcemerge } = fakeSearch();
+		await loadPart(search, { part: "0/1", files: folder, state });
+
+		const finished = await finishIndex(search, { files: folder, state });
+
+		expect(finished).toEqual({ finished: "library_2", records: 3, works: 2, refused: 0, failed: 0, replaced: ["library_1"] });
 		expect(updateAliases).toHaveBeenCalledWith({
 			actions: [{ remove: { index: "library_1", alias: "library" } }, { add: { index: "library_2", alias: "library", is_write_index: true } }],
 		});
+		expect(forcemerge).toHaveBeenCalledWith(expect.objectContaining({ index: "library_2" }), expect.anything());
+	});
+
+	it("won't finish before every file has loaded into this index", async () => {
+		file("a.jsonl.gz", [work(1)]);
+		file("b.jsonl.gz", [work(2)]);
+		const { search, updateAliases } = fakeSearch();
+		await loadPart(search, { part: "0/2", files: folder, state });
+
+		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("1 of 2 files aren't loaded");
+
+		expect(updateAliases).not.toHaveBeenCalled();
+		expect(existsSync(join(state, "library_2", "a.jsonl.gz.done"))).toBe(true);
+	});
+
+	it("won't finish an empty folder or an empty index", async () => {
+		const { search, updateAliases } = fakeSearch();
+		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("0 of 0 files");
+
+		file("a.jsonl.gz", ["not json"]);
+		await loadPart(search, { part: "0/1", files: folder, state });
+		search.client.count = (async () => ({ count: 0 })) as never;
+		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("holds no records");
+
+		expect(updateAliases).not.toHaveBeenCalled();
 	});
 });
