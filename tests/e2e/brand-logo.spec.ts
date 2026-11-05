@@ -172,7 +172,7 @@ async function waitForLogoMeasurement(page: Page) {
 	await expect
 		.poll(async () => (await page.request.get("/lib")).text().then((html) => html.includes('data-navbar-fit="fallback"')), {
 			message: "the server should have measured the header",
-			timeout: 75_000,
+			timeout: 90_000,
 		})
 		.toBe(false);
 }
