@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, openSync, readFileSync, readSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ItemLinks } from "@/app/api/item/types";
@@ -6,6 +6,9 @@ import { dataFiles, fileLines } from "./index-only-files";
 import { indexOnlyKey } from "./index-only-document";
 
 type Work = { id?: unknown; referenced_works?: unknown };
+
+/** Node writes at most 2 GiB in one call. */
+const WRITE_CHUNK = 1 << 30;
 
 const workNumber = (id: unknown) => Number(/\/?W(\d+)$/u.exec(String(id))?.[1] ?? Number.NaN);
 const referencesOf = ({ referenced_works: references }: Work): unknown[] => (Array.isArray(references) ? references : []);
@@ -57,28 +60,57 @@ function uniqueSortedIds(works: Float64Array) {
 	return sorted.slice(0, length);
 }
 
-const bytesOf = (numbers: Float64Array | Uint32Array) => new Uint8Array(numbers.buffer, numbers.byteOffset, numbers.byteLength);
 const linksFolder = (state: string) => join(state, "links");
+const fingerprint = (files: string) => dataFiles(files).map((name) => `${name} ${statSync(join(files, name)).size}`).join("\n");
+
+function writeNumbers(path: string, numbers: Float64Array | Uint32Array) {
+	const bytes = new Uint8Array(numbers.buffer, numbers.byteOffset, numbers.byteLength);
+	const file = openSync(path, "w");
+	for (let written = 0; written < bytes.length; ) written += writeSync(file, bytes, written, Math.min(WRITE_CHUNK, bytes.length - written));
+	closeSync(file);
+}
+
+/** Replaces the links in one step, so a stopped run leaves the last ones whole. */
+function writeLinks(state: string, files: string, ids: Float64Array, starts: Uint32Array, citers: Uint32Array) {
+	const folder = linksFolder(state);
+	const fresh = `${folder}.new`;
+	rmSync(fresh, { recursive: true, force: true });
+	mkdirSync(fresh, { recursive: true });
+	writeNumbers(join(fresh, "ids.bin"), ids);
+	writeNumbers(join(fresh, "starts.bin"), starts);
+	writeNumbers(join(fresh, "citers.bin"), citers);
+	writeFileSync(join(fresh, "files.txt"), fingerprint(files));
+	rmSync(folder, { recursive: true, force: true });
+	renameSync(fresh, folder);
+}
+
+type Found = Record<"works" | "ends" | "references", ReturnType<typeof createNumbers>>;
+
+async function readFile(path: string, { works, ends, references }: Found) {
+	for await (const line of fileLines(path)) {
+		const work = parsedWork(line);
+		const id = workNumber(work?.id);
+		if (!work || Number.isNaN(id)) continue;
+		works.push(id);
+		for (const reference of referencesOf(work)) references.push(workNumber(reference));
+		ends.push(references.size());
+	}
+}
 
 /**
  * Finds which works of the files cite each other, once for every part of a load: a part sees only its own files, and a
- * work's citations are in the others. It keeps, for each work, the works in the library that cite it.
+ * work's citations are in the others. It keeps, for each work, the works in the library that cite it. A damaged file
+ * doesn't stop the others; it is named, and `complete` is false.
  */
-export async function buildLinks(files: string, state: string) {
-	const works = createNumbers();
-	const ends = createNumbers();
-	const references = createNumbers();
+export async function buildLinks(files: string, state: string, signal?: AbortSignal) {
+	const found = { works: createNumbers(), ends: createNumbers(), references: createNumbers() };
+	const damaged: string[] = [];
 	for (const file of dataFiles(files)) {
-		for await (const line of fileLines(join(files, file))) {
-			const work = parsedWork(line);
-			const id = workNumber(work?.id);
-			if (!work || Number.isNaN(id)) continue;
-			works.push(id);
-			for (const reference of referencesOf(work)) references.push(workNumber(reference));
-			ends.push(references.size());
-		}
+		if (signal?.aborted) throw new Error("Stopped before the links were written");
+		await readFile(join(files, file), found).catch((error: unknown) => damaged.push(`${file}: ${error instanceof Error ? error.message : String(error)}`));
+		console.log(JSON.stringify({ read: file, works: found.works.size(), references: found.references.size() }));
 	}
-	const [citing, lastReference, cited] = [works.all(), ends.all(), references.all()];
+	const [citing, lastReference, cited] = [found.works.all(), found.ends.all(), found.references.all()];
 	const ids = uniqueSortedIds(citing);
 	const eachLink = (visit: (citer: number, target: number) => void) => {
 		let position = 0;
@@ -92,17 +124,18 @@ export async function buildLinks(files: string, state: string) {
 	};
 	const starts = new Uint32Array(ids.length + 1);
 	eachLink((_, target) => starts[target + 1]!++);
-	for (let slot = 0; slot < ids.length; slot++) starts[slot + 1]! += starts[slot]!;
+	let mostCited = 0;
+	for (let slot = 0; slot < ids.length; slot++) {
+		mostCited = Math.max(mostCited, starts[slot + 1]!);
+		starts[slot + 1]! += starts[slot]!;
+	}
 	const next = starts.slice();
 	const citers = new Uint32Array(starts[ids.length]!);
 	eachLink((citer, target) => {
 		citers[next[target]!++] = citer;
 	});
-	mkdirSync(linksFolder(state), { recursive: true });
-	writeFileSync(join(linksFolder(state), "ids.bin"), bytesOf(ids));
-	writeFileSync(join(linksFolder(state), "starts.bin"), bytesOf(starts));
-	writeFileSync(join(linksFolder(state), "citers.bin"), bytesOf(citers));
-	return { works: ids.length, links: citers.length };
+	writeLinks(state, files, ids, starts, citers);
+	return { works: ids.length, links: citers.length, mostCited, damaged, complete: damaged.length === 0 };
 }
 
 function readNumbers<T>(path: string, Numbers: new (buffer: ArrayBuffer) => T) {
@@ -111,17 +144,21 @@ function readNumbers<T>(path: string, Numbers: new (buffer: ArrayBuffer) => T) {
 }
 
 /** What `buildLinks` found, as a work's links to other records of the library. */
-export function openLinks(state: string) {
+export function openLinks(state: string, files: string) {
 	const folder = linksFolder(state);
-	if (!existsSync(join(folder, "ids.bin"))) throw new Error("No links to load: run --links first");
+	if (!existsSync(join(folder, "files.txt"))) throw new Error("No links to load: run --links first");
+	if (readFileSync(join(folder, "files.txt"), "utf8") !== fingerprint(files)) throw new Error("The files changed after their links were found: run --links again");
 	const ids = readNumbers(join(folder, "ids.bin"), Float64Array);
 	const starts = readNumbers(join(folder, "starts.bin"), Uint32Array);
+	if (starts.length !== ids.length + 1 || statSync(join(folder, "citers.bin")).size !== starts[ids.length]! * 4) {
+		throw new Error("The links are damaged: run --links again");
+	}
 	const citers = openSync(join(folder, "citers.bin"), "r");
 	const citedBy = (slot: number) => {
 		const count = slot < 0 ? 0 : starts[slot + 1]! - starts[slot]!;
 		if (count === 0) return [];
 		const slots = new Uint32Array(count);
-		readSync(citers, new Uint8Array(slots.buffer), 0, count * 4, starts[slot]! * 4);
+		if (readSync(citers, new Uint8Array(slots.buffer), 0, count * 4, starts[slot]! * 4) !== count * 4) throw new Error("The links are damaged: run --links again");
 		return [...new Set(slots)].map((citer) => indexOnlyKey(ids[citer]!));
 	};
 	return (work: Work): ItemLinks => {

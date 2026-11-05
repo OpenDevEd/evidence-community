@@ -16,11 +16,13 @@ const BATCH = 1_000;
 const IN_FLIGHT = 3;
 const REPORT_EVERY = 100_000;
 const SOURCE = "server-files";
+const MAX_CITERS = 2_000_000;
 
 export type LoadSearch = SearchService;
 export type LoadFiles = { files: string; state: string };
+type FinishOptions = LoadFiles & { acceptRefused?: boolean };
 export type LoadOptions = LoadFiles & { part: string; limit?: number; signal?: AbortSignal };
-type LoadStep = LoadFiles & { prepare?: boolean; links?: boolean; finish?: boolean; shards: string; part: string; limit: string; signal: AbortSignal };
+type LoadStep = FinishOptions & { prepare?: boolean; links?: boolean; finish?: boolean; shards: string; part: string; limit: string; signal: AbortSignal };
 
 /** The library's login, for a load: a full bulk request may take longer than a reader's search is allowed. */
 export function loadSearchFor(config: LibraryServerConfig): LoadSearch {
@@ -46,7 +48,9 @@ export async function prepareIndex({ alias, client }: LoadSearch, shards: number
 	const index = newSearchIndexName(alias);
 	await client.indices.create({
 		index,
-		settings: { ...settings, index: { ...settings.index, number_of_shards: shards, refresh_interval: "-1" } } as estypes.IndicesIndexSettings,
+		// A record's citers are read in one query, and the most cited record of a large library can have far more than the
+		// 65,536 Elasticsearch allows by default.
+		settings: { ...settings, index: { ...settings.index, number_of_shards: shards, refresh_interval: "-1", max_terms_count: MAX_CITERS } } as estypes.IndicesIndexSettings,
 		// Nothing searches a record's links, and a large library holds hundreds of millions of them.
 		mappings: {
 			...mappings,
@@ -77,13 +81,16 @@ function readLoadedFiles(files: string, markers: string) {
 }
 
 /**
- * Turns refresh on and moves the library's alias to the loaded index, once every file has loaded into it. The index
- * readers leave stays, and its name comes back, for a person to delete after checking the new one.
+ * Turns refresh on and moves the library's alias to the loaded index, once every file has loaded into it. Records that
+ * didn't load hold it back until a person accepts them: running a part again skips their file, so it can't bring them
+ * back. The index readers leave stays, and its name comes back, for a person to delete after checking the new one.
  */
-export async function finishIndex(search: LoadSearch, { files, state }: LoadFiles) {
+export async function finishIndex(search: LoadSearch, { files, state, acceptRefused }: FinishOptions) {
 	const { alias, client } = search;
 	const index = await target(search);
 	const loaded = readLoadedFiles(files, join(state, index));
+	const lost = loaded.refused + loaded.failed;
+	if (lost > 0 && !acceptRefused) throw new Error(`${lost} records didn't load: check the parts' reports, then finish with --accept-refused`);
 	await client.indices.putSettings({ index, settings: { index: { refresh_interval: "1s" } } });
 	await client.indices.refresh({ index });
 	const { count: records } = await client.count({ index });
@@ -94,7 +101,7 @@ export async function finishIndex(search: LoadSearch, { files, state }: LoadFile
 		actions: [...replaced.map((name) => ({ remove: { index: name, alias } })), { add: { index, alias, is_write_index: true } }],
 	});
 	await mergeSegments(search, index);
-	return { finished: index, records, ...loaded, replaced };
+	return { finished: index, records, ...loaded, repeated: loaded.works - loaded.failed - records, replaced };
 }
 
 type Tally = { works: number; refused: number; failed: number; damaged: string[]; reasons: Map<string, { records: number; first: string }> };
@@ -175,14 +182,20 @@ type Run = {
 	signal?: AbortSignal;
 };
 
+type FileWork = { id?: unknown; referenced_works?: unknown[] | null; referenced_works_count?: number | null };
+
+/** Some files list a work's references without counting them. */
+function withReferenceCount(work: FileWork) {
+	const count = work.referenced_works_count ?? work.referenced_works?.length;
+	return count === undefined ? work : { ...work, referenced_works_count: count };
+}
+
 function operationsFor(line: string, file: string, { linksOf, loadedAt, tally }: Run) {
 	let record = "a line that isn't JSON";
 	try {
-		const work = JSON.parse(line) as { id?: unknown; referenced_works?: unknown[] };
+		const work = JSON.parse(line) as FileWork;
 		record = String(work.id);
-		// Some files list a work's references without counting them.
-		const counted = { referenced_works_count: work.referenced_works?.length, ...work };
-		const document = documentFromWork(counted, { sourceConnectionKey: SOURCE, loadedAt, links: linksOf(work) });
+		const document = documentFromWork(withReferenceCount(work), { sourceConnectionKey: SOURCE, loadedAt, links: linksOf(work) });
 		tally.works++;
 		return [{ index: { _id: document.key } }, document];
 	} catch (error) {
@@ -229,7 +242,7 @@ export async function loadPart(search: LoadSearch, { part, files, state, limit =
 	const tally: Tally = { works: 0, refused: 0, failed: 0, damaged: [], reasons: new Map() };
 	const writer = createWriter(search, index, tally);
 	const progress = createProgress(part, tally);
-	const run = { limit, linksOf: openLinks(state), loadedAt: new Date(), tally, writer, progress, signal };
+	const run = { limit, linksOf: openLinks(state, files), loadedAt: new Date(), tally, writer, progress, signal };
 	for (const file of mine.filter((name) => !existsSync(markerOf(markers, name)))) {
 		const { works, refused, failed } = tally;
 		try {
@@ -248,10 +261,10 @@ export async function loadPart(search: LoadSearch, { part, files, state, limit =
 
 /** Runs the step the command line named; `complete` is false when a person has to look at the result. */
 export async function runLoadStep(search: LoadSearch, step: LoadStep) {
-	const { files, part, state, signal } = step;
+	const { acceptRefused, files, part, state, signal } = step;
 	if (step.prepare) return { ...(await prepareIndex(search, Number(step.shards))), complete: true };
 	if (!files || !state) throw new Error("--links, --part and --finish need --files and --state");
-	if (step.links) return { ...(await buildLinks(files, state)), complete: true };
-	if (step.finish) return { ...(await finishIndex(search, { files, state })), complete: true };
+	if (step.links) return buildLinks(files, state, signal);
+	if (step.finish) return { ...(await finishIndex(search, { files, state, acceptRefused })), complete: true };
 	return loadPart(search, { part, files, state, limit: Number(step.limit), signal });
 }

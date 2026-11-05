@@ -7,9 +7,11 @@
  *   npm run search:load-index-only -- --part 0/8 --files <folder> --state <folder>   (one process per part)
  *   npm run search:load-index-only -- --finish --files <folder> --state <folder>
  *
- * Links finds which works cite each other across all the files, once. A part prints its progress, skips the files it has finished, reports works it couldn't use, and exits non-zero when
- * a file or record didn't load: run it again. `--limit` stops a part after that many works, to measure a load. Finish
- * refuses until every file has loaded, and names the index readers left, which stays until a person deletes it.
+ * Links finds which works cite each other across all the files, once. A part prints its progress, skips the files it
+ * has finished, reports works it couldn't use, and exits non-zero when a file or record didn't load. Running it again
+ * tries unfinished files; records refused in a finished file stay out. `--limit` stops a part after that many works,
+ * to measure a load. Finish refuses until every file has loaded, and until `--accept-refused` accepts records that
+ * didn't. It names the index readers left, which stays until a person deletes it.
  */
 import { parseArgs } from "node:util";
 
@@ -21,6 +23,7 @@ const { values } = parseArgs({
 		prepare: { type: "boolean" },
 		links: { type: "boolean" },
 		finish: { type: "boolean" },
+		"accept-refused": { type: "boolean" },
 		part: { type: "string", default: "" },
 		files: { type: "string", default: "" },
 		state: { type: "string", default: "" },
@@ -35,7 +38,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => 
 async function main() {
 	const { config, close } = await openLibraryConfigProcess();
 	const search = loadSearchFor(config);
-	const result = await runLoadStep(search, { ...values, signal: stop.signal });
+	const result = await runLoadStep(search, { ...values, acceptRefused: values["accept-refused"], signal: stop.signal });
 	console.log(JSON.stringify(result));
 	process.exitCode = result.complete ? 0 : 1;
 	await search.client.close();
