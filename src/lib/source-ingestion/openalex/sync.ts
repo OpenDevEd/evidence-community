@@ -19,6 +19,7 @@ import { locateInstitutions } from "./institution-locations";
 import { findDuplicateRecords, skipRepeats, storedWorks } from "./duplicates";
 import { mapOpenAlexWork } from "./mapper";
 import { MIN_SLICED_WORKS, planSlices, slicedQuery } from "./slices";
+import { readSearchEngineAccess } from "./search-engine";
 import { OPENALEX_MAX_PAGE_SIZE, openAlexConnectionConfigSchema, type OpenAlexPage, type OpenAlexQuery } from "./schema";
 import { chunkValues } from "@/lib/chunk-values";
 
@@ -1093,16 +1094,17 @@ async function scanStages(scan: Scan) {
 }
 
 /** The works an approved query finds, page by page with OpenAlex's own cursor; a large one is read in date slices. */
-function queryStream(config: z.infer<typeof openAlexConnectionConfigSchema>): OpenAlexWorkStream {
+function queryStream(config: z.infer<typeof openAlexConnectionConfigSchema>, readsSearchEngine: boolean): OpenAlexWorkStream {
 	const query = config.approvedQuery.query;
 	return {
 		version: config.approvedQuery.version,
 		downloadPdfs: config.downloadPdfs,
-		fullScansOnly: isSampledOql(query),
+		// The search engine can't filter by update date or count by year.
+		fullScansOnly: isSampledOql(query) || readsSearchEngine,
 		page: (client, cursor, pageSize, updatedSince) =>
 			client.works(updatedSince ? withUpdatedSince(query, updatedSince) : query, cursor, pageSize, { followsCursor: true }),
 		planSlices: async (client, count) =>
-			count < MIN_SLICED_WORKS || isSampledOql(query) ? null : planSlices(client, query),
+			count < MIN_SLICED_WORKS || isSampledOql(query) || readsSearchEngine ? null : planSlices(client, query),
 		slicePage: (client, slice, cursor) => client.works(slicedQuery(query, slice.dates), cursor, RECORD_PAGE_SIZE, { followsCursor: true }),
 	};
 }
@@ -1112,7 +1114,8 @@ export async function syncOpenAlexSource(
 	options: OpenAlexSourceOptions = {},
 ) {
 	const config = openAlexConnectionConfigSchema.parse(context.sourceConnection.config);
-	return syncOpenAlexWorks(context, queryStream(config), options);
+	const apiKey = await context.credentialResolver?.(context.sourceConnection.key);
+	return syncOpenAlexWorks(context, queryStream(config, Boolean(apiKey && readSearchEngineAccess(apiKey))), options);
 }
 
 /**

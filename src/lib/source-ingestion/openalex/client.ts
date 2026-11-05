@@ -9,6 +9,7 @@ import {
 	type OpenAlexPage,
 	type OpenAlexQuery,
 } from "./schema";
+import { asOpenAlexWork, readSearchEngineAccess, SEARCH_ENGINE_ORIGIN, searchEngineHeaders } from "./search-engine";
 import { workIsOpenAccess } from "./work";
 
 /** OpenAlex refuses more ids than this in one filter. */
@@ -42,29 +43,28 @@ function worksUrl(
 		throw new Error(`OpenAlex pageSize must be between 1 and ${OPENALEX_MAX_PAGE_SIZE}`);
 	}
 	const approved = openAlexQuerySchema.parse(query);
+	const engine = readSearchEngineAccess(apiKey);
+	const origin = engine ? SEARCH_ENGINE_ORIGIN : "https://api.openalex.org";
 	// OQL runs at the API root with the query in the POST body.
-	const url = new URL(
-		approved.oql ? "https://api.openalex.org/" : "https://api.openalex.org/works",
-	);
+	const url = new URL(approved.oql ? `${origin}/` : `${origin}/works`);
 	for (const key of ["filter", "search"] as const) {
 		if (approved[key]) url.searchParams.set(key, approved[key]);
 	}
 	if (cursor) url.searchParams.set("cursor", cursor);
 	url.searchParams.set("per_page", String(pageSize));
-	url.searchParams.set("api_key", apiKey);
+	if (!engine) url.searchParams.set("api_key", apiKey);
 	return url;
 }
 
 /** OQL goes in a POST body, since it outgrows a URL. */
-function requestInit(oql: string | undefined): RequestInit {
-	if (!oql) return { headers: { Accept: "application/json" } };
+function requestInit(oql: string | undefined, apiKey: string): RequestInit {
+	const engine = readSearchEngineAccess(apiKey);
+	const headers = { Accept: "application/json", ...(engine ? searchEngineHeaders(engine) : {}) };
+	if (!oql) return { headers };
 	return {
 		method: "POST",
 		body: JSON.stringify({ oql }),
-		headers: {
-			Accept: "application/json",
-			"Content-Type": "application/json",
-		},
+		headers: { ...headers, "Content-Type": "application/json" },
 	};
 }
 
@@ -166,7 +166,7 @@ export class OpenAlexClient {
 	}
 
 	private async fetchWithRetries(url: URL, oql?: string, canShrink = false) {
-		const init = requestInit(oql);
+		const init = requestInit(oql, this.options.apiKey);
 		const request = this.options.fetch ?? fetch;
 		let waited = 0;
 		for (let attempt = 0; ; attempt++) {
@@ -236,6 +236,8 @@ export class OpenAlexClient {
 		if (!ids.length || ids.length > OPENALEX_MAX_IDS_PER_FILTER) {
 			throw new Error(`An OpenAlex institution filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} ids`);
 		}
+		// The engine's key must not reach OpenAlex, and the engine doesn't place institutions.
+		if (readSearchEngineAccess(this.options.apiKey)) return new Map();
 		const url = new URL("https://api.openalex.org/institutions");
 		url.searchParams.set("filter", `openalex:${ids.join("|")}`);
 		url.searchParams.set("select", "id,geo");
@@ -272,7 +274,15 @@ export class OpenAlexClient {
 	private async page(query: OpenAlexQuery, cursor: string, size: number, canShrink = false) {
 		const page = openAlexPageSchema.parse(await this.read(worksUrl(query, cursor, size, this.options.apiKey), query.oql, canShrink));
 		if (page.results.length > size) throw new OpenAlexApiError("OpenAlex returned more works than requested");
-		return page;
+		return readSearchEngineAccess(this.options.apiKey) ? this.asOpenAlexPage(page) : page;
+	}
+
+	/** The engine's page in OpenAlex's terms, without any work OpenAlex doesn't hold. */
+	private asOpenAlexPage(page: OpenAlexPage): OpenAlexPage {
+		const results = page.results.map(asOpenAlexWork).filter((work) => work !== null);
+		const skipped = page.results.length - results.length;
+		if (skipped) console.warn("Works without an OpenAlex id left out", { skipped });
+		return { ...page, results };
 	}
 
 	/**
