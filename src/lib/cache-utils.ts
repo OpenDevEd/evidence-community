@@ -6,10 +6,19 @@ import { computedCache } from "@/db/schema/tables/computedCache";
 
 type Cached<T> = { value: T; computedAt: number };
 
-/** Computes running now, by cache key, so concurrent callers share one instead of each starting their own. */
-const computing = new Map<string, Promise<unknown>>();
-/** The last value this process computed or read, by cache key: it still answers while a write is in flight or failed. */
-const remembered = new Map<string, Cached<unknown>>();
+type Store = {
+	/** Computes running now, by cache key, so concurrent callers share one instead of each starting their own. */
+	computing: Map<string, Promise<unknown>>;
+	/** The last value this process computed or read, by cache key: it still answers while a write is in flight or failed. */
+	remembered: Map<string, Cached<unknown>>;
+};
+
+// On globalThis, not in the module: Next bundles route handlers and pages separately, each with its own copy of this
+// module, and a count the health check starts must be the one the pages wait for and read.
+const { computing, remembered }: Store = ((globalThis as { __computedCache?: Store }).__computedCache ??= {
+	computing: new Map(),
+	remembered: new Map(),
+});
 
 async function cachedValue<T>(libraryConfig: LibraryServerConfig, key: string) {
 	const database = await getDatabaseForConfig(libraryConfig);

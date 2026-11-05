@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import {
 	type ComprehensiveStats,
 	getInstitutionStats,
@@ -30,9 +29,7 @@ import { resolveCitationMeasure } from "./citation-measure";
 import { getCachedCollections } from "@/app/api/cache";
 import type { Collection } from "@/app/api/collections/types";
 import type { ShownCollections } from "./topic-stats";
-
-/** Part of the cache key: raise it when the statistics change what they count, so a deployment never serves figures cached by the code before it. */
-const STATISTICS_VERSION = 6;
+import { statisticsCacheKey } from "./statistics-cache-key";
 
 /**
  * Runs the statistics queries one at a time. The web process has three database connections; a large library's
@@ -74,14 +71,9 @@ async function statisticsRequest(requestedCitationMeasure?: string) {
 	);
 	// No fallback: statistics computed without the collections would be cached with every topic missing.
 	const shown = shownCollections(await getCachedCollections(config));
-	// Topics are named from the shown collections, so renaming or moving one counts afresh.
-	const collectionsFingerprint = createHash("sha256")
-		.update(JSON.stringify([...shown]))
-		.digest("hex")
-		.slice(0, 16);
 	return {
 		config,
-		key: `${config.revision}-comprehensive-stats-v${STATISTICS_VERSION}-${collectionsFingerprint}-${measure.key}`,
+		key: statisticsCacheKey(config, shown, measure.key),
 		citationMeasure: { selectedKey: measure.key, options },
 		compute: async () => {
 			const totalItems = await getTotalItems(db, hidden);

@@ -97,3 +97,13 @@ it("still answers from memory when the cache write fails, and tries again after 
 	expect(compute).toHaveBeenCalledTimes(2);
 	error.mockRestore();
 });
+
+it("shares a value between the module's copies, as Next bundles route handlers and pages apart", async () => {
+	expect(await withComputedCache(config, "bundled", async () => ({ count: 8 }))).toEqual({ count: 8 });
+	stored.delete("bundled");
+	vi.resetModules();
+	const otherBundle = await import("@/lib/cache-utils");
+	const compute = vi.fn(async () => ({ count: 9 }));
+	expect(await otherBundle.peekComputedCache(config, "bundled", compute)).toEqual({ count: 8 });
+	expect(compute).not.toHaveBeenCalled();
+});
