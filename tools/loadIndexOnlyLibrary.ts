@@ -3,10 +3,11 @@
  * database (docs/search-indexing.md). Run in the library's network, with its LIBRARY_CONFIG_PATH:
  *
  *   npm run search:load-index-only -- --prepare --shards 4
+ *   npm run search:load-index-only -- --links --files <folder> --state <folder>
  *   npm run search:load-index-only -- --part 0/8 --files <folder> --state <folder>   (one process per part)
  *   npm run search:load-index-only -- --finish --files <folder> --state <folder>
  *
- * A part prints its progress, skips the files it has finished, reports works it couldn't use, and exits non-zero when
+ * Links finds which works cite each other across all the files, once. A part prints its progress, skips the files it has finished, reports works it couldn't use, and exits non-zero when
  * a file or record didn't load: run it again. `--limit` stops a part after that many works, to measure a load. Finish
  * refuses until every file has loaded, and names the index readers left, which stays until a person deletes it.
  */
@@ -17,10 +18,12 @@ import { Client } from "@elastic/elasticsearch";
 import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { isIndexOnly } from "../src/lib/search-index/index-only";
 import { finishIndex, loadPart, type LoadSearch, prepareIndex } from "../src/lib/search-index/index-only-load";
+import { buildLinks } from "../src/lib/search-index/index-only-links";
 
 const { values } = parseArgs({
 	options: {
 		prepare: { type: "boolean" },
+		links: { type: "boolean" },
 		finish: { type: "boolean" },
 		part: { type: "string", default: "" },
 		files: { type: "string", default: "" },
@@ -36,7 +39,8 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => 
 function step(search: LoadSearch) {
 	const { files, part, state } = values;
 	if (values.prepare) return prepareIndex(search, Number(values.shards));
-	if (!files || !state) throw new Error("--part and --finish need --files and --state");
+	if (!files || !state) throw new Error("--links, --part and --finish need --files and --state");
+	if (values.links) return buildLinks(files, state);
 	if (values.finish) return finishIndex(search, { files, state });
 	return loadPart(search, { part, files, state, limit: Number(values.limit), signal: stop.signal });
 }

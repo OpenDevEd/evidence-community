@@ -9,13 +9,14 @@ import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summa
 import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { workIsOpenAccess } from "@/lib/source-ingestion/openalex/work";
+import type { ItemLinks } from "@/app/api/item/types";
 import type { item } from "@/db/schema/tables/item";
 import { cleanRow, creatorNames, type ItemSearchDocument, metadataSearchValues, uniqueSorted } from "./projection";
 
 type ItemRow = typeof item.$inferSelect;
 type MappedRecord = ReturnType<typeof mapOpenAlexWork>["items"][number];
 
-export type IndexOnlyOptions = { sourceConnectionKey: string; loadedAt: Date };
+export type IndexOnlyOptions = { sourceConnectionKey: string; loadedAt: Date; links: ItemLinks };
 
 /** Keeps a work's PDF link clear of every work's own key: OpenAlex's ids stay far below this. */
 const ATTACHMENT_OFFSET = 700_000_000_000;
@@ -86,7 +87,7 @@ export function documentFromWork(work: unknown, options: IndexOnlyOptions): Item
 					},
 				]
 			: [],
-		citationCount: metric?.citedByCount ?? 0,
+		citationCount: Math.max(options.links.citedBy.length, metric?.citedByCount ?? 0),
 		collections: [],
 		collectionsAncestry: [],
 		country: resolveCountryFocus(parent),
@@ -96,7 +97,7 @@ export function documentFromWork(work: unknown, options: IndexOnlyOptions): Item
 		fullTextPDFs: [],
 		institution: [],
 		[INSTITUTION_FILTER_FIELD]: [...institutionNames.values()],
-		links: { cites: [], citedBy: [], related: [] },
+		links: options.links,
 		metadataSearch: metadataSearchValues(parent),
 		openAccess: workIsOpenAccess(work),
 		topicAncestors: [],

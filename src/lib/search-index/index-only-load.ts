@@ -1,13 +1,13 @@
 import type { estypes } from "@elastic/elasticsearch";
-import { createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { pipeline } from "node:stream";
-import { createGunzip } from "node:zlib";
 
 import type { SearchService } from "@/lib/elasticsearch-factory";
 import { newSearchIndexName, searchIndexDefinition } from "./elasticsearch-index";
 import { checkBulkItems, mergeSegments } from "./elasticsearch-writer";
 import { documentFromWork } from "./index-only-document";
+import { dataFiles, fileLines } from "./index-only-files";
+import { openLinks } from "./index-only-links";
 import { SearchIndexDocumentError } from "./writer";
 
 const BATCH = 1_000;
@@ -36,15 +36,14 @@ export async function prepareIndex({ alias, client }: LoadSearch, shards: number
 	await client.indices.create({
 		index,
 		settings: { ...settings, index: { ...settings.index, number_of_shards: shards, refresh_interval: "-1" } } as estypes.IndicesIndexSettings,
-		mappings: { ...mappings, _meta: { ...mappings._meta, indexOnly: true } } as estypes.MappingTypeMapping,
+		// Nothing searches a record's links, and a large library holds hundreds of millions of them.
+		mappings: {
+			...mappings,
+			_meta: { ...mappings._meta, indexOnly: true },
+			properties: { ...mappings.properties, links: { type: "object", enabled: false } },
+		} as estypes.MappingTypeMapping,
 	});
 	return { prepared: index };
-}
-
-function dataFiles(folder: string) {
-	return readdirSync(folder)
-		.filter((name) => name.endsWith(".jsonl.gz"))
-		.sort();
 }
 
 const markerOf = (markers: string, file: string) => join(markers, `${file}.done`);
@@ -85,18 +84,6 @@ export async function finishIndex(search: LoadSearch, { files, state }: LoadFile
 	});
 	await mergeSegments(search, index);
 	return { finished: index, records, ...loaded, replaced };
-}
-
-/** A file's lines. Node's readline also ends a line at U+2028 and U+2029, which a record's text can hold. */
-export async function* linesOf(stream: AsyncIterable<Buffer>) {
-	let rest = "";
-	const decoder = new TextDecoder();
-	for await (const chunk of stream) {
-		const lines = (rest + decoder.decode(chunk, { stream: true })).split("\n");
-		rest = lines.pop() ?? "";
-		yield* lines;
-	}
-	if (rest) yield rest;
 }
 
 type Tally = { works: number; refused: number; failed: number; damaged: string[]; reasons: Map<string, { records: number; first: string }> };
@@ -170,18 +157,21 @@ function createProgress(part: string, tally: Tally) {
 type Run = {
 	limit: number;
 	loadedAt: Date;
+	linksOf: ReturnType<typeof openLinks>;
 	tally: Tally;
 	writer: ReturnType<typeof createWriter>;
 	progress: ReturnType<typeof createProgress>;
 	signal?: AbortSignal;
 };
 
-function operationsFor(line: string, file: string, { loadedAt, tally }: Run) {
+function operationsFor(line: string, file: string, { linksOf, loadedAt, tally }: Run) {
 	let record = "a line that isn't JSON";
 	try {
-		const work = JSON.parse(line) as { id?: unknown };
+		const work = JSON.parse(line) as { id?: unknown; referenced_works?: unknown[] };
 		record = String(work.id);
-		const document = documentFromWork(work, { sourceConnectionKey: SOURCE, loadedAt });
+		// Some files list a work's references without counting them.
+		const counted = { referenced_works_count: work.referenced_works?.length, ...work };
+		const document = documentFromWork(counted, { sourceConnectionKey: SOURCE, loadedAt, links: linksOf(work) });
 		tally.works++;
 		return [{ index: { _id: document.key } }, document];
 	} catch (error) {
@@ -195,9 +185,8 @@ function operationsFor(line: string, file: string, { loadedAt, tally }: Run) {
 async function loadFile(folder: string, file: string, run: Run) {
 	const { limit, signal, tally, writer, progress } = run;
 	const stopped = () => tally.works >= limit || signal?.aborted === true;
-	const lines = pipeline(createReadStream(join(folder, file)), createGunzip(), () => {});
 	let batch: object[] = [];
-	for await (const line of linesOf(lines)) {
+	for await (const line of fileLines(join(folder, file))) {
 		if (stopped()) break;
 		batch.push(...operationsFor(line, file, run));
 		if (batch.length < BATCH * 2) continue;
@@ -229,7 +218,7 @@ export async function loadPart(search: LoadSearch, { part, files, state, limit =
 	const tally: Tally = { works: 0, refused: 0, failed: 0, damaged: [], reasons: new Map() };
 	const writer = createWriter(search, index, tally);
 	const progress = createProgress(part, tally);
-	const run = { limit, loadedAt: new Date(), tally, writer, progress, signal };
+	const run = { limit, linksOf: openLinks(state), loadedAt: new Date(), tally, writer, progress, signal };
 	for (const file of mine.filter((name) => !existsSync(markerOf(markers, name)))) {
 		const { works, refused, failed } = tally;
 		try {

@@ -19,7 +19,7 @@ vi.mock("@/lib/elasticsearch-factory", () => ({
 }));
 
 const loadedAt = new Date("2026-11-05T00:00:00Z");
-const options = { sourceConnectionKey: "server-files", loadedAt };
+const options = { sourceConnectionKey: "server-files", loadedAt, links: { cites: [], citedBy: [], related: [] } };
 const work = {
 	id: "https://openalex.org/W2620998106",
 	title: "Teachers and literacy in Kenya",

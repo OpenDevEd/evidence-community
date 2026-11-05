@@ -5,9 +5,19 @@ import { gzipSync } from "node:zlib";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
-import { finishIndex, linesOf, loadPart, type LoadSearch, prepareIndex } from "@/lib/search-index/index-only-load";
+import { indexOnlyKey } from "@/lib/search-index/index-only-document";
+import { linesOf } from "@/lib/search-index/index-only-files";
+import { buildLinks } from "@/lib/search-index/index-only-links";
+import { finishIndex, loadPart, type LoadOptions, type LoadSearch, prepareIndex } from "@/lib/search-index/index-only-load";
 
-const work = (id: number, title = `Work ${id}`) => JSON.stringify({ id: `https://openalex.org/W${id}`, title, type: "article", publication_year: 2020 });
+const work = (id: number, title = `Work ${id}`, references: number[] = []) =>
+	JSON.stringify({
+		id: `https://openalex.org/W${id}`,
+		title,
+		type: "article",
+		publication_year: 2020,
+		referenced_works: references.map((reference) => `https://openalex.org/W${reference}`),
+	});
 
 function fakeSearch(bulkItems: object[] = []) {
 	const bulks: object[][] = [];
@@ -54,6 +64,10 @@ describe("loading an index-only library", () => {
 	});
 
 	const file = (name: string, lines: string[]) => writeFileSync(join(folder, name), gzipSync(lines.join("\n")));
+	const load = async (search: LoadSearch, options: LoadOptions) => {
+		await buildLinks(folder, state);
+		return loadPart(search, options);
+	};
 
 	it("keeps a record whole when its text holds a line separator", async () => {
 		const title = "Teachers and pupils";
@@ -72,7 +86,7 @@ describe("loading an index-only library", () => {
 		file("a.jsonl.gz", [work(1), "not json", work(2)]);
 		const { search, bulks } = fakeSearch();
 
-		const result = await loadPart(search, { part: "0/1", files: folder, state });
+		const result = await load(search, { part: "0/1", files: folder, state });
 
 		expect(result).toMatchObject({ works: 2, refused: 1, failed: 0 });
 		expect(bulks.flat().filter((line) => "title" in line)).toHaveLength(2);
@@ -82,11 +96,11 @@ describe("loading an index-only library", () => {
 		file("a.jsonl.gz", [work(1)]);
 		file("b.jsonl.gz", [work(2)]);
 		const first = fakeSearch();
-		await loadPart(first.search, { part: "0/1", files: folder, state });
+		await load(first.search, { part: "0/1", files: folder, state });
 		file("c.jsonl.gz", [work(3)]);
 
 		const next = fakeSearch();
-		const result = await loadPart(next.search, { part: "0/1", files: folder, state });
+		const result = await load(next.search, { part: "0/1", files: folder, state });
 
 		expect(result.works).toBe(1);
 		expect(readdirSync(join(state, "library_2")).sort()).toEqual(["a.jsonl.gz.done", "b.jsonl.gz.done", "c.jsonl.gz.done"]);
@@ -94,6 +108,7 @@ describe("loading an index-only library", () => {
 
 	it("gives each part its share of the files", async () => {
 		for (const name of ["a", "b", "c", "d"]) file(`${name}.jsonl.gz`, [work(name.charCodeAt(0))]);
+		await buildLinks(folder, state);
 
 		const results = await Promise.all(
 			["0/2", "1/2"].map((part) => loadPart(fakeSearch().search, { part, files: folder, state })),
@@ -105,19 +120,48 @@ describe("loading an index-only library", () => {
 	it("stops at its limit without marking the file done", async () => {
 		file("a.jsonl.gz", [work(1), work(2), work(3)]);
 
-		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state, limit: 2 });
+		const result = await load(fakeSearch().search, { part: "0/1", files: folder, state, limit: 2 });
 
 		expect(result.works).toBe(2);
 		expect(readdirSync(join(state, "library_2"))).toEqual([]);
 	});
 
+	it("links works across files, to records of the library only, and counts references a file only lists", async () => {
+		file("a.jsonl.gz", [work(1, "One", [2, 3, 99, 1])]);
+		file("b.jsonl.gz", [work(2, "Two", [3]), work(3, "Three")]);
+		const { search, bulks } = fakeSearch();
+
+		await expect(buildLinks(folder, state)).resolves.toEqual({ works: 3, links: 3 });
+		await loadPart(search, { part: "0/1", files: folder, state });
+
+		const documents = bulks.flat().filter((line) => "title" in line) as unknown as Array<{
+			title: string;
+			links: object;
+			citationCount: number;
+			citationMetrics: Array<{ referencedWorksCount: number }>;
+		}>;
+		const named = Object.fromEntries(documents.map((document) => [document.title, document]));
+		const [one, two, three] = [1, 2, 3].map(indexOnlyKey);
+		expect(named.One!.links).toEqual({ cites: [two, three], citedBy: [], related: [] });
+		expect(named.Two!.links).toEqual({ cites: [three], citedBy: [one], related: [] });
+		expect(named.Three!.links).toEqual({ cites: [], citedBy: expect.arrayContaining([one, two]), related: [] });
+		expect(named.Three!.citationCount).toBe(2);
+		expect(named.One!.citationMetrics[0]!.referencedWorksCount).toBe(4);
+	});
+
+	it("refuses a load without its links, rather than show none", async () => {
+		file("a.jsonl.gz", [work(1)]);
+
+		await expect(loadPart(fakeSearch().search, { part: "0/1", files: folder, state })).rejects.toThrow("run --links first");
+	});
+
 	it("loads a new index in full, whatever an earlier index finished", async () => {
 		file("a.jsonl.gz", [work(1)]);
-		await loadPart(fakeSearch().search, { part: "0/1", files: folder, state });
+		await load(fakeSearch().search, { part: "0/1", files: folder, state });
 
 		const { search } = fakeSearch();
 		search.client.indices.get = (async () => ({ library_3: {} })) as never;
-		const result = await loadPart(search, { part: "0/1", files: folder, state });
+		const result = await load(search, { part: "0/1", files: folder, state });
 
 		expect(result.works).toBe(1);
 	});
@@ -126,7 +170,7 @@ describe("loading an index-only library", () => {
 		file("a.jsonl.gz", [work(1)]);
 		const refused = { index: { _id: "ABCD2345", status: 400, error: { type: "mapper_parsing_exception", reason: "bad date" } } };
 
-		const result = await loadPart(fakeSearch([refused]).search, { part: "0/1", files: folder, state });
+		const result = await load(fakeSearch([refused]).search, { part: "0/1", files: folder, state });
 
 		expect(result).toMatchObject({
 			failed: 1,
@@ -139,7 +183,7 @@ describe("loading an index-only library", () => {
 		file("a.jsonl.gz", [work(1)]);
 		const busy = { index: { _id: "ABCD2345", status: 429, error: { type: "es_rejected_execution_exception", reason: "queue full" } } };
 
-		await expect(loadPart(fakeSearch([busy]).search, { part: "0/1", files: folder, state })).rejects.toThrow("queue full");
+		await expect(load(fakeSearch([busy]).search, { part: "0/1", files: folder, state })).rejects.toThrow("queue full");
 
 		expect(readdirSync(join(state, "library_2"))).toEqual([]);
 	});
@@ -152,14 +196,16 @@ describe("loading an index-only library", () => {
 			.mockRejectedValueOnce(new Error("connection lost"))
 			.mockResolvedValue({ items: [] }) as never;
 
-		await expect(loadPart(search, { part: "0/1", files: folder, state })).rejects.toThrow("connection lost");
+		await expect(load(search, { part: "0/1", files: folder, state })).rejects.toThrow("connection lost");
 
 		expect(readdirSync(join(state, "library_2"))).toEqual([]);
 	});
 
 	it("carries on past a damaged file, and leaves it to run again", async () => {
-		writeFileSync(join(folder, "a.jsonl.gz"), gzipSync(work(1)).subarray(0, 12));
+		file("a.jsonl.gz", [work(1)]);
 		file("b.jsonl.gz", [work(2)]);
+		await buildLinks(folder, state);
+		writeFileSync(join(folder, "a.jsonl.gz"), gzipSync(work(1)).subarray(0, 12));
 
 		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state });
 
@@ -170,7 +216,7 @@ describe("loading an index-only library", () => {
 	it("stops between records when asked, without marking the file done", async () => {
 		file("a.jsonl.gz", [work(1)]);
 
-		const result = await loadPart(fakeSearch().search, { part: "0/1", files: folder, state, signal: AbortSignal.abort() });
+		const result = await load(fakeSearch().search, { part: "0/1", files: folder, state, signal: AbortSignal.abort() });
 
 		expect(result).toMatchObject({ works: 0, complete: false });
 		expect(readdirSync(join(state, "library_2"))).toEqual([]);
@@ -178,7 +224,7 @@ describe("loading an index-only library", () => {
 
 	it("refuses a part it can't read, and a load with no index to fill", async () => {
 		for (const part of ["one", "2/2", "1/0", "1.5/2", "-1/2"]) {
-			await expect(loadPart(fakeSearch().search, { part, files: folder, state })).rejects.toThrow("written <i>/<n>");
+			await expect(load(fakeSearch().search, { part, files: folder, state })).rejects.toThrow("written <i>/<n>");
 		}
 		const { search } = fakeSearch();
 		search.client.indices.get = (async () => ({})) as never;
@@ -193,7 +239,10 @@ describe("loading an index-only library", () => {
 		expect(create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				settings: expect.objectContaining({ index: expect.objectContaining({ number_of_shards: 4, refresh_interval: "-1" }) }),
-				mappings: expect.objectContaining({ _meta: expect.objectContaining({ indexOnly: true }) }),
+				mappings: expect.objectContaining({
+					_meta: expect.objectContaining({ indexOnly: true }),
+					properties: expect.objectContaining({ links: { type: "object", enabled: false } }),
+				}),
 			}),
 		);
 	});
@@ -201,7 +250,7 @@ describe("loading an index-only library", () => {
 	it("moves the alias to the full index, merges it, and names the index readers left", async () => {
 		file("a.jsonl.gz", [work(1), work(2)]);
 		const { search, updateAliases, forcemerge } = fakeSearch();
-		await loadPart(search, { part: "0/1", files: folder, state });
+		await load(search, { part: "0/1", files: folder, state });
 
 		const finished = await finishIndex(search, { files: folder, state });
 
@@ -216,7 +265,7 @@ describe("loading an index-only library", () => {
 		file("a.jsonl.gz", [work(1)]);
 		file("b.jsonl.gz", [work(2)]);
 		const { search, updateAliases } = fakeSearch();
-		await loadPart(search, { part: "0/2", files: folder, state });
+		await load(search, { part: "0/2", files: folder, state });
 
 		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("1 of 2 files aren't loaded");
 
@@ -229,7 +278,7 @@ describe("loading an index-only library", () => {
 		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("0 of 0 files");
 
 		file("a.jsonl.gz", ["not json"]);
-		await loadPart(search, { part: "0/1", files: folder, state });
+		await load(search, { part: "0/1", files: folder, state });
 		search.client.count = (async () => ({ count: 0 })) as never;
 		await expect(finishIndex(search, { files: folder, state })).rejects.toThrow("holds no records");
 
