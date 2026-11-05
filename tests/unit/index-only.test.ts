@@ -125,8 +125,11 @@ describe("index-only records", () => {
 		it("leaves Ask AI on, which reads its records from the index", () => {
 			const config = indexOnlyConfig();
 			config.features.ai = true;
+			const provider = { provider: "openrouter", enabled: true, apiKey: "key", models: ["a/model"], defaultModel: "a/model" };
+			Object.assign(config, { ai: { providers: [provider] } });
+			Object.assign(config.services, { redis: { url: "redis://redis:6379" } });
 
-			expect(refusedPaths(config) ?? []).not.toContain("features.ai");
+			expect(refusedPaths(config)).toBeUndefined();
 		});
 
 		it("asks nothing of a library that isn't index-only", () => {
