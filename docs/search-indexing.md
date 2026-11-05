@@ -190,8 +190,10 @@ copy of the records, so a worker that lost the setting still stops. Change a rec
 the worker.
 
 `npm run search:load-index-only` builds the index from gzipped JSON lines of OpenAlex works, without the API or the
-database. Run it in the library's network, in three steps: `--prepare`, then one `--part <i>/<n>` per process with
-`--files <folder> --state <folder>`, then `--finish --files <folder> --state <folder>`. A part remembers each finished
+database. Run it in the library's network, in four steps, all but the first with `--files <folder> --state <folder>`:
+`--prepare`, then `--links`, then one `--part <i>/<n>` per process, then `--finish`. `--links` reads every file once to
+find which works cite each other, because a part sees only its own files; this is what fills a record's References and
+Citations lists. Run it again when the files change. A part remembers each finished
 file under `--state`, per index, so a stopped load carries on. It stops when Elasticsearch fails or is too busy, goes on
 past a damaged file, and exits non-zero whenever a file or record didn't load, naming the first of each kind. Run it
 again to try the unfinished files. Keys come from OpenAlex's ids, so loading a work again replaces it.
