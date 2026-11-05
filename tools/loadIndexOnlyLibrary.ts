@@ -11,7 +11,6 @@
  */
 import { createReadStream, existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { createInterface } from "node:readline";
 import { parseArgs } from "node:util";
 import { createGunzip } from "node:zlib";
 
@@ -88,6 +87,18 @@ async function finish({ alias, client }: Search) {
 	console.log(JSON.stringify({ finished: index, records: count }));
 }
 
+/** A file's lines. Node's readline also ends a line at U+2028 and U+2029, which a record's text can hold. */
+async function* linesOf(stream: AsyncIterable<Buffer>) {
+	let rest = "";
+	const decoder = new TextDecoder();
+	for await (const chunk of stream) {
+		const lines = (rest + decoder.decode(chunk, { stream: true })).split("\n");
+		rest = lines.pop() ?? "";
+		yield* lines;
+	}
+	if (rest) yield rest;
+}
+
 async function load(search: Search) {
 	const [part, parts] = (values.part ?? "").split("/").map(Number);
 	if (!values.files || !values.state || part === undefined || !parts) {
@@ -125,8 +136,7 @@ async function load(search: Search) {
 		const done = join(values.state, `${file}.done`);
 		if (existsSync(done)) continue;
 		let batch: object[] = [];
-		const lines = createInterface({ input: createReadStream(join(values.files, file)).pipe(createGunzip()), crlfDelay: Infinity });
-		for await (const line of lines) {
+		for await (const line of linesOf(createReadStream(join(values.files, file)).pipe(createGunzip()))) {
 			if (tally.works >= limit) break;
 			try {
 				const document = documentFromWork(JSON.parse(line), { sourceConnectionKey: SOURCE, loadedAt });
