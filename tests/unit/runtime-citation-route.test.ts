@@ -4,6 +4,7 @@ const state = vi.hoisted(() => ({ enabled: true, showUrl: false, title: "Schools
 vi.mock("server-only", () => ({}));
 vi.mock("@/i18n/server", () => ({ getRuntimeRequestLocale: async () => "en-GB" }));
 vi.mock("@/config/library-config/server", () => ({ getLibraryConfig: async () => ({
+	services: { search: { engine: "meilisearch" } },
 	citations: { enabled: state.enabled, showUrl: state.showUrl }, identity: { baseUrl: "https://library.example.org" },
 }) }));
 vi.mock("@/db", () => ({ getDatabaseForConfig: async () => ({}) }));
