@@ -758,23 +758,25 @@ export async function projectPublicItems(
 	);
 	return keys.flatMap((key) => {
 		const document = documents.get(key);
-		if (
-			!document ||
-			hasAnyTag(document.tags, config.content.tags.hidden)
-		)
-			return [];
-		const result = document as unknown as Item;
-		result.attachmentsData = filterPublicAttachments(
-			result.attachmentsData,
-			publicTagRules(config),
-			result.sourceConnectionKey,
-		);
-		const attachmentKeys = new Set(
-			result.attachmentsData?.map((attachment) => attachment.key),
-		);
-		result.fullTextPDFs = result.fullTextPDFs?.filter(
-			(attachment) => attachmentKeys.has(attachment.key),
-		);
-		return [result];
+		const result = document ? publicItemFrom(document, config) : null;
+		return result ? [result] : [];
 	});
+}
+
+/** A search document as readers get it: null when it is hidden, and without attachments they can't see. */
+export function publicItemFrom(document: Pick<ItemSearchDocument, "tags">, config: LibraryServerConfig): Item | null {
+	if (hasAnyTag(document.tags, config.content.tags.hidden)) return null;
+	const result = document as unknown as Item;
+	result.attachmentsData = filterPublicAttachments(
+		result.attachmentsData,
+		publicTagRules(config),
+		result.sourceConnectionKey,
+	);
+	const attachmentKeys = new Set(
+		result.attachmentsData?.map((attachment) => attachment.key),
+	);
+	result.fullTextPDFs = result.fullTextPDFs?.filter(
+		(attachment) => attachmentKeys.has(attachment.key),
+	);
+	return result;
 }

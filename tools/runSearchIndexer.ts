@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { once } from "node:events";
 import { hostname } from "node:os";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -6,6 +7,7 @@ import { openLibraryConfigProcess } from "../src/config/library-config/process";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
+import { isIndexOnly } from "../src/lib/search-index/index-only";
 import {
 	prepareSearchProjection,
 	readSearchEngine,
@@ -115,6 +117,13 @@ async function main() {
 	const restoreFetch = installProcessFetchAbortSignal(abortController.signal);
 
 	try {
+		// The index holds an index-only library's records and the database doesn't, so a rebuild would empty it.
+		if (isIndexOnly(config)) {
+			console.log("Search index: this library is index-only, so the worker leaves its index alone");
+			await writeWorkerState({ ...reporter.current(), stage: "idle" }, true);
+			await once(abortController.signal, "abort");
+			return;
+		}
 		// The engine the library's configuration chooses (OpenDevEd/new-el#722).
 		const engine = await openSearchWriter(config, config.services.search.engine);
 		const writer = engine.writer;

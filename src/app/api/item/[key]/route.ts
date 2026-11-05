@@ -1,3 +1,5 @@
+import { isIndexOnly } from "@/lib/search-index/index-only";
+import { readIndexedItem } from "@/lib/search-index/index-only-read";
 import { readPublicItem } from "@/lib/search-index/projection";
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { getPublicItemCard } from "@/lib/public-item-card";
@@ -12,6 +14,7 @@ import type { Item } from "../types";
 
 export async function getItemRaw(key: string, config?: LibraryServerConfig) {
 	const libraryConfig = config ?? (await getLibraryConfig());
+	if (isIndexOnly(libraryConfig)) return { item: await readIndexedItem(key, libraryConfig) };
 	const database = await getDatabaseForConfig(libraryConfig);
 	return { item: await readPublicItem(database, key, libraryConfig) };
 }

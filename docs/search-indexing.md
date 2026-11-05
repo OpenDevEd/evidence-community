@@ -175,6 +175,18 @@ engine holds no update dates or year counts to read by, so the source reads ever
 record keeps OpenAlex's id; a work without one is left out, as is a second work under the same id. Records have no
 references, because the engine names them by its own ids.
 
+## Index-only libraries
+
+A read-only library that holds millions of records can skip the database: `services.search.indexOnly` is `true`, the
+engine is Elasticsearch, and records live only in the index. PostgreSQL stays empty, and readers read records, the record
+count and the engine from Elasticsearch. Such a library has no admin, drafts, collections or statistics, and no sources.
+The search worker leaves the index alone, because a rebuild reads the database and would empty it.
+
+`npm run search:load-index-only` builds the index from gzipped JSON lines of OpenAlex works, without the API or the
+database. Run it in the library's network, in three steps: `--prepare`, then one `--part <i>/<n>` per process with
+`--files <folder> --state <folder>`, then `--finish`. A part skips the files `--state` marks done, so a stopped load
+carries on. Keys come from OpenAlex's ids, so loading a work again replaces it.
+
 ## Embedder
 
 Similar Resources, AI search, and chat rank by meaning as well as words when the

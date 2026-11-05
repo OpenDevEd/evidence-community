@@ -1,6 +1,6 @@
 import { CANONICAL_RECORD_KEY_ALPHABET, CANONICAL_RECORD_KEY_LENGTH } from "@opendeved/evidence-library-core";
 
-import { institutionNameKey } from "@/config/library-config/institutions";
+import { INSTITUTION_FILTER_FIELD, institutionNameKey } from "@/config/library-config/institutions";
 import { sourceRecordValidationOptions, validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
@@ -10,7 +10,6 @@ import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-const
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { workIsOpenAccess } from "@/lib/source-ingestion/openalex/work";
 import type { item } from "@/db/schema/tables/item";
-import { INSTITUTION_FILTER_FIELD } from "./elasticsearch-index";
 import { cleanRow, creatorNames, type ItemSearchDocument, metadataSearchValues, uniqueSorted } from "./projection";
 
 type ItemRow = typeof item.$inferSelect;

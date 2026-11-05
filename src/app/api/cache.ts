@@ -3,6 +3,8 @@ import { getDatabase, getDatabaseForConfig } from "@/db";
 import { getItem, withoutFullText } from "./item/[key]/route";
 import { and, eq, sql } from "drizzle-orm";
 import { outbox } from "@opendeved/evidence-library-core";
+import { isIndexOnly } from "@/lib/search-index/index-only";
+import { readIndexedStatus } from "@/lib/search-index/index-only-read";
 import { readPublicLibraryStatus, type PublicLibraryStatus } from "@/lib/library-export-records";
 import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
@@ -127,6 +129,8 @@ export async function getCachedItemPage(key: string) {
 export async function getCachedStatus(): Promise<PublicLibraryStatus> {
 	const config = await getLibraryConfig();
 	return staleWhileRevalidate(`status:${config.revision}`, 60_000, async () =>
-		readPublicLibraryStatus(await getDatabaseForConfig(config), config),
+		isIndexOnly(config)
+			? readIndexedStatus(config)
+			: readPublicLibraryStatus(await getDatabaseForConfig(config), config),
 	);
 }
