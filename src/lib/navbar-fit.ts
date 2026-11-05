@@ -222,6 +222,8 @@ function phoneArrangements(bar: PhoneBar, names: [NameShown, number][]): Arrange
 
 /** What one arrangement shows, as declarations inside its container query. */
 /** A width as CSS, to the hundredth of a pixel: rounding to whole pixels would move the bar when the logo lands. */
+/** The widths are measured at the browser's default text size; a query in rem follows a reader's larger text. */
+const ROOT_PX = 16;
 const pixels = (width: number) => `${Math.round(width * 100) / 100}px`;
 
 function arrangementCss({ step, name }: Arrangement) {
@@ -248,7 +250,7 @@ export function navbarFitCss(fit: NavbarFit | null, stepCount: number) {
 		// Narrowest first, so a wider arrangement that also fits overrides it.
 		const rules = [...fit.arrangements]
 			.sort((a, b) => a.width - b.width)
-			.map((arrangement) => `@container navbar (min-width: ${arrangement.width}px) {
+			.map((arrangement) => `@container navbar (min-width: ${arrangement.width / ROOT_PX}rem) {
 	${arrangementCss(arrangement)}
 }`);
 		// The logo's box holds its own width while the picture loads, so the name and links beside it never move when it lands.

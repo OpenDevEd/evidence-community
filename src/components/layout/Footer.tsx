@@ -89,7 +89,7 @@ function Logo() {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
+			className="flex h-12 w-logo-footer max-w-full items-center justify-center rounded-lg"
 		>
 			<LibraryLogo onSettled={onLogoSettled} place="footer" />
 		</Skeleton>

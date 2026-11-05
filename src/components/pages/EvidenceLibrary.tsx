@@ -142,12 +142,12 @@ function SearchTabContent({
 			{!headless && (
 				<>
 				{/* Header with title and explore button */}
-				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
-					<div className="min-w-0 w-full lg:w-auto h-10 lg:h-12 flex flex-1 items-end gap-4">
+				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end min-h-24 lg:min-h-12 gap-4 relative">
+					<div className="min-w-0 w-full lg:w-auto min-h-10 lg:min-h-12 flex flex-1 flex-wrap items-end gap-4">
 						<SkipLink href="#collections">
 							{t("goToFilters")}
 						</SkipLink>
-						<h1 className="min-w-0 flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
+						<h1 className="min-w-[min(8rem,100%)] flex-1 text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 							{header || (showHeader && t("searchTitle"))}
 						</h1>
 						{/* Explore browses the library's filters, which a reader's list does not have. */}
@@ -157,7 +157,7 @@ function SearchTabContent({
 									startContent={
 										<HugeiconsIcon icon={CompassIcon} className="size-6 shrink-0" />
 									}
-									className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-full"
+									className="lg:hidden shrink-0 ml-auto rtl:ml-0 rtl:mr-auto h-10"
 									onPress={onExploreOpen}
 								>
 									{t("explore")}
@@ -169,9 +169,9 @@ function SearchTabContent({
 							</>
 						)}
 					</div>
-					<div className="flex gap-4 h-10 lg:h-12 shrink-0 justify-end">
+					<div className="flex flex-wrap gap-4 min-h-10 lg:min-h-12 shrink-0 justify-end">
 						<Button
-							className="h-full font-medium text-base !p-0"
+							className="h-10 lg:h-12 shrink-0 font-medium text-base !p-0"
 							isIconOnly
 							onPress={onHelpOpen}
 							aria-label={t("helpAriaLabel")}
@@ -199,12 +199,12 @@ function SearchTabContent({
 			)}
 
 			{/* Results count and view controls */}
-			<section className="flex justify-between h-10 lg:h-12 gap-8">
+			<section className="flex flex-wrap justify-between min-h-10 lg:min-h-12 gap-x-8 gap-y-4">
 				<Skeleton
 					isLoaded={
 						!!itemsContext.itemsData || !!itemsContext.itemsError
 					}
-					className="flex items-center flex-1 rounded-2xl"
+					className="flex h-10 lg:h-12 items-center flex-1 rounded-2xl"
 				>
 					{!itemsContext.itemsError && (
 						<h2
@@ -249,7 +249,7 @@ function SearchTabContent({
 							: "flex-1",
 					)}
 				>
-					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
+					<Card className="h-10 lg:h-12 flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
 								size="sm"
