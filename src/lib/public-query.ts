@@ -3,6 +3,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { ITEMS_PER_PAGE, MAX_ITEMS_PER_PAGE } from "@/constants/items";
 import {
 	lastNumberedPage,
+	resultLimitOf,
 	resolveSearchQuery,
 	type QueryIssue,
 	type SearchQueryConfig,
@@ -94,7 +95,7 @@ export function readPublicQuery(
 			...numberIssue(
 				"page",
 				given("page"),
-				given("after") || given("before") ? Number.MAX_SAFE_INTEGER : lastNumberedPage(perPage ?? ITEMS_PER_PAGE),
+				given("after") || given("before") ? Number.MAX_SAFE_INTEGER : lastNumberedPage(perPage ?? ITEMS_PER_PAGE, resultLimitOf(config)),
 			),
 			...perPageIssues,
 			...(heavy === null || heavy === "true" || heavy === "false"

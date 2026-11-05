@@ -208,6 +208,7 @@ export default function NavbarSearch() {
 		content,
 		filters,
 		institutions: configuredInstitutions,
+		resultLimit,
 		search,
 		topics,
 	} = useLibraryConfig();
@@ -228,8 +229,8 @@ export default function NavbarSearch() {
 	const scope = resolveRuntimeSearchScope(params.scope, search);
 	const sort = params.sort;
 	const runtimeParams = useMemo(
-		() => resolveSearchQuery(params, { filters, search, topics }).params,
-		[filters, params, search, topics],
+		() => resolveSearchQuery(params, { filters, resultLimit, search, topics }).params,
+		[filters, params, resultLimit, search, topics],
 	);
 
 	// The chips row appears when the library listing's own row would show a chip.

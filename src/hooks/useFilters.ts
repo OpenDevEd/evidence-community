@@ -66,12 +66,12 @@ function returnToListTop() {
 export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 	const config = useLibraryConfig();
-	const { features, filters, search } = config;
+	const { features, filters, resultLimit, search } = config;
 	// What the address says, put right for this library, so the API is only
 	// ever asked for a search it offers.
 	const runtimeParams = useMemo(
-		() => resolveSearchQuery(params, { filters, search, topics: config.topics }).params,
-		[config.topics, filters, params, search],
+		() => resolveSearchQuery(params, { filters, resultLimit, search, topics: config.topics }).params,
+		[config.topics, filters, params, resultLimit, search],
 	);
 
 	// Raw search params, only needed downstream for atom-feed serialization.

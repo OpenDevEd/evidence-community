@@ -23,7 +23,8 @@ import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { searchParamsLoader } from "./searchParams";
-import { lastNumberedPage, offersSources, resolveSearchQuery } from "./search-query";
+import { lastNumberedPage, offersSources, resolveSearchQuery, type SearchQueryConfig } from "./search-query";
+import { SEARCH_RESULT_LIMITS, SOURCES_FIELD } from "./search-filter-constants";
 import {
 	decodeCursor,
 	encodeCursor,
@@ -41,7 +42,6 @@ import {
 	type SearchRequest,
 } from "./search-engine";
 import { getSearchEngine } from "./search-engines";
-import { SOURCES_FIELD } from "./search-filter-constants";
 import { INSTITUTION_FILTER_FIELD } from "@/config/library-config/institutions";
 import { CITATION_RECORD_COLUMNS } from "./citation-record-columns";
 import { filterPublicAttachments, itemPageAttachments } from "./attachment-visibility";
@@ -271,7 +271,7 @@ function buildSearchFilters({
 
 export function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
+	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & Pick<SearchQueryConfig, "resultLimit" | "services"> & {
 		search: RuntimeSearch;
 		topics?: { enabled: boolean };
 	},
@@ -387,7 +387,7 @@ export function pagePosition(
 	searchParams: { after?: string; before?: string },
 	order: SearchOrder,
 ): { page: number; start: Pick<SearchRequest, "from" | "after" | "before"> } {
-	if (page <= lastNumberedPage(pageSize)) return { page, start: { from: (page - 1) * pageSize } };
+	if (page <= lastNumberedPage(pageSize, SEARCH_RESULT_LIMITS[order.engine])) return { page, start: { from: (page - 1) * pageSize } };
 	const after = decodeCursor(searchParams.after, order);
 	if (after) return { page, start: { after } };
 	const before = decodeCursor(searchParams.before, order);

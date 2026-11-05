@@ -9,11 +9,13 @@ import {
 import { ITEMS_PER_PAGE, SORT_OPTIONS } from "@/constants/items";
 import { COUNTRIES } from "@/constants/misc";
 import { findEntryByPath } from "./country";
-import { SEARCH_RESULT_LIMIT } from "./search-filter-constants";
+import { libraryResultLimit } from "./search-filter-constants";
 import type { searchParamsLoader } from "./searchParams";
 
 export type QueryIssue = { parameter: string; message: string };
-export type SearchQueryConfig = {
+/** The server's configuration names the library's search connections; the public one carries the limit they give. */
+type ResultLimitConfig = { services?: { search: { elasticsearch?: unknown } }; resultLimit?: number };
+export type SearchQueryConfig = ResultLimitConfig & {
 	filters: LibraryPublicConfig["filters"];
 	search: RuntimeSearch;
 	topics?: { enabled: boolean };
@@ -75,19 +77,22 @@ export const offersSources = (config: Pick<SearchQueryConfig, "filters" | "sourc
 const isKnownPlace = (place: string) =>
 	Object.hasOwn(COUNTRIES, place) || findEntryByPath(place) !== null;
 
+/** The results this library's page numbers reach. */
+export const resultLimitOf = (config: ResultLimitConfig) => config.resultLimit ?? libraryResultLimit(config.services);
+
 /** The last page a page number reaches on its own, which depends on how many a page holds. */
-export const lastNumberedPage = (perPage: number) =>
-	Math.max(1, Math.floor(SEARCH_RESULT_LIMIT / perPage));
+export const lastNumberedPage = (perPage: number, resultLimit: number) =>
+	Math.max(1, Math.floor(resultLimit / perPage));
 
 /**
  * The page a search opens on. A page past the numbered ones needs the cursor that places it; a cursor on a numbered
  * page places nothing and is dropped. A page that cannot be reached opens on the first.
  */
-function resolvePage(params: SearchParams, perPage: number) {
+function resolvePage(params: SearchParams, perPage: number, resultLimit: number) {
 	const page = Number(params.page);
 	const cursor = params.after || params.before;
 	if (!Number.isInteger(page) || page < 1) return { page: 1, after: "", before: "" };
-	if (page <= lastNumberedPage(perPage)) return { page, after: "", before: "" };
+	if (page <= lastNumberedPage(perPage, resultLimit)) return { page, after: "", before: "" };
 	return cursor ? { page, after: params.after ?? "", before: params.before ?? "" } : { page: 1, after: "", before: "" };
 }
 
@@ -147,7 +152,7 @@ export function resolveSearchQuery<P extends SearchParams>(
 			topics: resolved.topics.value,
 			sources: resolved.sources.value,
 			study: resolved.study.value,
-			...resolvePage(params, perPage),
+			...resolvePage(params, perPage, resultLimitOf(config)),
 		},
 		issues: Object.entries(resolved).flatMap(
 			([parameter, { issue }]): QueryIssue[] =>

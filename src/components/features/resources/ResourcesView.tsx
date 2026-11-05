@@ -380,8 +380,9 @@ function NumberedPager({ numbered, totalPages }: { numbered: number; totalPages:
 function PaginationControls({ className }: { className?: string }) {
 	const itemsContext = use(ItemsContext);
 	const totalPages = itemsContext.itemsData?.totalPages || 0;
-	// Page numbers reach the first 10,000 results; past them a reader moves with next and previous.
-	const numbered = Math.min(totalPages, lastNumberedPage(itemsContext.itemsData?.perPage ?? ITEMS_PER_PAGE));
+	// On Elasticsearch page numbers reach the first 10,000 results; past them a reader moves with next and previous.
+	const { resultLimit } = useLibraryConfig();
+	const numbered = Math.min(totalPages, lastNumberedPage(itemsContext.itemsData?.perPage ?? ITEMS_PER_PAGE, resultLimit));
 	const actuallyNoData =
 		(!itemsContext.isItemsLoading &&
 			itemsContext.itemsData &&

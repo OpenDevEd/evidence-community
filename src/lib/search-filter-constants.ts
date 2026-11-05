@@ -12,7 +12,16 @@ export const TITLE_START_WORDS = 4;
 export const SOURCES_FIELD = "sources";
 
 /**
- * The results a page number reaches: Elasticsearch pages by offset only this far (its `index.max_result_window`).
- * Past them, a page continues from a cursor, the place of the record before it.
+ * The results a page number reaches in each engine. Elasticsearch pages by offset only through its
+ * `index.max_result_window`; past that, a page continues from a cursor, the place of the record before it. Meilisearch
+ * counts and pages to the `maxTotalHits` its worker sets, so every result of a library above a million records has a page.
  */
-export const SEARCH_RESULT_LIMIT = 10_000;
+export const SEARCH_RESULT_LIMITS = { elasticsearch: 10_000, meilisearch: 10_000_000 } as const;
+
+/**
+ * The results a library's page numbers reach. While a switch runs, readers can be on either engine, so a library with
+ * an Elasticsearch connection keeps to Elasticsearch's limit, and so does a caller that names no connections.
+ */
+export function libraryResultLimit(services?: { search: { elasticsearch?: unknown } }) {
+	return services && !services.search.elasticsearch ? SEARCH_RESULT_LIMITS.meilisearch : SEARCH_RESULT_LIMITS.elasticsearch;
+}

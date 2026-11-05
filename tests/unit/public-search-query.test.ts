@@ -13,6 +13,7 @@ import { loadSearchParams } from "@/lib/searchParams";
 import {
 	cloneLibraryConfig,
 	maximalLibraryConfig,
+	minimalLibraryConfig,
 } from "../fixtures/library-config";
 
 const config = projectPublicLibraryConfig(
@@ -196,5 +197,36 @@ describe("a page address", () => {
 		expect(params("page=522&before=abc")).toMatchObject({ page: 522, after: "", before: "abc" });
 		// A filter that sends the reader back to page 1 leaves the cursor behind.
 		expect(params("page=1&after=abc")).toMatchObject({ page: 1, after: "", before: "" });
+	});
+});
+
+describe("how far page numbers reach", () => {
+	const meilisearch = libraryConfigSchema.parse(cloneLibraryConfig(minimalLibraryConfig));
+	const switching = libraryConfigSchema.parse({
+		...cloneLibraryConfig(minimalLibraryConfig),
+		services: {
+			...minimalLibraryConfig.services,
+			search: {
+				...minimalLibraryConfig.services.search,
+				elasticsearch: { host: "https://search.example.org", key: "search-key", index: "library" },
+			},
+		},
+	});
+	const opened = (query: string, on: Parameters<typeof resolveSearchQuery>[1]) =>
+		resolveSearchQuery(loadSearchParams(new URLSearchParams(query)), on).params.page;
+
+	it("is every result in a library on Meilisearch, on the server and in the browser", () => {
+		expect(opened("page=600", meilisearch)).toBe(600);
+		expect(opened("page=600", projectPublicLibraryConfig(meilisearch))).toBe(600);
+		expect(readPublicQuery(new URLSearchParams("page=600"), meilisearch, items).issues).toEqual([]);
+	});
+
+	it("is the first 10,000 results in a library on Elasticsearch, whose offsets stop there", () => {
+		expect(opened("page=600", config)).toBe(1);
+	});
+
+	it("is the first 10,000 results while a library has both engines, as readers can be on either", () => {
+		expect(opened("page=600", switching)).toBe(1);
+		expect(opened("page=600", projectPublicLibraryConfig(switching))).toBe(1);
 	});
 });

@@ -8,6 +8,7 @@ import { getRuntimePagePath } from "./links";
 import { getRuntimePageAvailability } from "./pages";
 import { sourcePublishTags } from "@/lib/tags";
 import { offersSources } from "@/lib/search-query";
+import { libraryResultLimit } from "@/lib/search-filter-constants";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -44,6 +45,7 @@ export function projectPublicLibraryConfig(
 		legal: config.legal,
 		localization: config.localization,
 		search: projectPublicSearch(config.search),
+		resultLimit: libraryResultLimit(config.services),
 		filters: { ...config.filters, sources: { ...config.filters.sources, enabled: offersSources(config) } },
 		topics: config.topics,
 		content: config.content,
