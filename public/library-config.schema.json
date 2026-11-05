@@ -2078,6 +2078,9 @@
 												"index"
 											],
 											"additionalProperties": false
+										},
+										"indexOnly": {
+											"type": "boolean"
 										}
 									},
 									"required": [

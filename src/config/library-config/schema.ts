@@ -1398,7 +1398,7 @@ const chosenEngineSchema = z.discriminatedUnion("engine", [
 			elasticsearch: elasticsearchConnectionSchema,
 			meilisearch: meilisearchConnectionSchema.optional(),
 			/** The index is the library: records live only there, and the database stays empty (docs/search-indexing.md). */
-			indexOnly: z.boolean().default(false),
+			indexOnly: z.boolean().optional(),
 		})
 		.strict(),
 	z
@@ -1864,6 +1864,43 @@ const notificationsSchema = z.object({
 	]).prefault({frequency: "weekly", weekday: 1}),
 }).strict().prefault({});
 
+/** Reads an index-only library can't answer: they find its records in the database, which holds none. */
+const FEATURES_NEEDING_THE_DATABASE = [
+	"readerAccounts",
+	"collections",
+	"collectionNotes",
+	"downloads",
+	"atomFeed",
+	"homePage",
+	"ai",
+	"aiSearch",
+	"deepResearch",
+	"relatedResources",
+] as const;
+
+function refuseWhatNeedsRecordsInTheDatabase(
+	config: {
+		services: { search: { engine: string; indexOnly?: boolean } };
+		sources: readonly unknown[];
+		collections: readonly unknown[];
+		features: Record<(typeof FEATURES_NEEDING_THE_DATABASE)[number], boolean>;
+		notifications: { enabled: boolean };
+		generation: { sitemap: boolean };
+	},
+	context: z.RefinementCtx,
+) {
+	if (config.services.search.indexOnly !== true) return;
+	const refuse = (path: (string | number)[]) =>
+		addRequiredIssue(context, path, "An index-only library's database holds no records, so this must be off");
+	if (config.sources.length > 0) refuse(["sources"]);
+	if (config.collections.length > 0) refuse(["collections"]);
+	for (const feature of FEATURES_NEEDING_THE_DATABASE) {
+		if (config.features[feature]) refuse(["features", feature]);
+	}
+	if (config.notifications.enabled) refuse(["notifications", "enabled"]);
+	if (config.generation.sitemap) refuse(["generation", "sitemap"]);
+}
+
 const generationSchema = z
 	.object({
 		sitemap: z.boolean().default(true),
@@ -2289,6 +2326,8 @@ export function createLibraryConfigSchema(
 				}
 			});
 		}
+
+		refuseWhatNeedsRecordsInTheDatabase(config, context);
 
 		const emailEnabled =
 			Boolean(config.email.contactRecipient) ||
