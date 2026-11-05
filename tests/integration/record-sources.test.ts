@@ -7,6 +7,7 @@ import { sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { generateSearchProjectionPlans } from "@/lib/search-index/projection";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { publicRecordCounter, readSourceStatuses } from "@/lib/source-ingestion/source-status";
 import { createNativeItemDraft, publishItemDraft } from "@/lib/admin/native-item-service";
 import { setAdminItemWritebackSources } from "@/lib/admin/source-writeback-service";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -59,6 +60,10 @@ it("indexes every source that holds a record, and searches it again when a sourc
 		expect(await searchedAgain(key)).toBe(true);
 		expect(await revision()).toBe(before);
 		expect(await sourcesOf(key)).toEqual(["oa-core", "oa-housing"]);
+		// Each source counts the record, and the community, which reports its own total, holds it once.
+		const searchable = new Map((await readSourceStatuses(db, { hiddenTags: [] })).map((status) => [status.key, status.searchable]));
+		expect(searchable).toEqual(new Map([["oa-core", 1], ["oa-housing", 1]]));
+		expect(await publicRecordCounter(db, { hiddenTags: [] })()).toBe(1);
 
 		// The second search's weekly full scan no longer finds it: the record stays, held by the first alone.
 		await markSearched(key);

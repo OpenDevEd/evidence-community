@@ -22,7 +22,7 @@ function status(overrides: Partial<SourceStatus> = {}): SourceStatus {
 	} as SourceStatus;
 }
 
-function reporter(read: () => Promise<SourceStatus[]>, fetch: typeof globalThis.fetch) {
+function reporter(read: () => Promise<SourceStatus[]>, fetch: typeof globalThis.fetch, countRecords = async () => 12_450) {
 	const log = vi.fn();
 	const report = createSourceStatusReporter({
 		convexSiteUrl: "https://convex-site.example.org",
@@ -32,6 +32,7 @@ function reporter(read: () => Promise<SourceStatus[]>, fetch: typeof globalThis.
 		machineCredential: credential,
 		now: () => new Date("2026-09-27T12:10:00.000Z"),
 		read,
+		countRecords,
 	});
 	return { log, report };
 }
@@ -49,6 +50,7 @@ describe("source status reporter", () => {
 		expect(JSON.parse(String(init?.body))).toEqual({
 			libraryId: "lib123",
 			observedAt: "2026-09-27T12:10:00.000Z",
+			records: 12_450,
 			sources: [status()],
 			version: 1,
 		});
@@ -62,6 +64,18 @@ describe("source status reporter", () => {
 		await report();
 
 		expect(fetch).toHaveBeenCalledTimes(1);
+	});
+
+	it("reports again when only the community's total changed", async () => {
+		const fetch = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => new Response(null, { status: 204 }));
+		let records = 12_450;
+		const { report } = reporter(async () => [status()], fetch, async () => records);
+
+		await report();
+		records = 12_451;
+		await report();
+
+		expect(fetch.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).records)).toEqual([12_450, 12_451]);
 	});
 
 	it("retries an unchanged snapshot after a failed post, logging the failure once", async () => {
@@ -94,6 +108,7 @@ describe("source status reporter", () => {
 				clock += 30_000;
 				return [status()];
 			},
+			countRecords: async () => 12_450,
 		});
 
 		await report();

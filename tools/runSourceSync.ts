@@ -23,6 +23,7 @@ import {
 } from "../src/lib/source-ingestion/run-requests";
 import {
 	hasSourceActivity,
+	publicRecordCounter,
 	readSourceStatuses,
 	type SearchableCache,
 } from "../src/lib/source-ingestion/source-status";
@@ -170,6 +171,7 @@ function startWatchLanes(
 		...config.authentication.openScholar,
 		read: () =>
 			readSourceStatuses(database, { cache: searchableCache, hiddenTags: config.content.tags.hidden }),
+		countRecords: publicRecordCounter(database, { hiddenTags: config.content.tags.hidden }),
 	});
 	const running = [
 		runRequestedSources({
