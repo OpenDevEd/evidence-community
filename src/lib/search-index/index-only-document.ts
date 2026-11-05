@@ -98,7 +98,7 @@ export function documentFromWork(work: unknown, options: IndexOnlyOptions): Item
 		[INSTITUTION_FILTER_FIELD]: [...institutionNames.values()],
 		links: { cites: [], citedBy: [], related: [] },
 		metadataSearch: metadataSearchValues(parent),
-		openAccess: workIsOpenAccess(work) ?? false,
+		openAccess: workIsOpenAccess(work),
 		topicAncestors: [],
 		topics: [],
 		key,

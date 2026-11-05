@@ -76,8 +76,9 @@ export async function GET(
 			result = await getCachedItemPage(key);
 		} else if (view === "card") {
 			const config = await getLibraryConfig();
-			const database = await getDatabaseForConfig(config);
-			result = { item: await getPublicItemCard(database, key, config) };
+			result = isIndexOnly(config)
+				? await getItemRaw(key, config)
+				: { item: await getPublicItemCard(await getDatabaseForConfig(config), key, config) };
 		} else {
 			result = withoutFullText(await getItem(key));
 		}

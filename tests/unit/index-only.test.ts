@@ -2,8 +2,21 @@ import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { getSearchForConfig } from "@/lib/elasticsearch";
+import { indexHoldsTheRecords } from "@/lib/search-index/engine-setup";
 import { isIndexOnly } from "@/lib/search-index/index-only";
 import { documentFromWork, indexOnlyKey } from "@/lib/search-index/index-only-document";
+import { readIndexedItem, readIndexedStatus } from "@/lib/search-index/index-only-read";
+import { cloneLibraryConfig, minimalLibraryConfig } from "../fixtures/library-config";
+
+const getMapping = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/elasticsearch", () => ({ getSearchForConfig: vi.fn() }));
+vi.mock("@/lib/elasticsearch-factory", () => ({
+	RevisionAwareSearchFactory: class {
+		get = async () => ({ alias: "library", client: { indices: { getMapping } } });
+	},
+}));
 
 const loadedAt = new Date("2026-11-05T00:00:00Z");
 const options = { sourceConnectionKey: "server-files", loadedAt };
@@ -79,5 +92,80 @@ describe("index-only records", () => {
 		expect(isIndexOnly(search({ engine: "elasticsearch", indexOnly: true }))).toBe(true);
 		expect(isIndexOnly(search({ engine: "elasticsearch", indexOnly: false }))).toBe(false);
 		expect(isIndexOnly(search({ engine: "meilisearch" }))).toBeFalsy();
+	});
+
+	describe("its configuration", () => {
+		const elasticsearch = { host: "http://elasticsearch:9200", key: "search-key", index: "library" };
+		const indexOnlyConfig = () => {
+			const config = cloneLibraryConfig(minimalLibraryConfig);
+			config.services.search = { engine: "elasticsearch", elasticsearch, indexOnly: true } as never;
+			return Object.assign(config, {
+				sources: [],
+				collections: [],
+				features: { collections: false } as Record<string, boolean>,
+				generation: { sitemap: false },
+			});
+		};
+		const refusedPaths = (config: unknown) => libraryConfigSchema.safeParse(config).error?.issues.map(({ path }) => path.join("."));
+
+		it("accepts a library that leaves off what needs records in the database", () => {
+			expect(refusedPaths(indexOnlyConfig())).toBeUndefined();
+		});
+
+		it("refuses everything that would look for records in the database", () => {
+			const config = indexOnlyConfig();
+			config.features.downloads = true;
+			config.features.atomFeed = true;
+			config.generation.sitemap = true;
+
+			expect(refusedPaths(config)).toEqual(expect.arrayContaining(["features.downloads", "features.atomFeed", "generation.sitemap"]));
+		});
+
+		it("asks nothing of a library that isn't index-only", () => {
+			const config = indexOnlyConfig();
+			config.services.search = { engine: "elasticsearch", elasticsearch } as never;
+			config.features.downloads = true;
+
+			expect(refusedPaths(config)).toBeUndefined();
+		});
+	});
+
+	describe("the index that holds its records", () => {
+		const config = { revision: "1", updatedAt: "2026-11-05T00:00:00Z", services: { search: { engine: "elasticsearch", elasticsearch: {} } } } as never;
+
+		it("says so to the search worker, and a normal index doesn't", async () => {
+			getMapping.mockResolvedValueOnce({ library_2: { mappings: { _meta: { version: "1", indexOnly: true } } } });
+			await expect(indexHoldsTheRecords(config)).resolves.toBe(true);
+
+			getMapping.mockResolvedValueOnce({ library_1: { mappings: { _meta: { version: "1" } } } });
+			await expect(indexHoldsTheRecords(config)).resolves.toBe(false);
+		});
+
+		it("is none of a new library's concern yet", async () => {
+			getMapping.mockResolvedValueOnce({ error: "index_not_found_exception", status: 404 });
+			await expect(indexHoldsTheRecords(config)).resolves.toBe(false);
+		});
+
+		it("is never asked about in a library on another engine", async () => {
+			getMapping.mockClear();
+			await expect(indexHoldsTheRecords({ services: { search: { engine: "meilisearch" } } } as never)).resolves.toBe(false);
+			expect(getMapping).not.toHaveBeenCalled();
+		});
+
+		it("tells a failed read from a missing record", async () => {
+			const mget = vi.fn().mockResolvedValue({ docs: [{ _id: "ABCD2345", error: { type: "shard_failure", reason: "no shard" } }] });
+			vi.mocked(getSearchForConfig).mockResolvedValue({ alias: "library", client: { mget } } as never);
+			await expect(readIndexedItem("ABCD2345", config)).rejects.toThrow("no shard");
+
+			mget.mockResolvedValue({ docs: [{ _id: "ABCD2345", found: false }] });
+			await expect(readIndexedItem("ABCD2345", config)).resolves.toBeNull();
+		});
+
+		it("counts no records before the first load finishes", async () => {
+			const count = vi.fn().mockResolvedValue({ error: "index_not_found_exception", status: 404 });
+			vi.mocked(getSearchForConfig).mockResolvedValue({ alias: "library", client: { count } } as never);
+
+			await expect(readIndexedStatus(config)).resolves.toEqual({ totalItems: 0, latestPublicationUpdatedAt: null });
+		});
 	});
 });

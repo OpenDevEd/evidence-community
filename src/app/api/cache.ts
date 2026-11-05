@@ -111,8 +111,10 @@ async function readCachedPublicItem(key: string, _configRevision: string, _versi
 }
 
 export const getCachedItemSmall = cache(async (key: string) => {
-	const [config, version] = await Promise.all([getLibraryConfig(), readItemVersion(key)]);
-	return readCachedPublicItem(key, config.revision, version);
+	const config = await getLibraryConfig();
+	// Nothing tells an index-only library's cache that a load replaced a record, and reading the index is quick.
+	if (isIndexOnly(config)) return withoutFullText(await getItem(key));
+	return readCachedPublicItem(key, config.revision, await readItemVersion(key));
 });
 
 /** A record as its page draws it: a placeholder until its citation is read, and its stored topic names. */
