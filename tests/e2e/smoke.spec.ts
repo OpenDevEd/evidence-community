@@ -157,6 +157,37 @@ test("redirects the root route to the evidence library", { tag: "@smoke" }, asyn
 	expect(new URL(location!, response.url()).pathname).toBe("/lib");
 });
 
+test("the header's links show one menu at a time", { tag: "@smoke" }, async ({ page }) => {
+	await page.goto("/lib");
+	await dismissConsent(page);
+	const nav = page.getByRole("banner").getByRole("navigation").first();
+	const triggers = nav.locator("button[aria-expanded]");
+	test.skip((await triggers.count()) < 2, "This library has fewer than two links with menus.");
+	// Every panel on the page, a closing one included: one fading out beside the next is the same defect.
+	const panels = nav.locator("[aria-labelledby]").filter({ visible: true });
+	const linkText = (index: number) =>
+		nav.locator("li").filter({ has: page.locator("button[aria-expanded]") }).nth(index).getByRole("link").first();
+
+	await linkText(0).hover();
+	await expect(triggers.nth(0)).toHaveAttribute("aria-expanded", "true");
+	await expect(panels.getByRole("link").first()).toBeVisible();
+
+	// No retry on the count: a menu that lingers after the next one opens is the defect.
+	await linkText(1).hover();
+	await expect(triggers.nth(1)).toHaveAttribute("aria-expanded", "true");
+	expect(await panels.count()).toBe(1);
+
+	await page.keyboard.press("Escape");
+	await expect(panels).toHaveCount(0);
+
+	await page.mouse.move(0, 0);
+	await triggers.nth(0).focus();
+	await page.keyboard.press("Enter");
+	await expect(panels).toHaveCount(1);
+	await page.keyboard.press("ArrowDown");
+	await expect(panels.getByRole("link").first()).toBeFocused();
+});
+
 test("reports the active runtime configuration revision only", async ({
 	request,
 }) => {

@@ -77,7 +77,14 @@
 				"label": "Amber Network",
 				"href": "https://react.dev",
 				"icon": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
-				"target": "blank"
+				"target": "blank",
+				"children": [
+					{
+						"id": "network-terms",
+						"label": "Amber Network Terms",
+						"href": "/terms"
+					}
+				]
 			}
 		]
 	},
