@@ -66,17 +66,19 @@ function loadGoogleFont(family: string, weight: number) {
 			const css = await fetch(`https://fonts.googleapis.com/css2?${query}`, {
 				headers: { "User-Agent": "Mozilla/4.0" },
 				signal: AbortSignal.timeout(5_000),
-			}).then((response) => (response.ok ? response.text() : ""));
+			}).then((response) => (response.ok ? response.text() : Promise.reject(new Error(`Google Fonts answered ${response.status}`))));
 			const url = css.match(/url\((https:[^)]+\.ttf)\)/)?.[1];
-			if (!url) return null;
+			if (!url) throw new Error("Google Fonts' answer names no TrueType file");
 			const file = await fetch(url, { signal: AbortSignal.timeout(5_000) }).then((response) =>
-				response.ok ? response.arrayBuffer() : null,
+				response.ok ? response.arrayBuffer() : Promise.reject(new Error(`The font file answered ${response.status}`)),
 			);
-			if (!file) return null;
 			const alias = `navbar-fit-${family}-${weight}`;
 			GlobalFonts.register(Buffer.from(file), alias);
 			return alias;
-		})().catch(() => null);
+		})().catch((error) => {
+			console.warn("[navbar-fit] the font's load failed", { family, weight }, error);
+			return null;
+		});
 		fontCache.set(key, pending);
 		void pending.then((alias) => {
 			if (!alias) setTimeout(() => fontCache.delete(key), FONT_RETRY_MS).unref();
