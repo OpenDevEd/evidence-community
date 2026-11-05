@@ -33,6 +33,14 @@ export class OpenAlexApiError extends Error {
 	}
 }
 
+/** Where a key's request goes. OpenAlex takes its key in the address; the engine takes its key in headers. */
+function addressFor(apiKey: string, path: string) {
+	const engine = readSearchEngineAccess(apiKey);
+	const url = new URL(path, engine ? SEARCH_ENGINE_ORIGIN : "https://api.openalex.org");
+	if (!engine) url.searchParams.set("api_key", apiKey);
+	return url;
+}
+
 function worksUrl(
 	query: OpenAlexQuery,
 	cursor: string | null,
@@ -43,16 +51,13 @@ function worksUrl(
 		throw new Error(`OpenAlex pageSize must be between 1 and ${OPENALEX_MAX_PAGE_SIZE}`);
 	}
 	const approved = openAlexQuerySchema.parse(query);
-	const engine = readSearchEngineAccess(apiKey);
-	const origin = engine ? SEARCH_ENGINE_ORIGIN : "https://api.openalex.org";
 	// OQL runs at the API root with the query in the POST body.
-	const url = new URL(approved.oql ? `${origin}/` : `${origin}/works`);
+	const url = addressFor(apiKey, approved.oql ? "/" : "/works");
 	for (const key of ["filter", "search"] as const) {
 		if (approved[key]) url.searchParams.set(key, approved[key]);
 	}
 	if (cursor) url.searchParams.set("cursor", cursor);
 	url.searchParams.set("per_page", String(pageSize));
-	if (!engine) url.searchParams.set("api_key", apiKey);
 	return url;
 }
 
