@@ -180,8 +180,9 @@ references, because the engine names them by its own ids.
 ## Index-only libraries
 
 A read-only library that holds millions of records can skip the database: `services.search.indexOnly` is `true`, the
-engine is Elasticsearch, and records live only in the index. PostgreSQL stays empty, and readers read records, the record
-count and the engine from Elasticsearch. Such a library has no admin, drafts, collections or statistics, and no sources.
+engine is Elasticsearch, and records live only in the index. PostgreSQL holds no records, and readers read records, the
+record count and the engine from Elasticsearch. Its one filled table is `institutionCountry`, a small list of where each
+institution is, which the map's institutions and the flags beside affiliations read. A load doesn't fill it. Such a library has no admin, drafts, collections or statistics, and no sources.
 Its configuration must leave off everything that finds records in the database: reader accounts, collections, downloads,
 the Atom feed, the home page, AI search, deep research, related resources, notifications and the sitemap. Ask AI stays
 available, because it reads records from the index. OpenScholar's reads of the community come up
