@@ -163,11 +163,18 @@ test("holds the logo's own width until the logo people see arrives", async ({
 /**
  * The first page a server draws can come before it has measured the logos and
  * the font. The loading tests are about the measured header, so they wait for it.
+ * A failed font load is tried again after a minute (FONT_RETRY_MS in
+ * src/lib/navbar-fit.ts), so the wait runs past that and a test's retries, all
+ * inside the same minute, don't fail on one bad answer from Google.
  */
 async function waitForLogoMeasurement(page: Page) {
+	test.setTimeout(120_000);
 	await expect
-		.poll(async () => (await page.request.get("/lib")).text())
-		.not.toContain('data-navbar-fit="fallback"');
+		.poll(async () => (await page.request.get("/lib")).text().then((html) => html.includes('data-navbar-fit="fallback"')), {
+			message: "the server should have measured the header",
+			timeout: 75_000,
+		})
+		.toBe(false);
 }
 
 /**
