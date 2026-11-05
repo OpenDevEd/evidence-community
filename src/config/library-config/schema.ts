@@ -1397,6 +1397,8 @@ const chosenEngineSchema = z.discriminatedUnion("engine", [
 			engine: z.literal("elasticsearch"),
 			elasticsearch: elasticsearchConnectionSchema,
 			meilisearch: meilisearchConnectionSchema.optional(),
+			/** The index is the library: records live only there, and the database stays empty (docs/search-indexing.md). */
+			indexOnly: z.boolean().default(false),
 		})
 		.strict(),
 	z
