@@ -79,6 +79,16 @@ describe("reading Openscholar's search engine", () => {
 		expect(page.meta.next_cursor).toBe("next");
 	});
 
+	it("keeps one work when the engine holds a paper twice under one OpenAlex id", async () => {
+		const twin = { ...engineWork, id: "https://openscholar.ai/OS999", title: "Teachers in Kenya, again" };
+		const { fetcher } = pages({ meta: { count: 2, next_cursor: null }, results: [engineWork, twin] });
+
+		const page = await new OpenAlexClient({ apiKey: key, fetch: fetcher }).works({ oql: "works where year is (2023)" }, "*", 200);
+
+		expect(page.results).toHaveLength(1);
+		expect(page.results[0]).toMatchObject({ id: "https://openalex.org/W2315890726", title: "Teachers in Kenya" });
+	});
+
 	it("never sends the engine's key to OpenAlex for an institution", async () => {
 		const { requests, fetcher } = pages({ results: [] });
 

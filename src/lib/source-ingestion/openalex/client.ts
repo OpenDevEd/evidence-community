@@ -277,12 +277,15 @@ export class OpenAlexClient {
 		return readSearchEngineAccess(this.options.apiKey) ? this.asOpenAlexPage(page) : page;
 	}
 
-	/** The engine's page in OpenAlex's terms, without any work OpenAlex doesn't hold. */
+	/** The engine's page in OpenAlex's terms: one work per OpenAlex id, as the engine can hold a paper twice, and none OpenAlex doesn't hold. */
 	private asOpenAlexPage(page: OpenAlexPage): OpenAlexPage {
-		const results = page.results.map(asOpenAlexWork).filter((work) => work !== null);
-		const skipped = page.results.length - results.length;
-		if (skipped) console.warn("Works without an OpenAlex id left out", { skipped });
-		return { ...page, results };
+		const works = new Map<string, unknown>();
+		for (const work of page.results.map(asOpenAlexWork)) {
+			if (work && !works.has(work.id)) works.set(work.id, work);
+		}
+		const skipped = page.results.length - works.size;
+		if (skipped) console.warn("Engine works left out: no OpenAlex id, or a second work under one", { skipped });
+		return { ...page, results: [...works.values()] };
 	}
 
 	/**
