@@ -14,8 +14,10 @@ Library-specific facts, commands, and deployment boundaries.
   accounts, billing, and Evidence Library setup and management.
 - Cross-repository calls use an authenticated, versioned, retry-safe API. Do
   not rebuild Openscholar research tools here.
-- There is no production for this product yet. This work prepares for a future
-  production release through Openscholar `main`.
+- Openscholar's `prod` is live. A community follows the Openscholar Convex that
+  published it, and updating one on prod is a release decision: only "promote"
+  does it. The steps are in Openscholar's `ship-prod` skill, at
+  `.agents/skills/ship-prod/SKILL.md` in `OpenDevEd/openalex-count`.
 
 ## Off limits: the `coolify` branch and its tenants
 
