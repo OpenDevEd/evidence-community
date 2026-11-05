@@ -81,6 +81,7 @@ describe("public library configuration", () => {
 				"localization",
 				"navigation",
 				"notifications",
+				"resultLimit",
 				"revision",
 				"schemaVersion",
 				"search",
