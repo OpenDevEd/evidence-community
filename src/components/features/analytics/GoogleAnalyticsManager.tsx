@@ -2,6 +2,7 @@
 
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
+	GOOGLE_COOKIE_PREFIX,
 	markGoogleAnalyticsReady,
 	prepareGoogleAnalytics,
 	resetGoogleAnalytics,
@@ -63,6 +64,8 @@ export default function GoogleAnalyticsManager({ gaId }: { gaId: string }) {
 					anonymize_ip: true,
 					allow_google_signals: false,
 					allow_ad_personalization_signals: false,
+					cookie_domain: window.location.hostname,
+					cookie_prefix: GOOGLE_COOKIE_PREFIX,
 				});
 				markGoogleAnalyticsReady(gaId);
 			}}

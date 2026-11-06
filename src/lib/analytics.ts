@@ -66,7 +66,12 @@ type QueuedGoogleEvent = {
 	params: Record<string, unknown>;
 };
 
-const GOOGLE_COOKIE_PREFIXES = ["_ga", "_gid", "_gat"];
+// A community can sit on a subdomain of a site with its own analytics, as *.openscholar.ai does beside
+// discover.openscholar.ai. Its cookies are host-only and named differently, so neither site reads or clears the
+// other's.
+export const GOOGLE_COOKIE_PREFIX = "community";
+const POSTHOG_PERSISTENCE_NAME = "community";
+const GOOGLE_COOKIE_PREFIXES = [`${GOOGLE_COOKIE_PREFIX}_ga`, "_ga", "_gid", "_gat"];
 const POSTHOG_STORAGE_PREFIXES = ["ph_", "__ph_", "posthog"];
 const SENSITIVE_PROPERTY_NAME =
 	/^\$(?:initial_)?referrer$|(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
@@ -238,13 +243,18 @@ function sanitizePostHogProperties(
 
 function sanitizePostHogEvent(event: CaptureResult | null) {
 	if (!event || analyticsMode !== "granted") return null;
+	const environment = activeConfiguration && new URL(activeConfiguration.scope).host;
 	return {
 		...event,
 		...(event.$set && { $set: sanitizePostHogProperties(event.$set) }),
 		...(event.$set_once && {
 			$set_once: sanitizePostHogProperties(event.$set_once),
 		}),
-		properties: sanitizePostHogProperties(event.properties, true),
+		properties: {
+			...sanitizePostHogProperties(event.properties, true),
+			// Which community sent it, as the server's events say too (server-analytics.ts).
+			...(environment && { environment }),
+		},
 	};
 }
 
@@ -260,10 +270,6 @@ function clearCookies(prefixes: string[]) {
 		document.cookie = base;
 		document.cookie = `${base}; Domain=${window.location.hostname}`;
 		document.cookie = `${base}; Domain=.${window.location.hostname}`;
-		const parts = window.location.hostname.split(".");
-		if (parts.length > 2) {
-			document.cookie = `${base}; Domain=.${parts.slice(1).join(".")}`;
-		}
 	}
 }
 
@@ -329,6 +335,8 @@ async function initializePostHog(expectedSignature: string) {
 				defaults: "2026-06-25",
 				api_host: posthog.host,
 				ui_host: posthog.uiHost ?? posthog.host,
+				cross_subdomain_cookie: false,
+				persistence_name: POSTHOG_PERSISTENCE_NAME,
 				autocapture: {
 					dom_event_allowlist: ["click", "change", "submit"],
 					element_allowlist: [

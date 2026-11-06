@@ -36,6 +36,7 @@ type AgentConfig = Pick<
 	| "authentication"
 	| "content"
 	| "filters"
+	| "identity"
 	| "revision"
 	| "search"
 	| "services"

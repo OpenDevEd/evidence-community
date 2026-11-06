@@ -140,6 +140,9 @@ describe("runtime browser analytics", () => {
 			expect.objectContaining({
 				api_host: "https://analytics.runtime.example",
 				ui_host: "https://analytics-ui.runtime.example",
+				// Its own host-only cookie, which a site on the parent domain never reads or clears.
+				cross_subdomain_cookie: false,
+				persistence_name: "community",
 				person_profiles: "always",
 				disable_session_recording: true,
 			}),
@@ -206,6 +209,7 @@ describe("runtime browser analytics", () => {
 				token: key,
 				distinct_id: "visitor-id",
 				$current_url: "https://library.example.org/lib",
+				environment: "library.example.org",
 				$heatmap_data: {
 					"https://library.example.org/lib": [{ x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 6 }],
 				},

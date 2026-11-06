@@ -31,7 +31,7 @@ const SCREENING_INSTRUCTIONS = [
 
 type TelemetryConfig = Pick<
 	LibraryServerConfig,
-	"analytics" | "revision" | "updatedAt"
+	"analytics" | "identity" | "revision" | "updatedAt"
 >;
 
 type ScreenedField = string | number | boolean | null;
