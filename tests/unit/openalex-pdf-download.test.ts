@@ -36,14 +36,14 @@ it("keeps the chosen link when it is a PDF and asks nobody else", async () => {
 
 it("tries the other open copies, then Unpaywall's, and publishes the first PDF", async () => {
 	answers.set("https://publisher.example/b.pdf", file(html, "text/html")("https://publisher.example/b.pdf"));
-	answers.set("https://api.unpaywall.org/v2/10.1%2Fb?email=support%40openscholar.ai", unpaywall([{ url_for_pdf: "https://mirror.example/b.pdf" }]));
+	answers.set("https://api.unpaywall.org/v2/10.1%2Fb?email=habari%40openscholar.ai", unpaywall([{ url_for_pdf: "https://mirror.example/b.pdf" }]));
 	answers.set("https://mirror.example/b.pdf", file(pdf, "application/pdf")("https://mirror.example/b.pdf"));
 	const bytes = await downloadAnyCopy("https://publisher.example/b.pdf", { otherCopies: ["https://repo.example/b.pdf"], doi: "10.1/b" }, 1_000_000);
 	expect(new TextDecoder().decode(bytes)).toBe("%PDF-1.7 body");
 	expect(requested).toEqual([
 		"https://publisher.example/b.pdf",
 		"https://repo.example/b.pdf",
-		"https://api.unpaywall.org/v2/10.1%2Fb?email=support%40openscholar.ai",
+		"https://api.unpaywall.org/v2/10.1%2Fb?email=habari%40openscholar.ai",
 		"https://mirror.example/b.pdf",
 	]);
 });
