@@ -14,6 +14,7 @@ import { trackAIUsage } from "@/lib/ai/telemetry";
 const config = {
 	revision: "analytics-usage",
 	updatedAt: "2026-07-28T10:00:00.000Z",
+	identity: { baseUrl: "https://library.example.org" },
 	analytics: {
 		posthog: {
 			host: "https://analytics.example.org",
@@ -58,6 +59,7 @@ describe("AI usage analytics", () => {
 		expect(event.event).toBe("ai_request");
 		expect(event.distinctId).toBe("runtime-user");
 		expect(event.properties).toMatchObject({
+			environment: "library.example.org",
 			feature: "summarize",
 			model: "openai/gpt-5.6-luna",
 			input_tokens: 10,

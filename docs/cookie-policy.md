@@ -21,7 +21,7 @@ The PostHog and Google Analytics browser tools do not load until you allow produ
 
 | **Name**                            | **Owner**        | **Purpose**                                                                                                                         | **Expires**                            |
 | ----------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `_ga`, `_ga_*`                      | Google Analytics | Distinguish consented visits and sessions for traffic and usage reports. Advertising storage and signals remain disabled.           | Google-managed, normally up to 2 years |
+| `community_ga`, `community_ga_*`    | Google Analytics | Distinguish consented visits and sessions for traffic and usage reports. Advertising storage and signals remain disabled.           | Google-managed, normally up to 2 years |
 | `ph_*`, `posthog*`, `posthog-opted` | PostHog          | Maintain a pseudonymous browser profile and session for consented product analytics. These entries may be cookies or local storage. | PostHog-managed                        |
 
 PostHog records useful product actions such as page visits, searches being present, result counts, allowed filter categories, file actions, copy and export actions, performance signals, dead clicks, and technical error types. It may automatically record clicks, changes, and form submissions on allowed interface elements.

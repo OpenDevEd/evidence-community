@@ -84,6 +84,8 @@ export async function captureServerAnalyticsEvent(
 			disableGeoip: true,
 			properties: {
 				...properties,
+				// Which community sent it, as its browser events say too (analytics.ts).
+				environment: new URL(config.identity.baseUrl).host,
 				analytics_mode: context.mode,
 				...(context.mode === "aggregate"
 					? { $process_person_profile: false }

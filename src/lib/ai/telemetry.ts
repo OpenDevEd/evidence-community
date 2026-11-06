@@ -14,7 +14,7 @@ type AIFeature =
 
 type TelemetryConfig = Pick<
 	LibraryServerConfig,
-	"analytics" | "revision" | "updatedAt"
+	"analytics" | "identity" | "revision" | "updatedAt"
 >;
 
 type TokenUsage = {
@@ -122,6 +122,7 @@ export async function trackAIUsage(
 			event: "ai_request",
 			distinctId,
 			properties: {
+				environment: new URL(config.identity.baseUrl).host,
 				feature,
 				model: modelId,
 				input_tokens: usage?.inputTokens ?? null,
