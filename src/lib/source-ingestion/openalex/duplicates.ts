@@ -171,7 +171,7 @@ async function dataCiteBatch(dois: readonly string[], fetchImpl: typeof fetch, s
 		let delay = backoff(attempt);
 		try {
 			const response = await fetchImpl(url, {
-				headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:support@openscholar.ai)" },
+				headers: { Accept: "application/vnd.api+json", "User-Agent": "Evidence-Library/1.0 (mailto:habari@openscholar.ai)" },
 				signal: AbortSignal.timeout(DATACITE_TIMEOUT_MS),
 			});
 			if (response.ok) return { records: ((await response.json()) as { data?: DataCiteRecord[] }).data ?? [] };
