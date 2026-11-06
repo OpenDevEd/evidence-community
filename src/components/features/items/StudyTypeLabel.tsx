@@ -67,7 +67,8 @@ export function StudyTypeLabel({ reading, className }: { reading: StudyReading |
 		<Hint
 			content={apart ? <StudyTypeExplanation type={UNCERTAIN} guess={type.key} how={how} /> : <StudyTypeExplanation type={type.key} how={how} />}
 			contentClassName={STUDY_TYPE_TIP}
-			className={twMerge("gap-1.5 text-lg", type.level === "synthesis" && !apart ? "font-medium text-accent" : "text-black/60 dark:text-white/60", className)}
+			// Wraps so "uncertain" goes under the type when the card is too narrow for both, as at large text on a phone.
+			className={twMerge("flex-wrap gap-1.5 text-lg", type.level === "synthesis" && !apart ? "font-medium text-accent" : "text-black/60 dark:text-white/60", className)}
 		>
 			<HugeiconsIcon icon={ICONS[reading.by]} className="size-4 shrink-0" aria-hidden />
 			{apart ? t("uncertainType.label") : t(`types.${type.key}.label`)}

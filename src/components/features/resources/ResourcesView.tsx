@@ -401,6 +401,8 @@ function PaginationControls({ className }: { className?: string }) {
 					isLoaded={totalPages > 0}
 					// At least one row: past page 500 on a phone the pager takes two.
 					className="w-full min-h-14 rounded-2xl flex items-center justify-center"
+					// Without it the pager's own sideways scroll never starts: its width pushed the row past the page, cut off at both ends.
+					classNames={{ content: "min-w-0" }}
 				>
 					{totalPages > 0 &&
 						(itemsContext.queryParams.page > numbered ? (

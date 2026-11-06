@@ -433,7 +433,7 @@ function ResourceFacts({ item, isLoading }: { item: Item | ListItem | undefined;
 	const reading = item?.reading;
 	if (!record?.verdict && !reading) return null;
 	return (
-		<div className="-mb-2 flex h-7 items-center gap-3 text-sm">
+		<div className="-mb-2 flex min-h-7 items-center gap-3 text-sm">
 			{reading && <StudyTypeLabel reading={reading} />}
 			<EvidenceVerdict item={item} />
 		</div>
