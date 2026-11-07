@@ -285,21 +285,24 @@ async function withdrawAnalyticsConsent(
 	await page
 		.getByRole("button", { name: consentDecline, exact: true })
 		.click();
-	await expect
-		.poll(() =>
-			page.evaluate(() => ({
-				cookies: document.cookie
-					.split("; ")
-					.map((cookie) => cookie.split("=")[0])
-					.filter((key) => key.startsWith("ph_")),
-				localStorage: Object.keys(localStorage).filter(
-					(key) =>
-						key.startsWith("ph_") &&
-						!key.startsWith("__ph_opt_in_out_"),
-				),
-			})),
-		)
-		.toEqual({ cookies: [], localStorage: [] });
+	const posthogStorage = () =>
+		page.evaluate(() => ({
+			cookies: document.cookie
+				.split("; ")
+				.map((cookie) => cookie.split("=")[0])
+				.filter((key) => key.startsWith("ph_")),
+			localStorage: Object.keys(localStorage).filter(
+				(key) =>
+					key.startsWith("ph_") &&
+					!key.startsWith("__ph_opt_in_out_"),
+			),
+			sessionStorage: Object.keys(sessionStorage).filter((key) => key.startsWith("ph_")),
+		}));
+	const empty = { cookies: [], localStorage: [], sessionStorage: [] };
+	await expect.poll(posthogStorage).toEqual(empty);
+	// PostHog saves its storage a moment after a change: it stays empty on this page past that, not only at first.
+	await page.waitForTimeout(analyticsDeliveryWindowMs);
+	expect(await posthogStorage()).toEqual(empty);
 	const requestsAfterWithdrawal = network.eventRequests.length;
 	await page.goto("/gapmaps");
 	await expect(page.getByRole("main")).toBeVisible();

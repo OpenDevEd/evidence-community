@@ -10,7 +10,6 @@ const posthog = vi.hoisted(() => ({
 		init: ReturnType<typeof vi.fn>;
 		opt_in_capturing: ReturnType<typeof vi.fn>;
 		opt_out_capturing: ReturnType<typeof vi.fn>;
-		reset: ReturnType<typeof vi.fn>;
 		setPersonProperties: ReturnType<typeof vi.fn>;
 		startSessionRecording: ReturnType<typeof vi.fn>;
 		stopSessionRecording: ReturnType<typeof vi.fn>;
@@ -26,7 +25,6 @@ vi.mock("posthog-js/dist/module.full.no-external", () => {
 			init = vi.fn();
 			opt_in_capturing = vi.fn();
 			opt_out_capturing = vi.fn();
-			reset = vi.fn();
 			setPersonProperties = vi.fn();
 			startSessionRecording = vi.fn();
 			stopSessionRecording = vi.fn();
@@ -244,7 +242,6 @@ describe("runtime browser analytics", () => {
 			{ analytics: true, sessionReplay: false },
 		);
 		expect(first?.stopSessionRecording).toHaveBeenCalled();
-		expect(first?.reset).toHaveBeenCalledWith(true);
 		expect(first?.opt_out_capturing).toHaveBeenCalled();
 
 		const second = posthog.instances.at(-1);
@@ -253,7 +250,7 @@ describe("runtime browser analytics", () => {
 			"denied",
 			{ analytics: false, sessionReplay: false },
 		);
-		expect(second?.reset).toHaveBeenCalledWith(true);
+		expect(second?.opt_out_capturing).toHaveBeenCalled();
 		expect(getAnalyticsDistinctId()).toBeNull();
 	});
 
