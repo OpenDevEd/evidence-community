@@ -233,6 +233,18 @@ export async function resolveSource(
  * How many public records the library holds, and its own collections, each with the public records a search of it
  * finds (its sub-collections' too), which is what resolving it reads.
  */
+/** Most countries a library's overview names: the ones most of its public records are about, for OpenScholar's directory card. */
+const OVERVIEW_COUNTRIES = 5;
+
+/** The countries most of the public records are about, most first, then by code, each with how many records name it. */
+function topCountries(counts: Record<string, number>) {
+	return Object.entries(counts)
+		.filter(([, records]) => records > 0)
+		.sort(([a, first], [b, second]) => second - first || a.localeCompare(b))
+		.slice(0, OVERVIEW_COUNTRIES)
+		.map(([code, records]) => ({ code, records }));
+}
+
 export async function readLibraryOverview(config: LibraryServerConfig, database: Database) {
 	const [status, collections, counted] = await Promise.all([
 		readPublicLibraryStatus(database, config),
@@ -243,12 +255,13 @@ export async function readLibraryOverview(config: LibraryServerConfig, database:
 			filters: publicRecordFilters(config.content.tags.hidden),
 			size: 0,
 			exactTotal: false,
-			facets: ["collectionsAncestry"],
+			facets: ["collectionsAncestry", "country"],
 		}),
 	]);
 	const records = counted.facets.collectionsAncestry ?? {};
 	return {
 		records: Number(status?.totalItems ?? 0),
+		countries: topCountries(counted.facets.country ?? {}),
 		collections: collections
 			.filter((collection) => !collection.deleted)
 			.map((collection) => ({ key: collection.key, name: collection.title || collection.name || collection.key, parent: collection.parentCollection ?? null, records: records[collection.key] ?? 0 })),
