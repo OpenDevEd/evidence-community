@@ -71,13 +71,13 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 		await sql.query(`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "date") SELECT key, 'native', key, 'JournalArticle', 'Saved ' || key, '2024' FROM unnest($1::text[]) key`, [keys]);
 		const index = client.index(config.services.search.meilisearch!.index);
 		await successful(client.createIndex(index.uid, { primaryKey: "key" }));
-		await successful(index.updateSettings({ pagination: { maxTotalHits: 30_000 }, filterableAttributes: ["key", "itemType", "deleted", "tags", "year", "collectionsAncestry"], sortableAttributes: ["title", "dateSortKey"] }));
+		await successful(index.updateSettings({ pagination: { maxTotalHits: 30_000 }, filterableAttributes: ["key", "itemType", "deleted", "tags", "year", "collectionsAncestry", "country"], sortableAttributes: ["title", "dateSortKey"] }));
 		await successful(index.addDocuments([
-			{ key: keys[0], title: "Tutoring at scale", itemType: "JournalArticle", deleted: 0, tags: [], year: 2021, date: "2021-03-01", provider: "openalex", sourceRecordKey: "W7", DOI: "https://doi.org/10.1000/ABC", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Okafor" }], abstractNote: "Tutors help.", publicationTitle: "A journal", attachmentsData: [{ key: "PDFAAAAA", itemType: "Attachment", contentType: "application/pdf", filename: "paper.pdf", url: "https://files.example.test/paper.pdf", deleted: 0, tags: [] }, { key: "PDFBBBBB", itemType: "Attachment", contentType: "application/pdf", filename: "unstored.pdf", deleted: 0, tags: [] }, { key: "NOTEAAAA", itemType: "Note", deleted: 0, tags: [] }] },
-			{ key: keys[1], title: "Reading camps", itemType: "JournalArticle", deleted: 0, tags: [], year: 2022, collectionsAncestry: [camps] },
+			{ key: keys[0], title: "Tutoring at scale", itemType: "JournalArticle", deleted: 0, tags: [], year: 2021, date: "2021-03-01", provider: "openalex", sourceRecordKey: "W7", DOI: "https://doi.org/10.1000/ABC", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Okafor" }], abstractNote: "Tutors help.", publicationTitle: "A journal", country: ["ke"], attachmentsData: [{ key: "PDFAAAAA", itemType: "Attachment", contentType: "application/pdf", filename: "paper.pdf", url: "https://files.example.test/paper.pdf", deleted: 0, tags: [] }, { key: "PDFBBBBB", itemType: "Attachment", contentType: "application/pdf", filename: "unstored.pdf", deleted: 0, tags: [] }, { key: "NOTEAAAA", itemType: "Note", deleted: 0, tags: [] }] },
+			{ key: keys[1], title: "Reading camps", itemType: "JournalArticle", deleted: 0, tags: [], year: 2022, collectionsAncestry: [camps], country: ["ke", "ug"] },
 			{ key: keys[2], title: "Coaching", itemType: "Report", deleted: 0, tags: [], year: 2023 },
 			// Deleted since a source was resolved: the index still holds it.
-			{ key: "GONEGONE", title: "Withdrawn", itemType: "JournalArticle", deleted: 1, tags: [], year: 2020, collectionsAncestry: [camps] },
+			{ key: "GONEGONE", title: "Withdrawn", itemType: "JournalArticle", deleted: 1, tags: [], year: 2020, collectionsAncestry: [camps], country: ["tz"] },
 		]));
 		await sql.query(`INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1)`, [camps]);
 		await sql.query(`INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems", "sortOrder") VALUES ($1, 'native', $1, 'Camps', 0, 1)`, [camps]);
@@ -123,8 +123,8 @@ it("answers OpenScholar's reads as the person it names, within what the library 
 
 		// The library's own collection, the whole library from a place in it, and a list, each as the library holds them.
 		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { libraryCollection: camps } })))).body.keys).toEqual([keys[1]]);
-		// The library's own collections count what resolving them reads, whatever their stored count says.
-		expect((await json(await overview(get("/api/v1/openscholar/library")))).body).toEqual({ records: 3, collections: [{ key: camps, name: "Camps", parent: null, records: 1 }] });
+		// The library's own collections count what resolving them reads, whatever their stored count says; its countries are its public records', most first.
+		expect((await json(await overview(get("/api/v1/openscholar/library")))).body).toEqual({ records: 3, countries: [{ code: "ke", records: 2 }, { code: "ug", records: 1 }], collections: [{ key: camps, name: "Camps", parent: null, records: 1 }] });
 		// A window past the first records of a search.
 		expect((await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: "user_amina", source: { readerCollection: mine }, first: 2, last: 2 })))).body).toMatchObject({ keys: [expect.any(String)], total: 2 });
 		const whole = await json(await resolve(post("/api/v1/openscholar/sources/resolve", { reader: null, source: { library: true }, first: 2, last: 3 })));
