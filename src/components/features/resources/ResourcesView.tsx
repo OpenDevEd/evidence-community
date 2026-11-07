@@ -855,7 +855,9 @@ function ResourcesViewFrame({
 				className={twMerge(
 					"w-full flex flex-col gap-4",
 
-					!engaged && "-mx-1 overflow-hidden px-1",
+					// Clip, not hidden: a hidden box can still be scrolled, and focusing a control that pokes past it (the
+					// pager's focus-ring margin at 200% text) slid the whole results column sideways.
+					!engaged && "-mx-1 overflow-clip px-1",
 				)}
 			>
 				{!engaged && <NoteView />}
