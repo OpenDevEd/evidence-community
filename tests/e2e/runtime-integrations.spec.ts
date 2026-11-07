@@ -275,6 +275,23 @@ async function expectFlushedSessionReplay(
 	}
 }
 
+function posthogStorage(page: Page) {
+	return page.evaluate(() => ({
+		cookies: document.cookie
+			.split("; ")
+			.map((cookie) => cookie.split("=")[0])
+			.filter((key) => key.startsWith("ph_")),
+		localStorage: Object.keys(localStorage).filter(
+			(key) =>
+				key.startsWith("ph_") &&
+				!key.startsWith("__ph_opt_in_out_"),
+		),
+		sessionStorage: Object.keys(sessionStorage).filter((key) => key.startsWith("ph_")),
+	}));
+}
+
+const noPosthogStorage = { cookies: [], localStorage: [], sessionStorage: [] };
+
 async function withdrawAnalyticsConsent(
 	page: Page,
 	network: AnalyticsNetwork,
@@ -285,24 +302,10 @@ async function withdrawAnalyticsConsent(
 	await page
 		.getByRole("button", { name: consentDecline, exact: true })
 		.click();
-	const posthogStorage = () =>
-		page.evaluate(() => ({
-			cookies: document.cookie
-				.split("; ")
-				.map((cookie) => cookie.split("=")[0])
-				.filter((key) => key.startsWith("ph_")),
-			localStorage: Object.keys(localStorage).filter(
-				(key) =>
-					key.startsWith("ph_") &&
-					!key.startsWith("__ph_opt_in_out_"),
-			),
-			sessionStorage: Object.keys(sessionStorage).filter((key) => key.startsWith("ph_")),
-		}));
-	const empty = { cookies: [], localStorage: [], sessionStorage: [] };
-	await expect.poll(posthogStorage).toEqual(empty);
+	await expect.poll(() => posthogStorage(page)).toEqual(noPosthogStorage);
 	// PostHog saves its storage a moment after a change: it stays empty on this page past that, not only at first.
 	await page.waitForTimeout(analyticsDeliveryWindowMs);
-	expect(await posthogStorage()).toEqual(empty);
+	expect(await posthogStorage(page)).toEqual(noPosthogStorage);
 	const requestsAfterWithdrawal = network.eventRequests.length;
 	await page.goto("/gapmaps");
 	await expect(page.getByRole("main")).toBeVisible();
@@ -475,6 +478,31 @@ test("sends analytics only for the configured and consented profile", async ({
 	await expect(page.getByRole("main")).toBeVisible();
 	await page.waitForTimeout(analyticsDeliveryWindowMs);
 	expect(network.eventRequests).toEqual([]);
+});
+
+test("keeps no PostHog storage when PostHog answers after consent is withdrawn", async ({ page }) => {
+	test.skip(!expectedAnalytics || !expectsConsent, "This library has no PostHog behind a consent dialog.");
+	await page.addInitScript(() => {
+		Object.defineProperty(Navigator.prototype, "webdriver", { get: () => false });
+	});
+	// PostHog's config and flags replies are held until after the reader withdraws, as on a slow connection.
+	let answer = () => {};
+	const withdrawn = new Promise<void>((resolve) => { answer = resolve; });
+	await page.route(`${fixtureOrigin}/**`, async (route) => {
+		if (/\/(?:array\/|flags)/u.test(new URL(route.request().url()).pathname)) await withdrawn;
+		await route.continue();
+	});
+
+	await page.goto("/lib");
+	await page.getByRole("button", { name: consentAccept, exact: true }).click();
+	await expect.poll(async () => (await posthogStorage(page)).cookies).toContain("ph_community");
+	await page.getByRole("button", { name: "Cookie Settings", exact: true }).click();
+	await page.getByRole("button", { name: consentDecline, exact: true }).click();
+	await expect.poll(() => posthogStorage(page)).toEqual(noPosthogStorage);
+
+	answer();
+	await page.waitForTimeout(analyticsDeliveryWindowMs);
+	expect(await posthogStorage(page)).toEqual(noPosthogStorage);
 });
 
 test("offers OpenScholar sign-in only where reader accounts are on", { tag: "@smoke" }, async ({

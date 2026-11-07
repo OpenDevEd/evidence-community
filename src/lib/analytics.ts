@@ -294,10 +294,12 @@ function teardownPostHog() {
 	removeClientErrorListeners?.();
 	if (posthogClient) {
 		posthogClient.stopSessionRecording();
-		// Opting out turns its storage off (opt_out_persistence_by_default), so nothing the client still holds writes
-		// a cookie after a reader withdraws. A reset here made a new ID, asked PostHog for its flags, and PostHog's
-		// delayed save wrote both back after the storage below was cleared.
+		// The opt-out turns the client's storage off (opt_out_persistence_by_default), and disable_persistence keeps
+		// it off once the storage cleared below takes PostHog's opt-out marker with it. Otherwise something the retired
+		// client still holds (PostHog's delayed save, a config reply on its way) writes a cookie after a reader
+		// withdraws. A reset here made a new ID, asked PostHog for its flags, and the delayed save wrote both back.
 		posthogClient.opt_out_capturing();
+		posthogClient.set_config({ disable_persistence: true });
 	}
 	posthogClient = null;
 	posthogInitialization = null;

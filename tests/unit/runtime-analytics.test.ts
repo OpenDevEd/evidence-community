@@ -10,6 +10,7 @@ const posthog = vi.hoisted(() => ({
 		init: ReturnType<typeof vi.fn>;
 		opt_in_capturing: ReturnType<typeof vi.fn>;
 		opt_out_capturing: ReturnType<typeof vi.fn>;
+		set_config: ReturnType<typeof vi.fn>;
 		setPersonProperties: ReturnType<typeof vi.fn>;
 		startSessionRecording: ReturnType<typeof vi.fn>;
 		stopSessionRecording: ReturnType<typeof vi.fn>;
@@ -25,6 +26,7 @@ vi.mock("posthog-js/dist/module.full.no-external", () => {
 			init = vi.fn();
 			opt_in_capturing = vi.fn();
 			opt_out_capturing = vi.fn();
+			set_config = vi.fn();
 			setPersonProperties = vi.fn();
 			startSessionRecording = vi.fn();
 			stopSessionRecording = vi.fn();
