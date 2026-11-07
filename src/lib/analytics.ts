@@ -294,8 +294,12 @@ function teardownPostHog() {
 	removeClientErrorListeners?.();
 	if (posthogClient) {
 		posthogClient.stopSessionRecording();
-		posthogClient.reset(true);
+		// The opt-out turns the client's storage off (opt_out_persistence_by_default), and disable_persistence keeps
+		// it off once the storage cleared below takes PostHog's opt-out marker with it. Otherwise something the retired
+		// client still holds (PostHog's delayed save, a config reply on its way) writes a cookie after a reader
+		// withdraws. A reset here made a new ID, asked PostHog for its flags, and the delayed save wrote both back.
 		posthogClient.opt_out_capturing();
+		posthogClient.set_config({ disable_persistence: true });
 	}
 	posthogClient = null;
 	posthogInitialization = null;
@@ -337,6 +341,7 @@ async function initializePostHog(expectedSignature: string) {
 				ui_host: posthog.uiHost ?? posthog.host,
 				cross_subdomain_cookie: false,
 				persistence_name: POSTHOG_PERSISTENCE_NAME,
+				opt_out_persistence_by_default: true,
 				autocapture: {
 					dom_event_allowlist: ["click", "change", "submit"],
 					element_allowlist: [
