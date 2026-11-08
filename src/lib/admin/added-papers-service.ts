@@ -101,7 +101,8 @@ export type PaperLookup = {
 };
 
 const workOf = (id: string | null | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)$/iu)?.[1]?.toUpperCase() ?? null;
-const workIdOf = (work: unknown) => workOf(String((work as { id?: unknown } | null)?.id ?? ""));
+/** The bare OpenAlex work (W2741809807) a work's `id` names, or null. */
+export const workIdOf = (work: unknown) => workOf(String((work as { id?: unknown } | null)?.id ?? ""));
 const chunks = <T,>(values: readonly T[]) => Array.from({ length: Math.ceil(values.length / OPENALEX_MAX_IDS_PER_FILTER) }, (_, at) => values.slice(at * OPENALEX_MAX_IDS_PER_FILTER, (at + 1) * OPENALEX_MAX_IDS_PER_FILTER));
 
 /** The lookups a running library uses: its own OpenAlex key, and its Zotero translation service for DOIs. */

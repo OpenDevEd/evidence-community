@@ -5,6 +5,8 @@ import { saveSourceDisplayName } from "../display-name";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 import { sourceRecordIssue } from "@opendeved/evidence-library-core";
 
+import { workIdOf } from "@/lib/admin/added-papers-service";
+
 import { OPENALEX_MAX_IDS_PER_FILTER, OpenAlexClient } from "../openalex/client";
 import { openAlexIdStream } from "../openalex/id-stream";
 import { openAlexWorksConfigSchema } from "../openalex/schema";
@@ -71,12 +73,10 @@ async function worksForDois(context: SourceAdapterContext, dois: readonly string
 	if (!dois.length || !apiKey) return found;
 	const client = new OpenAlexClient({ apiKey, fetch: options.fetch, sleep: options.sleep });
 	for (let at = 0; at < dois.length; at += OPENALEX_MAX_IDS_PER_FILTER) {
-		for (const [doi, work] of await client.worksByDoi(dois.slice(at, at + OPENALEX_MAX_IDS_PER_FILTER))) {
-			const id = String((work as { id?: unknown } | null)?.id ?? "").split("/").pop();
-			if (id && /^W\d+$/u.test(id)) found.set(doi, id);
-		}
+		const works = await client.worksByDoi(dois.slice(at, at + OPENALEX_MAX_IDS_PER_FILTER));
+		for (const [doi, work] of works) found.set(doi, workIdOf(work) ?? "");
 	}
-	return found;
+	return new Map([...found].filter(([, id]) => id));
 }
 
 /**
