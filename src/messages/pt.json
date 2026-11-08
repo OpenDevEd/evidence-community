@@ -617,7 +617,8 @@
     "overallAvgCitations": "Citações médias gerais",
     "acrossAllYears": "ao longo de todos os anos",
     "topicFilteringUnavailable": "A filtragem de tópicos requer dados adicionais que não estão disponíveis no momento",
-    "rateLimitedMessage": "Você atingiu o limite de solicitações. Tente novamente em {seconds} segundos."
+    "rateLimitedMessage": "Você atingiu o limite de solicitações. Tente novamente em {seconds} segundos.",
+    "suggestPapers": "Sugerir artigos"
   },
   "ai": {
     "sourcesTitle": "Fontes",
@@ -1663,5 +1664,28 @@
       "description": "Quais cookies e entradas de armazenamento local o site usa, quais são essenciais e quais só são ativados após o consentimento para análises.",
       "metaDescription": "Aviso de cookies que cobre cookies e armazenamento semelhante do navegador usado pelo site."
     }
+  },
+  "suggestPapers": {
+    "title": "Sugerir artigos",
+    "description": "Cole DOIs, IDs do OpenAlex ou links para eles. A equipa da comunidade analisa cada um antes de ser publicado.",
+    "inputLabel": "DOIs, IDs do OpenAlex ou links",
+    "find": "Encontrar artigos",
+    "overLimit": "{count, plural, one {Hoje pode sugerir mais # artigo aqui, por isso só o primeiro é procurado.} other {Hoje pode sugerir mais # artigos aqui, por isso só os primeiros # são procurados.}}",
+    "noneLeft": "Hoje já sugeriu aqui tantos artigos quanto uma pessoa pode. Tente novamente amanhã.",
+    "failed": "Não foi possível contactar a comunidade. Tente novamente.",
+    "resultsLabel": "Artigos encontrados",
+    "alreadyHere": "Já está aqui",
+    "waiting": "Em análise",
+    "notFound": "Não encontrado",
+    "leaveOut": "Deixar de fora {title}",
+    "noAuthors": "Sem autores indicados",
+    "toSuggest": "{count, plural, one {# artigo para sugerir} other {# artigos para sugerir}}",
+    "cancel": "Cancelar",
+    "send": "Enviar para análise",
+    "done": "Concluído",
+    "sent": "{count, plural, one {# artigo enviado para análise} other {# artigos enviados para análise}}",
+    "sentHint": "Verá a situação de cada um em As suas submissões no Openscholar: em espera, publicado ou devolvido com o motivo do revisor.",
+    "yourSubmissions": "As suas submissões",
+    "emptyLink": "Conhece um artigo que pertence aqui? Sugira-o"
   }
 }

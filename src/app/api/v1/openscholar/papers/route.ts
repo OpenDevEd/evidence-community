@@ -3,17 +3,12 @@ import { z } from "zod";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { fromError } from "zod-validation-error";
 
-import { actorSchema, addedPapersSettings, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
+import { actorSchema, addedPapersSettings, papersSchema, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
-import { addPapers, ADD_PAPERS_MAX } from "@/lib/admin/added-papers-service";
+import { addPapers } from "@/lib/admin/added-papers-service";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import { answerOpenScholar, refusals } from "@/lib/openscholar/library-reads";
-
-const papersSchema = z
-	.array(z.object({ openalexId: z.string().max(128).nullish(), doi: z.string().max(512).nullish() }).strict())
-	.min(1)
-	.max(ADD_PAPERS_MAX);
 
 /** What adding these papers would find, saving nothing: the add dialog shows it before the person confirms. */
 const previewRequestSchema = z.object({ preview: z.literal(true), papers: papersSchema }).strict();

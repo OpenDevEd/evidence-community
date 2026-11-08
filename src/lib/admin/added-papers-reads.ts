@@ -7,7 +7,8 @@ import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 
-import { ADD_PAPERS_MAX, knownPapers, lookUpPapers, paperLookupFor, summaryOf, type Found, type PaperLookup, type PaperReference, type PaperSummary, type Results } from "./added-papers-service";
+import { ADD_PAPERS_MAX, knownPapers, lookUpPapers, paperLookupFor, type Found, type PaperLookup, type PaperReference, type Results } from "./added-papers-service";
+import { summaryOf, type PaperSummary } from "./paper-summary";
 
 /**
  * Where an added paper stands: on the community and kept up to date from OpenAlex (`live`), on it from its DOI alone

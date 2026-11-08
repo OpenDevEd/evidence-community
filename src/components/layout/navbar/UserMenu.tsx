@@ -2,7 +2,8 @@
 
 import type { ComponentProps } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowUpRight01Icon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, InboxIcon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { openSuggestPapers } from "@/components/features/suggest/SuggestPapers";
 import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
@@ -121,6 +122,10 @@ export function readerMenuGroups(input: {
 						</DropdownItem>,
 					]
 				: []),
+			// Papers sent to this community's review queue (#777).
+			<DropdownItem key="suggest" onPress={openSuggestPapers} startContent={<NavbarMenuIcon icon={InboxIcon} />}>
+				{input.t("suggestPapers")}
+			</DropdownItem>,
 			<DropdownItem
 				key="account"
 				onPress={openAccount}

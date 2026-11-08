@@ -31,6 +31,7 @@ import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { ReaderSessionProvider, type Reader } from "@/components/layout/navbar/ReaderSession";
+import { SuggestPapersDialog } from "@/components/features/suggest/SuggestPapers";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
@@ -251,6 +252,7 @@ export default function Providers({
 									<InlineChatLayoutProvider>
 										{children}
 									</InlineChatLayoutProvider>
+									<SuggestPapersDialog />
 									<AnalyticsVendors
 										googleAnalyticsId={
 											analytics.google.measurementId ?? ""

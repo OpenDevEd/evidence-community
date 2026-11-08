@@ -617,7 +617,8 @@
     "overallAvgCitations": "Gesamt-Durchschnitt Zitate",
     "acrossAllYears": "über alle Jahre",
     "topicFilteringUnavailable": "Die Themenfilterung benötigt zusätzliche Daten, die derzeit nicht verfügbar sind",
-    "rateLimitedMessage": "Sie haben das Anfragelimit erreicht. Versuchen Sie es in {seconds} Sekunden erneut."
+    "rateLimitedMessage": "Sie haben das Anfragelimit erreicht. Versuchen Sie es in {seconds} Sekunden erneut.",
+    "suggestPapers": "Artikel vorschlagen"
   },
   "ai": {
     "sourcesTitle": "Quellen",
@@ -1663,5 +1664,28 @@
       "description": "Welche Cookies und lokalen Speichereinträge die Website verwendet, welche unbedingt erforderlich sind und welche erst nach Einwilligung in Analysen aktiviert werden.",
       "metaDescription": "Cookie-Hinweis zu Cookies und ähnlichem Browserspeicher, den die Website nutzt."
     }
+  },
+  "suggestPapers": {
+    "title": "Artikel vorschlagen",
+    "description": "Füge DOIs, OpenAlex-IDs oder Links dazu ein. Das Team der Community prüft jeden, bevor er veröffentlicht wird.",
+    "inputLabel": "DOIs, OpenAlex-IDs oder Links",
+    "find": "Artikel finden",
+    "overLimit": "{count, plural, one {Du kannst heute hier noch # Artikel vorschlagen, daher wird nur der erste gesucht.} other {Du kannst heute hier noch # Artikel vorschlagen, daher werden die ersten # gesucht.}}",
+    "noneLeft": "Du hast hier heute so viele Artikel vorgeschlagen, wie eine Person kann. Versuche es morgen wieder.",
+    "failed": "Die Community ist nicht erreichbar. Versuche es erneut.",
+    "resultsLabel": "Gefundene Artikel",
+    "alreadyHere": "Schon hier",
+    "waiting": "Wartet auf Prüfung",
+    "notFound": "Nicht gefunden",
+    "leaveOut": "{title} weglassen",
+    "noAuthors": "Keine Autoren angegeben",
+    "toSuggest": "{count, plural, one {# Artikel zum Vorschlagen} other {# Artikel zum Vorschlagen}}",
+    "cancel": "Abbrechen",
+    "send": "Zur Prüfung senden",
+    "done": "Fertig",
+    "sent": "{count, plural, one {# Artikel zur Prüfung gesendet} other {# Artikel zur Prüfung gesendet}}",
+    "sentHint": "In Deine Einreichungen auf Openscholar siehst du, wo jeder steht: wartend, veröffentlicht oder mit dem Grund der Prüfung zurückgegeben.",
+    "yourSubmissions": "Deine Einreichungen",
+    "emptyLink": "Kennst du einen Artikel, der hierher gehört? Schlag ihn vor"
   }
 }

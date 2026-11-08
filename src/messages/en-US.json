@@ -617,7 +617,8 @@
     "overallAvgCitations": "Overall Avg Citations",
     "acrossAllYears": "across all years",
     "topicFilteringUnavailable": "Topic filtering requires additional data that is not currently available",
-    "rateLimitedMessage": "You have reached the request limit. Try again in {seconds} seconds."
+    "rateLimitedMessage": "You have reached the request limit. Try again in {seconds} seconds.",
+    "suggestPapers": "Suggest papers"
   },
   "ai": {
     "sourcesTitle": "Sources",
@@ -1663,5 +1664,28 @@
       "description": "Which cookies and local storage entries the site uses, which are essential, and which only activate after analytics consent is granted.",
       "metaDescription": "Cookie notice covering cookies and similar browser storage used by the site."
     }
+  },
+  "suggestPapers": {
+    "title": "Suggest papers",
+    "description": "Paste DOIs, OpenAlex IDs or links to them. The community’s team reviews each before it goes live.",
+    "inputLabel": "DOIs, OpenAlex IDs or links",
+    "find": "Find papers",
+    "overLimit": "{count, plural, one {You can suggest # more paper here today, so the first one is looked up.} other {You can suggest # more papers here today, so the first # are looked up.}}",
+    "noneLeft": "You’ve suggested as many papers here as one person can today. Try again tomorrow.",
+    "failed": "Couldn’t reach the community. Try again.",
+    "resultsLabel": "Papers found",
+    "alreadyHere": "Already here",
+    "waiting": "Waiting for review",
+    "notFound": "Not found",
+    "leaveOut": "Leave out {title}",
+    "noAuthors": "No authors listed",
+    "toSuggest": "{count, plural, one {# paper to suggest} other {# papers to suggest}}",
+    "cancel": "Cancel",
+    "send": "Send for review",
+    "done": "Done",
+    "sent": "{count, plural, one {# paper sent for review} other {# papers sent for review}}",
+    "sentHint": "You’ll see where each stands in Your submissions on Openscholar: waiting, published, or returned with the reviewer’s reason.",
+    "yourSubmissions": "Your submissions",
+    "emptyLink": "Know a paper that belongs here? Suggest it"
   }
 }
