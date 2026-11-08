@@ -226,20 +226,23 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 async function sendRecords(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, made: readonly Made[], input: AddPapersInput, results: Results) {
 	for (const paper of made) {
 		try {
-			const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, paper.itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
-			// A review already returned or withdrawn stays so: a replayed request doesn't submit it again.
-			if (latest && latest.state !== "pending") {
-				results.set(paper.at, { at: paper.at, outcome: latest.state === "published" ? "added" : "returned", itemKey: paper.itemKey, foundBy: paper.foundBy });
-				continue;
-			}
-			const review = latest ?? (await submitItemReview(db, paper.itemKey, input.actor, config));
-			if (input.publish) await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
-			results.set(paper.at, { at: paper.at, outcome: input.publish ? "added" : "queued", itemKey: paper.itemKey, foundBy: paper.foundBy });
+			results.set(paper.at, { at: paper.at, outcome: await sendRecord(db, storage, config, paper.itemKey, input), itemKey: paper.itemKey, foundBy: paper.foundBy });
 		} catch (error) {
 			console.error("[added papers] could not send", { itemKey: paper.itemKey, error: String(error) });
 			results.set(paper.at, { at: paper.at, outcome: "failed", itemKey: paper.itemKey, message: error instanceof AdminValidationError ? error.message : "The paper was saved as a draft but could not be sent. Open it in the admin to send it." });
 		}
 	}
+}
+
+/** Sends one record on, and answers where it got to. */
+async function sendRecord(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, itemKey: string, input: AddPapersInput): Promise<AddedPaperResult["outcome"]> {
+	const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
+	// A review already returned or withdrawn stays so: a replayed request doesn't submit it again.
+	if (latest && latest.state !== "pending") return latest.state === "published" ? "added" : "returned";
+	const review = latest ?? (await submitItemReview(db, itemKey, input.actor, config));
+	if (!input.publish) return "queued";
+	await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
+	return "added";
 }
 
 /**
