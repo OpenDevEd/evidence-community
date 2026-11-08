@@ -1,7 +1,7 @@
 import { readSourceFields } from "./source-fields";
 import "server-only";
 import { itemIdentity, type itemDraft } from "@opendeved/evidence-library-core";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemReview, itemReviewFile } from "@/db/schema/review";
@@ -18,7 +18,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { readStudyReading } from "@/lib/readings/reading";
-import { itemFilePublication } from "@/db/schema/source";
+import { addedPaper, itemFilePublication } from "@/db/schema/source";
 import { projectSourcePdf } from "./source-file-choice";
 
 function snapshotFileDraft(
@@ -225,6 +225,11 @@ export async function getAdminReviewSnapshot(
 	);
 	const root = details.find((detail) => detail.key === review.itemKey);
 	if (!root) throw new ItemNotFoundError(review.itemKey);
+	// An added paper keeps the name of the person who sent it, who may be outside the team (#777).
+	const [sender] = await db
+		.select({ name: addedPaper.addedByName, suggested: addedPaper.suggested })
+		.from(addedPaper)
+		.where(and(eq(addedPaper.itemKey, review.itemKey), eq(addedPaper.addedBy, review.submittedBy)));
 	const frozenAttachments = details.filter(
 		(detail) => detail.parentItem === root.key,
 	);
@@ -243,6 +248,9 @@ export async function getAdminReviewSnapshot(
 		reviewState: review.state,
 		submittedAt: review.submittedAt.toISOString(),
 		submittedBy: review.submittedBy,
+		/** Who sent it, when the queue knows their name, and whether they're outside the team. */
+		submittedByName: sender?.name ?? null,
+		suggested: sender?.suggested ?? false,
 		remainingConflicts: review.remainingConflicts,
 		note: review.note,
 		publishing: review.snapshot.publishingChoice,

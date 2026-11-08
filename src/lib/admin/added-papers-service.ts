@@ -25,6 +25,26 @@ import { approveItemReview, submitItemReview } from "./review-service";
 /** Papers one request adds at most. */
 export const ADD_PAPERS_MAX = 100;
 
+/** Papers one person outside the team suggests to the community a day, and all of them together (#777). */
+export const SUGGESTIONS_PER_PERSON_DAY = 50;
+const SUGGESTIONS_PER_COMMUNITY_DAY = 500;
+
+/** The person as the review queue treats them: someone outside the team as a Creator. */
+export const reviewerOf = (actor: Pick<AddPapersInput["actor"], "userId" | "role">) => ({ userId: actor.userId, role: actor.role === "reader" ? ("creator" as const) : actor.role });
+
+/** How many more papers someone outside the team may suggest today; unlimited for the team. */
+async function suggestionsLeft(transaction: DatabaseTransaction, actor: AddPapersInput["actor"]) {
+	if (actor.role !== "reader") return Number.POSITIVE_INFINITY;
+	const [counts] = await transaction
+		.select({
+			mine: sql<number>`count(*) FILTER (WHERE ${addedPaper.addedBy} = ${actor.userId})::int`,
+			all: sql<number>`count(*)::int`,
+		})
+		.from(addedPaper)
+		.where(sql`${addedPaper.suggested} AND ${addedPaper.addedAt} > now() - interval '1 day'`);
+	return Math.min(SUGGESTIONS_PER_PERSON_DAY - (counts?.mine ?? 0), SUGGESTIONS_PER_COMMUNITY_DAY - (counts?.all ?? 0));
+}
+
 export type PaperReference = { openalexId?: string | null; doi?: string | null };
 
 export type AddPapersInput = {
@@ -32,7 +52,8 @@ export type AddPapersInput = {
 	requestId: string;
 	/** Publish at once, which an owner or editor may; otherwise each paper waits in the review queue. */
 	publish: boolean;
-	actor: { userId: string; name: string | null; role: "owner" | "editor" | "creator" };
+	/** A `reader` is anyone signed in outside the team: like a Creator, they only send papers to the review queue. */
+	actor: { userId: string; name: string | null; role: "owner" | "editor" | "creator" | "reader" };
 	papers: PaperReference[];
 };
 
@@ -171,6 +192,7 @@ async function createRecord(transaction: DatabaseTransaction, paper: Found, inpu
 		addedBy: input.actor.userId,
 		addedByName: input.actor.name,
 		requestId: input.requestId,
+		suggested: input.actor.role === "reader",
 	});
 	return { at: paper.at, itemKey, foundBy: paper.openalexId ? "openalex" : "doi" };
 }
@@ -187,6 +209,11 @@ export async function knownPapers(transaction: Database | DatabaseTransaction, f
 	};
 }
 
+/** Refuses one more suggestion past the day's number: the papers sent again don't count. */
+function assertRoom(made: readonly Made[], left: number) {
+	if (made.filter((sent) => !sent.again).length >= left) throw new AdminValidationError("This community takes no more suggested papers from you today. Try again tomorrow.");
+}
+
 /**
  * Makes a record for each paper new to the community, in one transaction that takes turns with other requests, so a
  * repeated or concurrent request finds the papers the first one sent instead of racing its checks.
@@ -196,6 +223,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		// The OpenAlex writer's own lock: an import of the same work by another source waits, so neither makes a second record.
 		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
 		const known = await knownPapers(transaction, found);
+		const left = await suggestionsLeft(transaction, input.actor);
 		const made: Made[] = [];
 		const seen = new Map<string, string>();
 		for (const paper of found) {
@@ -213,6 +241,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 				results.set(paper.at, answer ?? { at: paper.at, outcome: "existing", itemKey: twice[0] });
 				continue;
 			}
+			assertRoom(made, left);
 			const record = await createRecord(transaction, paper, input);
 			for (const id of [paper.openalexId, paper.doi]) if (id) seen.set(id, record.itemKey);
 			made.push(record);
@@ -250,9 +279,9 @@ async function sendRecord(db: Database, storage: EvidenceFileStorage, config: Li
 	const latest = await latestReview(db, itemKey);
 	if (latest?.state === "published") return "added";
 	if (latest && latest.state !== "pending" && !again) return "returned";
-	const review = latest?.state === "pending" ? latest : await submitItemReview(db, itemKey, input.actor, config);
+	const review = latest?.state === "pending" ? latest : await submitItemReview(db, itemKey, reviewerOf(input.actor), config);
 	if (!input.publish) return "queued";
-	await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
+	await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, reviewerOf(input.actor), config);
 	return "added";
 }
 
@@ -281,7 +310,7 @@ export async function addPapers(
 	lookup: PaperLookup = paperLookupFor(config),
 ): Promise<{ results: AddedPaperResult[] }> {
 	if (input.papers.length > ADD_PAPERS_MAX) throw new AdminValidationError(`Add no more than ${ADD_PAPERS_MAX} papers at once.`);
-	if (input.publish && input.actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish papers.");
+	if (input.publish && reviewerOf(input.actor).role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish papers.");
 	const results: Results = new Map();
 	const found = await lookUpPapers(input.papers, lookup, results);
 	const made = await createRecords(db, found, input, results);

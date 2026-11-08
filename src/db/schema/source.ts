@@ -18,7 +18,7 @@ import {
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
 import { relations, sql } from "drizzle-orm";
-import { check, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import type { OpenAlexApprovedQuery } from "@/lib/source-ingestion/openalex/schema";
 
 import { collection } from "./tables/collection";
@@ -245,6 +245,8 @@ export const addedPaper = pgTable(
 		addedByName: varchar("addedByName", { length: 255 }),
 		/** The OpenScholar request that sent it, so a repeated request adds nothing twice. */
 		requestId: varchar("requestId", { length: 128 }).notNull(),
+		/** Suggested by someone outside the community's team, who may only send it to the review queue. */
+		suggested: boolean("suggested").notNull().default(false),
 		addedAt: timestamp("addedAt", { withTimezone: true }).notNull().defaultNow(),
 		acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
 	},
@@ -255,5 +257,7 @@ export const addedPaper = pgTable(
 		uniqueIndex("addedPaper_doi_unique").on(table.doi).where(sql`${table.doi} IS NOT NULL`),
 		index("addedPaper_request_idx").on(table.requestId),
 		index("addedPaper_unresolved_idx").on(table.state).where(sql`${table.openalexId} IS NULL`),
+		index("addedPaper_suggested_idx").on(table.addedAt).where(sql`${table.suggested}`),
+		index("addedPaper_added_by_idx").on(table.addedBy, table.addedAt),
 	],
 );
