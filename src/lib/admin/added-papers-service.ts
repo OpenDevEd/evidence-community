@@ -60,7 +60,7 @@ const workIdOf = (work: unknown) => workOf(String((work as { id?: unknown } | nu
 const chunks = <T,>(values: readonly T[]) => Array.from({ length: Math.ceil(values.length / OPENALEX_MAX_IDS_PER_FILTER) }, (_, at) => values.slice(at * OPENALEX_MAX_IDS_PER_FILTER, (at + 1) * OPENALEX_MAX_IDS_PER_FILTER));
 
 /** The lookups a running library uses: its own OpenAlex key, and its Zotero translation service for DOIs. */
-function paperLookupFor(config: LibraryServerConfig): PaperLookup {
+export function paperLookupFor(config: LibraryServerConfig): PaperLookup {
 	const apiKey = config.services.openAlex?.apiKey;
 	const client = apiKey ? new OpenAlexClient({ apiKey }) : null;
 	const translationUrl = config.services.zotero.translationUrl;
@@ -90,7 +90,7 @@ function paperLookupFor(config: LibraryServerConfig): PaperLookup {
 	};
 }
 
-type Found = { at: number; openalexId: string | null; doi: string | null; payload: Record<string, unknown>; remoteVersion?: string | null };
+export type Found = { at: number; openalexId: string | null; doi: string | null; payload: Record<string, unknown>; remoteVersion?: string | null };
 
 /** A draft's payload from an OpenAlex work: what the source's sync would write, so a reviewer sees the same record. */
 function payloadOfWork(work: unknown) {
@@ -99,7 +99,7 @@ function payloadOfWork(work: unknown) {
 }
 
 type Reference = { at: number; openalexId: string | null; doi: string | null };
-type Results = Map<number, AddedPaperResult>;
+export type Results = Map<number, AddedPaperResult>;
 /** `again`: a paper waiting in the community, sent by another request, which submits it again if its review ended. */
 type Made = { at: number; itemKey: string; foundBy: "openalex" | "doi"; again?: boolean };
 
@@ -176,7 +176,7 @@ async function createRecord(transaction: DatabaseTransaction, paper: Found, inpu
 }
 
 /** What the community holds of these papers: the ones sent before, and records of their works or DOIs. */
-async function knownPapers(transaction: DatabaseTransaction, found: readonly Found[]): Promise<Known> {
+export async function knownPapers(transaction: Database | DatabaseTransaction, found: readonly Found[]): Promise<Known> {
 	const works = [...new Set(found.flatMap((paper) => paper.openalexId ?? []))];
 	const dois = [...new Set(found.flatMap((paper) => paper.doi ?? []))];
 	const matches = [...(works.length ? [inArray(addedPaper.openalexId, works)] : []), ...(dois.length ? [inArray(addedPaper.doi, dois)] : [])];
@@ -251,6 +251,17 @@ async function sendRecord(db: Database, storage: EvidenceFileStorage, config: Li
 }
 
 /**
+ * Looks each paper up: by its OpenAlex ID, then OpenAlex by its DOI, then the DOI on its own. Returns the ones found;
+ * the rest have their answer in `results`.
+ */
+export async function lookUpPapers(papers: readonly PaperReference[], lookup: PaperLookup, results: Results) {
+	const refs = papers.map((paper, at) => ({ at, openalexId: workOf(paper.openalexId), doi: normalizeDoi(paper.doi) }));
+	for (const ref of refs) if (!ref.openalexId && !ref.doi) results.set(ref.at, { at: ref.at, outcome: "not_found", message: "This is not an OpenAlex ID or a DOI." });
+	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at)), lookup, results);
+	return [...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
+}
+
+/**
  * Adds papers to the community by OpenAlex ID or DOI (OpenDevEd/new-el#773). Each is looked up by its OpenAlex ID,
  * then OpenAlex by its DOI, then the DOI lookup the admin import uses. A paper found becomes a record of the Added
  * papers source, submitted for review as the person who sent it and, when they publish, approved at once. A paper
@@ -266,10 +277,7 @@ export async function addPapers(
 	if (input.papers.length > ADD_PAPERS_MAX) throw new AdminValidationError(`Add no more than ${ADD_PAPERS_MAX} papers at once.`);
 	if (input.publish && input.actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish papers.");
 	const results: Results = new Map();
-	const refs = input.papers.map((paper, at) => ({ at, openalexId: workOf(paper.openalexId), doi: normalizeDoi(paper.doi) }));
-	for (const ref of refs) if (!ref.openalexId && !ref.doi) results.set(ref.at, { at: ref.at, outcome: "not_found", message: "This is not an OpenAlex ID or a DOI." });
-	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at)), lookup, results);
-	const found = [...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
+	const found = await lookUpPapers(input.papers, lookup, results);
 	const made = await createRecords(db, found, input, results);
 	await sendRecords(db, storage, config, made, input, results);
 	// The source imports what was just published from OpenAlex at its next sweep; asked now, it starts right away.

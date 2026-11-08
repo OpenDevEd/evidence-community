@@ -8,9 +8,11 @@ import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
+import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
+import { unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
@@ -243,5 +245,52 @@ it("submits a returned paper again when a new request sends it", async () => {
 		const again = await addPapers(db, storage, config, { requestId: "r15", publish: true, actor: owner, papers: [{ openalexId: "W14" }] }, lookup);
 		expect(again.results).toEqual([{ at: 0, outcome: "added", itemKey: key, foundBy: "openalex" }]);
 		expect((await record(db, key))?.title).toBe("Work 14");
+	});
+});
+
+it("previews what adding would find without saving anything, and lists added papers by where they stand", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const doi = "10.1000/doi-only-list";
+		const { lookup } = services([work(20, "Teacher coaching in Kenya"), work(21, "Lesson study")], { [doi]: { itemType: "journalArticle", title: "School leadership", DOI: doi, date: "2026-03-01" } });
+		await addPapers(db, storage, config, { requestId: "r20", publish: true, actor: owner, papers: [{ openalexId: "W20" }] }, lookup);
+		await addPapers(db, storage, config, { requestId: "r21", publish: false, actor: creator, papers: [{ openalexId: "W21" }] }, lookup);
+
+		const preview = await previewPapers(db, config, [{ openalexId: "W20" }, { openalexId: "W21" }, { doi }, { doi: "nothing" }], lookup);
+		expect(preview.results.map((result) => result.outcome)).toEqual(["existing", "queued", "found", "not_found"]);
+		expect(preview.results[2]).toMatchObject({ foundBy: "doi", paper: { title: "School leadership", year: 2026, doi } });
+		expect(await db.select().from(addedPaper)).toHaveLength(2);
+
+		await addPapers(db, storage, config, { requestId: "r22", publish: true, actor: owner, papers: [{ doi }] }, lookup);
+		const [returned] = await db.select().from(itemReview).where(and(eq(itemReview.state, "pending")));
+		await resolveItemReview(db, { reviewId: returned!.id, expectedRevision: returned!.revision, action: "returned", note: "Not about teachers" }, editor);
+		const first = await listAddedPapers(db, { cursor: null, limit: 2 });
+		const second = await listAddedPapers(db, { cursor: first.next, limit: 2 });
+		expect([...first.papers, ...second.papers].map((paper) => [paper.title, paper.status, paper.note])).toEqual([
+			["School leadership", "doi_only", null],
+			["Lesson study", "returned", "Not about teachers"],
+			["Teacher coaching in Kenya", "live", null],
+		]);
+		expect(second.next).toBeNull();
+		expect(first.counts).toEqual({ live: 2, waiting: 0 });
+		// A returned paper previews as returned: adding it again sends it again.
+		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
+
+		// A paper an editor unpublished is off the community, so it's no longer listed or counted as live.
+		await unpublishNativeItem(db, first.papers[0]!.itemKey);
+		const after = await listAddedPapers(db, { cursor: null, limit: 5 });
+		expect(after.papers.map((paper) => paper.title)).toEqual(["Lesson study", "Teacher coaching in Kenya"]);
+		expect(after.counts).toEqual({ live: 1, waiting: 0 });
+	});
+});
+
+it("pages through papers added together, which share their moment, without skipping any", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const { lookup } = services([work(30), work(31), work(32)]);
+		await addPapers(db, new MemoryFileStorage(), config, { requestId: "r30", publish: false, actor: creator, papers: [{ openalexId: "W30" }, { openalexId: "W31" }, { openalexId: "W32" }] }, lookup);
+		const first = await listAddedPapers(db, { cursor: null, limit: 2 });
+		const second = await listAddedPapers(db, { cursor: first.next, limit: 2 });
+		expect(new Set([...first.papers, ...second.papers].map((paper) => paper.openalexId))).toEqual(new Set(["W30", "W31", "W32"]));
+		expect(second.next).toBeNull();
 	});
 });
