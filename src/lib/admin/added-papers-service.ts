@@ -1,5 +1,5 @@
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
@@ -39,7 +39,8 @@ export type AddPapersInput = {
 export type AddedPaperResult = {
 	/** The paper's place in the request. */
 	at: number;
-	outcome: "added" | "queued" | "existing" | "not_found" | "failed";
+	/** `returned`: sent before, and its review was returned or withdrawn; sending it again is a new submission. */
+	outcome: "added" | "queued" | "returned" | "existing" | "not_found" | "failed";
 	itemKey?: string;
 	/** How it was found: on OpenAlex, or only by its DOI, in which case each sync looks for it on OpenAlex again. */
 	foundBy?: "openalex" | "doi";
@@ -153,14 +154,14 @@ function knownPaper(paper: Found, known: Known, requestId: string): AddedPaperRe
 
 /** A new record of the Added papers source for one paper: its draft, and the row that waits for its review. */
 async function createRecord(transaction: DatabaseTransaction, paper: Found, input: AddPapersInput): Promise<Made> {
-	const itemKey = await reserveItemIdentity(transaction, { sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, ...(paper.openalexId ? { sourceRecordKey: paper.openalexId } : {}) });
+	// Under its own key, not its work's: other OpenAlex sources match records by work, and one still waiting for review
+	// must not be theirs to publish. Approval links it to its work.
+	const itemKey = await reserveItemIdentity(transaction, { sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY });
 	await transaction.update(itemIdentity).set({ kind: "imported", importMethod: "doi" }).where(eq(itemIdentity.key, itemKey));
 	await transaction.insert(itemDraft).values({ itemKey, patch: paper.payload, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY });
-	// What OpenAlex said when the paper arrived: a reviewer's correction is measured against it, so it outlives the
-	// first sync, which also brings the work's topics.
-	if (paper.openalexId) {
-		await transaction.insert(itemSourceValue).values({ itemKey, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, payload: paper.payload, remoteVersion: paper.remoteVersion ?? null, importedTopics: true });
-	}
+	// What the paper arrived as, from OpenAlex or its DOI: a reviewer's correction is measured against it, so it
+	// outlives the syncs that follow, the first of which also brings the work's topics.
+	await transaction.insert(itemSourceValue).values({ itemKey, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, payload: paper.payload, remoteVersion: paper.remoteVersion ?? null, importedTopics: true });
 	await transaction.insert(addedPaper).values({
 		itemKey,
 		openalexId: paper.openalexId,
@@ -191,7 +192,8 @@ async function knownPapers(transaction: DatabaseTransaction, found: readonly Fou
  */
 function createRecords(db: Database, found: readonly Found[], input: AddPapersInput, results: Results) {
 	return db.transaction(async (transaction) => {
-		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:added-papers'))`);
+		// The OpenAlex writer's own lock: an import of the same work by another source waits, so neither makes a second record.
+		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
 		const known = await knownPapers(transaction, found);
 		const made: Made[] = [];
 		const seen = new Map<string, string>();
@@ -217,12 +219,20 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 	});
 }
 
-/** Submits each new record as the person who sent it, or takes up its pending review, and publishes it at once when they chose to. */
+/**
+ * Submits each new record as the person who sent it, or takes up the review a stopped request left pending, and
+ * publishes it at once when they chose to.
+ */
 async function sendRecords(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, made: readonly Made[], input: AddPapersInput, results: Results) {
 	for (const paper of made) {
 		try {
-			const [pending] = await db.select({ id: itemReview.id, revision: itemReview.revision }).from(itemReview).where(and(eq(itemReview.itemKey, paper.itemKey), eq(itemReview.state, "pending")));
-			const review = pending ?? (await submitItemReview(db, paper.itemKey, input.actor, config));
+			const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, paper.itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
+			// A review already returned or withdrawn stays so: a replayed request doesn't submit it again.
+			if (latest && latest.state !== "pending") {
+				results.set(paper.at, { at: paper.at, outcome: latest.state === "published" ? "added" : "returned", itemKey: paper.itemKey, foundBy: paper.foundBy });
+				continue;
+			}
+			const review = latest ?? (await submitItemReview(db, paper.itemKey, input.actor, config));
 			if (input.publish) await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
 			results.set(paper.at, { at: paper.at, outcome: input.publish ? "added" : "queued", itemKey: paper.itemKey, foundBy: paper.foundBy });
 		} catch (error) {

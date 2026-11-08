@@ -11,7 +11,7 @@ import { item } from "@/db/schema/tables/item";
 import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { approveItemReview, correctItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, correctItemReview, resolveItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -172,5 +172,50 @@ it("finishes sending a paper whose first request stopped before its review was s
 		await db.delete(itemReview).where(eq(itemReview.itemKey, key));
 		expect((await addPapers(db, storage, config, request, lookup)).results).toEqual([{ at: 0, outcome: "queued", itemKey: key, foundBy: "openalex" }]);
 		expect(await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")))).toHaveLength(1);
+	});
+});
+
+const editor = { userId: "user_editor", role: "editor" } as const;
+
+/** An OpenAlex search source that finds `found`, synced once. */
+async function searchFinds(db: Database, found: ReturnType<typeof work>[]) {
+	await db.insert(sourceConnection).values({ key: "oa-search", provider: "openalex", scopeKind: "query", config: { name: "Search", searchUrl: "/results/1", approvedQuery: { version: "v1", approvedAt: "2026-11-08T10:00:00Z", query: { search: "teachers" } }, downloadPdfs: false } });
+	const [search] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-search"));
+	await syncOpenAlexSource({ database: db, sourceConnection: search!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch: (async () => Response.json({ meta: { count: found.length, next_cursor: null }, results: found })) as typeof globalThis.fetch, sleep: async () => {} });
+}
+
+it("leaves a paper waiting for review unpublished when an OpenAlex search finds the same work", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const { lookup } = services([work(10)]);
+		const { results } = await addPapers(db, new MemoryFileStorage(), config, { requestId: "r10", publish: false, actor: creator, papers: [{ openalexId: "W10" }] }, lookup);
+		await searchFinds(db, [work(10)]);
+		expect(await record(db, results[0]!.itemKey!)).toBeUndefined();
+	});
+});
+
+it("doesn't submit again a paper whose review was returned when its request is replayed", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const { lookup } = services([work(11)]);
+		const request = { requestId: "r11", publish: false, actor: creator, papers: [{ openalexId: "W11" }] };
+		const key = (await addPapers(db, new MemoryFileStorage(), config, request, lookup)).results[0]!.itemKey!;
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		await resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "returned", note: "Outside this community's focus" }, editor);
+		expect((await addPapers(db, new MemoryFileStorage(), config, request, lookup)).results).toEqual([{ at: 0, outcome: "returned", itemKey: key, foundBy: "openalex" }]);
+		expect(await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")))).toHaveLength(0);
+	});
+});
+
+it("keeps a correction to a paper found only by its DOI once OpenAlex has the work", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const doi = "10.1000/doi-only";
+		const { lookup } = services([], { [doi]: { itemType: "journalArticle", title: "school leadership", DOI: doi } });
+		const key = (await addPapers(db, storage, config, { requestId: "r12", publish: false, actor: creator, papers: [{ doi }] }, lookup)).results[0]!.itemKey!;
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		const sent = review!.snapshot.records[0]!;
+		const corrected = await correctItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, records: [{ ...sent, payload: { ...sent.payload, title: "School leadership support" } }] }, editor);
+		await approveItemReview(db, storage, { reviewId: corrected.id, expectedRevision: corrected.revision }, editor, config);
+		await sync(db, services([work(12, "school leadership", doi)]).fetch);
+		expect((await record(db, key))?.title).toBe("School leadership support");
 	});
 });
