@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { OpenScholarServiceError, type OpenScholarService } from "@/lib/openscholar-service";
 
 import type { SourceAdapterContext, SourceSyncResult } from "../adapter";
@@ -49,10 +50,13 @@ export async function syncOpenScholarCollection(
 			throw new OpenScholarCollectionGoneError(gone, collectionId);
 		}
 	};
-	let collection = await read(savedOpenAlexWorksVersion(connection.syncCursor));
+	// The saved scan's version is the collection's, with the works its DOIs resolved to after it; Openscholar knows only
+	// the collection's.
+	const saved = savedOpenAlexWorksVersion(connection.syncCursor);
+	let collection = await read(saved?.split(RESOLVED)[0] ?? null);
 	await saveSourceDisplayName(context.database, connection, async () => collection.name);
 	if (collection.unchanged) {
-		const due = openAlexWorksAreDue(connection.syncCursor, { version: collection.version, downloadPdfs: config.downloadPdfs }, new Date());
+		const due = openAlexWorksAreDue(connection.syncCursor, { version: saved ?? collection.version, downloadPdfs: config.downloadPdfs }, new Date());
 		if (!due) return { unchanged: true, version: collection.version };
 		collection = await read(null);
 		if (collection.unchanged) throw new Error(`Openscholar collection ${collectionId} answered without its items`);
@@ -61,7 +65,10 @@ export async function syncOpenScholarCollection(
 	const byDoi = await worksForDois(context, collection.dois, options);
 	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi)));
 	const ids = [...new Set([...collection.openAlexIds, ...byDoi.values()])].sort();
-	const result = await syncOpenAlexWorks(context, openAlexIdStream(ids, collection.version, config.downloadPdfs), options);
+	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list
+	// isn't resumed over the new one.
+	const version = byDoi.size ? `${collection.version}${RESOLVED}${createHash("sha256").update(ids.join(",")).digest("hex").slice(0, 16)}` : collection.version;
+	const result = await syncOpenAlexWorks(context, openAlexIdStream(ids, version, config.downloadPdfs), options);
 	return { ...result, unresolved: collection.unresolved + collection.dois.length - byDoi.size };
 }
 
@@ -98,6 +105,9 @@ async function listMissing(context: SourceAdapterContext, dois: readonly string[
 			.onConflictDoNothing();
 	});
 }
+
+/** Between the collection's version and its resolved works' in a scan's version. */
+const RESOLVED = "~";
 
 /** The issue code of a collection paper OpenAlex doesn't have. */
 const MISSING_CODE = "doi_not_on_openalex";

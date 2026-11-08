@@ -248,8 +248,19 @@ it("finds a collection paper that has only a DOI on OpenAlex by it, and lists th
 		}) as typeof fetch;
 		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => [row.sourceRecordKey, row.code]);
 
-		const result = await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request });
+		const asked: (string | null)[] = [];
+		const counting = (async (input: string | URL, init?: RequestInit) => {
+			if (new URL(String(input)).pathname === COLLECTION_ITEMS_PATH) asked.push((JSON.parse(String(init?.body)) as { knownVersion: string | null }).knownVersion);
+			return request(input, init);
+		}) as typeof fetch;
+		const result = await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: counting });
 		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "W5"]);
+		// The scan is saved under the works the DOIs resolved to, so a resumed scan never reads another list; Openscholar
+		// is asked about its own version alone.
+		const [saved] = await db.select({ cursor: sourceConnection.syncCursor }).from(sourceConnection).where(eq(sourceConnection.key, "openscholar-c1"));
+		expect((saved!.cursor as { queryVersion: string }).queryVersion).toMatch(/^v1~[0-9a-f]{16}$/u);
+		await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: counting });
+		expect(asked).toEqual([null, "v1"]);
 		expect(await issues()).toEqual([["doi:10.1000/w6", "doi_not_on_openalex"]]);
 		expect(result.unresolved).toBe(1);
 

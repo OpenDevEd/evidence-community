@@ -192,12 +192,18 @@ type SourceScope = { provider: string; scopeKind: string; externalScopeKey: stri
 /** Zotero's own web address for a record, as its last response gave it. */
 const ZOTERO_WEB = /^https:\/\/www\.zotero\.org\//u;
 
+/**
+ * A work's page on OpenAlex. A PDF record's key is its work's, with ":pdf" after it; a collection paper OpenAlex
+ * doesn't have is listed by its DOI, which has no page there.
+ */
+function openAlexLinks(recordKey: string): AdminSourceIssueLink[] {
+	if (recordKey.startsWith("doi:")) return [];
+	return [{ kind: "openalex", href: `https://openalex.org/${encodeURIComponent(recordKey.split(":")[0]!)}` }];
+}
+
 function sourceLinks(source: SourceScope, recordKey: string, zoteroWeb: string | null): AdminSourceIssueLink[] {
 	const key = encodeURIComponent(recordKey);
-	if (isOpenAlexWorkProvider(source.provider)) {
-		// A PDF record's key is its work's, with ":pdf" after it.
-		return [{ kind: "openalex", href: `https://openalex.org/${encodeURIComponent(recordKey.split(":")[0]!)}` }];
-	}
+	if (isOpenAlexWorkProvider(source.provider)) return openAlexLinks(recordKey);
 	if (source.provider !== "zotero" || !source.externalScopeKey) return [];
 	const scope = encodeURIComponent(source.externalScopeKey);
 	const group = source.scopeKind === "group";
