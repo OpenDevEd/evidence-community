@@ -32,6 +32,10 @@ function parse(text: string) {
 
 /** MOCK: the community already holds this one, to show the state. */
 const ALREADY_HERE = "W2126314681";
+/** MOCK: suggestions the reader has left today. The community allows 50 a day per person, and 100 in one request. */
+const LEFT_TODAY = 50;
+/** Lookups in flight at once, so a long paste doesn't flood OpenAlex. */
+const AT_ONCE = 5;
 
 async function lookUp(path: string): Promise<Omit<Found, "key" | "raw">> {
 	const response = await fetch(`https://api.openalex.org/works/${path}?select=id,title,publication_year,authorships`).catch(() => null);
@@ -63,7 +67,9 @@ export function SuggestPapersDialog() {
 		window.addEventListener("suggest-papers:open", show);
 		return () => window.removeEventListener("suggest-papers:open", show);
 	}, []);
-	const pasted = parse(text);
+	const named = parse(text);
+	// No more than the reader may still suggest today are looked up.
+	const pasted = named.slice(0, LEFT_TODAY);
 	const ready = (found ?? []).filter((row) => row.state === "found");
 	const looking = found?.some((row) => row.state === "looking") ?? false;
 	const close = () => {
@@ -74,9 +80,15 @@ export function SuggestPapersDialog() {
 	};
 	const find = () => {
 		setFound(pasted.map(({ key, raw }) => ({ key, raw, title: null, authors: "", year: null, state: "looking" })));
-		for (const { key, path } of pasted) {
-			void lookUp(path).then((result) => setFound((rows) => rows?.map((row) => (row.key === key ? { ...row, ...result } : row)) ?? rows));
-		}
+		const queue = [...pasted];
+		const next = async (): Promise<void> => {
+			const paper = queue.shift();
+			if (!paper) return;
+			const result = await lookUp(paper.path);
+			setFound((rows) => rows?.map((row) => (row.key === paper.key ? { ...row, ...result } : row)) ?? rows);
+			return next();
+		};
+		for (let lane = 0; lane < AT_ONCE; lane++) void next();
 	};
 	const send = () => {
 		setSending(true);
@@ -87,7 +99,7 @@ export function SuggestPapersDialog() {
 	};
 
 	return (
-		<DialogModal isOpen={open} onOpenChange={(next) => (next ? setOpen(true) : close())} size="xl" scrollBehavior="inside">
+		<DialogModal isOpen={open} onOpenChange={(next) => (next ? setOpen(true) : close())} size="3xl" scrollBehavior="inside">
 			<ModalContent>
 				<ModalHeader className="flex flex-col gap-1">
 					<span className="text-lg font-semibold">Suggest papers</span>
@@ -113,6 +125,7 @@ export function SuggestPapersDialog() {
 								aria-label="DOIs, OpenAlex IDs or links"
 								placeholder={"10.1016/j.tate.2015.06.010\nhttps://openalex.org/W2126314681"}
 								minRows={4}
+								maxRows={8}
 								value={text}
 								onValueChange={(value) => {
 									setText(value);
@@ -121,15 +134,15 @@ export function SuggestPapersDialog() {
 								classNames={{ input: "font-mono text-xs" }}
 							/>
 							<div className="flex items-center justify-between gap-3">
-								<span className="text-sm text-foreground/60 dark:text-white/60 tabular-nums">
-									{pasted.length ? (pasted.length === 1 ? "1 paper" : `${pasted.length} papers`) : null}
+								<span className="text-sm text-warning-600 dark:text-warning">
+									{named.length > LEFT_TODAY ? `You can suggest ${LEFT_TODAY} more papers here today, so the first ${LEFT_TODAY} are looked up.` : null}
 								</span>
-								<Button size="sm" variant="bordered" isDisabled={!pasted.length || found !== null} onPress={find} startContent={<HugeiconsIcon icon={Search01Icon} className="size-4" aria-hidden />}>
+								<Button className="shrink-0" size="sm" variant="bordered" isDisabled={!pasted.length || found !== null} onPress={find} startContent={<HugeiconsIcon icon={Search01Icon} className="size-4" aria-hidden />}>
 									Find papers
 								</Button>
 							</div>
 							{found ? (
-								<ul aria-label="Papers found" className="divide-y divide-black/10 overflow-hidden rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
+								<ul aria-label="Papers found" className="max-h-[calc(6*3.5rem+5px)] shrink-0 divide-y overflow-y-auto divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
 									{found.map((row) => (
 										<li key={row.key} className={`flex h-14 items-center gap-3 px-3 ${row.state === "here" ? "opacity-60" : ""}`}>
 											{row.state === "looking" ? <Spinner size="sm" /> : null}
