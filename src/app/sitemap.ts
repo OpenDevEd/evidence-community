@@ -17,6 +17,8 @@ import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
+import { loadPolicyDocument } from "@/lib/policy-documents";
+import { POLICY_DESTINATIONS } from "@/lib/legal-links";
 
 export async function generateSitemaps() {
 	if (process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD) {
@@ -75,15 +77,19 @@ export default async function sitemap(props: {
 	const records = await readSitemapRecords(libraryConfig, identifier);
 
 	let pageEntries: MetadataRoute.Sitemap = [];
-	// The privacy and cookie pages aren't listed: robots.txt keeps search engines off them.
 	if (identifier === 0) {
 		// The home is listed only while it is a page of its own; otherwise `/` is a redirect to the listing.
 		const pages = isLibraryFeatureEnabled(libraryConfig.features, "homePage") ? ["/", "/lib"] : ["/lib"];
+		// Of the policy pages only the terms are listed: robots.txt keeps search engines off the privacy and cookie pages.
+		const terms = await loadPolicyDocument(libraryConfig, "terms").catch(() => null);
+		const page = (pathname: string, lastModified?: string | Date) => ({
+			url: buildLocalizedSiteUrl(pathname, localization.defaultLocale, localization, baseUrl),
+			lastModified,
+			alternates: { languages: buildLanguageAlternates(pathname, localization, baseUrl) },
+		});
 		pageEntries = [
-			...pages.map((pathname) => ({
-				url: buildLocalizedSiteUrl(pathname, localization.defaultLocale, localization, baseUrl),
-				alternates: { languages: buildLanguageAlternates(pathname, localization, baseUrl) },
-			})),
+			...pages.map((pathname) => page(pathname)),
+			...(terms ? [page(POLICY_DESTINATIONS.terms.path, terms.lastUpdated)] : []),
 			...getEnabledGapMaps(libraryConfig.gapMaps).map((gapMap) => ({ url: buildSiteUrl(gapMap.href, baseUrl) })),
 		];
 	}
