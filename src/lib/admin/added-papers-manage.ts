@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -28,9 +28,10 @@ export const actorSchema = z
 export async function removeAddedPaper(db: Database, itemKey: string, actor: ReviewActor): Promise<"withdrawn" | "removed"> {
 	const [row] = await db.select({ state: addedPaper.state }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey));
 	if (!row) throw new ItemNotFoundError(itemKey);
-	if (row.state === "pending") {
-		const review = await latestReview(db, itemKey);
-		// Returned or withdrawn already: there's nothing left in the queue to take back.
+	const review = row.state === "pending" ? await latestReview(db, itemKey) : undefined;
+	// Approved since its row was read, it's live: removed below like any other. Returned or withdrawn already, there's
+	// nothing left in the queue to take back. A review approved meanwhile fails the withdrawal on its revision.
+	if (row.state === "pending" && review?.state !== "published") {
 		if (review?.state === "pending") await resolveItemReview(db, { reviewId: review.id, expectedRevision: review.revision, action: "withdrawn" }, actor);
 		return "withdrawn";
 	}
@@ -49,12 +50,16 @@ export async function addedPapersSettings(db: Database): Promise<AddedPapersSett
 
 /** Pauses or resumes the Added papers source, or turns its PDFs on or off. Resumed, it syncs at once. */
 export async function setAddedPapersSettings(db: Database, change: Partial<AddedPapersSettings>): Promise<AddedPapersSettings> {
-	const current = await addedPapersSettings(db);
-	const next = { ...current, ...change };
+	// Only what changed is written, so two changes sent together both hold.
 	await db
 		.update(sourceConnection)
-		.set({ status: next.enabled ? "active" : "paused", config: { downloadPdfs: next.downloadPdfs }, updatedAt: new Date() })
+		.set({
+			...(change.enabled === undefined ? {} : { status: change.enabled ? "active" : "paused" }),
+			...(change.downloadPdfs === undefined ? {} : { config: sql`jsonb_set(coalesce(${sourceConnection.config}, '{}'::jsonb), '{downloadPdfs}', to_jsonb(${change.downloadPdfs}::boolean))` }),
+			updatedAt: new Date(),
+		})
 		.where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
-	if (next.enabled && (!current.enabled || (next.downloadPdfs && !current.downloadPdfs))) await requestSourceRun(db, ADDED_PAPERS_SOURCE_CONNECTION_KEY);
-	return next;
+	const settings = await addedPapersSettings(db);
+	if (settings.enabled && (change.enabled || change.downloadPdfs)) await requestSourceRun(db, ADDED_PAPERS_SOURCE_CONNECTION_KEY);
+	return settings;
 }

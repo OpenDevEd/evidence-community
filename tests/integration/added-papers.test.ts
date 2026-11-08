@@ -322,6 +322,9 @@ it("pauses the source and turns its PDFs off and on", async () => {
 		expect(await addedPapersSettings(db)).toEqual({ enabled: true, downloadPdfs: true });
 		await setAddedPapersSettings(db, { enabled: false });
 		expect(await addedPapersSettings(db)).toEqual({ enabled: false, downloadPdfs: true });
+		// A change to one setting leaves the other as it is, even one written since it was read.
+		await setAddedPapersSettings(db, { downloadPdfs: false });
+		expect(await addedPapersSettings(db)).toEqual({ enabled: false, downloadPdfs: false });
 		await setAddedPapersSettings(db, { enabled: true, downloadPdfs: false });
 		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
 		expect(connection).toMatchObject({ status: "active", config: { downloadPdfs: false } });
