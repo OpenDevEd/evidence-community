@@ -409,8 +409,8 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 		expect((await db.select().from(submissionStatusDelivery)).every((row) => row.nextAttemptAt === null)).toBe(true);
 		// What each paper is goes with it, so one sent from this site becomes the person's submission on Openscholar.
 		expect(sent.map((body) => body.paper).sort((a, b) => String((a as { title: string }).title).localeCompare(String((b as { title: string }).title)))).toEqual([
-			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60" },
-			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61" },
+			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60", requestId: expect.any(String) },
+			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61", requestId: expect.any(String) },
 		]);
 	});
 });

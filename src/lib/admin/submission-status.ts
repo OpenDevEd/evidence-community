@@ -26,7 +26,7 @@ const submissionStatusSchema = z
 		at: z.string(),
 		/** What the paper is, so one sent from this site becomes the person's submission on Openscholar too. */
 		paper: z
-			.object({ title: z.string().min(1).max(1000), authors: z.string().max(2000), year: z.number().int().nullable(), openalexId: z.string().max(64).nullable(), doi: z.string().max(512).nullable() })
+			.object({ title: z.string().min(1).max(1000), authors: z.string().max(2000), year: z.number().int().nullable(), openalexId: z.string().max(64).nullable(), doi: z.string().max(512).nullable(), requestId: z.string().min(1).max(128) })
 			.strict()
 			.optional(),
 	})
@@ -51,7 +51,7 @@ export async function queueSubmissionStatus(transaction: DatabaseTransaction, it
  * where its latest review does, and is sent as the person who submitted that review.
  */
 async function payloadOf(transaction: DatabaseTransaction, config: LibraryServerConfig, job: { itemKey: string; generation: number }) {
-	const [paper] = await transaction.select({ addedBy: addedPaper.addedBy, state: addedPaper.state, openalexId: addedPaper.openalexId, doi: addedPaper.doi }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
+	const [paper] = await transaction.select({ addedBy: addedPaper.addedBy, state: addedPaper.state, openalexId: addedPaper.openalexId, doi: addedPaper.doi, requestId: addedPaper.requestId }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
 	const [review] = await transaction
 		.select({ state: itemReview.state, note: itemReview.note, submittedBy: itemReview.submittedBy, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt, snapshot: itemReview.snapshot })
 		.from(itemReview)
@@ -75,11 +75,14 @@ async function payloadOf(transaction: DatabaseTransaction, config: LibraryServer
 	});
 }
 
-/** The paper as its review shows it, within what Openscholar keeps of a title and its authors. */
-function summaryForOpenScholar(snapshot: unknown, itemKey: string, ids: { openalexId: string | null; doi: string | null }) {
+/**
+ * The paper as its review shows it, within what Openscholar keeps of a title and its authors, with the request that
+ * sent it: Openscholar's own send of it, still finishing, then leaves this word as it is.
+ */
+function summaryForOpenScholar(snapshot: unknown, itemKey: string, paper: { openalexId: string | null; doi: string | null; requestId: string }) {
 	const record = (snapshot as { records?: { itemKey: string; payload: Record<string, unknown> }[] } | null)?.records?.find((entry) => entry.itemKey === itemKey);
 	const { title, authors, year } = summaryOf(record?.payload ?? {});
-	return { title: title.slice(0, 1000), authors: authors.slice(0, 2000), year, openalexId: ids.openalexId, doi: ids.doi };
+	return { title: title.slice(0, 1000), authors: authors.slice(0, 2000), year, openalexId: paper.openalexId, doi: paper.doi, requestId: paper.requestId };
 }
 
 /** Sends waiting changes of submitted papers to Openscholar for up to five seconds; true when it sent any. */
