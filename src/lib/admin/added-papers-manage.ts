@@ -29,9 +29,10 @@ export async function removeAddedPaper(db: Database, itemKey: string, actor: Rev
 	const [row] = await db.select({ state: addedPaper.state }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey));
 	if (!row) throw new ItemNotFoundError(itemKey);
 	const review = row.state === "pending" ? await latestReview(db, itemKey) : undefined;
-	// Approved since its row was read, it's live: removed below like any other. Returned or withdrawn already, there's
-	// nothing left in the queue to take back. A review approved meanwhile fails the withdrawal on its revision.
+	// Approved since its row was read, it's live: removed below like any other. A review approved meanwhile fails the
+	// withdrawal on its revision. Withdrawn already, it's gone; returned, it's the reviewer's answer to keep.
 	if (row.state === "pending" && review?.state !== "published") {
+		if (review?.state === "returned") throw new AdminValidationError("This paper was returned by a reviewer, so it isn't in the review queue to withdraw.");
 		if (review?.state === "pending") await resolveItemReview(db, { reviewId: review.id, expectedRevision: review.revision, action: "withdrawn" }, actor);
 		return "withdrawn";
 	}

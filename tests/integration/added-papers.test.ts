@@ -276,6 +276,8 @@ it("previews what adding would find without saving anything, and lists added pap
 		expect(first.counts).toEqual({ total: 3, live: 2, waiting: 0 });
 		// A returned paper previews as returned: adding it again sends it again.
 		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
+		// It's the reviewer's answer, not the queue's to withdraw.
+		await expect(removeAddedPaper(db, first.papers[1]!.itemKey, { userId: creator.userId, role: "creator" })).rejects.toBeInstanceOf(AdminValidationError);
 
 		// A paper an editor unpublished is off the community, so it's no longer listed or counted as live.
 		await unpublishNativeItem(db, first.papers[0]!.itemKey);
