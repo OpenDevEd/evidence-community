@@ -6,7 +6,7 @@ import { addedPaper, sourceConnection } from "@/db/schema/source";
 import { addedPapersConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { requestSourceRun } from "@/lib/source-ingestion/run-requests";
 
-import { latestReview } from "./added-papers-service";
+import { latestReview, reviewerOf } from "./added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 import { ItemNotFoundError, unpublishNativeItemWithOutcome } from "./native-item-service";
@@ -17,7 +17,8 @@ export const actorSchema = z
 	.object({
 		clerkUserId: z.string().min(1).max(128),
 		name: z.string().max(255).nullable(),
-		role: z.enum(["owner", "editor", "creator"]),
+		// `reader`: anyone signed in outside the team, who suggests papers like a Creator (#777).
+		role: z.enum(["owner", "editor", "creator", "reader"]),
 	})
 	.strict();
 
@@ -25,7 +26,8 @@ export const actorSchema = z
  * Takes a paper off the community's added papers. One waiting for review is withdrawn from the queue: a Creator
  * withdraws only their own. One on the community is unpublished, as the admin's Unpublish does, by an Editor or Owner.
  */
-export async function removeAddedPaper(db: Database, itemKey: string, actor: ReviewActor): Promise<"withdrawn" | "removed"> {
+export async function removeAddedPaper(db: Database, itemKey: string, sender: { userId: string; role: ReviewActor["role"] | "reader" }): Promise<"withdrawn" | "removed"> {
+	const actor = reviewerOf(sender);
 	const [row] = await db.select({ state: addedPaper.state }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey));
 	if (!row) throw new ItemNotFoundError(itemKey);
 	const review = row.state === "pending" ? await latestReview(db, itemKey) : undefined;

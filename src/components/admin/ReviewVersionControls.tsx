@@ -173,6 +173,12 @@ function formatReviewTime(value: string) {
 	});
 }
 
+/** Who sent an added paper, as the review's time says it; one suggested from outside the team says so. */
+function senderOf(snapshot: AdminReviewSnapshot | undefined) {
+	if (!snapshot?.submittedByName) return "";
+	return ` by ${snapshot.submittedByName}${snapshot.suggested ? ", outside the team" : ""}`;
+}
+
 function ReviewVersionTime({
 	snapshot,
 	updatedAt,
@@ -181,26 +187,29 @@ function ReviewVersionTime({
 	updatedAt: string;
 }) {
 	const displayedAt = snapshot?.submittedAt ?? updatedAt;
+	const by = senderOf(snapshot);
 	const label = snapshot
-		? `Submitted ${formatReviewTime(snapshot.submittedAt)}`
+		? `Submitted ${formatReviewTime(snapshot.submittedAt)}${by}`
 		: `Edited ${formatReviewTime(updatedAt)}`;
+	// It also shows a sender's name the bar cuts short.
+	const explains = Boolean(snapshot) && (snapshot?.submittedAt !== updatedAt || Boolean(by));
 
 	return (
 		<Tooltip
-			isDisabled={!snapshot || snapshot.submittedAt === updatedAt}
+			isDisabled={!explains}
 			content={
 				<div className="text-xs leading-5">
 					<p>Last edited {formatReviewTime(updatedAt)}</p>
 					{snapshot && (
-						<p>Submitted {formatReviewTime(snapshot.submittedAt)}</p>
+						<p>Submitted {formatReviewTime(snapshot.submittedAt)}{by}</p>
 					)}
 				</div>
 			}
 		>
 			<time
-				tabIndex={snapshot && snapshot.submittedAt !== updatedAt ? 0 : undefined}
+				tabIndex={explains ? 0 : undefined}
 				dateTime={displayedAt}
-				className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] opacity-65 outline-none focus-visible:ring-2 focus-visible:ring-focus"
+				className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap text-[10px] opacity-65 outline-none focus-visible:ring-2 focus-visible:ring-focus"
 			>
 				<HugeiconsIcon
 					icon={Clock01Icon}
@@ -208,7 +217,7 @@ function ReviewVersionTime({
 					className="shrink-0"
 					aria-hidden
 				/>
-				{label}
+				<span className="truncate">{label}</span>
 			</time>
 		</Tooltip>
 	);

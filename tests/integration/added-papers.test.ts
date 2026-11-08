@@ -10,7 +10,8 @@ import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
-import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
+import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
+import { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { unpublishNativeItem } from "@/lib/admin/native-item-service";
@@ -330,5 +331,35 @@ it("pauses the source and turns its PDFs off and on", async () => {
 		await setAddedPapersSettings(db, { enabled: true, downloadPdfs: false });
 		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
 		expect(connection).toMatchObject({ status: "active", config: { downloadPdfs: false } });
+	});
+});
+
+it("takes suggestions from someone outside the team into the review queue only, names them there, and holds them to a daily number", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const reader = { userId: "user_reader", name: "Grace Otieno", role: "reader" } as const;
+		const works = Array.from({ length: SUGGESTIONS_PER_PERSON_DAY + 1 }, (_, at) => work(100 + at));
+		const { lookup } = services(works);
+		await expect(addPapers(db, storage, config, { requestId: "s0", publish: true, actor: reader, papers: [{ openalexId: "W100" }] }, lookup)).rejects.toBeInstanceOf(AdminValidationError);
+		const { results } = await addPapers(db, storage, config, { requestId: "s1", publish: false, actor: reader, papers: [{ openalexId: "W100" }] }, lookup);
+		expect(results[0]).toMatchObject({ outcome: "queued" });
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, results[0]!.itemKey!));
+		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config })).toMatchObject({ submittedBy: "user_reader", submittedByName: "Grace Otieno", suggested: true });
+		// They withdraw their own suggestion, as a Creator does.
+		expect(await removeAddedPaper(db, results[0]!.itemKey!, { userId: "user_reader", role: "creator" })).toBe("withdrawn");
+
+		// One short of the day's number, a request sent again with one more paper counts only the new one.
+		await addPapers(db, storage, config, { requestId: "s1b", publish: false, actor: reader, papers: [{ openalexId: works[1]!.id }] }, lookup);
+		await addPapers(db, storage, config, { requestId: "s2", publish: false, actor: reader, papers: works.slice(4).map((w) => ({ openalexId: w.id })) }, lookup);
+		expect(await db.select().from(addedPaper)).toHaveLength(SUGGESTIONS_PER_PERSON_DAY - 1);
+		const resent = { requestId: "s1b", publish: false, actor: reader, papers: [{ openalexId: works[1]!.id }, { openalexId: works[2]!.id }] };
+		expect((await addPapers(db, storage, config, resent, lookup)).results.map((result) => result.outcome)).toEqual(["queued", "queued"]);
+
+		// Past it, a request adds nothing; the team isn't held to it.
+		const more = [{ openalexId: "W9999" }];
+		const { lookup: moreLookup } = services([...works, work(9999)]);
+		await expect(addPapers(db, storage, config, { requestId: "s3", publish: false, actor: reader, papers: more }, moreLookup)).rejects.toThrow(/no more suggested papers/);
+		expect(await db.select().from(addedPaper)).toHaveLength(SUGGESTIONS_PER_PERSON_DAY);
+		expect((await addPapers(db, storage, config, { requestId: "s4", publish: false, actor: creator, papers: more }, moreLookup)).results[0]).toMatchObject({ outcome: "queued" });
 	});
 });
