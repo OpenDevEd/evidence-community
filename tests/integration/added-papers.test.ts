@@ -273,7 +273,7 @@ it("previews what adding would find without saving anything, and lists added pap
 			["Teacher coaching in Kenya", "live", null],
 		]);
 		expect(second.next).toBeNull();
-		expect(first.counts).toEqual({ live: 2, waiting: 0 });
+		expect(first.counts).toEqual({ total: 3, live: 2, waiting: 0 });
 		// A returned paper previews as returned: adding it again sends it again.
 		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
 
@@ -281,7 +281,7 @@ it("previews what adding would find without saving anything, and lists added pap
 		await unpublishNativeItem(db, first.papers[0]!.itemKey);
 		const after = await listAddedPapers(db, { cursor: null, limit: 5 });
 		expect(after.papers.map((paper) => paper.title)).toEqual(["Lesson study", "Teacher coaching in Kenya"]);
-		expect(after.counts).toEqual({ live: 1, waiting: 0 });
+		expect(after.counts).toEqual({ total: 2, live: 1, waiting: 0 });
 	});
 });
 

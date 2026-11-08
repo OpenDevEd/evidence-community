@@ -124,7 +124,7 @@ async function latestReviews(db: Database, keys: readonly string[]) {
 }
 
 /**
- * The community's added papers, newest first, a page at a time, with where each stands and how many are live and
+ * The community's added papers, newest first, a page at a time, with where each stands and how many there are, live and
  * waiting in all. A paper waiting for review shows its draft; one on the community, its published record.
  */
 export async function listAddedPapers(db: Database, { cursor, limit }: { cursor: string | null; limit: number }) {
@@ -142,6 +142,7 @@ export async function listAddedPapers(db: Database, { cursor, limit }: { cursor:
 		latestReviews(db, keys),
 		db
 			.select({
+				total: sql<number>`count(*)::int`,
 				live: sql<number>`count(*) FILTER (WHERE ${addedPaper.state} = 'accepted')::int`,
 				// Waiting: sent and still in the review queue, not returned or withdrawn.
 				waiting: sql<number>`count(*) FILTER (WHERE ${addedPaper.state} = 'pending' AND EXISTS (SELECT 1 FROM ${itemReview} WHERE ${itemReview.itemKey} = ${addedPaper.itemKey} AND ${itemReview.state} = 'pending'))::int`,
@@ -156,7 +157,7 @@ export async function listAddedPapers(db: Database, { cursor, limit }: { cursor:
 	return {
 		papers,
 		next: rows.length > limit ? page.at(-1)!.id : null,
-		counts: { live: counts[0]?.live ?? 0, waiting: counts[0]?.waiting ?? 0 },
+		counts: { total: counts[0]?.total ?? 0, live: counts[0]?.live ?? 0, waiting: counts[0]?.waiting ?? 0 },
 	};
 }
 
