@@ -10,6 +10,7 @@ import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProv
 import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { getOrderedRuntimeLocales } from "@/i18n/runtime";
+import { intlLocale } from "@/i18n/intl-locale";
 import { localesNames } from "@/i18n/routing";
 import type { NavbarElementProps } from "@/types/navbar";
 import {
@@ -32,7 +33,7 @@ export function languageMenuItems<Locale extends string>(input: {
 	return input.locales.map((locale) => (
 		<DropdownItem
 			key={`locale-${locale}`}
-			lang={locale}
+			lang={intlLocale(locale)}
 			onPress={() => input.onSelect(locale)}
 			endContent={
 				locale === input.current ? (

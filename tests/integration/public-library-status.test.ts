@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
-import { buildPublicLibraryKeysQuery, readPublicLibraryStatus } from "@/lib/library-export-records";
+import { buildPublicLibraryKeysQuery, buildSitemapKeysQuery, countSitemapRecords, readPublicLibraryStatus } from "@/lib/library-export-records";
 
 vi.mock("server-only", () => ({}));
 
@@ -27,6 +27,11 @@ it("counts exported publications and their latest update, excluding hidden and u
 		await client.query('INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES (\'HIDDENNN\', \'Hidden\')');
 		expect(await readPublicLibraryStatus(database, config)).toEqual({ totalItems: 2, latestPublicationUpdatedAt: new Date("2026-09-10T15:30:00Z") });
 		expect((await buildPublicLibraryKeysQuery(database, config, 250)).map(record => record.key)).toEqual(["PUBAAAAA", "PUBBBBBB"]);
+		// The sitemaps list only public records with an abstract: one that is blank once its markup is taken out counts as none.
+		await client.query('UPDATE "item" SET "abstractNote" = \'What the study found.\' WHERE "key" IN (\'PUBAAAAA\', \'HIDDENNN\')');
+		await client.query('UPDATE "item" SET "abstractNote" = \'<p>&nbsp;</p>\n\t\' WHERE "key" = \'PUBBBBBB\'');
+		expect((await buildSitemapKeysQuery(database, config, 250, 0)).map(record => record.key)).toEqual(["PUBAAAAA"]);
+		expect(await countSitemapRecords(database, config)).toBe(1);
 		await client.query('UPDATE "item" SET "deleted" = 1 WHERE "key" = \'PUBBBBBB\'');
 		expect(await readPublicLibraryStatus(database, config)).toEqual({ totalItems: 1, latestPublicationUpdatedAt: new Date("2026-09-09T09:00:00Z") });
 	});

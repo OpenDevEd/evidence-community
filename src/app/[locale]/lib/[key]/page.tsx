@@ -3,7 +3,6 @@ import { getCachedItemPage, getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { creatorDisplayName } from "@/lib/creator-display-name";
-import { buildLanguageAlternates } from "@/lib/language-alternates";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRecordCitationLinks } from "@/config/library-config/exports";
 import { buildSiteUrl } from "@/lib/site-url";
@@ -63,15 +62,12 @@ export async function generateMetadata(props: {
 		description: item.abstractNote,
 		generator: "new-el",
 		alternates: {
+			// One address in every language: a record's title and abstract aren't translated, so its language versions
+			// name this one as canonical and no language alternates are listed.
 			canonical: buildSiteUrl(`/lib/${item.key}`, baseUrl),
-			languages: buildLanguageAlternates(
-				`/lib/${item.key}`,
-				libraryConfig.localization,
-				baseUrl,
-			),
-			// Only advertise a citation file the library actually serves.
-			types: Object.fromEntries(
-				getRecordCitationLinks(
+			// Only advertise a citation file the library actually serves, and the PDF when it has one.
+			types: Object.fromEntries([
+				...getRecordCitationLinks(
 					libraryConfig.exports,
 					libraryConfig.features.downloads,
 					item.key,
@@ -79,15 +75,8 @@ export async function generateMetadata(props: {
 					link.contentType,
 					buildSiteUrl(link.path, baseUrl),
 				]),
-			),
-			media: {
-				"image/jpeg": pdfWithImage
-					? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "")
-					: null,
-				"application/pdf": pdfWithImage
-					? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`, baseUrl)
-					: null,
-			},
+				...(pdfWithImage ? [["application/pdf", buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`, baseUrl)]] : []),
+			]),
 		},
 		other: {
 			citation_title: item.title ?? "",

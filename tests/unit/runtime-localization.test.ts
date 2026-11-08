@@ -100,4 +100,14 @@ describe("runtime localization", () => {
 			"x-default": "https://library.example.org/lib",
 		});
 	});
+
+	it("names Chinese by the language tag search engines know, at our `cn` address", () => {
+		expect(
+			buildLanguageAlternates(
+				"/lib",
+				{ ...localization, locales: ["fr", "cn"] },
+				"https://library.example.org",
+			),
+		).toMatchObject({ "zh-CN": "https://library.example.org/cn/lib" });
+	});
 });

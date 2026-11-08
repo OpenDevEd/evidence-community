@@ -11,17 +11,24 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { connection } from "next/server";
 import { homeRich } from "@/components/pages/HomeRichText";
+import { buildLanguageAlternates, buildLocalizedSiteUrl } from "@/lib/language-alternates";
 
 // The library's home page, shown at `/` while `features.homePage` is on; otherwise `/` opens the listing.
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
 	await connection();
 	const config = await getLibraryConfig();
-	const { description, name, tagline } = config.identity;
+	const { locale } = await params;
+	const { description, name, tagline, baseUrl } = config.identity;
 	return {
 		// The tagline tells search engines what the library holds.
 		title: tagline?.trim() ? `${name}: ${tagline.trim()}` : name,
 		description: description?.trim() || tagline?.trim() || name,
+		// Each language's home is its own page, as each language's listing is.
+		alternates: {
+			canonical: buildLocalizedSiteUrl("/", locale as typeof config.localization.defaultLocale, config.localization, baseUrl),
+			languages: buildLanguageAlternates("/", config.localization, baseUrl),
+		},
 	};
 }
 

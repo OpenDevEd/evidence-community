@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
 	getLibraryConfig: vi.fn(),
 	getDatabaseForConfig: vi.fn(),
-	readPublicLibraryStatus: vi.fn(),
+	countSitemapRecords: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
@@ -18,7 +18,7 @@ vi.mock("@/db", () => ({
 	getDatabaseForConfig: mocks.getDatabaseForConfig,
 }));
 vi.mock("@/lib/library-export-records", () => ({
-	readPublicLibraryStatus: mocks.readPublicLibraryStatus,
+	countSitemapRecords: mocks.countSitemapRecords,
 }));
 
 import { SITEMAP_SIZE } from "@/constants/misc";
@@ -45,18 +45,16 @@ describe("runtime sitemap page count", () => {
 			getSitemapPageCount(config(false)),
 		).resolves.toBe(0);
 		expect(
-			mocks.readPublicLibraryStatus,
+			mocks.countSitemapRecords,
 		).not.toHaveBeenCalled();
 	});
 
-	it("counts shards of the library's public records when sitemap publication is enabled", async () => {
-		mocks.readPublicLibraryStatus.mockResolvedValue({
-			totalItems: SITEMAP_SIZE + 1,
-		});
+	it("counts shards of the records the sitemaps list when sitemap publication is enabled", async () => {
+		mocks.countSitemapRecords.mockResolvedValue(SITEMAP_SIZE + 1);
 
 		await expect(
 			getSitemapPageCount(config(true)),
 		).resolves.toBe(2);
-		expect(mocks.readPublicLibraryStatus).toHaveBeenCalledOnce();
+		expect(mocks.countSitemapRecords).toHaveBeenCalledOnce();
 	});
 });
