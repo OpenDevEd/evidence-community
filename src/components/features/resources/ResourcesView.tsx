@@ -39,6 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
+import { openSuggestPapers } from "@/components/features/suggest/SuggestPapers";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -152,6 +153,12 @@ function ResourcesList({
 				) : actuallyNoData ? (
 					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
+						{/* MOCK (mock/suggest-paper): a paper that isn't here can be suggested. */}
+						<span className="mt-2 block">
+							<button type="button" onClick={openSuggestPapers} className="text-accent underline-offset-2 hover:underline">
+								Know a paper that belongs here? Suggest it
+							</button>
+						</span>
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(

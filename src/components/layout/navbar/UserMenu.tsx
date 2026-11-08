@@ -2,7 +2,8 @@
 
 import type { ComponentProps } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowUpRight01Icon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, InboxIcon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { openSuggestPapers, SuggestPapersDialog } from "@/components/features/suggest/SuggestPapers";
 import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
 import { Dropdown } from "@/components/nextui/Dropdown";
@@ -121,6 +122,10 @@ export function readerMenuGroups(input: {
 						</DropdownItem>,
 					]
 				: []),
+			// MOCK (mock/suggest-paper): papers sent to this community's review queue.
+			<DropdownItem key="suggest" onPress={openSuggestPapers} startContent={<NavbarMenuIcon icon={InboxIcon} />}>
+				Suggest papers
+			</DropdownItem>,
 			<DropdownItem
 				key="account"
 				onPress={openAccount}
@@ -163,6 +168,8 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 	if (variant === "menuItem") return <>{[groups.identity, ...groups.account, groups.signOut]}</>;
 
 	return (
+		<>
+		<SuggestPapersDialog />
 		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
 			<DropdownTrigger>
 				<ReaderAvatar reader={reader} asTrigger />
@@ -177,5 +184,6 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 				<DropdownSection classNames={navbarMenuSectionClasses}>{groups.signOut}</DropdownSection>
 			</DropdownMenu>
 		</Dropdown>
+		</>
 	);
 }
