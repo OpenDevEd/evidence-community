@@ -300,19 +300,13 @@ export async function latestReview(db: Database, itemKey: string) {
 	return latest;
 }
 
-/**
- * Records a request that sent a paper again, so a replay of it later leaves a return alone. Recorded after the
- * submission, so a request that stops between the two takes up the pending review when replayed.
- */
-const noteResend = (db: Database, itemKey: string, requestId: string) =>
+/** Records a request that sent a paper again, so a replay of it later leaves a return alone. */
+const noteResend = (db: Database | DatabaseTransaction, itemKey: string, requestId: string) =>
 	db.update(addedPaper).set({ resendRequestIds: sql`array_append(${addedPaper.resendRequestIds}, ${requestId})` }).where(and(eq(addedPaper.itemKey, itemKey), sql`NOT (${requestId} = ANY(${addedPaper.resendRequestIds}))`));
 
-/** Submits the record for review, noting the request when it sends a paper reviewed before. */
-async function submitAgain(db: Database, config: LibraryServerConfig, itemKey: string, reviewedBefore: boolean, input: AddPapersInput) {
-	const review = await submitItemReview(db, itemKey, reviewerOf(input.actor), config);
-	if (reviewedBefore) await noteResend(db, itemKey, input.requestId);
-	return review;
-}
+/** Submits the record for review, noting the request with it when it sends a paper reviewed before. */
+const submitAgain = (db: Database, config: LibraryServerConfig, itemKey: string, reviewedBefore: boolean, input: AddPapersInput) =>
+	submitItemReview(db, itemKey, reviewerOf(input.actor), config, reviewedBefore ? (transaction) => noteResend(transaction, itemKey, input.requestId) : undefined);
 
 /**
  * Sends one record on, and answers where it got to. A review returned or withdrawn stays so when its own request is
