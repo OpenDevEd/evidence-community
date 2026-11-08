@@ -12,6 +12,7 @@ import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { getAdminReviewSnapshot } from "@/lib/admin/review-query";
+import { openAlexWorkOf } from "@/lib/admin/library-query-service";
 import { runSubmissionStatusCycle } from "@/lib/admin/submission-status";
 import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -134,11 +135,14 @@ it("adds a paper OpenAlex doesn't have from its DOI, and links it to its work on
 		// It belongs to the source from the start, and a scan of OpenAlex never withdraws it.
 		expect(await linked(db, key)).toBe(true);
 		expect((await sync(db, missing.fetch)).unresolved).toBe(1);
+		// Found by its DOI alone, it has no work for the inspector to open on Openscholar.
+		expect(await openAlexWorkOf(db, key)).toBeNull();
 		expect((await record(db, key))?.deleted).toBe(0);
 
 		const arrived = services([work(7, "School leadership support and growth", doi)]);
 		expect((await sync(db, arrived.fetch)).unresolved).toBe(0);
 		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBe("W7");
+		expect(await openAlexWorkOf(db, key)).toBe("W7");
 		expect((await record(db, key))?.title).toBe("School leadership support and growth");
 		expect(await db.select({ key: item.key }).from(item)).toHaveLength(1);
 
