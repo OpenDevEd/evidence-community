@@ -371,7 +371,10 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 		const storage = new MemoryFileStorage();
 		const { lookup } = services([work(60, "Coaching teachers"), work(61, "Lesson study")]);
 		const { results } = await addPapers(db, storage, config, { requestId: "t1", publish: false, actor: creator, papers: [{ openalexId: "W60" }, { openalexId: "W61" }] }, lookup);
-		expect(results.map((result) => result.paper?.title)).toEqual(["Coaching teachers", "Lesson study"]);
+		expect(results.map((result) => result.paper)).toEqual([
+			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60" },
+			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61" },
+		]);
 		// Sent to the queue is what Openscholar recorded itself; nothing waits to be told yet.
 		expect(await db.select().from(submissionStatusDelivery)).toEqual([]);
 

@@ -77,6 +77,8 @@ export function summaryOf(record: { title?: unknown; creators?: unknown; date?: 
 	};
 }
 
+type SentPaper = PaperSummary & { openalexId: string | null; doi: string | null };
+
 export type AddedPaperResult = {
 	/** The paper's place in the request. */
 	at: number;
@@ -85,8 +87,8 @@ export type AddedPaperResult = {
 	itemKey?: string;
 	/** How it was found: on OpenAlex, or only by its DOI, in which case each sync looks for it on OpenAlex again. */
 	foundBy?: "openalex" | "doi";
-	/** What was sent, for the sender's list of submissions: its title, authors and year. */
-	paper?: PaperSummary;
+	/** What was sent, for the sender's list of submissions: its title, authors, year, OpenAlex ID and DOI. */
+	paper?: SentPaper;
 	message?: string;
 };
 
@@ -340,10 +342,10 @@ export async function addPapers(
 	await sendRecords(db, storage, config, made, input, results);
 	// The source imports what was just published from OpenAlex at its next sweep; asked now, it starts right away.
 	if (input.publish && made.length) await requestSourceRun(db, ADDED_PAPERS_SOURCE_CONNECTION_KEY);
-	const sent = new Map(found.map((paper) => [paper.at, summaryOf(paper.payload)]));
+	const sent = new Map(found.map((paper) => [paper.at, { ...summaryOf(paper.payload), openalexId: paper.openalexId, doi: paper.doi }]));
 	return { results: input.papers.map((_, at) => withSummary(results.get(at)!, sent.get(at))) };
 }
 
 /** A paper sent on carries what it is, for the sender's list of submissions. */
-const withSummary = (result: AddedPaperResult, paper: PaperSummary | undefined): AddedPaperResult =>
+const withSummary = (result: AddedPaperResult, paper: SentPaper | undefined): AddedPaperResult =>
 	paper && (result.outcome === "added" || result.outcome === "queued") ? { ...result, paper } : result;
