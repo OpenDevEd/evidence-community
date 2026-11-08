@@ -18,6 +18,7 @@ import type { AdminItemDetail } from "@/lib/admin/types";
 import { adminFieldLabel } from "@/lib/admin/errors";
 import { publishingNeeds } from "@/lib/admin/review-validation";
 import { validationTargetId } from "./admin-validation";
+import { useReturnWords } from "./review-words";
 import type { usePublishingChoice } from "./usePublishingChoice";
 
 export function useReviewReadiness(
@@ -63,7 +64,8 @@ export function ReviewReadiness({
 	requestedChanges?: string | null;
 }) {
 	const { checks, missing, loading } = readiness;
-	const header = readinessHeader(missing > 0 || loading, requestedChanges);
+	const words = useReturnWords();
+	const header = readinessHeader(missing > 0 || loading, requestedChanges, words.state);
 	const [disclosure, setDisclosure] = useState({
 		open: header.open,
 		expanded: header.open,
@@ -183,10 +185,10 @@ export function ReviewReadiness({
 	);
 }
 
-function readinessHeader(blocked: boolean, requestedChanges?: string | null) {
+function readinessHeader(blocked: boolean, requestedChanges: string | null | undefined, returned: string) {
 	if (requestedChanges)
 		return {
-			label: "Changes requested",
+			label: returned,
 			icon: Comment01Icon,
 			className: "text-rose-700 dark:text-rose-300",
 			open: true,

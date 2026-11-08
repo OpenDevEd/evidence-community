@@ -25,7 +25,7 @@ import {
 	itemReview,
 	itemReviewFile,
 } from "@/db/schema/review";
-import { itemFilePublication } from "@/db/schema/source";
+import { addedPaper, itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { publicationTarget } from "@/db/schema/publication";
 import { AdminValidationError } from "./errors";
@@ -273,6 +273,9 @@ async function lockPendingReview(
 	return review;
 }
 
+const isAddedPaper = async (transaction: DatabaseTransaction, itemKey: string) =>
+	(await transaction.select({ itemKey: addedPaper.itemKey }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey)).limit(1)).length > 0;
+
 export async function resolveItemReview(
 	db: Database,
 	input: {
@@ -300,6 +303,11 @@ export async function resolveItemReview(
 		)
 			throw new AdminValidationError(
 				"You can only withdraw your own submission.",
+			);
+		// A paper someone sent can't be changed by them, only sent again: the team declines it with a reason they read.
+		if (input.action === "withdrawn" && review.submittedBy !== actor.userId && (await isAddedPaper(transaction, review.itemKey)))
+			throw new AdminValidationError(
+				"Only the person who sent this paper can withdraw it. Decline it with a reason instead.",
 			);
 		await releaseSourceFileChoices(transaction, review.id);
 		const [updated] = await transaction
