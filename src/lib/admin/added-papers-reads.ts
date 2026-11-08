@@ -104,8 +104,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const after = (cursor: string | null) =>
 	cursor && UUID.test(cursor) ? sql`("addedAt", "id") < (SELECT "addedAt", "id" FROM "addedPaper" WHERE "id" = ${cursor})` : undefined;
 
-/** Papers whose record an editor hasn't unpublished: a paper taken off the community is no longer one of its added papers. */
-const onCommunity = sql`NOT EXISTS (SELECT 1 FROM ${item} WHERE ${item.key} = ${addedPaper.itemKey} AND ${item.deleted} = 1)`;
+/**
+ * The papers still listed: not unpublished by an editor, and not withdrawn from the queue by the person who sent them.
+ * A paper taken off the community, or taken back, is no longer one of its added papers.
+ */
+const onCommunity = sql`NOT EXISTS (SELECT 1 FROM ${item} WHERE ${item.key} = ${addedPaper.itemKey} AND ${item.deleted} = 1)
+	AND NOT (${addedPaper.state} = 'pending' AND (SELECT ${itemReview.state} FROM ${itemReview} WHERE ${itemReview.itemKey} = ${addedPaper.itemKey} ORDER BY ${itemReview.submittedAt} DESC LIMIT 1) IS NOT DISTINCT FROM 'withdrawn')`;
 
 /** Each record's latest review, by key. */
 async function latestReviews(db: Database, keys: readonly string[]) {
