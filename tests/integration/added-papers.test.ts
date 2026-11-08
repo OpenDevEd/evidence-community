@@ -11,7 +11,8 @@ import { item } from "@/db/schema/tables/item";
 import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { approveItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, correctItemReview } from "@/lib/admin/review-service";
+import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage } from "../helpers/file-storage";
@@ -22,11 +23,12 @@ const owner = { userId: "user_owner", name: "Amina Yusuf", role: "owner" } as co
 const creator = { userId: "user_creator", name: "Daniel Mensah", role: "creator" } as const;
 
 /** An OpenAlex work as the API answers, titled by its version so a sync's refresh shows. */
-const work = (id: number, title = `Work ${id}`, doi = `10.1000/w${id}`) => ({
+const work = (id: number, title = `Work ${id}`, doi = `10.1000/w${id}`, published = "2020-01-01") => ({
 	id: `https://openalex.org/W${id}`,
 	doi: `https://doi.org/${doi}`,
 	type: "article",
 	title,
+	publication_date: published,
 	updated_date: "2026-11-08T10:00:00Z",
 });
 
@@ -123,12 +125,52 @@ it("adds a paper OpenAlex doesn't have from its DOI, and links it to its work on
 		expect(results).toEqual([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "doi" }]);
 		const key = results[0]!.itemKey!;
 		expect((await record(db, key))?.title).toBe("School leadership support");
+		// It belongs to the source from the start, and a scan of OpenAlex never withdraws it.
+		expect(await linked(db, key)).toBe(true);
 		expect((await sync(db, missing.fetch)).unresolved).toBe(1);
+		expect((await record(db, key))?.deleted).toBe(0);
 
 		const arrived = services([work(7, "School leadership support and growth", doi)]);
 		expect((await sync(db, arrived.fetch)).unresolved).toBe(0);
 		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBe("W7");
 		expect((await record(db, key))?.title).toBe("School leadership support and growth");
 		expect(await db.select({ key: item.key }).from(item)).toHaveLength(1);
+
+		// An OpenAlex search that finds the same work holds this record too, instead of making another.
+		await db.insert(sourceConnection).values({ key: "oa-leadership", provider: "openalex", scopeKind: "query", config: { name: "Leadership", searchUrl: "/results/1", approvedQuery: { version: "v1", approvedAt: "2026-11-08T10:00:00Z", query: { search: "leadership" } }, downloadPdfs: false } });
+		const [search] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-leadership"));
+		await syncOpenAlexSource({ database: db, sourceConnection: search!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch: (async () => Response.json({ meta: { count: 1, next_cursor: null }, results: [work(7, "School leadership support and growth", doi)] })) as typeof globalThis.fetch, sleep: async () => {} });
+		expect(await db.select({ key: item.key }).from(item)).toHaveLength(1);
+	});
+});
+
+it("keeps a reviewer's correction after the source's first sync, while the fields left alone follow OpenAlex", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(8, "teacher coaching kenya")]);
+		const { results } = await addPapers(db, storage, config, { requestId: "r8", publish: false, actor: creator, papers: [{ openalexId: "W8" }] }, lookup);
+		const key = results[0]!.itemKey!;
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		const record = review!.snapshot.records[0]!;
+		const corrected = await correctItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, records: [{ ...record, payload: { ...record.payload, title: "Teacher coaching in Kenya" } }] }, { userId: "user_editor", role: "editor" });
+		await approveItemReview(db, storage, { reviewId: corrected.id, expectedRevision: corrected.revision }, { userId: "user_editor", role: "editor" }, config);
+		await sync(db, services([work(8, "teacher coaching kenya", "10.1000/w8", "2020-06-15")]).fetch);
+		const [synced] = await db.select().from(item).where(eq(item.key, key));
+		expect(synced?.title).toBe("Teacher coaching in Kenya");
+		expect(synced?.date).toContain("2020-06-15");
+	});
+});
+
+it("finishes sending a paper whose first request stopped before its review was submitted", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(9)]);
+		const request = { requestId: "r9", publish: false, actor: creator, papers: [{ openalexId: "W9" }] };
+		const { results } = await addPapers(db, storage, config, request, lookup);
+		const key = results[0]!.itemKey!;
+		// As if the request had stopped after making the record, before submitting it.
+		await db.delete(itemReview).where(eq(itemReview.itemKey, key));
+		expect((await addPapers(db, storage, config, request, lookup)).results).toEqual([{ at: 0, outcome: "queued", itemKey: key, foundBy: "openalex" }]);
+		expect(await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")))).toHaveLength(1);
 	});
 });

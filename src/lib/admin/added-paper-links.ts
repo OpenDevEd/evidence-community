@@ -11,13 +11,13 @@ type Writer = Pick<DatabaseTransaction, "insert" | "update">;
 /** Ties a record to its OpenAlex work, so the Added papers source's next sync keeps it up to date from OpenAlex. */
 export async function linkAddedPaper(transaction: Writer, itemKey: string, openalexId: string) {
 	await transaction.update(addedPaper).set({ openalexId }).where(eq(addedPaper.itemKey, itemKey));
-	// The link is what the source's sync finds the record by. A paper first found by its DOI keeps the key it was
-	// reserved under: its published row holds that key. ponytail: another OpenAlex source importing the same work later
-	// would not join it, since joins match reserved keys; record the work on the identity if that ever happens.
+	// The link is what the source's sync, and any other OpenAlex source, finds the record by. A paper first found by
+	// its DOI keeps the key it was reserved under: its published row holds that key.
+	// A paper first found by its DOI was linked under its own key; the link now names its work.
 	await transaction
 		.insert(itemSourceLink)
 		.values({ itemKey, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, sourceRecordKey: openalexId })
-		.onConflictDoNothing();
+		.onConflictDoUpdate({ target: [itemSourceLink.itemKey, itemSourceLink.sourceConnectionKey], set: { sourceRecordKey: openalexId } });
 }
 
 /**
@@ -31,5 +31,10 @@ export async function acceptAddedPapers(transaction: Writer, itemKeys: readonly 
 		.set({ state: "accepted", acceptedAt: new Date() })
 		.where(and(inArray(addedPaper.itemKey, [...itemKeys]), eq(addedPaper.state, "pending")))
 		.returning({ itemKey: addedPaper.itemKey, openalexId: addedPaper.openalexId });
-	for (const paper of accepted) if (paper.openalexId) await linkAddedPaper(transaction, paper.itemKey, paper.openalexId);
+	for (const paper of accepted) {
+		if (paper.openalexId) await linkAddedPaper(transaction, paper.itemKey, paper.openalexId);
+		// One found only by its DOI still belongs to the source, under its own key until OpenAlex has it. With no
+		// snapshot from OpenAlex, a scan never withdraws it.
+		else await transaction.insert(itemSourceLink).values({ itemKey: paper.itemKey, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, sourceRecordKey: paper.itemKey }).onConflictDoNothing();
+	}
 }

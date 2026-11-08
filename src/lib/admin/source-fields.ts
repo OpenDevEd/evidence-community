@@ -89,9 +89,14 @@ async function publishFieldOverride(db: DatabaseTransaction, itemKey: string, fi
   await db.insert(itemFieldOverride).values(values).onConflictDoUpdate({target: [itemFieldOverride.itemKey, itemFieldOverride.field], set: values});
 }
 
-export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemKey: string, before: Record<string, unknown>, after: Record<string, unknown>) {
+/**
+ * Records the fields a publish sets apart from the record's sources. On a record's first publish, such as a paper added
+ * by DOI or OpenAlex ID, its source's values stand for what was there before, so only what the editor changed counts.
+ */
+export async function publishSourceFieldOverrides(db: DatabaseTransaction, itemKey: string, published: Record<string, unknown>, after: Record<string, unknown>, { firstPublish = false } = {}) {
   const sources = await sourceValues(db, itemKey);
   if (!sources.length) return;
+  const before = firstPublish ? { ...published, ...sources[0]!.payload } : published;
   const previous = new Map((await db.select().from(itemFieldOverride).where(eq(itemFieldOverride.itemKey, itemKey))).map(row => [row.field, row]));
   const resolutions = sourceResolutionsSchema.parse(after.sourceResolutions ?? {});
   const patch = createItemDraftPatch(before, after);

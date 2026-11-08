@@ -1,10 +1,12 @@
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
-import { eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { addedPaper } from "@/db/schema/source";
+import { itemReview } from "@/db/schema/review";
+import { itemSourceValue } from "@/db/schema/topics";
 import { normalizeDoi } from "@/lib/doi";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { OPENALEX_MAX_IDS_PER_FILTER, OpenAlexClient, worksWithIds } from "@/lib/source-ingestion/openalex/client";
@@ -87,7 +89,7 @@ function paperLookupFor(config: LibraryServerConfig): PaperLookup {
 	};
 }
 
-type Found = { at: number; openalexId: string | null; doi: string | null; payload: Record<string, unknown> };
+type Found = { at: number; openalexId: string | null; doi: string | null; payload: Record<string, unknown>; remoteVersion?: string | null };
 
 /** A draft's payload from an OpenAlex work: what the source's sync would write, so a reviewer sees the same record. */
 function payloadOfWork(work: unknown) {
@@ -107,7 +109,7 @@ async function findOnOpenAlex(refs: readonly Reference[], lookup: PaperLookup, r
 	const doiOnly: { at: number; doi: string }[] = [];
 	for (const ref of refs) {
 		const work = (ref.openalexId && byId.get(ref.openalexId)) || (ref.doi && byDoi.get(ref.doi));
-		if (work) found.push({ at: ref.at, openalexId: workIdOf(work), doi: normalizeDoi((work as { doi?: string | null }).doi) ?? ref.doi, payload: payloadOfWork(work) });
+		if (work) found.push({ at: ref.at, openalexId: workIdOf(work), doi: normalizeDoi((work as { doi?: string | null }).doi) ?? ref.doi, payload: payloadOfWork(work), remoteVersion: (work as { updated_date?: string | null }).updated_date ?? null });
 		else if (ref.doi) doiOnly.push({ at: ref.at, doi: ref.doi });
 		else results.set(ref.at, { at: ref.at, outcome: "not_found", message: "OpenAlex doesn't have this work." });
 	}
@@ -154,6 +156,11 @@ async function createRecord(transaction: DatabaseTransaction, paper: Found, inpu
 	const itemKey = await reserveItemIdentity(transaction, { sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, ...(paper.openalexId ? { sourceRecordKey: paper.openalexId } : {}) });
 	await transaction.update(itemIdentity).set({ kind: "imported", importMethod: "doi" }).where(eq(itemIdentity.key, itemKey));
 	await transaction.insert(itemDraft).values({ itemKey, patch: paper.payload, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY });
+	// What OpenAlex said when the paper arrived: a reviewer's correction is measured against it, so it outlives the
+	// first sync, which also brings the work's topics.
+	if (paper.openalexId) {
+		await transaction.insert(itemSourceValue).values({ itemKey, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, payload: paper.payload, remoteVersion: paper.remoteVersion ?? null, importedTopics: true });
+	}
 	await transaction.insert(addedPaper).values({
 		itemKey,
 		openalexId: paper.openalexId,
@@ -189,6 +196,12 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		const made: Made[] = [];
 		const seen = new Map<string, string>();
 		for (const paper of found) {
+			// Sent by this request before, but not through: its submission or approval didn't finish. It goes on now.
+			const unfinished = known.sent.find((row) => row.requestId === input.requestId && row.state === "pending" && ((paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi)));
+			if (unfinished) {
+				made.push({ at: paper.at, itemKey: unfinished.itemKey, foundBy: unfinished.openalexId ? "openalex" : "doi" });
+				continue;
+			}
 			const answer = knownPaper(paper, known, input.requestId);
 			// The same work named twice in one request, such as by its OpenAlex ID and its DOI.
 			const twice = [paper.openalexId, paper.doi].flatMap((id) => (id && seen.get(id)) || []);
@@ -204,11 +217,12 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 	});
 }
 
-/** Submits each new record as the person who sent it, and publishes it at once when they chose to. */
+/** Submits each new record as the person who sent it, or takes up its pending review, and publishes it at once when they chose to. */
 async function sendRecords(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, made: readonly Made[], input: AddPapersInput, results: Results) {
 	for (const paper of made) {
 		try {
-			const review = await submitItemReview(db, paper.itemKey, input.actor, config);
+			const [pending] = await db.select({ id: itemReview.id, revision: itemReview.revision }).from(itemReview).where(and(eq(itemReview.itemKey, paper.itemKey), eq(itemReview.state, "pending")));
+			const review = pending ?? (await submitItemReview(db, paper.itemKey, input.actor, config));
 			if (input.publish) await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
 			results.set(paper.at, { at: paper.at, outcome: input.publish ? "added" : "queued", itemKey: paper.itemKey, foundBy: paper.foundBy });
 		} catch (error) {
