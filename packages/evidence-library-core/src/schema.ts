@@ -25,6 +25,8 @@ import {
 
 export const SOURCE_PROVIDERS = [
 	"native",
+	// The papers added to the community one at a time, by DOI or OpenAlex ID (OpenDevEd/new-el#773).
+	"added",
 	"zotero",
 	"mendeley",
 	"openalex",
@@ -139,6 +141,7 @@ export const sourceConnection = pgTable(
 			"sourceConnection_scope_valid",
 			sql`(
 				(${table.provider} = 'native' AND ${table.key} = 'native' AND ${table.scopeKind} = 'library' AND ${table.externalScopeKey} IS NULL)
+				OR (${table.provider} = 'added' AND ${table.key} = 'added-papers' AND ${table.scopeKind} = 'library' AND ${table.externalScopeKey} IS NULL)
 				OR (${table.provider} = 'zotero' AND ${table.scopeKind} IN ('group', 'personal-library') AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'mendeley' AND ${table.scopeKind} IN ('group', 'personal-library') AND ${table.externalScopeKey} IS NOT NULL)
 				OR (${table.provider} = 'openalex' AND ${table.scopeKind} = 'query' AND ${table.externalScopeKey} IS NULL)

@@ -57,6 +57,9 @@ export const openAlexWorksConfigSchema = z
 	})
 	.strict();
 
+/** The Added papers source's settings, kept on its connection: it has no settings entry of its own. PDFs start on. */
+export const addedPapersConfigSchema = z.object({ downloadPdfs: z.boolean().default(true) }).strict();
+
 export const openAlexConnectionConfigSchema = openAlexWorksConfigSchema
 	.extend({
 		// The editor retains its unexpanded query, filters and local history ID.

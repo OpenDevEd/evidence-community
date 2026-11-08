@@ -62,7 +62,8 @@ it("indexes every source that holds a record, and searches it again when a sourc
 		expect(await sourcesOf(key)).toEqual(["oa-core", "oa-housing"]);
 		// Each source counts the record, and the community, which reports its own total, holds it once.
 		const searchable = new Map((await readSourceStatuses(db, { hiddenTags: [] })).map((status) => [status.key, status.searchable]));
-		expect(searchable).toEqual(new Map([["oa-core", 1], ["oa-housing", 1]]));
+		// The Added papers source every community has holds none of these.
+		expect(searchable).toEqual(new Map([["added-papers", 0], ["oa-core", 1], ["oa-housing", 1]]));
 		expect(await publicRecordCounter(db, { hiddenTags: [] })()).toBe(1);
 
 		// The second search's weekly full scan no longer finds it: the record stays, held by the first alone.

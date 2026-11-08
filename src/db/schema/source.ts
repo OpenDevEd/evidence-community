@@ -17,8 +17,8 @@ import {
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
-import { relations } from "drizzle-orm";
-import { jsonb, pgTable, primaryKey, varchar } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
+import { check, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import type { OpenAlexApprovedQuery } from "@/lib/source-ingestion/openalex/schema";
 
 import { collection } from "./tables/collection";
@@ -225,4 +225,35 @@ export const sourceRecordAliasRelations = relations(
 			],
 		}),
 	}),
+);
+
+/**
+ * A paper added to the community by DOI or OpenAlex ID (OpenDevEd/new-el#773). Its record waits in the review queue
+ * while `pending`; once `accepted`, the Added papers source keeps it up to date from OpenAlex. A paper OpenAlex
+ * doesn't have yet keeps no `openalexId`, and each sync looks for it there again by its DOI.
+ */
+export const addedPaper = pgTable(
+	"addedPaper",
+	{
+		id: uuid("id").primaryKey().defaultRandom(),
+		itemKey: varchar("itemKey", { length: 64 }).notNull().unique().references(() => itemIdentity.key),
+		openalexId: varchar("openalexId", { length: 32 }),
+		doi: varchar("doi", { length: 512 }),
+		state: text("state", { enum: ["pending", "accepted"] }).notNull(),
+		/** Who sent it: their OpenScholar user, and their name as the queue shows it. */
+		addedBy: varchar("addedBy", { length: 128 }).notNull(),
+		addedByName: varchar("addedByName", { length: 255 }),
+		/** The OpenScholar request that sent it, so a repeated request adds nothing twice. */
+		requestId: varchar("requestId", { length: 128 }).notNull(),
+		addedAt: timestamp("addedAt", { withTimezone: true }).notNull().defaultNow(),
+		acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
+	},
+	(table) => [
+		check("addedPaper_state_valid", sql`${table.state} IN ('pending', 'accepted')`),
+		check("addedPaper_identified", sql`${table.openalexId} IS NOT NULL OR ${table.doi} IS NOT NULL`),
+		uniqueIndex("addedPaper_openalex_unique").on(table.openalexId).where(sql`${table.openalexId} IS NOT NULL`),
+		uniqueIndex("addedPaper_doi_unique").on(table.doi).where(sql`${table.doi} IS NOT NULL`),
+		index("addedPaper_request_idx").on(table.requestId),
+		index("addedPaper_unresolved_idx").on(table.state).where(sql`${table.openalexId} IS NULL`),
+	],
 );

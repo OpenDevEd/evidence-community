@@ -3,7 +3,7 @@
 import OpenScholar from "@/components/icons/OpenScholar";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { CloudIcon, HardDriveIcon } from "@hugeicons/core-free-icons";
+import { CloudIcon, FileAddIcon, HardDriveIcon } from "@hugeicons/core-free-icons";
 import { siZotero } from "simple-icons";
 
 import BrandIcon from "@/components/icons/BrandIcon";
@@ -12,7 +12,7 @@ import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 /**
  * One icon per kind of source, used wherever sources are listed: the
- * library's own records, Zotero groups, OpenAlex searches, OpenScholar collections and any other
+ * library's own records, its added papers, Zotero groups, OpenAlex searches, OpenScholar collections and any other
  * provider.
  */
 export function SourceProviderIcon({
@@ -22,6 +22,9 @@ export function SourceProviderIcon({
 }: { provider: string; size?: number } & Omit<Omit<React.ComponentProps<typeof HugeiconsIcon>, "icon">, "size">) {
 	if (provider === NATIVE_SOURCE_CONNECTION_KEY) {
 		return <HugeiconsIcon icon={HardDriveIcon} aria-hidden size={size} {...props} />;
+	}
+	if (provider === "added") {
+		return <HugeiconsIcon icon={FileAddIcon} aria-hidden size={size} {...props} />;
 	}
 	if (provider === "zotero") {
 		return (

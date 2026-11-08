@@ -23,6 +23,7 @@ export default defineConfig({
 			"tests/integration/open-access.test.ts",
 			"tests/integration/search-requeue.test.ts",
 			"tests/integration/openscholar-source.test.ts",
+			"tests/integration/added-papers.test.ts",
 			"tests/integration/openalex-attachment-processor.test.ts",
 			"tools/verifyCrossrefActivation.ts",
 			"tools/verifyZenodoActivation.ts",
