@@ -23,6 +23,7 @@ const definition: AdminSchemaDefinition = {
 function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 	return {
 		sourceFields: [], importedTopics: [], importChecks: null,
+		openalexId: null,
 		kind: "created",
 		importMethod: null,
 		attachments: [],

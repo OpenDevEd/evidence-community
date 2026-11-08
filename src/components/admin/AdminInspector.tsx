@@ -23,6 +23,7 @@ import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract"
 import { PublishingChoicePanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import OpenScholar from "@/components/icons/OpenScholar";
 import {
 	Add01Icon,
 	CloudUploadIcon,
@@ -1765,6 +1766,8 @@ export function AdminInspector({
     const writebackRestriction = !readOnlyVersion && !liveRecord.editable && liveRecord.state !== "deleted" && originWritebackReason && originWritebackReason !== "ok"
         ? writebackUnavailableMessage[originWritebackReason] : null;
 	const itemUrl = buildAdminPublicItemUrl(liveRecord, identity.baseUrl);
+	// The paper's page on Openscholar, for a record an OpenAlex source holds.
+	const openScholarPaperUrl = detail.openalexId ? new URL(`/papers/${detail.openalexId}`, libraryConfig.authentication.openScholar.siteUrl).toString() : null;
 	const restoring =
 		detail.state === "deleted" &&
 		(Boolean(detail.parentItem) || !detail.draft);
@@ -1852,6 +1855,24 @@ export function AdminInspector({
 									className={`${ADMIN_GROUP_BUTTON} ${ADMIN_GROUP_DIVIDER}`}
 								>
 									<HugeiconsIcon icon={LinkSquare01Icon} aria-hidden size={14} />
+								</Button>
+							</Tooltip>
+						)}
+						{openScholarPaperUrl && (
+							<Tooltip content="Open in Openscholar">
+								<Button
+									as="a"
+									aria-label="Open in Openscholar"
+									href={openScholarPaperUrl}
+									target="_blank"
+									rel="noreferrer"
+									isIconOnly
+									size="xs"
+									variant="transparent"
+									className={`${ADMIN_GROUP_BUTTON} ${ADMIN_GROUP_DIVIDER}`}
+								>
+									{/* Its own title would show as the browser's tooltip beside this one. */}
+									<OpenScholar monochrome aria-hidden className="pointer-events-none size-3.5" />
 								</Button>
 							</Tooltip>
 						)}

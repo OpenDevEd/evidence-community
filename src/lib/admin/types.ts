@@ -160,6 +160,8 @@ export type AdminItemDetail = AdminItemSummary & {
 	filePublication: AdminFilePublication | null;
 	fileRemovalPending: boolean;
 	links: AdminItemLinks;
+	/** The OpenAlex work it is, for its page on Openscholar; null when no OpenAlex source holds it. */
+	openalexId: string | null;
 	/** What OpenAlex says about a published record's open access, whatever an editor chose; null when it has no answer. */
 	openAccessFromSources: boolean | null;
 	/** What the reading found the record to be, whatever an editor chose; null before it is read. */

@@ -4,17 +4,19 @@ import { hasUnsubmittedSourceFileChoice, projectSourcePdf, readSourceFileChoices
 import { readSourceFields } from "./source-fields";
 import { sourceTopicAssignment } from "@/db/schema/topics";
 import "server-only";
+import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 
 import {
 	itemDraft,
 	itemIdentity,
 	itemFileDraft,
+	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { itemFilePublication } from "@/db/schema/source";
+import { addedPaper, itemFilePublication } from "@/db/schema/source";
 import { itemFileRemoval } from "@/db/schema/review";
 import { importChecksOf } from "./import-checks";
 import {
@@ -364,6 +366,22 @@ export async function adminItemLinks(
 	};
 }
 
+/**
+ * The OpenAlex work a record is, when a source that reads OpenAlex works holds it, or an added paper waiting for review
+ * names it (its source link comes with approval): null for one found by DOI alone.
+ */
+export async function openAlexWorkOf(db: Database, itemKey: string) {
+	const [links, added] = await Promise.all([
+		db
+			.select({ key: itemSourceLink.sourceRecordKey })
+			.from(itemSourceLink)
+			.innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+			.where(and(eq(itemSourceLink.itemKey, itemKey), inArray(sourceConnection.provider, [...OPENALEX_WORK_PROVIDERS]))),
+		db.select({ key: addedPaper.openalexId }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey)).limit(1),
+	]);
+	return [...links, ...added].map((row) => row.key).find((key): key is string => typeof key === "string" && /^W\d+$/u.test(key)) ?? null;
+}
+
 export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
@@ -462,9 +480,10 @@ export async function getAdminItemDetail(
 			])
 		: [null, null];
 
-	const [choices, sourcePdfChangePending] = await Promise.all([
+	const [choices, sourcePdfChangePending, openalexId] = await Promise.all([
 		readSourceFileChoices(db, [itemKey]),
 		hasUnsubmittedSourceFileChoice(db, [itemKey, ...attachments.map((attachment) => attachment.key)]),
+		openAlexWorkOf(db, itemKey),
 	]);
 	const sourcePdf = projectSourcePdf(published, choices.get(itemKey), Boolean(filePublication), config);
 	const plainSummary = itemSummary(
@@ -513,6 +532,7 @@ export async function getAdminItemDetail(
 		filePublication: filePublicationJson(filePublication),
 		fileRemovalPending: Boolean(removal) || Boolean(sourcePdf?.fileRemovalPending),
 		links,
+		openalexId,
 		openAccessFromSources: fromSources,
 		readingStudyType,
 		parentItem,
