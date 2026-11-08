@@ -1,5 +1,6 @@
 import { captureItemReviewSnapshot } from "./review-snapshot";
 import { acceptAddedPapers } from "./added-paper-links";
+import { queueSubmissionStatus } from "./submission-status";
 import { readPublicationRepositorySnapshot } from "@/lib/publication/repository";
 import { lockedZenodoIdentifierPolicy } from "@/lib/publication/zenodo-policy";
 import { CrossrefActivationValidationError, ZenodoIdentifierPolicyLockedError } from "@/lib/publication/errors";
@@ -234,6 +235,8 @@ export async function submitItemReview(
 			})
 			.returning();
 		await holdSourceFileChoices(transaction, review!.id, sourcePdfChanges.map((change) => change.itemKey));
+		// Sent again, an added paper waits for review again: that supersedes any earlier word still on its way.
+		await queueSubmissionStatus(transaction, [rootKey]);
 		if (capturedFiles.length)
 			await transaction.insert(itemReviewFile).values(
 				capturedFiles.map(({ itemKey, file, removalId }) => ({
@@ -310,6 +313,7 @@ export async function resolveItemReview(
 			})
 			.where(eq(itemReview.id, review.id))
 			.returning();
+		await queueSubmissionStatus(transaction, [review.itemKey]);
 		return updated!;
 	});
 }
@@ -665,6 +669,7 @@ export async function approveItemReview(
 			await activateChosenIdentifiers(transaction, locked.itemKey, locked.snapshot.publishingChoice, config, actor.userId);
 			// A paper added by DOI or OpenAlex ID is accepted with its record, and kept up to date from now on.
 			await acceptAddedPapers(transaction, keys);
+			await queueSubmissionStatus(transaction, keys);
 			const [published] = await transaction
 				.update(itemReview)
 				.set({

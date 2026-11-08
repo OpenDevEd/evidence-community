@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
-import { and, eq } from "drizzle-orm";
-import { itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
+import { and, desc, eq } from "drizzle-orm";
+import { itemDraft, itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
@@ -12,10 +12,12 @@ import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { getAdminReviewSnapshot } from "@/lib/admin/review-query";
+import { runSubmissionStatusCycle } from "@/lib/admin/submission-status";
+import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { unpublishNativeItem } from "@/lib/admin/native-item-service";
-import { approveItemReview, correctItemReview, resolveItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -71,7 +73,7 @@ it("publishes an owner's paper at once, and the source's sync then keeps that sa
 		const storage = new MemoryFileStorage();
 		const { lookup, fetch } = services([work(1, "Teacher coaching in Kenya")]);
 		const { results } = await addPapers(db, storage, config, { requestId: "r1", publish: true, actor: owner, papers: [{ openalexId: "https://openalex.org/W1" }] }, lookup);
-		expect(results).toEqual([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "openalex" }]);
+		expect(results).toMatchObject([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "openalex" }]);
 		const key = results[0]!.itemKey!;
 		expect((await record(db, key))?.title).toBe("Teacher coaching in Kenya");
 		expect(await linked(db, key)).toBe(true);
@@ -90,7 +92,7 @@ it("keeps a creator's paper in the review queue, out of the sync, until an edito
 		const { lookup, fetch } = services([work(2)]);
 		await expect(addPapers(db, storage, config, { requestId: "r2", publish: true, actor: creator, papers: [{ doi: "10.1000/w2" }] }, lookup)).rejects.toBeInstanceOf(AdminValidationError);
 		const { results } = await addPapers(db, storage, config, { requestId: "r2", publish: false, actor: creator, papers: [{ doi: "https://doi.org/10.1000/W2" }] }, lookup);
-		expect(results).toEqual([{ at: 0, outcome: "queued", itemKey: expect.any(String), foundBy: "openalex" }]);
+		expect(results).toMatchObject([{ at: 0, outcome: "queued", itemKey: expect.any(String), foundBy: "openalex" }]);
 		const key = results[0]!.itemKey!;
 		expect(await record(db, key)).toBeUndefined();
 		expect(await linked(db, key)).toBe(false);
@@ -126,7 +128,7 @@ it("adds a paper OpenAlex doesn't have from its DOI, and links it to its work on
 		const doi = "10.68354/743355";
 		const missing = services([], { [doi]: { itemType: "journalArticle", title: "School leadership support", DOI: doi } });
 		const { results } = await addPapers(db, storage, config, { requestId: "r5", publish: true, actor: owner, papers: [{ doi }] }, missing.lookup);
-		expect(results).toEqual([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "doi" }]);
+		expect(results).toMatchObject([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "doi" }]);
 		const key = results[0]!.itemKey!;
 		expect((await record(db, key))?.title).toBe("School leadership support");
 		// It belongs to the source from the start, and a scan of OpenAlex never withdraws it.
@@ -174,7 +176,7 @@ it("finishes sending a paper whose first request stopped before its review was s
 		const key = results[0]!.itemKey!;
 		// As if the request had stopped after making the record, before submitting it.
 		await db.delete(itemReview).where(eq(itemReview.itemKey, key));
-		expect((await addPapers(db, storage, config, request, lookup)).results).toEqual([{ at: 0, outcome: "queued", itemKey: key, foundBy: "openalex" }]);
+		expect((await addPapers(db, storage, config, request, lookup)).results).toMatchObject([{ at: 0, outcome: "queued", itemKey: key, foundBy: "openalex" }]);
 		expect(await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")))).toHaveLength(1);
 	});
 });
@@ -245,7 +247,7 @@ it("submits a returned paper again when a new request sends it", async () => {
 		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
 		await resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "returned", note: "Add the abstract" }, editor);
 		const again = await addPapers(db, storage, config, { requestId: "r15", publish: true, actor: owner, papers: [{ openalexId: "W14" }] }, lookup);
-		expect(again.results).toEqual([{ at: 0, outcome: "added", itemKey: key, foundBy: "openalex" }]);
+		expect(again.results).toMatchObject([{ at: 0, outcome: "added", itemKey: key, foundBy: "openalex" }]);
 		expect((await record(db, key))?.title).toBe("Work 14");
 	});
 });
@@ -361,5 +363,75 @@ it("takes suggestions from someone outside the team into the review queue only, 
 		await expect(addPapers(db, storage, config, { requestId: "s3", publish: false, actor: reader, papers: more }, moreLookup)).rejects.toThrow(/no more suggested papers/);
 		expect(await db.select().from(addedPaper)).toHaveLength(SUGGESTIONS_PER_PERSON_DAY);
 		expect((await addPapers(db, storage, config, { requestId: "s4", publish: false, actor: creator, papers: more }, moreLookup)).results[0]).toMatchObject({ outcome: "queued" });
+	});
+});
+
+it("tells Openscholar when a sent paper is approved or returned, until it answers, and says what each sent paper is", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(60, "Coaching teachers"), work(61, "Lesson study")]);
+		const { results } = await addPapers(db, storage, config, { requestId: "t1", publish: false, actor: creator, papers: [{ openalexId: "W60" }, { openalexId: "W61" }] }, lookup);
+		expect(results.map((result) => result.paper)).toEqual([
+			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60" },
+			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61" },
+		]);
+		// Each submission is told too, as waiting for review.
+		expect(await db.select().from(submissionStatusDelivery)).toHaveLength(2);
+
+		const [approve, ret] = await Promise.all(results.map(async (result) => (await db.select().from(itemReview).where(eq(itemReview.itemKey, result.itemKey!)))[0]!));
+		await approveItemReview(db, storage, { reviewId: approve!.id, expectedRevision: approve!.revision }, { userId: "user_editor", role: "editor" }, config);
+		await resolveItemReview(db, { reviewId: ret!.id, expectedRevision: ret!.revision, action: "returned", note: "Not about teachers" }, editor);
+
+		const sent: Record<string, unknown>[] = [];
+		let up = false;
+		const openscholar = (async (_url: string | URL, init?: RequestInit) => {
+			if (!up) return new Response("down", { status: 503 });
+			const body = JSON.parse(String(init?.body));
+			sent.push(body);
+			return Response.json({ idempotencyKey: body.idempotencyKey, generation: body.generation });
+		}) as typeof globalThis.fetch;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect((await db.select().from(submissionStatusDelivery)).map((row) => row.attempts)).toEqual([1, 1]);
+
+		up = true;
+		await db.update(submissionStatusDelivery).set({ nextAttemptAt: new Date() });
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(sent.map(({ itemKey, status, note, clerkUserId }) => ({ itemKey, status, note, clerkUserId })).sort((a, b) => String(a.status).localeCompare(String(b.status)))).toEqual([
+			{ itemKey: results[0]!.itemKey, status: "published", note: null, clerkUserId: "user_creator" },
+			{ itemKey: results[1]!.itemKey, status: "returned", note: "Not about teachers", clerkUserId: "user_creator" },
+		]);
+		expect((await db.select().from(submissionStatusDelivery)).every((row) => row.nextAttemptAt === null)).toBe(true);
+	});
+});
+
+it("sends a resubmitted paper as waiting again, from its new sender, and keeps an accepted paper published whatever later edits do", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(70), work(71)]);
+		const reader = { userId: "user_reader", name: "Grace Otieno", role: "reader" } as const;
+		const told: { itemKey: string; status: string; clerkUserId: string }[] = [];
+		const openscholar = (async (_url: string | URL, init?: RequestInit) => {
+			const body = JSON.parse(String(init?.body));
+			told.push({ itemKey: body.itemKey, status: body.status, clerkUserId: body.clerkUserId });
+			return Response.json({ idempotencyKey: body.idempotencyKey, generation: body.generation });
+		}) as typeof globalThis.fetch;
+		const latest = async (itemKey: string) => (await db.select().from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)))[0]!;
+
+		// Returned, then sent again by someone else before that word went out: the new submission is what's told.
+		const returned = (await addPapers(db, storage, config, { requestId: "u1", publish: false, actor: creator, papers: [{ openalexId: "W70" }] }, lookup)).results[0]!.itemKey!;
+		const first = await latest(returned);
+		await resolveItemReview(db, { reviewId: first.id, expectedRevision: first.revision, action: "returned", note: "Not yet" }, editor);
+		await addPapers(db, storage, config, { requestId: "u2", publish: false, actor: reader, papers: [{ openalexId: "W70" }] }, lookup);
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "queued", clerkUserId: "user_reader" }]);
+
+		// Published, then an edit to it is returned: it stays published.
+		const live = (await addPapers(db, storage, config, { requestId: "u3", publish: true, actor: owner, papers: [{ openalexId: "W71" }] }, lookup)).results[0]!.itemKey!;
+		await db.insert(itemDraft).values({ itemKey: live, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, patch: { title: "Work 71, edited" } }).onConflictDoUpdate({ target: itemDraft.itemKey, set: { patch: { title: "Work 71, edited" } } });
+		const edit = await submitItemReview(db, live, { userId: "user_creator", role: "creator" }, config);
+		await resolveItemReview(db, { reviewId: edit.id, expectedRevision: edit.revision, action: "returned", note: "Keep the title" }, editor);
+		told.length = 0;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === live)).toEqual([{ itemKey: live, status: "published", clerkUserId: "user_owner" }]);
 	});
 });

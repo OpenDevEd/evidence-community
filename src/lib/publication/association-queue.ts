@@ -3,15 +3,15 @@ import { sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
-/** Both publication feeds use the same lease and supersession rules. */
+/** Every feed to Openscholar uses the same lease and supersession rules. */
 export async function runAssociationDeliveryCycle(
   database: Database,
-  tableName: "authorAssociationDelivery" | "topicAssociationDelivery",
+  tableName: "authorAssociationDelivery" | "topicAssociationDelivery" | "submissionStatusDelivery",
   deliver: (job: {itemKey: string; revision: number; generation: number}, leaseToken: string) => Promise<void>,
 ) {
   const token = randomUUID();
   const table = sql.identifier(tableName);
-  const generation = sql.identifier(tableName === "topicAssociationDelivery" ? "generation" : "revision");
+  const generation = sql.identifier(tableName === "authorAssociationDelivery" ? "revision" : "generation");
   const claimed = await database.execute<{itemKey: string; revision: number; generation: number; attempts: number}>(sql`
     UPDATE ${table} SET "leaseToken" = ${token}, "leaseExpiresAt" = now() + interval '60 seconds'
     WHERE "itemKey" = (SELECT "itemKey" FROM ${table}

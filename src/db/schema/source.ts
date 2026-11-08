@@ -18,11 +18,12 @@ import {
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
 import { relations, sql } from "drizzle-orm";
-import { boolean, check, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, index, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid, varchar } from "drizzle-orm/pg-core";
 import type { OpenAlexApprovedQuery } from "@/lib/source-ingestion/openalex/schema";
 
 import { collection } from "./tables/collection";
 import { item } from "./tables/item";
+import { associationDeliveryColumns } from "./author-associations";
 
 export {
 	collectionIdentity,
@@ -260,4 +261,19 @@ export const addedPaper = pgTable(
 		index("addedPaper_suggested_idx").on(table.addedAt).where(sql`${table.suggested}`),
 		index("addedPaper_added_by_idx").on(table.addedBy, table.addedAt),
 	],
+);
+
+/**
+ * An added paper's change of state for Openscholar to keep (OpenDevEd/new-el#778): approved, returned or withdrawn.
+ * A newer change of the same paper takes the row over; each is sent until Openscholar answers.
+ */
+export const submissionStatusDelivery = pgTable(
+	"submissionStatusDelivery",
+	{
+		itemKey: varchar("itemKey", { length: 64 }).primaryKey(),
+		generation: bigint("generation", { mode: "number" }).notNull().default(1),
+		payload: jsonb("payload").$type<Record<string, unknown>>(),
+		...associationDeliveryColumns,
+	},
+	(table) => [index("submissionStatusDelivery_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)],
 );

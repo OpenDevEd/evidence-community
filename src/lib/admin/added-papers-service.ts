@@ -57,6 +57,28 @@ export type AddPapersInput = {
 	papers: PaperReference[];
 };
 
+/** A paper as a list of added papers shows it: its title, authors and year. */
+export type PaperSummary = { title: string; authors: string; year: number | null };
+
+
+type Creator = { firstName?: unknown; lastName?: unknown; name?: unknown };
+
+/** The title, first authors and year a record's payload or row holds. */
+export function summaryOf(record: { title?: unknown; creators?: unknown; date?: unknown }): PaperSummary {
+	const names = (Array.isArray(record.creators) ? (record.creators as Creator[]) : []).flatMap((creator) => {
+		const name = typeof creator.name === "string" ? creator.name : [creator.firstName, creator.lastName].filter((part) => typeof part === "string" && part).join(" ");
+		return name ? [name] : [];
+	});
+	const year = typeof record.date === "string" ? Number(record.date.match(/\b(\d{4})\b/u)?.[1]) || null : null;
+	return {
+		title: typeof record.title === "string" && record.title.trim() ? record.title.trim() : "Untitled",
+		authors: names.length > 3 ? `${names.slice(0, 3).join(", ")} et al.` : names.join(", "),
+		year,
+	};
+}
+
+type SentPaper = PaperSummary & { openalexId: string | null; doi: string | null };
+
 export type AddedPaperResult = {
 	/** The paper's place in the request. */
 	at: number;
@@ -65,6 +87,8 @@ export type AddedPaperResult = {
 	itemKey?: string;
 	/** How it was found: on OpenAlex, or only by its DOI, in which case each sync looks for it on OpenAlex again. */
 	foundBy?: "openalex" | "doi";
+	/** What was sent, for the sender's list of submissions: its title, authors, year, OpenAlex ID and DOI. */
+	paper?: SentPaper;
 	message?: string;
 };
 
@@ -318,5 +342,10 @@ export async function addPapers(
 	await sendRecords(db, storage, config, made, input, results);
 	// The source imports what was just published from OpenAlex at its next sweep; asked now, it starts right away.
 	if (input.publish && made.length) await requestSourceRun(db, ADDED_PAPERS_SOURCE_CONNECTION_KEY);
-	return { results: input.papers.map((_, at) => results.get(at)!) };
+	const sent = new Map(found.map((paper) => [paper.at, { ...summaryOf(paper.payload), openalexId: paper.openalexId, doi: paper.doi }]));
+	return { results: input.papers.map((_, at) => withSummary(results.get(at)!, sent.get(at))) };
 }
+
+/** A paper sent on carries what it is, for the sender's list of submissions. */
+const withSummary = (result: AddedPaperResult, paper: SentPaper | undefined): AddedPaperResult =>
+	paper && (result.outcome === "added" || result.outcome === "queued") ? { ...result, paper } : result;
