@@ -16,7 +16,7 @@ import {
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { itemFilePublication } from "@/db/schema/source";
+import { addedPaper, itemFilePublication } from "@/db/schema/source";
 import { itemFileRemoval } from "@/db/schema/review";
 import { importChecksOf } from "./import-checks";
 import {
@@ -366,14 +366,20 @@ export async function adminItemLinks(
 	};
 }
 
-/** The OpenAlex work a record is, when a source that reads OpenAlex works holds it: null for one found by DOI alone. */
+/**
+ * The OpenAlex work a record is, when a source that reads OpenAlex works holds it, or an added paper waiting for review
+ * names it (its source link comes with approval): null for one found by DOI alone.
+ */
 export async function openAlexWorkOf(db: Database, itemKey: string) {
-	const rows = await db
-		.select({ key: itemSourceLink.sourceRecordKey })
-		.from(itemSourceLink)
-		.innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-		.where(and(eq(itemSourceLink.itemKey, itemKey), inArray(sourceConnection.provider, [...OPENALEX_WORK_PROVIDERS])));
-	return rows.map((row) => row.key).find((key) => /^W\d+$/u.test(key)) ?? null;
+	const [links, added] = await Promise.all([
+		db
+			.select({ key: itemSourceLink.sourceRecordKey })
+			.from(itemSourceLink)
+			.innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+			.where(and(eq(itemSourceLink.itemKey, itemKey), inArray(sourceConnection.provider, [...OPENALEX_WORK_PROVIDERS]))),
+		db.select({ key: addedPaper.openalexId }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey)).limit(1),
+	]);
+	return [...links, ...added].map((row) => row.key).find((key): key is string => typeof key === "string" && /^W\d+$/u.test(key)) ?? null;
 }
 
 export async function getAdminItemDetail(

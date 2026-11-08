@@ -97,6 +97,8 @@ it("keeps a creator's paper in the review queue, out of the sync, until an edito
 		const key = results[0]!.itemKey!;
 		expect(await record(db, key)).toBeUndefined();
 		expect(await linked(db, key)).toBe(false);
+		// Its reviewer opens it on Openscholar while it waits, before it has a source link.
+		expect(await openAlexWorkOf(db, key)).toBe("W2");
 
 		// The sync publishes nothing that waits for review.
 		await sync(db, fetch);

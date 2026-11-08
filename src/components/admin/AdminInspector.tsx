@@ -1767,8 +1767,7 @@ export function AdminInspector({
         ? writebackUnavailableMessage[originWritebackReason] : null;
 	const itemUrl = buildAdminPublicItemUrl(liveRecord, identity.baseUrl);
 	// The paper's page on Openscholar, for a record an OpenAlex source holds.
-	const openScholarSite = useLibraryConfig().authentication.openScholar.siteUrl;
-	const openScholarPaperUrl = detail.openalexId ? new URL(`/papers/${detail.openalexId}`, openScholarSite).toString() : null;
+	const openScholarPaperUrl = detail.openalexId ? new URL(`/papers/${detail.openalexId}`, libraryConfig.authentication.openScholar.siteUrl).toString() : null;
 	const restoring =
 		detail.state === "deleted" &&
 		(Boolean(detail.parentItem) || !detail.draft);
