@@ -102,7 +102,7 @@ function DraftAuthors({ row }: { row: ImportRow }) {
 function sendVerbs(canPublish: boolean) {
 	return canPublish
 		? { act: "Publish", after: "", doing: "Publishing", done: "published", to: "to publish" }
-		: { act: "Submit", after: " for review", doing: "Submitting", done: "submitted", to: "to submit" };
+		: { act: "Send", after: " to the queue", doing: "Sending to the queue", done: "sent to the queue", to: "to send to the queue" };
 }
 
 type SendVerbs = ReturnType<typeof sendVerbs>;
@@ -145,7 +145,7 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, routeOf(batch), id, kind), row: rowById.get(id)! }] : []));
 	// While the server sends the drafts on, it does as the person who imported them could, whoever looks now.
-	const verbs = sendVerbs(batch.send && serverSending(batch) ? batch.send.action === "publish" : canPublish);
+	const verbs = sendVerbs(batch.send && serverSending(batch) ? batch.send.action === "publish" : (batch.sendApproves ?? canPublish));
 	const { routeHeld, sentIds, started } = sending(batch);
 	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again. One that
 	// still needs a field the route asks for waits until the editor completes it in the record.
@@ -177,8 +177,10 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		passing: publishable.filter(({ applied, row }) => rowPasses(row, applied)).length,
 		pdfs: pdfs.length,
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
-		/** "Publish 3", "Submit 3 for review", then the progress. */
+		/** "Publish 3", "Send 3 to the queue", then the progress. */
 		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${verbs.act}${chosen.size ? ` ${chosen.size}` : ""}${verbs.after}`,
+		/** For an Editor or Owner, the other way on: to the review queue instead of published. */
+		queueLabel: `Send${chosen.size ? ` ${chosen.size}` : ""} to the queue`,
 		/** Drafts sent on so far, which stay out of the ticks. */
 		sentIds,
 		/** Whether the DOI route can still change for the drafts to come. */

@@ -68,7 +68,7 @@ import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfI
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
-import { setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
+import { approveAdminReview, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
 import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
@@ -407,10 +407,18 @@ function hasChangeToSubmit(detail: AdminItemDetail) {
 }
 
 /** A review is always for the whole record, so an attachment submits its record with it. */
-function reviewSubmission(detail: AdminItemDetail) {
-	const message = "The Editor reviews this version. Further edits stay in the working draft.";
+/** The confirmation's title and button for sending a version on. */
+const sendDialog = (publish: boolean) =>
+	publish
+		? { title: "Publish this version?", confirmLabel: "Publish" }
+		: { title: "Send this version to the review queue?", confirmLabel: "Send to queue" };
+
+function reviewSubmission(detail: AdminItemDetail, publish: boolean) {
+	const message = publish
+		? "Readers see this version now. Further edits stay in the working draft."
+		: "An Editor reviews this version. Further edits stay in the working draft.";
 	return detail.parentItem
-		? { reviewKey: detail.parentItem, message: `This attachment goes to review with its record. ${message}` }
+		? { reviewKey: detail.parentItem, message: `This attachment goes with its record. ${message}` }
 		: { reviewKey: detail.key, message };
 }
 
@@ -1353,25 +1361,35 @@ export default function AdminWorkbench({
 		return true;
 	};
 
-	const publishCurrent = () => {
+	/**
+	 * Sends the record on: to the review queue, or, for an Editor or Owner who chooses Publish, through it at once,
+	 * submitted and approved in one step as PDF import does.
+	 */
+	const sendCurrent = (publish: boolean) => {
         if (!detail || !hasChangeToSubmit(detail)) return;
         const recordKey = detail.key;
-        const { reviewKey, message } = reviewSubmission(detail);
+        const { reviewKey, message } = reviewSubmission(detail, publish);
         // Set once the attachment's own edits are saved: a failure after that is the record's, shown on the record.
         let attachmentSaved = false;
-        setConfirmDialog({title: "Submit snapshot for review?", message, confirmLabel: "Submit snapshot", action: async () => {
+        setConfirmDialog({...sendDialog(publish), message, action: async () => {
             if (detail.draft) await flushDraft(recordKey, draftPayload);
             attachmentSaved = true;
-            // The record's own unsaved edits go with it too.
-            if (reviewKey !== recordKey) await flushDraft(reviewKey);
-            await submitAdminReview(reviewKey);
-            await mutate(["admin-reviews", reviewKey]);
-            await Promise.all([loadDetail(recordKey), loadItems()]);
-            toast.success("Snapshot submitted for review");
+            await sendVersion(recordKey, reviewKey, publish);
         },
         // A record that isn't ready opens beside the error, with what it still needs.
         onError: reviewKey === recordKey ? undefined : () => { if (attachmentSaved) setSelectedKey(reviewKey); }});
     };
+
+	/** Submits the version for review and, when publishing, approves it, then shows where it stands. */
+	const sendVersion = async (recordKey: string, reviewKey: string, publish: boolean) => {
+		// The record's own unsaved edits go with it too.
+		if (reviewKey !== recordKey) await flushDraft(reviewKey);
+		const review = await submitAdminReview(reviewKey);
+		if (publish) await approveAdminReview(review.id, review.revision);
+		await mutate(["admin-reviews", reviewKey]);
+		await Promise.all([loadDetail(recordKey), loadItems()]);
+		toast.success(publish ? "Published" : "Sent to the review queue");
+	};
 
 	const manageSources = () => {
 		askWritebackSources("manage");
@@ -2795,7 +2813,7 @@ export default function AdminWorkbench({
 							}}
 							onOpenDraft={openCurrentDraft}
 							onManageSources={manageSources}
-							onPublish={publishCurrent}
+							onPublish={sendCurrent}
 							onWritebackResolved={(result) => {
 								if (!detail) return;
 								const recordKey = detail.key;

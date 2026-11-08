@@ -34,6 +34,7 @@ import {
 	AttachmentIcon,
 	Cancel01Icon,
 	CheckmarkBadge01Icon,
+	InboxIcon,
 	Copy01Icon,
 	Delete02Icon,
 	Download01Icon,
@@ -1601,7 +1602,8 @@ export function AdminInspector({
 	previewReview?: PreviewReview;
 	onOpenDraft: () => void;
 	onManageSources: () => void;
-	onPublish: () => void;
+	/** Sends the working draft on: to the review queue, or published at once by an Editor or Owner. */
+	onPublish: (publish: boolean) => void;
 	onPublicationChanged: (
 		receipts?: readonly AdminSearchIndexReceipt[],
 	) => Promise<void>;
@@ -1769,12 +1771,7 @@ export function AdminInspector({
 	// An attachment acts like its record: Edit, then Submit for review, which sends the record with it. One it can't
 	// change has no main action.
 	const showPrimaryAction = !detail.parentItem || detail.editable || sourcePdfChange;
-	const primaryAction = {
-		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
-		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
-		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
-		submit: { label: "Submit for review", icon: SentIcon, onPress: onPublish },
-	}[
+	const primaryKey =
 		sourcePdfChange && !detail.draft
 			? "submit"
 			: !detail.editable && !readOnlyVersion
@@ -1783,8 +1780,15 @@ export function AdminInspector({
 				? "restore"
 				: !detail.draft
 					? "edit"
-					: "submit"
-	];
+					: "submit";
+	const primaryAction = {
+		duplicate: { label: "Duplicate as native", icon: Copy01Icon, onPress: onDuplicate },
+		restore: { label: "Restore", icon: ArchiveRestoreIcon, onPress: onRestore },
+		edit: { label: "Edit", icon: PencilIcon, onPress: onOpenDraft },
+		submit: { label: "Send to queue", icon: InboxIcon, onPress: () => onPublish(false) },
+	}[primaryKey];
+	// An Editor or Owner sends a version to the review queue, or publishes it at once.
+	const choosesPublish = primaryKey === "submit" && canPublish;
 	const primaryDisabled =
 		busy ||
 		readOnlyVersion ||
@@ -2112,11 +2116,12 @@ export function AdminInspector({
 							(showPrimaryAction && (
 								<Button
 									size="xs"
+									// Beside Publish, sending to the queue is the quieter choice.
 									color={
-										primaryDisabled ? "secondary" : "accent"
+										primaryDisabled || choosesPublish ? "secondary" : "accent"
 									}
 									variant={
-										primaryDisabled ? "muted" : "solid"
+										primaryDisabled || choosesPublish ? "muted" : "solid"
 									}
 									className="h-9 min-w-0 flex-1 gap-1.5 rounded-xl px-3 font-semibold"
 									isDisabled={primaryDisabled}
@@ -2131,6 +2136,19 @@ export function AdminInspector({
 									{primaryAction.label}
 								</Button>
 							))}
+						{!versionActions && showPrimaryAction && choosesPublish && (
+							<Button
+								size="xs"
+								color={primaryDisabled ? "secondary" : "accent"}
+								variant={primaryDisabled ? "muted" : "solid"}
+								className="h-9 min-w-0 flex-1 gap-1.5 rounded-xl px-3 font-semibold"
+								isDisabled={primaryDisabled}
+								onPress={() => onPublish(true)}
+								startContent={<HugeiconsIcon icon={CheckmarkBadge01Icon} size={14} />}
+							>
+								Publish
+							</Button>
+						)}
 						{versionWithdraw}
 					</div>
 					)

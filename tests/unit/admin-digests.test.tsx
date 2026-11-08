@@ -109,12 +109,12 @@ describe("digests in the admin", () => {
 		expect(text()).toContain("Eunice Jengo");
 		expect(text()).toContain("edited the text");
 		expect(button(/Publish/)).toHaveLength(0);
-		await press(button("Send for review")[0]);
+		await press(button("Send to queue")[0]);
 		await settle();
 		expect(mocked.moveAdminDigest).toHaveBeenCalledWith(ID, 3, "submit");
 		expect(text()).toContain("Waiting for an editor");
 		expect(button("Take back")).toHaveLength(1);
-		expect(button("Send for review")).toHaveLength(0);
+		expect(button("Send to queue")).toHaveLength(0);
 	});
 
 	it("offers an Editor the way back and publishing, and says what publishing does", async () => {

@@ -67,8 +67,11 @@ const adminImportCommitRequestSchema = z.object({
 		.refine((records) => new Set(records.map(({ id }) => id)).size === records.length, {
 			message: "Each record must be unique.",
 		}),
-	/** A PDF import's drafts go on once their PDFs are attached, with this DOI route (null: no DOI); left out, they stay drafts. */
-	send: z.object({ route: z.enum(["zenodo", "crossref-zenodo"]).nullable() }).nullable().optional(),
+	/**
+	 * A PDF import's drafts go on once their PDFs are attached, with this DOI route (null: no DOI), published when an
+	 * Editor or Owner chooses to and otherwise sent to the review queue; left out, they stay drafts.
+	 */
+	send: z.object({ route: z.enum(["zenodo", "crossref-zenodo"]).nullable(), publish: z.boolean().default(true) }).nullable().optional(),
 });
 
 export const adminImportRequestSchema = z.discriminatedUnion("action", [

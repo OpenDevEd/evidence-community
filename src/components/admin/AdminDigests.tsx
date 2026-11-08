@@ -387,7 +387,9 @@ const narrow = "h-9 shrink-0 rounded-xl px-3";
 const readers = (count: number) => `${count.toLocaleString("en-GB")} ${count === 1 ? "reader" : "readers"}`;
 
 type Offer = { action: DigestAction; label: string; icon: IconSvgElement; primary?: boolean; wide?: boolean };
-const SUBMIT: Offer = { action: "submit", label: "Send for review", icon: InboxIcon, primary: true, wide: true };
+const SUBMIT: Offer = { action: "submit", label: "Send to queue", icon: InboxIcon, primary: true, wide: true };
+/** For an Editor or Owner, beside Publish: the same edition to the review queue instead. */
+const QUEUE: Offer = { action: "submit", label: "Send to queue", icon: InboxIcon, wide: true };
 const WITHDRAW: Offer = { action: "withdraw", label: "Take back", icon: ArrowTurnBackwardIcon, wide: true };
 const RETURN: Offer = { action: "return", label: "Send back", icon: ArrowTurnBackwardIcon };
 
@@ -396,7 +398,7 @@ function offersFor(digest: AdminDigest, canPublish: boolean): Offer[] {
 	const publish: Offer = digest.published
 		? { action: "publish", label: "Publish changes", icon: CheckmarkBadge01Icon, primary: true, wide: true }
 		: { action: "publish", label: "Publish and send", icon: MailSend01Icon, primary: true, wide: true };
-	const offers: Partial<Record<DigestState, Offer[]>> = canPublish ? { draft: [publish], review: [RETURN, publish] } : { draft: [SUBMIT], review: [WITHDRAW] };
+	const offers: Partial<Record<DigestState, Offer[]>> = canPublish ? { draft: [QUEUE, publish], review: [RETURN, publish] } : { draft: [SUBMIT], review: [WITHDRAW] };
 	return offers[digest.state] ?? [];
 }
 

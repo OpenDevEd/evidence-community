@@ -129,10 +129,10 @@ async function startLookupImport(inputs: { collections: string[]; doiText: strin
 
 /** Imports the chosen records as drafts. A PDF import is kept on the server, which gives each new draft its PDF. */
 /** Sent on, the server publishes or submits each draft of a PDF import as its PDF is attached, so closing the tab doesn't stop it. */
-const sendOf = (batch: ImportBatch) => (batch.kind === "pdfs" && batch.outcome === "send" ? { route: batch.publishRoute } : null);
+const sendOf = (batch: ImportBatch, publish: boolean) => (batch.kind === "pdfs" && batch.outcome === "send" ? { route: batch.publishRoute, publish } : null);
 
-async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"]) {
-	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled), send: sendOf(batch) };
+async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"], publish: boolean) {
+	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled), send: sendOf(batch, publish) };
 	changeImportBatch(batch, (current) => ({ ...current, committing: true }));
 	try {
 		const { results } = batch.kind === "pdfs" ? await commitAdminPdfImport(input) : await commitAdminImport(input);
@@ -250,6 +250,7 @@ async function sendDrafts(batch: ImportBatch, drafts: readonly SentDraft[], appr
 	const mark: Mark = (id, state, review) => changeImportBatch(batch, (current) => ({ ...current, publish: new Map(current.publish).set(id, state), reviews: review ? { ...current.reviews, [id]: review } : current.reviews }));
 	// Without the import's status, or with an edit to one of them that couldn't be saved, nothing is sent, and the drafts can be tried again.
 	const failAll = (caught: unknown) => drafts.forEach(({ id }) => mark(id, { message: publishError(caught), state: "failed" }));
+	changeImportBatch(batch, (current) => ({ ...current, sendApproves: approve }));
 	for (const { id } of drafts) mark(id, { state: "sending" });
 	try {
 		await onBeforeSend(drafts.map(({ itemKey }) => itemKey));
@@ -393,7 +394,8 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		choicesOf,
 		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
 		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), batch?.outcome === "send" ? batch.publishRoute : "later"),
-		commit: () => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported) : undefined)),
+		/** `publish`: an Editor or Owner sends the drafts on published, not to the review queue. */
+		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish) : undefined)),
 		error,
 		filter,
 		finish: () => void finish(),

@@ -265,7 +265,7 @@ const fullConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 const SEND = { actor: { role: "editor" as const, userId: EDITOR }, route: "zenodo" as const };
 
 /** Reads the PDFs (dated.pdf has a date, any other none) and imports them all, to be sent on with Zenodo DOIs. */
-async function importToSend(db: Database, storage: MemoryFileStorage, names: string[]) {
+async function importToSend(db: Database, storage: MemoryFileStorage, names: string[], send: { actor: typeof SEND.actor; route: typeof SEND.route; publish?: boolean } = SEND) {
 	const reading = (title: string, date?: string) => ({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { abstractNote: "What the report found.", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "report", title, ...(date ? { date } : {}) } });
 	readImportPdf.mockReset().mockImplementation(async (_: unknown, { filename }: { filename: string }) => (filename === "dated.pdf" ? reading("A dated report", "2024-06-12") : reading("An undated report")));
 	const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: names.map(pdfFile), instructions: "" });
@@ -276,7 +276,7 @@ async function importToSend(db: Database, storage: MemoryFileStorage, names: str
 	await runPdfImportCycle(db, storage, fullConfig);
 	const files = (await pdfImportStatus(db)).import!.files;
 	const records = files.map((file) => ({ id: file.rowId, method: "pdf" as const, payload: file.reading!.record.payload! }));
-	const { results } = await commitPdfImport(db, { collections: [], importId: started.id, records, send: SEND });
+	const { results } = await commitPdfImport(db, { collections: [], importId: started.id, records, send });
 	return { files, importId: started.id, keyOf: (row: string) => results.find(({ id }) => id === row)!.itemKey! };
 }
 
@@ -295,6 +295,21 @@ test("sends the imported drafts on once their PDFs are attached, and holds one i
 		expect(status.sending).toEqual({ [rowOf("undated.pdf")]: { message: expect.stringMatching(/date/iu), state: "held" } });
 		expect((await getItemPublishingChoice(db, keyOf(rowOf("undated.pdf")), fullConfig)).choice).toBeNull();
 		// The import stays open until nothing waits to be sent; then it closes.
+		await closePdfImport(db, storage, importId);
+	});
+});
+
+test("sends an editor's drafts to the review queue when the editor chose the queue over publishing", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { files, importId, keyOf } = await importToSend(db, storage, ["dated.pdf"], { ...SEND, publish: false });
+		await runPdfImportCycle(db, storage, fullConfig);
+		await runPdfImportCycle(db, storage, fullConfig);
+
+		const itemKey = keyOf(files[0]!.rowId);
+		expect((await pdfImportStatus(db)).import!.send).toEqual({ action: "submit", route: "zenodo" });
+		expect(await db.select({ key: item.key }).from(item).where(eq(item.key, itemKey))).toEqual([]);
+		expect(await db.select({ state: itemReview.state, submittedBy: itemReview.submittedBy }).from(itemReview).where(eq(itemReview.itemKey, itemKey))).toEqual([{ state: "pending", submittedBy: EDITOR }]);
 		await closePdfImport(db, storage, importId);
 	});
 });

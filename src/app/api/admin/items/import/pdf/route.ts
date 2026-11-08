@@ -56,11 +56,11 @@ const actions: Record<string, (runtime: Runtime, body: unknown, actor: ReviewAct
 	},
 };
 
-/** Imports the chosen records; drafts sent on go as the person importing them, published by an editor or owner, submitted by anyone else. */
+/** Imports the chosen records; drafts sent on go as the person importing them, published when an editor or owner chose to, otherwise sent to the review queue. */
 async function commit(runtime: Runtime, body: unknown, actor: ReviewActor) {
 	const request = adminImportRequestSchema.parse({ ...(body as object), action: "commit" });
 	if (request.action !== "commit") throw new AdminValidationError("Choose the records to import.");
-	return commitPdfImport(runtime.db, { ...request, send: request.send ? { actor, route: request.send.route } : null });
+	return commitPdfImport(runtime.db, { ...request, send: request.send ? { actor, route: request.send.route, publish: request.send.publish } : null });
 }
 
 /**

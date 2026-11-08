@@ -7,7 +7,11 @@ import type { ReviewActor } from "@/lib/admin/review-service";
 import type { PublishingChoice } from "@/lib/admin/review-contract";
 
 /** Sending an import's drafts on as the editor who imported them, with the DOI route they chose (null: no DOI). */
-export type ImportSend = { actor: ReviewActor; route: PublishingChoice["route"] | null } | null;
+/** `publish`: whether the importer chose to publish; an import saved before the choice existed published for an Editor or Owner. */
+export type ImportSend = { actor: ReviewActor; route: PublishingChoice["route"] | null; publish?: boolean } | null;
+
+/** Whether an import's drafts are published as they go on, not sent to the review queue: only by an Editor or Owner who chose to. */
+export const sendPublishes = (send: NonNullable<ImportSend>) => send.actor.role !== "creator" && send.publish !== false;
 
 /** The library's PDF import: one at a time, read in the publication worker, closed once imported or discarded. */
 export const pdfImport = pgTable("pdfImport", {
