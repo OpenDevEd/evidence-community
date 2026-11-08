@@ -1,12 +1,15 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DatabaseTransaction } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 
-import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "./constants";
+import { openAlexItemKeys } from "@/lib/source-ingestion/openalex/references";
 
-type Writer = Pick<DatabaseTransaction, "insert" | "update">;
+import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "./constants";
+import { AdminValidationError } from "./errors";
+
+type Writer = Pick<DatabaseTransaction, "insert" | "update" | "select" | "execute">;
 
 /** Ties a record to its OpenAlex work, so the Added papers source's next sync keeps it up to date from OpenAlex. */
 export async function linkAddedPaper(transaction: Writer, itemKey: string, openalexId: string) {
@@ -26,6 +29,19 @@ export async function linkAddedPaper(transaction: Writer, itemKey: string, opena
  */
 export async function acceptAddedPapers(transaction: Writer, itemKeys: readonly string[]) {
 	if (!itemKeys.length) return;
+	const waiting = await transaction
+		.select({ itemKey: addedPaper.itemKey, openalexId: addedPaper.openalexId })
+		.from(addedPaper)
+		.where(and(inArray(addedPaper.itemKey, [...itemKeys]), eq(addedPaper.state, "pending")));
+	if (!waiting.length) return;
+	// Another source may have brought the same work in while it waited. The OpenAlex writer's lock holds imports back
+	// while that is checked, and approving would make it the work's second record.
+	await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+	const works = waiting.flatMap((paper) => paper.openalexId ?? []);
+	const elsewhere = [...(await openAlexItemKeys(transaction, works)).values()].find((itemKey) => !itemKeys.includes(itemKey));
+	if (elsewhere) {
+		throw new AdminValidationError(`This paper is already in the community as record ${elsewhere}, which another source brought in. Return this submission instead.`);
+	}
 	const accepted = await transaction
 		.update(addedPaper)
 		.set({ state: "accepted", acceptedAt: new Date() })

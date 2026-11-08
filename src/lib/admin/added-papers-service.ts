@@ -100,7 +100,8 @@ function payloadOfWork(work: unknown) {
 
 type Reference = { at: number; openalexId: string | null; doi: string | null };
 type Results = Map<number, AddedPaperResult>;
-type Made = { at: number; itemKey: string; foundBy: "openalex" | "doi" };
+/** `again`: a paper waiting in the community, sent by another request, which submits it again if its review ended. */
+type Made = { at: number; itemKey: string; foundBy: "openalex" | "doi"; again?: boolean };
 
 /** Looks each paper up on OpenAlex, by work and then by DOI. Returns the ones found and the DOIs it didn't have. */
 async function findOnOpenAlex(refs: readonly Reference[], lookup: PaperLookup, results: Results) {
@@ -139,13 +140,13 @@ async function findByDoi(papers: readonly { at: number; doi: string }[], lookup:
 type Known = { sent: (typeof addedPaper.$inferSelect)[]; workKeys: Map<string, string>; existingDois: ReadonlyMap<string, string> };
 
 /**
- * What to answer for a paper the community already has: sent before (the same answer to the same request; otherwise
- * here, or waiting for review), or already one of its records. Null for a paper new to it.
+ * What to answer for a paper the community already has: accepted before (the same answer to the same request), or
+ * already one of its records. Null for a paper new to it.
  */
 function knownPaper(paper: Found, known: Known, requestId: string): AddedPaperResult | null {
 	const sent = known.sent.find((row) => (paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi));
 	if (sent) {
-		const outcome = sent.state === "pending" ? "queued" : sent.requestId === requestId ? "added" : "existing";
+		const outcome = sent.requestId === requestId ? "added" : "existing";
 		return { at: paper.at, outcome, itemKey: sent.itemKey, foundBy: sent.openalexId ? "openalex" : "doi" };
 	}
 	const here = (paper.openalexId && known.workKeys.get(paper.openalexId)) || (paper.doi && known.existingDois.get(paper.doi));
@@ -198,10 +199,11 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		const made: Made[] = [];
 		const seen = new Map<string, string>();
 		for (const paper of found) {
-			// Sent by this request before, but not through: its submission or approval didn't finish. It goes on now.
-			const unfinished = known.sent.find((row) => row.requestId === input.requestId && row.state === "pending" && ((paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi)));
-			if (unfinished) {
-				made.push({ at: paper.at, itemKey: unfinished.itemKey, foundBy: unfinished.openalexId ? "openalex" : "doi" });
+			// Sent before and not yet accepted: this request's own, whose submission or approval may not have finished, or
+			// another's, which sends it again. Either goes on from where its review stands.
+			const waiting = known.sent.find((row) => row.state === "pending" && ((paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi)));
+			if (waiting) {
+				made.push({ at: paper.at, itemKey: waiting.itemKey, foundBy: waiting.openalexId ? "openalex" : "doi", again: waiting.requestId !== input.requestId });
 				continue;
 			}
 			const answer = knownPaper(paper, known, input.requestId);
@@ -226,7 +228,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 async function sendRecords(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, made: readonly Made[], input: AddPapersInput, results: Results) {
 	for (const paper of made) {
 		try {
-			results.set(paper.at, { at: paper.at, outcome: await sendRecord(db, storage, config, paper.itemKey, input), itemKey: paper.itemKey, foundBy: paper.foundBy });
+			results.set(paper.at, { at: paper.at, outcome: await sendRecord(db, storage, config, paper, input), itemKey: paper.itemKey, foundBy: paper.foundBy });
 		} catch (error) {
 			console.error("[added papers] could not send", { itemKey: paper.itemKey, error: String(error) });
 			results.set(paper.at, { at: paper.at, outcome: "failed", itemKey: paper.itemKey, message: error instanceof AdminValidationError ? error.message : "The paper was saved as a draft but could not be sent. Open it in the admin to send it." });
@@ -234,12 +236,15 @@ async function sendRecords(db: Database, storage: EvidenceFileStorage, config: L
 	}
 }
 
-/** Sends one record on, and answers where it got to. */
-async function sendRecord(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, itemKey: string, input: AddPapersInput): Promise<AddedPaperResult["outcome"]> {
+/**
+ * Sends one record on, and answers where it got to. A review returned or withdrawn stays so when its own request is
+ * replayed; a new request submits the record again.
+ */
+async function sendRecord(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, { itemKey, again }: Made, input: AddPapersInput): Promise<AddedPaperResult["outcome"]> {
 	const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
-	// A review already returned or withdrawn stays so: a replayed request doesn't submit it again.
-	if (latest && latest.state !== "pending") return latest.state === "published" ? "added" : "returned";
-	const review = latest ?? (await submitItemReview(db, itemKey, input.actor, config));
+	if (latest?.state === "published") return "added";
+	if (latest && latest.state !== "pending" && !again) return "returned";
+	const review = latest?.state === "pending" ? latest : await submitItemReview(db, itemKey, input.actor, config);
 	if (!input.publish) return "queued";
 	await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, input.actor, config);
 	return "added";

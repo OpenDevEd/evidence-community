@@ -219,3 +219,29 @@ it("keeps a correction to a paper found only by its DOI once OpenAlex has the wo
 		expect((await record(db, key))?.title).toBe("School leadership support");
 	});
 });
+
+it("refuses to approve a paper another source brought in while it waited, leaving one public record", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(13)]);
+		const key = (await addPapers(db, storage, config, { requestId: "r13", publish: false, actor: creator, papers: [{ openalexId: "W13" }] }, lookup)).results[0]!.itemKey!;
+		await searchFinds(db, [work(13)]);
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		await expect(approveItemReview(db, storage, { reviewId: review!.id, expectedRevision: review!.revision }, editor, config)).rejects.toBeInstanceOf(AdminValidationError);
+		expect(await record(db, key)).toBeUndefined();
+		expect(await db.select({ key: item.key }).from(item)).toHaveLength(1);
+	});
+});
+
+it("submits a returned paper again when a new request sends it", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(14)]);
+		const key = (await addPapers(db, storage, config, { requestId: "r14", publish: false, actor: creator, papers: [{ openalexId: "W14" }] }, lookup)).results[0]!.itemKey!;
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		await resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "returned", note: "Add the abstract" }, editor);
+		const again = await addPapers(db, storage, config, { requestId: "r15", publish: true, actor: owner, papers: [{ openalexId: "W14" }] }, lookup);
+		expect(again.results).toEqual([{ at: 0, outcome: "added", itemKey: key, foundBy: "openalex" }]);
+		expect((await record(db, key))?.title).toBe("Work 14");
+	});
+});
