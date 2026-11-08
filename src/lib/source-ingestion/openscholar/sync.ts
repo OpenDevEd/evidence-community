@@ -99,15 +99,21 @@ async function listMissing(context: SourceAdapterContext, dois: readonly string[
 			.where(and(eq(sourceRecordIssue.sourceConnectionKey, key), eq(sourceRecordIssue.code, MISSING_CODE), keys.length ? notInArray(sourceRecordIssue.sourceRecordKey, keys) : sql`true`));
 		if (!keys.length) return;
 		const now = new Date();
-		await transaction
-			.insert(sourceRecordIssue)
-			.values(dois.map((doi) => ({ sourceConnectionKey: key, sourceRecordKey: `doi:${doi}`, code: MISSING_CODE, message: `OpenAlex doesn't have ${doi} yet, so it isn't in the library. Each sync looks for it again.`, createdAt: now, updatedAt: now })))
-			.onConflictDoNothing();
+		// A statement holds 65,535 parameters, six an issue.
+		for (let at = 0; at < dois.length; at += ISSUES_PER_INSERT) {
+			await transaction
+				.insert(sourceRecordIssue)
+				.values(dois.slice(at, at + ISSUES_PER_INSERT).map((doi) => ({ sourceConnectionKey: key, sourceRecordKey: `doi:${doi}`, code: MISSING_CODE, message: `OpenAlex doesn't have ${doi} yet, so it isn't in the library. Each sync looks for it again.`, createdAt: now, updatedAt: now })))
+				.onConflictDoNothing();
+		}
 	});
 }
 
 /** Between the collection's version and its resolved works' in a scan's version. */
 const RESOLVED = "~";
+
+/** Missing papers one insert lists. */
+const ISSUES_PER_INSERT = 5_000;
 
 /** The issue code of a collection paper OpenAlex doesn't have. */
 const MISSING_CODE = "doi_not_on_openalex";

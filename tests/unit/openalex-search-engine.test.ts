@@ -89,6 +89,14 @@ describe("reading Openscholar's search engine", () => {
 		expect(page.results[0]).toMatchObject({ id: "https://openalex.org/W2315890726", title: "Teachers in Kenya" });
 	});
 
+	it("finds a work by DOI under OpenAlex's id", async () => {
+		const { fetcher } = pages({ meta: { count: 1, next_cursor: null }, results: [{ ...engineWork, doi: "https://doi.org/10.1016/j.tate.2015.06.010" }] });
+
+		const works = await new OpenAlexClient({ apiKey: key, fetch: fetcher }).worksByDoi(["10.1016/j.tate.2015.06.010"]);
+
+		expect((works.get("10.1016/j.tate.2015.06.010") as { id: string }).id).toBe("https://openalex.org/W2315890726");
+	});
+
 	it("never sends the engine's key to OpenAlex for an institution", async () => {
 		const { requests, fetcher } = pages({ results: [] });
 

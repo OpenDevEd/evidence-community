@@ -243,14 +243,22 @@ export class OpenAlexClient {
 		}
 		const works = new Map<string, unknown>();
 		for (let cursor: string | null = "*"; cursor; ) {
-			const page = openAlexPageSchema.parse(await this.read(worksUrl({ filter: `doi:${dois.join("|")}` }, cursor, OPENALEX_MAX_PAGE_SIZE, this.options.apiKey), undefined));
-			for (const work of page.results) {
+			const { results, next } = await this.doiPage(dois, cursor);
+			for (const work of results) {
 				const doi = normalizeDoi((work as { doi?: string | null } | null)?.doi);
 				if (doi && !works.has(doi)) works.set(doi, work);
 			}
-			cursor = page.results.length > 0 ? page.meta.next_cursor : null;
+			cursor = next;
 		}
 		return works;
+	}
+
+	/** A page of the works these DOIs name, under OpenAlex's ids, and where the next page starts. */
+	private async doiPage(dois: readonly string[], cursor: string) {
+		const read = openAlexPageSchema.parse(await this.read(worksUrl({ filter: `doi:${dois.join("|")}` }, cursor, OPENALEX_MAX_PAGE_SIZE, this.options.apiKey), undefined));
+		// The engine's works carry its own ids: read under OpenAlex's, as every other page is.
+		const page = readSearchEngineAccess(this.options.apiKey) ? this.asOpenAlexPage(read) : read;
+		return { results: page.results, next: read.results.length > 0 ? read.meta.next_cursor : null };
 	}
 
 	/**
