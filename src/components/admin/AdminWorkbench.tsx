@@ -68,7 +68,7 @@ import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfI
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
-import { approveAdminReview, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
+import { approveAdminReview, getAdminItemReviews, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
 import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
@@ -407,6 +407,32 @@ function hasChangeToSubmit(detail: AdminItemDetail) {
 }
 
 /** A review is always for the whole record, so an attachment submits its record with it. */
+/** Where a sent version got to, said once it's there. */
+const SENT_TOASTS = {
+	published: () => toast.success("Published"),
+	confirm: () => toast.info("Sent to the review queue: changing its PDF on Zenodo needs a confirmation there before it publishes."),
+	queued: () => toast.success("Sent to the review queue"),
+} as const;
+
+/** The version's review to approve: one an earlier Publish submitted but couldn't approve, or a new one. */
+async function pendingOrSubmitted(reviewKey: string) {
+	return (await getAdminItemReviews(reviewKey)).find((review) => review.state === "pending") ?? (await submitAdminReview(reviewKey));
+}
+
+/**
+ * Approves a review just submitted. One that changes a PDF already on Zenodo asks for a confirmation the review queue
+ * gives, so it waits there for it.
+ */
+async function approveOrQueue(review: { id: string; revision: number }): Promise<"published" | "confirm"> {
+	try {
+		await approveAdminReview(review.id, review.revision);
+		return "published";
+	} catch (error) {
+		if (error instanceof AdminApiError && error.code === "confirmation_required") return "confirm";
+		throw error;
+	}
+}
+
 /** The confirmation's title and button for sending a version on. */
 const sendDialog = (publish: boolean) =>
 	publish
@@ -1384,11 +1410,10 @@ export default function AdminWorkbench({
 	const sendVersion = async (recordKey: string, reviewKey: string, publish: boolean) => {
 		// The record's own unsaved edits go with it too.
 		if (reviewKey !== recordKey) await flushDraft(reviewKey);
-		const review = await submitAdminReview(reviewKey);
-		if (publish) await approveAdminReview(review.id, review.revision);
+		const outcome = publish ? await approveOrQueue(await pendingOrSubmitted(reviewKey)) : (await submitAdminReview(reviewKey), "queued" as const);
 		await mutate(["admin-reviews", reviewKey]);
 		await Promise.all([loadDetail(recordKey), loadItems()]);
-		toast.success(publish ? "Published" : "Sent to the review queue");
+		SENT_TOASTS[outcome]();
 	};
 
 	const manageSources = () => {

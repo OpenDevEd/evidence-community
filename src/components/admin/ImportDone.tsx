@@ -145,7 +145,9 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	const drafts: Draft[] = results.flatMap(({ id, itemKey, kind, outcome }) => (outcome === "created" && itemKey && rowById.has(id) ? [{ applied: appliedOf(batch, rowById.get(id)!), itemKey, kind, needs: draftNeeds(batch.needs, routeOf(batch), id, kind), row: rowById.get(id)! }] : []));
 	// While the server sends the drafts on, it does as the person who imported them could, whoever looks now.
+	// The rows and the progress name the send this tab started; the button always says what it does itself.
 	const verbs = sendVerbs(batch.send && serverSending(batch) ? batch.send.action === "publish" : (batch.sendApproves ?? canPublish));
+	const act = sendVerbs(canPublish);
 	const { routeHeld, sentIds, started } = sending(batch);
 	// A draft goes on with its PDF, so only one whose PDF is attached can, and one already sent can't go again. One that
 	// still needs a field the route asks for waits until the editor completes it in the record.
@@ -178,7 +180,7 @@ export function publishView(batch: ImportBatch, onChoose: (ids: ReadonlySet<stri
 		pdfs: pdfs.length,
 		toSend: () => publishable.filter(({ row }) => chosen.has(row.id)).map(({ itemKey, kind, row }) => ({ id: row.id, itemKey, kind })),
 		/** "Publish 3", "Send 3 to the queue", then the progress. */
-		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${verbs.act}${chosen.size ? ` ${chosen.size}` : ""}${verbs.after}`,
+		label: started ? `${sent} of ${chosen.size} ${verbs.done}` : `${act.act}${chosen.size ? ` ${chosen.size}` : ""}${act.after}`,
 		/** For an Editor or Owner, the other way on: to the review queue instead of published. */
 		queueLabel: `Send${chosen.size ? ` ${chosen.size}` : ""} to the queue`,
 		/** Drafts sent on so far, which stay out of the ticks. */

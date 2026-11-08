@@ -125,7 +125,10 @@ describe("the finish step", () => {
 	it("offers an editor the review queue beside publishing, and names the send by the choice made", () => {
 		const current = batch([["1", "attached"], ["2", "attached"]]);
 		expect(view(current)).toMatchObject({ label: "Publish 1", queueLabel: "Send 1 to the queue" });
-		expect(view({ ...current, sendApproves: false }).verbs.doing).toBe("Sending to the queue");
+		const queued = view({ ...current, sendApproves: false });
+		expect(queued.verbs.doing).toBe("Sending to the queue");
+		// The button still says what it does: it publishes.
+		expect(queued.label).toBe("Publish 1");
 		expect(view({ ...current, sendApproves: true }).verbs.doing).toBe("Publishing");
 	});
 
