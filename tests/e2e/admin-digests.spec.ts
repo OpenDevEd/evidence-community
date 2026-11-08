@@ -35,7 +35,7 @@ test("a Creator's change to a digest reaches readers only once an Editor publish
 	await expect(inspector.getByText("Draft", { exact: true })).toBeVisible();
 	// A Creator is offered no way to publish.
 	await expect(inspector.getByRole("button", { name: /Publish/ })).toHaveCount(0);
-	await inspector.getByRole("button", { name: "Send for review" }).click();
+	await inspector.getByRole("button", { name: "Send to queue" }).click();
 	await expect(inspector.getByText("In review", { exact: true })).toBeVisible();
 	await expect(inspector.getByText("Waiting for an editor")).toBeVisible();
 	await creatorContext.close();

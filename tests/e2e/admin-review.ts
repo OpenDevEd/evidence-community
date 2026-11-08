@@ -7,9 +7,9 @@ export async function publishWorkingDraft(page: Page) {
   if (!key) throw new Error("The inspector has no selected item");
   const edit = inspector.getByRole("button", {name: "Edit", exact: true});
   if (await edit.isVisible()) await edit.click();
-  await inspector.getByRole("button", {name: "Submit for review", exact: true}).click();
-  const submit = page.getByRole("dialog", {name: "Submit snapshot for review?"});
-  await submit.getByRole("button", {name: "Submit snapshot", exact: true}).click();
+  await inspector.getByRole("button", {name: "Send to queue", exact: true}).click();
+  const submit = page.getByRole("dialog", {name: "Send this version to the review queue?"});
+  await submit.getByRole("button", {name: "Send to queue", exact: true}).click();
   await expect(submit).toBeHidden();
   await inspector.getByRole("button", {name: "Submitted version", exact: true}).click();
   await inspector.getByRole("button", {name: "Publish version", exact: true}).click();

@@ -1768,7 +1768,7 @@ export function AdminInspector({
 	const restoring =
 		detail.state === "deleted" &&
 		(Boolean(detail.parentItem) || !detail.draft);
-	// An attachment acts like its record: Edit, then Submit for review, which sends the record with it. One it can't
+	// An attachment acts like its record: Edit, then Send to queue or Publish, which sends the record with it. One it can't
 	// change has no main action.
 	const showPrimaryAction = !detail.parentItem || detail.editable || sourcePdfChange;
 	const primaryKey =
