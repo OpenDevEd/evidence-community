@@ -67,6 +67,26 @@ export function buildPublicLibraryKeysQuery(
 		.offset(offset);
 }
 
+/**
+ * Records worth a search result: public ones with an abstract. A record without one is only a title and a few names,
+ * the thin page search engines skip, so the sitemap leaves it out; its page stays open to visitors and crawlers.
+ */
+function sitemapRecordCondition(database: Database, config: LibraryServerConfig) {
+	return and(publicRecordCondition(database, config), sql`btrim(coalesce(${item.abstractNote}, '')) <> ''`);
+}
+
+/** One sitemap's records, in key order, from `offset` on. */
+export function buildSitemapKeysQuery(database: Database, config: LibraryServerConfig, limit: number, offset: number) {
+	return database.select({ key: item.key }).from(item).where(sitemapRecordCondition(database, config))
+		.orderBy(asc(item.key)).limit(limit).offset(offset);
+}
+
+/** How many records the sitemaps list. */
+export async function countSitemapRecords(database: Database, config: LibraryServerConfig) {
+	const [row] = await database.select({ total: count() }).from(item).where(sitemapRecordCondition(database, config));
+	return row?.total ?? 0;
+}
+
 /** The query behind the Atom feed: newest addition first. */
 export function buildNewestRecordsQuery(
 	database: Database,

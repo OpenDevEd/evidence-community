@@ -2,7 +2,7 @@ import { SITEMAP_SIZE } from "@/constants/misc";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getDatabaseForConfig } from "@/db";
-import { readPublicLibraryStatus } from "@/lib/library-export-records";
+import { countSitemapRecords } from "@/lib/library-export-records";
 import { buildSiteUrl } from "@/lib/site-url";
 import { cacheLife, cacheTag } from "next/cache";
 
@@ -13,8 +13,8 @@ async function getSitemapPageCountCached(
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('sitemap-total-' + configRevision)
-	const status = await readPublicLibraryStatus(await getDatabaseForConfig(config), config);
-	return Math.max(1, Math.ceil(Number(status?.totalItems ?? 0) / SITEMAP_SIZE));
+	const total = await countSitemapRecords(await getDatabaseForConfig(config), config);
+	return Math.max(1, Math.ceil(Number(total) / SITEMAP_SIZE));
 }
 
 export async function getSitemapPageCount(

@@ -3,7 +3,7 @@ import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { getDatabaseForConfig } from "@/db";
-import { buildPublicLibraryKeysQuery } from "@/lib/library-export-records";
+import { buildSitemapKeysQuery } from "@/lib/library-export-records";
 import { searchKeys } from "@/lib/search";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -16,8 +16,6 @@ import {
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
-import { loadPolicyDocument } from "@/lib/policy-documents";
-import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
 
 export async function generateSitemaps() {
@@ -36,11 +34,11 @@ export async function generateSitemaps() {
 }
 
 /**
- * One sitemap's records with what their entries show. PostgreSQL decides which records each sitemap holds, in key
- * order; the search copy adds their cover images. A failed search is tried again, waiting longer each time.
+ * One sitemap's records with what their entries show. PostgreSQL decides which records each sitemap holds (public ones
+ * with an abstract, in key order); the search copy adds their cover images. A failed search is tried again, waiting longer each time.
  */
 async function readSitemapRecords(libraryConfig: LibraryServerConfig, identifier: number) {
-	const keys = (await buildPublicLibraryKeysQuery(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE)).map((row) => row.key);
+	const keys = (await buildSitemapKeysQuery(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE)).map((row) => row.key);
 	if (keys.length === 0) return [];
 	const maxRetries = 10;
 	for (let attempt = 1; ; attempt++) {
@@ -76,53 +74,18 @@ export default async function sitemap(props: {
 	const baseUrl = libraryConfig.identity.baseUrl;
 	const records = await readSitemapRecords(libraryConfig, identifier);
 
-	let policyEntries: MetadataRoute.Sitemap = [];
-	let gapmapEntries: MetadataRoute.Sitemap = [];
-	let homeEntries: MetadataRoute.Sitemap = [];
+	let pageEntries: MetadataRoute.Sitemap = [];
+	// The privacy and cookie pages aren't listed: robots.txt keeps search engines off them.
 	if (identifier === 0) {
-		// Listed only while it is a page of its own; otherwise `/` is a redirect to the listing.
-		if (isLibraryFeatureEnabled(libraryConfig.features, "homePage")) {
-			homeEntries = [{
-				url: buildLocalizedSiteUrl("/", localization.defaultLocale, localization, baseUrl),
-				alternates: { languages: buildLanguageAlternates("/", localization, baseUrl) },
-			}];
-		}
-		const policyPages = Object.entries(POLICY_DESTINATIONS) as [PolicyDocumentKind, (typeof POLICY_DESTINATIONS)[PolicyDocumentKind]][];
-		try {
-			const documents = await Promise.all(
-				policyPages.map(([kind]) => loadPolicyDocument(libraryConfig, kind)),
-			);
-			policyEntries = policyPages.flatMap(([, { path: pathname }], index) => {
-				const document = documents[index];
-				if (!document) return [];
-				return [
-					{
-						url: buildLocalizedSiteUrl(
-							pathname,
-							localization.defaultLocale,
-							localization,
-							baseUrl,
-						),
-						lastModified: document.lastUpdated,
-						alternates: {
-							languages: buildLanguageAlternates(
-								pathname,
-								localization,
-								baseUrl,
-							),
-						},
-					},
-				];
-			});
-		} catch {
-			// Policy docs may not exist in all environments; skip gracefully.
-		}
-
-		gapmapEntries = getEnabledGapMaps(
-			libraryConfig.gapMaps,
-			).map((gapMap) => ({
-				url: buildSiteUrl(gapMap.href, baseUrl),
-		}));
+		// The home is listed only while it is a page of its own; otherwise `/` is a redirect to the listing.
+		const pages = isLibraryFeatureEnabled(libraryConfig.features, "homePage") ? ["/", "/lib"] : ["/lib"];
+		pageEntries = [
+			...pages.map((pathname) => ({
+				url: buildLocalizedSiteUrl(pathname, localization.defaultLocale, localization, baseUrl),
+				alternates: { languages: buildLanguageAlternates(pathname, localization, baseUrl) },
+			})),
+			...getEnabledGapMaps(libraryConfig.gapMaps).map((gapMap) => ({ url: buildSiteUrl(gapMap.href, baseUrl) })),
+		];
 	}
 
 	const itemEntries = records.map((item: any) => ({
@@ -133,13 +96,7 @@ export default async function sitemap(props: {
 				baseUrl,
 		),
 		lastModified: item.updatedAt,
-		alternates: {
-			languages: buildLanguageAlternates(
-					`/lib/${item.key}`,
-					localization,
-					baseUrl,
-			),
-		},
+		// No language alternates: every language version of a record names this address as canonical.
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
 				.map((attachment: any) =>
@@ -149,5 +106,5 @@ export default async function sitemap(props: {
 				),
 	}));
 
-	return [...homeEntries, ...policyEntries, ...gapmapEntries, ...itemEntries];
+	return [...pageEntries, ...itemEntries];
 }

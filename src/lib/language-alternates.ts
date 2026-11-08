@@ -1,6 +1,7 @@
 import type { RuntimeLocalization } from "@/i18n/runtime";
 import { buildRuntimeLocalizedPathname } from "@/i18n/runtime";
 import { buildSiteUrl } from "@/lib/site-url";
+import { intlLocale } from "@/i18n/intl-locale";
 
 export function buildLocalizedSiteUrl(
 	pathname: string,
@@ -25,7 +26,8 @@ export function buildLanguageAlternates(
 ) {
 	return Object.fromEntries([
 		...localization.locales.map((locale) => [
-			locale,
+			// Keyed by the language tag search engines know: `cn` is ours for Chinese, `zh-CN` theirs.
+			intlLocale(locale),
 			buildLocalizedSiteUrl(
 				pathname,
 				locale,

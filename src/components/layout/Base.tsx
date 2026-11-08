@@ -25,6 +25,7 @@ import { getSignedInReader } from "@/lib/readers/session";
 import PageFallback, { LoadPageFallback } from "@/components/pages/PageFallback";
 import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { homePlaceholderContent } from "@/components/pages/HomeRichText";
+import { intlLocale } from "@/i18n/intl-locale";
 
 async function BaseContent({
 	children,
@@ -98,7 +99,7 @@ export default async function Base({
 	const fontVariables = themeGoogleFonts(libraryConfig.theme).map((family) => PLATFORM_FONTS[family].variable);
 	const fallback = { contactForm: isEmailChannelEnabled(serverConfig, "contact"), home: homePlaceholderContent(serverConfig, (await getTranslations({ locale, namespace: "homePage" }))("defaultIntro", { name: serverConfig.identity.name })) };
 	return (
-		<html lang={locale} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
+		<html lang={intlLocale(locale)} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
 			<body>
 				<EarlyTypingScript />
 				<ConsentDefaultsScript />
