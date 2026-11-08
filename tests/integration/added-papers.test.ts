@@ -12,6 +12,7 @@ import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
+import { unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
@@ -274,6 +275,12 @@ it("previews what adding would find without saving anything, and lists added pap
 		expect(first.counts).toEqual({ live: 2, waiting: 0 });
 		// A returned paper previews as returned: adding it again sends it again.
 		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
+
+		// A paper an editor unpublished is off the community, so it's no longer listed or counted as live.
+		await unpublishNativeItem(db, first.papers[0]!.itemKey);
+		const after = await listAddedPapers(db, { cursor: null, limit: 5 });
+		expect(after.papers.map((paper) => paper.title)).toEqual(["Lesson study", "Teacher coaching in Kenya"]);
+		expect(after.counts).toEqual({ live: 1, waiting: 0 });
 	});
 });
 

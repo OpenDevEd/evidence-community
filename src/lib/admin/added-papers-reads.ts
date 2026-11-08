@@ -1,5 +1,5 @@
 import { itemDraft } from "@opendeved/evidence-library-core";
-import { desc, inArray, sql } from "drizzle-orm";
+import { and, desc, inArray, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
@@ -104,6 +104,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const after = (cursor: string | null) =>
 	cursor && UUID.test(cursor) ? sql`("addedAt", "id") < (SELECT "addedAt", "id" FROM "addedPaper" WHERE "id" = ${cursor})` : undefined;
 
+/** Papers whose record an editor hasn't unpublished: a paper taken off the community is no longer one of its added papers. */
+const onCommunity = sql`NOT EXISTS (SELECT 1 FROM ${item} WHERE ${item.key} = ${addedPaper.itemKey} AND ${item.deleted} = 1)`;
+
 /** Each record's latest review, by key. */
 async function latestReviews(db: Database, keys: readonly string[]) {
 	const rows = keys.length
@@ -124,7 +127,7 @@ export async function listAddedPapers(db: Database, { cursor, limit }: { cursor:
 	const rows = await db
 		.select()
 		.from(addedPaper)
-		.where(after(cursor))
+		.where(and(onCommunity, after(cursor)))
 		.orderBy(desc(addedPaper.addedAt), desc(addedPaper.id))
 		.limit(limit + 1);
 	const page = rows.slice(0, limit);
@@ -139,7 +142,8 @@ export async function listAddedPapers(db: Database, { cursor, limit }: { cursor:
 				// Waiting: sent and still in the review queue, not returned or withdrawn.
 				waiting: sql<number>`count(*) FILTER (WHERE ${addedPaper.state} = 'pending' AND EXISTS (SELECT 1 FROM ${itemReview} WHERE ${itemReview.itemKey} = ${addedPaper.itemKey} AND ${itemReview.state} = 'pending'))::int`,
 			})
-			.from(addedPaper),
+			.from(addedPaper)
+			.where(onCommunity),
 	]);
 	const recordOf = new Map(records.map((record) => [record.key, record]));
 	const draftOf = new Map(drafts.map((draft) => [draft.itemKey, draft.patch as Record<string, unknown>]));
