@@ -271,6 +271,19 @@ it("previews what adding would find without saving anything, and lists added pap
 			["Teacher coaching in Kenya", "live", null],
 		]);
 		expect(second.next).toBeNull();
-		expect(first.counts).toEqual({ live: 2, waiting: 1 });
+		expect(first.counts).toEqual({ live: 2, waiting: 0 });
+		// A returned paper previews as returned: adding it again sends it again.
+		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
+	});
+});
+
+it("pages through papers added together, which share their moment, without skipping any", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const { lookup } = services([work(30), work(31), work(32)]);
+		await addPapers(db, new MemoryFileStorage(), config, { requestId: "r30", publish: false, actor: creator, papers: [{ openalexId: "W30" }, { openalexId: "W31" }, { openalexId: "W32" }] }, lookup);
+		const first = await listAddedPapers(db, { cursor: null, limit: 2 });
+		const second = await listAddedPapers(db, { cursor: first.next, limit: 2 });
+		expect(new Set([...first.papers, ...second.papers].map((paper) => paper.openalexId))).toEqual(new Set(["W30", "W31", "W32"]));
+		expect(second.next).toBeNull();
 	});
 });

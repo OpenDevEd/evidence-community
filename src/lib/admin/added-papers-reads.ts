@@ -1,5 +1,5 @@
 import { itemDraft } from "@opendeved/evidence-library-core";
-import { and, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
+import { desc, inArray, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
@@ -37,8 +37,11 @@ function summaryOf(record: { title?: unknown; creators?: unknown; date?: unknown
 
 type PreviewResult = {
 	at: number;
-	/** `found`: new to the community; `existing`: already one of its records; `queued`: already waiting for review. */
-	outcome: "found" | "existing" | "queued" | "not_found";
+	/**
+	 * `found`: new to the community; `existing`: already one of its records; `queued`: already waiting for review;
+	 * `returned`: sent before and returned or withdrawn, so adding it sends it again.
+	 */
+	outcome: "found" | "existing" | "queued" | "returned" | "not_found";
 	itemKey?: string;
 	foundBy?: "openalex" | "doi";
 	paper?: PaperSummary & { openalexId: string | null; doi: string | null };
@@ -46,12 +49,12 @@ type PreviewResult = {
 };
 
 /** Where one paper found would land: new to the community, already one of its records, or waiting for review. */
-function previewOf(paper: Found, known: Awaited<ReturnType<typeof knownPapers>>): PreviewResult {
+function previewOf(paper: Found, known: Awaited<ReturnType<typeof knownPapers>>, reviews: ReadonlyMap<string, string>): PreviewResult {
 	const sent = sentRow(paper, known.sent);
 	const itemKey = sent?.itemKey ?? recordHolding(paper, known);
 	return {
 		at: paper.at,
-		outcome: sent?.state === "pending" ? "queued" : itemKey ? "existing" : "found",
+		outcome: sent?.state === "pending" ? (reviews.get(sent.itemKey) === "pending" ? "queued" : "returned") : itemKey ? "existing" : "found",
 		...(itemKey ? { itemKey } : {}),
 		foundBy: paper.openalexId ? "openalex" : "doi",
 		paper: { ...summaryOf(paper.payload), openalexId: paper.openalexId, doi: paper.doi },
@@ -78,7 +81,9 @@ export async function previewPapers(db: Database, config: LibraryServerConfig, p
 	const found = await lookUpPapers(papers, lookup, results);
 	const known = await knownPapers(db, found);
 	const preview = new Map<number, PreviewResult>([...results].map(([at, result]) => [at, { at, outcome: "not_found" as const, ...(result.message ? { message: result.message } : {}) }]));
-	for (const paper of found) preview.set(paper.at, previewOf(paper, known));
+	const reviews = await latestReviews(db, known.sent.filter((row) => row.state === "pending").map((row) => row.itemKey));
+	const states = new Map([...reviews].map(([key, review]) => [key, review.state]));
+	for (const paper of found) preview.set(paper.at, previewOf(paper, known, states));
 	return { results: papers.map((_, at) => preview.get(at)!) };
 }
 
@@ -94,23 +99,32 @@ type AddedPaperRow = PaperSummary & {
 	addedAt: string;
 };
 
-/** A page cursor: the last row's time and id, newest first. */
-const cursorOf = (row: { addedAt: Date; id: string }) => `${row.addedAt.toISOString()}|${row.id}`;
-const parseCursor = (cursor: string | null) => {
-	const [at, id] = cursor?.split("|") ?? [];
-	return at && id && !Number.isNaN(Date.parse(at)) ? { at: new Date(at), id } : null;
-};
+/** The last row a page read, by id: the next page starts after it, compared in the database at its full precision. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+const after = (cursor: string | null) =>
+	cursor && UUID.test(cursor) ? sql`("addedAt", "id") < (SELECT "addedAt", "id" FROM "addedPaper" WHERE "id" = ${cursor})` : undefined;
+
+/** Each record's latest review, by key. */
+async function latestReviews(db: Database, keys: readonly string[]) {
+	const rows = keys.length
+		? await db
+				.selectDistinctOn([itemReview.itemKey], { itemKey: itemReview.itemKey, state: itemReview.state, note: itemReview.note })
+				.from(itemReview)
+				.where(inArray(itemReview.itemKey, [...keys]))
+				.orderBy(itemReview.itemKey, desc(itemReview.submittedAt))
+		: [];
+	return new Map(rows.map((row) => [row.itemKey, row]));
+}
 
 /**
  * The community's added papers, newest first, a page at a time, with where each stands and how many are live and
  * waiting in all. A paper waiting for review shows its draft; one on the community, its published record.
  */
 export async function listAddedPapers(db: Database, { cursor, limit }: { cursor: string | null; limit: number }) {
-	const after = parseCursor(cursor);
 	const rows = await db
 		.select()
 		.from(addedPaper)
-		.where(after ? or(lt(addedPaper.addedAt, after.at), and(eq(addedPaper.addedAt, after.at), lt(addedPaper.id, after.id))) : undefined)
+		.where(after(cursor))
 		.orderBy(desc(addedPaper.addedAt), desc(addedPaper.id))
 		.limit(limit + 1);
 	const page = rows.slice(0, limit);
@@ -118,27 +132,23 @@ export async function listAddedPapers(db: Database, { cursor, limit }: { cursor:
 	const [records, drafts, reviews, counts] = await Promise.all([
 		keys.length ? db.select({ key: item.key, title: item.title, creators: item.creators, date: item.date }).from(item).where(inArray(item.key, keys)) : [],
 		keys.length ? db.select({ itemKey: itemDraft.itemKey, patch: itemDraft.patch }).from(itemDraft).where(inArray(itemDraft.itemKey, keys)) : [],
-		keys.length
-			? db
-					.selectDistinctOn([itemReview.itemKey], { itemKey: itemReview.itemKey, state: itemReview.state, note: itemReview.note })
-					.from(itemReview)
-					.where(inArray(itemReview.itemKey, keys))
-					.orderBy(itemReview.itemKey, desc(itemReview.submittedAt))
-			: [],
+		latestReviews(db, keys),
 		db
-			.select({ state: addedPaper.state, count: sql<number>`count(*)::int` })
-			.from(addedPaper)
-			.groupBy(addedPaper.state),
+			.select({
+				live: sql<number>`count(*) FILTER (WHERE ${addedPaper.state} = 'accepted')::int`,
+				// Waiting: sent and still in the review queue, not returned or withdrawn.
+				waiting: sql<number>`count(*) FILTER (WHERE ${addedPaper.state} = 'pending' AND EXISTS (SELECT 1 FROM ${itemReview} WHERE ${itemReview.itemKey} = ${addedPaper.itemKey} AND ${itemReview.state} = 'pending'))::int`,
+			})
+			.from(addedPaper),
 	]);
 	const recordOf = new Map(records.map((record) => [record.key, record]));
 	const draftOf = new Map(drafts.map((draft) => [draft.itemKey, draft.patch as Record<string, unknown>]));
-	const reviewOf = new Map(reviews.map((review) => [review.itemKey, review]));
+	const reviewOf = reviews;
 	const papers = page.map((row) => rowOf(row, { record: recordOf.get(row.itemKey), draft: draftOf.get(row.itemKey), review: reviewOf.get(row.itemKey) }));
-	const total = (state: "pending" | "accepted") => counts.find((count) => count.state === state)?.count ?? 0;
 	return {
 		papers,
-		next: rows.length > limit ? cursorOf(page.at(-1)!) : null,
-		counts: { live: total("accepted"), waiting: total("pending") },
+		next: rows.length > limit ? page.at(-1)!.id : null,
+		counts: { live: counts[0]?.live ?? 0, waiting: counts[0]?.waiting ?? 0 },
 	};
 }
 
