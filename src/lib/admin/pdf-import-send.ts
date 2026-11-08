@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db";
-import { pdfImport, type ImportSend } from "@/db/schema/pdf-import";
+import { pdfImport, sendPublishes, type ImportSend } from "@/db/schema/pdf-import";
 import { itemReview, itemReviewFile } from "@/db/schema/review";
 import { reserveCrossrefDoi } from "@/lib/publication/crossref-activation-service";
 
@@ -74,6 +74,6 @@ export async function sendImportedDraft(
 	if (pending && !pending.matches) return { error: "It was submitted for review another way, so it waits for that review.", state: "held" };
 	if (kind === "created" && !pending) await chooseRoute(db, itemKey, route, send, config);
 	const review = pending ?? (await submitItemReview(db, itemKey, send.actor, config));
-	if (send.actor.role !== "creator") await approveItemReview(db, storage, { expectedRevision: review.revision, reviewId: review.id }, send.actor, config);
+	if (sendPublishes(send)) await approveItemReview(db, storage, { expectedRevision: review.revision, reviewId: review.id }, send.actor, config);
 	return { error: null, state: "sent" };
 }

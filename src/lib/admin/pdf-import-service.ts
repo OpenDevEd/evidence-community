@@ -6,7 +6,7 @@ import { itemDraft } from "@opendeved/evidence-library-core";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db";
-import { pdfImport, pdfImportFile, type ImportSend } from "@/db/schema/pdf-import";
+import { pdfImport, pdfImportFile, sendPublishes, type ImportSend } from "@/db/schema/pdf-import";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 
@@ -146,7 +146,7 @@ export async function pdfImportStatus(db: Database): Promise<AdminPdfImportStatu
 		id: open.id,
 		instructions: open.instructions,
 		results: open.results,
-		send: open.send && { action: open.send.actor.role === "creator" ? "submit" : "publish", route: open.send.route },
+		send: open.send && { action: sendPublishes(open.send) ? "publish" : "submit", route: open.send.route },
 		sending: sendStates(files),
 		...(await draftStates(db, open.results)),
 	};
