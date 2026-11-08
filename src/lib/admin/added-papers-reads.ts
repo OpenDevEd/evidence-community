@@ -7,10 +7,7 @@ import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 
-import { ADD_PAPERS_MAX, knownPapers, lookUpPapers, paperLookupFor, type Found, type PaperLookup, type PaperReference, type Results } from "./added-papers-service";
-
-/** A paper as a list of added papers shows it: its title, authors and year. */
-type PaperSummary = { title: string; authors: string; year: number | null };
+import { ADD_PAPERS_MAX, knownPapers, lookUpPapers, paperLookupFor, summaryOf, type Found, type PaperLookup, type PaperReference, type PaperSummary, type Results } from "./added-papers-service";
 
 /**
  * Where an added paper stands: on the community and kept up to date from OpenAlex (`live`), on it from its DOI alone
@@ -18,22 +15,6 @@ type PaperSummary = { title: string; authors: string; year: number | null };
  * withdrawn (`returned`), with the reviewer's note.
  */
 type AddedPaperStatus = "live" | "doi_only" | "queued" | "returned";
-
-type Creator = { firstName?: unknown; lastName?: unknown; name?: unknown };
-
-/** The title, first authors and year a record's payload or row holds. */
-function summaryOf(record: { title?: unknown; creators?: unknown; date?: unknown }): PaperSummary {
-	const names = (Array.isArray(record.creators) ? (record.creators as Creator[]) : []).flatMap((creator) => {
-		const name = typeof creator.name === "string" ? creator.name : [creator.firstName, creator.lastName].filter((part) => typeof part === "string" && part).join(" ");
-		return name ? [name] : [];
-	});
-	const year = typeof record.date === "string" ? Number(record.date.match(/\b(\d{4})\b/u)?.[1]) || null : null;
-	return {
-		title: typeof record.title === "string" && record.title.trim() ? record.title.trim() : "Untitled",
-		authors: names.length > 3 ? `${names.slice(0, 3).join(", ")} et al.` : names.join(", "),
-		year,
-	};
-}
 
 type PreviewResult = {
 	at: number;

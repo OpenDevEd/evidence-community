@@ -1,4 +1,5 @@
 import { runTopicAssociationCycle } from "../src/lib/topics/association-delivery";
+import { runSubmissionStatusCycle } from "../src/lib/admin/submission-status";
 import { runReadingCycle } from "../src/lib/readings/worker";
 import { runNotificationCycle } from "../src/lib/notifications/worker";
 import { runAuthorAssociationCycle } from "../src/lib/authors/association-delivery";
@@ -176,6 +177,7 @@ async function main() {
 			try {
 				await runAuthorAssociationCycle(resource.database, config, abortController.signal);
 				await runTopicAssociationCycle(resource.database, config, abortController.signal);
+				await runSubmissionStatusCycle(resource.database, config, abortController.signal);
 				await runReadingCycle(resource.database, config, abortController.signal);
 				pdfImportReading ??= runPdfImportCycle(resource.database, storage, config, abortController.signal)
 					.catch((error: unknown) => console.error(`PDF import cycle failed: ${errorMessage(error)}`))
