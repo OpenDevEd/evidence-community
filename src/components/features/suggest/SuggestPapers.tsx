@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip } from "@nextui-org/react";
 import { Cancel01Icon, CheckmarkCircle02Icon, InboxIcon, Search01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
@@ -22,6 +22,7 @@ type Reference = { openalexId?: string; doi?: string };
 type Looked = { key: string; raw: string; ref: Reference };
 type Answer = { outcome: "found" | "existing" | "queued" | "returned" | "not_found"; paper?: { title: string; authors: string; year: number | null } };
 type Row = Looked & { state: "looking" | "found" | "here" | "waiting" | "missing"; title?: string; authors?: string; year?: number | null };
+type Sent = { outcome: string; message?: string };
 
 /** The papers a paste names: DOIs, OpenAlex IDs and links to either, split on spaces and lines, each once. */
 function parse(text: string): Looked[] {
@@ -107,6 +108,8 @@ function SentPanel({ count }: { count: number }) {
 
 /** What the paste field says beside Find papers: the day's limit, or why the last try failed. */
 function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | null, named: number, room: number, problem: string) {
+	// Until the allowance is known, only why it couldn't be read.
+	if (left === null) return problem;
 	if (left === 0) return t("noneLeft");
 	return named > room ? t("overLimit", { count: room }) : problem;
 }
@@ -120,24 +123,30 @@ function useSuggestion() {
 	const [sending, setSending] = useState(false);
 	const [problem, setProblem] = useState("");
 	const [requestId, setRequestId] = useState("");
+	// Each paste, lookup and reset moves this on, so a lookup that comes back after its paste changed is dropped.
+	const turn = useRef(0);
 	/** A new request, with how many papers the reader may still suggest here today. Kept, so the dialog listens once. */
-	const start = useCallback(() => {
+	const start = useCallback((failed: string) => {
 		setRequestId(crypto.randomUUID());
-		void call<{ left: number }>().then(({ left }) => setLeft(left), () => setLeft(null));
+		setLeft(null);
+		void call<{ left: number }>().then(({ left }) => setLeft(left), (error: unknown) => setProblem(messageOf(error, failed)));
 	}, []);
 	const named = parse(text);
-	const room = Math.min(left ?? PER_REQUEST, PER_REQUEST);
+	// Nothing is looked up until the day's allowance is known, and no more than it is sent.
+	const room = Math.min(left ?? 0, PER_REQUEST);
 	const pasted = named.slice(0, room);
-	const ready = (rows ?? []).filter((row) => row.state === "found");
+	const ready = (rows ?? []).filter((row) => row.state === "found").slice(0, room);
 	return {
 		text, left, rows, sent, sending, problem, named, room, pasted, ready,
 		looking: rows?.some((row) => row.state === "looking") ?? false,
 		start,
 		type: (value: string) => {
+			turn.current++;
 			setText(value);
 			setRows(null);
 		},
 		reset: () => {
+			turn.current++;
 			setText("");
 			setRows(null);
 			setSent(null);
@@ -145,12 +154,14 @@ function useSuggestion() {
 		},
 		leaveOut: (key: string) => setRows((all) => all?.filter((row) => row.key !== key) ?? all),
 		find: async (failed: string) => {
+			const mine = ++turn.current;
 			setProblem("");
 			setRows(pasted.map((paper) => ({ ...paper, state: "looking" })));
 			try {
 				const { results } = await post<{ results: Answer[] }>({ preview: true, papers: pasted.map((paper) => paper.ref) });
-				setRows(pasted.map((paper, at) => ({ ...paper, state: STATE_OF[results[at]?.outcome ?? "not_found"], ...results[at]?.paper })));
+				if (mine === turn.current) setRows(pasted.map((paper, at) => ({ ...paper, state: STATE_OF[results[at]?.outcome ?? "not_found"], ...results[at]?.paper })));
 			} catch (error) {
+				if (mine !== turn.current) return;
 				setRows(null);
 				setProblem(messageOf(error, failed));
 			}
@@ -159,8 +170,13 @@ function useSuggestion() {
 			setSending(true);
 			setProblem("");
 			try {
-				const { results } = await post<{ results: { outcome: string }[] }>({ requestId, papers: ready.map((row) => row.ref) });
-				setSent(results.filter((result) => result.outcome === "queued").length);
+				const { results } = await post<{ results: Sent[] }>({ requestId, papers: ready.map((row) => row.ref) });
+				const failures = results.filter((result) => result.outcome === "failed");
+				if (!failures.length) return setSent(results.filter((result) => result.outcome === "queued").length);
+				// Some didn't go: the ones that did now wait for review, and the rest stay here to send again, with why.
+				const waiting = new Set(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
+				setRows((all) => all?.map((row) => (waiting.has(row.key) ? { ...row, state: "waiting" } : row)) ?? all);
+				setProblem(failures[0]?.message ?? failed);
 			} catch (error) {
 				setProblem(messageOf(error, failed));
 			} finally {
@@ -216,11 +232,11 @@ export function SuggestPapersDialog() {
 	useEffect(() => {
 		const show = () => {
 			setOpen(true);
-			start();
+			start(t("failed"));
 		};
 		window.addEventListener("suggest-papers:open", show);
 		return () => window.removeEventListener("suggest-papers:open", show);
-	}, [start]);
+	}, [start, t]);
 	if (!reader) return null;
 	const { rows, sent, looking, ready } = suggestion;
 	const close = () => {

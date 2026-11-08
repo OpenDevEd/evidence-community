@@ -435,6 +435,12 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 		await addPapers(db, storage, config, { requestId: "u2", publish: false, actor: reader, papers: [{ openalexId: "W70" }] }, lookup);
 		await runSubmissionStatusCycle(db, config, undefined, openscholar);
 		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "queued", clerkUserId: "user_reader" }]);
+		// Approved before that word goes out: published is told as theirs, whose version was accepted.
+		const resent = await latest(returned);
+		await approveItemReview(db, storage, { reviewId: resent.id, expectedRevision: resent.revision }, { userId: "user_editor", role: "editor" }, config);
+		told.length = 0;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "published", clerkUserId: "user_reader" }]);
 
 		// Published, then an edit to it is returned: it stays published.
 		const live = (await addPapers(db, storage, config, { requestId: "u3", publish: true, actor: owner, papers: [{ openalexId: "W71" }] }, lookup)).results[0]!.itemKey!;
