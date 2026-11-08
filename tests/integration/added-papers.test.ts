@@ -348,10 +348,18 @@ it("takes suggestions from someone outside the team into the review queue only, 
 		// They withdraw their own suggestion, as a Creator does.
 		expect(await removeAddedPaper(db, results[0]!.itemKey!, { userId: "user_reader", role: "creator" })).toBe("withdrawn");
 
-		// Past the day's number, a request adds nothing; the team isn't held to it.
-		const many = works.slice(1).map((w) => ({ openalexId: w.id }));
-		await expect(addPapers(db, storage, config, { requestId: "s2", publish: false, actor: reader, papers: many }, lookup)).rejects.toThrow(/no more suggested papers/);
-		expect(await db.select().from(addedPaper)).toHaveLength(1);
-		expect((await addPapers(db, storage, config, { requestId: "s3", publish: false, actor: creator, papers: many }, lookup)).results.every((result) => result.outcome === "queued")).toBe(true);
+		// One short of the day's number, a request sent again with one more paper counts only the new one.
+		await addPapers(db, storage, config, { requestId: "s1b", publish: false, actor: reader, papers: [{ openalexId: works[1]!.id }] }, lookup);
+		await addPapers(db, storage, config, { requestId: "s2", publish: false, actor: reader, papers: works.slice(4).map((w) => ({ openalexId: w.id })) }, lookup);
+		expect(await db.select().from(addedPaper)).toHaveLength(SUGGESTIONS_PER_PERSON_DAY - 1);
+		const resent = { requestId: "s1b", publish: false, actor: reader, papers: [{ openalexId: works[1]!.id }, { openalexId: works[2]!.id }] };
+		expect((await addPapers(db, storage, config, resent, lookup)).results.map((result) => result.outcome)).toEqual(["queued", "queued"]);
+
+		// Past it, a request adds nothing; the team isn't held to it.
+		const more = [{ openalexId: "W9999" }];
+		const { lookup: moreLookup } = services([...works, work(9999)]);
+		await expect(addPapers(db, storage, config, { requestId: "s3", publish: false, actor: reader, papers: more }, moreLookup)).rejects.toThrow(/no more suggested papers/);
+		expect(await db.select().from(addedPaper)).toHaveLength(SUGGESTIONS_PER_PERSON_DAY);
+		expect((await addPapers(db, storage, config, { requestId: "s4", publish: false, actor: creator, papers: more }, moreLookup)).results[0]).toMatchObject({ outcome: "queued" });
 	});
 });

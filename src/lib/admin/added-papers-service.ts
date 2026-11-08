@@ -209,9 +209,9 @@ export async function knownPapers(transaction: Database | DatabaseTransaction, f
 	};
 }
 
-/** Refuses one more suggestion past the day's number: the papers sent again don't count. */
-function assertRoom(made: readonly Made[], left: number) {
-	if (made.filter((sent) => !sent.again).length >= left) throw new AdminValidationError("This community takes no more suggested papers from you today. Try again tomorrow.");
+/** Refuses one more suggestion past the day's number. Only the records this request makes count: ones it resumes were counted when made. */
+function assertRoom(created: number, left: number) {
+	if (created >= left) throw new AdminValidationError("This community takes no more suggested papers from you today. Try again tomorrow.");
 }
 
 /**
@@ -225,6 +225,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		const known = await knownPapers(transaction, found);
 		const left = await suggestionsLeft(transaction, input.actor);
 		const made: Made[] = [];
+		let created = 0;
 		const seen = new Map<string, string>();
 		for (const paper of found) {
 			// Sent before and not yet accepted: this request's own, whose submission or approval may not have finished, or
@@ -241,7 +242,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 				results.set(paper.at, answer ?? { at: paper.at, outcome: "existing", itemKey: twice[0] });
 				continue;
 			}
-			assertRoom(made, left);
+			assertRoom(created++, left);
 			const record = await createRecord(transaction, paper, input);
 			for (const id of [paper.openalexId, paper.doi]) if (id) seen.set(id, record.itemKey);
 			made.push(record);
