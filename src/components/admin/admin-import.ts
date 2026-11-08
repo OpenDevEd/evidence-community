@@ -240,6 +240,8 @@ export type ImportBatch = {
 	rows: ImportRow[];
 	/** The drafts ticked for publishing, once the editor changes the default. */
 	toPublish: ReadonlySet<string> | null;
+	/** Whether the drafts this tab is sending on are being published (true) or sent to the review queue; null before a send. */
+	sendApproves?: boolean | null;
 	/** Each record's topics and collections, once the editor changes the AI's choice. */
 	chosen: Record<ChoiceKind, ReadonlyMap<string, ReadonlySet<string>>>;
 };
@@ -263,7 +265,7 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sendApproves: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";

@@ -445,7 +445,7 @@ function OpenRecordButton({ flow, row }: { flow: ImportFlowState; row: ImportRow
 
 /** What sending a draft on is for this person: publishing it, or submitting it to an editor. */
 function sendWords(canPublish: boolean) {
-	return canPublish ? { icon: SentIcon, label: "Publish", note: "Each record is published as soon as its PDF is attached." } : { icon: UserCheck01Icon, label: "Submit for review", note: "Each record goes to an editor for review as soon as its PDF is attached." };
+	return canPublish ? { icon: SentIcon, label: "Publish", note: "Each record is published as soon as its PDF is attached." } : { icon: UserCheck01Icon, label: "Send to queue", note: "Each record goes to an editor for review as soon as its PDF is attached." };
 }
 
 const optionContent = (icon: typeof SentIcon, label: string) => (

@@ -121,6 +121,17 @@ describe("the finish step", () => {
 		expect(current.label).toBe("Publish 1");
 	});
 
+	// An editor chooses between publishing and the review queue; what they chose, not their role, names the progress.
+	it("offers an editor the review queue beside publishing, and names the send by the choice made", () => {
+		const current = batch([["1", "attached"], ["2", "attached"]]);
+		expect(view(current)).toMatchObject({ label: "Publish 1", queueLabel: "Send 1 to the queue" });
+		const queued = view({ ...current, sendApproves: false });
+		expect(queued.verbs.doing).toBe("Sending to the queue");
+		// The button still says what it does: it publishes.
+		expect(queued.label).toBe("Publish 1");
+		expect(view({ ...current, sendApproves: true }).verbs.doing).toBe("Publishing");
+	});
+
 	// Sending an undated draft on Zenodo failed after the send; it now waits until the record editor completes it.
 	it("holds back a draft until it has what its DOI route needs", () => {
 		const undated = { ...batch([["1", "attached"], ["2", "attached"]]), needs: { 1: { zenodo: { date: "Enter a valid publication date." } } } };

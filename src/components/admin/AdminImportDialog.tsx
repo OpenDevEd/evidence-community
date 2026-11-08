@@ -139,16 +139,23 @@ function reviewNote(flow: ImportFlowState, canPublish: boolean) {
 function sendNote(flow: ImportFlowState, canPublish: boolean) {
 	const held = flow.selected.size - sendableCount(flow);
 	if (held) return `${held} ${held === 1 ? "stays a draft" : "stay drafts"} to complete in the editor`;
-	return canPublish ? "Published as their PDFs attach" : "Sent for review as their PDFs attach";
+	return canPublish ? "Each goes on as its PDF attaches" : "Sent to the review queue as their PDFs attach";
 }
 
-function importLabel(flow: ImportFlowState, canPublish: boolean) {
+/** The import's main button: importing alone, or importing and sending on, published or to the review queue. */
+function importLabel(flow: ImportFlowState, publish: boolean) {
 	const sendable = sendableCount(flow);
 	if (!sendingOn(flow) || !sendable) return action("Import", flow.selected.size, "record", "records");
-	return sendLabel(flow.selected.size, sendable, canPublish ? "publish" : "submit");
+	return sendLabel(flow.selected.size, sendable, publish ? "publish" : "queue");
 }
 
-const sendLabel = (chosen: number, sendable: number, verb: string) => (sendable === chosen ? `Import and ${verb} ${sendable}` : `Import ${chosen} and ${verb} ${sendable}`);
+/** Whether importing sends drafts on, so an Editor or Owner chooses between publishing and the review queue. */
+const choosesPublish = (flow: ImportFlowState, canPublish: boolean) => canPublish && sendingOn(flow) && sendableCount(flow) > 0;
+
+const sendLabel = (chosen: number, sendable: number, verb: "publish" | "queue") => {
+	const what = verb === "publish" ? (count: number) => `publish ${count}` : (count: number) => `send ${count} to the queue`;
+	return sendable === chosen ? `Import and ${what(sendable)}` : `Import ${chosen} and ${what(sendable)}`;
+};
 
 function StageActions({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView | null }) {
 	if (flow.stage === "input") return <InputActions flow={flow} />;
@@ -181,10 +188,41 @@ function ReviewActions({ canPublish, flow }: { canPublish: boolean; flow: Import
 			<Button isDisabled={flow.locked} onPress={flow.restart} size="sm" variant="transparent">
 				{pdfImport(flow) ? "Discard" : "Back"}
 			</Button>
-			<Button className="min-w-32" color="accent" isDisabled={flow.reading || flow.selected.size === 0} isLoading={flow.locked} onPress={flow.commit} size="sm" variant="solid">
-				{importLabel(flow, canPublish)}
+			<ImportButtons canPublish={canPublish} flow={flow} />
+		</>
+	);
+}
+
+/** Import, or for an Editor or Owner sending drafts on, import and publish beside import and send to the queue. */
+function ImportButtons({ canPublish, flow }: { canPublish: boolean; flow: ImportFlowState }) {
+	const choosing = choosesPublish(flow, canPublish);
+	return (
+		<>
+			{choosing ? (
+				<Button isDisabled={flow.reading || flow.locked} onPress={() => flow.commit(false)} size="sm" variant="muted">
+					{importLabel(flow, false)}
+				</Button>
+			) : null}
+			<Button className="min-w-32" color="accent" isDisabled={flow.reading || flow.selected.size === 0} isLoading={flow.locked} onPress={() => flow.commit(choosing)} size="sm" variant="solid">
+				{importLabel(flow, choosing)}
 			</Button>
 		</>
+	);
+}
+
+/** Sends the chosen drafts on: published, or for an Editor or Owner, to the review queue instead. */
+function SendButtons({ canPublish, flow, view }: { canPublish: boolean; flow: ImportFlowState; view: PublishView }) {
+	return (
+		<span className="flex gap-2">
+			{canPublish && !view.started ? (
+				<Button isDisabled={!view.chosen.size} onPress={() => flow.send(view.toSend(), false)} size="sm" variant="muted">
+					{view.queueLabel}
+				</Button>
+			) : null}
+			<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
+				{view.label}
+			</Button>
+		</span>
 	);
 }
 
@@ -203,9 +241,7 @@ function DoneActions({ canPublish, flow, view }: { canPublish: boolean; flow: Im
 					// Folded, its start margin takes back the footer's gap, so it leaves no space. It clips only while it moves, so
 					// the button's focus ring shows. Folding, it takes no click, which would send with the choices it last had.
 					<LeavingSpan animate={{ marginInlineStart: "0px", opacity: 1, transitionEnd: { overflow: "visible" }, width: "auto" }} className="flex" exit={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} initial={{ marginInlineStart: "-8px", opacity: 0, overflow: "hidden", width: 0 }} key="send" transition={sheetTransition(reduceMotion, 0.22)}>
-						<Button className="min-w-32" color="accent" isDisabled={view.started || !view.chosen.size} onPress={() => flow.send(view.toSend(), canPublish)} size="sm" variant="solid">
-							{view.label}
-						</Button>
+						<SendButtons canPublish={canPublish} flow={flow} view={view} />
 					</LeavingSpan>
 				) : null}
 			</AnimatePresence>
