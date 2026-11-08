@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { fromError } from "zod-validation-error";
 
+import { actorSchema, addedPapersSettings, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, ADD_PAPERS_MAX } from "@/lib/admin/added-papers-service";
 import { AdminValidationError } from "@/lib/admin/errors";
@@ -17,21 +18,13 @@ const papersSchema = z
 /** What adding these papers would find, saving nothing: the add dialog shows it before the person confirms. */
 const previewRequestSchema = z.object({ preview: z.literal(true), papers: papersSchema }).strict();
 
-const addPapersRequestSchema = z
-	.object({
-		requestId: z.string().min(1).max(128),
-		publish: z.boolean(),
-		// The person adding, and the role OpenScholar gives them in this community.
-		actor: z
-			.object({
-				clerkUserId: z.string().min(1).max(128),
-				name: z.string().max(255).nullable(),
-				role: z.enum(["owner", "editor", "creator"]),
-			})
-			.strict(),
-		papers: papersSchema,
-	})
-	.strict();
+const addPapersRequestSchema = z.object({ requestId: z.string().min(1).max(128), publish: z.boolean(), actor: actorSchema, papers: papersSchema }).strict();
+
+/** Pauses or resumes the source, or turns its PDFs on or off. */
+const settingsRequestSchema = z
+	.object({ enabled: z.boolean().optional(), downloadPdfs: z.boolean().optional() })
+	.strict()
+	.refine((change) => change.enabled !== undefined || change.downloadPdfs !== undefined, "Change enabled, downloadPdfs or both.");
 
 /** Added papers a page reads at most. */
 const LIST_MAX = 100;
@@ -39,11 +32,24 @@ const LIST_MAX = 100;
 /** The page size asked for, from 1 to 100; 20 when none is. */
 const limitOf = (value: string | null) => Math.min(LIST_MAX, Math.max(1, Number(value) || 20));
 
-/** The community's added papers, newest first: `?cursor=` from the last page's `next`, and `?limit=` up to 100. */
+/**
+ * The community's added papers, newest first: `?cursor=` from the last page's `next`, and `?limit=` up to 100. With
+ * them, whether the source syncs and fetches PDFs.
+ */
 export async function GET(request: Request) {
 	return answerOpenScholar(request, "papers", async ({ database }) => {
 		const params = new URL(request.url).searchParams;
-		return { body: await listAddedPapers(database, { cursor: params.get("cursor")?.slice(0, 128) || null, limit: limitOf(params.get("limit")) }) };
+		const list = await listAddedPapers(database, { cursor: params.get("cursor")?.slice(0, 128) || null, limit: limitOf(params.get("limit")) });
+		return { body: { ...list, settings: await addedPapersSettings(database) } };
+	});
+}
+
+/** Pauses or resumes the Added papers source, or turns its PDFs on or off. OpenScholar lets only the owner. */
+export async function PATCH(request: Request) {
+	return answerOpenScholar(request, "papers settings", async ({ database }) => {
+		const body = settingsRequestSchema.safeParse(await request.json().catch(() => null));
+		if (!body.success) return refusals.invalid(fromError(body.error).toString());
+		return { body: { settings: await setAddedPapersSettings(database, body.data) } };
 	});
 }
 

@@ -8,6 +8,7 @@ import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
+import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, type PaperLookup } from "@/lib/admin/added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -272,15 +273,17 @@ it("previews what adding would find without saving anything, and lists added pap
 			["Teacher coaching in Kenya", "live", null],
 		]);
 		expect(second.next).toBeNull();
-		expect(first.counts).toEqual({ live: 2, waiting: 0 });
+		expect(first.counts).toEqual({ total: 3, live: 2, waiting: 0 });
 		// A returned paper previews as returned: adding it again sends it again.
 		expect((await previewPapers(db, config, [{ openalexId: "W21" }], lookup)).results[0]?.outcome).toBe("returned");
+		// It's the reviewer's answer, not the queue's to withdraw.
+		await expect(removeAddedPaper(db, first.papers[1]!.itemKey, { userId: creator.userId, role: "creator" })).rejects.toBeInstanceOf(AdminValidationError);
 
 		// A paper an editor unpublished is off the community, so it's no longer listed or counted as live.
 		await unpublishNativeItem(db, first.papers[0]!.itemKey);
 		const after = await listAddedPapers(db, { cursor: null, limit: 5 });
 		expect(after.papers.map((paper) => paper.title)).toEqual(["Lesson study", "Teacher coaching in Kenya"]);
-		expect(after.counts).toEqual({ live: 1, waiting: 0 });
+		expect(after.counts).toEqual({ total: 2, live: 1, waiting: 0 });
 	});
 });
 
@@ -292,5 +295,40 @@ it("pages through papers added together, which share their moment, without skipp
 		const second = await listAddedPapers(db, { cursor: first.next, limit: 2 });
 		expect(new Set([...first.papers, ...second.papers].map((paper) => paper.openalexId))).toEqual(new Set(["W30", "W31", "W32"]));
 		expect(second.next).toBeNull();
+	});
+});
+
+it("withdraws a queued paper only for the person who sent it, and unpublishes a live one only for an editor", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup, fetch } = services([work(40), work(41)]);
+		const queued = (await addPapers(db, storage, config, { requestId: "r40", publish: false, actor: creator, papers: [{ openalexId: "W40" }] }, lookup)).results[0]!.itemKey!;
+		const live = (await addPapers(db, storage, config, { requestId: "r41", publish: true, actor: owner, papers: [{ openalexId: "W41" }] }, lookup)).results[0]!.itemKey!;
+
+		await expect(removeAddedPaper(db, queued, { userId: "user_other", role: "creator" })).rejects.toBeInstanceOf(AdminValidationError);
+		expect(await removeAddedPaper(db, queued, { userId: creator.userId, role: "creator" })).toBe("withdrawn");
+		await expect(removeAddedPaper(db, live, { userId: creator.userId, role: "creator" })).rejects.toBeInstanceOf(AdminValidationError);
+		expect(await removeAddedPaper(db, live, { userId: owner.userId, role: "owner" })).toBe("removed");
+		expect((await listAddedPapers(db, { cursor: null, limit: 5 })).papers).toEqual([]);
+
+		// The sync leaves the removed paper off the community; sending the withdrawn one again queues it again.
+		await sync(db, fetch);
+		expect((await record(db, live))?.deleted).toBe(1);
+		await addPapers(db, storage, config, { requestId: "r42", publish: false, actor: creator, papers: [{ openalexId: "W40" }] }, lookup);
+		expect((await listAddedPapers(db, { cursor: null, limit: 5 })).papers.map((paper) => [paper.itemKey, paper.status])).toEqual([[queued, "queued"]]);
+	});
+});
+
+it("pauses the source and turns its PDFs off and on", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		expect(await addedPapersSettings(db)).toEqual({ enabled: true, downloadPdfs: true });
+		await setAddedPapersSettings(db, { enabled: false });
+		expect(await addedPapersSettings(db)).toEqual({ enabled: false, downloadPdfs: true });
+		// A change to one setting leaves the other as it is, even one written since it was read.
+		await setAddedPapersSettings(db, { downloadPdfs: false });
+		expect(await addedPapersSettings(db)).toEqual({ enabled: false, downloadPdfs: false });
+		await setAddedPapersSettings(db, { enabled: true, downloadPdfs: false });
+		const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
+		expect(connection).toMatchObject({ status: "active", config: { downloadPdfs: false } });
 	});
 });
