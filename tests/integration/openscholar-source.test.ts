@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { and, eq, isNull } from "drizzle-orm";
-import { itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
+import { itemSourceLink, sourceConnection, sourceRecordIssue } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { COLLECTION_ITEMS_PATH } from "@/lib/source-ingestion/openscholar/client";
@@ -216,5 +216,59 @@ it("withdraws a collection's works when the person who added it leaves, and impo
 		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "W4"]);
 		const [back] = await db.select({ deleted: item.deleted }).from(item).where(eq(item.key, followed.get("W4")!));
 		expect(back?.deleted).toBe(0);
+	});
+}, 120_000);
+
+it("finds a collection paper that has only a DOI on OpenAlex by it, and lists the ones OpenAlex doesn't have until it does", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await seed(db);
+		const onOpenAlex = new Map([["10.1000/w5", 5]]);
+		let version = "v1";
+		const items = [
+			{ itemId: "item-2", openalexId: "W2", doi: null },
+			{ itemId: "item-5", openalexId: null, doi: "https://doi.org/10.1000/W5" },
+			{ itemId: "item-6", openalexId: null, doi: "10.1000/w6" },
+		];
+		const request = (async (input: string | URL, init?: RequestInit) => {
+			const url = new URL(String(input));
+			if (url.pathname === COLLECTION_ITEMS_PATH) {
+				const body = JSON.parse(String(init?.body)) as { knownVersion: string | null };
+				const base = { contractVersion: 1, version, name: "Reading list" };
+				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
+			}
+			const filter = url.searchParams.get("filter")!;
+			const meta = (count: number) => ({ count, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) });
+			const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
+			if (dois) {
+				const results = dois.flatMap((doi) => (onOpenAlex.has(doi) ? [{ ...work(onOpenAlex.get(doi)!), doi: `https://doi.org/${doi}` }] : []));
+				return Response.json({ meta: meta(results.length), results });
+			}
+			const ids = filter.match(/^ids\.openalex:([^,]+)/u)![1]!.split("|");
+			return Response.json({ meta: meta(ids.length), results: ids.map((id) => work(Number(id.slice(1)))) });
+		}) as typeof fetch;
+		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => [row.sourceRecordKey, row.code]);
+
+		const asked: (string | null)[] = [];
+		const counting = (async (input: string | URL, init?: RequestInit) => {
+			if (new URL(String(input)).pathname === COLLECTION_ITEMS_PATH) asked.push((JSON.parse(String(init?.body)) as { knownVersion: string | null }).knownVersion);
+			return request(input, init);
+		}) as typeof fetch;
+		const result = await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: counting });
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "W5"]);
+		// The scan is saved under the works the DOIs resolved to, so a resumed scan never reads another list; Openscholar
+		// is asked about its own version alone.
+		const [saved] = await db.select({ cursor: sourceConnection.syncCursor }).from(sourceConnection).where(eq(sourceConnection.key, "openscholar-c1"));
+		expect((saved!.cursor as { queryVersion: string }).queryVersion).toMatch(/^v1~[0-9a-f]{16}$/u);
+		await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: counting });
+		expect(asked).toEqual([null, "v1"]);
+		expect(await issues()).toEqual([["doi:10.1000/w6", "doi_not_on_openalex"]]);
+		expect(result.unresolved).toBe(1);
+
+		// Once OpenAlex has it, the next sync brings it in and takes it off the list.
+		onOpenAlex.set("10.1000/w6", 6);
+		version = "v2";
+		await syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request });
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "W5", "W6"]);
+		expect(await issues()).toEqual([]);
 	});
 }, 120_000);

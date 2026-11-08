@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { normalizeDoi } from "@/lib/doi";
 import { postToOpenScholar, type OpenScholarService } from "@/lib/openscholar-service";
 
 /** OpenScholar no longer lets the library read this collection. */
@@ -47,7 +48,9 @@ export type OpenScholarCollection =
 			name: string;
 			/** The collection's OpenAlex works, sorted, each once. */
 			openAlexIds: string[];
-			/** Items with no identifier the library can resolve yet. */
+			/** The DOIs of its items with no OpenAlex work, each once, for the sync to look up. */
+			dois: string[];
+			/** Items with neither, which the library can't find at all. */
 			unresolved: number;
 	  };
 
@@ -88,12 +91,14 @@ export async function readOpenScholarCollection(
 		}
 		if (!consistent) continue;
 		const ids = items.flatMap((item) => (item.openalexId ? [item.openalexId] : []));
+		const dois = items.flatMap((item) => (item.openalexId ? [] : (normalizeDoi(item.doi) ?? [])));
 		return {
 			unchanged: false,
 			version: first.version,
 			name: first.name,
 			openAlexIds: [...new Set(ids)].sort(),
-			unresolved: items.length - ids.length,
+			dois: [...new Set(dois)].sort(),
+			unresolved: items.length - ids.length - dois.length,
 		};
 	}
 	throw new Error(`Openscholar collection ${collectionId} kept changing while it was read`);
