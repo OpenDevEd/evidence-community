@@ -1142,7 +1142,7 @@ export async function publishItemDraftWithContext(
 			}
 		}
 
-		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload);
+		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload, { firstPublish: !current });
 		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
 		if (current?.deleted === 1) await restoreSourceChildren(transaction, itemKey);
 		const nextRevision = currentRevision + 1;

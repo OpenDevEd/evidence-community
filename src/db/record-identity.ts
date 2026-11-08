@@ -7,7 +7,7 @@ import {
 	sourceConnection,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, notExists } from "drizzle-orm";
+import { and, eq, inArray, ne, notExists } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "./database-schema";
@@ -183,7 +183,7 @@ export async function reserveItemSourceLinks(
 		.where(eq(sourceConnection.key, sourceConnectionKey));
 	if (isOpenAlexWorkProvider(connection?.provider)) {
 		// Sources of OpenAlex works share work identity inside this library, never DOI-match manual or Zotero records.
-		const shared = await db
+		const byIdentity = await db
 			.select({ itemKey: itemIdentity.key, sourceRecordKey: itemIdentity.sourceRecordKey })
 			.from(itemIdentity)
 			.innerJoin(sourceConnection, eq(sourceConnection.key, itemIdentity.sourceConnectionKey))
@@ -191,6 +191,17 @@ export async function reserveItemSourceLinks(
 				inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS),
 				inArray(itemIdentity.sourceRecordKey, uniqueSourceRecordKeys),
 			));
+		// A record first added by its DOI, which OpenAlex has since, holds the work through its link alone.
+		const byLink = await db
+			.select({ itemKey: itemSourceLink.itemKey, sourceRecordKey: itemSourceLink.sourceRecordKey })
+			.from(itemSourceLink)
+			.innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+			.where(and(
+				inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS),
+				ne(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				inArray(itemSourceLink.sourceRecordKey, uniqueSourceRecordKeys),
+			));
+		const shared = [...new Map([...byLink, ...byIdentity].map((row) => [row.sourceRecordKey, row])).values()];
 		if (shared.length) {
 			const added = await db.insert(itemSourceLink)
 				.values(shared.map((row) => ({ ...row, sourceConnectionKey })))

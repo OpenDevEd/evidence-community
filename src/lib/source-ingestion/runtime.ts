@@ -14,6 +14,7 @@ export function createSourceSyncRuntime(
 	const storage = createSupabaseFileStorage(config.services.storage);
 	const credentialResolver = createManifestSourceCredentialResolver(
 		config.sources,
+		config.services.openAlex?.apiKey,
 	);
 	const attachmentProcessor = createZoteroAttachmentProcessor({
 		database,
@@ -36,6 +37,7 @@ export function createSourceSyncRuntime(
 			zotero: { attachmentProcessor, legacyPublishTags: config.content.tags.publish },
 			openalex,
 			openscholar: { ...openalex, service: config.authentication.openScholar },
+			added: openalex,
 		}),
 		storage,
 	};

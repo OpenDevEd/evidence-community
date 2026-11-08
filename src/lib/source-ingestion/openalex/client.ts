@@ -234,6 +234,26 @@ export class OpenAlexClient {
 	}
 
 	/**
+	 * Each DOI's work, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` normalised DOIs. A DOI OpenAlex does not know is left out;
+	 * one it holds several works for keeps the first, as OpenAlex orders them.
+	 */
+	async worksByDoi(dois: readonly string[]) {
+		if (!dois.length || dois.length > OPENALEX_MAX_IDS_PER_FILTER) {
+			throw new Error(`An OpenAlex DOI filter takes 1 to ${OPENALEX_MAX_IDS_PER_FILTER} DOIs`);
+		}
+		const works = new Map<string, unknown>();
+		for (let cursor: string | null = "*"; cursor; ) {
+			const page = openAlexPageSchema.parse(await this.read(worksUrl({ filter: `doi:${dois.join("|")}` }, cursor, OPENALEX_MAX_PAGE_SIZE, this.options.apiKey), undefined));
+			for (const work of page.results) {
+				const doi = normalizeDoi((work as { doi?: string | null } | null)?.doi);
+				if (doi && !works.has(doi)) works.set(doi, work);
+			}
+			cursor = page.results.length > 0 ? page.meta.next_cursor : null;
+		}
+		return works;
+	}
+
+	/**
 	 * Where OpenAlex places each institution, for 1 to `OPENALEX_MAX_IDS_PER_FILTER` ids such as "I40120149": its coordinates
 	 * and city. An institution OpenAlex does not know, or places nowhere, is left out.
 	 */

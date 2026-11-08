@@ -4,12 +4,15 @@ import { item } from "@/db/schema/tables/item";
 import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { saveSourceScreening } from "@/lib/readings/screening";
 import { sourceConnection } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 
 type ConfiguredSource = LibraryServerConfig["sources"][number];
+
+/** Connections every community has, outside its settings: its own records and its added papers. Settings never remove them. */
+const BUILT_IN_PROVIDERS = ["native", "added"] as const;
 
 export class SourceConfigurationConflictError extends Error {
 	constructor(message: string) {
@@ -142,7 +145,7 @@ async function reconcileInTransaction(
 	const current = await transaction
 		.select()
 		.from(sourceConnection)
-		.where(ne(sourceConnection.provider, "native"));
+		.where(notInArray(sourceConnection.provider, [...BUILT_IN_PROVIDERS]));
 	const currentByKey = new Map(current.map((row) => [row.key, row]));
 	const currentByScope = new Map(
 		current
@@ -182,7 +185,7 @@ async function reconcileInTransaction(
 	const saved = await transaction
 		.select()
 		.from(sourceConnection)
-		.where(ne(sourceConnection.provider, "native"));
+		.where(notInArray(sourceConnection.provider, [...BUILT_IN_PROVIDERS]));
 	const toggled = toggledRemoval(current, saved);
 	await requeueRecordsOfToggledSources(transaction, toggled);
 	// A removed source stops holding its records for screening too, and holds them again when it returns.
