@@ -44,12 +44,14 @@ function doiOf(doi: string | null | undefined) {
 
 type RecordSource = Pick<ListItem, "key" | "revision" | "itemType" | "title" | "abstractNote" | "creators" | "year" | "date" | "publicationTitle" | "url" | "DOI" | "provider"> & {
 	sourceRecordKey?: string | null;
+	openalexId?: string | null;
 	attachmentsData?: Array<{ key: string; filename?: string | null; contentType?: string | null; linkMode?: string | null; url?: string | null }>;
 };
 
 /** A record, from the search index's copy of it with its public attachments only, as OpenScholar reads it. */
 export function toOpenScholarRecord(record: RecordSource): OpenScholarRecord {
-	const openalexId = isOpenAlexWorkProvider(record.provider) && /^W[1-9]\d*$/.test(record.sourceRecordKey ?? "") ? record.sourceRecordKey! : undefined;
+	// The work its sources found it as; a document indexed before it carried that has only the record's own key.
+	const openalexId = record.openalexId ?? (isOpenAlexWorkProvider(record.provider) && /^W[1-9]\d*$/.test(record.sourceRecordKey ?? "") ? record.sourceRecordKey! : undefined);
 	const doi = doiOf(record.DOI);
 	return {
 		key: record.key,

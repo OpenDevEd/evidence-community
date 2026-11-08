@@ -20,6 +20,7 @@ import { unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
+import { readItemSources } from "@/lib/search-index/item-sources";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -105,6 +106,8 @@ it("keeps a creator's paper in the review queue, out of the sync, until an edito
 		await approveItemReview(db, storage, { reviewId: review!.id, expectedRevision: review!.revision }, { userId: "user_editor", role: "editor" }, config);
 		expect((await record(db, key))?.title).toBe("Work 2");
 		expect(await linked(db, key)).toBe(true);
+		// Its search document, and so Openscholar's copy, names its work.
+		expect((await readItemSources(db, [key])).workOf(key)).toBe("W2");
 	});
 });
 
@@ -249,6 +252,26 @@ it("submits a returned paper again when a new request sends it", async () => {
 		const again = await addPapers(db, storage, config, { requestId: "r15", publish: true, actor: owner, papers: [{ openalexId: "W14" }] }, lookup);
 		expect(again.results).toMatchObject([{ at: 0, outcome: "added", itemKey: key, foundBy: "openalex" }]);
 		expect((await record(db, key))?.title).toBe("Work 14");
+	});
+});
+
+it("leaves a paper returned when any request that sent it is replayed, the one that sent it again included", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(16)]);
+		const send = (requestId: string) => addPapers(db, storage, config, { requestId, publish: false, actor: creator, papers: [{ openalexId: "W16" }] }, lookup);
+		const returnLatest = async (key: string) => {
+			const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key)).orderBy(desc(itemReview.submittedAt)).limit(1);
+			await resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "returned", note: "Not in scope" }, editor);
+		};
+		const key = (await send("r16")).results[0]!.itemKey!;
+		await returnLatest(key);
+		expect((await send("r17")).results).toMatchObject([{ outcome: "queued", itemKey: key }]);
+		await returnLatest(key);
+		// Replayed, neither request sends it a third time.
+		expect((await send("r17")).results).toMatchObject([{ outcome: "returned", itemKey: key }]);
+		expect((await send("r16")).results).toMatchObject([{ outcome: "returned", itemKey: key }]);
+		expect(await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")))).toEqual([]);
 	});
 });
 
