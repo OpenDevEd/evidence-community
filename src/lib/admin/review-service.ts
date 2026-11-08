@@ -235,6 +235,8 @@ export async function submitItemReview(
 			})
 			.returning();
 		await holdSourceFileChoices(transaction, review!.id, sourcePdfChanges.map((change) => change.itemKey));
+		// Sent again, an added paper waits for review again: that supersedes any earlier word still on its way.
+		await queueSubmissionStatus(transaction, [rootKey]);
 		if (capturedFiles.length)
 			await transaction.insert(itemReviewFile).values(
 				capturedFiles.map(({ itemKey, file, removalId }) => ({

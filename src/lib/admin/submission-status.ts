@@ -28,7 +28,8 @@ const submissionStatusSchema = z
 const receiptSchema = z.object({ idempotencyKey: z.string(), generation: z.number() });
 
 /**
- * Sends Openscholar where these records stand now, when they're added papers: approved, returned or withdrawn. Runs in
+ * Sends Openscholar where these records stand now, when they're added papers: submitted, approved, returned or
+ * withdrawn. Runs in
  * the change's own transaction, so a change that's saved is always sent; a later one takes the row over.
  */
 export async function queueSubmissionStatus(transaction: DatabaseTransaction, itemKeys: readonly string[]) {
@@ -39,26 +40,30 @@ export async function queueSubmissionStatus(transaction: DatabaseTransaction, it
 			"attempts" = 0, "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL`);
 }
 
-/** The change to send for one paper: who sent it and where its latest review stands. */
+/**
+ * The change to send for one paper. Accepted, it stays published whatever later edits to it do. Until then it stands
+ * where its latest review does, and is sent as the person who submitted that review.
+ */
 async function payloadOf(transaction: DatabaseTransaction, config: LibraryServerConfig, job: { itemKey: string; generation: number }) {
-	const [paper] = await transaction.select({ addedBy: addedPaper.addedBy }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
+	const [paper] = await transaction.select({ addedBy: addedPaper.addedBy, state: addedPaper.state }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
 	const [review] = await transaction
-		.select({ state: itemReview.state, note: itemReview.note, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt })
+		.select({ state: itemReview.state, note: itemReview.note, submittedBy: itemReview.submittedBy, submittedAt: itemReview.submittedAt, resolvedAt: itemReview.resolvedAt })
 		.from(itemReview)
 		.where(and(eq(itemReview.itemKey, job.itemKey), inArray(itemReview.state, Object.keys(STATUS_OF_REVIEW) as (keyof typeof STATUS_OF_REVIEW)[])))
 		.orderBy(desc(itemReview.submittedAt))
 		.limit(1);
 	if (!paper || !review) return null;
 	const libraryId = config.authentication.openScholar.libraryId;
+	const accepted = paper.state === "accepted";
 	return submissionStatusSchema.parse({
 		contractVersion: 1,
 		idempotencyKey: `${libraryId}:${job.itemKey}:${job.generation}`,
 		libraryId,
 		itemKey: job.itemKey,
 		generation: Number(job.generation),
-		clerkUserId: paper.addedBy,
-		status: STATUS_OF_REVIEW[review.state as keyof typeof STATUS_OF_REVIEW],
-		note: review.state === "returned" ? review.note : null,
+		clerkUserId: accepted ? paper.addedBy : review.submittedBy,
+		status: accepted ? "published" : STATUS_OF_REVIEW[review.state as keyof typeof STATUS_OF_REVIEW],
+		note: !accepted && review.state === "returned" ? review.note : null,
 		at: (review.resolvedAt ?? review.submittedAt).toISOString(),
 	});
 }

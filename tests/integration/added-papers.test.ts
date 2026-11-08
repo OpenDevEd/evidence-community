@@ -1,8 +1,8 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
-import { and, eq } from "drizzle-orm";
-import { itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
+import { and, desc, eq } from "drizzle-orm";
+import { itemDraft, itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
@@ -17,7 +17,7 @@ import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { unpublishNativeItem } from "@/lib/admin/native-item-service";
-import { approveItemReview, correctItemReview, resolveItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { maximalLibraryConfig } from "../fixtures/library-config";
@@ -375,8 +375,8 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60" },
 			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61" },
 		]);
-		// Sent to the queue is what Openscholar recorded itself; nothing waits to be told yet.
-		expect(await db.select().from(submissionStatusDelivery)).toEqual([]);
+		// Each submission is told too, as waiting for review.
+		expect(await db.select().from(submissionStatusDelivery)).toHaveLength(2);
 
 		const [approve, ret] = await Promise.all(results.map(async (result) => (await db.select().from(itemReview).where(eq(itemReview.itemKey, result.itemKey!)))[0]!));
 		await approveItemReview(db, storage, { reviewId: approve!.id, expectedRevision: approve!.revision }, { userId: "user_editor", role: "editor" }, config);
@@ -401,5 +401,37 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 			{ itemKey: results[1]!.itemKey, status: "returned", note: "Not about teachers", clerkUserId: "user_creator" },
 		]);
 		expect((await db.select().from(submissionStatusDelivery)).every((row) => row.nextAttemptAt === null)).toBe(true);
+	});
+});
+
+it("sends a resubmitted paper as waiting again, from its new sender, and keeps an accepted paper published whatever later edits do", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(70), work(71)]);
+		const reader = { userId: "user_reader", name: "Grace Otieno", role: "reader" } as const;
+		const told: { itemKey: string; status: string; clerkUserId: string }[] = [];
+		const openscholar = (async (_url: string | URL, init?: RequestInit) => {
+			const body = JSON.parse(String(init?.body));
+			told.push({ itemKey: body.itemKey, status: body.status, clerkUserId: body.clerkUserId });
+			return Response.json({ idempotencyKey: body.idempotencyKey, generation: body.generation });
+		}) as typeof globalThis.fetch;
+		const latest = async (itemKey: string) => (await db.select().from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)))[0]!;
+
+		// Returned, then sent again by someone else before that word went out: the new submission is what's told.
+		const returned = (await addPapers(db, storage, config, { requestId: "u1", publish: false, actor: creator, papers: [{ openalexId: "W70" }] }, lookup)).results[0]!.itemKey!;
+		const first = await latest(returned);
+		await resolveItemReview(db, { reviewId: first.id, expectedRevision: first.revision, action: "returned", note: "Not yet" }, editor);
+		await addPapers(db, storage, config, { requestId: "u2", publish: false, actor: reader, papers: [{ openalexId: "W70" }] }, lookup);
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "queued", clerkUserId: "user_reader" }]);
+
+		// Published, then an edit to it is returned: it stays published.
+		const live = (await addPapers(db, storage, config, { requestId: "u3", publish: true, actor: owner, papers: [{ openalexId: "W71" }] }, lookup)).results[0]!.itemKey!;
+		await db.insert(itemDraft).values({ itemKey: live, sourceConnectionKey: ADDED_PAPERS_SOURCE_CONNECTION_KEY, patch: { title: "Work 71, edited" } }).onConflictDoUpdate({ target: itemDraft.itemKey, set: { patch: { title: "Work 71, edited" } } });
+		const edit = await submitItemReview(db, live, { userId: "user_creator", role: "creator" }, config);
+		await resolveItemReview(db, { reviewId: edit.id, expectedRevision: edit.revision, action: "returned", note: "Keep the title" }, editor);
+		told.length = 0;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === live)).toEqual([{ itemKey: live, status: "published", clerkUserId: "user_owner" }]);
 	});
 });
