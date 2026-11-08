@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { addedPaper } from "@/db/schema/source";
+import { openAlexItemKeys } from "../openalex/references";
 import { linkAddedPaper } from "@/lib/admin/added-paper-links";
 
 import type { SourceAdapter, SourceAdapterContext, SourceSyncResult } from "../adapter";
@@ -33,10 +34,15 @@ async function resolveDoiOnlyPapers(context: SourceAdapterContext, client: OpenA
 			return work ? [{ itemKey: row.itemKey, openalexId: workIdOf(work) }] : [];
 		});
 		if (!linked.length) continue;
-		await context.database.transaction(async (transaction) => {
-			for (const { itemKey, openalexId } of linked) await linkAddedPaper(transaction, itemKey, openalexId);
+		left -= await context.database.transaction(async (transaction) => {
+			// The OpenAlex writer's lock: a work another source brought in meanwhile stays that record's alone, and this
+			// one stays on its DOI rather than become the work's second record.
+			await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+			const held = await openAlexItemKeys(transaction, linked.map((paper) => paper.openalexId));
+			const free = linked.filter(({ itemKey, openalexId }) => (held.get(openalexId) ?? itemKey) === itemKey);
+			for (const { itemKey, openalexId } of free) await linkAddedPaper(transaction, itemKey, openalexId);
+			return free.length;
 		});
-		left -= linked.length;
 	}
 	return left;
 }

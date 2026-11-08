@@ -435,3 +435,29 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 		expect(told.filter((entry) => entry.itemKey === live)).toEqual([{ itemKey: live, status: "published", clerkUserId: "user_owner" }]);
 	});
 });
+
+it("refuses to withdraw a paper whose request stopped before it reached the review queue", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(80)]);
+		const key = (await addPapers(db, storage, config, { requestId: "x1", publish: false, actor: creator, papers: [{ openalexId: "W80" }] }, lookup)).results[0]!.itemKey!;
+		// As a request that stopped after making the record and before submitting it leaves the paper.
+		await db.delete(itemReview).where(eq(itemReview.itemKey, key));
+		await expect(removeAddedPaper(db, key, { userId: creator.userId, role: "creator" })).rejects.toThrow(/isn't in the review queue yet/);
+	});
+});
+
+it("leaves a paper found by its DOI on its DOI when another source brought its work in first, so the work has one record", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const doi = "10.1000/late-work";
+		const missing = services([], { [doi]: { itemType: "journalArticle", title: "Late work", DOI: doi } });
+		const key = (await addPapers(db, new MemoryFileStorage(), config, { requestId: "y1", publish: true, actor: owner, papers: [{ doi }] }, missing.lookup)).results[0]!.itemKey!;
+		await searchFinds(db, [work(90, "Late work", doi)]);
+		await sync(db, services([work(90, "Late work", doi)]).fetch);
+		const holders = new Set((await db.select({ itemKey: itemSourceLink.itemKey }).from(itemSourceLink).where(eq(itemSourceLink.sourceRecordKey, "W90"))).map((row) => row.itemKey));
+		expect(holders.size).toBe(1);
+		// Linked to its work only if it's the record the search holds too.
+		const [paper] = await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key));
+		expect(paper!.openalexId === null || holders.has(key)).toBe(true);
+	});
+});

@@ -35,6 +35,8 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 	// withdrawal on its revision. Withdrawn already, it's gone; returned, it's the reviewer's answer to keep.
 	if (row.state === "pending" && review?.state !== "published") {
 		if (review?.state === "returned") throw new AdminValidationError("This paper was returned by a reviewer, so it isn't in the review queue to withdraw.");
+		// Its request stopped before it reached the queue: sending it again finishes that, and there's nothing to take back yet.
+		if (!review) throw new AdminValidationError("This paper isn't in the review queue yet. Send it again to finish sending it.");
 		if (review?.state === "pending") await resolveItemReview(db, { reviewId: review.id, expectedRevision: review.revision, action: "withdrawn" }, actor);
 		return "withdrawn";
 	}
