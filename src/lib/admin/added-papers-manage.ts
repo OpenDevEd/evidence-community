@@ -1,12 +1,12 @@
-import { desc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
 import { addedPaper, sourceConnection } from "@/db/schema/source";
-import { itemReview } from "@/db/schema/review";
 import { addedPapersConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { requestSourceRun } from "@/lib/source-ingestion/run-requests";
 
+import { latestReview } from "./added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 import { ItemNotFoundError, unpublishNativeItemWithOutcome } from "./native-item-service";
@@ -29,12 +29,7 @@ export async function removeAddedPaper(db: Database, itemKey: string, actor: Rev
 	const [row] = await db.select({ state: addedPaper.state }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey));
 	if (!row) throw new ItemNotFoundError(itemKey);
 	if (row.state === "pending") {
-		const [review] = await db
-			.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state })
-			.from(itemReview)
-			.where(eq(itemReview.itemKey, itemKey))
-			.orderBy(desc(itemReview.submittedAt))
-			.limit(1);
+		const review = await latestReview(db, itemKey);
 		// Returned or withdrawn already: there's nothing left in the queue to take back.
 		if (review?.state === "pending") await resolveItemReview(db, { reviewId: review.id, expectedRevision: review.revision, action: "withdrawn" }, actor);
 		return "withdrawn";

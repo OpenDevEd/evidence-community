@@ -236,12 +236,18 @@ async function sendRecords(db: Database, storage: EvidenceFileStorage, config: L
 	}
 }
 
+/** The record's latest review, if it has one. */
+export async function latestReview(db: Database, itemKey: string) {
+	const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
+	return latest;
+}
+
 /**
  * Sends one record on, and answers where it got to. A review returned or withdrawn stays so when its own request is
  * replayed; a new request submits the record again.
  */
 async function sendRecord(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, { itemKey, again }: Made, input: AddPapersInput): Promise<AddedPaperResult["outcome"]> {
-	const [latest] = await db.select({ id: itemReview.id, revision: itemReview.revision, state: itemReview.state }).from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)).limit(1);
+	const latest = await latestReview(db, itemKey);
 	if (latest?.state === "published") return "added";
 	if (latest && latest.state !== "pending" && !again) return "returned";
 	const review = latest?.state === "pending" ? latest : await submitItemReview(db, itemKey, input.actor, config);
