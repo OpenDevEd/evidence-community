@@ -1697,10 +1697,6 @@
     "noYear": "No year",
     "noYearLink": "Records with no year",
     "otherYears": "Other years",
-    "untitled": "Untitled",
-    "authorsMore": "{first} and {more} more",
-    "pages": "Pages",
-    "pageOf": "Page {page} of {pages}",
     "footerLink": "Browse all records by year"
   }
 }

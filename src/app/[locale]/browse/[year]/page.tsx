@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { getTranslations } from "next-intl/server";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { readBrowsePage, readBrowseYears } from "@/lib/browse-records";
+import { BROWSE_PAGE_SIZE, readBrowsePage, readBrowseYears } from "@/lib/browse-records";
 import { BrowseYear } from "@/components/browse/BrowsePages";
 
 type Props = { params: Promise<{ year: string }>; searchParams: Promise<{ page?: string }> };
@@ -29,5 +29,5 @@ export default async function Page({ params, searchParams }: Props) {
   const config = await getLibraryConfig();
   const [data, years] = await Promise.all([readBrowsePage(config, year, page), readBrowseYears(config)]);
   if (page > data.pages || (!data.total && year !== null)) notFound();
-  return <BrowseYear year={year} page={page} data={data} years={years} />;
+  return <BrowseYear year={year} page={page} perPage={BROWSE_PAGE_SIZE} data={data} years={years} />;
 }
