@@ -272,3 +272,55 @@ it("finds a collection paper that has only a DOI on OpenAlex by it, and lists th
 		expect(await issues()).toEqual([]);
 	});
 }, 120_000);
+
+it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its work's once OpenAlex has it, and withdraws one that leaves", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await seed(db);
+		const onOpenAlex = new Map<string, number>();
+		let version = "v1";
+		let items = [
+			{ itemId: "item-2", openalexId: "W2", doi: null },
+			{ itemId: "item-6", openalexId: null, doi: "10.1000/w6" },
+			{ itemId: "item-7", openalexId: null, doi: "10.1000/w7" },
+			{ itemId: "item-8", openalexId: null, doi: "10.1000/w8" },
+		];
+		const request = (async (input: string | URL, init?: RequestInit) => {
+			const url = new URL(String(input));
+			if (url.pathname === COLLECTION_ITEMS_PATH) {
+				const body = JSON.parse(String(init?.body)) as { knownVersion: string | null };
+				const base = { contractVersion: 1, version, name: "Reading list" };
+				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
+			}
+			const filter = url.searchParams.get("filter")!;
+			const meta = (count: number) => ({ count, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) });
+			const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
+			if (dois) {
+				const results = dois.flatMap((doi) => (onOpenAlex.has(doi) ? [{ ...work(onOpenAlex.get(doi)!), doi: `https://doi.org/${doi}` }] : []));
+				return Response.json({ meta: meta(results.length), results });
+			}
+			const ids = filter.match(/^ids\.openalex:([^,]+)/u)![1]!.split("|");
+			return Response.json({ meta: meta(ids.length), results: ids.map((id) => work(Number(id.slice(1)))) });
+		}) as typeof fetch;
+		// The DOI lookup finds w6 and w8; w7 is nowhere yet.
+		const recordByDoi = async (doi: string) => (doi === "10.1000/w7" ? null : { itemType: "journalArticle", title: `Found by ${doi}`, DOI: doi });
+		const sync = async () => syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request, recordByDoi });
+		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => row.sourceRecordKey);
+
+		const first = await sync();
+		const made = await activeKeys(db, "openscholar-c1");
+		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", "doi:10.1000/w8"]);
+		expect((await db.select({ title: item.title }).from(item).where(eq(item.key, made.get("doi:10.1000/w6")!)))[0]?.title).toBe("Found by 10.1000/w6");
+		expect(await issues()).toEqual(["doi:10.1000/w7"]);
+		expect(first.unresolved).toBe(1);
+
+		// OpenAlex has w6 now: the same record becomes the work's. w8 left the collection: it's withdrawn.
+		onOpenAlex.set("10.1000/w6", 6);
+		items = items.filter((entry) => entry.itemId !== "item-8");
+		version = "v2";
+		await sync();
+		const after = await activeKeys(db, "openscholar-c1");
+		expect([...after.keys()].sort()).toEqual(["W2", "W6"]);
+		expect(after.get("W6")).toBe(made.get("doi:10.1000/w6"));
+		expect(await issues()).toEqual(["doi:10.1000/w7"]);
+	});
+}, 120_000);

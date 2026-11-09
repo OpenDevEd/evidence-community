@@ -19,8 +19,13 @@ import {
 	type OpenAlexSourceOptions,
 } from "../openalex/sync";
 import { OpenScholarCollectionGoneError, readOpenScholarCollection } from "./client";
+import { syncDoiRecords, withdrawDoiRecords, type RecordByDoi } from "./doi-records";
 
-export type OpenScholarSourceOptions = OpenAlexSourceOptions & { service: OpenScholarService };
+export type OpenScholarSourceOptions = OpenAlexSourceOptions & {
+	service: OpenScholarService;
+	/** The DOI lookup a paper OpenAlex doesn't have is made from; without it, such a paper is only listed. */
+	recordByDoi?: RecordByDoi;
+};
 
 function goneCode(error: unknown) {
 	if (!(error instanceof OpenScholarServiceError)) return null;
@@ -47,6 +52,7 @@ export async function syncOpenScholarCollection(
 			const gone = goneCode(error);
 			if (!gone) throw error;
 			await withdrawOpenAlexWorks(context);
+			await withdrawDoiRecords(context);
 			throw new OpenScholarCollectionGoneError(gone, collectionId);
 		}
 	};
@@ -63,13 +69,15 @@ export async function syncOpenScholarCollection(
 	}
 	// A paper with only a DOI is found on OpenAlex by it; the ones OpenAlex doesn't have are listed as issues.
 	const byDoi = await worksForDois(context, collection.dois, options);
-	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi)));
+	// One OpenAlex doesn't have is made from its DOI; the ones nothing finds are listed as issues.
+	const recorded = await syncDoiRecords(context, { dois: collection.dois, resolved: byDoi, recordByDoi: options.recordByDoi });
+	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
 	const ids = [...new Set([...collection.openAlexIds, ...byDoi.values()])].sort();
 	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list
 	// isn't resumed over the new one.
 	const version = byDoi.size ? `${collection.version}${RESOLVED}${createHash("sha256").update(ids.join(",")).digest("hex").slice(0, 16)}` : collection.version;
 	const result = await syncOpenAlexWorks(context, openAlexIdStream(ids, version, config.downloadPdfs), options);
-	return { ...result, unresolved: collection.unresolved + collection.dois.length - byDoi.size };
+	return { ...result, unresolved: collection.unresolved + collection.dois.length - byDoi.size - recorded.size };
 }
 
 /** The OpenAlex works these DOIs name, by DOI: those OpenAlex has. */
@@ -103,7 +111,7 @@ async function listMissing(context: SourceAdapterContext, dois: readonly string[
 		for (let at = 0; at < dois.length; at += ISSUES_PER_INSERT) {
 			await transaction
 				.insert(sourceRecordIssue)
-				.values(dois.slice(at, at + ISSUES_PER_INSERT).map((doi) => ({ sourceConnectionKey: key, sourceRecordKey: `doi:${doi}`, code: MISSING_CODE, message: `OpenAlex doesn't have ${doi} yet, so it isn't in the library. Each sync looks for it again.`, createdAt: now, updatedAt: now })))
+				.values(dois.slice(at, at + ISSUES_PER_INSERT).map((doi) => ({ sourceConnectionKey: key, sourceRecordKey: `doi:${doi}`, code: MISSING_CODE, message: `Neither OpenAlex nor the DOI lookup finds ${doi} yet, so it isn't in the library. Each sync looks for it again.`, createdAt: now, updatedAt: now })))
 				.onConflictDoNothing();
 		}
 	});

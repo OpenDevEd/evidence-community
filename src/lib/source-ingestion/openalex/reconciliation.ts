@@ -76,6 +76,8 @@ export async function reconcileOpenAlexMemberships(db: Database, args: Withdrawa
       SELECT links."itemKey" FROM "itemSourceLink" links JOIN "sourceSnapshot" snapshot
         ON snapshot."itemKey" = links."itemKey" AND snapshot."sourceConnectionKey" = links."sourceConnectionKey"
       WHERE links."sourceConnectionKey" = ${args.sourceConnectionKey} AND NOT links."remoteDeleted"
+        -- A collection paper made from its DOI isn't one of the scan's works: the collection's own sync keeps it.
+        AND links."sourceRecordKey" NOT LIKE 'doi:%'
         AND snapshot."fetchedAt" < ${new Date(args.startedAt)} ORDER BY links."itemKey" LIMIT 100
     `);
     const keys = missing.rows.map(row => row.itemKey);
