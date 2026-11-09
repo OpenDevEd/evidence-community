@@ -513,7 +513,7 @@
     "citationsByYear": "Citas por año",
     "filterOptions": "Opciones de filtro",
     "filterByTopic": "Filtrar por área temática",
-    "yearsCovered": "Años cubiertos",
+    "yearsCovered": "Años con citas",
     "citationTrendsOverTime": "Tendencias de citas a lo largo del tiempo",
     "available": "disponible",
     "inYear": "En {year}",
@@ -538,7 +538,7 @@
     "references": "referencias",
     "citingResources": "Citas en esta comunidad",
     "noCitingResources": "Ningún registro de esta comunidad la cita todavía",
-    "avgCitationsPerYear": "Citas medias por año",
+    "avgCitationsPerYear": "Media de citas por año con alguna",
     "peakYear": "Año máximo",
     "previous": "Anterior",
     "next": "Siguiente",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Tipos de estudio",
-    "read": "{count, number} leídos",
-    "notRead": "Aún no leído",
+    "read": "{count, number} clasificados por tipo",
+    "notRead": "Aún sin clasificar",
     "chip": "Tipo de estudio",
     "uncertain": "incierto",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Leído por <ai>IA</ai> a partir del {input, select, abstract {título y resumen} title {solo el título, ya que el registro no tiene resumen} other {inicio de su PDF, porque una lectura anterior no estaba segura}}, con {percent}% de certeza{uncertain, select, yes {, por lo que se marca como incierto} other {}}.",
     "method": {
       "title": "Cómo se asignan los tipos",
-      "when": "El tipo de cada registro se asigna cuando entra en la comunidad.",
+      "when": "La IA asigna el tipo de cada registro cuando entra en la comunidad; un editor puede cambiarlo.",
       "ai": {
         "lead": "La IA elige el único tipo que mejor encaja.",
         "text": "Lee el título y el resumen, o solo el título cuando un registro no tiene resumen."

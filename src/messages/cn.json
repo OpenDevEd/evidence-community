@@ -513,7 +513,7 @@
     "citationsByYear": "按年份引文",
     "filterOptions": "筛选选项",
     "filterByTopic": "按主题筛选",
-    "yearsCovered": "涵盖年份",
+    "yearsCovered": "有引用的年份",
     "citationTrendsOverTime": "引文趋势随时间变化",
     "available": "可用的",
     "inYear": "在 {year} 年",
@@ -538,7 +538,7 @@
     "references": "参考文献",
     "citingResources": "本社区中的引用",
     "noCitingResources": "本社区中尚无记录引用它",
-    "avgCitationsPerYear": "平均引用次数/年",
+    "avgCitationsPerYear": "有引用年份的年均引用",
     "peakYear": "峰年",
     "previous": "以前的",
     "next": "下一个",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "研究类型",
-    "read": "已判断 {count, number} 条",
-    "notRead": "尚未判断",
+    "read": "{count, number} 已按类型分类",
+    "notRead": "尚未分类",
     "chip": "研究类型",
     "uncertain": "不确定",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "由 <ai>AI</ai> 根据{input, select, abstract {标题和摘要} title {仅标题（该记录没有摘要）} other {PDF 开头部分（此前的判断不确定）}}判断，置信度 {percent}%{uncertain, select, yes {，因此标为不确定} other {}}。",
     "method": {
       "title": "类型如何判断",
-      "when": "每条记录在进入社区时判断其类型。",
+      "when": "每条记录进入社区时由 AI 设定类型，编辑可以修改。",
       "ai": {
         "lead": "AI 选出最贴切的一种类型。",
         "text": "它阅读标题和摘要；没有摘要的记录仅根据标题判断。"

@@ -513,7 +513,7 @@
     "citationsByYear": "Izibhekiselo ngonyaka",
     "filterOptions": "Izinketho zezihlungi",
     "filterByTopic": "Hlunga ngetopiki",
-    "yearsCovered": "Iminyaka ehlanganisiwe",
+    "yearsCovered": "Iminyaka enezicaphuno",
     "citationTrendsOverTime": "Izindlela zezibhekiselo ngokuhamba kwesikhathi",
     "available": "etholakalayo",
     "inYear": "Ngonyaka {year}",
@@ -538,7 +538,7 @@
     "references": "izinkomba",
     "citingResources": "Izibhekiselo kulo mphakathi",
     "noCitingResources": "Akukho rekhodi kulo mphakathi elibhekisela kulo okwamanje",
-    "avgCitationsPerYear": "Avareji yezibhekiselo/unyaka",
+    "avgCitationsPerYear": "Isilinganiso sezicaphuno ngonyaka onazo",
     "peakYear": "Unyaka wophezulu",
     "previous": "Okwangaphambili",
     "next": "Okulandelayo",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Izinhlobo zezifundo",
-    "read": "{count, number} kufundiwe",
-    "notRead": "Akukafundwa",
+    "read": "{count, number} kuhlelwe ngohlobo",
+    "notRead": "Akukahlelwa",
     "chip": "Uhlobo lwesifundo",
     "uncertain": "akuqinisekile",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Ifundwe yi-<ai>AI</ai> kusuka {input, select, abstract {esihlokweni nesifinyezweni} title {esihlokweni kuphela, ngoba irekhodi alinasifinyezo} other {ekuqaleni kwePDF yalo, ngoba ukufunda kwangaphambili kwayishiya ingaqinisekile}}, {percent}% iqinisekile{uncertain, select, yes {, ngakho imakwe njengengaqinisekile} other {}}.",
     "method": {
       "title": "Indlela izinhlobo ezifundwa ngayo",
-      "when": "Uhlobo lwerekhodi ngalinye lufundwa lapho lungena emphakathini.",
+      "when": "Uhlobo lwerekhodi ngalinye lusethwa yi-AI uma lingena emphakathini; umhleli angalushintsha.",
       "ai": {
         "lead": "I-AI ikhetha uhlobo olulodwa oluhambisana kakhulu.",
         "text": "Ifunda isihloko nesifinyezo, noma isihloko kuphela uma irekhodi lingenasifinyezo."
