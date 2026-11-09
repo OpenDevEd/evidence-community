@@ -241,23 +241,26 @@ async function createRecord(transaction: DatabaseTransaction, paper: Found, inpu
 }
 
 /** What the community holds of these papers: the ones sent before, and records of their works or DOIs. */
-export async function knownPapers(transaction: Database | DatabaseTransaction, found: readonly Found[]): Promise<Known> {
+export async function knownPapers(transaction: Database | DatabaseTransaction, found: readonly Found[], requestId?: string): Promise<Known> {
 	const works = [...new Set(found.flatMap((paper) => paper.openalexId ?? []))];
 	const dois = [...new Set(found.flatMap((paper) => paper.doi ?? []))];
 	const matches = [...(works.length ? [inArray(addedPaper.openalexId, works)] : []), ...(dois.length ? [inArray(addedPaper.doi, dois)] : [])];
 	const rows = matches.length ? await transaction.select().from(addedPaper).where(or(...matches)) : [];
 	const workKeys = await openAlexItemKeys(transaction, works);
 	const existingDois = (await findExistingRecords(transaction, found.map((paper) => importIdentifiers({ DOI: paper.doi })))).doi;
-	// A paper whose record was removed since (no draft left, and no record but a deleted one) is no longer here: sent
-	// again, it's added anew. One whose deleted record still holds its work or DOI keeps its row, which that record answers for.
-	const held = new Set([...workKeys.values(), ...existingDois.values()]);
 	const live = await liveRecords(transaction, [...rows.map((row) => row.itemKey), ...existingDois.values()]);
+	// A row stays while its record is in the community, while a deleted record still holds its work or DOI (that record
+	// answers for it), or when this very request sent it, so a repeat of the request is answered as the first was.
+	const held = new Set([...workKeys.values(), ...existingDois.values()]);
+	const kept = (row: (typeof rows)[number]) => live.has(row.itemKey) || held.has(row.itemKey) || (requestId !== undefined && sentBy(row, requestId));
+	const rowKeys = new Set(rows.filter(kept).map((row) => row.itemKey));
 	return {
-		sent: rows.filter((row) => live.has(row.itemKey)),
-		gone: rows.flatMap((row) => (live.has(row.itemKey) || held.has(row.itemKey) ? [] : [row.itemKey])),
+		sent: rows.filter((row) => live.has(row.itemKey) || (requestId !== undefined && sentBy(row, requestId))),
+		// Gone: its record removed since (no draft left, and no record but a deleted one). Sent again, it's added anew.
+		gone: rows.flatMap((row) => (kept(row) ? [] : [row.itemKey])),
 		workKeys,
-		// A deleted record with the same DOI doesn't hold the paper: only one still in the community does.
-		existingDois: new Map([...existingDois].filter(([, itemKey]) => live.has(itemKey))),
+		// A deleted record with the same DOI holds the paper only while it keeps its row: a paper taken off is added anew.
+		existingDois: new Map([...existingDois].filter(([, itemKey]) => live.has(itemKey) || rowKeys.has(itemKey))),
 	};
 }
 
@@ -287,7 +290,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 	return db.transaction(async (transaction) => {
 		// The OpenAlex writer's own lock: an import of the same work by another source waits, so neither makes a second record.
 		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
-		const known = await knownPapers(transaction, found);
+		const known = await knownPapers(transaction, found, input.requestId);
 		await forgetGone(transaction, known.gone);
 		const left = await suggestionsLeft(transaction, input.actor);
 		const made: Made[] = [];

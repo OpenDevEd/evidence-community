@@ -146,6 +146,18 @@ it("adds a paper again after the team removed it from the community, as a new re
 	});
 });
 
+it("answers a DOI-only paper the admin unpublished as already here when it's added again, without failing", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const doi = "10.68354/743356";
+		const missing = services([], { [doi]: { itemType: "journalArticle", title: "School leadership", DOI: doi } });
+		const { results } = await addPapers(db, storage, config, { requestId: "r44", publish: true, actor: owner, papers: [{ doi }] }, missing.lookup);
+		await unpublishNativeItem(db, results[0]!.itemKey!);
+		const again = await addPapers(db, storage, config, { requestId: "r45", publish: true, actor: owner, papers: [{ doi }] }, missing.lookup);
+		expect(again.results).toMatchObject([{ outcome: "existing", itemKey: results[0]!.itemKey }]);
+	});
+});
+
 it("answers a repeated request as before, and reports a paper already here instead of adding it again", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
