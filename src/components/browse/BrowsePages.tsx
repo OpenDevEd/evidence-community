@@ -9,6 +9,7 @@ import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/features/items/Resource";
 import { FacetOption } from "@/components/features/collections/FacetOption";
 import { HeadFigure, SidebarCard } from "@/components/features/collections/SidebarCard";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import { TextLink, muted } from "@/components/digests/DigestPrimitives";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { readBrowsePage, readBrowseYears } from "@/lib/browse-records";
@@ -80,5 +81,28 @@ export function BrowseYear({ year, page, perPage, data, years }: { year: number 
       <div className="flex flex-col gap-4">{data.cards.map((card) => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
     </AuthorProfilesContext>
     <div className="mt-8"><BrowsePager base={`/browse/${year ?? "undated"}`} page={page} pages={data.pages} total={data.total} perPage={perPage} /></div>
+  </PageContainer>;
+}
+
+/** The year index while it's on its way: the heading as it will be, and decade cards whose rows are still loading. */
+export function BrowseYearsPlaceholder() {
+  const t = useTranslations("browse");
+  return <PageContainer className="mx-auto">
+    <header className="mb-8"><h1 className="font-heading text-4xl font-semibold tracking-tight sm:text-5xl">{t("title")}</h1><Skeleton isLoaded={false} className="mt-4 h-5 w-96 max-w-full rounded-lg" /></header>
+    <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {[0, 1, 2].map((card) => <SidebarCard key={card} title={<Skeleton isLoaded={false} className="h-6 w-20 rounded-lg" />}>
+        <div className="flex flex-col gap-4">{[0, 1, 2, 3, 4].map((row) => <Skeleton key={row} isLoaded={false} className="h-6 w-full rounded-lg" />)}</div>
+      </SidebarCard>)}
+    </div>
+  </PageContainer>;
+}
+
+/** A year's page while it's on its way: its year, already known from the address, over result cards still loading. */
+export function BrowseYearPlaceholder({ year }: { year: string }) {
+  const t = useTranslations("browse");
+  return <PageContainer className="mx-auto max-w-5xl">
+    <TextLink href="/browse" back>{t("title")}</TextLink>
+    <header className="mb-6 mt-6"><h1 className="font-heading text-5xl font-semibold tabular-nums tracking-tight">{year === "undated" ? t("noYear") : year}</h1><Skeleton isLoaded={false} className="mt-3 h-5 w-28 rounded-lg" /></header>
+    <div className="flex flex-col gap-4">{[0, 1, 2].map((card) => <Resource key={card} as="div" abstract hideUnapi isLoading />)}</div>
   </PageContainer>;
 }
