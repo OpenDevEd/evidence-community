@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { connection, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { adminRoleOf } from "@/lib/admin/access";
@@ -10,6 +10,8 @@ import { getSignedInOpenScholarUser } from "@/lib/readers/session";
  * reused for about a minute (../../../../lib/admin/access.ts).
  */
 export async function GET(request: Request) {
+	// Each answer belongs to one signed-in reader, so none is prerendered at build time.
+	await connection();
 	const config = await getLibraryConfig();
 	const reader = await getSignedInOpenScholarUser(request.headers, config);
 	const admin = reader ? (await adminRoleOf(config, reader.clerkUserId)) !== null : false;
