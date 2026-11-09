@@ -61,7 +61,7 @@ function digestPage(slug: string | undefined) {
 type ServerFlags = { contactForm: boolean; home: { intro?: ReactNode } | null };
 
 /** What each page draws before its server data is in, by the first part of its address and the id after it. */
-const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) => ReactNode> = {
+const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags, sub: string | undefined) => ReactNode> = {
 	"": (_, server) => server.home && <HomePlaceholder intro={server.home.intro} />,
 	profile: (id) => id && <ReaderProfile data={{ id, name: "", image: null, viewer: null, bookmarks: {}, collections: { rows: [], chosen: null, page: 1, pages: 1, total: 0 }, shared: null }} loading />,
 	lib: (id) => (id ? <ItemLoading /> : <EvidenceLibrary />),
@@ -78,7 +78,7 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	digests: (slug) => <DigestFallback slug={slug} />,
 	contact: (_, server) => <Contact formEnabled={server.contactForm} />,
 	invitations: (id) => id && <CollectionInvitationPlaceholder invitationId={id} />,
-	browse: (year) => (year ? <BrowseYearPlaceholder year={year} /> : <BrowseYearsPlaceholder />),
+	browse: (year, _, month) => (year ? <BrowseYearPlaceholder year={year} month={month} /> : <BrowseYearsPlaceholder />),
 };
 
 /** Pages that bring their own frame and loading state; every other page gets at least the generic stand-in. */
@@ -101,9 +101,9 @@ export default function PageFallback(server: ServerFlags) {
 }
 
 function fallbackFor(pathname: string, server: ServerFlags) {
-	const [, section = "", id] = pathname.split("/");
+	const [, section = "", id, sub] = pathname.split("/");
 	if (OWN_FRAME.has(section)) return null;
-	return FALLBACKS[section]?.(id, server) || <PagePlaceholder />;
+	return FALLBACKS[section]?.(id, server, sub) || <PagePlaceholder />;
 }
 
 /**

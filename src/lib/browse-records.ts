@@ -15,6 +15,10 @@ export const BROWSE_PAGE_SIZE = 100;
 /** The year a record was published, read from its date however it was written: "2021", "2021-05-13", "May 2021". */
 const yearOf = sql<string | null>`substring(${item.date} from '(?:^|[^0-9])((?:1[5-9]|20)[0-9]{2})(?:[^0-9]|$)')`;
 
+/** The month a record was published, when its date gives one ("2021-05-13", "2021-05"). */
+const monthOf = sql<string | null>`substring(${item.date} from '^(?:1[5-9]|20)[0-9]{2}-([01][0-9])')`;
+
+
 /** How many public records each year holds, newest first; records with no readable year are counted apart. */
 export async function readBrowseYears(config: LibraryServerConfig) {
   const database = await getDatabaseForConfig(config);
@@ -27,12 +31,13 @@ export async function readBrowseYears(config: LibraryServerConfig) {
 }
 
 /**
- * One page of a year's records, newest first, as the cards the library's results list shows, with their authors' profiles.
+ * One page of a year's records (or one month's of them), newest first, as the cards the library's results list shows, with their authors' profiles.
  * `year` null is the records with no readable year.
  */
-export async function readBrowsePage(config: LibraryServerConfig, year: number | null, page: number) {
+export async function readBrowsePage(config: LibraryServerConfig, year: number | null, page: number, month?: number | "unknown") {
   const database = await getDatabaseForConfig(config);
-  const inYear = and(publicRecordCondition(database, config), year === null ? sql`${yearOf} is null` : sql`${yearOf} = ${String(year)}`);
+  const inMonth = month === undefined ? undefined : month === "unknown" ? sql`(${monthOf} is null or ${monthOf}::int not between 1 and 12)` : sql`${monthOf} = ${String(month).padStart(2, "0")}`;
+  const inYear = and(publicRecordCondition(database, config), year === null ? sql`${yearOf} is null` : sql`${yearOf} = ${String(year)}`, inMonth);
   const [rows, [total]] = await Promise.all([
     database.select({ key: item.key }).from(item).where(inYear).orderBy(desc(item.date), asc(item.key))
       .limit(BROWSE_PAGE_SIZE).offset((page - 1) * BROWSE_PAGE_SIZE),
@@ -46,4 +51,19 @@ export async function readBrowsePage(config: LibraryServerConfig, year: number |
   const profiles = await readAuthorProfiles(cards.flatMap((card) => card.creators ?? []).flatMap((creator) => (creator.authorProfileId ? [creator.authorProfileId] : [])));
   const records = Number(total?.total ?? 0);
   return { cards, profiles, total: records, pages: Math.max(1, Math.ceil(records / BROWSE_PAGE_SIZE)) };
+}
+
+/** A year with more records than this is split by month, so every page of it stays a few links from the home page. */
+export const MONTH_SPLIT = 500;
+
+
+/** How many of a year's records fall in each month, and how many give no month. */
+export async function readBrowseMonths(config: LibraryServerConfig, year: number) {
+  const database = await getDatabaseForConfig(config);
+  const rows = await database.select({ month: monthOf, records: count() }).from(item)
+    .where(and(publicRecordCondition(database, config), sql`${yearOf} = ${String(year)}`)).groupBy(monthOf).orderBy(sql`${monthOf} desc nulls last`);
+  return {
+    months: rows.flatMap((row) => (row.month && Number(row.month) >= 1 && Number(row.month) <= 12 ? [{ month: Number(row.month), records: Number(row.records) }] : [])),
+    unknown: rows.filter((row) => !row.month || Number(row.month) < 1 || Number(row.month) > 12).reduce((sum, row) => sum + Number(row.records), 0),
+  };
 }

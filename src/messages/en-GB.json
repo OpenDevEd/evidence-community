@@ -1696,7 +1696,10 @@
     "decade": "{decade}s",
     "noYear": "No year",
     "noYearLink": "Records with no year",
-    "otherYears": "Other years",
-    "footerLink": "Browse all records by year"
+    "footerLink": "Browse all records by year",
+    "otherPeriods": "Before and after",
+    "months": "Months",
+    "noMonth": "No month given",
+    "noMonthIn": "{year}, no month given"
   }
 }
