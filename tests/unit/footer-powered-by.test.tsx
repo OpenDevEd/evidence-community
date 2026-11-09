@@ -65,6 +65,6 @@ describe("footer powered-by link", () => {
 		const markup = renderToStaticMarkup(<Footer />);
 
 		expect(markup).not.toContain("data-library-powered-by");
-		expect(markup).not.toContain(openScholar);
+		expect(markup).not.toContain(`href="${openScholar}"`);
 	});
 });

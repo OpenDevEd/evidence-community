@@ -618,7 +618,9 @@
     "acrossAllYears": "katika miaka yote",
     "topicFilteringUnavailable": "Uchujaji wa mada unahitaji data ya ziada ambayo haipatikani sasa",
     "rateLimitedMessage": "Umefikia kikomo cha maombi. Jaribu tena baada ya sekunde {seconds}.",
-    "suggestPapers": "Pendekeza makala"
+    "suggestPapers": "Pendekeza makala",
+    "adminMenuItem": "Usimamizi",
+    "joinThisTeam": "Jiunge na timu hii"
   },
   "ai": {
     "sourcesTitle": "Vyanzo",

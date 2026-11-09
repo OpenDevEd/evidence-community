@@ -125,11 +125,13 @@ describe("public library configuration", () => {
 			enabled: serverConfig.citations.enabled,
 			showUrl: serverConfig.citations.showUrl,
 		});
-		// Only the account page reaches the browser: never the OAuth client secret,
+		// Only the account page and the library's ID reach the browser: never the OAuth client secret,
 		// the machine credential or the session secret.
 		expect(publicConfig.authentication).toEqual({
 			openScholar: {
 				accountUrl: serverConfig.authentication.openScholar.accountUrl,
+				// For the link to apply to join its team.
+				libraryId: serverConfig.authentication.openScholar.libraryId,
 				// Only the site of the library's page on OpenScholar, never the page itself.
 				siteUrl: new URL(serverConfig.authentication.openScholar.libraryUrl).origin,
 			},
@@ -150,7 +152,7 @@ describe("public library configuration", () => {
 			"google-client-secret-value",
 			"12345678901234567890123456789012",
 			"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			"kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			// Not the library's OpenScholar ID: the link to join its team names it, and OpenScholar's public directory lists it.
 			"https://spotted-woodpecker-546.convex.site",
 			"smtp-password",
 			"smtp-user",

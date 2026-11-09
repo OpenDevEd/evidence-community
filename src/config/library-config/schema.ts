@@ -2399,6 +2399,8 @@ const publicAuthenticationSchema = z
 	.object({
 		openScholar: z.object({
 			accountUrl: publicHttpsUrlSchema,
+			/** Its ID in OpenScholar, which the link to apply to join it names. */
+			libraryId: z.string().regex(/^[a-z0-9]+$/u).max(128),
 			/** The OpenScholar this library belongs to, which every link to OpenScholar is built on. */
 			siteUrl: publicHttpsOriginSchema,
 		}).strict(),

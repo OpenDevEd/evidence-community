@@ -217,6 +217,7 @@ export default function Providers({
 	gapmaps,
 	storedConsent,
 	reader,
+	readerAdmin,
 }: {
 	children: ReactNode;
 	status: RuntimeStatus;
@@ -225,6 +226,8 @@ export default function Providers({
 	storedConsent: string | null;
 	/** Who is signed in, as the server read it with the page. */
 	reader: Reader | null;
+	/** Whether they have a role in this library above viewer, as the server read it. */
+	readerAdmin: boolean;
 }) {
 	const router = useRouter();
 	// The component library's own labels (a combobox's "Show suggestions", a field's "Clear input", "Dismiss") in the
@@ -242,7 +245,7 @@ export default function Providers({
 		>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<ReaderSessionProvider reader={reader}>
+					<ReaderSessionProvider reader={reader} admin={readerAdmin}>
 						<AnalyticsConsentProvider
 							storedConsentFromServer={storedConsent}
 						>

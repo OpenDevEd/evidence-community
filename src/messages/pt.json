@@ -618,7 +618,9 @@
     "acrossAllYears": "ao longo de todos os anos",
     "topicFilteringUnavailable": "A filtragem de tópicos requer dados adicionais que não estão disponíveis no momento",
     "rateLimitedMessage": "Você atingiu o limite de solicitações. Tente novamente em {seconds} segundos.",
-    "suggestPapers": "Sugerir artigos"
+    "suggestPapers": "Sugerir artigos",
+    "adminMenuItem": "Administração",
+    "joinThisTeam": "Entrar nesta equipe"
   },
   "ai": {
     "sourcesTitle": "Fontes",
