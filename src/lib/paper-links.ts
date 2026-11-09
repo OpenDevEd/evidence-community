@@ -56,7 +56,8 @@ export function paperLinkOf(raw: string): PaperLink | null {
 	if (own) return { kind: "own", work: own.toUpperCase() };
 	const address = paperAt(given);
 	if (address) return address;
-	const doi = normalizeDoi(trimDoi(raw.match(/10\.\d{4,9}\/\S+/iu)?.[0] ?? ""));
+	// Angle brackets and quotes never belong to a DOI; its own round brackets stay for trimDoi to weigh.
+	const doi = normalizeDoi(trimDoi(raw.trim().replace(/^[<"']+/u, "").replace(/[>"']+[.,;:!?]*$/u, "").match(/10\.\d{4,9}\/\S+/iu)?.[0] ?? ""));
 	return doi ? { kind: "doi", doi } : null;
 }
 

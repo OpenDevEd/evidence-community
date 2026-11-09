@@ -73,11 +73,12 @@ const resolvedSchema = z.object({ papers: z.array(z.object({ openalexId: z.strin
 
 /**
  * The paper each link names, as Openscholar follows it: its paper pages, a paper only its index has, a community's
- * record, an OpenAlex work with its DOI. Null for one where it finds none; up to 100 links a call.
+ * record, an OpenAlex work with its DOI. Null for one where it finds none; up to 100 links a call. A `reader`'s
+ * lookups count against their own Openscholar search allowance, as their searches do.
  */
-export async function papersAtLinks(service: OpenScholarService, links: readonly string[]): Promise<Array<PaperIds | null>> {
+export async function papersAtLinks(service: OpenScholarService, links: readonly string[], reader?: string): Promise<Array<PaperIds | null>> {
 	if (!links.length) return [];
-	const { papers } = resolvedSchema.parse(await postToOpenScholar(service, RESOLVE_PATH, { contractVersion: 1, links }));
+	const { papers } = resolvedSchema.parse(await postToOpenScholar(service, RESOLVE_PATH, { contractVersion: 1, links, ...(reader ? { clerkUserId: reader } : {}) }));
 	if (papers.length !== links.length) throw new Error("Openscholar answered a different number of papers than it was asked about.");
 	return papers;
 }

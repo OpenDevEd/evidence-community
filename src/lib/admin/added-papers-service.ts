@@ -92,8 +92,11 @@ const workOf = (id: string | null | undefined) => id?.trim().match(/(?:^|\/)(W[1
 export const workIdOf = (work: unknown) => workOf(String((work as { id?: unknown } | null)?.id ?? ""));
 const chunks = <T,>(values: readonly T[]) => Array.from({ length: Math.ceil(values.length / OPENALEX_MAX_IDS_PER_FILTER) }, (_, at) => values.slice(at * OPENALEX_MAX_IDS_PER_FILTER, (at + 1) * OPENALEX_MAX_IDS_PER_FILTER));
 
-/** The lookups a running library uses: its own OpenAlex key, and its Zotero translation service for DOIs. */
-export function paperLookupFor(config: LibraryServerConfig): PaperLookup {
+/**
+ * The lookups a running library uses: its own OpenAlex key, its Zotero translation service for DOIs, and Openscholar for
+ * its own links, where a `reader`'s lookups count against their allowance.
+ */
+export function paperLookupFor(config: LibraryServerConfig, reader?: string): PaperLookup {
 	const apiKey = config.services.openAlex?.apiKey;
 	const client = apiKey ? new OpenAlexClient({ apiKey }) : null;
 	const translationUrl = config.services.zotero.translationUrl;
@@ -120,7 +123,7 @@ export function paperLookupFor(config: LibraryServerConfig): PaperLookup {
 			const [found] = await searchZoteroIdentifier(doi, translationUrl);
 			return found ? importPayloadFromZoteroItem(found) : null;
 		},
-		papersAtLinks: (links) => papersAtLinks(config.authentication.openScholar, links),
+		papersAtLinks: (links) => papersAtLinks(config.authentication.openScholar, links, reader),
 	};
 }
 
@@ -362,7 +365,7 @@ export async function addPapers(
 	storage: EvidenceFileStorage,
 	config: LibraryServerConfig,
 	input: AddPapersInput,
-	lookup: PaperLookup = paperLookupFor(config),
+	lookup: PaperLookup = paperLookupFor(config, input.actor.role === "reader" ? input.actor.userId : undefined),
 ): Promise<{ results: AddedPaperResult[] }> {
 	if (input.papers.length > ADD_PAPERS_MAX) throw new AdminValidationError(`Add no more than ${ADD_PAPERS_MAX} papers at once.`);
 	if (input.publish && reviewerOf(input.actor).role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish papers.");
