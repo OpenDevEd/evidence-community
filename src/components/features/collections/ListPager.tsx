@@ -29,7 +29,7 @@ export function ListPager({ page, pages, total, perPage, onChange, href }: Pager
 			</span>
 			{href ? (
 				// The moving highlight belongs to NextUI's own items; these are links, so the current one carries the highlight itself.
-				<Pagination total={pages} page={page} siblings={1} showControls disableCursorAnimation renderItem={(item) => <PageLink key={item.key} item={item} page={page} pages={pages} href={href} />} />
+				<Pagination total={pages} page={page} siblings={1} showControls disableCursorAnimation renderItem={(item) => <PageLink key={item.key} item={item} page={page} pages={pages} href={href} label={item.value === "prev" ? t("previous") : item.value === "next" ? t("next") : undefined} />} />
 			) : (
 				<Pagination total={pages} page={page} onChange={onChange} siblings={0} size="sm" showControls />
 			)}
@@ -45,11 +45,11 @@ function pageTarget(value: ItemProps["value"], page: number, pages: number) {
 	return typeof target === "number" && target >= 1 && target <= pages ? target : null;
 }
 
-function PageLink({ item: { ref, value, isActive, className }, page, pages, href }: { item: ItemProps; page: number; pages: number; href: (page: number) => string }) {
+function PageLink({ item: { ref, value, isActive, className }, page, pages, href, label }: { item: ItemProps; page: number; pages: number; href: (page: number) => string; label: string | undefined }) {
 	const target = pageTarget(value, page, pages);
-	if (target === null) return <span ref={ref} className={className} aria-disabled={value !== "dots"}>{ARROWS[value]}</span>;
+	if (target === null) return <span ref={ref} className={className} aria-disabled={value !== "dots"} aria-label={label}>{ARROWS[value]}</span>;
 	return (
-		<Link ref={ref} href={href(target)} className={twMerge(className, isActive && "!border-transparent !bg-accent !text-white")} aria-current={isActive ? "page" : undefined}>
+		<Link ref={ref} href={href(target)} className={twMerge(className, isActive && "!border-transparent !bg-accent !text-white")} aria-current={isActive ? "page" : undefined} aria-label={label}>
 			{ARROWS[value] ?? value}
 		</Link>
 	);

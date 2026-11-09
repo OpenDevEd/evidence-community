@@ -13,10 +13,10 @@ import { readAuthorProfiles } from "@/lib/authors/catalog-server";
 export const BROWSE_PAGE_SIZE = 100;
 
 /** The year a record was published, read from its date however it was written: "2021", "2021-05-13", "May 2021". */
-const yearOf = sql<string | null>`substring(${item.date} from '(?:^|[^0-9])((?:1[5-9]|20)[0-9]{2})(?:[^0-9]|$)')`;
+const yearOf = sql<string | null>`substring(${item.date} from '(?:^|[^0-9])([12][0-9]{3})(?:[^0-9]|$)')`;
 
 /** The month a record was published, when its date gives one ("2021-05-13", "2021-05"). */
-const monthOf = sql<string | null>`substring(${item.date} from '^(?:1[5-9]|20)[0-9]{2}-([01][0-9])')`;
+const monthOf = sql<string | null>`substring(${item.date} from '^[12][0-9]{3}-([01][0-9])')`;
 
 
 /** How many public records each year holds, newest first; records with no readable year are counted apart. */
@@ -39,7 +39,7 @@ export async function readBrowsePage(config: LibraryServerConfig, year: number |
   const inMonth = month === undefined ? undefined : month === "unknown" ? sql`(${monthOf} is null or ${monthOf}::int not between 1 and 12)` : sql`${monthOf} = ${String(month).padStart(2, "0")}`;
   const inYear = and(publicRecordCondition(database, config), year === null ? sql`${yearOf} is null` : sql`${yearOf} = ${String(year)}`, inMonth);
   const [rows, [total]] = await Promise.all([
-    database.select({ key: item.key }).from(item).where(inYear).orderBy(desc(item.date), asc(item.key))
+    database.select({ key: item.key }).from(item).where(inYear).orderBy(sql`${monthOf} desc nulls last`, desc(item.date), asc(item.key))
       .limit(BROWSE_PAGE_SIZE).offset((page - 1) * BROWSE_PAGE_SIZE),
     database.select({ total: count() }).from(item).where(inYear),
   ]);
@@ -54,7 +54,7 @@ export async function readBrowsePage(config: LibraryServerConfig, year: number |
 }
 
 /** A year as a browse address writes it. */
-export const BROWSE_YEAR = /^(1[5-9]|20)\d{2}$/;
+export const BROWSE_YEAR = /^[12]\d{3}$/;
 
 /** The page in `?page=`; anything unreadable is the first. */
 export const browsePageOf = (raw: string | undefined) => Math.max(1, Number.parseInt(raw ?? "1", 10) || 1);
