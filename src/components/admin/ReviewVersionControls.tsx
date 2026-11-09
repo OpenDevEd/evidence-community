@@ -1,5 +1,6 @@
 "use client";
 import { adminPanelTabState } from "./admin-tab-styles";
+import { returnWordsFor, useReturnWords } from "./review-words";
 import { useAdminSession } from "./AdminSessionProvider";
 import type { ReactNode } from "react";
 import {
@@ -132,7 +133,7 @@ function reviewVersionPresentation(
 	return {
 		dataState: reviewState ? snapshot?.reviewState : detail.state,
 		state,
-		stateLabel: reviewState ? state.label : recordReviewStateLabel(detail, state),
+		stateLabel: reviewState ? (snapshot?.reviewState === "returned" ? returnWordsFor(detail).state : state.label) : recordReviewStateLabel(detail, state),
 		title: reviewVersionTitle(detail, viewingSubmitted),
 	};
 }
@@ -252,7 +253,7 @@ export function ReviewStatusLabel({
 				size={14}
 				className={state.className}
 			/>
-			{state.label}
+			{state === reviewStates.returned ? returnWordsFor(detail).state : state.label}
 		</span>
 	) : (
 		<RecordStateChip state={detail.state} />
@@ -310,7 +311,11 @@ export function ReviewWithdrawButton({
 	compact?: boolean;
 }) {
 	const session = useAdminSession();
-	const canWithdraw = session.canPublish || submittedBy === session.userId;
+	const words = useReturnWords();
+	const own = submittedBy === session.userId;
+	// A paper someone sent is theirs to withdraw; the team declines it instead, with a reason they read.
+	if (words.senderOnlyWithdraw && !own) return null;
+	const canWithdraw = session.canPublish || own;
 	const button = (
 		<Button
 			size="xs"
@@ -340,6 +345,7 @@ export function ReviewDraftNotice({
 	onConflicts: () => void;
 	feedback: string | null | undefined;
 }) {
+	const words = useReturnWords();
 	return (
 		<>
 			{notice}
@@ -358,7 +364,7 @@ export function ReviewDraftNotice({
 				<div className="mt-3 rounded-xl bg-amber-500/[0.07] p-3">
 					<p className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
 						<HugeiconsIcon icon={Comment01Icon} size={14} />
-						Changes requested
+						{words.state}
 					</p>
 					<p className="mt-1 whitespace-pre-wrap text-[11px] leading-relaxed text-black/65 dark:text-white/65">
 						{feedback}

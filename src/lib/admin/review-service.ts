@@ -25,7 +25,7 @@ import {
 	itemReview,
 	itemReviewFile,
 } from "@/db/schema/review";
-import { itemFilePublication } from "@/db/schema/source";
+import { addedPaper, itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { publicationTarget } from "@/db/schema/publication";
 import { AdminValidationError } from "./errors";
@@ -276,6 +276,18 @@ async function lockPendingReview(
 	return review;
 }
 
+const isAddedPaper = async (transaction: DatabaseTransaction, itemKey: string) =>
+	(await transaction.select({ itemKey: addedPaper.itemKey }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey)).limit(1)).length > 0;
+
+/** Refuses what the person may not do to the review: only the team returns one, and a Creator withdraws only their own. */
+async function assertMayResolve(transaction: DatabaseTransaction, review: { itemKey: string; submittedBy: string }, action: "returned" | "withdrawn", actor: ReviewActor) {
+	if (action === "returned" && actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can return a review.");
+	if (action !== "withdrawn" || review.submittedBy === actor.userId) return;
+	if (actor.role === "creator") throw new AdminValidationError("You can only withdraw your own submission.");
+	// A paper someone sent can't be changed by them, only sent again: the team declines it with a reason they read.
+	if (await isAddedPaper(transaction, review.itemKey)) throw new AdminValidationError("Only the person who sent this paper can withdraw it. Decline it with a reason instead.");
+}
+
 export async function resolveItemReview(
 	db: Database,
 	input: {
@@ -292,18 +304,7 @@ export async function resolveItemReview(
 			input.reviewId,
 			input.expectedRevision,
 		);
-		if (input.action === "returned" && actor.role === "creator")
-			throw new AdminValidationError(
-				"Only an Editor or Owner can return a review.",
-			);
-		if (
-			input.action === "withdrawn" &&
-			actor.role === "creator" &&
-			review.submittedBy !== actor.userId
-		)
-			throw new AdminValidationError(
-				"You can only withdraw your own submission.",
-			);
+		await assertMayResolve(transaction, review, input.action, actor);
 		await releaseSourceFileChoices(transaction, review.id);
 		const [updated] = await transaction
 			.update(itemReview)

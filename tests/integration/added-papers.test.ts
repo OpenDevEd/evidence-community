@@ -465,6 +465,17 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 	});
 });
 
+it("leaves withdrawing a paper to the person who sent it, so the team declines it with a reason instead", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(82)]);
+		const key = (await addPapers(db, storage, config, { requestId: "w1", publish: false, actor: creator, papers: [{ openalexId: "W82" }] }, lookup)).results[0]!.itemKey!;
+		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		await expect(resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "withdrawn" }, editor)).rejects.toThrow(/Decline it with a reason/);
+		await resolveItemReview(db, { reviewId: review!.id, expectedRevision: review!.revision, action: "returned", note: "Outside this community's focus" }, editor);
+	});
+});
+
 it("refuses to withdraw a paper whose request stopped before it reached the review queue", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();

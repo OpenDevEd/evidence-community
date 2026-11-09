@@ -1,5 +1,6 @@
 "use client";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import { useReturnWords } from "./review-words";
 import { useRef, useState } from "react";
 import {
 	ModalBody,
@@ -50,6 +51,7 @@ export function ReviewActions({
 	publishBlocked = false,
 }: ReviewActionProps) {
 	const { canPublish } = useAdminSession();
+	const words = useReturnWords();
 	const state = useReviewAction(
 		snapshot,
 		onUpdated,
@@ -93,7 +95,7 @@ export function ReviewActions({
 							setDialog("changes");
 						}}
 					>
-						Request changes
+						{words.action}
 					</Button>
 				</div>
 			) : (
@@ -119,6 +121,7 @@ function ReviewDialog({
 }: Pick<ReviewActionProps, "snapshot" | "disabled"> & {
 	state: ReturnType<typeof useReviewAction>;
 }) {
+	const words = useReturnWords();
 	const {
 		dialog,
 		feedback,
@@ -142,7 +145,7 @@ function ReviewDialog({
 				<ModalHeader className="flex items-center justify-between gap-3">
 					{dialog === "publish"
 						? "Publish submitted version"
-						: "Request changes"}
+						: words.title}
 					<Button
 						isIconOnly
 						size="xs"
@@ -171,8 +174,8 @@ function ReviewDialog({
 					</div>
 					{dialog === "changes" ? (
 						<Textarea
-							label="What needs to change?"
-							placeholder="Describe the changes needed before publication"
+							label={words.field}
+							placeholder={words.placeholder}
 							minRows={4}
 							value={feedback}
 							onValueChange={setFeedback}
@@ -240,7 +243,7 @@ function ReviewDialog({
 							? confirmCorrection
 								? "Publish correction"
 								: "Publish version"
-							: "Send feedback"}
+							: words.confirm}
 					</Button>
 				</ModalFooter>
 			</ModalContent>
@@ -254,6 +257,7 @@ function useReviewAction(
 	disabled: boolean,
 	publishBlocked: boolean,
 ) {
+	const words = useReturnWords();
 	const [dialog, setDialog] = useState<"publish" | "changes" | null>(null);
 	const [feedback, setFeedback] = useState("");
 	const [error, setError] = useState("");
@@ -294,7 +298,7 @@ function useReviewAction(
 			setDialog(null);
 			setFeedback("");
 			setCorrectionRevision(null);
-			await finishReviewUpdate(onUpdated, receipts, dialog);
+			await finishReviewUpdate(onUpdated, receipts, dialog, words.done);
 		} catch (error) {
 			setCorrectionRevision(
 				error instanceof AdminApiError &&
@@ -332,13 +336,14 @@ async function finishReviewUpdate(
 	onUpdated: ReviewActionProps["onUpdated"],
 	receipts: readonly AdminSearchIndexReceipt[],
 	dialog: "publish" | "changes" | null,
+	returned: string,
 ) {
 	try {
 		await onUpdated(receipts);
 		toast.success(
 			dialog === "publish"
 				? "Submitted version published"
-				: "Changes requested",
+				: returned,
 		);
 	} catch (error) {
 		toast.error(

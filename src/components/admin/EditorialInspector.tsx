@@ -2,6 +2,7 @@
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import type { ComponentProps, ReactNode } from "react";
 import useSWR from "swr";
+import { ReturnWordsContext, returnWordsFor } from "./review-words";
 import { getAdminItem, adminErrorMessage } from "./admin-api";
 import type { ConflictingDraft } from "@/lib/admin/errors";
 import type { AdminReviewSnapshot } from "./admin-api";
@@ -43,15 +44,18 @@ type Props = ComponentProps<typeof AdminInspector> & {
 export function EditorialInspector(props: Props) {
 	if (!props.detail) return <AdminInspector {...props} />;
 	return (
-		<ReviewInspector
-			key={`${props.detail.key}:${props.reviewQueue}`}
-			{...props}
-			detail={props.detail}
-		/>
+		// An added paper is declined, not sent back for changes its sender can't make.
+		<ReturnWordsContext value={returnWordsFor(props.detail)}>
+			<ReviewInspector
+				key={`${props.detail.key}:${props.reviewQueue}`}
+				{...props}
+				detail={props.detail}
+			/>
+		</ReturnWordsContext>
 	);
 }
 
-/** Withdraw shares the action bar with publish and request-changes only for a publisher on a pending submitted version. */
+/** Withdraw shares the action bar with publish and request-changes (or Decline) only for a publisher on a pending submitted version. */
 function withdrawCompact(viewingSubmitted: boolean, pending: boolean, canPublish: boolean) {
 	return viewingSubmitted && pending && canPublish;
 }
