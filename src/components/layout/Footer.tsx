@@ -100,6 +100,7 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const { contact, footer, identity, legal } = useLibraryConfig();
+	const tBrowse = useTranslations("browse");
 	const { capabilities, openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -306,6 +307,11 @@ export default function Footer() {
 					})}
 				</section>
 			)}
+
+			{/* Every record is a few plain links from here, which Google Scholar asks for and readers can use too. */}
+			<Link href="/browse" className="text-sm text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
+				{tBrowse("footerLink")}
+			</Link>
 
 			{(footer.disclaimer || footer.attribution || footer.poweredBy) && (
 				<div className="flex w-full max-w-4xl flex-col gap-4 text-center text-sm text-black/60 dark:text-white/60">

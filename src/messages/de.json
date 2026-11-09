@@ -1687,5 +1687,19 @@
     "sentHint": "In Deine Einreichungen auf Openscholar siehst du, wo jeder steht: wartend, veröffentlicht oder mit dem Grund der Prüfung zurückgegeben.",
     "yourSubmissions": "Deine Einreichungen",
     "emptyLink": "Kennst du einen Artikel, der hierher gehört? Schlag ihn vor"
+  },
+  "browse": {
+    "title": "Nach Jahr durchsuchen",
+    "intro": "Alle Einträge in {name}, nach Erscheinungsjahr.",
+    "recordsWord": "{count, plural, one {Eintrag} other {Einträge}}",
+    "records": "{count, plural, one {# Eintrag} other {# Einträge}}",
+    "decade": "{decade}er",
+    "noYear": "Ohne Jahr",
+    "noYearLink": "Einträge ohne Jahr",
+    "footerLink": "Alle Einträge nach Jahr durchsuchen",
+    "otherPeriods": "Davor und danach",
+    "months": "Monate",
+    "noMonth": "Ohne Monatsangabe",
+    "noMonthIn": "{year}, ohne Monatsangabe"
   }
 }

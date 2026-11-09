@@ -1687,5 +1687,19 @@
     "sentHint": "Verás en qué punto está cada uno en Tus envíos de Openscholar: en espera, publicado o devuelto con el motivo del revisor.",
     "yourSubmissions": "Tus envíos",
     "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo"
+  },
+  "browse": {
+    "title": "Explorar por año",
+    "intro": "Todos los registros de {name}, por año de publicación.",
+    "recordsWord": "{count, plural, one {registro} other {registros}}",
+    "records": "{count, plural, one {# registro} other {# registros}}",
+    "decade": "Años {decade}",
+    "noYear": "Sin año",
+    "noYearLink": "Registros sin año",
+    "footerLink": "Explorar todos los registros por año",
+    "otherPeriods": "Antes y después",
+    "months": "Meses",
+    "noMonth": "Sin mes indicado",
+    "noMonthIn": "{year}, sin mes indicado"
   }
 }

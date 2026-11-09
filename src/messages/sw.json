@@ -1687,5 +1687,19 @@
     "sentHint": "Utaona hali ya kila moja katika Mawasilisho yako kwenye Openscholar: inasubiri, imechapishwa, au imerudishwa na sababu ya mkaguzi.",
     "yourSubmissions": "Mawasilisho yako",
     "emptyLink": "Unajua makala inayofaa kuwa hapa? Ipendekeze"
+  },
+  "browse": {
+    "title": "Vinjari kwa mwaka",
+    "intro": "Kila rekodi katika {name}, kwa mwaka ilipochapishwa.",
+    "recordsWord": "{count, plural, one {rekodi} other {rekodi}}",
+    "records": "{count, plural, one {rekodi #} other {rekodi #}}",
+    "decade": "Miaka ya {decade}",
+    "noYear": "Bila mwaka",
+    "noYearLink": "Rekodi zisizo na mwaka",
+    "footerLink": "Vinjari rekodi zote kwa mwaka",
+    "otherPeriods": "Kabla na baada",
+    "months": "Miezi",
+    "noMonth": "Mwezi haujatajwa",
+    "noMonthIn": "{year}, mwezi haujatajwa"
   }
 }

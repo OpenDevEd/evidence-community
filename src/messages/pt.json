@@ -1687,5 +1687,19 @@
     "sentHint": "Verá a situação de cada um em As suas submissões no Openscholar: em espera, publicado ou devolvido com o motivo do revisor.",
     "yourSubmissions": "As suas submissões",
     "emptyLink": "Conhece um artigo que pertence aqui? Sugira-o"
+  },
+  "browse": {
+    "title": "Explorar por ano",
+    "intro": "Todos os registos de {name}, por ano de publicação.",
+    "recordsWord": "{count, plural, one {registo} other {registos}}",
+    "records": "{count, plural, one {# registo} other {# registos}}",
+    "decade": "Anos {decade}",
+    "noYear": "Sem ano",
+    "noYearLink": "Registos sem ano",
+    "footerLink": "Explorar todos os registos por ano",
+    "otherPeriods": "Antes e depois",
+    "months": "Meses",
+    "noMonth": "Sem mês indicado",
+    "noMonthIn": "{year}, sem mês indicado"
   }
 }

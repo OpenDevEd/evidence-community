@@ -1687,5 +1687,19 @@
     "sentHint": "Uzobona ukuthi ngalinye limi kuphi kokuthi Okuthunyelwe yimi ku-Openscholar: lilindile, lishicilelwe, noma libuyiselwe nesizathu sombuyekezi.",
     "yourSubmissions": "Okuthunyelwe yimi",
     "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise"
+  },
+  "browse": {
+    "title": "Phequlula ngonyaka",
+    "intro": "Wonke amarekhodi aku-{name}, ngonyaka ashicilelwe ngawo.",
+    "recordsWord": "{count, plural, one {irekhodi} other {amarekhodi}}",
+    "records": "{count, plural, one {irekhodi elingu-#} other {amarekhodi angu-#}}",
+    "decade": "Iminyaka yama-{decade}",
+    "noYear": "Awukho unyaka",
+    "noYearLink": "Amarekhodi angenawo unyaka",
+    "footerLink": "Phequlula onke amarekhodi ngonyaka",
+    "otherPeriods": "Ngaphambili nangemuva",
+    "months": "Izinyanga",
+    "noMonth": "Ayikho inyanga eshiwoyo",
+    "noMonthIn": "{year}, ayikho inyanga eshiwoyo"
   }
 }
