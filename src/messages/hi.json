@@ -618,7 +618,9 @@
     "acrossAllYears": "सभी वर्षों में",
     "topicFilteringUnavailable": "विषय फ़िल्टरिंग के लिए अतिरिक्त डेटा की आवश्यकता होती है जो वर्तमान में उपलब्ध नहीं है",
     "rateLimitedMessage": "आपने अनुरोध की सीमा पूरी कर ली है। {seconds} सेकंड बाद फिर से प्रयास करें।",
-    "suggestPapers": "पेपर सुझाएँ"
+    "suggestPapers": "पेपर सुझाएँ",
+    "adminMenuItem": "एडमिन",
+    "joinThisTeam": "इस टीम से जुड़ें"
   },
   "ai": {
     "sourcesTitle": "स्रोत",

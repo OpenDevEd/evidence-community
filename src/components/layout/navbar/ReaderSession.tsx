@@ -10,10 +10,32 @@ import { readerAuthClient } from "@/lib/readers/client";
 export type Reader = { id: string; name: string; image: string | null };
 
 const ServerReader = createContext<Reader | null>(null);
+const ReaderAdmin = createContext(false);
 
 /** The server reads the session with the page, so the header is right on its first frame. */
-export function ReaderSessionProvider({ reader, children }: { reader: Reader | null; children: ReactNode }) {
-	return <ServerReader value={reader}>{children}</ServerReader>;
+export function ReaderSessionProvider({ reader, admin, children }: { reader: Reader | null; admin: boolean; children: ReactNode }) {
+	return (
+		<ServerReader value={reader}>
+			<ReaderAdmin value={admin}>{children}</ReaderAdmin>
+		</ServerReader>
+	);
+}
+
+/** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */
+export function useOpenScholarAccountUrl() {
+	return useLibraryConfig().authentication.openScholar.accountUrl;
+}
+
+/**
+ * Where the reader's menu leads: their OpenScholar account, and this library's team. `admin` with a role above
+ * viewer, which opens /admin; anyone else applies to join at `joinUrl`, OpenScholar's Communities page with the
+ * dialog to apply to this one open.
+ */
+export type ReaderLinks = { accountUrl: string; admin: boolean; joinUrl: string };
+
+export function useReaderLinks(): ReaderLinks {
+	const { accountUrl, siteUrl, libraryId } = useLibraryConfig().authentication.openScholar;
+	return { accountUrl, admin: useContext(ReaderAdmin), joinUrl: new URL(`/evidence-communities?apply=${libraryId}`, siteUrl).toString() };
 }
 
 export function useReaderSession() {
@@ -47,7 +69,3 @@ export function useOpenScholarUrl() {
 	return (path = "/") => new URL(path, site).toString();
 }
 
-/** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */
-export function useOpenScholarAccountUrl() {
-	return useLibraryConfig().authentication.openScholar.accountUrl;
-}

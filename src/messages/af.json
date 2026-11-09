@@ -618,7 +618,9 @@
     "acrossAllYears": "oor alle jare",
     "topicFilteringUnavailable": "Onderwerpfiltering vereis bykomende data wat tans nie beskikbaar is nie",
     "rateLimitedMessage": "Jy het die versoeklimiet bereik. Probeer weer oor {seconds} sekondes.",
-    "suggestPapers": "Stel artikels voor"
+    "suggestPapers": "Stel artikels voor",
+    "adminMenuItem": "Admin",
+    "joinThisTeam": "Sluit by hierdie span aan"
   },
   "ai": {
     "sourcesTitle": "Bronne",

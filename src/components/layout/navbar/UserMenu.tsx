@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowUpRight01Icon, InboxIcon, Logout01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, DashboardSquare01Icon, InboxIcon, Logout01Icon, UserAdd01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { openSuggestPapers } from "@/components/features/suggest/SuggestPapers";
 import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
@@ -12,7 +12,7 @@ import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useRouter } from "@/i18n/routing";
 import { twMerge } from "@/lib/tw-merge";
 import type { NavbarElementProps } from "@/types/navbar";
-import { useOpenScholarAccountUrl, useReaderSession, type Reader } from "./ReaderSession";
+import { useReaderLinks, useReaderSession, type Reader, type ReaderLinks } from "./ReaderSession";
 import {
 	NavbarMenuIcon,
 	navbarMenuClasses,
@@ -73,13 +73,14 @@ export function ReaderAvatar({
 export function readerMenuGroups(input: {
 	reader: Reader;
 	t: Translate;
-	accountUrl: string;
+	/** Their OpenScholar account page, where they change their name, avatar and sign-in settings; Admin for its team, Join this team for anyone else. */
+	links: ReaderLinks;
 	/** Absent when the library has no reader profiles, as for an admin of a library with reader accounts off. */
 	onProfile?: () => void;
 	onSignOut: () => void;
 }) {
 	const { reader, t } = input;
-	const openAccount = () => window.open(input.accountUrl, "_blank", "noopener");
+	const openAccount = () => window.open(input.links.accountUrl, "_blank", "noopener");
 	const external = <NavbarMenuIcon icon={ArrowUpRight01Icon} className="size-4 text-foreground/40 dark:text-white/40" />;
 	const name = readerDisplayName(reader, t);
 	return {
@@ -122,6 +123,20 @@ export function readerMenuGroups(input: {
 						</DropdownItem>,
 					]
 				: []),
+			input.links.admin ? (
+				<DropdownItem key="admin" href="/admin" startContent={<NavbarMenuIcon icon={DashboardSquare01Icon} />}>
+					{t("adminMenuItem")}
+				</DropdownItem>
+			) : (
+				<DropdownItem
+					key="join"
+					onPress={() => window.open(input.links.joinUrl, "_blank", "noopener")}
+					startContent={<NavbarMenuIcon icon={UserAdd01Icon} />}
+					endContent={external}
+				>
+					{t("joinThisTeam")}
+				</DropdownItem>
+			),
 			// Papers sent to this community's review queue (#777).
 			<DropdownItem key="suggest" onPress={openSuggestPapers} startContent={<NavbarMenuIcon icon={InboxIcon} />}>
 				{input.t("suggestPapers")}
@@ -150,17 +165,17 @@ export function readerMenuGroups(input: {
 
 export default function UserMenu({ variant }: NavbarElementProps) {
 	const { reader, signOut } = useReaderSession();
-	const accountUrl = useOpenScholarAccountUrl();
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const hasProfiles = useLibraryFeature("readerAccounts");
+	const links = useReaderLinks();
 
 	if (!reader) return null;
 
 	const groups = readerMenuGroups({
 		reader,
 		t,
-		accountUrl,
+		links,
 		onProfile: hasProfiles ? () => router.push(`/profile/${reader.id}`) : undefined,
 		onSignOut: signOut,
 	});

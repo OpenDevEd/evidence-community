@@ -15,7 +15,7 @@ import LoginButton from "./LoginButton";
 import { languageMenuItems, languageName, useLibraryLanguages } from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
-import { useOpenScholarAccountUrl, useReaderSession } from "./ReaderSession";
+import { useReaderLinks, useReaderSession } from "./ReaderSession";
 import { ReaderAvatar, readerMenuGroups } from "./UserMenu";
 import {
 	NavbarMenuIcon,
@@ -287,7 +287,7 @@ function ActionsMenu({
 }) {
 	const t = useTranslations("ui");
 	const { reader, signIn, signOut } = useReaderSession();
-	const accountUrl = useOpenScholarAccountUrl();
+	const links = useReaderLinks();
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const router = useRouter();
 	const currentLocale = useLocale();
@@ -307,7 +307,7 @@ function ActionsMenu({
 		? readerMenuGroups({
 				reader,
 				t,
-				accountUrl,
+				links,
 				onProfile: hasProfiles ? () => router.push(`/profile/${reader.id}`) : undefined,
 				onSignOut: signOut,
 			})
