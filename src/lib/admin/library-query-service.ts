@@ -370,6 +370,10 @@ export async function adminItemLinks(
  * The OpenAlex work a record is, when a source that reads OpenAlex works holds it, or an added paper waiting for review
  * names it (its source link comes with approval): null for one found by DOI alone.
  */
+/** Whether the record is a paper someone sent through Added papers. */
+export const isAddedPaper = async (db: Database, itemKey: string) =>
+	(await db.select({ key: addedPaper.itemKey }).from(addedPaper).where(eq(addedPaper.itemKey, itemKey)).limit(1)).length > 0;
+
 export async function openAlexWorkOf(db: Database, itemKey: string) {
 	const [links, added] = await Promise.all([
 		db
@@ -480,10 +484,11 @@ export async function getAdminItemDetail(
 			])
 		: [null, null];
 
-	const [choices, sourcePdfChangePending, openalexId] = await Promise.all([
+	const [choices, sourcePdfChangePending, openalexId, addedPaper] = await Promise.all([
 		readSourceFileChoices(db, [itemKey]),
 		hasUnsubmittedSourceFileChoice(db, [itemKey, ...attachments.map((attachment) => attachment.key)]),
 		openAlexWorkOf(db, itemKey),
+		isAddedPaper(db, parentItem ?? itemKey),
 	]);
 	const sourcePdf = projectSourcePdf(published, choices.get(itemKey), Boolean(filePublication), config);
 	const plainSummary = itemSummary(
@@ -533,6 +538,7 @@ export async function getAdminItemDetail(
 		fileRemovalPending: Boolean(removal) || Boolean(sourcePdf?.fileRemovalPending),
 		links,
 		openalexId,
+		addedPaper,
 		openAccessFromSources: fromSources,
 		readingStudyType,
 		parentItem,
