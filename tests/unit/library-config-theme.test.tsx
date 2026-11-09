@@ -101,6 +101,40 @@ describe("runtime theme tokens", () => {
 		);
 	});
 
+	it("keeps one set of colours for both modes when the theme gives no dark ones", () => {
+		const css = buildThemeColorCss(maximalTheme);
+
+		expect(css).not.toContain(":root.dark{--color");
+		expect(css).toContain(":root.light,:root.dark{--nextui-focus:");
+	});
+
+	it("switches dark mode to the dark accent, and the colours that follow it", () => {
+		const css = buildThemeColorCss(
+			libraryConfigSchema.parse({
+				...minimalLibraryConfig,
+				theme: { colors: { ...minimalLibraryConfig.theme.colors, accentDark: "#5B8DEF" } },
+			}).theme,
+		);
+		const [light, dark] = css.split(":root.dark{--color");
+
+		expect(light).toContain("--color-accent-500:230 129 36");
+		for (const token of ["accent", "link", "collection", "doi"]) {
+			expect(dark).toContain(`--color-${token}-500:91 141 239`);
+		}
+		expect(dark).not.toContain("--color-tertiary-");
+		expect(css).toContain(":root.light{--nextui-focus:");
+	});
+
+	it("reads a dark link of its own against the dark background", () => {
+		const result = libraryConfigSchema.safeParse({
+			...minimalLibraryConfig,
+			theme: { colors: { ...minimalLibraryConfig.theme.colors, backgroundDark: "#000000", linkDark: "#000000" } },
+		});
+
+		expect(result.success).toBe(false);
+		expect(result.error?.issues.map((issue) => issue.path.join("."))).toEqual(["theme.colors.linkDark"]);
+	});
+
 	it("tints the panels with a community's own backgrounds", () => {
 		const css = buildThemeColorCss({
 			...maximalTheme,

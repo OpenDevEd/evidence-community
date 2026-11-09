@@ -43,12 +43,13 @@ function mix(color: RgbaColor, surface: RgbaColor, amount: number): RgbaColor {
 const RAMP_STEPS = 8;
 
 /** Band tones plus a sequential ramp of the accent over the card surface the charts sit on, every step with its own readable text colour in both modes. */
-export function tonesFrom(colors: { accent: string; tertiary: string; backgroundLight: string; backgroundDark: string; cardLight: string; cardDark: string }): { tones: Tones; ramp: Tone[] } {
+export function tonesFrom(colors: { accent: string; accentDark: string; tertiary: string; tertiaryDark: string; backgroundLight: string; backgroundDark: string; cardLight: string; cardDark: string }): { tones: Tones; ramp: Tone[] } {
 	const dark = parseHexColor(colors.backgroundDark);
 	const light = parseHexColor(colors.cardLight);
 	const accent = parseHexColor(colors.accent);
+	const accentDark = parseHexColor(colors.accentDark);
 	const tint = mix(accent, parseHexColor(colors.backgroundLight), 0.1);
-	const tintDark = mix(accent, dark, 0.12);
+	const tintDark = mix(accentDark, dark, 0.12);
 	const channels = ([red, green, blue]: RgbaColor) => `${red} ${green} ${blue}`;
 	const tone = (bg: RgbaColor, bgDark: RgbaColor): Tone => {
 		const fg = readableOn(bg, dark, light);
@@ -56,21 +57,24 @@ export function tonesFrom(colors: { accent: string; tertiary: string; background
 		return { bg: formatCssColor(bg), fg: formatCssColor(fg), fgRgb: channels(fg), bgDark: formatCssColor(bgDark), fgDark: formatCssColor(fgDark), fgRgbDark: channels(fgDark) };
 	};
 	const tertiary = generateColorRamp(colors.tertiary);
+	const tertiaryDark = generateColorRamp(colors.tertiaryDark);
 	// The accent at the lightest shade whose text meets WCAG AAA (7:1), for a band set entirely in the accent.
-	const accentRamp = generateColorRamp(colors.accent);
-	const deep = ([400, 300, 200, 100, 50] as const).map((shade) => accentRamp[shade]).find((shade) => wcagRatio(readableOn(shade, dark, light), shade) >= 7) ?? accentRamp[50];
+	const deepOf = (color: string) => {
+		const accentRamp = generateColorRamp(color);
+		return ([400, 300, 200, 100, 50] as const).map((shade) => accentRamp[shade]).find((shade) => wcagRatio(readableOn(shade, dark, light), shade) >= 7) ?? accentRamp[50];
+	};
 	return {
 		tones: {
 			page: tone(parseHexColor(colors.backgroundLight), parseHexColor(colors.backgroundDark)),
 			card: tone(parseHexColor(colors.cardLight), parseHexColor(colors.cardDark)),
 			tint: tone(tint, tintDark),
-			accent: tone(accent, accent),
-			tertiary: tone(tertiary[500], tertiary[600]),
-			deep: tone(deep, deep),
+			accent: tone(accent, accentDark),
+			tertiary: tone(tertiary[500], tertiaryDark[600]),
+			deep: tone(deepOf(colors.accent), deepOf(colors.accentDark)),
 		},
 		ramp: Array.from({ length: RAMP_STEPS }, (_, index) => {
 			const amount = 1 - (0.84 * index) / (RAMP_STEPS - 1);
-			return tone(mix(accent, light, amount), mix(accent, parseHexColor(colors.cardDark), amount));
+			return tone(mix(accent, light, amount), mix(accentDark, parseHexColor(colors.cardDark), amount));
 		}),
 	};
 }
