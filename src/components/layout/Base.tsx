@@ -13,7 +13,7 @@ import EarlyTypingScript from "@/app/_components/EarlyTypingScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
@@ -21,7 +21,8 @@ import { LibraryThemeStyles, themeGoogleFonts } from "@/components/library/Libra
 import { PLATFORM_FONTS } from "@/components/library/platform-fonts";
 import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
-import { getSignedInReader } from "@/lib/readers/session";
+import { getSignedInOpenScholarUser } from "@/lib/readers/session";
+import { adminRoleOf } from "@/lib/admin/access";
 import PageFallback, { LoadPageFallback } from "@/components/pages/PageFallback";
 import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { homePlaceholderContent } from "@/components/pages/HomeRichText";
@@ -38,14 +39,16 @@ async function BaseContent({
 	locale: string;
 	storedConsent: string | null;
 }>) {
+	const config = await getLibraryConfig();
 	const [status, messages, t, signedIn] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
-		getSignedInReader(),
+		getSignedInOpenScholarUser(await headers(), config),
 	]);
-	// Only what other readers may see goes to the browser.
+	// Only what other readers may see goes to the browser, and whether they have a role here, for the menu's Admin.
 	const reader = signedIn ? { id: signedIn.id, name: signedIn.name, image: signedIn.image } : null;
+	const readerAdmin = signedIn ? (await adminRoleOf(config, signedIn.clerkUserId)) !== null : false;
 
 	return (
 		<NextIntlClientProvider messages={messages}>
@@ -54,6 +57,7 @@ async function BaseContent({
 				gapmaps={gapmaps}
 				storedConsent={storedConsent}
 				reader={reader}
+				readerAdmin={readerAdmin}
 			>
 				{/* Single shared filter state for the whole app — lives above the
 				    navbar AND the page so collections/params stay resident across

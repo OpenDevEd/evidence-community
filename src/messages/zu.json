@@ -618,7 +618,9 @@
     "acrossAllYears": "kuyo yonke iminyaka",
     "topicFilteringUnavailable": "Ukuhlungwa ngetopiki kudinga idatha eyengeziwe engatholakali okwamanje",
     "rateLimitedMessage": "Ufinyelele umkhawulo wezicelo. Zama futhi emasekhondeni angu-{seconds}.",
-    "suggestPapers": "Phakamisa amaphepha"
+    "suggestPapers": "Phakamisa amaphepha",
+    "adminMenuItem": "Ukuphatha",
+    "joinThisTeam": "Joyina leli qembu"
   },
   "ai": {
     "sourcesTitle": "Imithombo",

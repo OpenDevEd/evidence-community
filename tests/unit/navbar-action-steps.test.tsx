@@ -25,6 +25,7 @@ vi.mock("@/components/layout/navbar/LanguageSwitcher", () => ({
 vi.mock("@/components/layout/navbar/ReaderSession", () => ({
 	useReaderSession: () => ({ reader: session.reader, signIn: vi.fn(), signOut: vi.fn() }),
 	useOpenScholarAccountUrl: () => "https://accounts.openscholar.example.org/user",
+	useReaderLinks: () => ({ accountUrl: "https://accounts.openscholar.example.org/user", admin: false, joinUrl: "https://openscholar.example.org/evidence-communities?apply=library" }),
 }));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryFeature: (feature: string) => session.features[feature] ?? false,

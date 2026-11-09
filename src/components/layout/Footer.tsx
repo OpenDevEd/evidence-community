@@ -1,6 +1,6 @@
 "use client";
 
-import { Linkedin01Icon } from "@hugeicons/core-free-icons";
+import { Linkedin01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -26,6 +26,7 @@ import {
 } from "@/config/library-config/links";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useReaderLinks } from "@/components/layout/navbar/ReaderSession";
 import { Link, useRouter } from "@/i18n/routing";
 import { hasContactDetails } from "@/config/library-config/pages";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
@@ -96,11 +97,32 @@ function Logo() {
 	);
 }
 
+/** Every record a few plain links away, and the way to join its team. */
+function FooterFoot() {
+	const tBrowse = useTranslations("browse");
+	const tUI = useTranslations("ui");
+	const team = useReaderLinks();
+	return (
+		<div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+			{/* Google Scholar asks for plain links to every record, and readers can use them too. */}
+			<Link href="/browse" className="text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
+				{tBrowse("footerLink")}
+			</Link>
+			{/* Applying happens on OpenScholar, which asks anyone signed out to sign in first. Its team has Admin in the menu. */}
+			{team.admin ? null : (
+				<a href={team.joinUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
+					<HugeiconsIcon icon={UserAdd01Icon} aria-hidden className="size-4" />
+					{tUI("joinThisTeam")}
+				</a>
+			)}
+		</div>
+	);
+}
+
 export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const { contact, footer, identity, legal } = useLibraryConfig();
-	const tBrowse = useTranslations("browse");
 	const { capabilities, openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -308,10 +330,7 @@ export default function Footer() {
 				</section>
 			)}
 
-			{/* Every record is a few plain links from here, which Google Scholar asks for and readers can use too. */}
-			<Link href="/browse" className="text-sm text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
-				{tBrowse("footerLink")}
-			</Link>
+			<FooterFoot />
 
 			{(footer.disclaimer || footer.attribution || footer.poweredBy) && (
 				<div className="flex w-full max-w-4xl flex-col gap-4 text-center text-sm text-black/60 dark:text-white/60">

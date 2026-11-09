@@ -618,7 +618,9 @@
     "citationsTitle": "Citations - {title}",
     "citationsDescription": "View citation statistics and citing resources for “{title}”",
     "rateLimitedMessage": "You have reached the request limit. Try again in {seconds} seconds.",
-    "suggestPapers": "Suggest papers"
+    "suggestPapers": "Suggest papers",
+    "adminMenuItem": "Admin",
+    "joinThisTeam": "Join this team"
   },
   "ai": {
     "sourcesTitle": "Sources",

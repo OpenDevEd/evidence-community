@@ -79,6 +79,12 @@ async function readAdminRole(config: LibraryServerConfig, clerkUserId: string): 
 	return answer;
 }
 
+/** The person's role in the library, or null with none: a role above viewer opens /admin. */
+export async function adminRoleOf(config: LibraryServerConfig, clerkUserId: string): Promise<AdminRole | null> {
+	const answer = await readAdminRole(config, clerkUserId);
+	return answer && "role" in answer ? answer.role : null;
+}
+
 /**
  * Whether the person signed in on this request may do something in /admin.
  * They sign in with OpenScholar like any reader; OpenScholar decides their

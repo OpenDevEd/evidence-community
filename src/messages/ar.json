@@ -618,7 +618,9 @@
     "acrossAllYears": "على مدار السنوات",
     "topicFilteringUnavailable": "تتطلب تصفية المواضيع بيانات إضافية غير متوفرة حاليًا",
     "rateLimitedMessage": "لقد بلغت الحد المسموح به من الطلبات. حاول مرة أخرى بعد {seconds} ثانية.",
-    "suggestPapers": "اقترح أوراقًا"
+    "suggestPapers": "اقترح أوراقًا",
+    "adminMenuItem": "الإدارة",
+    "joinThisTeam": "انضم إلى هذا الفريق"
   },
   "ai": {
     "sourcesTitle": "المصادر",

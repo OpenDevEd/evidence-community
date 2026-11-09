@@ -618,7 +618,9 @@
     "acrossAllYears": "über alle Jahre",
     "topicFilteringUnavailable": "Die Themenfilterung benötigt zusätzliche Daten, die derzeit nicht verfügbar sind",
     "rateLimitedMessage": "Sie haben das Anfragelimit erreicht. Versuchen Sie es in {seconds} Sekunden erneut.",
-    "suggestPapers": "Artikel vorschlagen"
+    "suggestPapers": "Artikel vorschlagen",
+    "adminMenuItem": "Verwaltung",
+    "joinThisTeam": "Diesem Team beitreten"
   },
   "ai": {
     "sourcesTitle": "Quellen",
