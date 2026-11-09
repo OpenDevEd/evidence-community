@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {hulpbron} other {hulpbronne}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {geboekmerkte hulpbron} other {geboekmerkte hulpbronne}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {hulpbron} other {hulpbronne}} in <collections>{collection}</collections>",
-    "noFacetsFound": "Geen fasette gevind nie",
+    "noFacetsFound": "Nog niks om hier op te filter nie",
     "pageNotFound": "Bladsy nie gevind nie",
     "itemNotFound": "Hulpbron nie gevind nie",
     "copyLink": "Kopieer skakel",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Stel artikels voor",
-    "description": "Plak DOI’s, OpenAlex-ID’s of skakels daarna. Die gemeenskap se span hersien elkeen voordat dit gepubliseer word.",
-    "inputLabel": "DOI’s, OpenAlex-ID’s of skakels",
+    "description": "Plak skakels na artikels (van Openscholar, hierdie webwerf, OpenAlex of doi.org), DOI’s of OpenAlex-ID’s. Die gemeenskap se span hersien elkeen voordat dit gepubliseer word.",
+    "inputLabel": "Artikelskakels, DOI’s of OpenAlex-ID’s",
     "find": "Vind artikels",
     "overLimit": "{count, plural, one {Jy kan vandag nog # artikel hier voorstel, so net die eerste een word gesoek.} other {Jy kan vandag nog # artikels hier voorstel, so die eerste # word gesoek.}}",
     "noneLeft": "Jy het vandag hier soveel artikels voorgestel as wat een persoon kan. Probeer môre weer.",
@@ -1684,8 +1684,9 @@
     "send": "Stuur vir hersiening",
     "done": "Klaar",
     "sent": "{count, plural, one {# artikel vir hersiening gestuur} other {# artikels vir hersiening gestuur}}",
-    "sentHint": "Jy sal in Jou voorleggings op Openscholar sien waar elkeen staan: wag, gepubliseer, of teruggestuur met die hersiener se rede.",
+    "sentHint": "Jy sien in Jou voorleggings op Openscholar waar elkeen staan: wag, gepubliseer, of afgekeur met die span se rede.",
     "yourSubmissions": "Jou voorleggings",
-    "emptyLink": "Ken jy ’n artikel wat hier hoort? Stel dit voor"
+    "emptyLink": "Ken jy ’n artikel wat hier hoort? Stel dit voor",
+    "invalid": "{count, plural, one {Dit is nie ’n artikelskakel, DOI of ID nie, so dit word uitgelaat: {values}} other {Hierdie is nie artikelskakels, DOI’s of ID’s nie, so hulle word uitgelaat: {values}}}"
   }
 }

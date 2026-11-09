@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {recurso} other {recursos}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {recurso marcado} other {recursos marcados}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {recurso} other {recursos}} em <collections>{collection}</collections>",
-    "noFacetsFound": "Nenhuma faceta encontrada",
+    "noFacetsFound": "Ainda não há nada para filtrar aqui",
     "pageNotFound": "Página Não Encontrada",
     "itemNotFound": "Recurso Não Encontrado",
     "copyLink": "Copiar Link",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Sugerir artigos",
-    "description": "Cole DOIs, IDs do OpenAlex ou links para eles. A equipa da comunidade analisa cada um antes de ser publicado.",
-    "inputLabel": "DOIs, IDs do OpenAlex ou links",
+    "description": "Cole links de artigos (do Openscholar, deste site, do OpenAlex ou do doi.org), DOIs ou IDs do OpenAlex. A equipe da comunidade revisa cada um antes de publicá-lo.",
+    "inputLabel": "Links de artigos, DOIs ou IDs do OpenAlex",
     "find": "Encontrar artigos",
     "overLimit": "{count, plural, one {Hoje pode sugerir mais # artigo aqui, por isso só o primeiro é procurado.} other {Hoje pode sugerir mais # artigos aqui, por isso só os primeiros # são procurados.}}",
     "noneLeft": "Hoje já sugeriu aqui tantos artigos quanto uma pessoa pode. Tente novamente amanhã.",
@@ -1684,8 +1684,9 @@
     "send": "Enviar para análise",
     "done": "Concluído",
     "sent": "{count, plural, one {# artigo enviado para análise} other {# artigos enviados para análise}}",
-    "sentHint": "Verá a situação de cada um em As suas submissões no Openscholar: em espera, publicado ou devolvido com o motivo do revisor.",
+    "sentHint": "Você verá a situação de cada um em Seus envios no Openscholar: aguardando, publicado ou recusado com o motivo da equipe.",
     "yourSubmissions": "As suas submissões",
-    "emptyLink": "Conhece um artigo que pertence aqui? Sugira-o"
+    "emptyLink": "Conhece um artigo que pertence aqui? Sugira-o",
+    "invalid": "{count, plural, one {Isto não é um link de artigo, DOI ou ID, então foi deixado de fora: {values}} other {Estes não são links de artigos, DOIs ou IDs, então foram deixados de fora: {values}}}"
   }
 }

@@ -39,6 +39,9 @@ function parse(text: string): Looked[] {
 	});
 }
 
+/** What a paste holds that names no paper, said back so the reader knows what was left out. */
+const unnamed = (text: string) => text.split(/\s+/u).filter((raw) => raw && !paperLinkOf(raw));
+
 /** Where a paper looked up stands: new here (or returned before, so it can be sent again), already here, waiting, or not found. */
 const STATE_OF: Record<Answer["outcome"], Row["state"]> = { found: "found", returned: "found", existing: "here", queued: "waiting", not_found: "missing" };
 
@@ -109,11 +112,12 @@ function SentPanel({ count }: { count: number }) {
 }
 
 /** What the paste field says beside Find papers: the day's limit, or why the last try failed. */
-function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | null, named: number, room: number, problem: string) {
+function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | null, named: number, room: number, problem: string, invalid: string[]) {
 	// Until the allowance is known, only why it couldn't be read.
 	if (left === null) return problem;
 	if (left === 0) return t("noneLeft");
-	return named > room ? t("overLimit", { count: room }) : problem;
+	if (named > room) return t("overLimit", { count: room });
+	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : problem;
 }
 
 /** The dialog's state: the paste, what it found, and sending it. */
@@ -208,7 +212,7 @@ function PastePanel({ suggestion }: { suggestion: ReturnType<typeof useSuggestio
 				classNames={{ input: "font-mono text-xs" }}
 			/>
 			<div className="flex items-center justify-between gap-3">
-				<span className="text-sm text-warning-600 dark:text-warning">{hintOf(t, suggestion.left, suggestion.named.length, suggestion.room, suggestion.problem)}</span>
+				<span className="text-sm text-warning-600 dark:text-warning">{hintOf(t, suggestion.left, suggestion.named.length, suggestion.room, suggestion.problem, unnamed(suggestion.text))}</span>
 				<Button className="shrink-0" size="sm" variant="bordered" isDisabled={!suggestion.pasted.length || rows !== null} onPress={() => void suggestion.find(t("failed"))} startContent={<HugeiconsIcon icon={Search01Icon} className="size-4" aria-hidden />}>
 					{t("find")}
 				</Button>

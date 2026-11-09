@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}} zilizowekwa alama",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {rasilimali} other {rasilimali}} katika <collections>{collection}</collections>",
-    "noFacetsFound": "Hakuna vipengele vilivyopatikana",
+    "noFacetsFound": "Bado hakuna cha kuchuja hapa",
     "pageNotFound": "Ukurasa Haujapatikana",
     "itemNotFound": "Rasilimali Haijapatikana",
     "copyLink": "Nakili Kiungo",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Pendekeza makala",
-    "description": "Bandika DOI, vitambulisho vya OpenAlex au viungo vyake. Timu ya jumuiya hukagua kila moja kabla haijachapishwa.",
-    "inputLabel": "DOI, vitambulisho vya OpenAlex au viungo",
+    "description": "Bandika viungo vya makala (kutoka Openscholar, tovuti hii, OpenAlex au doi.org), DOI au vitambulisho vya OpenAlex. Timu ya jumuiya hukagua kila moja kabla ya kuchapishwa.",
+    "inputLabel": "Viungo vya makala, DOI au vitambulisho vya OpenAlex",
     "find": "Tafuta makala",
     "overLimit": "{count, plural, one {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo ya kwanza tu inatafutwa.} other {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo # za kwanza zinatafutwa.}}",
     "noneLeft": "Umependekeza hapa leo makala nyingi kadiri mtu mmoja anavyoweza. Jaribu tena kesho.",
@@ -1684,8 +1684,9 @@
     "send": "Tuma kwa ukaguzi",
     "done": "Imekamilika",
     "sent": "{count, plural, one {Makala # imetumwa kwa ukaguzi} other {Makala # zimetumwa kwa ukaguzi}}",
-    "sentHint": "Utaona hali ya kila moja katika Mawasilisho yako kwenye Openscholar: inasubiri, imechapishwa, au imerudishwa na sababu ya mkaguzi.",
+    "sentHint": "Utaona hali ya kila moja katika Ulichotuma kwenye Openscholar: inasubiri, imechapishwa, au imekataliwa pamoja na sababu ya timu.",
     "yourSubmissions": "Mawasilisho yako",
-    "emptyLink": "Unajua makala inayofaa kuwa hapa? Ipendekeze"
+    "emptyLink": "Unajua makala inayofaa kuwa hapa? Ipendekeze",
+    "invalid": "{count, plural, one {Hiki si kiungo cha makala, DOI wala kitambulisho, kwa hivyo kimeachwa: {values}} other {Hivi si viungo vya makala, DOI wala vitambulisho, kwa hivyo vimeachwa: {values}}}"
   }
 }

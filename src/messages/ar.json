@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {مصدر} other {مصادر}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {مصدر محفوظ} other {مصادر محفوظة}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {مصدر} other {مصادر}} في <collections>{collection}</collections>",
-    "noFacetsFound": "لم يتم العثور على تصنيفات",
+    "noFacetsFound": "لا شيء للتصفية هنا بعد",
     "pageNotFound": "الصفحة غير موجودة",
     "itemNotFound": "المصدر غير موجود",
     "copyLink": "نسخ الرابط",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "اقترح أوراقًا",
-    "description": "الصق معرّفات DOI أو معرّفات OpenAlex أو روابط إليها. يراجع فريق المجتمع كل ورقة قبل نشرها.",
-    "inputLabel": "معرّفات DOI أو OpenAlex أو روابط",
+    "description": "الصق روابط الأوراق (من Openscholar أو هذا الموقع أو OpenAlex أو doi.org) أو أرقام DOI أو معرّفات OpenAlex. يراجع فريق المجتمع كل ورقة قبل نشرها.",
+    "inputLabel": "روابط الأوراق أو DOI أو معرّفات OpenAlex",
     "find": "ابحث عن الأوراق",
     "overLimit": "{count, plural, one {يمكنك اقتراح # ورقة أخرى هنا اليوم، لذا يُبحث عن الأولى فقط.} other {يمكنك اقتراح # أوراق أخرى هنا اليوم، لذا يُبحث عن أول # فقط.}}",
     "noneLeft": "اقترحت هنا اليوم أقصى عدد من الأوراق المسموح للشخص الواحد. حاول غدًا.",
@@ -1684,8 +1684,9 @@
     "send": "أرسل للمراجعة",
     "done": "تم",
     "sent": "{count, plural, one {أُرسلت # ورقة للمراجعة} other {أُرسلت # أوراق للمراجعة}}",
-    "sentHint": "سترى حالة كل ورقة في «مشاركاتك» على Openscholar: بانتظار المراجعة، أو منشورة، أو مُعادة مع سبب المراجع.",
+    "sentHint": "سترى حالة كل ورقة في «ما أرسلته» على Openscholar: بانتظار المراجعة أو منشورة أو مرفوضة مع سبب الفريق.",
     "yourSubmissions": "مشاركاتك",
-    "emptyLink": "تعرف ورقة مكانها هنا؟ اقترحها"
+    "emptyLink": "تعرف ورقة مكانها هنا؟ اقترحها",
+    "invalid": "{count, plural, one {هذا ليس رابط ورقة ولا DOI ولا معرّفًا، لذا تُرك: {values}} other {هذه ليست روابط أوراق ولا DOI ولا معرّفات، لذا تُركت: {values}}}"
   }
 }

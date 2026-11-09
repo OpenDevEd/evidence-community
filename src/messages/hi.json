@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {संसाधन} other {संसाधन}}",
     "likedItemsCount": "<number>{count}</number> बुकमार्क किए गए {count, plural, one {संसाधन} other {संसाधन}}",
     "itemsInCollection": "<collections>{collection}</collections> में <number>{count}</number> {count, plural, one {संसाधन} other {संसाधन}}",
-    "noFacetsFound": "कोई फेसेट नहीं मिला",
+    "noFacetsFound": "यहाँ अभी फ़िल्टर करने को कुछ नहीं",
     "pageNotFound": "पृष्ठ नहीं मिला",
     "itemNotFound": "संसाधन नहीं मिला",
     "copyLink": "लिंक कॉपी करें",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "पेपर सुझाएँ",
-    "description": "DOI, OpenAlex ID या उनके लिंक चिपकाएँ। समुदाय की टीम हर एक की समीक्षा करती है, फिर वह प्रकाशित होता है।",
-    "inputLabel": "DOI, OpenAlex ID या लिंक",
+    "description": "पेपरों के लिंक (Openscholar, इस साइट, OpenAlex या doi.org से), DOI या OpenAlex ID चिपकाएँ। समुदाय की टीम हर एक को प्रकाशित होने से पहले देखती है।",
+    "inputLabel": "पेपर लिंक, DOI या OpenAlex ID",
     "find": "पेपर खोजें",
     "overLimit": "{count, plural, one {आज आप यहाँ # और पेपर सुझा सकते हैं, इसलिए केवल पहला खोजा जाता है।} other {आज आप यहाँ # और पेपर सुझा सकते हैं, इसलिए पहले # खोजे जाते हैं।}}",
     "noneLeft": "आज आपने यहाँ उतने पेपर सुझा दिए हैं जितने एक व्यक्ति सुझा सकता है। कल फिर कोशिश करें।",
@@ -1684,8 +1684,9 @@
     "send": "समीक्षा के लिए भेजें",
     "done": "हो गया",
     "sent": "{count, plural, one {# पेपर समीक्षा के लिए भेजा गया} other {# पेपर समीक्षा के लिए भेजे गए}}",
-    "sentHint": "Openscholar पर आपके सबमिशन में देखें कि हर एक कहाँ है: प्रतीक्षा में, प्रकाशित, या समीक्षक के कारण के साथ लौटाया गया।",
+    "sentHint": "Openscholar पर ‘आपके भेजे गए’ में आप देखेंगे कि हर एक कहाँ है: प्रतीक्षा में, प्रकाशित, या टीम के कारण के साथ अस्वीकृत।",
     "yourSubmissions": "आपके सबमिशन",
-    "emptyLink": "कोई पेपर जानते हैं जो यहाँ होना चाहिए? उसे सुझाएँ"
+    "emptyLink": "कोई पेपर जानते हैं जो यहाँ होना चाहिए? उसे सुझाएँ",
+    "invalid": "{count, plural, one {यह पेपर लिंक, DOI या ID नहीं है, इसलिए छोड़ा गया: {values}} other {ये पेपर लिंक, DOI या ID नहीं हैं, इसलिए छोड़े गए: {values}}}"
   }
 }
