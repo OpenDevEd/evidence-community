@@ -53,6 +53,7 @@ export function recordStructuredData(item: Item, baseUrl: string) {
 		headline: item.title?.slice(0, 110),
 		author: authors,
 		datePublished: dateOf(item.date),
+		dateModified: item.dateModified ? new Date(item.dateModified).toISOString() : undefined,
 		abstract: item.abstractNote,
 		isPartOf: item.itemType && CONTAINERS[item.itemType] ? named(CONTAINERS[item.itemType]!, item.publicationTitle) : undefined,
 		publisher: named("Organization", item.publisher),

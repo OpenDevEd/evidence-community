@@ -9,6 +9,7 @@ import { getItemsPaginationMeta } from "@/lib/search";
 import { lastNumberedPage, resultLimitOf } from "@/lib/search-query";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import SiteStructuredData from "@/components/layout/SiteStructuredData";
 import RuntimeMetadata from "@/components/layout/RuntimeMetadata";
 import { readSelectedTopicNames } from "@/lib/topics/server";
 import { SelectedTopicNames } from "@/components/topics/SelectedTopicNames";
@@ -125,6 +126,7 @@ export default function Lib(props: {
         />
       </SelectedTopicNames>
       <RuntimeMetadata />
+      <Suspense fallback={null}><SiteStructuredData /></Suspense>
     </>
   );
 }
