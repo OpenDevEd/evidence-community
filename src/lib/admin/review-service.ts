@@ -189,6 +189,8 @@ export async function submitItemReview(
 	rootKey: string,
 	actor: ReviewActor,
 	config: Pick<LibraryServerConfig, "services">,
+	/** Written in the same transaction, so it holds only if the submission does. */
+	alongside?: (transaction: DatabaseTransaction) => Promise<unknown>,
 ) {
 	return db.transaction(async (transaction) => {
 		const children = await reviewChildKeys(transaction, rootKey);
@@ -248,6 +250,7 @@ export async function submitItemReview(
 					coverObjectPath: file?.coverObjectPath ?? null,
 				})),
 			);
+		await alongside?.(transaction);
 		return review!;
 	});
 }

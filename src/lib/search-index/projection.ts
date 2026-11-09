@@ -443,7 +443,7 @@ async function buildSearchProjectionPlanForKeys(
 		database,
 		institutionRows.filter((row) => row.source === "author"),
 	);
-	const [linksByItem, citationMetricsByItem, openAccessOf, sourcesOf] = await Promise.all([
+	const [linksByItem, citationMetricsByItem, openAccessOf, { sourcesOf, workOf }] = await Promise.all([
 		getPublicItemLinksForKeys(database, activeParentKeys, { hiddenTags }),
 		getSourceCitationMetricsForKeys(database, activeParentKeys),
 		readOpenAccess(database, activeParentKeys),
@@ -575,6 +575,7 @@ async function buildSearchProjectionPlanForKeys(
 				links,
 				metadataSearch: metadataSearchValues(parent),
 				openAccess: openAccessOf(parent.key, doi),
+				openalexId: workOf(parent.key),
 				topicAncestors: topicAncestry(parent.topics),
 				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
 				key: parent.key,

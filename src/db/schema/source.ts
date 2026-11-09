@@ -246,6 +246,8 @@ export const addedPaper = pgTable(
 		addedByName: varchar("addedByName", { length: 255 }),
 		/** The OpenScholar request that sent it, so a repeated request adds nothing twice. */
 		requestId: varchar("requestId", { length: 128 }).notNull(),
+		/** The later requests that sent it again after its review was returned or withdrawn. */
+		resendRequestIds: varchar("resendRequestIds", { length: 128 }).array().notNull().default(sql`'{}'`),
 		/** Suggested by someone outside the community's team, who may only send it to the review queue. */
 		suggested: boolean("suggested").notNull().default(false),
 		addedAt: timestamp("addedAt", { withTimezone: true }).notNull().defaultNow(),
