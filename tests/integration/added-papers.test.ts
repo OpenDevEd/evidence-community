@@ -116,6 +116,22 @@ it("keeps a creator's paper in the review queue, out of the sync, until an edito
 	});
 });
 
+it("adds a paper again once its record was removed, as a new record", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(40)]);
+		const queued = await addPapers(db, storage, config, { requestId: "r40", publish: false, actor: creator, papers: [{ openalexId: "W40" }] }, lookup);
+		const first = queued.results[0]!.itemKey!;
+		// The team removes the waiting draft: its review is gone with it, and the paper is no longer in the community.
+		await db.delete(itemReview).where(eq(itemReview.itemKey, first));
+		await db.delete(itemDraft).where(eq(itemDraft.itemKey, first));
+		const again = await addPapers(db, storage, config, { requestId: "r41", publish: true, actor: owner, papers: [{ openalexId: "W40" }] }, lookup);
+		expect(again.results).toMatchObject([{ outcome: "added", foundBy: "openalex" }]);
+		expect(again.results[0]!.itemKey).not.toBe(first);
+		expect(await db.select({ itemKey: addedPaper.itemKey }).from(addedPaper)).toEqual([{ itemKey: again.results[0]!.itemKey }]);
+	});
+});
+
 it("answers a repeated request as before, and reports a paper already here instead of adding it again", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();

@@ -6,6 +6,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { summaryOf, type PaperSummary } from "./paper-summary";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { addedPaper } from "@/db/schema/source";
+import { item } from "@/db/schema/tables/item";
 import { itemReview } from "@/db/schema/review";
 import { itemSourceValue } from "@/db/schema/topics";
 import { normalizeDoi } from "@/lib/doi";
@@ -197,7 +198,7 @@ async function findByDoi(papers: readonly { at: number; doi: string }[], lookup:
 	return found;
 }
 
-type Known = { sent: (typeof addedPaper.$inferSelect)[]; workKeys: Map<string, string>; existingDois: ReadonlyMap<string, string> };
+type Known = { sent: (typeof addedPaper.$inferSelect)[]; gone: string[]; workKeys: Map<string, string>; existingDois: ReadonlyMap<string, string> };
 
 /** Whether this request sent the paper: first, or again after its review was returned or withdrawn. */
 const sentBy = (row: typeof addedPaper.$inferSelect, requestId: string) => row.requestId === requestId || row.resendRequestIds.includes(requestId);
@@ -244,11 +245,24 @@ export async function knownPapers(transaction: Database | DatabaseTransaction, f
 	const works = [...new Set(found.flatMap((paper) => paper.openalexId ?? []))];
 	const dois = [...new Set(found.flatMap((paper) => paper.doi ?? []))];
 	const matches = [...(works.length ? [inArray(addedPaper.openalexId, works)] : []), ...(dois.length ? [inArray(addedPaper.doi, dois)] : [])];
+	const rows = matches.length ? await transaction.select().from(addedPaper).where(or(...matches)) : [];
+	// A paper whose record was removed since (no draft left, and no record but a deleted one) is no longer here: sent
+	// again, it's added anew.
+	const live = await liveRecords(transaction, rows.map((row) => row.itemKey));
 	return {
-		sent: matches.length ? await transaction.select().from(addedPaper).where(or(...matches)) : [],
+		sent: rows.filter((row) => live.has(row.itemKey)),
+		gone: rows.flatMap((row) => (live.has(row.itemKey) ? [] : [row.itemKey])),
 		workKeys: await openAlexItemKeys(transaction, works),
 		existingDois: (await findExistingRecords(transaction, found.map((paper) => importIdentifiers({ DOI: paper.doi })))).doi,
 	};
+}
+
+/** Of these records, the ones still in the community: with a draft, or a record that isn't deleted. */
+async function liveRecords(transaction: Database | DatabaseTransaction, keys: readonly string[]) {
+	if (!keys.length) return new Set<string>();
+	const drafts = await transaction.select({ key: itemDraft.itemKey }).from(itemDraft).where(inArray(itemDraft.itemKey, [...keys]));
+	const records = await transaction.select({ key: item.key }).from(item).where(and(inArray(item.key, [...keys]), sql`coalesce(${item.deleted}, 0) <> 1`));
+	return new Set([...drafts, ...records].map((row) => row.key));
 }
 
 /** Refuses one more suggestion past the day's number. Only the records this request makes count: ones it resumes were counted when made. */
@@ -265,6 +279,8 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		// The OpenAlex writer's own lock: an import of the same work by another source waits, so neither makes a second record.
 		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
 		const known = await knownPapers(transaction, found);
+		// Its row would hold the paper's work and DOI from the new record it gets.
+		if (known.gone.length) await transaction.delete(addedPaper).where(inArray(addedPaper.itemKey, known.gone));
 		const left = await suggestionsLeft(transaction, input.actor);
 		const made: Made[] = [];
 		let created = 0;
