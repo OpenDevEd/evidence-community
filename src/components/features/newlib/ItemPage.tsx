@@ -746,7 +746,8 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 			title={t("itemAbstractTitle")}
 			copyText={item?.abstractNote || undefined}
 		>
-			<p className="text-base text-black/60 dark:text-white/60">
+			{/* In its own language's direction: an English abstract on an Arabic page ends with its full stop on the right. */}
+			<p dir="auto" className="text-base text-black/60 dark:text-white/60">
 				{item?.abstractNote}
 			</p>
 		</ItemPropertyRowWrapper>
@@ -860,6 +861,8 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 							href={link.url}
 							target="_blank"
 							rel="noopener noreferrer"
+							// An identifier reads left to right on a right-to-left page too: "10.51878/…", not "…/10.51878".
+							dir="ltr"
 							className="block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link transition-colors hover:underline"
 						>
 							{link.value}
