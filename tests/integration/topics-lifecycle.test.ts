@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { outbox } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { status } from "@/db/schema/tables/status";
 import { itemDraft, itemSourceLink, sourceConnection, sourceRecordIssue } from "@/db/schema/source";
@@ -142,6 +143,36 @@ it("delivers stable retry bodies and new generations for visibility changes with
   });
 });
 
+
+it("sends a record's PDF and its cover with it, and sends the record again when its attachment changes", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Coaching", topics: ["T12260"]}, policy);
+    const published = await publishItemDraft(db, draft.itemKey, policy);
+    const delivered: {metadata?: {pdf?: unknown}}[] = [];
+    const request: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body)); delivered.push(body);
+      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
+    };
+    await runTopicAssociationCycle(db, config, undefined, request);
+    expect(delivered.at(-1)?.metadata?.pdf).toBeNull();
+    // A stored PDF arrives, written as an attachment and its outbox entry. Without its cover it isn't public yet.
+    await db.execute(sql`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('PDFCVRAB', 'native', 'PDFCVRAB')`);
+    await db.execute(sql`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "parentItem", "linkMode", "contentType", "dateAdded", "deleted")
+      VALUES ('PDFCVRAB', 'native', 'PDFCVRAB', 'Attachment', 1, 'Full text', ${draft.itemKey}, 'imported_file', 'application/pdf', now(), 0)`);
+    await db.insert(outbox).values({entityType: "item", entityKey: "PDFCVRAB", operation: "upsert", revision: 1});
+    await runTopicAssociationCycle(db, config, undefined, request);
+    expect(delivered.at(-1)?.metadata?.pdf).toBeNull();
+    // Its cover drawn, the record goes again with both.
+    await db.execute(sql`UPDATE "item" SET "PDFCoverPageImage" = 'https://files.example.test/covers/PDFCVRAB.png', "PDFCoverPageWidth" = 600, "PDFCoverPageHeight" = 800, "revision" = 2 WHERE key = 'PDFCVRAB'`);
+    await db.insert(outbox).values({entityType: "item", entityKey: "PDFCVRAB", operation: "upsert", revision: 2});
+    await runTopicAssociationCycle(db, config, undefined, request);
+    expect(delivered.at(-1)).toMatchObject({publishedRevision: published.revision, metadata: {pdf: {
+      url: new URL(`/lib/${draft.itemKey}/download/PDFCVRAB`, `${config.identity.baseUrl}/`).href,
+      cover: "https://files.example.test/covers/PDFCVRAB.png",
+    }}});
+  });
+});
 
 it("stores the settings without queuing deliveries on the first run while Topics are off", async () => {
   await withIsolatedPublicationDatabase(async db => {
