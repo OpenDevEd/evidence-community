@@ -64,7 +64,7 @@ function PaperRow({ row, onLeaveOut }: { row: Row; onLeaveOut: () => void }) {
 		<li className={`flex h-14 items-center gap-3 px-3 ${known ? "opacity-60" : ""}`}>
 			{row.state === "looking" ? <Spinner size="sm" /> : null}
 			<div className="min-w-0 flex-1">
-				<p className="truncate text-sm font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
+				<p className="line-clamp-2 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
 				{row.title ? (
 					<p className="flex min-w-0 gap-2 text-xs text-foreground/60 dark:text-white/60">
 						<span className="truncate">{row.authors || t("noAuthors")}</span>

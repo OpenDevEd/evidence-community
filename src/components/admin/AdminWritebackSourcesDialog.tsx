@@ -133,7 +133,7 @@ function WritebackDialogForm({
 									<span className="truncate">{option.sourceLabel}</span>
 									{option.isOrigin ? (
 										<span className="shrink-0 rounded border border-black/15 px-1 text-[10.5px] font-normal text-black/60 dark:border-white/15 dark:text-white/60">
-											origin
+											Came from here
 										</span>
 									) : null}
 								</p>

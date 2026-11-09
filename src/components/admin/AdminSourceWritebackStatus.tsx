@@ -114,7 +114,7 @@ const appearance = {
 	},
 	unsupported: {
 		className: "text-black/45 dark:text-white/45",
-		description: "This source type does not support writeback.",
+		description: "This source keeps its own copy: it can't be changed from here.",
 		icon: CloudLoadingIcon,
 		label: "No writeback",
 		spin: false,

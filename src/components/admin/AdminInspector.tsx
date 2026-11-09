@@ -140,7 +140,7 @@ const writebackUnavailableMessage = {
 	"source-disabled": "Writeback is disabled for this source.",
 	"source-paused": "This record's source is paused.",
 	"source-removed": "This record's source has been removed.",
-	"unsupported-provider": "This source type does not support writeback.",
+	"unsupported-provider": "This source keeps its own copy: it can't be changed from here.",
 } as const;
 
 const inspectorTextareaClassNames = {
