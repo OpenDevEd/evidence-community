@@ -32,6 +32,7 @@ const DigestPages = fromPage(() => import("@/components/digests/DigestPages"));
 const Contact = fromPage(() => import("@/components/pages/Contact"));
 const CollectionInvitationPlaceholder = fromPage(async () => ({ default: (await import("@/components/pages/CollectionInvitation")).CollectionInvitationPlaceholder }));
 const HomePlaceholder = fromPage(async () => ({ default: (await import("@/components/pages/HomePage")).HomePlaceholder }));
+const PagePlaceholder = fromPage(() => import("@/components/pages/PagePlaceholder"));
 
 // Data the page has not read yet: parts that wait on it keep their own placeholders until the page replaces them.
 const PENDING = new Promise<never>(() => {});
@@ -77,10 +78,14 @@ const FALLBACKS: Record<string, (id: string | undefined, server: ServerFlags) =>
 	invitations: (id) => id && <CollectionInvitationPlaceholder invitationId={id} />,
 };
 
+/** Pages that bring their own frame and loading state; every other page gets at least the generic stand-in. */
+const OWN_FRAME = new Set(["admin", "api"]);
+
 /**
  * What the page area shows while a page is on its way from the server: on a first load before its content streams in,
- * and on Back when the page has to be read again. Each page is drawn from its own components in their loading state,
- * so the area is never empty between the header and the footer. Not listed: the admin.
+ * and on Back when the page has to be read again. A page listed above is drawn from its own components in their loading
+ * state; any other page, including one added later and never listed, gets the generic stand-in, so the area is never
+ * empty between the header and the footer. Not covered: the admin, which has its own.
  */
 export default function PageFallback(server: ServerFlags) {
 	const page = fallbackFor(usePathname(), server);
@@ -94,7 +99,8 @@ export default function PageFallback(server: ServerFlags) {
 
 function fallbackFor(pathname: string, server: ServerFlags) {
 	const [, section = "", id] = pathname.split("/");
-	return FALLBACKS[section]?.(id, server);
+	if (OWN_FRAME.has(section)) return null;
+	return FALLBACKS[section]?.(id, server) || <PagePlaceholder />;
 }
 
 /**
