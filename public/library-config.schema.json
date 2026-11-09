@@ -35,6 +35,11 @@
 					"minLength": 1,
 					"maxLength": 160
 				},
+				"searchTitle": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 70
+				},
 				"description": {
 					"type": "string",
 					"maxLength": 300
