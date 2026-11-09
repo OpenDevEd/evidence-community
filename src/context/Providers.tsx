@@ -2,6 +2,7 @@
 
 import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider } from "next-themes";
+import { useLocale } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import { usePathname, useRouter } from "@/i18n/routing";
 import {
@@ -226,6 +227,10 @@ export default function Providers({
 	reader: Reader | null;
 }) {
 	const router = useRouter();
+	// The component library's own labels (a combobox's "Show suggestions", a field's "Clear input", "Dismiss") in the
+	// site's language; "cn" is this site's name for Chinese.
+	const locale = useLocale();
+	const uiLocale = locale === "cn" ? "zh-CN" : locale;
 	const { analytics, theme } = useLibraryConfig();
 
 	return (
@@ -242,7 +247,7 @@ export default function Providers({
 							storedConsentFromServer={storedConsent}
 						>
 							<CacheProvider status={status} gapmaps={gapmaps}>
-								<NextUIProvider navigate={router.push}>
+								<NextUIProvider navigate={router.push} locale={uiLocale}>
 									<Suspense>
 										<PramNotificationProvider>
 											<PageView />
