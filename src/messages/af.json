@@ -1688,5 +1688,19 @@
     "yourSubmissions": "Jou voorleggings",
     "emptyLink": "Ken jy ’n artikel wat hier hoort? Stel dit voor",
     "invalid": "{count, plural, one {Dit is nie ’n artikelskakel, DOI of ID nie, so dit word uitgelaat: {values}} other {Hierdie is nie artikelskakels, DOI’s of ID’s nie, so hulle word uitgelaat: {values}}}"
+  },
+  "browse": {
+    "title": "Blaai per jaar",
+    "intro": "Elke rekord in {name}, volgens die jaar waarin dit gepubliseer is.",
+    "recordsWord": "{count, plural, one {rekord} other {rekords}}",
+    "records": "{count, plural, one {# rekord} other {# rekords}}",
+    "decade": "{decade}'s",
+    "noYear": "Geen jaar",
+    "noYearLink": "Rekords sonder ’n jaar",
+    "footerLink": "Blaai deur alle rekords per jaar",
+    "otherPeriods": "Voor en na",
+    "months": "Maande",
+    "noMonth": "Geen maand gegee",
+    "noMonthIn": "{year}, geen maand gegee"
   }
 }

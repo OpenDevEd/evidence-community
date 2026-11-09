@@ -1688,5 +1688,19 @@
     "yourSubmissions": "你的提交",
     "emptyLink": "知道应该收录在这里的论文？推荐它",
     "invalid": "{count, plural, other {这些不是论文链接、DOI 或 ID，已被略过：{values}}}"
+  },
+  "browse": {
+    "title": "按年份浏览",
+    "intro": "{name} 中的所有记录，按发表年份排列。",
+    "recordsWord": "条记录",
+    "records": "{count} 条记录",
+    "decade": "{decade} 年代",
+    "noYear": "无年份",
+    "noYearLink": "无年份的记录",
+    "footerLink": "按年份浏览所有记录",
+    "otherPeriods": "之前与之后",
+    "months": "月份",
+    "noMonth": "未注明月份",
+    "noMonthIn": "{year} 年，未注明月份"
   }
 }

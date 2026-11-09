@@ -1688,5 +1688,19 @@
     "yourSubmissions": "Tus envíos",
     "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo",
     "invalid": "{count, plural, one {Esto no es un enlace a un artículo, un DOI ni un ID, así que se omite: {values}} other {Esto no son enlaces a artículos, DOI ni ID, así que se omiten: {values}}}"
+  },
+  "browse": {
+    "title": "Explorar por año",
+    "intro": "Todos los registros de {name}, por año de publicación.",
+    "recordsWord": "{count, plural, one {registro} other {registros}}",
+    "records": "{count, plural, one {# registro} other {# registros}}",
+    "decade": "Años {decade}",
+    "noYear": "Sin año",
+    "noYearLink": "Registros sin año",
+    "footerLink": "Explorar todos los registros por año",
+    "otherPeriods": "Antes y después",
+    "months": "Meses",
+    "noMonth": "Sin mes indicado",
+    "noMonthIn": "{year}, sin mes indicado"
   }
 }

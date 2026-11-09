@@ -1688,5 +1688,19 @@
     "yourSubmissions": "Deine Einreichungen",
     "emptyLink": "Kennst du einen Artikel, der hierher gehört? Schlag ihn vor",
     "invalid": "{count, plural, one {Das ist kein Link zu einer Arbeit, keine DOI und keine ID, daher wird es ausgelassen: {values}} other {Das sind keine Links zu Arbeiten, DOIs oder IDs, daher werden sie ausgelassen: {values}}}"
+  },
+  "browse": {
+    "title": "Nach Jahr durchsuchen",
+    "intro": "Alle Einträge in {name}, nach Erscheinungsjahr.",
+    "recordsWord": "{count, plural, one {Eintrag} other {Einträge}}",
+    "records": "{count, plural, one {# Eintrag} other {# Einträge}}",
+    "decade": "{decade}er",
+    "noYear": "Ohne Jahr",
+    "noYearLink": "Einträge ohne Jahr",
+    "footerLink": "Alle Einträge nach Jahr durchsuchen",
+    "otherPeriods": "Davor und danach",
+    "months": "Monate",
+    "noMonth": "Ohne Monatsangabe",
+    "noMonthIn": "{year}, ohne Monatsangabe"
   }
 }

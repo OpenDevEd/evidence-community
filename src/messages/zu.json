@@ -1688,5 +1688,19 @@
     "yourSubmissions": "Okuthunyelwe yimi",
     "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise",
     "invalid": "{count, plural, one {Lokhu akusona isixhumanisi sephepha, i-DOI noma i-ID, ngakho kushiyiwe: {values}} other {Lokhu akuzona izixhumanisi zamaphepha, ama-DOI noma ama-ID, ngakho kushiyiwe: {values}}}"
+  },
+  "browse": {
+    "title": "Phequlula ngonyaka",
+    "intro": "Wonke amarekhodi aku-{name}, ngonyaka ashicilelwe ngawo.",
+    "recordsWord": "{count, plural, one {irekhodi} other {amarekhodi}}",
+    "records": "{count, plural, one {irekhodi elingu-#} other {amarekhodi angu-#}}",
+    "decade": "Iminyaka yama-{decade}",
+    "noYear": "Awukho unyaka",
+    "noYearLink": "Amarekhodi angenawo unyaka",
+    "footerLink": "Phequlula onke amarekhodi ngonyaka",
+    "otherPeriods": "Ngaphambili nangemuva",
+    "months": "Izinyanga",
+    "noMonth": "Ayikho inyanga eshiwoyo",
+    "noMonthIn": "{year}, ayikho inyanga eshiwoyo"
   }
 }

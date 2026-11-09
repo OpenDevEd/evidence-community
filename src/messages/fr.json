@@ -1688,5 +1688,19 @@
     "yourSubmissions": "Vos soumissions",
     "emptyLink": "Vous connaissez un article qui a sa place ici ? Suggérez-le",
     "invalid": "{count, plural, one {Ceci n’est ni un lien vers un article, ni un DOI, ni un identifiant, il est donc ignoré : {values}} other {Ce ne sont ni des liens vers des articles, ni des DOI, ni des identifiants, ils sont donc ignorés : {values}}}"
+  },
+  "browse": {
+    "title": "Parcourir par année",
+    "intro": "Toutes les notices de {name}, par année de publication.",
+    "recordsWord": "{count, plural, one {notice} other {notices}}",
+    "records": "{count, plural, one {# notice} other {# notices}}",
+    "decade": "Années {decade}",
+    "noYear": "Sans année",
+    "noYearLink": "Notices sans année",
+    "footerLink": "Parcourir toutes les notices par année",
+    "otherPeriods": "Avant et après",
+    "months": "Mois",
+    "noMonth": "Mois non précisé",
+    "noMonthIn": "{year}, mois non précisé"
   }
 }

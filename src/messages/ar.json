@@ -1688,5 +1688,19 @@
     "yourSubmissions": "مشاركاتك",
     "emptyLink": "تعرف ورقة مكانها هنا؟ اقترحها",
     "invalid": "{count, plural, one {هذا ليس رابط ورقة ولا DOI ولا معرّفًا، لذا تُرك: {values}} other {هذه ليست روابط أوراق ولا DOI ولا معرّفات، لذا تُركت: {values}}}"
+  },
+  "browse": {
+    "title": "تصفح حسب السنة",
+    "intro": "كل سجل في {name}، حسب سنة نشره.",
+    "recordsWord": "{count, plural, one {سجل} two {سجلان} few {سجلات} many {سجلًا} other {سجل}}",
+    "records": "{count, plural, one {سجل واحد} two {سجلان} few {# سجلات} many {# سجلًا} other {# سجل}}",
+    "decade": "{decade}s",
+    "noYear": "بلا سنة",
+    "noYearLink": "سجلات بلا سنة",
+    "footerLink": "تصفح كل السجلات حسب السنة",
+    "otherPeriods": "قبل وبعد",
+    "months": "الأشهر",
+    "noMonth": "بلا شهر محدد",
+    "noMonthIn": "{year}، بلا شهر محدد"
   }
 }
