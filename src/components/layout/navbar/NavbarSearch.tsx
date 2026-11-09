@@ -420,7 +420,7 @@ export default function NavbarSearch() {
 			<div
 				ref={barRef}
 				role="search"
-				className="bg-[#EAE9E5] dark:bg-card border border-black/5 dark:border-white/5 xl:rounded-2xl !rounded-t-none !border-t-0 p-4 xl:p-6 flex flex-col gap-4"
+				className="bg-secondary_light dark:bg-card border border-black/5 dark:border-white/5 xl:rounded-2xl !rounded-t-none !border-t-0 p-4 xl:p-6 flex flex-col gap-4"
 			>
 				<div className="flex flex-col gap-3 xl:flex-row xl:items-center">
 					{/* Search field + autocomplete dropdown */}

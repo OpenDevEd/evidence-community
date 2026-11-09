@@ -67,11 +67,11 @@ export default function MobileMenu({
 				aria-hidden={!isOpen}
 				onKeyDown={closeOnEscape}
 				className={twMerge(
-					"nf-compact bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 motion-reduce:duration-0 overflow-y-auto overscroll-contain -z-10 flex flex-col gap-8",
+					"nf-compact bg-secondary_light dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 motion-reduce:duration-0 overflow-y-auto overscroll-contain -z-10 flex flex-col gap-8",
 					// Position absolutely when open to overlay content
 					"absolute left-0 right-0 top-full",
 					isOpen
-						? "max-h-[calc(100dvh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-[#EAE9E5] dark:shadow-secondary-400"
+						? "max-h-[calc(100dvh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-secondary_light dark:shadow-secondary-400"
 						: "max-h-0 opacity-0"
 				)}
 			>

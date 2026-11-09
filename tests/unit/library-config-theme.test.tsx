@@ -76,6 +76,8 @@ describe("runtime theme tokens", () => {
 			"background_light",
 			"card",
 			"card_light",
+			"secondary",
+			"secondary_light",
 		]) {
 			expect(css).toContain(`--color-${token}-50:`);
 			expect(css).toContain(`--color-${token}-500:`);
@@ -91,9 +93,22 @@ describe("runtime theme tokens", () => {
 		);
 		expect(css).toContain("--color-card-500:20 20 20");
 		expect(css).toContain("--color-card_light-500:255 255 255");
+		// Panels follow the backgrounds; the platform's own backgrounds keep the panels every community has today.
+		expect(css).toContain("--color-secondary-500:30 30 30");
+		expect(css).toContain("--color-secondary_light-500:232 230 226");
 		expect(css).toContain(
 			":root.light,:root.dark{--nextui-focus:",
 		);
+	});
+
+	it("tints the panels with a community's own backgrounds", () => {
+		const css = buildThemeColorCss({
+			...maximalTheme,
+			colors: { ...maximalTheme.colors, backgroundDark: "#1C1B24", backgroundLight: "#F7F7FA" },
+		});
+
+		expect(css).toContain("--color-secondary-500:42 41 50");
+		expect(css).toContain("--color-secondary_light-500:235 235 238");
 	});
 });
 
