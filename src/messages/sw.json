@@ -513,7 +513,7 @@
     "citationsByYear": "Nukuu kwa Mwaka",
     "filterOptions": "Chaguzi za Kichujio",
     "filterByTopic": "Chuja kwa Mada",
-    "yearsCovered": "Miaka Iliyofunikwa",
+    "yearsCovered": "Miaka yenye manukuu",
     "citationTrendsOverTime": "Mwelekeo wa Kunukuu Baada ya Muda",
     "available": "zinapatikana",
     "inYear": "Katika Mwaka {year}",
@@ -538,7 +538,7 @@
     "references": "marejeleo",
     "citingResources": "Nukuu katika jumuiya hii",
     "noCitingResources": "Bado hakuna rekodi katika jumuiya hii inayolinukuu",
-    "avgCitationsPerYear": "Wastani wa Nukuu/Mwaka",
+    "avgCitationsPerYear": "Wastani wa manukuu kwa mwaka wenye manukuu",
     "peakYear": "Mwaka wa Kilele",
     "previous": "Iliyopita",
     "next": "Ifuatayo",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Aina za tafiti",
-    "read": "{count, number} zimesomwa",
-    "notRead": "Bado hazijasomwa",
+    "read": "{count, number} zimepangwa kwa aina",
+    "notRead": "Bado hazijapangwa",
     "chip": "Aina ya utafiti",
     "uncertain": "haina uhakika",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Imesomwa na <ai>AI</ai> kutoka {input, select, abstract {kwenye kichwa na muhtasari} title {kwenye kichwa pekee, kwa kuwa rekodi haina muhtasari} other {mwanzo wa PDF yake, kwa kuwa usomaji wa awali haukuwa na uhakika}}, kwa uhakika wa {percent}%{uncertain, select, yes {, hivyo imewekwa alama ya kutokuwa na uhakika} other {}}.",
     "method": {
       "title": "Jinsi aina zinavyosomwa",
-      "when": "Aina ya kila rekodi husomwa inapoingia kwenye jumuiya.",
+      "when": "Aina ya kila rekodi huwekwa na AI inapoingia kwenye jumuiya; mhariri anaweza kuibadilisha.",
       "ai": {
         "lead": "AI huchagua aina inayofaa zaidi.",
         "text": "Husoma kichwa na muhtasari, au kichwa pekee ikiwa rekodi haina muhtasari."

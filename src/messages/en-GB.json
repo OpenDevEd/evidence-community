@@ -524,7 +524,7 @@
     "citationsByYear": "Citations by Year",
     "filterOptions": "Filter Options",
     "filterByTopic": "Filter by Topic",
-    "yearsCovered": "Years Covered",
+    "yearsCovered": "Years with citations",
     "citationTrendsOverTime": "Citation Trends Over Time",
     "available": "available",
     "inYear": "In Year {year}",
@@ -549,7 +549,7 @@
     "references": "references",
     "citingResources": "Citations in this community",
     "noCitingResources": "No record in this community cites it yet",
-    "avgCitationsPerYear": "Avg Citations/Year",
+    "avgCitationsPerYear": "Avg per year with citations",
     "peakYear": "Peak Year",
     "previous": "Previous",
     "next": "Next",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Study types",
-    "read": "{count, number} read",
-    "notRead": "Not read yet",
+    "read": "{count, number} sorted by type",
+    "notRead": "Not sorted yet",
     "chip": "Study type",
     "uncertain": "uncertain",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Read by <ai>AI</ai> from the {input, select, abstract {title and abstract} title {title alone, as the record has no abstract} other {opening of its PDF, as an earlier reading left it unsure}}, {percent}% sure{uncertain, select, yes {, so it is marked uncertain} other {}}.",
     "method": {
       "title": "How types are read",
-      "when": "Each record's type is read when it enters the community.",
+      "when": "Each record's type is set by AI when it enters the community; an editor can change it.",
       "ai": {
         "lead": "AI picks the one type that fits best.",
         "text": "It reads the title and abstract, or only the title when a record has no abstract."

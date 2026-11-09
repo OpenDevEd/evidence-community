@@ -513,7 +513,7 @@
     "citationsByYear": "Citações por Ano",
     "filterOptions": "Opções de filtro",
     "filterByTopic": "Filtrar por Tópico",
-    "yearsCovered": "Anos Cobertos",
+    "yearsCovered": "Anos com citações",
     "citationTrendsOverTime": "Tendências de Citação ao Longo do Tempo",
     "available": "disponível",
     "inYear": "No ano {year}",
@@ -538,7 +538,7 @@
     "references": "referências",
     "citingResources": "Citações nesta comunidade",
     "noCitingResources": "Nenhum registo desta comunidade a cita ainda",
-    "avgCitationsPerYear": "Média de Citações/Ano",
+    "avgCitationsPerYear": "Média de citações por ano com alguma",
     "peakYear": "Ano de pico",
     "previous": "Anterior",
     "next": "Próximo",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Tipos de estudo",
-    "read": "{count, number} lidos",
-    "notRead": "Ainda não lidos",
+    "read": "{count, number} classificados por tipo",
+    "notRead": "Ainda não classificados",
     "chip": "Tipo de estudo",
     "uncertain": "incerto",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Lido pela <ai>IA</ai> a partir {input, select, abstract {do título e do resumo} title {apenas do título, pois o registro não tem resumo} other {do início do PDF, pois uma leitura anterior ficou incerta}}, com {percent}% de certeza{uncertain, select, yes {, por isso marcado como incerto} other {}}.",
     "method": {
       "title": "Como os tipos são lidos",
-      "when": "O tipo de cada registro é lido quando ele entra na comunidade.",
+      "when": "A IA define o tipo de cada registo quando entra na comunidade; um editor pode alterá-lo.",
       "ai": {
         "lead": "A IA escolhe o tipo que melhor se encaixa.",
         "text": "Ela lê o título e o resumo, ou só o título quando o registro não tem resumo."

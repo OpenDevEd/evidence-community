@@ -513,7 +513,7 @@
     "citationsByYear": "Aanhalings per jaar",
     "filterOptions": "Filteropsies",
     "filterByTopic": "Filtreer volgens onderwerp",
-    "yearsCovered": "Jare wat gedek word",
+    "yearsCovered": "Jare met sitasies",
     "citationTrendsOverTime": "Aanhalingstendense oor tyd",
     "available": "beskikbaar",
     "inYear": "In jaar {year}",
@@ -538,7 +538,7 @@
     "references": "verwysings",
     "citingResources": "Aanhalings in hierdie gemeenskap",
     "noCitingResources": "Geen rekord in hierdie gemeenskap haal dit nog aan nie",
-    "avgCitationsPerYear": "Gem. aanhalings/jaar",
+    "avgCitationsPerYear": "Gem. sitasies per jaar met enige",
     "peakYear": "Pieksjaar",
     "previous": "Vorige",
     "next": "Volgende",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Studietipes",
-    "read": "{count, number} gelees",
-    "notRead": "Nog nie gelees nie",
+    "read": "{count, number} volgens tipe gesorteer",
+    "notRead": "Nog nie gesorteer nie",
     "chip": "Studietipe",
     "uncertain": "onseker",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Gelees deur <ai>KI</ai> uit die {input, select, abstract {titel en abstrak} title {net die titel, want die rekord het geen abstrak nie} other {begin van die PDF, omdat ’n vroeëre lesing onseker gelaat het}}, {percent}% seker{uncertain, select, yes {, dus gemerk as onseker} other {}}.",
     "method": {
       "title": "Hoe tipes gelees word",
-      "when": "Elke rekord se tipe word gelees wanneer dit in die gemeenskap ingaan.",
+      "when": "Elke rekord se tipe word deur KI gestel wanneer dit die gemeenskap binnekom; 'n redakteur kan dit verander.",
       "ai": {
         "lead": "KI kies die een tipe wat die beste pas.",
         "text": "Dit lees die titel en abstrak, of net die titel wanneer ’n rekord geen abstrak het nie."

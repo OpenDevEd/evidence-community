@@ -513,7 +513,7 @@
     "citationsByYear": "Citations par année",
     "filterOptions": "Options de filtre",
     "filterByTopic": "Filtrer par sujet",
-    "yearsCovered": "Années couvertes",
+    "yearsCovered": "Années avec citations",
     "citationTrendsOverTime": "Tendances de Citation au fil du Temps",
     "available": "disponible",
     "inYear": "En année {year}",
@@ -538,7 +538,7 @@
     "references": "références",
     "citingResources": "Citations dans cette communauté",
     "noCitingResources": "Aucune notice de cette communauté ne la cite pour l’instant",
-    "avgCitationsPerYear": "Citations moyennes/an",
+    "avgCitationsPerYear": "Citations moyennes par année citée",
     "peakYear": "Année de pointe",
     "previous": "Précédent",
     "next": "Suivant",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Types d'études",
-    "read": "{count, number} lues",
-    "notRead": "Pas encore lues",
+    "read": "{count, number} classées par type",
+    "notRead": "Pas encore classées",
     "chip": "Type d'étude",
     "uncertain": "incertain",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Lu par une <ai>IA</ai> à partir {input, select, abstract {du titre et du résumé} title {du titre seul, la notice n'ayant pas de résumé} other {du début de son PDF, une lecture précédente étant restée incertaine}}, sûr à {percent} %{uncertain, select, yes {, donc marqué incertain} other {}}.",
     "method": {
       "title": "Comment les types sont lus",
-      "when": "Le type de chaque notice est lu à son entrée dans la communauté.",
+      "when": "L'IA attribue le type de chaque notice à son arrivée dans la communauté ; un éditeur peut le modifier.",
       "ai": {
         "lead": "L'IA choisit le type qui convient le mieux.",
         "text": "Elle lit le titre et le résumé, ou seulement le titre quand la notice n'a pas de résumé."

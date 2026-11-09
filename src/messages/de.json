@@ -513,7 +513,7 @@
     "citationsByYear": "Zitierungen nach Jahr",
     "filterOptions": "Filteroptionen",
     "filterByTopic": "Filtern nach Thema",
-    "yearsCovered": "Abgedeckte Jahre",
+    "yearsCovered": "Jahre mit Zitierungen",
     "citationTrendsOverTime": "Zitier-Trends im Zeitverlauf",
     "available": "verfügbar",
     "inYear": "Im Jahr {year}",
@@ -538,7 +538,7 @@
     "references": "Referenzen",
     "citingResources": "Zitationen in dieser Community",
     "noCitingResources": "Noch kein Eintrag dieser Community zitiert sie",
-    "avgCitationsPerYear": "Durchschnittliche Zitationen/Jahr",
+    "avgCitationsPerYear": "Ø Zitierungen pro Jahr mit Zitierungen",
     "peakYear": "Spitzenjahr",
     "previous": "Vorherige",
     "next": "Nächste",
@@ -1083,8 +1083,8 @@
   },
   "studyTypes": {
     "title": "Studientypen",
-    "read": "{count, number} bestimmt",
-    "notRead": "Noch nicht bestimmt",
+    "read": "{count, number} nach Typ sortiert",
+    "notRead": "Noch nicht sortiert",
     "chip": "Studientyp",
     "uncertain": "unsicher",
     "uncertainType": {
@@ -1097,7 +1097,7 @@
     "ai": "Von <ai>KI</ai> anhand {input, select, abstract {von Titel und Abstract} title {des Titels allein, da der Eintrag kein Abstract hat} other {des Anfangs seines PDFs, da eine frühere Bestimmung unsicher war}} bestimmt, zu {percent} % sicher{uncertain, select, yes {, daher als unsicher markiert} other {}}.",
     "method": {
       "title": "Wie Typen bestimmt werden",
-      "when": "Der Typ jedes Eintrags wird bestimmt, sobald er in die Community aufgenommen wird.",
+      "when": "Den Typ jedes Eintrags legt KI fest, wenn er in die Community kommt; eine Redaktion kann ihn ändern.",
       "ai": {
         "lead": "Die KI wählt den passendsten Typ.",
         "text": "Sie liest Titel und Abstract, oder nur den Titel, wenn der Eintrag kein Abstract hat."
