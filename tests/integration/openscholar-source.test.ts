@@ -278,15 +278,18 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 		await seed(db);
 		const onOpenAlex = new Map<string, number>();
 		let version = "v1";
+		let gone = false;
 		let items = [
 			{ itemId: "item-2", openalexId: "W2", doi: null },
 			{ itemId: "item-6", openalexId: null, doi: "10.1000/w6" },
 			{ itemId: "item-7", openalexId: null, doi: "10.1000/w7" },
 			{ itemId: "item-8", openalexId: null, doi: "10.1000/w8" },
+			{ itemId: "item-9", openalexId: null as string | null, doi: "10.1000/w9" },
 		];
 		const request = (async (input: string | URL, init?: RequestInit) => {
 			const url = new URL(String(input));
 			if (url.pathname === COLLECTION_ITEMS_PATH) {
+				if (gone) return Response.json({ error: "owner_left" }, { status: 403 });
 				const body = JSON.parse(String(init?.body)) as { knownVersion: string | null };
 				const base = { contractVersion: 1, version, name: "Reading list" };
 				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
@@ -301,26 +304,38 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 			const ids = filter.match(/^ids\.openalex:([^,]+)/u)![1]!.split("|");
 			return Response.json({ meta: meta(ids.length), results: ids.map((id) => work(Number(id.slice(1)))) });
 		}) as typeof fetch;
-		// The DOI lookup finds w6 and w8; w7 is nowhere yet.
-		const recordByDoi = async (doi: string) => (doi === "10.1000/w7" ? null : { itemType: "journalArticle", title: `Found by ${doi}`, DOI: doi });
+		// The DOI lookup finds w6, w8 and w9, with the empty collections its payloads always carry; w7 is nowhere yet.
+		const recordByDoi = async (doi: string) => (doi === "10.1000/w7" ? null : { itemType: "journalArticle", title: `Found by ${doi}`, DOI: doi, collections: [] });
 		const sync = async () => syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request, recordByDoi });
 		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => row.sourceRecordKey);
 
 		const first = await sync();
 		const made = await activeKeys(db, "openscholar-c1");
-		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", "doi:10.1000/w8"]);
+		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", "doi:10.1000/w8", "doi:10.1000/w9"]);
 		expect((await db.select({ title: item.title }).from(item).where(eq(item.key, made.get("doi:10.1000/w6")!)))[0]?.title).toBe("Found by 10.1000/w6");
 		expect(await issues()).toEqual(["doi:10.1000/w7"]);
 		expect(first.unresolved).toBe(1);
 
-		// OpenAlex has w6 now: the same record becomes the work's. w8 left the collection: it's withdrawn.
+		// OpenAlex has w6 now, and the collection names w9's work itself: each same record becomes its work's. w8 left the
+		// collection: it's withdrawn.
 		onOpenAlex.set("10.1000/w6", 6);
-		items = items.filter((entry) => entry.itemId !== "item-8");
+		items = items.filter((entry) => entry.itemId !== "item-8").map((entry) => (entry.itemId === "item-9" ? { ...entry, openalexId: "W9" } : entry));
 		version = "v2";
 		await sync();
 		const after = await activeKeys(db, "openscholar-c1");
-		expect([...after.keys()].sort()).toEqual(["W2", "W6"]);
+		expect([...after.keys()].sort()).toEqual(["W2", "W6", "W9"]);
 		expect(after.get("W6")).toBe(made.get("doi:10.1000/w6"));
+		expect(after.get("W9")).toBe(made.get("doi:10.1000/w9"));
 		expect(await issues()).toEqual(["doi:10.1000/w7"]);
+
+		// A DOI record that's still one, and the works, all go when the library loses the collection.
+		onOpenAlex.delete("10.1000/w6");
+		items = [...items, { itemId: "item-8", openalexId: null, doi: "10.1000/w8" }];
+		version = "v3";
+		await sync();
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()]).toContain("doi:10.1000/w8");
+		gone = true;
+		await expect(sync()).rejects.toThrow(/owner_left|left|access/iu);
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()]).toEqual([]);
 	});
 }, 120_000);

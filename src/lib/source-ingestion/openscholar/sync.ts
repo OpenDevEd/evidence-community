@@ -51,8 +51,9 @@ export async function syncOpenScholarCollection(
 		} catch (error) {
 			const gone = goneCode(error);
 			if (!gone) throw error;
-			await withdrawOpenAlexWorks(context);
+			// Before the works: withdrawing them resets the cursor the DOI records are withdrawn against.
 			await withdrawDoiRecords(context);
+			await withdrawOpenAlexWorks(context);
 			throw new OpenScholarCollectionGoneError(gone, collectionId);
 		}
 	};
@@ -70,7 +71,9 @@ export async function syncOpenScholarCollection(
 	// A paper with only a DOI is found on OpenAlex by it; the ones OpenAlex doesn't have are listed as issues.
 	const byDoi = await worksForDois(context, collection.dois, options);
 	// One OpenAlex doesn't have is made from its DOI; the ones nothing finds are listed as issues.
-	const recorded = await syncDoiRecords(context, { dois: collection.dois, resolved: byDoi, recordByDoi: options.recordByDoi });
+	// A record made from a DOI becomes its work's once OpenAlex has the DOI, or once the collection names the work itself.
+	const works = new Map([...collection.doiWorks, ...byDoi]);
+	const recorded = await syncDoiRecords(context, { dois: collection.dois, works, recordByDoi: options.recordByDoi });
 	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
 	const ids = [...new Set([...collection.openAlexIds, ...byDoi.values()])].sort();
 	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list

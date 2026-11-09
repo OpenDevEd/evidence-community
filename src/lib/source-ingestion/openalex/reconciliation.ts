@@ -26,6 +26,22 @@ function withSourceUnchanged<T>(db: Database, args: WithdrawalArgs, withdraw: (t
   });
 }
 
+/** Runs a change to the source's records under the OpenAlex writer's lock, while its configuration and cursor stay as read. */
+export function inUnchangedSource<T>(db: Database, args: WithdrawalArgs, change: (tx: Transaction) => Promise<T>) {
+  return withSourceUnchanged(db, args, tx => change(tx));
+}
+
+/**
+ * Withdraws these records from the source as a scan does, a hundred at a time: one another source holds, or one with
+ * editorial work, stays live, the latter with an issue saying why.
+ */
+export async function withdrawSourceRecords(db: Database, args: WithdrawalArgs, itemKeys: readonly string[], issueMessage: string) {
+  for (let at = 0; at < itemKeys.length; at += 100) {
+    const keys = itemKeys.slice(at, at + 100);
+    await withSourceUnchanged(db, args, tx => withdrawItems(tx, args, keys, issueMessage));
+  }
+}
+
 /**
  * Takes the source's link off these items and withdraws the ones nothing else keeps. Edited items stay, with an
  * issue that says why the source let them go.
