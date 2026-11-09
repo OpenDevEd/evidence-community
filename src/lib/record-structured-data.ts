@@ -42,8 +42,8 @@ const named = (type: string, name: string | null | undefined) => (name ? { "@typ
 export function recordStructuredData(item: Item, baseUrl: string) {
 	const url = buildSiteUrl(`/lib/${item.key}`, baseUrl);
 	const cover = item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage;
-	// A creator with a single name is an organisation in this app; one with a first and last name is a person.
-	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named(creator.name?.trim() ? "Organization" : "Person", creatorDisplayName(creator)));
+	// Authors are people: records from OpenAlex keep a person's whole name in one field, so the field's shape can't tell an organisation apart.
+	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named("Person", creatorDisplayName(creator)));
 	const data: Record<string, unknown> = {
 		"@context": "https://schema.org",
 		"@type": (item.itemType && TYPES[item.itemType]) ?? "CreativeWork",

@@ -27,7 +27,8 @@ describe("record structured data", () => {
 		expect(data["@type"]).toBe("Report");
 		expect(data).not.toHaveProperty("datePublished");
 		expect(data).not.toHaveProperty("isPartOf");
-		expect(data.author).toEqual([{ "@type": "Organization", name: "UNESCO" }]);
+		// A one-field name is how OpenAlex records name people, so it stays a person.
+		expect(data.author).toEqual([{ "@type": "Person", name: "UNESCO" }]);
 		expect(recordStructuredData(record({ date: "2021-05" }), "https://aied.openscholar.ai").datePublished).toBe("2021-05");
 	});
 });
