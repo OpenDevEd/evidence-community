@@ -66,6 +66,16 @@ export function buildLibraryMetadata(
 	};
 }
 
+/** The home page's title in search results: the owner's own when they set one, otherwise the name and the tagline, which says what the library holds. */
+export function homeSearchTitle({ name, tagline, searchTitle }: LibraryServerConfig["identity"]) {
+	return searchTitle?.trim() || (tagline?.trim() ? `${name}: ${tagline.trim()}` : name);
+}
+
+/** The home page's description in search results. A blank description or tagline says nothing, so it gives way to the next. */
+export function homeSearchDescription({ name, tagline, description }: LibraryServerConfig["identity"]) {
+	return description?.trim() || tagline?.trim() || name;
+}
+
 export function buildLibraryLogoCss(
 	identity: LibraryIdentityConfig,
 ): string | null {
