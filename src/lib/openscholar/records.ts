@@ -1,5 +1,4 @@
 import type { ListItem } from "@/app/api/item/types";
-import { isOpenAlexWorkProvider } from "@/lib/source-providers";
 
 /**
  * A library record as OpenScholar reads it (plans/evidence-library-sources in OpenScholar): what
@@ -42,14 +41,15 @@ function doiOf(doi: string | null | undefined) {
 	return bare || undefined;
 }
 
-type RecordSource = Pick<ListItem, "key" | "revision" | "itemType" | "title" | "abstractNote" | "creators" | "year" | "date" | "publicationTitle" | "url" | "DOI" | "provider"> & {
-	sourceRecordKey?: string | null;
+type RecordSource = Pick<ListItem, "key" | "revision" | "itemType" | "title" | "abstractNote" | "creators" | "year" | "date" | "publicationTitle" | "url" | "DOI"> & {
+	openalexId?: string | null;
 	attachmentsData?: Array<{ key: string; filename?: string | null; contentType?: string | null; linkMode?: string | null; url?: string | null }>;
 };
 
 /** A record, from the search index's copy of it with its public attachments only, as OpenScholar reads it. */
 export function toOpenScholarRecord(record: RecordSource): OpenScholarRecord {
-	const openalexId = isOpenAlexWorkProvider(record.provider) && /^W[1-9]\d*$/.test(record.sourceRecordKey ?? "") ? record.sourceRecordKey! : undefined;
+	// The work its sources found it as: an added paper is kept under its own key, so its own key can't say.
+	const openalexId = record.openalexId ?? undefined;
 	const doi = doiOf(record.DOI);
 	return {
 		key: record.key,

@@ -1,5 +1,5 @@
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
-import { desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
@@ -185,6 +185,9 @@ async function findByDoi(papers: readonly { at: number; doi: string }[], lookup:
 
 type Known = { sent: (typeof addedPaper.$inferSelect)[]; workKeys: Map<string, string>; existingDois: ReadonlyMap<string, string> };
 
+/** Whether this request sent the paper: first, or again after its review was returned or withdrawn. */
+const sentBy = (row: typeof addedPaper.$inferSelect, requestId: string) => row.requestId === requestId || row.resendRequestIds.includes(requestId);
+
 /**
  * What to answer for a paper the community already has: accepted before (the same answer to the same request), or
  * already one of its records. Null for a paper new to it.
@@ -192,7 +195,7 @@ type Known = { sent: (typeof addedPaper.$inferSelect)[]; workKeys: Map<string, s
 function knownPaper(paper: Found, known: Known, requestId: string): AddedPaperResult | null {
 	const sent = known.sent.find((row) => (paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi));
 	if (sent) {
-		const outcome = sent.requestId === requestId ? "added" : "existing";
+		const outcome = sentBy(sent, requestId) ? "added" : "existing";
 		return { at: paper.at, outcome, itemKey: sent.itemKey, foundBy: sent.openalexId ? "openalex" : "doi" };
 	}
 	const here = (paper.openalexId && known.workKeys.get(paper.openalexId)) || (paper.doi && known.existingDois.get(paper.doi));
@@ -257,7 +260,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 			// another's, which sends it again. Either goes on from where its review stands.
 			const waiting = known.sent.find((row) => row.state === "pending" && ((paper.openalexId && row.openalexId === paper.openalexId) || (paper.doi && row.doi === paper.doi)));
 			if (waiting) {
-				made.push({ at: paper.at, itemKey: waiting.itemKey, foundBy: waiting.openalexId ? "openalex" : "doi", again: waiting.requestId !== input.requestId });
+				made.push({ at: paper.at, itemKey: waiting.itemKey, foundBy: waiting.openalexId ? "openalex" : "doi", again: !sentBy(waiting, input.requestId) });
 				continue;
 			}
 			const answer = knownPaper(paper, known, input.requestId);
@@ -297,6 +300,14 @@ export async function latestReview(db: Database, itemKey: string) {
 	return latest;
 }
 
+/** Records a request that sent a paper again, so a replay of it later leaves a return alone. */
+const noteResend = (db: Database | DatabaseTransaction, itemKey: string, requestId: string) =>
+	db.update(addedPaper).set({ resendRequestIds: sql`array_append(${addedPaper.resendRequestIds}, ${requestId})` }).where(and(eq(addedPaper.itemKey, itemKey), sql`NOT (${requestId} = ANY(${addedPaper.resendRequestIds}))`));
+
+/** Submits the record for review, noting the request with it when it sends a paper reviewed before. */
+const submitAgain = (db: Database, config: LibraryServerConfig, itemKey: string, reviewedBefore: boolean, input: AddPapersInput) =>
+	submitItemReview(db, itemKey, reviewerOf(input.actor), config, reviewedBefore ? (transaction) => noteResend(transaction, itemKey, input.requestId) : undefined);
+
 /**
  * Sends one record on, and answers where it got to. A review returned or withdrawn stays so when its own request is
  * replayed; a new request submits the record again.
@@ -305,7 +316,7 @@ async function sendRecord(db: Database, storage: EvidenceFileStorage, config: Li
 	const latest = await latestReview(db, itemKey);
 	if (latest?.state === "published") return "added";
 	if (latest && latest.state !== "pending" && !again) return "returned";
-	const review = latest?.state === "pending" ? latest : await submitItemReview(db, itemKey, reviewerOf(input.actor), config);
+	const review = latest?.state === "pending" ? latest : await submitAgain(db, config, itemKey, latest !== undefined, input);
 	if (!input.publish) return "queued";
 	await approveItemReview(db, storage, { reviewId: review.id, expectedRevision: review.revision }, reviewerOf(input.actor), config);
 	return "added";

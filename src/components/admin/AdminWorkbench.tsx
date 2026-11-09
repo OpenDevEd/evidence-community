@@ -68,7 +68,8 @@ import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfI
 import { EditorialInspector } from "./EditorialInspector";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
-import { approveAdminReview, getAdminItemReviews, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
+import { approveAdminReview, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
+import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { AdminSourceStatusDialog } from "./AdminSourceStatus";
 import {
 	AdminWritebackSourcesDialog,
@@ -414,21 +415,15 @@ const SENT_TOASTS = {
 	queued: () => toast.success("Sent to the review queue"),
 } as const;
 
-/** The version's review to approve: one an earlier Publish submitted but couldn't approve, or a new one. */
-async function pendingOrSubmitted(reviewKey: string) {
-	return (await getAdminItemReviews(reviewKey)).find((review) => review.state === "pending") ?? (await submitAdminReview(reviewKey));
-}
-
 /**
- * Approves a review just submitted. One that changes a PDF already on Zenodo asks for a confirmation the review queue
- * gives, so it waits there for it.
+ * Approves a review just submitted, with the receipts of the search updates it started. One that changes a PDF already
+ * on Zenodo asks for a confirmation the review queue gives, so it waits there for it.
  */
-async function approveOrQueue(review: { id: string; revision: number }): Promise<"published" | "confirm"> {
+async function approveOrQueue(review: { id: string; revision: number }): Promise<{ outcome: "published" | "confirm"; receipts: readonly AdminSearchIndexReceipt[] }> {
 	try {
-		await approveAdminReview(review.id, review.revision);
-		return "published";
+		return { outcome: "published", receipts: (await approveAdminReview(review.id, review.revision)).indexingReceipts };
 	} catch (error) {
-		if (error instanceof AdminApiError && error.code === "confirmation_required") return "confirm";
+		if (error instanceof AdminApiError && error.code === "confirmation_required") return { outcome: "confirm", receipts: [] };
 		throw error;
 	}
 }
@@ -1410,10 +1405,21 @@ export default function AdminWorkbench({
 	const sendVersion = async (recordKey: string, reviewKey: string, publish: boolean) => {
 		// The record's own unsaved edits go with it too.
 		if (reviewKey !== recordKey) await flushDraft(reviewKey);
-		const outcome = publish ? await approveOrQueue(await pendingOrSubmitted(reviewKey)) : (await submitAdminReview(reviewKey), "queued" as const);
-		await mutate(["admin-reviews", reviewKey]);
-		await Promise.all([loadDetail(recordKey), loadItems()]);
-		SENT_TOASTS[outcome]();
+		let sent: { outcome: keyof typeof SENT_TOASTS; indexed: Promise<void> };
+		try {
+			const review = await submitAdminReview(reviewKey);
+			const { outcome, receipts } = publish ? await approveOrQueue(review) : { outcome: "queued" as const, receipts: [] };
+			// Readers' search follows the publication, shown as the review queue's Publish shows it.
+			sent = { outcome, indexed: searchIndex.trackAndWait(receipts) };
+		} finally {
+			// Also when approval failed: the version then waits in the review queue, and the record says so, so Publish
+			// can't approve that earlier version after the draft changes.
+			await mutate(["admin-reviews", reviewKey]);
+			await Promise.all([loadDetail(recordKey), loadItems()]);
+		}
+		SENT_TOASTS[sent.outcome]();
+		// The version is out either way: search that didn't follow is said apart, as the review queue's Publish says it.
+		void sent.indexed.catch((error: unknown) => toast.error(error instanceof Error ? error.message : "Public search did not update."));
 	};
 
 	const manageSources = () => {
