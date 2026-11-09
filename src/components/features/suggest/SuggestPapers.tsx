@@ -54,7 +54,9 @@ async function call<T>(init?: RequestInit): Promise<T> {
 }
 
 const post = <T,>(body: object) => call<T>({ method: "POST", body: JSON.stringify(body) });
-const messageOf = (error: unknown, fallback: string) => (error instanceof Error && error.message ? error.message : fallback);
+// A request that never reached the community fails as a TypeError whose words are the browser's ("Load failed", "Failed
+// to fetch"): it says it couldn't reach the community instead. Any other error is the community's own words.
+const messageOf = (error: unknown, fallback: string) => (error instanceof Error && !(error instanceof TypeError) && error.message ? error.message : fallback);
 
 /** One paper looked up: what it is, and where it stands here, or a button to leave it out. */
 function PaperRow({ row, onLeaveOut }: { row: Row; onLeaveOut: () => void }) {
