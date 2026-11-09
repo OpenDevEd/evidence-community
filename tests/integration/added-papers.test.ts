@@ -132,15 +132,17 @@ it("adds a paper again once its record was removed, as a new record", async () =
 	});
 });
 
-it("keeps a removed paper's row while its deleted record still holds the work", async () => {
+it("adds a paper again after the team removed it from the community, as a new record", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
 		const { lookup } = services([work(42)]);
 		const published = await addPapers(db, storage, config, { requestId: "r42", publish: true, actor: owner, papers: [{ openalexId: "W42" }] }, lookup);
 		const first = published.results[0]!.itemKey!;
-		await removeAddedPaper(db, first, { userId: owner.userId, role: "owner" });
-		await addPapers(db, storage, config, { requestId: "r43", publish: true, actor: owner, papers: [{ openalexId: "W42" }] }, lookup);
-		expect(await db.select({ itemKey: addedPaper.itemKey }).from(addedPaper)).toEqual([{ itemKey: first }]);
+		expect(await removeAddedPaper(db, first, { userId: owner.userId, role: "owner" })).toBe("removed");
+		const again = await addPapers(db, storage, config, { requestId: "r43", publish: true, actor: owner, papers: [{ openalexId: "W42" }] }, lookup);
+		expect(again.results).toMatchObject([{ outcome: "added" }]);
+		expect(again.results[0]!.itemKey).not.toBe(first);
+		expect(await db.select({ itemKey: addedPaper.itemKey, state: addedPaper.state }).from(addedPaper)).toEqual([{ itemKey: again.results[0]!.itemKey, state: "accepted" }]);
 	});
 });
 

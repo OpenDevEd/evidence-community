@@ -1,4 +1,5 @@
-import { eq, sql } from "drizzle-orm";
+import { itemSourceLink } from "@opendeved/evidence-library-core";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -48,6 +49,12 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 	}
 	if (actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can remove a paper from the community.");
 	await unpublishNativeItemWithOutcome(db, itemKey);
+	// Taken off, it's no longer one of the added papers: the source lets go of its work, so the paper can be added again
+	// as a new record, and its sync doesn't bring it back.
+	await db.transaction(async (transaction) => {
+		await transaction.delete(itemSourceLink).where(and(eq(itemSourceLink.itemKey, itemKey), eq(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY)));
+		await transaction.delete(addedPaper).where(eq(addedPaper.itemKey, itemKey));
+	});
 	return "removed";
 }
 

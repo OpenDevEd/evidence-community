@@ -251,12 +251,13 @@ export async function knownPapers(transaction: Database | DatabaseTransaction, f
 	// A paper whose record was removed since (no draft left, and no record but a deleted one) is no longer here: sent
 	// again, it's added anew. One whose deleted record still holds its work or DOI keeps its row, which that record answers for.
 	const held = new Set([...workKeys.values(), ...existingDois.values()]);
-	const live = await liveRecords(transaction, rows.map((row) => row.itemKey));
+	const live = await liveRecords(transaction, [...rows.map((row) => row.itemKey), ...existingDois.values()]);
 	return {
 		sent: rows.filter((row) => live.has(row.itemKey)),
 		gone: rows.flatMap((row) => (live.has(row.itemKey) || held.has(row.itemKey) ? [] : [row.itemKey])),
 		workKeys,
-		existingDois,
+		// A deleted record with the same DOI doesn't hold the paper: only one still in the community does.
+		existingDois: new Map([...existingDois].filter(([, itemKey]) => live.has(itemKey))),
 	};
 }
 
