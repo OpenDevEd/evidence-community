@@ -118,6 +118,11 @@ function reviewVersionTitle(
 	return "Published version";
 }
 
+/** On the working draft of a paper waiting for review, where the review is: its own version holds Publish and Decline. */
+function waitingHere(snapshot: AdminReviewSnapshot | undefined, viewingSubmitted: boolean) {
+	return !viewingSubmitted && snapshot?.reviewState === "pending" ? "Awaiting review: open Submitted version to publish or decline it" : null;
+}
+
 function reviewVersionPresentation(
 	detail: AdminItemDetail,
 	snapshot: AdminReviewSnapshot | undefined,
@@ -133,7 +138,7 @@ function reviewVersionPresentation(
 	return {
 		dataState: reviewState ? snapshot?.reviewState : detail.state,
 		state,
-		stateLabel: reviewState ? (snapshot?.reviewState === "returned" ? returnWordsFor(detail).state : state.label) : recordReviewStateLabel(detail, state),
+		stateLabel: reviewState ? (snapshot?.reviewState === "returned" ? returnWordsFor(detail).state : waitingHere(snapshot, viewingSubmitted) ?? state.label) : recordReviewStateLabel(detail, state),
 		title: reviewVersionTitle(detail, viewingSubmitted),
 	};
 }
