@@ -11,6 +11,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { connection } from "next/server";
 import { homeRich } from "@/components/pages/HomeRichText";
+import SiteStructuredData from "@/components/layout/SiteStructuredData";
 import { homeSearchDescription, homeSearchTitle } from "@/config/library-config/identity";
 import { buildLanguageAlternates, buildLocalizedSiteUrl } from "@/lib/language-alternates";
 
@@ -60,6 +61,8 @@ export default async function Home({ params }: Props) {
 	const data = loadHomeData(locale, config);
 	const { shapes } = await getWorldMap();
 	return (
+		<>
+		<SiteStructuredData />
 		<HomePage
 			{...tonesFrom(config.theme.colors)}
 			rich={homeRich(about, config.identity.baseUrl)}
@@ -71,6 +74,7 @@ export default async function Home({ params }: Props) {
 			about={about}
 			data={data}
 		/>
+		</>
 	);
 }
 
