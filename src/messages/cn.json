@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> 个{count, plural, one {资源} other {资源}}",
     "likedItemsCount": "<number>{count}</number> 个已收藏{count, plural, one {资源} other {资源}}",
     "itemsInCollection": "<collections>{collection}</collections> 中有 <number>{count}</number> 个{count, plural, one {资源} other {资源}}",
-    "noFacetsFound": "未找到分面",
+    "noFacetsFound": "这里暂时没有可筛选的内容",
     "pageNotFound": "页面未找到",
     "itemNotFound": "资源未找到",
     "copyLink": "复制链接",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "推荐论文",
-    "description": "粘贴 DOI、OpenAlex ID 或其链接。社区团队会在每篇上线前审核。",
-    "inputLabel": "DOI、OpenAlex ID 或链接",
+    "description": "粘贴论文链接（来自 Openscholar、本站、OpenAlex 或 doi.org）、DOI 或 OpenAlex ID。社区团队会在发布前审核每一篇。",
+    "inputLabel": "论文链接、DOI 或 OpenAlex ID",
     "find": "查找论文",
     "overLimit": "{count, plural, other {你今天还能在这里推荐 # 篇论文，因此只查找前 # 篇。}}",
     "noneLeft": "你今天在这里推荐的论文已达到个人上限。请明天再试。",
@@ -1684,9 +1684,10 @@
     "send": "发送审核",
     "done": "完成",
     "sent": "{count, plural, other {已发送 # 篇论文待审核}}",
-    "sentHint": "你可以在 Openscholar 的“你的提交”中查看每篇的状态：等待中、已发布，或附审核人理由退回。",
+    "sentHint": "你可以在 Openscholar 的“你的提交”中看到每篇的状态：等待审核、已发布，或附团队理由的已拒绝。",
     "yourSubmissions": "你的提交",
-    "emptyLink": "知道应该收录在这里的论文？推荐它"
+    "emptyLink": "知道应该收录在这里的论文？推荐它",
+    "invalid": "{count, plural, other {这些不是论文链接、DOI 或 ID，已被略过：{values}}}"
   },
   "browse": {
     "title": "按年份浏览",

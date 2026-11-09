@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {recurso} other {recursos}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {recurso marcado} other {recursos marcados}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {recurso} other {recursos}} en <collections>{collection}</collections>",
-    "noFacetsFound": "No se encontraron filtros",
+    "noFacetsFound": "Aún no hay nada por lo que filtrar",
     "pageNotFound": "Página no encontrada",
     "itemNotFound": "Recurso no encontrado",
     "copyLink": "Copiar enlace",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Sugerir artículos",
-    "description": "Pega DOI, identificadores de OpenAlex o enlaces a ellos. El equipo de la comunidad revisa cada uno antes de publicarlo.",
-    "inputLabel": "DOI, identificadores de OpenAlex o enlaces",
+    "description": "Pega enlaces a artículos (de Openscholar, este sitio, OpenAlex o doi.org), DOI o ID de OpenAlex. El equipo de la comunidad revisa cada uno antes de publicarlo.",
+    "inputLabel": "Enlaces a artículos, DOI o ID de OpenAlex",
     "find": "Buscar artículos",
     "overLimit": "{count, plural, one {Hoy puedes sugerir # artículo más aquí, así que solo se busca el primero.} other {Hoy puedes sugerir # artículos más aquí, así que se buscan los primeros #.}}",
     "noneLeft": "Hoy ya sugeriste aquí tantos artículos como puede una persona. Vuelve a intentarlo mañana.",
@@ -1684,9 +1684,10 @@
     "send": "Enviar a revisión",
     "done": "Listo",
     "sent": "{count, plural, one {# artículo enviado a revisión} other {# artículos enviados a revisión}}",
-    "sentHint": "Verás en qué punto está cada uno en Tus envíos de Openscholar: en espera, publicado o devuelto con el motivo del revisor.",
+    "sentHint": "Verás en qué punto está cada uno en Tus envíos en Openscholar: en espera, publicado o rechazado con el motivo del equipo.",
     "yourSubmissions": "Tus envíos",
-    "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo"
+    "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo",
+    "invalid": "{count, plural, one {Esto no es un enlace a un artículo, un DOI ni un ID, así que se omite: {values}} other {Esto no son enlaces a artículos, DOI ni ID, así que se omiten: {values}}}"
   },
   "browse": {
     "title": "Explorar por año",

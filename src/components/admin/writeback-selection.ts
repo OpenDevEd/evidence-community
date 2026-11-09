@@ -21,7 +21,7 @@ const blockedHelper: Record<string, string> = {
 	"source-disabled": "Turned off in community settings",
 	"source-paused": "Paused in community settings",
 	"source-removed": "Removed from community settings",
-	"unsupported-provider": "This source type does not support writeback",
+	"unsupported-provider": "Keeps its own copy: it can't be changed from here",
 };
 
 function statusFor(
@@ -87,7 +87,7 @@ export function writebackDialogText(mode: WritebackDialogMode) {
 				confirm: "Unpublish",
 				here: "Removed from the public page and search",
 				intro:
-					"It leaves this community either way. Switch on any source whose copy should be removed as well.",
+					"It comes off this community's site either way. Where a source below has its own copy, switch it on to delete that copy too.",
 				title: "Unpublish this record",
 			};
 		case "manage":

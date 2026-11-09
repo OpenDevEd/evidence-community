@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {ressource} other {ressources}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {ressource marquée} other {ressources marquées}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {ressource} other {ressources}} dans <collections>{collection}</collections>",
-    "noFacetsFound": "Aucune facette trouvée",
+    "noFacetsFound": "Rien à filtrer ici pour l’instant",
     "pageNotFound": "Page non trouvée",
     "itemNotFound": "Ressource non trouvée",
     "copyLink": "Copier le lien",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Suggérer des articles",
-    "description": "Collez des DOI, des identifiants OpenAlex ou des liens vers eux. L’équipe de la communauté examine chacun avant sa mise en ligne.",
-    "inputLabel": "DOI, identifiants OpenAlex ou liens",
+    "description": "Collez des liens vers des articles (d’Openscholar, de ce site, d’OpenAlex ou de doi.org), des DOI ou des identifiants OpenAlex. L’équipe de la communauté relit chacun avant sa publication.",
+    "inputLabel": "Liens vers des articles, DOI ou identifiants OpenAlex",
     "find": "Trouver les articles",
     "overLimit": "{count, plural, one {Vous pouvez encore suggérer # article ici aujourd’hui, seul le premier est donc recherché.} other {Vous pouvez encore suggérer # articles ici aujourd’hui, seuls les # premiers sont donc recherchés.}}",
     "noneLeft": "Vous avez suggéré ici autant d’articles qu’une personne le peut aujourd’hui. Réessayez demain.",
@@ -1684,9 +1684,10 @@
     "send": "Envoyer pour examen",
     "done": "Terminé",
     "sent": "{count, plural, one {# article envoyé pour examen} other {# articles envoyés pour examen}}",
-    "sentHint": "Vous verrez où en est chacun dans Vos soumissions sur Openscholar : en attente, publié, ou renvoyé avec la raison de l’examinateur.",
+    "sentHint": "Vous verrez où en est chacun dans Vos envois sur Openscholar : en attente, publié ou refusé avec la raison de l’équipe.",
     "yourSubmissions": "Vos soumissions",
-    "emptyLink": "Vous connaissez un article qui a sa place ici ? Suggérez-le"
+    "emptyLink": "Vous connaissez un article qui a sa place ici ? Suggérez-le",
+    "invalid": "{count, plural, one {Ceci n’est ni un lien vers un article, ni un DOI, ni un identifiant, il est donc ignoré : {values}} other {Ce ne sont ni des liens vers des articles, ni des DOI, ni des identifiants, ils sont donc ignorés : {values}}}"
   },
   "browse": {
     "title": "Parcourir par année",

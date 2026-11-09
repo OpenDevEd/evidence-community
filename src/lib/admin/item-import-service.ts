@@ -289,13 +289,28 @@ async function doisAtLinks(entries: readonly string[], papersAtLinks: (links: re
 	return followed;
 }
 
+/**
+ * One DOI through the translation server. It sometimes answers a lookup made beside others with an error for a DOI it
+ * finds a moment later, so a failed lookup is tried twice more before it's reported.
+ */
+async function lookUpDoi(doi: string, translationUrl: string, waits: readonly number[] = [500, 1500]): Promise<Record<string, unknown>[]> {
+	try {
+		return await searchZoteroIdentifier(doi, translationUrl);
+	} catch (error) {
+		const [wait, ...rest] = waits;
+		if (wait === undefined) throw error;
+		await new Promise((resolve) => setTimeout(resolve, wait));
+		return await lookUpDoi(doi, translationUrl, rest);
+	}
+}
+
 async function translateDois(dois: readonly string[], translationUrl: string, papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>) {
 	const followed = await doisAtLinks(dois, papersAtLinks);
 	return mapWithConcurrency(dois, DOI_LOOKUP_CONCURRENCY, async (raw): Promise<TranslatedEntry[]> => {
 		const doi = normalizeDoi(raw) ?? followed.get(raw)?.doi ?? null;
 		if (!doi) return [{ message: !followed.has(raw) ? "This is not a valid DOI." : followed.get(raw) ? "Openscholar knows this paper but not its DOI." : "Openscholar finds no paper at this address.", source: raw }];
 		try {
-			const [found] = await searchZoteroIdentifier(doi, translationUrl);
+			const [found] = await lookUpDoi(doi, translationUrl);
 			return found
 				? [{ source: doi, zoteroItem: found }]
 				: [{ message: "No record was found for this DOI.", source: doi }];

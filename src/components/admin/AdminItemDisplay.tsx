@@ -51,8 +51,9 @@ export function AdminItemDisplay({
 	const [version, setVersion] = useState<"draft" | "published">("draft");
 	const hidden = hasAnyTag(tags, content.tags.hidden);
 
+	// A record not yet published shows to no one, whatever its display says: until then it's visible once published.
 	const labelFor = (key: (typeof ITEM_DISPLAY_OPTIONS)[number]["key"]) =>
-		key === "hidden" ? (hidden ? "Hidden" : "Visible") : controlLabels[key];
+		key === "hidden" ? (hidden ? "Hidden" : publishedDetail.published ? "Visible" : "Visible once published") : controlLabels[key];
 	const iconFor = (key: (typeof ITEM_DISPLAY_OPTIONS)[number]["key"]) =>
 		key === "hidden" && !hidden ? ViewIcon : displayIcons[key];
 	return (

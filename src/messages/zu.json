@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {insiza} other {izinsiza}}",
     "likedItemsCount": "<number>{count}</number> {count, plural, one {insiza ebhukimakiwe} other {izinsiza ezibhukimakiwe}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {insiza} other {izinsiza}} ku-<collections>{collection}</collections>",
-    "noFacetsFound": "Azikho izihlungi ezitholakele",
+    "noFacetsFound": "Akukho okungahlungwa lapha okwamanje",
     "pageNotFound": "Ikhasi alitholakali",
     "itemNotFound": "Insiza ayitholakali",
     "copyLink": "Kopisha ixhumanisi",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Phakamisa amaphepha",
-    "description": "Namathisela ama-DOI, ama-ID e-OpenAlex noma izixhumanisi zawo. Ithimba lomphakathi libuyekeza ngalinye ngaphambi kokuthi lishicilelwe.",
-    "inputLabel": "Ama-DOI, ama-ID e-OpenAlex noma izixhumanisi",
+    "description": "Namathisela izixhumanisi zamaphepha (ezivela ku-Openscholar, kule sayithi, ku-OpenAlex noma ku-doi.org), ama-DOI noma ama-ID e-OpenAlex. Ithimba lomphakathi libuyekeza ngalinye ngaphambi kokuthi lishicilelwe.",
+    "inputLabel": "Izixhumanisi zamaphepha, ama-DOI noma ama-ID e-OpenAlex",
     "find": "Thola amaphepha",
     "overLimit": "{count, plural, one {Namuhla ungaphakamisa elinye iphepha elingu-# lapha, ngakho kufunwa elokuqala kuphela.} other {Namuhla ungaphakamisa amanye amaphepha angu-# lapha, ngakho kufunwa angu-# okuqala.}}",
     "noneLeft": "Namuhla usuphakamise lapha amaphepha amaningi ngangokuthi umuntu oyedwa angakwazi. Zama futhi kusasa.",
@@ -1684,9 +1684,10 @@
     "send": "Thumela ukuze libuyekezwe",
     "done": "Kwenziwe",
     "sent": "{count, plural, one {Iphepha elingu-# lithunyelwe ukuze libuyekezwe} other {Amaphepha angu-# athunyelwe ukuze abuyekezwe}}",
-    "sentHint": "Uzobona ukuthi ngalinye limi kuphi kokuthi Okuthunyelwe yimi ku-Openscholar: lilindile, lishicilelwe, noma libuyiselwe nesizathu sombuyekezi.",
+    "sentHint": "Uzobona ukuthi ngalinye limi kuphi kokuthumele ku-Openscholar: lilinde, lishicilelwe, noma lenqatshwe nesizathu sethimba.",
     "yourSubmissions": "Okuthunyelwe yimi",
-    "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise"
+    "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise",
+    "invalid": "{count, plural, one {Lokhu akusona isixhumanisi sephepha, i-DOI noma i-ID, ngakho kushiyiwe: {values}} other {Lokhu akuzona izixhumanisi zamaphepha, ama-DOI noma ama-ID, ngakho kushiyiwe: {values}}}"
   },
   "browse": {
     "title": "Phequlula ngonyaka",

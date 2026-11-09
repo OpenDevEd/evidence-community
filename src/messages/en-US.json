@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {resource} other {resources}}",
     "likedItemsCount": "<number>{count}</number> bookmarked {count, plural, one {resource} other {resources}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {resource} other {resources}} in <collections>{collection}</collections>",
-    "noFacetsFound": "No facets found",
+    "noFacetsFound": "Nothing to filter by here yet",
     "pageNotFound": "Page Not Found",
     "itemNotFound": "Resource Not Found",
     "copyLink": "Copy Link",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Suggest papers",
-    "description": "Paste DOIs, OpenAlex IDs or links to them. The community’s team reviews each before it goes live.",
-    "inputLabel": "DOIs, OpenAlex IDs or links",
+    "description": "Paste links to papers (from Openscholar, this site, OpenAlex or doi.org), DOIs or OpenAlex IDs. The community’s team reviews each before it goes live.",
+    "inputLabel": "Paper links, DOIs or OpenAlex IDs",
     "find": "Find papers",
     "overLimit": "{count, plural, one {You can suggest # more paper here today, so the first one is looked up.} other {You can suggest # more papers here today, so the first # are looked up.}}",
     "noneLeft": "You’ve suggested as many papers here as one person can today. Try again tomorrow.",
@@ -1684,9 +1684,10 @@
     "send": "Send for review",
     "done": "Done",
     "sent": "{count, plural, one {# paper sent for review} other {# papers sent for review}}",
-    "sentHint": "You’ll see where each stands in Your submissions on Openscholar: waiting, published, or returned with the reviewer’s reason.",
+    "sentHint": "You’ll see where each stands in Your submissions on Openscholar: waiting, published, or declined with the team’s reason.",
     "yourSubmissions": "Your submissions",
-    "emptyLink": "Know a paper that belongs here? Suggest it"
+    "emptyLink": "Know a paper that belongs here? Suggest it",
+    "invalid": "{count, plural, one {This isn’t a paper link, DOI or ID, so it’s left out: {values}} other {These aren’t paper links, DOIs or IDs, so they’re left out: {values}}}"
   },
   "browse": {
     "title": "Browse by year",

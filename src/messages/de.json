@@ -88,7 +88,7 @@
     "resourcesCount": "<number>{count}</number> {count, plural, one {Ressource} other {Ressourcen}}",
     "likedItemsCount": "<number>{count}</number> gespeicherte {count, plural, one {Ressource} other {Ressourcen}}",
     "itemsInCollection": "<number>{count}</number> {count, plural, one {Ressource} other {Ressourcen}} in <collections>{collection}</collections>",
-    "noFacetsFound": "Keine Facetten gefunden",
+    "noFacetsFound": "Hier gibt es noch nichts zum Filtern",
     "pageNotFound": "Seite nicht gefunden",
     "itemNotFound": "Ressource nicht gefunden",
     "copyLink": "Link kopieren",
@@ -1667,8 +1667,8 @@
   },
   "suggestPapers": {
     "title": "Artikel vorschlagen",
-    "description": "Füge DOIs, OpenAlex-IDs oder Links dazu ein. Das Team der Community prüft jeden, bevor er veröffentlicht wird.",
-    "inputLabel": "DOIs, OpenAlex-IDs oder Links",
+    "description": "Füge Links zu Arbeiten (von Openscholar, dieser Website, OpenAlex oder doi.org), DOIs oder OpenAlex-IDs ein. Das Team der Community prüft jede, bevor sie veröffentlicht wird.",
+    "inputLabel": "Links zu Arbeiten, DOIs oder OpenAlex-IDs",
     "find": "Artikel finden",
     "overLimit": "{count, plural, one {Du kannst heute hier noch # Artikel vorschlagen, daher wird nur der erste gesucht.} other {Du kannst heute hier noch # Artikel vorschlagen, daher werden die ersten # gesucht.}}",
     "noneLeft": "Du hast hier heute so viele Artikel vorgeschlagen, wie eine Person kann. Versuche es morgen wieder.",
@@ -1684,9 +1684,10 @@
     "send": "Zur Prüfung senden",
     "done": "Fertig",
     "sent": "{count, plural, one {# Artikel zur Prüfung gesendet} other {# Artikel zur Prüfung gesendet}}",
-    "sentHint": "In Deine Einreichungen auf Openscholar siehst du, wo jeder steht: wartend, veröffentlicht oder mit dem Grund der Prüfung zurückgegeben.",
+    "sentHint": "Unter „Deine Einsendungen“ auf Openscholar siehst du, wo jede steht: wartet, veröffentlicht oder abgelehnt mit dem Grund des Teams.",
     "yourSubmissions": "Deine Einreichungen",
-    "emptyLink": "Kennst du einen Artikel, der hierher gehört? Schlag ihn vor"
+    "emptyLink": "Kennst du einen Artikel, der hierher gehört? Schlag ihn vor",
+    "invalid": "{count, plural, one {Das ist kein Link zu einer Arbeit, keine DOI und keine ID, daher wird es ausgelassen: {values}} other {Das sind keine Links zu Arbeiten, DOIs oder IDs, daher werden sie ausgelassen: {values}}}"
   },
   "browse": {
     "title": "Nach Jahr durchsuchen",

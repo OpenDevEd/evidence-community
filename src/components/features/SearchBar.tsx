@@ -195,6 +195,8 @@ export function SearchBar({
 					classNames?.inputWrapper,
 				),
 				base: twMerge("col-span-2", classNames?.base),
+				// A control drawn over the field's end (Ask AI) keeps the clear button and the text clear of it.
+				...(trailing ? { clearButton: twMerge("end-36", classNames?.clearButton), input: twMerge("pe-32", classNames?.input) } : {}),
 			}}
 			isClearable
 			startContent={
