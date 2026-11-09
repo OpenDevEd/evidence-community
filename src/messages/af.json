@@ -1687,5 +1687,19 @@
     "sentHint": "Jy sal in Jou voorleggings op Openscholar sien waar elkeen staan: wag, gepubliseer, of teruggestuur met die hersiener se rede.",
     "yourSubmissions": "Jou voorleggings",
     "emptyLink": "Ken jy ’n artikel wat hier hoort? Stel dit voor"
+  },
+  "browse": {
+    "title": "Blaai per jaar",
+    "intro": "Elke rekord in {name}, volgens die jaar waarin dit gepubliseer is.",
+    "recordsWord": "{count, plural, one {rekord} other {rekords}}",
+    "records": "{count, plural, one {# rekord} other {# rekords}}",
+    "decade": "{decade}'s",
+    "noYear": "Geen jaar",
+    "noYearLink": "Rekords sonder ’n jaar",
+    "footerLink": "Blaai deur alle rekords per jaar",
+    "otherPeriods": "Voor en na",
+    "months": "Maande",
+    "noMonth": "Geen maand gegee",
+    "noMonthIn": "{year}, geen maand gegee"
   }
 }

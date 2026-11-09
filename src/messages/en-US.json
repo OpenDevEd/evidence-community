@@ -1687,5 +1687,19 @@
     "sentHint": "You’ll see where each stands in Your submissions on Openscholar: waiting, published, or returned with the reviewer’s reason.",
     "yourSubmissions": "Your submissions",
     "emptyLink": "Know a paper that belongs here? Suggest it"
+  },
+  "browse": {
+    "title": "Browse by year",
+    "intro": "Every record in {name}, by the year it was published.",
+    "recordsWord": "{count, plural, one {record} other {records}}",
+    "records": "{count, plural, one {# record} other {# records}}",
+    "decade": "{decade}s",
+    "noYear": "No year",
+    "noYearLink": "Records with no year",
+    "footerLink": "Browse all records by year",
+    "otherPeriods": "Before and after",
+    "months": "Months",
+    "noMonth": "No month given",
+    "noMonthIn": "{year}, no month given"
   }
 }

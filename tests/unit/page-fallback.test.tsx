@@ -17,14 +17,14 @@ async function standIn(pathname: string) {
 	const host = document.createElement("div");
 	root = createRoot(host);
 	await act(async () => root!.render(<Suspense fallback={null}><PageFallback contactForm={false} home={null} /></Suspense>));
-	// The stand-in's code loads on first use, as the page's own does.
-	await vi.waitFor(async () => { await act(async () => {}); if (!host.innerHTML && !pathname.startsWith("/admin")) throw new Error("still loading"); }, { timeout: 5000 });
+	// The stand-in's code loads on first use, as the page's own does; a cold import on a busy CI runner took over 5 s.
+	await vi.waitFor(async () => { await act(async () => {}); if (!host.innerHTML && !pathname.startsWith("/admin")) throw new Error("still loading"); }, { timeout: 20_000 });
 	return host;
 }
 
 describe("page stand-in", () => {
 	// A page nobody gave a stand-in of its own once left the area empty while it loaded, the footer against the header.
-	it.each(["/a-page-added-later", "/evidence", "/profile"])("draws something on %s while the page loads", async (pathname) => {
+	it.each(["/a-page-added-later", "/evidence", "/profile"])("draws something on %s while the page loads", { timeout: 30_000 }, async (pathname) => {
 		expect((await standIn(pathname)).querySelector("main")).not.toBeNull();
 	});
 

@@ -1687,5 +1687,19 @@
     "sentHint": "Vous verrez où en est chacun dans Vos soumissions sur Openscholar : en attente, publié, ou renvoyé avec la raison de l’examinateur.",
     "yourSubmissions": "Vos soumissions",
     "emptyLink": "Vous connaissez un article qui a sa place ici ? Suggérez-le"
+  },
+  "browse": {
+    "title": "Parcourir par année",
+    "intro": "Toutes les notices de {name}, par année de publication.",
+    "recordsWord": "{count, plural, one {notice} other {notices}}",
+    "records": "{count, plural, one {# notice} other {# notices}}",
+    "decade": "Années {decade}",
+    "noYear": "Sans année",
+    "noYearLink": "Notices sans année",
+    "footerLink": "Parcourir toutes les notices par année",
+    "otherPeriods": "Avant et après",
+    "months": "Mois",
+    "noMonth": "Mois non précisé",
+    "noMonthIn": "{year}, mois non précisé"
   }
 }
