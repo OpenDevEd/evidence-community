@@ -60,18 +60,8 @@ const colors = {
 		800: "#ffffff",
 		900: "#ffffff",
 	},
-	secondary: {
-		DEFAULT: "#1e1e1e",
-		100: "#060606",
-		200: "#0c0c0c",
-		300: "#121212",
-		400: "#181818",
-		500: "#1e1e1e",
-		600: "#4b4b4b",
-		700: "#787878",
-		800: "#a5a5a5",
-		900: "#d2d2d2",
-	},
+	secondary: runtimePalette("secondary"),
+	secondary_light: runtimePalette("secondary_light"),
 };
 
 const config: Config = {

@@ -54,6 +54,26 @@ export function generateColorRamp(value: string): ColorRamp {
 	return ramp;
 }
 
+/** `value` moved `amount` (0 to 1) of the way to `toward`, as a hex colour. */
+function mixHexColor(value: string, toward: string, amount: number) {
+	const from = parseHexColor(value);
+	const to = parseHexColor(toward);
+	return `#${[0, 1, 2]
+		.map((channel) => clampChannel(from[channel] + (to[channel] - from[channel]) * amount).toString(16).padStart(2, "0"))
+		.join("")}`;
+}
+
+/**
+ * Panels (the header, sidebar cards, fields, menus) sit one step off the page in its own tint: a sixteenth of the way
+ * to white in dark mode, a twentieth of the way to black in light mode. The platform's #0f0f0f gives #1e1e1e.
+ */
+export function panelColors(colors: { backgroundDark: string; backgroundLight: string }) {
+	return {
+		dark: mixHexColor(colors.backgroundDark, "#ffffff", 1 / 16),
+		light: mixHexColor(colors.backgroundLight, "#000000", 0.05),
+	};
+}
+
 export function formatRgbChannels(color: RgbaColor) {
 	return `${color[0]} ${color[1]} ${color[2]}`;
 }

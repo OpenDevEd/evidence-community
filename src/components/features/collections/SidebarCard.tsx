@@ -11,7 +11,7 @@ import { twMerge } from "@/lib/tw-merge";
 const MUTED = "text-black/60 dark:text-white/60";
 
 /** The sidebar's grey: the filter card's, and every card's head and foot, so the column reads as one set. */
-export const SIDEBAR_GREY = "bg-[#E8E6E1] dark:bg-secondary";
+export const SIDEBAR_GREY = "bg-secondary_light dark:bg-secondary";
 
 /**
  * A block of the sidebar, built as the filter card is: a grey head with the heading and a summary of the block and its

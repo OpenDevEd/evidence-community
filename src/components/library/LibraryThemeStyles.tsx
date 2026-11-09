@@ -2,6 +2,7 @@ import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import {
 	formatRgbChannels,
 	generateColorRamp,
+	panelColors,
 	type RgbaColor,
 } from "@/config/library-config/theme";
 
@@ -38,6 +39,7 @@ function hslChannels([red, green, blue]: RgbaColor) {
 }
 
 export function buildThemeColorCss(theme: Theme) {
+	const panels = panelColors(theme.colors);
 	const colors = {
 		accent: theme.colors.accent,
 		link: theme.colors.link,
@@ -48,6 +50,8 @@ export function buildThemeColorCss(theme: Theme) {
 		background_light: theme.colors.backgroundLight,
 		card: theme.colors.cardDark,
 		card_light: theme.colors.cardLight,
+		secondary: panels.dark,
+		secondary_light: panels.light,
 	};
 	const declarations: string[] = [];
 
