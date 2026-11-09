@@ -1,3 +1,4 @@
+import { paperLookupFor } from "@/lib/admin/added-papers-service";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { createSupabaseFileStorage } from "@/lib/admin/file-storage";
@@ -36,7 +37,8 @@ export function createSourceSyncRuntime(
 		registry: createDefaultSourceAdapterRegistry({
 			zotero: { attachmentProcessor, legacyPublishTags: config.content.tags.publish },
 			openalex,
-			openscholar: { ...openalex, service: config.authentication.openScholar },
+			// A collection paper OpenAlex doesn't have is made from its DOI, as Added papers makes one.
+			openscholar: { ...openalex, service: config.authentication.openScholar, recordByDoi: paperLookupFor(config).recordByDoi },
 			added: openalex,
 		}),
 		storage,

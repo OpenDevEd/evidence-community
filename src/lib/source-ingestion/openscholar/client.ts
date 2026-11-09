@@ -52,6 +52,8 @@ export type OpenScholarCollection =
 			dois: string[];
 			/** Items with neither, which the library can't find at all. */
 			unresolved: number;
+			/** Items with both, by DOI: a record the library first made from one of these DOIs is that work's. */
+			doiWorks: [doi: string, openalexId: string][];
 	  };
 
 /** Reads that found the collection changing between pages before one read it whole. */
@@ -99,6 +101,10 @@ export async function readOpenScholarCollection(
 			openAlexIds: [...new Set(ids)].sort(),
 			dois: [...new Set(dois)].sort(),
 			unresolved: items.length - ids.length - dois.length,
+			doiWorks: items.flatMap((item) => {
+				const doi = item.openalexId ? normalizeDoi(item.doi) : null;
+				return doi ? [[doi, item.openalexId!] as [string, string]] : [];
+			}),
 		};
 	}
 	throw new Error(`Openscholar collection ${collectionId} kept changing while it was read`);
