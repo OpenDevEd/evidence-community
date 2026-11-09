@@ -167,10 +167,13 @@ function useSuggestion() {
 			}
 		},
 		send: async (failed: string) => {
+			// A dialog closed or changed while this was on its way doesn't take its answer.
+			const mine = ++turn.current;
 			setSending(true);
 			setProblem("");
 			try {
 				const { results } = await post<{ results: Sent[] }>({ requestId, papers: ready.map((row) => row.ref) });
+				if (mine !== turn.current) return;
 				const failures = results.filter((result) => result.outcome === "failed");
 				if (!failures.length) return setSent(results.filter((result) => result.outcome === "queued").length);
 				// Some didn't go: the ones that did now wait for review, and the rest stay here to send again, with why.
@@ -178,7 +181,7 @@ function useSuggestion() {
 				setRows((all) => all?.map((row) => (waiting.has(row.key) ? { ...row, state: "waiting" } : row)) ?? all);
 				setProblem(failures[0]?.message ?? failed);
 			} catch (error) {
-				setProblem(messageOf(error, failed));
+				if (mine === turn.current) setProblem(messageOf(error, failed));
 			} finally {
 				setSending(false);
 			}

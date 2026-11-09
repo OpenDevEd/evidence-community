@@ -51,7 +51,7 @@ export async function queueSubmissionStatus(transaction: DatabaseTransaction, it
  * where its latest review does, and is sent as the person who submitted that review.
  */
 async function payloadOf(transaction: DatabaseTransaction, config: LibraryServerConfig, job: { itemKey: string; generation: number }) {
-	const [paper] = await transaction.select({ state: addedPaper.state, openalexId: addedPaper.openalexId, doi: addedPaper.doi, requestId: addedPaper.requestId }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
+	const [paper] = await transaction.select({ state: addedPaper.state, openalexId: addedPaper.openalexId, doi: addedPaper.doi, requestId: addedPaper.requestId, resendRequestIds: addedPaper.resendRequestIds }).from(addedPaper).where(eq(addedPaper.itemKey, job.itemKey));
 	if (!paper) return null;
 	const accepted = paper.state === "accepted";
 	// Accepted, it's the version that was: sent by whoever sent that one, whatever later edits do.
@@ -87,10 +87,10 @@ async function reviewOf(transaction: DatabaseTransaction, itemKey: string, accep
  * The paper as its review shows it, within what Openscholar keeps of a title and its authors, with the request that
  * sent it: Openscholar's own send of it, still finishing, then leaves this word as it is.
  */
-function summaryForOpenScholar(snapshot: unknown, itemKey: string, paper: { openalexId: string | null; doi: string | null; requestId: string }) {
+function summaryForOpenScholar(snapshot: unknown, itemKey: string, paper: { openalexId: string | null; doi: string | null; requestId: string; resendRequestIds: string[] }) {
 	const record = (snapshot as { records?: { itemKey: string; payload: Record<string, unknown> }[] } | null)?.records?.find((entry) => entry.itemKey === itemKey);
 	const { title, authors, year } = summaryOf(record?.payload ?? {});
-	return { title: title.slice(0, 1000), authors: authors.slice(0, 2000), year, openalexId: paper.openalexId, doi: paper.doi, requestId: paper.requestId };
+	return { title: title.slice(0, 1000), authors: authors.slice(0, 2000), year, openalexId: paper.openalexId, doi: paper.doi, requestId: paper.resendRequestIds.at(-1) ?? paper.requestId };
 }
 
 /** Sends waiting changes of submitted papers to Openscholar for up to five seconds; true when it sent any. */
