@@ -265,6 +265,11 @@ async function liveRecords(transaction: Database | DatabaseTransaction, keys: re
 	return new Set([...drafts, ...records].map((row) => row.key));
 }
 
+/** Clears the rows of papers whose records were removed: they'd hold the work and DOI a new record of the paper needs. */
+async function forgetGone(transaction: DatabaseTransaction, gone: readonly string[]) {
+	if (gone.length) await transaction.delete(addedPaper).where(inArray(addedPaper.itemKey, [...gone]));
+}
+
 /** Refuses one more suggestion past the day's number. Only the records this request makes count: ones it resumes were counted when made. */
 function assertRoom(created: number, left: number) {
 	if (created >= left) throw new AdminValidationError("This community takes no more suggested papers from you today. Try again tomorrow.");
@@ -279,8 +284,7 @@ function createRecords(db: Database, found: readonly Found[], input: AddPapersIn
 		// The OpenAlex writer's own lock: an import of the same work by another source waits, so neither makes a second record.
 		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
 		const known = await knownPapers(transaction, found);
-		// Its row would hold the paper's work and DOI from the new record it gets.
-		if (known.gone.length) await transaction.delete(addedPaper).where(inArray(addedPaper.itemKey, known.gone));
+		await forgetGone(transaction, known.gone);
 		const left = await suggestionsLeft(transaction, input.actor);
 		const made: Made[] = [];
 		let created = 0;
