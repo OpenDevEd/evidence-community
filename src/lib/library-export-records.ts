@@ -44,7 +44,7 @@ function selectionFor(columns: readonly string[]) {
  * annotation, and not carrying one of the library's hidden tags. Tag matching
  * ignores letter case, the same as `hasAnyTag` in the rest of the runtime.
  */
-function publicRecordCondition(
+export function publicRecordCondition(
 	database: Database,
 	config: LibraryServerConfig,
 ) {

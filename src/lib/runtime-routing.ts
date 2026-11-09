@@ -79,6 +79,8 @@ const RESERVED_ROUTE_SEGMENTS = new Set([
 	"about",
 	"admin",
 	"api",
+	// Every record by year, as plain links for crawlers and readers.
+	"browse",
 	"citation",
 	"contact",
 	"cookie-policy",
