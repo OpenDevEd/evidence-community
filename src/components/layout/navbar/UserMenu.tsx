@@ -183,7 +183,8 @@ export default function UserMenu({ variant }: NavbarElementProps) {
 	if (variant === "menuItem") return <>{[groups.identity, ...groups.account, groups.signOut]}</>;
 
 	return (
-		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses}>
+		// Opening it asks again whether they're on the team: an application accepted since the page loaded shows Admin.
+		<Dropdown placement="bottom-end" classNames={navbarMenuDropdownClasses} onOpenChange={(open) => { if (open) links.refreshTeam(); }}>
 			<DropdownTrigger>
 				<ReaderAvatar reader={reader} asTrigger />
 			</DropdownTrigger>
