@@ -285,6 +285,8 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 			{ itemId: "item-7", openalexId: null, doi: "10.1000/w7" },
 			{ itemId: "item-8", openalexId: null, doi: "10.1000/w8" },
 			{ itemId: "item-9", openalexId: null as string | null, doi: "10.1000/w9" },
+			{ itemId: "item-10", openalexId: null as string | null, doi: "10.1000/w10" },
+			{ itemId: "item-11", openalexId: null as string | null, doi: "10.1000/w11" },
 		];
 		const request = (async (input: string | URL, init?: RequestInit) => {
 			const url = new URL(String(input));
@@ -311,7 +313,7 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 
 		const first = await sync();
 		const made = await activeKeys(db, "openscholar-c1");
-		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", "doi:10.1000/w8", "doi:10.1000/w9"]);
+		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w10", "doi:10.1000/w11", "doi:10.1000/w6", "doi:10.1000/w8", "doi:10.1000/w9"]);
 		expect((await db.select({ title: item.title }).from(item).where(eq(item.key, made.get("doi:10.1000/w6")!)))[0]?.title).toBe("Found by 10.1000/w6");
 		expect(await issues()).toEqual(["doi:10.1000/w7"]);
 		expect(first.unresolved).toBe(1);
@@ -319,11 +321,15 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 		// OpenAlex has w6 now, and the collection names w9's work itself: each same record becomes its work's. w8 left the
 		// collection: it's withdrawn.
 		onOpenAlex.set("10.1000/w6", 6);
-		items = items.filter((entry) => entry.itemId !== "item-8").map((entry) => (entry.itemId === "item-9" ? { ...entry, openalexId: "W9" } : entry));
+		// Two DOIs that turn out to name one work leave one record of it.
+		items = items
+			.filter((entry) => entry.itemId !== "item-8")
+			.map((entry) => (entry.itemId === "item-9" ? { ...entry, openalexId: "W9" } : ["item-10", "item-11"].includes(entry.itemId) ? { ...entry, openalexId: "W10" } : entry));
 		version = "v2";
 		await sync();
 		const after = await activeKeys(db, "openscholar-c1");
-		expect([...after.keys()].sort()).toEqual(["W2", "W6", "W9"]);
+		expect([...after.keys()].sort()).toEqual(["W10", "W2", "W6", "W9"]);
+		expect([made.get("doi:10.1000/w10"), made.get("doi:10.1000/w11")]).toContain(after.get("W10"));
 		expect(after.get("W6")).toBe(made.get("doi:10.1000/w6"));
 		expect(after.get("W9")).toBe(made.get("doi:10.1000/w9"));
 		expect(await issues()).toEqual(["doi:10.1000/w7"]);

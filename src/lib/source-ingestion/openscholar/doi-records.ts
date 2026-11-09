@@ -37,11 +37,12 @@ async function doiRecordsOf(context: SourceAdapterContext) {
  * loses the work; it's listed instead. One withdrawn while still on its DOI is made again when its DOI comes back.
  */
 async function becameWorks(context: SourceAdapterContext) {
+	// Through the source's own links: a paper two collections share has the identity the first one made.
 	const rows = await context.database
 		.select({ recordKey: itemIdentity.sourceRecordKey })
-		.from(itemIdentity)
-		.innerJoin(itemSourceLink, and(eq(itemSourceLink.itemKey, itemIdentity.key), eq(itemSourceLink.sourceConnectionKey, itemIdentity.sourceConnectionKey)))
-		.where(and(eq(itemIdentity.sourceConnectionKey, context.sourceConnection.key), like(itemIdentity.sourceRecordKey, `${DOI_RECORD}%`), ne(itemSourceLink.sourceRecordKey, itemIdentity.sourceRecordKey)));
+		.from(itemSourceLink)
+		.innerJoin(itemIdentity, eq(itemIdentity.key, itemSourceLink.itemKey))
+		.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), like(itemIdentity.sourceRecordKey, `${DOI_RECORD}%`), ne(itemSourceLink.sourceRecordKey, itemIdentity.sourceRecordKey)));
 	return new Set(rows.map((row) => row.recordKey!.slice(DOI_RECORD.length)));
 }
 
@@ -64,6 +65,8 @@ async function linkResolved(context: SourceAdapterContext, records: ReadonlyMap<
 				.update(itemSourceLink)
 				.set({ sourceRecordKey: work })
 				.where(and(eq(itemSourceLink.itemKey, itemKey), eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key)));
+			// Two DOIs can name one work: the next record that names it is a repeat of this one.
+			held.set(work, itemKey);
 		}
 		return repeats;
 	});
