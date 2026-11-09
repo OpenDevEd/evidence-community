@@ -7,6 +7,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemReview, itemReviewFile } from "@/db/schema/review";
 import {
 	adminItemLinks,
+	isAddedPaper,
 	openAlexWorkOf,
 	draftJson,
 	itemSummary,
@@ -192,6 +193,7 @@ export async function getAdminReviewSnapshot(
 					),
 					filePublication: null,
 					openalexId: await openAlexWorkOf(db, record.itemKey),
+					addedPaper: await isAddedPaper(db, review.itemKey),
 					openAccessFromSources: await readOpenAccessFromSourcesFor(db, record.itemKey, payload),
 					readingStudyType: await readStudyReading(db, record.itemKey),
 					fileRemovalPending: files.some(

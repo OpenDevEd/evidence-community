@@ -24,6 +24,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 	return {
 		sourceFields: [], importedTopics: [], importChecks: null,
 		openalexId: null,
+		addedPaper: false,
 		kind: "created",
 		importMethod: null,
 		attachments: [],

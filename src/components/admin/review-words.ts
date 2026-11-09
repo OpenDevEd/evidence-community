@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type { AdminItemDetail } from "@/lib/admin/types";
 
 /** What sending a version back is called, in the button, its dialog and the state it leaves. */
@@ -34,7 +33,8 @@ const DECLINE: ReturnWords = {
 	senderOnlyWithdraw: true,
 };
 
-export const returnWordsFor = (detail: Pick<AdminItemDetail, "sourceConnectionKey">) => (detail.sourceConnectionKey === ADDED_PAPERS_SOURCE_CONNECTION_KEY ? DECLINE : REQUEST);
+/** By the review's record, so an added paper's attachment is declined like the paper. */
+export const returnWordsFor = (detail: Pick<AdminItemDetail, "addedPaper">) => (detail.addedPaper ? DECLINE : REQUEST);
 
 export const ReturnWordsContext = createContext<ReturnWords>(REQUEST);
 
