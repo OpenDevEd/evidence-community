@@ -477,18 +477,27 @@ const themeColorsSchema = z
 		collection: colorSchema.optional(),
 		doi: colorSchema.optional(),
 		tertiary: colorSchema,
+		/** Dark mode's own accent, link and tertiary; without one, dark mode uses the light colour. */
+		accentDark: colorSchema.optional(),
+		linkDark: colorSchema.optional(),
+		collectionDark: colorSchema.optional(),
+		doiDark: colorSchema.optional(),
+		tertiaryDark: colorSchema.optional(),
 		backgroundDark: colorSchema.default("#0f0f0f"),
 		backgroundLight: colorSchema.default("#F4F2EE"),
 		cardDark: colorSchema.default("#141414"),
 		cardLight: colorSchema.default("#FFFFFF"),
 	})
 	.strict()
-	.transform((colors) => ({
-		...colors,
-		link: colors.link ?? colors.accent,
-		collection: colors.collection ?? colors.accent,
-		doi: colors.doi ?? colors.accent,
-	}));
+	.transform((colors) => {
+		const accentDark = colors.accentDark ?? colors.accent;
+		// A colour that follows the accent follows the dark accent; one set on its own keeps its value.
+		const followAccent = (own: string | undefined, dark: string | undefined) => [own ?? colors.accent, dark ?? own ?? accentDark] as const;
+		const [link, linkDark] = followAccent(colors.link, colors.linkDark);
+		const [collection, collectionDark] = followAccent(colors.collection, colors.collectionDark);
+		const [doi, doiDark] = followAccent(colors.doi, colors.doiDark);
+		return { ...colors, link, collection, doi, accentDark, linkDark, collectionDark, doiDark, tertiaryDark: colors.tertiaryDark ?? colors.tertiary };
+	});
 
 function composite(
 	foreground: RgbaColor,
@@ -624,21 +633,18 @@ const themeSchema = z
 			});
 		}
 
-		for (const [background, canvas] of [
-			[theme.colors.backgroundDark, "dark"],
-			[theme.colors.backgroundLight, "light"],
-		] as const) {
-			if (
-				!hasAccessiblePaletteTone(theme.colors.link, background, canvas)
-			) {
-				context.addIssue({
-					code: z.ZodIssueCode.custom,
-					message:
-						"Link palette must provide a WCAG AA tone against each background",
-					path: ["colors", "link"],
-				});
-				break;
-			}
+		// Each mode's link against that mode's background; a dark link that is the light one is reported on the light field.
+		const { link, linkDark, backgroundDark, backgroundLight } = theme.colors;
+		const unreadable = new Set<"link" | "linkDark">();
+		if (!hasAccessiblePaletteTone(linkDark, backgroundDark, "dark")) unreadable.add(linkDark.toLowerCase() === link.toLowerCase() ? "link" : "linkDark");
+		if (!hasAccessiblePaletteTone(link, backgroundLight, "light")) unreadable.add("link");
+		for (const field of unreadable) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"Link palette must provide a WCAG AA tone against each background",
+				path: ["colors", field],
+			});
 		}
 	});
 

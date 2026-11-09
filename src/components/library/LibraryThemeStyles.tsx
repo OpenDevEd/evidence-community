@@ -53,23 +53,32 @@ export function buildThemeColorCss(theme: Theme) {
 		secondary: panels.dark,
 		secondary_light: panels.light,
 	};
-	const declarations: string[] = [];
+	// Dark mode redefines only the colours the theme gives a dark value of their own.
+	const darkColors = Object.entries({
+		accent: theme.colors.accentDark,
+		link: theme.colors.linkDark,
+		collection: theme.colors.collectionDark,
+		doi: theme.colors.doiDark,
+		tertiary: theme.colors.tertiaryDark,
+	}).filter(([name, value]) => value.toLowerCase() !== colors[name as keyof typeof colors].toLowerCase());
+	const focus = (color: string) => hslChannels(generateColorRamp(color)[500]);
+	const focusCss =
+		theme.colors.accentDark.toLowerCase() === theme.colors.accent.toLowerCase()
+			? `:root.light,:root.dark{--nextui-focus:${focus(theme.colors.accent)}}`
+			: `:root.light{--nextui-focus:${focus(theme.colors.accent)}}:root.dark{--nextui-focus:${focus(theme.colors.accentDark)}}`;
 
-	for (const [name, value] of Object.entries(colors)) {
-		const ramp = generateColorRamp(value);
-		for (const [shade, color] of Object.entries(ramp)) {
-			declarations.push(
+	return `:root{${paletteDeclarations(Object.entries(colors))}}${darkColors.length ? `:root.dark{${paletteDeclarations(darkColors)}}` : ""}${focusCss}`;
+}
+
+function paletteDeclarations(colors: [name: string, value: string][]) {
+	return colors
+		.flatMap(([name, value]) =>
+			Object.entries(generateColorRamp(value)).flatMap(([shade, color]) => [
 				`--color-${name}-${shade}:${formatRgbChannels(color)}`,
 				`--color-${name}-${shade}-alpha:${formatAlpha(color[3])}`,
-			);
-		}
-	}
-
-	const nextUiFocus = hslChannels(
-		generateColorRamp(theme.colors.accent)[500],
-	);
-
-	return `:root{${declarations.join(";")}}:root.light,:root.dark{--nextui-focus:${nextUiFocus}}`;
+			]),
+		)
+		.join(";");
 }
 
 /** The Google fonts a theme uses, each once. */
