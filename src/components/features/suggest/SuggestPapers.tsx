@@ -117,7 +117,8 @@ function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: nu
 	if (left === null) return problem;
 	if (left === 0) return t("noneLeft");
 	if (named > room) return t("overLimit", { count: room });
-	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : problem;
+	// A failed lookup or send says why first: the entries it didn't recognise matter less.
+	return problem || (invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "");
 }
 
 /** The dialog's state: the paste, what it found, and sending it. */

@@ -132,6 +132,18 @@ it("adds a paper again once its record was removed, as a new record", async () =
 	});
 });
 
+it("keeps a removed paper's row while its deleted record still holds the work", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(42)]);
+		const published = await addPapers(db, storage, config, { requestId: "r42", publish: true, actor: owner, papers: [{ openalexId: "W42" }] }, lookup);
+		const first = published.results[0]!.itemKey!;
+		await removeAddedPaper(db, first, { userId: owner.userId, role: "owner" });
+		await addPapers(db, storage, config, { requestId: "r43", publish: true, actor: owner, papers: [{ openalexId: "W42" }] }, lookup);
+		expect(await db.select({ itemKey: addedPaper.itemKey }).from(addedPaper)).toEqual([{ itemKey: first }]);
+	});
+});
+
 it("answers a repeated request as before, and reports a paper already here instead of adding it again", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();

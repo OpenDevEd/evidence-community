@@ -246,14 +246,17 @@ export async function knownPapers(transaction: Database | DatabaseTransaction, f
 	const dois = [...new Set(found.flatMap((paper) => paper.doi ?? []))];
 	const matches = [...(works.length ? [inArray(addedPaper.openalexId, works)] : []), ...(dois.length ? [inArray(addedPaper.doi, dois)] : [])];
 	const rows = matches.length ? await transaction.select().from(addedPaper).where(or(...matches)) : [];
+	const workKeys = await openAlexItemKeys(transaction, works);
+	const existingDois = (await findExistingRecords(transaction, found.map((paper) => importIdentifiers({ DOI: paper.doi })))).doi;
 	// A paper whose record was removed since (no draft left, and no record but a deleted one) is no longer here: sent
-	// again, it's added anew.
+	// again, it's added anew. One whose deleted record still holds its work or DOI keeps its row, which that record answers for.
+	const held = new Set([...workKeys.values(), ...existingDois.values()]);
 	const live = await liveRecords(transaction, rows.map((row) => row.itemKey));
 	return {
 		sent: rows.filter((row) => live.has(row.itemKey)),
-		gone: rows.flatMap((row) => (live.has(row.itemKey) ? [] : [row.itemKey])),
-		workKeys: await openAlexItemKeys(transaction, works),
-		existingDois: (await findExistingRecords(transaction, found.map((paper) => importIdentifiers({ DOI: paper.doi })))).doi,
+		gone: rows.flatMap((row) => (live.has(row.itemKey) || held.has(row.itemKey) ? [] : [row.itemKey])),
+		workKeys,
+		existingDois,
 	};
 }
 
