@@ -2,6 +2,7 @@ import type { Item } from "@/app/api/item/types";
 import { creatorDisplayName } from "@/lib/creator-display-name";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
+import { parseBibliographicDate } from "@/lib/bibliographic-date";
 
 /** The schema.org type for a Zotero item type; anything else is a plain creative work. */
 const TYPES: Partial<Record<NonNullable<Item["itemType"]>, string>> = {
@@ -16,8 +17,14 @@ const TYPES: Partial<Record<NonNullable<Item["itemType"]>, string>> = {
 	Webpage: "WebPage",
 };
 
-/** The record's date as a calendar day, when it reads as one. */
-const dayOf = (date: string | null | undefined) => (date && !Number.isNaN(new Date(date).getTime()) ? new Date(date).toISOString().slice(0, 10) : undefined);
+/** The record's date as precisely as it's known (a year, a month or a day), never a day it doesn't have. */
+function dateOf(date: string | null | undefined) {
+	const parsed = parseBibliographicDate(date ?? "");
+	return parsed.kind === "parsed" ? parsed.raw : undefined;
+}
+
+/** What the record was published in: a journal for an article, a book for a chapter; otherwise left out rather than guessed. */
+const CONTAINERS: Partial<Record<NonNullable<Item["itemType"]>, string>> = { JournalArticle: "Periodical", Preprint: "Periodical", BookSection: "Book" };
 
 /** The record's DOI as an address, from its DOI field or the Extra field Zotero keeps it in. */
 function doiAddressOf(item: Item) {
@@ -35,7 +42,8 @@ const named = (type: string, name: string | null | undefined) => (name ? { "@typ
 export function recordStructuredData(item: Item, baseUrl: string) {
 	const url = buildSiteUrl(`/lib/${item.key}`, baseUrl);
 	const cover = item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage;
-	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author").map(creatorDisplayName).filter(Boolean);
+	// A creator with a single name is an organisation in this app; one with a first and last name is a person.
+	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named(creator.name?.trim() ? "Organization" : "Person", creatorDisplayName(creator)));
 	const data: Record<string, unknown> = {
 		"@context": "https://schema.org",
 		"@type": (item.itemType && TYPES[item.itemType]) ?? "CreativeWork",
@@ -43,10 +51,10 @@ export function recordStructuredData(item: Item, baseUrl: string) {
 		url,
 		name: item.title,
 		headline: item.title?.slice(0, 110),
-		author: authors.map((name) => named("Person", name)),
-		datePublished: dayOf(item.date),
+		author: authors,
+		datePublished: dateOf(item.date),
 		abstract: item.abstractNote,
-		isPartOf: named("Periodical", item.publicationTitle),
+		isPartOf: item.itemType && CONTAINERS[item.itemType] ? named(CONTAINERS[item.itemType]!, item.publicationTitle) : undefined,
 		publisher: named("Organization", item.publisher),
 		inLanguage: item.languageName,
 		keywords: item.tags?.join(", "),

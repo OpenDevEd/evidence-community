@@ -23,9 +23,11 @@ describe("record structured data", () => {
 	});
 
 	it("names other kinds of work by their own type and leaves out what the record lacks", () => {
-		const data = recordStructuredData(record({ itemType: "Report", date: "sometime" }), "https://aied.openscholar.ai");
+		const data = recordStructuredData(record({ itemType: "Report", date: "sometime", publicationTitle: "Series", creators: [{ creatorType: "author", name: "UNESCO" }] }), "https://aied.openscholar.ai");
 		expect(data["@type"]).toBe("Report");
 		expect(data).not.toHaveProperty("datePublished");
-		expect(data).not.toHaveProperty("author");
+		expect(data).not.toHaveProperty("isPartOf");
+		expect(data.author).toEqual([{ "@type": "Organization", name: "UNESCO" }]);
+		expect(recordStructuredData(record({ date: "2021-05" }), "https://aied.openscholar.ai").datePublished).toBe("2021-05");
 	});
 });
