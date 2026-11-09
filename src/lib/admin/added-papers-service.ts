@@ -9,6 +9,8 @@ import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { itemSourceValue } from "@/db/schema/topics";
 import { normalizeDoi } from "@/lib/doi";
+import { paperLinkOf, type PaperIds } from "@/lib/paper-links";
+import { papersAtLinks } from "@/lib/openscholar-service";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { OPENALEX_MAX_IDS_PER_FILTER, OpenAlexClient, worksWithIds } from "@/lib/source-ingestion/openalex/client";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
@@ -46,7 +48,8 @@ export async function suggestionsLeft(transaction: Database | DatabaseTransactio
 	return Math.min(SUGGESTIONS_PER_PERSON_DAY - (counts?.mine ?? 0), SUGGESTIONS_PER_COMMUNITY_DAY - (counts?.all ?? 0));
 }
 
-export type PaperReference = { openalexId?: string | null; doi?: string | null };
+/** A paper by its OpenAlex work, its DOI, or a `link`: any address that names one (lib/paper-links.ts). */
+export type PaperReference = { openalexId?: string | null; doi?: string | null; link?: string | null };
 
 export type AddPapersInput = {
 	/** OpenScholar's id for the request: sent again, it adds nothing twice. */
@@ -80,6 +83,8 @@ export type PaperLookup = {
 	worksByDoi: (dois: readonly string[]) => Promise<Map<string, unknown>>;
 	/** The record a DOI names, as a draft's payload, or null when there is none. */
 	recordByDoi: (doi: string) => Promise<Record<string, unknown> | null>;
+	/** The paper each link names that only Openscholar can follow, or null where it finds none. */
+	papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>;
 };
 
 const workOf = (id: string | null | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)$/iu)?.[1]?.toUpperCase() ?? null;
@@ -87,8 +92,11 @@ const workOf = (id: string | null | undefined) => id?.trim().match(/(?:^|\/)(W[1
 export const workIdOf = (work: unknown) => workOf(String((work as { id?: unknown } | null)?.id ?? ""));
 const chunks = <T,>(values: readonly T[]) => Array.from({ length: Math.ceil(values.length / OPENALEX_MAX_IDS_PER_FILTER) }, (_, at) => values.slice(at * OPENALEX_MAX_IDS_PER_FILTER, (at + 1) * OPENALEX_MAX_IDS_PER_FILTER));
 
-/** The lookups a running library uses: its own OpenAlex key, and its Zotero translation service for DOIs. */
-export function paperLookupFor(config: LibraryServerConfig): PaperLookup {
+/**
+ * The lookups a running library uses: its own OpenAlex key, its Zotero translation service for DOIs, and Openscholar for
+ * its own links, where a `reader`'s lookups count against their allowance.
+ */
+export function paperLookupFor(config: LibraryServerConfig, reader?: string): PaperLookup {
 	const apiKey = config.services.openAlex?.apiKey;
 	const client = apiKey ? new OpenAlexClient({ apiKey }) : null;
 	const translationUrl = config.services.zotero.translationUrl;
@@ -115,7 +123,31 @@ export function paperLookupFor(config: LibraryServerConfig): PaperLookup {
 			const [found] = await searchZoteroIdentifier(doi, translationUrl);
 			return found ? importPayloadFromZoteroItem(found) : null;
 		},
+		papersAtLinks: (links) => papersAtLinks(config.authentication.openScholar, links, reader),
 	};
+}
+
+/**
+ * The papers given by a link, or by an ID that is one, as OpenAlex IDs and DOIs, by their place; a link Openscholar
+ * finds nothing at is null. An OpenAlex link or DOI is read here; Openscholar's own pages, its index's papers and
+ * communities' records are asked of it, all in one call.
+ */
+async function linkedPapers(papers: readonly PaperReference[], lookup: PaperLookup) {
+	const linked = new Map<number, PaperIds | null>();
+	const asked: { at: number; link: string }[] = [];
+	papers.forEach((paper, at) => {
+		const given = paper.link ?? (paper.openalexId && !workOf(paper.openalexId) ? paper.openalexId : null);
+		if (!given) return;
+		const link = paperLinkOf(given);
+		if (!link) linked.set(at, null);
+		else if (link.kind === "work") linked.set(at, { openalexId: link.openalexId, doi: paper.doi ?? null });
+		else if (link.kind === "doi") linked.set(at, { openalexId: null, doi: link.doi });
+		else asked.push({ at, link: given });
+	});
+	// Openscholar not answering is a failure to look up, said as one; only a link it finds nothing at is not found.
+	const answers = await lookup.papersAtLinks(asked.map(({ link }) => link));
+	asked.forEach(({ at }, index) => linked.set(at, answers[index] ?? null));
+	return linked;
 }
 
 export type Found = { at: number; openalexId: string | null; doi: string | null; payload: Record<string, unknown>; remoteVersion?: string | null };
@@ -309,8 +341,15 @@ async function sendRecord(db: Database, storage: EvidenceFileStorage, config: Li
  * the rest have their answer in `results`.
  */
 export async function lookUpPapers(papers: readonly PaperReference[], lookup: PaperLookup, results: Results) {
-	const refs = papers.map((paper, at) => ({ at, openalexId: workOf(paper.openalexId), doi: normalizeDoi(paper.doi) }));
-	for (const ref of refs) if (!ref.openalexId && !ref.doi) results.set(ref.at, { at: ref.at, outcome: "not_found", message: "This is not an OpenAlex ID or a DOI." });
+	const linked = await linkedPapers(papers, lookup);
+	const refs = papers.map((paper, at) => {
+		const ids = linked.has(at) ? (linked.get(at) ?? { openalexId: null, doi: null }) : paper;
+		return { at, openalexId: workOf(ids.openalexId), doi: normalizeDoi(ids.doi) };
+	});
+	for (const ref of refs) {
+		if (ref.openalexId || ref.doi) continue;
+		results.set(ref.at, { at: ref.at, outcome: "not_found", message: linked.get(ref.at) === null ? "Openscholar finds no paper at this address." : "This is not an OpenAlex ID, a DOI or a link to a paper." });
+	}
 	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at)), lookup, results);
 	return [...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
 }
@@ -326,7 +365,7 @@ export async function addPapers(
 	storage: EvidenceFileStorage,
 	config: LibraryServerConfig,
 	input: AddPapersInput,
-	lookup: PaperLookup = paperLookupFor(config),
+	lookup: PaperLookup = paperLookupFor(config, input.actor.role === "reader" ? input.actor.userId : undefined),
 ): Promise<{ results: AddedPaperResult[] }> {
 	if (input.papers.length > ADD_PAPERS_MAX) throw new AdminValidationError(`Add no more than ${ADD_PAPERS_MAX} papers at once.`);
 	if (input.publish && reviewerOf(input.actor).role === "creator") throw new AdminValidationError("Only an Editor or Owner can publish papers.");

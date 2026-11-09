@@ -8,6 +8,7 @@ import { publicationIdentifier } from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
+import type { PaperIds } from "@/lib/paper-links";
 import { zoteroDataToCanonicalMetadata } from "@/lib/source-ingestion/zotero/mapper";
 import {
 	importZoteroBibliography,
@@ -277,10 +278,22 @@ export type TranslatedEntry =
 	| { source: string; zoteroItem: Record<string, unknown> }
 	| { message: string; source: string };
 
-async function translateDois(dois: readonly string[], translationUrl: string) {
+/** The DOI of each address given in place of one, as Openscholar follows it, 100 at a time; null where it finds none. */
+async function doisAtLinks(entries: readonly string[], papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>) {
+	const links = entries.filter((entry) => !normalizeDoi(entry));
+	const followed = new Map<string, PaperIds | null>();
+	for (let at = 0; at < links.length; at += 100) {
+		const part = links.slice(at, at + 100);
+		(await papersAtLinks(part)).forEach((paper, index) => followed.set(part[index]!, paper));
+	}
+	return followed;
+}
+
+async function translateDois(dois: readonly string[], translationUrl: string, papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>) {
+	const followed = await doisAtLinks(dois, papersAtLinks);
 	return mapWithConcurrency(dois, DOI_LOOKUP_CONCURRENCY, async (raw): Promise<TranslatedEntry[]> => {
-		const doi = normalizeDoi(raw);
-		if (!doi) return [{ message: "This is not a valid DOI.", source: raw }];
+		const doi = normalizeDoi(raw) ?? followed.get(raw)?.doi ?? null;
+		if (!doi) return [{ message: !followed.has(raw) ? "This is not a valid DOI." : followed.get(raw) ? "Openscholar knows this paper but not its DOI." : "Openscholar finds no paper at this address.", source: raw }];
 		try {
 			const [found] = await searchZoteroIdentifier(doi, translationUrl);
 			return found
@@ -314,9 +327,11 @@ export async function previewImportRecords(
 	db: Executor,
 	input: AdminImportPreviewRequest,
 	translationUrl: string,
+	/** Follows an address given in place of a DOI (lib/openscholar-service.ts papersAtLinks). */
+	papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>,
 ): Promise<AdminImportPreviewResponse> {
 	const [doiEntries, fileEntries] = await Promise.all([
-		translateDois(input.dois, translationUrl),
+		translateDois(input.dois, translationUrl, papersAtLinks),
 		translateFiles(input.files, translationUrl),
 	]);
 	return previewEntries(db, [

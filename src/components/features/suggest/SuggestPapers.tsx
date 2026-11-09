@@ -11,6 +11,7 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { Spinner } from "@/components/nextui/Spinner";
 import { useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { paperLinkKey, paperLinkOf } from "@/lib/paper-links";
 
 /** Opens the dialog from anywhere on the page: the reader's menu and an empty search both do. */
 export const openSuggestPapers = () => window.dispatchEvent(new Event("suggest-papers:open"));
@@ -18,22 +19,23 @@ export const openSuggestPapers = () => window.dispatchEvent(new Event("suggest-p
 /** Papers one request looks up or sends at most, as the community takes them. */
 const PER_REQUEST = 100;
 
-type Reference = { openalexId?: string; doi?: string };
+type Reference = { openalexId?: string; doi?: string; link?: string };
 type Looked = { key: string; raw: string; ref: Reference };
 type Answer = { outcome: "found" | "existing" | "queued" | "returned" | "not_found"; paper?: { title: string; authors: string; year: number | null } };
 type Row = Looked & { state: "looking" | "found" | "here" | "waiting" | "missing"; title?: string; authors?: string; year?: number | null };
 type Sent = { outcome: string; message?: string };
 
-/** The papers a paste names: DOIs, OpenAlex IDs and links to either, split on spaces and lines, each once. */
+/** The papers a paste names: DOIs, OpenAlex IDs and every address that names one, Openscholar's and communities' included; each once. */
 function parse(text: string): Looked[] {
 	const seen = new Set<string>();
 	return text.split(/\s+/u).filter(Boolean).flatMap((raw) => {
-		const work = raw.match(/(?:^|\/)(W\d+)$/iu)?.[1]?.toUpperCase();
-		const doi = work ? null : raw.match(/10\.\d{4,9}\/\S+/iu)?.[0]?.replace(/[.,;]+$/u, "").toLowerCase();
-		const key = work ?? (doi ? `doi:${doi}` : null);
-		if (!key || seen.has(key)) return [];
+		const link = paperLinkOf(raw);
+		const key = link ? paperLinkKey(link) : null;
+		if (!link || !key || seen.has(key)) return [];
 		seen.add(key);
-		return [{ key, raw, ref: work ? { openalexId: work } : { doi: doi! } }];
+		// A link only Openscholar can follow goes to the server as given, which asks it.
+		const ref = link.kind === "work" ? { openalexId: link.openalexId } : link.kind === "doi" ? { doi: link.doi } : { link: raw };
+		return [{ key, raw, ref }];
 	});
 }
 

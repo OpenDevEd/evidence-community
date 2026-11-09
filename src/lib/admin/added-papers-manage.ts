@@ -15,7 +15,7 @@ import { resolveItemReview, type ReviewActor } from "./review-service";
 /** The person acting, as OpenScholar names them, and the role it gives them in this community. */
 /** Papers a request names, by OpenAlex ID or DOI. */
 export const papersSchema = z
-	.array(z.object({ openalexId: z.string().max(128).nullish(), doi: z.string().max(512).nullish() }).strict())
+	.array(z.object({ openalexId: z.string().max(128).nullish(), doi: z.string().max(512).nullish(), link: z.string().max(2048).nullish() }).strict())
 	.min(1)
 	.max(ADD_PAPERS_MAX);
 

@@ -47,6 +47,8 @@ function services(works: ReturnType<typeof work>[], byDoi: Record<string, Record
 		worksById: async (ids) => new Map(works.filter((w) => ids.includes(w.id.split("/").pop()!)).map((w) => [w.id.split("/").pop()!, w])),
 		worksByDoi: async (dois) => new Map(works.filter((w) => dois.includes(doiOf(w))).map((w) => [doiOf(w), w])),
 		recordByDoi: async (doi) => byDoi[doi] ?? null,
+		// Openscholar following its own links: a paper only its index has is W30's DOI; anything else, nothing.
+		papersAtLinks: async (links) => links.map((link) => (link.includes("OS30") ? { openalexId: null, doi: "10.1000/w30" } : null)),
 	};
 	const openAlex = (async (input: string | URL) => {
 		const url = new URL(String(input));
@@ -285,7 +287,7 @@ it("previews what adding would find without saving anything, and lists added pap
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
 		const doi = "10.1000/doi-only-list";
-		const { lookup } = services([work(20, "Teacher coaching in Kenya"), work(21, "Lesson study")], { [doi]: { itemType: "journalArticle", title: "School leadership", DOI: doi, date: "2026-03-01" } });
+		const { lookup } = services([work(20, "Teacher coaching in Kenya"), work(21, "Lesson study"), work(30, "Peer tutoring")], { [doi]: { itemType: "journalArticle", title: "School leadership", DOI: doi, date: "2026-03-01" } });
 		await addPapers(db, storage, config, { requestId: "r20", publish: true, actor: owner, papers: [{ openalexId: "W20" }] }, lookup);
 		await addPapers(db, storage, config, { requestId: "r21", publish: false, actor: creator, papers: [{ openalexId: "W21" }] }, lookup);
 
@@ -293,6 +295,12 @@ it("previews what adding would find without saving anything, and lists added pap
 		expect(preview.results.map((result) => result.outcome)).toEqual(["existing", "queued", "found", "not_found"]);
 		expect(preview.results[2]).toMatchObject({ foundBy: "doi", paper: { title: "School leadership", year: 2026, doi } });
 		expect(await db.select().from(addedPaper)).toHaveLength(2);
+
+		// Openscholar's own pages and its index's papers name papers too; a record page Openscholar finds nothing at is said in its place.
+		const linked = await previewPapers(db, config, [{ link: "https://dev.openscholar.ai/papers/W20/teacher-coaching" }, { link: "https://openscholar.ai/papers/OS30" }, { link: "https://other.example.org/lib/ABCD2345" }, { openalexId: "https://openscholar.ai/papers/W21/x" }], lookup);
+		expect(linked.results.map((result) => result.outcome)).toEqual(["existing", "found", "not_found", "queued"]);
+		expect(linked.results[1]).toMatchObject({ paper: { doi: "10.1000/w30" } });
+		expect(linked.results[2]).toMatchObject({ message: "Openscholar finds no paper at this address." });
 
 		await addPapers(db, storage, config, { requestId: "r22", publish: true, actor: owner, papers: [{ doi }] }, lookup);
 		const [returned] = await db.select().from(itemReview).where(and(eq(itemReview.state, "pending")));

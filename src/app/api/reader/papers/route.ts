@@ -6,7 +6,8 @@ import { fromError } from "zod-validation-error";
 
 import { papersSchema } from "@/lib/admin/added-papers-manage";
 import { previewPapers } from "@/lib/admin/added-papers-reads";
-import { addPapers, suggestionsLeft } from "@/lib/admin/added-papers-service";
+import { addPapers, paperLookupFor, suggestionsLeft } from "@/lib/admin/added-papers-service";
+import { OpenScholarServiceError } from "@/lib/openscholar-service";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import { READER_RESPONSE_HEADERS, readerError, readJsonBody, readReaderRequest } from "@/lib/readers/http";
@@ -45,8 +46,19 @@ export async function POST(request: Request) {
 	if (access.response) return access.response;
 	const json = await readJsonBody(request);
 	const preview = previewSchema.safeParse(json);
-	if (!preview.success) return suggest(json, access);
-	return NextResponse.json(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers), { headers: READER_RESPONSE_HEADERS });
+	if (!preview.success) return withinLookups(() => suggest(json, access));
+	const lookup = paperLookupFor(access.config, access.actor.userId);
+	return withinLookups(async () => NextResponse.json(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers, lookup), { headers: READER_RESPONSE_HEADERS }));
+}
+
+/** Openscholar's own links count against the reader's search allowance there; once it's spent, the reader is told so. */
+async function withinLookups(answer: () => Promise<Response>) {
+	try {
+		return await answer();
+	} catch (error) {
+		if (error instanceof OpenScholarServiceError && error.status === 429) return readerError(429, "You've used your paper lookups on Openscholar for now. Try again later, or paste DOIs instead.");
+		throw error;
+	}
 }
 
 /** Sends the papers to the review queue as the reader's suggestions; a refusal, such as the day's limit, is said as given. */

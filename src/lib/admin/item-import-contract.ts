@@ -1,7 +1,7 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
-import { normalizeDoi } from "@/lib/doi";
+import { paperLinkOf } from "@/lib/paper-links";
 
 import type { AdminFieldErrors } from "./errors";
 import type { PdfPropertiesReading } from "./pdf-properties";
@@ -242,15 +242,18 @@ export type AdminImportCommitResponse = {
 	results: AdminImportCommitResult[];
 };
 
-/** Splits pasted text into normalized DOIs and the entries that are not DOIs. */
+/**
+ * Splits pasted text into what names a paper and the entries that don't: a DOI, normalized, or an address that names
+ * a paper (Openscholar's paper pages, an OpenAlex work, a community's record), which the import follows to its DOI.
+ */
 export function parseDoiList(text: string) {
 	const dois: string[] = [];
 	const invalid: string[] = [];
 	for (const entry of text.split(/[\s,]+/u)) {
 		if (!entry) continue;
-		const doi = normalizeDoi(entry);
-		if (doi) dois.push(doi);
-		else invalid.push(entry);
+		const link = paperLinkOf(entry);
+		if (!link) invalid.push(entry);
+		else dois.push(link.kind === "doi" ? link.doi : entry);
 	}
 	return { dois: [...new Set(dois)], invalid };
 }
