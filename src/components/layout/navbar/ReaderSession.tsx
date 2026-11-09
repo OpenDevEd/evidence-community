@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
+import { useLocale } from "next-intl";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { readerAuthClient } from "@/lib/readers/client";
@@ -10,13 +11,21 @@ import { readerAuthClient } from "@/lib/readers/client";
 export type Reader = { id: string; name: string; image: string | null };
 
 const ServerReader = createContext<Reader | null>(null);
-const ReaderAdmin = createContext(false);
+/** Whether the reader has a role here above viewer, and a way to ask again. */
+const ReaderAdmin = createContext<{ admin: boolean; refresh: () => void }>({ admin: false, refresh: () => {} });
 
 /** The server reads the session with the page, so the header is right on its first frame. */
 export function ReaderSessionProvider({ reader, admin, children }: { reader: Reader | null; admin: boolean; children: ReactNode }) {
+	// The server's answer until the menu asks again (`refresh`), as it does each time it opens.
+	const [live, setLive] = useState<boolean | null>(null);
+	const refresh = () =>
+		void fetch("/api/reader/team", { cache: "no-store" })
+			.then((response) => (response.ok ? response.json() : null))
+			.then((body: { admin?: boolean } | null) => { if (body) setLive(body.admin === true); })
+			.catch(() => {});
 	return (
 		<ServerReader value={reader}>
-			<ReaderAdmin value={admin}>{children}</ReaderAdmin>
+			<ReaderAdmin value={{ admin: live ?? admin, refresh }}>{children}</ReaderAdmin>
 		</ServerReader>
 	);
 }
@@ -31,11 +40,17 @@ export function useOpenScholarAccountUrl() {
  * viewer, which opens /admin; anyone else applies to join at `joinUrl`, OpenScholar's Communities page with the
  * dialog to apply to this one open.
  */
-export type ReaderLinks = { accountUrl: string; admin: boolean; joinUrl: string };
+export type ReaderLinks = { accountUrl: string; admin: boolean; joinUrl: string; refreshTeam: () => void };
+
+/** This site's language as OpenScholar names it: its Chinese is "cn" here and "zh" there. */
+const openScholarLocale = (locale: string) => (locale === "cn" ? "zh" : locale);
 
 export function useReaderLinks(): ReaderLinks {
 	const { accountUrl, siteUrl, libraryId } = useLibraryConfig().authentication.openScholar;
-	return { accountUrl, admin: useContext(ReaderAdmin), joinUrl: new URL(`/evidence-communities?apply=${libraryId}`, siteUrl).toString() };
+	const team = useContext(ReaderAdmin);
+	// The reader's language goes along, for OpenScholar to use when it has none of theirs yet.
+	const joinUrl = new URL(`/evidence-communities?apply=${libraryId}&hl=${openScholarLocale(useLocale())}`, siteUrl).toString();
+	return { accountUrl, admin: team.admin, joinUrl, refreshTeam: team.refresh };
 }
 
 export function useReaderSession() {

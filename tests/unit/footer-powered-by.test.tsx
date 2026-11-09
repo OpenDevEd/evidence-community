@@ -15,6 +15,8 @@ vi.mock("@/i18n/routing", () => ({
 }));
 vi.mock("next-intl", () => ({
 	useTranslations: () => (key: string) => key,
+	// The join link carries the site's language.
+	useLocale: () => "en-GB",
 }));
 vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 	useAnalyticsConsent: () => ({

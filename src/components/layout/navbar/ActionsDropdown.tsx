@@ -322,7 +322,8 @@ function ActionsMenu({
 			placement="bottom-end"
 			classNames={navbarMenuDropdownClasses}
 			isOpen={isOpen}
-			onOpenChange={setOpen}
+			// Opening it asks again whether they're on the team, as the desktop menu does.
+			onOpenChange={(open) => { setOpen(open); if (open) links.refreshTeam(); }}
 			closeOnSelect={false}
 		>
 			<DropdownTrigger>{reader ? <ReaderAvatar reader={reader} asTrigger /> : menuButton(t, includeSignIn)}</DropdownTrigger>
