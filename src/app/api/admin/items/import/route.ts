@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { papersAtLinks } from "@/lib/openscholar-service";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
@@ -32,7 +33,8 @@ async function requireTranslationUrl() {
 async function runImport(input: AdminImportRequest) {
 	const db = await getDatabase();
 	if (input.action === "commit") return commitImportRecords(db, input);
-	return previewImportRecords(db, input, await requireTranslationUrl());
+	const config = await getLibraryConfig();
+	return previewImportRecords(db, input, await requireTranslationUrl(), (links) => papersAtLinks(config.authentication.openScholar, links));
 }
 
 export async function POST(request: NextRequest) {

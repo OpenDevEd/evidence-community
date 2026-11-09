@@ -31,6 +31,13 @@ describe("DOI list parsing", () => {
 			),
 		).toEqual({ dois: ["10.1000/abc", "10.5555/xyz;part"], invalid: ["not-a-doi"] });
 	});
+
+	it("keeps an address that names a paper as given, for the import to follow to its DOI", () => {
+		expect(parseDoiList("https://dev.openscholar.ai/papers/OS79563844/a-title\nhttps://example.org/page")).toEqual({
+			dois: ["https://dev.openscholar.ai/papers/OS79563844/a-title"],
+			invalid: ["https://example.org/page"],
+		});
+	});
 });
 
 describe("Zotero import payload", () => {

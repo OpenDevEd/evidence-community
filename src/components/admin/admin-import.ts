@@ -53,10 +53,10 @@ export function doiPreviewRequest(text: string): ImportPreviewInput {
 	if (invalid.length) {
 		const shown = invalid.slice(0, 5).join(", ");
 		throw new ImportInputError(
-			`These entries are not DOIs: ${shown}${invalid.length > 5 ? "…" : ""}`,
+			`These entries name no paper: ${shown}${invalid.length > 5 ? "…" : ""}`,
 		);
 	}
-	if (!dois.length) throw new ImportInputError("Paste at least one DOI.");
+	if (!dois.length) throw new ImportInputError("Paste at least one DOI or link to a paper.");
 	if (dois.length > ADMIN_IMPORT_MAX_RECORDS) {
 		throw new ImportInputError(
 			`Import no more than ${ADMIN_IMPORT_MAX_RECORDS} records at once.`,

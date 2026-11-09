@@ -204,18 +204,18 @@ function PdfUpload({ flow }: { flow: ImportFlowState }) {
 	);
 }
 
-/** The pasted DOIs fill the space; entries that are not DOIs are listed under them so nothing is looked up by surprise. */
+/** The pasted DOIs and links fill the space; entries that name no paper are listed under them so nothing is looked up by surprise. */
 function DoiUpload({ flow }: { flow: ImportFlowState }) {
 	const { dois, invalid } = parseDoiList(flow.doiText);
 	return (
 		<>
-			<UploadHeader aside={dois.length ? `${dois.length} to look up` : undefined} busy={flow.busy} title="DOIs or doi.org links" />
+			<UploadHeader aside={dois.length ? `${dois.length} to look up` : undefined} busy={flow.busy} title="DOIs or links to papers" />
 			<textarea
 				aria-label="DOIs"
 				className="min-h-48 flex-1 resize-none rounded-xl bg-default-100 px-4 py-3 font-mono text-[13px] leading-6 text-black/85 outline-none transition-colors placeholder:font-sans placeholder:text-black/40 hover:bg-default-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:opacity-50 dark:bg-secondary dark:text-white/85 dark:placeholder:text-white/35 dark:hover:bg-white/[4%]"
 				disabled={flow.busy}
 				onChange={(event) => flow.setDoiText(event.target.value)}
-				placeholder={`10.1000/xyz123\nhttps://doi.org/10.1000/abc456\n\nOne per line or separated by commas, up to ${ADMIN_IMPORT_MAX_RECORDS}.`}
+				placeholder={`10.1000/xyz123\nhttps://doi.org/10.1000/abc456\nhttps://openscholar.ai/papers/W2126314681\n\nOne per line or separated by commas, up to ${ADMIN_IMPORT_MAX_RECORDS}.`}
 				spellCheck={false}
 				value={flow.doiText}
 			/>
@@ -223,13 +223,13 @@ function DoiUpload({ flow }: { flow: ImportFlowState }) {
 				<ul className="flex shrink-0 flex-col gap-1 font-mono text-xs">
 					{invalid.slice(0, 4).map((entry) => (
 						<li className="flex items-center gap-1.5 text-danger" key={`invalid-${entry}`}>
-							<HugeiconsIcon aria-label="Not a DOI" className="shrink-0" icon={AlertCircleIcon} size={12} />
+							<HugeiconsIcon aria-label="Names no paper" className="shrink-0" icon={AlertCircleIcon} size={12} />
 							<span className="min-w-0 flex-1">
 								<TruncatedText text={entry} />
 							</span>
 						</li>
 					))}
-					{invalid.length > 4 ? <li className="font-sans text-danger">and {invalid.length - 4} more that are not DOIs</li> : null}
+					{invalid.length > 4 ? <li className="font-sans text-danger">and {invalid.length - 4} more that name no paper</li> : null}
 				</ul>
 			) : null}
 		</>

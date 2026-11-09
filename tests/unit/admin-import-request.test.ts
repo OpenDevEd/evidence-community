@@ -30,7 +30,7 @@ const record = (
 
 describe("import input checks", () => {
 	it("rejects non-DOI entries before any lookup and normalizes the rest", () => {
-		expect(() => doiPreviewRequest("10.1000/abc\nnope")).toThrow("not DOIs: nope");
+		expect(() => doiPreviewRequest("10.1000/abc\nnope")).toThrow("name no paper: nope");
 		expect(() => doiPreviewRequest("  \n")).toThrow("at least one DOI");
 		expect(doiPreviewRequest("https://doi.org/10.1000/ABC")).toEqual({
 			dois: ["10.1000/abc"],

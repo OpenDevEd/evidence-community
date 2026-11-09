@@ -1,5 +1,8 @@
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readBoundedResponse } from "@/lib/source-ingestion/read-bounded-response";
+import { z } from "zod";
+
+import type { PaperIds } from "@/lib/paper-links";
 
 export type OpenScholarService = LibraryServerConfig["authentication"]["openScholar"];
 
@@ -63,4 +66,18 @@ export async function postToOpenScholar(
 	const text = new TextDecoder().decode(bytes);
 	if (!response.ok) throw new OpenScholarServiceError(response.status, errorCode(text));
 	return JSON.parse(text) as unknown;
+}
+
+const RESOLVE_PATH = "/api/v1/evidence-libraries/papers/resolve";
+const resolvedSchema = z.object({ papers: z.array(z.object({ openalexId: z.string().nullable(), doi: z.string().nullable() }).nullable()) });
+
+/**
+ * The paper each link names, as Openscholar follows it: its paper pages, a paper only its index has, a community's
+ * record, an OpenAlex work with its DOI. Null for one where it finds none; up to 100 links a call.
+ */
+export async function papersAtLinks(service: OpenScholarService, links: readonly string[]): Promise<Array<PaperIds | null>> {
+	if (!links.length) return [];
+	const { papers } = resolvedSchema.parse(await postToOpenScholar(service, RESOLVE_PATH, { contractVersion: 1, links }));
+	if (papers.length !== links.length) throw new Error("Openscholar answered a different number of papers than it was asked about.");
+	return papers;
 }
