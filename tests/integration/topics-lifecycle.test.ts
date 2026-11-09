@@ -156,11 +156,16 @@ it("sends a record's PDF and its cover with it, and sends the record again when 
     };
     await runTopicAssociationCycle(db, config, undefined, request);
     expect(delivered.at(-1)?.metadata?.pdf).toBeNull();
-    // A stored PDF with a picture of its first page arrives, written as an attachment and its outbox entry.
+    // A stored PDF arrives, written as an attachment and its outbox entry. Without its cover it isn't public yet.
     await db.execute(sql`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('PDFCVRAB', 'native', 'PDFCVRAB')`);
-    await db.execute(sql`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "parentItem", "linkMode", "contentType", "PDFCoverPageImage", "PDFCoverPageWidth", "PDFCoverPageHeight", "dateAdded", "deleted")
-      VALUES ('PDFCVRAB', 'native', 'PDFCVRAB', 'Attachment', 1, 'Full text', ${draft.itemKey}, 'imported_file', 'application/pdf', 'https://files.example.test/covers/PDFCVRAB.png', 600, 800, now(), 0)`);
+    await db.execute(sql`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "parentItem", "linkMode", "contentType", "dateAdded", "deleted")
+      VALUES ('PDFCVRAB', 'native', 'PDFCVRAB', 'Attachment', 1, 'Full text', ${draft.itemKey}, 'imported_file', 'application/pdf', now(), 0)`);
     await db.insert(outbox).values({entityType: "item", entityKey: "PDFCVRAB", operation: "upsert", revision: 1});
+    await runTopicAssociationCycle(db, config, undefined, request);
+    expect(delivered.at(-1)?.metadata?.pdf).toBeNull();
+    // Its cover drawn, the record goes again with both.
+    await db.execute(sql`UPDATE "item" SET "PDFCoverPageImage" = 'https://files.example.test/covers/PDFCVRAB.png', "PDFCoverPageWidth" = 600, "PDFCoverPageHeight" = 800, "revision" = 2 WHERE key = 'PDFCVRAB'`);
+    await db.insert(outbox).values({entityType: "item", entityKey: "PDFCVRAB", operation: "upsert", revision: 2});
     await runTopicAssociationCycle(db, config, undefined, request);
     expect(delivered.at(-1)).toMatchObject({publishedRevision: published.revision, metadata: {pdf: {
       url: new URL(`/lib/${draft.itemKey}/download/PDFCVRAB`, `${config.identity.baseUrl}/`).href,

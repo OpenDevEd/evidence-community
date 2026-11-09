@@ -8,6 +8,7 @@ import { topicAssociationDelivery, topicDeliveryConfiguration } from "@/db/schem
 import { getPublicItemCard } from "@/lib/public-item-card";
 import { readPublicItem } from "@/lib/search-index/projection";
 import { buildSiteUrl } from "@/lib/site-url";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
 import { topicAssociationReceiptSchema, topicAssociationRequestSchema } from "./contract";
 
@@ -39,7 +40,8 @@ const addressOf = (value: string | null | undefined, base: string) => {
  */
 async function publicPdfOf(database: Database, key: string, config: LibraryServerConfig): Promise<PublicPdf> {
   const record = await readPublicItem(database, key, config);
-  const pdfs = (record?.attachmentsData ?? []).filter(attachment => attachment.contentType === "application/pdf");
+  // As the record's page shows them: a stored PDF with its cover, or a PDF link its source published.
+  const pdfs = (record?.attachmentsData ?? []).filter(attachment => attachment.contentType?.toLowerCase() === "application/pdf" && isVisiblePdfAttachment(attachment));
   const pdf = pdfs.find(attachment => attachment.PDFCoverPageImage) ?? pdfs[0];
   if (!pdf) return null;
   const base = config.identity.baseUrl;

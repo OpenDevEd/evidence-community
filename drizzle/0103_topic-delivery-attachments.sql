@@ -25,3 +25,8 @@ BEGIN
   RETURN NEW;
 END;
 $$;
+--> statement-breakpoint
+-- Records already sent before this carry no PDF in OpenScholar: each one with a PDF is sent once more, with it.
+UPDATE "topicAssociationDelivery" SET "generation" = "generation" + 1, "payload" = NULL, "attempts" = 0,
+  "nextAttemptAt" = now(), "leaseToken" = NULL, "leaseExpiresAt" = NULL, "lastError" = NULL
+WHERE "itemKey" IN (SELECT "parentItem" FROM "item" WHERE "parentItem" IS NOT NULL AND lower("contentType") = 'application/pdf' AND coalesce("deleted", 0) <> 1);
