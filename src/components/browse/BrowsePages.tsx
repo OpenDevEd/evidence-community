@@ -15,6 +15,8 @@ import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
 import type { readBrowsePage, readBrowseYears } from "@/lib/browse-records";
 import { BrowsePager } from "./BrowsePager";
 
+const recordGrid = "grid grid-cols-1 gap-6 lg:grid-cols-2 2xl:grid-cols-3";
+
 type Years = Awaited<ReturnType<typeof readBrowseYears>>;
 type Page = Awaited<ReturnType<typeof readBrowsePage>>;
 
@@ -64,7 +66,7 @@ export function BrowseYear({ year, page, perPage, data, years }: { year: number 
   const at = year === null ? -1 : order.indexOf(year);
   const newer = at > 0 ? order[at - 1] : null;
   const older = at >= 0 && at < order.length - 1 ? order[at + 1] : null;
-  return <PageContainer className="mx-auto max-w-5xl">
+  return <PageContainer className="mx-auto">
     <TextLink href="/browse" back>{t("title")}</TextLink>
     <header className="mb-6 mt-6 flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -78,7 +80,8 @@ export function BrowseYear({ year, page, perPage, data, years }: { year: number 
     </header>
     {/* The server read the authors with the cards, so no card looks them up on its own. */}
     <AuthorProfilesContext value={new Map(data.profiles.map((profile) => [profile.id, profile]))}>
-      <div className="flex flex-col gap-4">{data.cards.map((card) => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
+      {/* The listing's grid view: two columns from lg, a third on very wide screens. */}
+      <div className={recordGrid}>{data.cards.map((card) => <Resource key={card.key} as="div" abstract hideUnapi itemData={card} />)}</div>
     </AuthorProfilesContext>
     <div className="mt-8"><BrowsePager base={`/browse/${year ?? "undated"}`} page={page} pages={data.pages} total={data.total} perPage={perPage} /></div>
   </PageContainer>;
@@ -100,9 +103,9 @@ export function BrowseYearsPlaceholder() {
 /** A year's page while it's on its way: its year, already known from the address, over result cards still loading. */
 export function BrowseYearPlaceholder({ year }: { year: string }) {
   const t = useTranslations("browse");
-  return <PageContainer className="mx-auto max-w-5xl">
+  return <PageContainer className="mx-auto">
     <TextLink href="/browse" back>{t("title")}</TextLink>
     <header className="mb-6 mt-6"><h1 className="font-heading text-5xl font-semibold tabular-nums tracking-tight">{year === "undated" ? t("noYear") : year}</h1><Skeleton isLoaded={false} className="mt-3 h-5 w-28 rounded-lg" /></header>
-    <div className="flex flex-col gap-4">{[0, 1, 2].map((card) => <Resource key={card} as="div" abstract hideUnapi isLoading />)}</div>
+    <div className={recordGrid}>{[0, 1, 2, 3, 4, 5].map((card) => <Resource key={card} as="div" abstract hideUnapi isLoading />)}</div>
   </PageContainer>;
 }
