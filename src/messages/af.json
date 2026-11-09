@@ -617,7 +617,8 @@
     "overallAvgCitations": "Algehele gem. aanhalings",
     "acrossAllYears": "oor alle jare",
     "topicFilteringUnavailable": "Onderwerpfiltering vereis bykomende data wat tans nie beskikbaar is nie",
-    "rateLimitedMessage": "Jy het die versoeklimiet bereik. Probeer weer oor {seconds} sekondes."
+    "rateLimitedMessage": "Jy het die versoeklimiet bereik. Probeer weer oor {seconds} sekondes.",
+    "suggestPapers": "Stel artikels voor"
   },
   "ai": {
     "sourcesTitle": "Bronne",
@@ -1663,5 +1664,28 @@
       "description": "Watter koekies en plaaslike bergingsinskrywings die webwerf gebruik, watter noodsaaklik is, en watter eers aktiveer nadat ontledingstoestemming gegee is.",
       "metaDescription": "Koekiekennisgewing wat koekies en soortgelyke blaaierberging wat die webwerf gebruik, dek."
     }
+  },
+  "suggestPapers": {
+    "title": "Stel artikels voor",
+    "description": "Plak DOI’s, OpenAlex-ID’s of skakels daarna. Die gemeenskap se span hersien elkeen voordat dit gepubliseer word.",
+    "inputLabel": "DOI’s, OpenAlex-ID’s of skakels",
+    "find": "Vind artikels",
+    "overLimit": "{count, plural, one {Jy kan vandag nog # artikel hier voorstel, so net die eerste een word gesoek.} other {Jy kan vandag nog # artikels hier voorstel, so die eerste # word gesoek.}}",
+    "noneLeft": "Jy het vandag hier soveel artikels voorgestel as wat een persoon kan. Probeer môre weer.",
+    "failed": "Kon nie die gemeenskap bereik nie. Probeer weer.",
+    "resultsLabel": "Artikels gevind",
+    "alreadyHere": "Reeds hier",
+    "waiting": "Wag vir hersiening",
+    "notFound": "Nie gevind nie",
+    "leaveOut": "Laat {title} uit",
+    "noAuthors": "Geen outeurs gelys nie",
+    "toSuggest": "{count, plural, one {# artikel om voor te stel} other {# artikels om voor te stel}}",
+    "cancel": "Kanselleer",
+    "send": "Stuur vir hersiening",
+    "done": "Klaar",
+    "sent": "{count, plural, one {# artikel vir hersiening gestuur} other {# artikels vir hersiening gestuur}}",
+    "sentHint": "Jy sal in Jou voorleggings op Openscholar sien waar elkeen staan: wag, gepubliseer, of teruggestuur met die hersiener se rede.",
+    "yourSubmissions": "Jou voorleggings",
+    "emptyLink": "Ken jy ’n artikel wat hier hoort? Stel dit voor"
   }
 }

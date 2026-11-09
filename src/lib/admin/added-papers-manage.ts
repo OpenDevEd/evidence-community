@@ -6,13 +6,19 @@ import { addedPaper, sourceConnection } from "@/db/schema/source";
 import { addedPapersConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { requestSourceRun } from "@/lib/source-ingestion/run-requests";
 
-import { latestReview, reviewerOf } from "./added-papers-service";
+import { ADD_PAPERS_MAX, latestReview, reviewerOf } from "./added-papers-service";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 import { ItemNotFoundError, unpublishNativeItemWithOutcome } from "./native-item-service";
 import { resolveItemReview, type ReviewActor } from "./review-service";
 
 /** The person acting, as OpenScholar names them, and the role it gives them in this community. */
+/** Papers a request names, by OpenAlex ID or DOI. */
+export const papersSchema = z
+	.array(z.object({ openalexId: z.string().max(128).nullish(), doi: z.string().max(512).nullish() }).strict())
+	.min(1)
+	.max(ADD_PAPERS_MAX);
+
 export const actorSchema = z
 	.object({
 		clerkUserId: z.string().min(1).max(128),

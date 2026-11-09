@@ -39,6 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
+import { SuggestLink } from "@/components/features/suggest/SuggestPapers";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -152,6 +153,7 @@ function ResourcesList({
 				) : actuallyNoData ? (
 					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
+						<SuggestLink />
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(

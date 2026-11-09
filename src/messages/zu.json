@@ -617,7 +617,8 @@
     "overallAvgCitations": "Izibhekiselo ezivamile ngokuphelele",
     "acrossAllYears": "kuyo yonke iminyaka",
     "topicFilteringUnavailable": "Ukuhlungwa ngetopiki kudinga idatha eyengeziwe engatholakali okwamanje",
-    "rateLimitedMessage": "Ufinyelele umkhawulo wezicelo. Zama futhi emasekhondeni angu-{seconds}."
+    "rateLimitedMessage": "Ufinyelele umkhawulo wezicelo. Zama futhi emasekhondeni angu-{seconds}.",
+    "suggestPapers": "Phakamisa amaphepha"
   },
   "ai": {
     "sourcesTitle": "Imithombo",
@@ -1663,5 +1664,28 @@
       "description": "Ama-cookie nezingenisi zesitoreji sendawo esetshenziswa yisayithi, ezidingekayo nokuthi yiziphi ezisebenza kuphela ngemva kokuvunyelwa kokuhlaziya.",
       "metaDescription": "Isaziso sama-cookie esihlanganisa ama-cookie nesitoreji esifanayo sesiphequluli esisetshenziswa yisayithi."
     }
+  },
+  "suggestPapers": {
+    "title": "Phakamisa amaphepha",
+    "description": "Namathisela ama-DOI, ama-ID e-OpenAlex noma izixhumanisi zawo. Ithimba lomphakathi libuyekeza ngalinye ngaphambi kokuthi lishicilelwe.",
+    "inputLabel": "Ama-DOI, ama-ID e-OpenAlex noma izixhumanisi",
+    "find": "Thola amaphepha",
+    "overLimit": "{count, plural, one {Namuhla ungaphakamisa elinye iphepha elingu-# lapha, ngakho kufunwa elokuqala kuphela.} other {Namuhla ungaphakamisa amanye amaphepha angu-# lapha, ngakho kufunwa angu-# okuqala.}}",
+    "noneLeft": "Namuhla usuphakamise lapha amaphepha amaningi ngangokuthi umuntu oyedwa angakwazi. Zama futhi kusasa.",
+    "failed": "Akukwazanga ukufinyelela umphakathi. Zama futhi.",
+    "resultsLabel": "Amaphepha atholakele",
+    "alreadyHere": "Selikhona lapha",
+    "waiting": "Lilinde ukubuyekezwa",
+    "notFound": "Alitholakalanga",
+    "leaveOut": "Shiya ngaphandle {title}",
+    "noAuthors": "Abekho ababhali ababaliwe",
+    "toSuggest": "{count, plural, one {Iphepha elingu-# lokuphakamisa} other {Amaphepha angu-# okuphakamisa}}",
+    "cancel": "Khansela",
+    "send": "Thumela ukuze libuyekezwe",
+    "done": "Kwenziwe",
+    "sent": "{count, plural, one {Iphepha elingu-# lithunyelwe ukuze libuyekezwe} other {Amaphepha angu-# athunyelwe ukuze abuyekezwe}}",
+    "sentHint": "Uzobona ukuthi ngalinye limi kuphi kokuthi Okuthunyelwe yimi ku-Openscholar: lilindile, lishicilelwe, noma libuyiselwe nesizathu sombuyekezi.",
+    "yourSubmissions": "Okuthunyelwe yimi",
+    "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise"
   }
 }

@@ -617,7 +617,8 @@
     "overallAvgCitations": "Nombre moyen total de citations",
     "acrossAllYears": "sur toutes les années",
     "topicFilteringUnavailable": "Le filtrage des sujets nécessite des données supplémentaires qui ne sont pas actuellement disponibles",
-    "rateLimitedMessage": "Vous avez atteint la limite de requêtes. Réessayez dans {seconds} secondes."
+    "rateLimitedMessage": "Vous avez atteint la limite de requêtes. Réessayez dans {seconds} secondes.",
+    "suggestPapers": "Suggérer des articles"
   },
   "ai": {
     "sourcesTitle": "Sources",
@@ -1663,5 +1664,28 @@
       "description": "Les cookies et entrées de stockage local utilisés par le site, ceux qui sont essentiels, et ceux qui ne s’activent qu’après consentement aux analyses.",
       "metaDescription": "Avis relatif aux cookies et au stockage similaire du navigateur utilisé par le site."
     }
+  },
+  "suggestPapers": {
+    "title": "Suggérer des articles",
+    "description": "Collez des DOI, des identifiants OpenAlex ou des liens vers eux. L’équipe de la communauté examine chacun avant sa mise en ligne.",
+    "inputLabel": "DOI, identifiants OpenAlex ou liens",
+    "find": "Trouver les articles",
+    "overLimit": "{count, plural, one {Vous pouvez encore suggérer # article ici aujourd’hui, seul le premier est donc recherché.} other {Vous pouvez encore suggérer # articles ici aujourd’hui, seuls les # premiers sont donc recherchés.}}",
+    "noneLeft": "Vous avez suggéré ici autant d’articles qu’une personne le peut aujourd’hui. Réessayez demain.",
+    "failed": "Impossible de joindre la communauté. Réessayez.",
+    "resultsLabel": "Articles trouvés",
+    "alreadyHere": "Déjà présent",
+    "waiting": "En attente d’examen",
+    "notFound": "Introuvable",
+    "leaveOut": "Retirer {title}",
+    "noAuthors": "Aucun auteur indiqué",
+    "toSuggest": "{count, plural, one {# article à suggérer} other {# articles à suggérer}}",
+    "cancel": "Annuler",
+    "send": "Envoyer pour examen",
+    "done": "Terminé",
+    "sent": "{count, plural, one {# article envoyé pour examen} other {# articles envoyés pour examen}}",
+    "sentHint": "Vous verrez où en est chacun dans Vos soumissions sur Openscholar : en attente, publié, ou renvoyé avec la raison de l’examinateur.",
+    "yourSubmissions": "Vos soumissions",
+    "emptyLink": "Vous connaissez un article qui a sa place ici ? Suggérez-le"
   }
 }

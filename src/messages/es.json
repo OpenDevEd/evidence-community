@@ -617,7 +617,8 @@
     "overallAvgCitations": "Promedio general de citas",
     "acrossAllYears": "en todos los años",
     "topicFilteringUnavailable": "El filtrado por tema requiere datos adicionales que actualmente no están disponibles",
-    "rateLimitedMessage": "Has alcanzado el límite de solicitudes. Vuelve a intentarlo en {seconds} segundos."
+    "rateLimitedMessage": "Has alcanzado el límite de solicitudes. Vuelve a intentarlo en {seconds} segundos.",
+    "suggestPapers": "Sugerir artículos"
   },
   "ai": {
     "sourcesTitle": "Fuentes",
@@ -1663,5 +1664,28 @@
       "description": "Qué cookies y entradas de almacenamiento local usa el sitio, cuáles son esenciales y cuáles solo se activan tras dar su consentimiento para la analítica.",
       "metaDescription": "Aviso de cookies que cubre las cookies y el almacenamiento similar del navegador que usa el sitio."
     }
+  },
+  "suggestPapers": {
+    "title": "Sugerir artículos",
+    "description": "Pega DOI, identificadores de OpenAlex o enlaces a ellos. El equipo de la comunidad revisa cada uno antes de publicarlo.",
+    "inputLabel": "DOI, identificadores de OpenAlex o enlaces",
+    "find": "Buscar artículos",
+    "overLimit": "{count, plural, one {Hoy puedes sugerir # artículo más aquí, así que solo se busca el primero.} other {Hoy puedes sugerir # artículos más aquí, así que se buscan los primeros #.}}",
+    "noneLeft": "Hoy ya sugeriste aquí tantos artículos como puede una persona. Vuelve a intentarlo mañana.",
+    "failed": "No se pudo conectar con la comunidad. Inténtalo de nuevo.",
+    "resultsLabel": "Artículos encontrados",
+    "alreadyHere": "Ya está aquí",
+    "waiting": "Esperando revisión",
+    "notFound": "No encontrado",
+    "leaveOut": "Quitar {title}",
+    "noAuthors": "Sin autores",
+    "toSuggest": "{count, plural, one {# artículo para sugerir} other {# artículos para sugerir}}",
+    "cancel": "Cancelar",
+    "send": "Enviar a revisión",
+    "done": "Listo",
+    "sent": "{count, plural, one {# artículo enviado a revisión} other {# artículos enviados a revisión}}",
+    "sentHint": "Verás en qué punto está cada uno en Tus envíos de Openscholar: en espera, publicado o devuelto con el motivo del revisor.",
+    "yourSubmissions": "Tus envíos",
+    "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo"
   }
 }

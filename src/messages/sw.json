@@ -617,7 +617,8 @@
     "overallAvgCitations": "Wastani wa jumla wa Nukuu",
     "acrossAllYears": "katika miaka yote",
     "topicFilteringUnavailable": "Uchujaji wa mada unahitaji data ya ziada ambayo haipatikani sasa",
-    "rateLimitedMessage": "Umefikia kikomo cha maombi. Jaribu tena baada ya sekunde {seconds}."
+    "rateLimitedMessage": "Umefikia kikomo cha maombi. Jaribu tena baada ya sekunde {seconds}.",
+    "suggestPapers": "Pendekeza makala"
   },
   "ai": {
     "sourcesTitle": "Vyanzo",
@@ -1663,5 +1664,28 @@
       "description": "Vidakuzi na ingizo za hifadhi ya ndani ambazo tovuti inatumia, zipi ni muhimu, na zipi huwashwa tu baada ya ridhaa ya uchanganuzi.",
       "metaDescription": "Notisi ya vidakuzi inayohusu vidakuzi na hifadhi nyingine ya kivinjari inayotumiwa na tovuti."
     }
+  },
+  "suggestPapers": {
+    "title": "Pendekeza makala",
+    "description": "Bandika DOI, vitambulisho vya OpenAlex au viungo vyake. Timu ya jumuiya hukagua kila moja kabla haijachapishwa.",
+    "inputLabel": "DOI, vitambulisho vya OpenAlex au viungo",
+    "find": "Tafuta makala",
+    "overLimit": "{count, plural, one {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo ya kwanza tu inatafutwa.} other {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo # za kwanza zinatafutwa.}}",
+    "noneLeft": "Umependekeza hapa leo makala nyingi kadiri mtu mmoja anavyoweza. Jaribu tena kesho.",
+    "failed": "Imeshindwa kufikia jumuiya. Jaribu tena.",
+    "resultsLabel": "Makala zilizopatikana",
+    "alreadyHere": "Tayari ipo hapa",
+    "waiting": "Inasubiri ukaguzi",
+    "notFound": "Haikupatikana",
+    "leaveOut": "Ondoa {title}",
+    "noAuthors": "Hakuna waandishi",
+    "toSuggest": "{count, plural, one {Makala # ya kupendekeza} other {Makala # za kupendekeza}}",
+    "cancel": "Ghairi",
+    "send": "Tuma kwa ukaguzi",
+    "done": "Imekamilika",
+    "sent": "{count, plural, one {Makala # imetumwa kwa ukaguzi} other {Makala # zimetumwa kwa ukaguzi}}",
+    "sentHint": "Utaona hali ya kila moja katika Mawasilisho yako kwenye Openscholar: inasubiri, imechapishwa, au imerudishwa na sababu ya mkaguzi.",
+    "yourSubmissions": "Mawasilisho yako",
+    "emptyLink": "Unajua makala inayofaa kuwa hapa? Ipendekeze"
   }
 }

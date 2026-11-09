@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { summaryOf, type PaperSummary } from "./paper-summary";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
@@ -33,7 +34,7 @@ const SUGGESTIONS_PER_COMMUNITY_DAY = 500;
 export const reviewerOf = (actor: Pick<AddPapersInput["actor"], "userId" | "role">) => ({ userId: actor.userId, role: actor.role === "reader" ? ("creator" as const) : actor.role });
 
 /** How many more papers someone outside the team may suggest today; unlimited for the team. */
-async function suggestionsLeft(transaction: DatabaseTransaction, actor: AddPapersInput["actor"]) {
+export async function suggestionsLeft(transaction: Database | DatabaseTransaction, actor: Pick<AddPapersInput["actor"], "userId" | "role">) {
 	if (actor.role !== "reader") return Number.POSITIVE_INFINITY;
 	const [counts] = await transaction
 		.select({
@@ -58,25 +59,6 @@ export type AddPapersInput = {
 };
 
 /** A paper as a list of added papers shows it: its title, authors and year. */
-export type PaperSummary = { title: string; authors: string; year: number | null };
-
-
-type Creator = { firstName?: unknown; lastName?: unknown; name?: unknown };
-
-/** The title, first authors and year a record's payload or row holds. */
-export function summaryOf(record: { title?: unknown; creators?: unknown; date?: unknown }): PaperSummary {
-	const names = (Array.isArray(record.creators) ? (record.creators as Creator[]) : []).flatMap((creator) => {
-		const name = typeof creator.name === "string" ? creator.name : [creator.firstName, creator.lastName].filter((part) => typeof part === "string" && part).join(" ");
-		return name ? [name] : [];
-	});
-	const year = typeof record.date === "string" ? Number(record.date.match(/\b(\d{4})\b/u)?.[1]) || null : null;
-	return {
-		title: typeof record.title === "string" && record.title.trim() ? record.title.trim() : "Untitled",
-		authors: names.length > 3 ? `${names.slice(0, 3).join(", ")} et al.` : names.join(", "),
-		year,
-	};
-}
-
 type SentPaper = PaperSummary & { openalexId: string | null; doi: string | null };
 
 export type AddedPaperResult = {

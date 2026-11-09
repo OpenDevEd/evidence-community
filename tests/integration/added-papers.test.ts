@@ -430,6 +430,11 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 			{ itemKey: results[1]!.itemKey, status: "returned", note: "Not about teachers", clerkUserId: "user_creator" },
 		]);
 		expect((await db.select().from(submissionStatusDelivery)).every((row) => row.nextAttemptAt === null)).toBe(true);
+		// What each paper is goes with it, so one sent from this site becomes the person's submission on Openscholar.
+		expect(sent.map((body) => body.paper).sort((a, b) => String((a as { title: string }).title).localeCompare(String((b as { title: string }).title)))).toEqual([
+			{ title: "Coaching teachers", authors: "", year: 2020, openalexId: "W60", doi: "10.1000/w60", requestId: expect.any(String) },
+			{ title: "Lesson study", authors: "", year: 2020, openalexId: "W61", doi: "10.1000/w61", requestId: expect.any(String) },
+		]);
 	});
 });
 
@@ -438,10 +443,10 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 		const storage = new MemoryFileStorage();
 		const { lookup } = services([work(70), work(71)]);
 		const reader = { userId: "user_reader", name: "Grace Otieno", role: "reader" } as const;
-		const told: { itemKey: string; status: string; clerkUserId: string }[] = [];
+		const told: { itemKey: string; status: string; clerkUserId: string; requestId?: string }[] = [];
 		const openscholar = (async (_url: string | URL, init?: RequestInit) => {
 			const body = JSON.parse(String(init?.body));
-			told.push({ itemKey: body.itemKey, status: body.status, clerkUserId: body.clerkUserId });
+			told.push({ itemKey: body.itemKey, status: body.status, clerkUserId: body.clerkUserId, requestId: body.paper?.requestId });
 			return Response.json({ idempotencyKey: body.idempotencyKey, generation: body.generation });
 		}) as typeof globalThis.fetch;
 		const latest = async (itemKey: string) => (await db.select().from(itemReview).where(eq(itemReview.itemKey, itemKey)).orderBy(desc(itemReview.submittedAt)))[0]!;
@@ -452,7 +457,13 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 		await resolveItemReview(db, { reviewId: first.id, expectedRevision: first.revision, action: "returned", note: "Not yet" }, editor);
 		await addPapers(db, storage, config, { requestId: "u2", publish: false, actor: reader, papers: [{ openalexId: "W70" }] }, lookup);
 		await runSubmissionStatusCycle(db, config, undefined, openscholar);
-		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "queued", clerkUserId: "user_reader" }]);
+		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "queued", clerkUserId: "user_reader", requestId: "u2" }]);
+		// Approved before that word goes out: published is told as theirs, whose version was accepted.
+		const resent = await latest(returned);
+		await approveItemReview(db, storage, { reviewId: resent.id, expectedRevision: resent.revision }, { userId: "user_editor", role: "editor" }, config);
+		told.length = 0;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(told.filter((entry) => entry.itemKey === returned)).toEqual([{ itemKey: returned, status: "published", clerkUserId: "user_reader", requestId: "u2" }]);
 
 		// Published, then an edit to it is returned: it stays published.
 		const live = (await addPapers(db, storage, config, { requestId: "u3", publish: true, actor: owner, papers: [{ openalexId: "W71" }] }, lookup)).results[0]!.itemKey!;
@@ -461,7 +472,7 @@ it("sends a resubmitted paper as waiting again, from its new sender, and keeps a
 		await resolveItemReview(db, { reviewId: edit.id, expectedRevision: edit.revision, action: "returned", note: "Keep the title" }, editor);
 		told.length = 0;
 		await runSubmissionStatusCycle(db, config, undefined, openscholar);
-		expect(told.filter((entry) => entry.itemKey === live)).toEqual([{ itemKey: live, status: "published", clerkUserId: "user_owner" }]);
+		expect(told.filter((entry) => entry.itemKey === live)).toEqual([{ itemKey: live, status: "published", clerkUserId: "user_owner", requestId: "u3" }]);
 	});
 });
 
