@@ -39,7 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
-import { namesPaper, PaperNamed, SuggestButton, SuggestEmpty } from "@/components/features/suggest/SuggestPapers";
+import { namesPaper, PaperNamed, SuggestButton } from "@/components/features/suggest/SuggestPapers";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -151,10 +151,11 @@ function ResourcesList({
 						</Button>
 					</li>
 				) : actuallyNoData ? (
-					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
+					// Laid out as the failed-to-load state above is: what happened, then the one thing to do about it.
+					<li className="mb-4 flex flex-col items-center gap-4 py-12 text-center text-sm text-black/40 dark:text-white/40">
 						{t("noResourcesFound")}
 						{/* In the community's own search; a search that names a paper already offers that paper above. */}
-						{itemsContext.userData || namesPaper(itemsContext.queryParams.search ?? "") ? null : <SuggestEmpty />}
+						{itemsContext.userData || namesPaper(itemsContext.queryParams.search ?? "") ? null : <SuggestButton small />}
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(

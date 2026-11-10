@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Add01Icon, ArrowUpRight01Icon, Cancel01Icon, CheckmarkCircle02Icon, File01Icon, InboxIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { Add01Icon, ArrowUpRight01Icon, Cancel01Icon, CheckmarkCircle02Icon, File01Icon, InboxIcon, Search01Icon, TaskAdd01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
 import { parseAsString, useQueryState } from "nuqs";
 import useSWR, { useSWRConfig } from "swr";
@@ -14,6 +14,7 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { Spinner } from "@/components/nextui/Spinner";
 import { SUGGEST_PARAM, useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useDebouncedValue } from "@/hooks/useDebounce";
 import { Link } from "@/i18n/routing";
 import { paperLinkKey, paperLinkOf } from "@/lib/paper-links";
 
@@ -39,8 +40,7 @@ type Reference = { openalexId?: string; doi?: string; link?: string };
 type Looked = { key: string; raw: string; ref: Reference };
 type Paper = { title: string; authors: string; year: number | null; openalexId?: string | null; doi?: string | null };
 type Answer = { outcome: "found" | "existing" | "queued" | "returned" | "not_found"; itemKey?: string; paper?: Paper };
-/** `picked`: goes with the next send. A paper pasted is picked once found; one a title found is picked with Add. */
-type Row = Looked & { state: "looking" | "found" | "here" | "waiting" | "missing"; picked: boolean; title?: string; authors?: string; year?: number | null };
+type Row = Looked & { state: "looking" | "found" | "here" | "waiting" | "missing"; title?: string; authors?: string; year?: number | null };
 type Sent = { outcome: string; message?: string };
 
 /** A link, DOI or ID as the community's lookups take it. A link only Openscholar can follow goes as given, which asks it. */
@@ -93,33 +93,35 @@ function usePaperNamed(raw: string | null) {
 const LEFT_KEY = "suggest-papers-left";
 const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
 
-const rowMotion = { initial: { height: 0, opacity: 0 }, animate: { height: "4.5rem", opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2 } };
+const rowMotion = { initial: { height: 0, opacity: 0 }, animate: { height: "4.25rem", opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2 } };
 
-/** One paper looked up: what it is, and where it stands here, a button to add it, or one to leave it out. */
-function PaperRow({ row, onAdd, onLeaveOut }: { row: Row; onAdd: () => void; onLeaveOut: () => void }) {
+/** One paper: what it is, with what can be done with it at its end. */
+function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolean; children: React.ReactNode }) {
 	const t = useTranslations("suggestPapers");
 	const known = row.state === "here" || row.state === "waiting";
 	return (
 		<motion.li {...rowMotion} className="overflow-hidden">
-			<div className={`flex h-[4.5rem] items-center gap-3 px-3 ${known ? "opacity-60" : ""}`}>
-				{row.state === "looking" ? <Spinner size="sm" /> : row.picked && row.state === "found" ? <HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-5 shrink-0 text-accent" aria-hidden /> : null}
-				<div className="min-w-0 flex-1">
-					<p className="line-clamp-2 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
+			<div className="flex h-[4.25rem] items-center gap-3 rounded-xl px-3 hover:bg-black/[3%] dark:hover:bg-white/[4%]">
+				<span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${picked ? "bg-accent/15 text-accent" : "bg-black/5 text-foreground/50 dark:bg-white/5 dark:text-white/50"}`}>
+					{row.state === "looking" ? <Spinner size="sm" /> : <HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />}
+				</span>
+				<div className={`min-w-0 flex-1 ${known ? "opacity-60" : ""}`}>
+					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
 					{row.title ? (
-						<p className="flex min-w-0 gap-2 text-xs text-foreground/60 dark:text-white/60">
+						<p className="flex min-w-0 gap-2 text-xs/5 text-foreground/60 dark:text-white/60">
 							<span className="truncate">{row.authors || t("noAuthors")}</span>
 							{row.year ? <span className="shrink-0 tabular-nums">{row.year}</span> : null}
 						</p>
 					) : null}
 				</div>
-				<RowEnd row={row} onAdd={onAdd} onLeaveOut={onLeaveOut} />
+				{children}
 			</div>
 		</motion.li>
 	);
 }
 
-/** Where a paper looked up stands here, the button that adds one a title found, or the one that leaves a picked one out. */
-function RowEnd({ row, onAdd, onLeaveOut }: { row: Row; onAdd: () => void; onLeaveOut: () => void }) {
+/** What a paper the search found offers: adding it, taking it back out, or where it already stands here. */
+function FoundEnd({ row, picked, onAdd, onRemove }: { row: Row; picked: boolean; onAdd: () => void; onRemove: () => void }) {
 	const t = useTranslations("suggestPapers");
 	if (row.state === "here" || row.state === "waiting")
 		return (
@@ -129,15 +131,10 @@ function RowEnd({ row, onAdd, onLeaveOut }: { row: Row; onAdd: () => void; onLea
 		);
 	if (row.state === "missing") return <Chip size="sm" variant="flat" color="danger">{t("notFound")}</Chip>;
 	if (row.state !== "found") return null;
-	if (!row.picked)
-		return (
-			<Button size="sm" variant="bordered" className="shrink-0" aria-label={t("addTitle", { title: row.title ?? row.raw })} onPress={onAdd} startContent={<HugeiconsIcon icon={Add01Icon} className="size-4" aria-hidden />}>
-				{t("add")}
-			</Button>
-		);
+	// One button in one place: Add, and once added, the same button takes it back out.
 	return (
-		<Button isIconOnly size="sm" variant="light" aria-label={t("leaveOut", { title: row.title ?? row.raw })} onPress={onLeaveOut}>
-			<HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+		<Button size="sm" variant={picked ? "flat" : "bordered"} color={picked ? "accent" : "default"} className="w-24 shrink-0" aria-label={t(picked ? "leaveOut" : "addTitle", { title: row.title ?? row.raw })} onPress={picked ? onRemove : onAdd} startContent={<HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : Add01Icon} className="size-4" aria-hidden />}>
+			{t(picked ? "added" : "add")}
 		</Button>
 	);
 }
@@ -147,7 +144,7 @@ function SentPanel({ count }: { count: number }) {
 	const t = useTranslations("suggestPapers");
 	const openScholar = useOpenScholarUrl();
 	return (
-		<div className="flex flex-col items-center gap-3 py-8 text-center">
+		<div className="flex h-full flex-col items-center justify-center gap-3 text-center">
 			<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-10 text-success" aria-hidden />
 			<p className="text-base font-medium">{t("sent", { count })}</p>
 			<p className="max-w-sm text-sm text-foreground/60 dark:text-white/60">{t("sentHint")}</p>
@@ -158,104 +155,89 @@ function SentPanel({ count }: { count: number }) {
 	);
 }
 
-/** What the field says beside Find papers: the day's limit, or why the last try failed. */
-function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | undefined, named: number, room: number, problem: string, invalid: string[]) {
-	// Until the allowance is known, only why it couldn't be read.
-	if (left === undefined) return problem;
+/** What a search finds: the papers a paste names (`named`), each with where it stands here, or the papers a title may name. */
+async function findPapers(query: string, room: number): Promise<{ named: boolean; rows: Row[] }> {
+	const pasted = parse(query).slice(0, room);
+	if (pasted.length) {
+		const { results } = await post<{ results: Answer[] }>({ preview: true, papers: pasted.map((paper) => paper.ref) });
+		return { named: true, rows: pasted.map((paper, at) => ({ ...paper, state: STATE_OF[results[at]?.outcome ?? "not_found"], ...results[at]?.paper })) };
+	}
+	const { matches } = await post<{ matches: (Answer & { ref: Reference })[] }>({ search: query });
+	return { named: false, rows: matches.map((match) => ({ key: `work:${match.ref.openalexId}`, raw: query, ref: match.ref, state: STATE_OF[match.outcome], ...match.paper })) };
+}
+
+/** What the dialog says above its list when something needs saying: the day's limit, or why the last try failed. */
+function noticeOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | undefined, named: number, room: number, problem: string, invalid: string[]) {
 	if (left === 0) return t("noneLeft");
-	if (named > room) return t("overLimit", { count: room });
-	// A failed lookup or send says why first: the entries it didn't recognise matter less. A text that names no paper is a title.
+	if (left !== undefined && named > room) return t("overLimit", { count: room });
+	// A failed search or send says why first: the entries it didn't recognise matter less. A text that names no paper is a title.
 	return problem || (named && invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "");
 }
 
-/** The dialog's state: what is typed, the papers found and picked, and sending them. `first` is the paper it opened on. */
+/**
+ * The dialog's state: what is typed, what it finds as the typing stops, the papers picked to send, and sending them.
+ * `first` is the paper it opened on, picked from the start.
+ */
 function useSuggestion(first: string, left: number | undefined) {
 	const t = useTranslations("suggestPapers");
 	const { mutate } = useSWRConfig();
 	const [text, setText] = useState("");
-	/** The text the last Find ran on: the same text finds nothing new. */
-	const [foundFor, setFoundFor] = useState<string | null>(null);
-	const [rows, setRows] = useState<Row[]>([]);
+	const [picked, setPicked] = useState<Row[]>([]);
 	const [firstLeftOut, setFirstLeftOut] = useState(false);
 	const [sent, setSent] = useState<number | null>(null);
 	const [sending, setSending] = useState(false);
-	const [problem, setProblem] = useState("");
+	const [failure, setFailure] = useState("");
 	const [requestId] = useState(() => crypto.randomUUID());
-	// Each lookup moves this on, so one that comes back after the next started is dropped.
-	const turn = useRef(0);
 	// The paper the dialog opened on is the search row's, already read there, or read now after a sign-in.
 	const opened = looked(first);
 	const named = usePaperNamed(opened ? first : null);
-	const firstRow: Row | null = !opened || firstLeftOut ? null : { ...opened, picked: true, state: named.data ? STATE_OF[named.data.outcome] : named.error ? "missing" : "looking", ...named.data?.paper };
-	const all = firstRow ? [firstRow, ...rows.filter((row) => row.key !== firstRow.key)] : rows;
-	const pastes = parse(text);
+	const firstRow: Row | null = !opened || firstLeftOut ? null : { ...opened, state: named.data ? STATE_OF[named.data.outcome] : named.error ? "missing" : "looking", ...named.data?.paper };
+	const basket = firstRow ? [firstRow, ...picked.filter((row) => row.key !== firstRow.key)] : picked;
 	// Nothing is looked up until the day's allowance is known, and no more than it is sent.
 	const room = Math.min(left ?? 0, PER_REQUEST);
-	const ready = all.filter((row) => row.state === "found" && row.picked).slice(0, room);
-	const title = pastes.length ? "" : text.trim();
-	const fail = (error: unknown) => setProblem(messageOf(error, t("failed")));
-
-	/** The papers a paste names, each added to the list as it is found. */
-	const findPasted = async (mine: number, kept: Row[]) => {
-		const fresh = pastes.slice(0, room).filter((paper) => !kept.some((row) => row.key === paper.key) && paper.key !== firstRow?.key);
-		setRows([...kept, ...fresh.map((paper): Row => ({ ...paper, state: "looking", picked: true }))]);
-		if (!fresh.length) return;
-		const { results } = await post<{ results: Answer[] }>({ preview: true, papers: fresh.map((paper) => paper.ref) });
-		if (mine !== turn.current) return;
-		const answers = new Map(fresh.map((paper, at) => [paper.key, results[at]]));
-		setRows((current) => current.map((row) => (answers.has(row.key) ? { ...row, state: STATE_OF[answers.get(row.key)?.outcome ?? "not_found"], ...answers.get(row.key)?.paper } : row)));
-	};
-	/** The papers a title may name: each is added with its own button. */
-	const findTitle = async (mine: number, kept: Row[]) => {
-		setRows([...kept, { key: "title", raw: title, ref: {}, state: "looking", picked: false }]);
-		const { matches } = await post<{ matches: (Answer & { ref: Reference })[] }>({ search: title });
-		if (mine !== turn.current) return;
-		const found = matches.map((match): Row => ({ key: `work:${match.ref.openalexId}`, raw: title, ref: match.ref, state: STATE_OF[match.outcome], picked: false, ...match.paper }));
-		setRows([...kept, ...found.filter((row) => !kept.some((held) => held.key === row.key) && row.key !== firstRow?.key)]);
-		if (!found.length) setProblem(t("noMatches"));
-	};
-
+	const ready = basket.filter((row) => row.state === "found").slice(0, room);
+	const add = (rows: Row[]) => setPicked((current) => [...current, ...rows.filter((row) => row.state === "found" && !current.some((held) => held.key === row.key))]);
+	// The search runs once the typing stops; the last answer stays, dimmed, until the next one is in.
+	const query = useDebouncedValue(text.trim(), 350);
+	const pastes = parse(query).length;
+	const searchable = room > 0 && (pastes > 0 || query.length >= TITLE_MIN);
+	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room), {
+		keepPreviousData: true,
+		revalidateOnFocus: false,
+		// Papers named outright are what the reader means to send, so they are picked as they are found.
+		onSuccess: (answer) => { if (answer.named) add(answer.rows); },
+	});
+	const typed = text.trim();
+	const found = typed && searchable ? (search.data?.rows ?? []) : [];
 	return {
-		text, rows: all, sent, sending, problem, room, ready, named: pastes.length,
-		invalid: unnamed(text),
-		canFind: left !== 0 && foundFor !== text && (pastes.length > 0 || title.length >= TITLE_MIN),
-		looking: all.some((row) => row.state === "looking"),
+		text, sent, sending, basket, ready, found, room,
+		/** What the list shows is a pasted list's papers, not a title's matches. */
+		pasted: Boolean(typed) && search.data?.named === true,
 		type: setText,
-		add: (key: string) => setRows((current) => current.map((row) => (row.key === key ? { ...row, picked: true } : row))),
-		leaveOut: (key: string) => (key === firstRow?.key ? setFirstLeftOut(true) : setRows((current) => current.filter((row) => row.key !== key))),
-		find: async () => {
-			const mine = ++turn.current;
-			setProblem("");
-			setFoundFor(text);
-			// What is picked stays; what the last search found and wasn't picked makes room for this one's.
-			const kept = rows.filter((row) => row.picked && row.state !== "looking");
-			try {
-				await (pastes.length ? findPasted(mine, kept) : findTitle(mine, kept));
-			} catch (error) {
-				if (mine !== turn.current) return;
-				setRows(kept);
-				setFoundFor(null);
-				fail(error);
-			}
-		},
+		isPicked: (key: string) => basket.some((row) => row.key === key),
+		/** The list still shows the answer to an earlier text. */
+		stale: Boolean(typed) && (typed !== query || search.isValidating),
+		/** A title that found nothing, said in the list's place. */
+		noMatches: Boolean(typed) && typed === query && searchable && !pastes && !search.isValidating && search.data?.rows.length === 0,
+		notice: noticeOf(t, left, pastes, room, failure || (search.error ? messageOf(search.error, t("failed")) : ""), unnamed(query)),
+		add: (row: Row) => add([row]),
+		remove: (key: string) => (key === firstRow?.key ? setFirstLeftOut(true) : setPicked((current) => current.filter((row) => row.key !== key))),
 		send: async () => {
-			// A dialog closed or changed while this was on its way doesn't take its answer.
-			const mine = ++turn.current;
 			setSending(true);
-			setProblem("");
+			setFailure("");
 			try {
 				const { results } = await post<{ results: Sent[] }>({ requestId, papers: ready.map((row) => row.ref) });
 				void mutate(LEFT_KEY);
-				void mutate((key) => Array.isArray(key) && key[0] === "paper-named");
-				if (mine !== turn.current) return;
+				void mutate((key) => Array.isArray(key) && (key[0] === "paper-named" || key[0] === "suggest-find"));
 				const failures = results.filter((result) => result.outcome === "failed");
 				if (!failures.length) return setSent(results.filter((result) => result.outcome === "queued").length);
-				// Some didn't go: the ones that did now wait for review, and the rest stay here to send again, with why.
-				const waiting = new Set(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
-				setRows((current) => current.map((row) => (waiting.has(row.key) ? { ...row, state: "waiting" } : row)));
-				setProblem(failures[0]?.message ?? t("failed"));
+				// Some didn't go: the ones that did leave the list, and the rest stay to send again, with why.
+				const gone = new Set(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
+				setPicked((current) => current.filter((row) => !gone.has(row.key)));
+				if (firstRow && gone.has(firstRow.key)) setFirstLeftOut(true);
+				setFailure(failures[0]?.message ?? t("failed"));
 			} catch (error) {
-				if (mine === turn.current) fail(error);
+				setFailure(messageOf(error, t("failed")));
 			} finally {
 				setSending(false);
 			}
@@ -263,38 +245,84 @@ function useSuggestion(first: string, left: number | undefined) {
 	};
 }
 
-/** The field for a title or a paste, the day's limit or what went wrong beside Find papers, and the papers found. */
-function FindPanel({ suggestion, left }: { suggestion: ReturnType<typeof useSuggestion>; left: number | undefined }) {
+/** Before anything is typed or picked: the two things the box takes, side by side in the room the papers will fill. */
+function EmptyHint() {
 	const t = useTranslations("suggestPapers");
-	const { rows } = suggestion;
-	const find = () => void suggestion.find();
+	const ways = [
+		{ icon: Search01Icon, title: t("emptyTitle"), hint: t("emptyHint") },
+		{ icon: TaskAdd01Icon, title: t("pasteTitle"), hint: t("pasteHint") },
+	];
+	return (
+		<div className="grid h-full content-center gap-3 px-3 sm:grid-cols-2">
+			{ways.map((way) => (
+				<div key={way.title} className="flex flex-col items-center gap-1 rounded-2xl bg-black/[3%] px-4 py-6 text-center dark:bg-white/[4%]">
+					<HugeiconsIcon icon={way.icon} className="mb-2 size-7 text-foreground/50 dark:text-white/50" aria-hidden />
+					<p className="font-medium">{way.title}</p>
+					<p className="text-sm text-foreground/60 dark:text-white/60">{way.hint}</p>
+				</div>
+			))}
+		</div>
+	);
+}
+
+/** A pasted list in one line: how many of its papers were added, are already here, wait for review, or weren't found. */
+function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string) => boolean }) {
+	const t = useTranslations("suggestPapers");
+	const count = (state: Row["state"]) => rows.filter((row) => row.state === state).length;
+	const parts = [
+		{ key: "added" as const, count: rows.filter((row) => row.state === "found" && isPicked(row.key)).length, classNames: { base: "bg-accent/15", content: "text-accent" } },
+		{ key: "here" as const, count: count("here") },
+		{ key: "waiting" as const, count: count("waiting") },
+		{ key: "missing" as const, count: count("missing"), color: "danger" as const },
+	].filter((part) => part.count > 0);
+	return (
+		<p className="flex flex-wrap gap-2 px-3 pb-2">
+			{parts.map(({ key, count: papers, ...look }) => <Chip key={key} size="sm" variant="flat" {...look}>{t(`pasted.${key}`, { count: papers })}</Chip>)}
+		</p>
+	);
+}
+
+/** The papers the search found, then the ones picked to send, in a room that keeps its height. */
+function PaperLists({ suggestion }: { suggestion: ReturnType<typeof useSuggestion> }) {
+	const t = useTranslations("suggestPapers");
+	const { basket, found } = suggestion;
+	// A paper picked shows once, among the picked, unless the search is showing it now.
+	const kept = basket.filter((row) => !found.some((match) => match.key === row.key));
+	if (!found.length && !basket.length && !suggestion.noMatches && !suggestion.notice) return <EmptyHint />;
 	return (
 		<>
-			<Textarea
-				autoFocus
-				aria-label={t("inputLabel")}
-				placeholder={t("placeholder")}
-				minRows={2}
-				maxRows={8}
-				isDisabled={left === 0}
-				value={suggestion.text}
-				onValueChange={suggestion.type}
-				// Enter finds, as in a search box; Shift and Enter starts another line of a list.
-				onKeyDown={(event) => {
-					if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
-					event.preventDefault();
-					if (suggestion.canFind) find();
-				}}
-			/>
-			<div className="flex min-h-8 items-center justify-between gap-3">
-				<span className="text-sm text-warning-600 dark:text-warning">{hintOf(t, left, suggestion.named, suggestion.room, suggestion.problem, suggestion.invalid)}</span>
-				<Button className="shrink-0" size="sm" variant="bordered" isDisabled={!suggestion.canFind} onPress={find} startContent={<HugeiconsIcon icon={Search01Icon} className="size-4" aria-hidden />}>
-					{t("find")}
-				</Button>
-			</div>
-			<ul aria-label={t("resultsLabel")} className={`max-h-[calc(5*4.5rem+4px)] shrink-0 divide-y divide-black/10 overflow-y-auto rounded-xl border-black/10 transition-[border-width] dark:divide-white/10 dark:border-white/10 ${rows.length ? "border" : "border-0"}`}>
+			{suggestion.notice ? <p className="px-3 pb-2 text-sm text-warning-600 dark:text-warning">{suggestion.notice}</p> : null}
+			{suggestion.noMatches ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("noMatches")}</p> : null}
+			{suggestion.pasted && found.length > 1 ? <PastedSummary rows={found} isPicked={suggestion.isPicked} /> : null}
+			<ul aria-label={t("resultsLabel")} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
 				<AnimatePresence initial={false}>
-					{rows.map((row) => <PaperRow key={row.key} row={row} onAdd={() => suggestion.add(row.key)} onLeaveOut={() => suggestion.leaveOut(row.key)} />)}
+					{found.map((row) => (
+						<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
+							<FoundEnd row={row} picked={suggestion.isPicked(row.key)} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
+						</PaperRow>
+					))}
+				</AnimatePresence>
+			</ul>
+			<AnimatePresence initial={false}>
+				{kept.length ? (
+					<motion.p key="label" initial={{ height: 0, opacity: 0 }} animate={{ height: "2rem", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="flex items-end overflow-hidden px-3 text-xs font-medium text-foreground/50 dark:text-white/50">
+						{t("toSuggestLabel")}
+					</motion.p>
+				) : null}
+			</AnimatePresence>
+			<ul aria-label={t("toSuggestLabel")}>
+				<AnimatePresence initial={false}>
+					{kept.map((row) => (
+						<PaperRow key={row.key} row={row} picked={row.state === "found"}>
+							{row.state === "found" || row.state === "looking" ? (
+								<Button isIconOnly size="sm" variant="light" aria-label={t("leaveOut", { title: row.title ?? row.raw })} onPress={() => suggestion.remove(row.key)}>
+									<HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+								</Button>
+							) : (
+								<FoundEnd row={row} picked={false} onAdd={() => {}} onRemove={() => {}} />
+							)}
+						</PaperRow>
+					))}
 				</AnimatePresence>
 			</ul>
 		</>
@@ -305,23 +333,45 @@ function FindPanel({ suggestion, left }: { suggestion: ReturnType<typeof useSugg
 function SuggestContent({ first, left, onClose }: { first: string; left: number | undefined; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
 	const suggestion = useSuggestion(first, left);
-	const { sent, looking, ready } = suggestion;
+	const { sent, ready } = suggestion;
 	return (
 		<>
-			<ModalHeader className="flex flex-col gap-1">
-				<span className="text-lg font-semibold">{t("title")}</span>
-				<span className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</span>
+			<ModalHeader className="flex flex-col gap-3 pb-3">
+				<div>
+					<p className="text-lg font-semibold">{t("title")}</p>
+					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
+				</div>
+				{sent === null ? (
+					// One line for a title, growing to hold a pasted list with a paper on each line.
+					<Textarea
+						autoFocus
+						isClearable
+						isDisabled={left === 0}
+						aria-label={t("inputLabel")}
+						placeholder={t("placeholder")}
+						minRows={1}
+						maxRows={5}
+						autoCorrect="off"
+						value={suggestion.text}
+						onValueChange={suggestion.type}
+						onClear={() => suggestion.type("")}
+						// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
+						onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) event.preventDefault(); }}
+						classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", input: "py-0.5 text-base font-normal" }}
+						startContent={suggestion.stale ? <Spinner size="sm" className="size-6 shrink-0" /> : <HugeiconsIcon icon={Search01Icon} aria-hidden className="size-6 shrink-0 text-black/60 dark:text-white/40" />}
+					/>
+				) : null}
 			</ModalHeader>
-			<ModalBody>{sent !== null ? <SentPanel count={sent} /> : <FindPanel suggestion={suggestion} left={left} />}</ModalBody>
+			<ModalBody className="h-[min(21rem,50dvh)] flex-none gap-0 overflow-y-auto px-3 py-0">{sent !== null ? <SentPanel count={sent} /> : <PaperLists suggestion={suggestion} />}</ModalBody>
 			<ModalFooter className="flex-wrap items-center justify-between gap-y-3">
 				{sent !== null ? (
 					<Button className="ms-auto" color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>
 				) : (
 					<>
-						<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{suggestion.rows.length && !looking ? t("toSuggest", { count: ready.length }) : null}</span>
+						<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: ready.length })}</span>
 						<span className="ms-auto flex gap-2">
 							<Button variant="light" onPress={onClose}>{t("cancel")}</Button>
-							<Button color="accent" variant="solid" isDisabled={looking || !ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? null : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
+							<Button color="accent" variant="solid" isDisabled={!ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? null : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
 								{t("send")}
 							</Button>
 						</span>
@@ -333,8 +383,8 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 }
 
 /**
- * Suggest papers to this community: a signed-in reader finds papers by title, or pastes links, DOIs or OpenAlex IDs,
- * sees what they are, and sends them to the community's review queue (OpenDevEd/new-el#777). The team reviews each
+ * Suggest papers to this community: a signed-in reader searches by title, or pastes links, DOIs or OpenAlex IDs,
+ * picks the papers, and sends them to the community's review queue (OpenDevEd/new-el#777). The team reviews each
  * before it goes live; the reader follows them in Openscholar's Your submissions.
  *
  * It is open while the address says so (`?suggest`, or `?suggest=<paper>` to open on one): a sign-in started from a
@@ -353,7 +403,7 @@ export function SuggestPapersDialog() {
 	if (!reader) return null;
 	const close = () => void setPaper(null);
 	return (
-		<DialogModal isOpen={paper !== null} onOpenChange={(next) => { if (!next) close(); }} size="3xl" scrollBehavior="inside">
+		<DialogModal isOpen={paper !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
 			<ModalContent>
 				<SuggestContent first={paper ?? ""} left={left} onClose={close} />
 			</ModalContent>
@@ -361,28 +411,19 @@ export function SuggestPapersDialog() {
 	);
 }
 
-/** The button that suggests papers, as the search's own buttons are drawn. Gone where the community has no reader accounts. */
-export function SuggestButton({ centred = false }: { centred?: boolean }) {
+/**
+ * The button that suggests papers, as the search's own buttons are drawn; `small` under a search that found nothing,
+ * as the button under results that failed to load is. Gone where the community has no reader accounts.
+ */
+export function SuggestButton({ small = false }: { small?: boolean }) {
 	const t = useTranslations("suggestPapers");
 	const suggest = useSuggest();
 	if (!useLibraryFeature("readerAccounts")) return null;
-	const icon = <HugeiconsIcon icon={InboxIcon} className={centred ? "size-5" : "size-6"} aria-hidden />;
+	const icon = <HugeiconsIcon icon={InboxIcon} className={small ? "size-4" : "size-6"} aria-hidden />;
 	return (
-		<Button onPress={() => suggest()} {...(centred ? { startContent: icon, color: "accent" as const, variant: "solid" as const } : { endContent: icon })}>
+		<Button onPress={() => suggest()} {...(small ? { size: "sm" as const, startContent: icon } : { endContent: icon })}>
 			{t("title")}
 		</Button>
-	);
-}
-
-/** Under a search that found nothing: a paper that isn't here can be suggested. */
-export function SuggestEmpty() {
-	const t = useTranslations("suggestPapers");
-	if (!useLibraryFeature("readerAccounts")) return null;
-	return (
-		<span className="mt-4 flex flex-col items-center gap-3">
-			<span>{t("emptyQuestion")}</span>
-			<SuggestButton centred />
-		</span>
 	);
 }
 
@@ -402,7 +443,7 @@ export function PaperNamed({ search }: { search: string }) {
 		<AnimatePresence initial={false}>
 			{offered && (
 				<motion.div key="paper" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
-					<div className="flex min-h-[4.75rem] flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3 sm:flex-nowrap">
+					<div className="flex min-h-[4.75rem] flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-card_light px-4 py-3 dark:bg-card sm:flex-nowrap">
 						<span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
 							<HugeiconsIcon icon={File01Icon} className="size-6" aria-hidden />
 						</span>

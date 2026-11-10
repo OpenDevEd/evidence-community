@@ -1674,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "Suggest papers",
-    "description": "Find a paper by its title, or paste links, DOIs or OpenAlex IDs. The community’s team reviews each before it goes live.",
-    "inputLabel": "A title, or paper links, DOIs or OpenAlex IDs",
-    "find": "Find papers",
+    "description": "The team reviews each paper before it goes live.",
+    "inputLabel": "A title, or a list of DOIs, OpenAlex IDs or paper links",
     "overLimit": "{count, plural, one {You can suggest # more paper here today, so the first one is looked up.} other {You can suggest # more papers here today, so the first # are looked up.}}",
     "noneLeft": "You’ve suggested as many papers here as one person can today. Try again tomorrow.",
     "failed": "Couldn’t reach the community. Try again.",
@@ -1694,16 +1693,27 @@
     "sentHint": "You’ll see where each stands in Your submissions on Openscholar: waiting, published, or declined with the team’s reason.",
     "yourSubmissions": "Your submissions",
     "invalid": "{count, plural, one {This isn’t a paper link, DOI or ID, so it’s left out: {values}} other {These aren’t paper links, DOIs or IDs, so they’re left out: {values}}}",
-    "placeholder": "Type a title, or paste links, DOIs or OpenAlex IDs",
+    "placeholder": "Search by title, or paste DOIs and links",
     "add": "Add",
     "addTitle": "Add {title}",
     "noMatches": "No paper found with that title. Try more of it, or paste its DOI.",
-    "emptyQuestion": "Know a paper that belongs here?",
     "suggestThis": "Suggest this paper",
     "inCommunity": "In this community",
     "open": "Open",
     "lookingUp": "Looking this paper up",
-    "noPaperNamed": "No paper found for this"
+    "noPaperNamed": "No paper found for this",
+    "added": "Added",
+    "toSuggestLabel": "To suggest",
+    "emptyTitle": "Search by title",
+    "emptyHint": "Pick from the papers it finds",
+    "pasteTitle": "Paste a list",
+    "pasteHint": "DOIs, OpenAlex IDs or paper links, as many as you have",
+    "pasted": {
+      "added": "{count, plural, one {# added} other {# added}}",
+      "here": "{count, plural, one {# already here} other {# already here}}",
+      "waiting": "{count, plural, one {# waiting for review} other {# waiting for review}}",
+      "missing": "{count, plural, one {# not found} other {# not found}}"
+    }
   },
   "browse": {
     "title": "Browse by year",
