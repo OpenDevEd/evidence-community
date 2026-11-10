@@ -401,7 +401,12 @@ export async function lookUpPapers(papers: readonly PaperReference[], lookup: Pa
 	const reports = await findOnOpenscholar(refs.filter((ref) => !results.has(ref.at)), lookup, results);
 	const taken = new Set(reports.map((paper) => paper.at));
 	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at) && !taken.has(ref.at)), lookup, results);
-	return [...reports, ...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
+	// A paper given by its OpenAlex work alone has a DOI only now. If that DOI is a report's, the paper is the report:
+	// it is taken from Openscholar like one given by its DOI, and a withdrawn one isn't added through OpenAlex's copy.
+	const learned = onOpenAlex.found.filter((paper) => paper.doi && refs[paper.at]?.doi !== paper.doi);
+	const late = await findOnOpenscholar(learned.map((paper) => ({ at: paper.at, openalexId: null, doi: paper.doi })), lookup, results);
+	const replaced = new Set([...late.map((paper) => paper.at), ...learned.filter((paper) => results.has(paper.at)).map((paper) => paper.at)]);
+	return [...reports, ...late, ...onOpenAlex.found.filter((paper) => !replaced.has(paper.at)), ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
 }
 
 /**

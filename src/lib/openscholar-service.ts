@@ -95,8 +95,11 @@ export async function papersByTitle(service: OpenScholarService, title: string, 
 }
 
 export const REPORTS_PATH = "/api/v1/evidence-libraries/reports/records";
-/** DOIs one request asks Openscholar about. */
-const REPORTS_PER_REQUEST = 100;
+/**
+ * DOIs one request asks Openscholar about. Openscholar takes a hundred; a report's details can run to about 160 KB
+ * (200 authors, a long abstract), so 25 keep the largest answer well inside what one request reads.
+ */
+const REPORTS_PER_REQUEST = 25;
 
 const liveReportSchema = z.object({
 	state: z.literal("live"),

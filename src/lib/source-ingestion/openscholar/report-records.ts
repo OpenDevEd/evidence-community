@@ -1,6 +1,9 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { item } from "@/db/schema/tables/item";
+import { itemFieldOverride } from "@/db/schema/topics";
+import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
 import type { OpenscholarReport } from "@/lib/openscholar-service";
 
 import type { SourceAdapterContext } from "../adapter";
@@ -48,7 +51,24 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 	const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 	if (!withdrawn.length) return;
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
-	await withdrawSourceRecords(context.database, asRead(context), [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs], "This edited record's report was withdrawn on Openscholar.");
+	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
+	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
+	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
+	// Openscholar is public nowhere: what is still live is unpublished, which keeps the team's edits out of sight
+	// with the record, for an editor to restore if the report is reinstated.
+	const stillPublic = await context.database.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), eq(item.deleted, 0)));
+	// Attachments first: a record with a public child isn't unpublished.
+	const pdfKeys = new Set(pdfs);
+	for (const { key } of [...stillPublic].sort((a, b) => Number(pdfKeys.has(b.key)) - Number(pdfKeys.has(a.key)))) {
+		await unpublishNativeItemWithOutcome(context.database, key).catch((error: unknown) => {
+			console.error("[reports] couldn't unpublish a withdrawn report's record", { itemKey: key, error: String(error) });
+		});
+	}
+	// An unpublish is remembered as the team's own deletion, which a source never undoes. This one is Openscholar's:
+	// forgotten here, the record and its PDF come back when the report is reinstated, the team's edits with them.
+	// Only for what this withdrawal unpublished: a record or a PDF the team had unpublished itself wasn't public, and
+	// keeps its deletion.
+	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, stillPublic.map(({ key }) => key)), eq(itemFieldOverride.field, "deleted")));
 }
 
 /** Live reports one batch writes. */
