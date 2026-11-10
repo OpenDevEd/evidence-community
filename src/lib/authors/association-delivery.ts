@@ -1,10 +1,14 @@
 import type { Database } from "@/db/database-schema";
-import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
+import { drainAssociationQueue, eachAssociation, postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getPublicItemCard } from "@/lib/public-item-card";
 
+/** Records sent at once, each in its own call. */
+const AT_ONCE = 10;
+
 export async function runAuthorAssociationCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal) {
-  return runAssociationDeliveryCycle(database, "authorAssociationDelivery", job => deliverAssociations(database, config, job, signal));
+  return drainAssociationQueue(() => runAssociationDeliveryCycle(database, "authorAssociationDelivery",
+    eachAssociation(job => deliverAssociations(database, config, job, signal)), AT_ONCE), signal);
 }
 
 async function deliverAssociations(

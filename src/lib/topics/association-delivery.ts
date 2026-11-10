@@ -5,14 +5,16 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { itemSourceLink, sourceConnection } from "@/db/schema/source";
 import { OPENALEX_WORK_PROVIDERS } from "@/lib/source-providers";
 import { topicAssociationDelivery, topicDeliveryConfiguration } from "@/db/schema/topics";
-import { getPublicItemCard } from "@/lib/public-item-card";
-import { readPublicItem } from "@/lib/search-index/projection";
+import { getPublicItemCards } from "@/lib/public-item-card";
+import { readPublicItems } from "@/lib/search-index/projection";
 import { buildSiteUrl } from "@/lib/site-url";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
-import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
-import { topicAssociationReceiptSchema, topicAssociationRequestSchema } from "./contract";
+import { drainAssociationQueue, postOpenScholarAssociation, runAssociationDeliveryCycle, type AssociationJob } from "@/lib/publication/association-queue";
+import { topicAssociationBatchReceiptSchema, topicAssociationRequestSchema } from "./contract";
 
-type PublicCard = NonNullable<Awaited<ReturnType<typeof getPublicItemCard>>>;
+type PublicCard = Awaited<ReturnType<typeof getPublicItemCards>>[number];
+type PublicRecord = Awaited<ReturnType<typeof readPublicItems>>[number];
+type TopicDelivery = ReturnType<typeof topicAssociationRequestSchema.parse>;
 
 type PublicPdf = {url: string; cover: string | null} | null;
 
@@ -38,8 +40,7 @@ const addressOf = (value: string | null | undefined, base: string) => {
  * The record's PDF and the picture of its first page, as its public page offers them: the PDF with a picture first. A
  * stored PDF is opened through the site's download route.
  */
-async function publicPdfOf(database: Database, key: string, config: LibraryServerConfig): Promise<PublicPdf> {
-  const record = await readPublicItem(database, key, config);
+function publicPdfOf(record: PublicRecord | undefined, key: string, config: LibraryServerConfig): PublicPdf {
   // As the record's page shows them: a stored PDF with its cover, or a PDF link its source published.
   const pdfs = (record?.attachmentsData ?? []).filter(attachment => attachment.contentType?.toLowerCase() === "application/pdf" && isVisiblePdfAttachment(attachment));
   const pdf = pdfs.find(attachment => attachment.PDFCoverPageImage) ?? pdfs[0];
@@ -74,46 +75,84 @@ async function reconcileVisibility(database: Database, config: LibraryServerConf
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-/** What the record's delivery says now: its topics, its public metadata with its PDF and cover, and its OpenAlex work. */
-async function deliveryOf(tx: Transaction, database: Database, config: LibraryServerConfig, job: {itemKey: string; generation: number | string; revision: number | string}) {
+/** Most records one call carries, and the longest body it builds up to: Openscholar saves a call in one transaction. */
+const BATCH_MAX = 50;
+const BATCH_BODY_MAX = 1_000_000;
+
+/** What each record's delivery says now: its topics, its public metadata with its PDF and cover, and its OpenAlex work. */
+async function deliveriesOf(tx: Transaction, database: Database, config: LibraryServerConfig, jobs: AssociationJob[]): Promise<TopicDelivery[]> {
+  const keys = jobs.map(job => job.itemKey);
   // Topics off, the record still goes, without its topics (the card leaves them out), so its paper page lists this community.
-  const card = await getPublicItemCard(tx, job.itemKey, config);
-  const pdf = card ? await publicPdfOf(database, job.itemKey, config) : null;
-  const [source] = await tx.select({id: itemSourceLink.sourceRecordKey}).from(itemSourceLink)
+  const cards = new Map((await getPublicItemCards(tx, keys, config)).map(card => [card.key, card]));
+  const records = new Map((await readPublicItems(database, [...cards.keys()], config)).map(record => [record.key, record]));
+  const sources = new Map<string, string>();
+  for (const row of await tx.select({itemKey: itemSourceLink.itemKey, id: itemSourceLink.sourceRecordKey}).from(itemSourceLink)
     .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
-    .where(and(eq(itemSourceLink.itemKey, job.itemKey), inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS))).limit(1);
+    .where(and(inArray(itemSourceLink.itemKey, keys), inArray(sourceConnection.provider, OPENALEX_WORK_PROVIDERS)))) {
+    if (!sources.has(row.itemKey)) sources.set(row.itemKey, row.id);
+  }
   const libraryId = config.authentication.openScholar.libraryId;
-  return topicAssociationRequestSchema.parse({contractVersion: 1,
-    idempotencyKey: `${libraryId}:${job.itemKey}:${job.generation}`,
-    libraryId, itemKey: job.itemKey, generation: Number(job.generation),
-    publishedRevision: Math.max(Number(job.revision), card?.revision ?? 0),
-    openalexId: source?.id && /^W[1-9]\d*$/.test(source.id) ? source.id : null,
-    ...publicationFields(card, pdf),
+  return jobs.map(job => {
+    const card = cards.get(job.itemKey) ?? null;
+    const source = sources.get(job.itemKey);
+    return topicAssociationRequestSchema.parse({contractVersion: 1,
+      idempotencyKey: `${libraryId}:${job.itemKey}:${job.generation}`,
+      libraryId, itemKey: job.itemKey, generation: Number(job.generation),
+      publishedRevision: Math.max(Number(job.revision), card?.revision ?? 0),
+      openalexId: source && /^W[1-9]\d*$/.test(source) ? source : null,
+      ...publicationFields(card, card ? publicPdfOf(records.get(job.itemKey), job.itemKey, config) : null),
+    });
   });
 }
 
+/** The deliveries in calls of up to BATCH_MAX records and about BATCH_BODY_MAX characters; a larger record goes alone. */
+function batchesOf<T extends {delivery: TopicDelivery}>(entries: T[]) {
+  const batches: T[][] = [];
+  let size = 0;
+  for (const entry of entries) {
+    const length = JSON.stringify(entry.delivery).length;
+    const last = batches.at(-1);
+    if (last && last.length < BATCH_MAX && size + length <= BATCH_BODY_MAX) { last.push(entry); size += length; }
+    else { batches.push([entry]); size = length; }
+  }
+  return batches;
+}
+
+/** Sends waiting records to Openscholar's paper pages, a batch a call, for up to five seconds; true when it sent any. */
 export async function runTopicAssociationCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request: typeof fetch = fetch) {
   await reconcileVisibility(database, config);
-  const deadline = Date.now() + 5_000;
-  let processed = false;
-  do {
-  if (signal?.aborted) break;
-  const claimed = await runAssociationDeliveryCycle(database, "topicAssociationDelivery", async (job, leaseToken) => {
-    const payload = await database.transaction(async tx => {
-      const [current] = await tx.select().from(topicAssociationDelivery).where(and(eq(topicAssociationDelivery.itemKey, job.itemKey), eq(topicAssociationDelivery.leaseToken, leaseToken))).for("update").limit(1);
-      if (!current) return null;
-      if (current.payload) return topicAssociationRequestSchema.parse(current.payload);
-      const data = await deliveryOf(tx, database, config, job);
-      await tx.update(topicAssociationDelivery).set({payload: data}).where(eq(topicAssociationDelivery.itemKey, job.itemKey));
-      return data;
+  return drainAssociationQueue(() => runAssociationDeliveryCycle(database, "topicAssociationDelivery", async (jobs, leaseToken) => {
+    // Each body is kept once built, so a retry sends the same one under the same key.
+    const deliveries = await database.transaction(async tx => {
+      const current = new Map((await tx.select().from(topicAssociationDelivery)
+        .where(and(inArray(topicAssociationDelivery.itemKey, jobs.map(job => job.itemKey)), eq(topicAssociationDelivery.leaseToken, leaseToken)))
+        .for("update")).map(row => [row.itemKey, row]));
+      const made = new Map((await deliveriesOf(tx, database, config, jobs.filter(job => current.has(job.itemKey) && !current.get(job.itemKey)!.payload)))
+        .map(delivery => [delivery.itemKey, delivery]));
+      for (const delivery of made.values()) await tx.update(topicAssociationDelivery).set({payload: delivery}).where(eq(topicAssociationDelivery.itemKey, delivery.itemKey));
+      return jobs.map(job => {
+        const row = current.get(job.itemKey);
+        return row?.payload ? topicAssociationRequestSchema.parse(row.payload) : made.get(job.itemKey) ?? null;
+      });
     });
-    if (!payload) return;
-    const response = await postOpenScholarAssociation(config, "/api/v1/evidence-libraries/topic-associations", "topic delivery", payload, signal, request);
-    const receipt = topicAssociationReceiptSchema.parse(await response.json());
-    if (receipt.idempotencyKey !== payload.idempotencyKey || receipt.generation !== payload.generation) throw new Error("Topic association receipt did not match the delivery");
-  });
-  if (!claimed) break;
-  processed = true;
-  } while (Date.now() < deadline);
-  return processed;
+    // A record whose lease another worker took is that worker's to send.
+    const errors: unknown[] = jobs.map(() => null);
+    const libraryId = config.authentication.openScholar.libraryId;
+    for (const batch of batchesOf(deliveries.flatMap((delivery, index) => delivery ? [{delivery, index}] : []))) {
+      try {
+        const response = await postOpenScholarAssociation(config, "/api/v1/evidence-libraries/topic-associations/batch", "topic delivery",
+          {contractVersion: 1, libraryId, deliveries: batch.map(entry => entry.delivery)}, signal, request);
+        const {receipts} = topicAssociationBatchReceiptSchema.parse(await response.json());
+        if (receipts.length !== batch.length) throw new Error("Topic association receipts did not match the batch");
+        for (const [at, {delivery, index}] of batch.entries()) {
+          const receipt = receipts[at]!;
+          if (receipt.idempotencyKey !== delivery.idempotencyKey || receipt.generation !== delivery.generation) errors[index] = new Error("Topic association receipt did not match the delivery");
+          else if ("error" in receipt) errors[index] = new Error(`Openscholar refused the topic delivery: ${receipt.error.code}`);
+        }
+      } catch (error) {
+        for (const {index} of batch) errors[index] = error;
+      }
+    }
+    return errors;
+  }, BATCH_MAX), signal);
 }

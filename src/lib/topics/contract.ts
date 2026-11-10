@@ -43,7 +43,14 @@ export const topicAssociationRequestSchema = z.object({
     pdf: z.object({url: z.string().url().max(2048), cover: z.string().url().max(2048).nullable()}).strict().nullable().optional(),
   }).strict().nullable(),
 }).strict().refine(value => value.state === "published" ? value.metadata !== null : value.topicIds.length === 0, "Invalid publication state");
-export const topicAssociationReceiptSchema = z.object({
+const topicAssociationReceiptSchema = z.object({
   contractVersion: z.literal(1), idempotencyKey: z.string(), generation: z.number().int().positive(),
   status: z.enum(["applied", "superseded"]),
+}).strict();
+/** Openscholar's answer to a batch, in its order: a receipt for each record it saved, the refusal's code for each it didn't. */
+export const topicAssociationBatchReceiptSchema = z.object({
+  contractVersion: z.literal(1),
+  receipts: z.array(z.union([topicAssociationReceiptSchema, z.object({
+    idempotencyKey: z.string(), generation: z.number().int().positive(), error: z.object({code: z.string()}).strict(),
+  }).strict()])),
 }).strict();
