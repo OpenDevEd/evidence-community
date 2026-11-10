@@ -378,7 +378,8 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 							const field = event.currentTarget;
 							setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
 						}}
-						classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", input: `py-0.5 text-base font-normal ${long ? FIELD_FADE[`${hidden.above}-${hidden.below}`] : ""}` }}
+						// The clear button sits on the first line, level with the search icon and as far from its own edge.
+						classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", clearButton: "top-3.5 right-3.5 rtl:left-3.5", input: `py-0.5 text-base font-normal ${long ? FIELD_FADE[`${hidden.above}-${hidden.below}`] : ""}` }}
 						// The search icon and the spinner share one place and fade into each other, so neither arrives at once.
 						startContent={
 							<span className="relative size-6 shrink-0">
