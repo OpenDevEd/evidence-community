@@ -602,6 +602,17 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		expect((await record(db, key))?.deleted).toBe(1);
 		expect(await linked(db, key)).toBe(true);
 
+		// Given by its OpenAlex work alone, a report is still taken from Openscholar: its DOI is learned from the work.
+		const other = "10.53832/openscholar-r.r100002";
+		const second = services([work(98, "OpenAlex's copy of another report", other)], {}, new Map([[other, { ...live("Rain gauges and bean yields", "2026-11-10T08:00:00.000Z"), key: "R100002", doi: other, pageUrl: "https://openscholar.test/papers/R100002", pdfUrl: null }]]));
+		const byWork = await addPapers(db, storage, config, { requestId: "r-report-work", publish: true, actor: owner, papers: [{ openalexId: "W98" }] }, second.lookup);
+		expect(byWork.results).toMatchObject([{ at: 0, outcome: "added", foundBy: "doi" }]);
+		expect(await record(db, byWork.results[0]!.itemKey!)).toMatchObject({ title: "Rain gauges and bean yields", url: "https://openscholar.test/papers/R100002" });
+		// And one withdrawn on Openscholar isn't added through OpenAlex's copy of it.
+		const gone = "10.53832/openscholar-r.r100003";
+		const third = services([work(97, "OpenAlex's copy of a withdrawn report", gone)], {}, new Map([[gone, { state: "withdrawn", key: "R100003", doi: gone, version: "2026-11-12T09:00:00.000Z" }]]));
+		expect((await addPapers(db, storage, config, { requestId: "r-report-gone", publish: true, actor: owner, papers: [{ openalexId: "W97" }] }, third.lookup)).results).toMatchObject([{ at: 0, outcome: "not_found", message: "This report was withdrawn on Openscholar." }]);
+
 		// A withdrawn report isn't added.
 		const again = await addPapers(db, storage, config, { requestId: "r-report-2", publish: true, actor: owner, papers: [{ doi: "10.53832/openscholar-r.r100009" }] }, services([], {}, new Map([["10.53832/openscholar-r.r100009", { state: "withdrawn", key: "R100009", doi: "10.53832/openscholar-r.r100009", version: "2026-11-12T09:00:00.000Z" }]])).lookup);
 		expect(again.results).toMatchObject([{ at: 0, outcome: "not_found", message: "This report was withdrawn on Openscholar." }]);
