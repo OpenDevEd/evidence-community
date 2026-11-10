@@ -188,15 +188,17 @@ function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	const typed = text.trim();
 	const query = useDebouncedValue(typed, 350);
 	const { named, searchable } = askedBy(query, room);
-	// The text whose papers were picked already. The same text read again behind the reader's back (after a send, on
-	// reconnecting) picks nothing back that they took out; typing again (`rearm`) makes the next answer pick.
+	// What the field holds now, and the text whose papers were picked already. An answer to a text the reader has since
+	// changed picks nothing; nor does the same text read again behind their back (after a send, on reconnecting), which
+	// would put back a paper they took out. Typing (`retype`) makes the next answer pick.
+	const held = useRef(typed);
 	const pickedFor = useRef<string | null>(null);
-	const pick = (answer: { named: boolean; rows: Row[] }) => {
-		if (!answer.named || pickedFor.current === query) return;
-		pickedFor.current = query;
+	const pick = (answer: { named: boolean; rows: Row[]; query: string }) => {
+		if (!answer.named || answer.query !== held.current || pickedFor.current === answer.query) return;
+		pickedFor.current = answer.query;
 		onNamed(answer.rows);
 	};
-	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room), {
+	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room).then((answer) => ({ ...answer, query })), {
 		keepPreviousData: true,
 		revalidateOnFocus: false,
 		// Asked again each time the same text comes back, never answered from a moment ago: `onSuccess` is what picks a paste's papers.
@@ -205,7 +207,7 @@ function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	});
 	const settled = typed === query && !search.isValidating;
 	const rows = typed && searchable ? (search.data?.rows ?? []) : [];
-	return { query, named, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, rearm: () => { pickedFor.current = null; } };
+	return { query, named, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, retype: (value: string) => { held.current = value.trim(); pickedFor.current = null; } };
 }
 
 /** What the dialog says above its list when something needs saying: the day's limit, why the last try failed, or what a paste holds that names no paper. */
@@ -289,7 +291,7 @@ function useSuggestion(first: string, allowance: Allowance) {
 		/** The day allows no more than are picked already: nothing more is added. */
 		full: room > 0 && basket.length >= room,
 		found: find.rows,
-		type: (value: string) => { find.rearm(); setText(value); },
+		type: (value: string) => { find.retype(value); setText(value); },
 		add: (row: Row) => add([row]),
 		remove: (key: string) => remove([key]),
 		isPicked: (key: string) => basket.some((row) => row.key === key),

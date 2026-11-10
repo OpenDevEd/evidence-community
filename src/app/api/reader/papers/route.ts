@@ -5,6 +5,7 @@ import { connection, NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 
@@ -18,6 +19,8 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import { READER_RESPONSE_HEADERS, readerError, readJsonBody, readReaderRequest } from "@/lib/readers/http";
 import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 import { paperLinkOf } from "@/lib/paper-links";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { item } from "@/db/schema/tables/item";
 
 /** What suggesting these papers would find, saving nothing: the dialog shows it before the reader sends them. */
 const previewSchema = z.object({ preview: z.literal(true), papers: papersSchema }).strict();
@@ -91,9 +94,21 @@ async function paperNamed(request: Request, raw: string) {
 	const refused = reader ? null : await visitorRefusal(request, config, reference);
 	if (refused) return refused;
 	return withinLookups(async () => {
-		const { results } = await previewPapers((await getNativeFileRuntime()).db, config, [reference], paperLookupFor(config, reader?.clerkUserId));
-		return NextResponse.json(results[0], { headers: READER_RESPONSE_HEADERS });
+		const { db } = await getNativeFileRuntime();
+		const { results } = await previewPapers(db, config, [reference], paperLookupFor(config, reader?.clerkUserId));
+		const [named] = results;
+		return NextResponse.json({ ...named, itemKey: await openableKey(db, config, named?.itemKey) }, { headers: READER_RESPONSE_HEADERS });
 	});
+}
+
+/**
+ * A record's key when anyone may open its page. A record the team took down, or keeps hidden, is still the
+ * community's, so the paper counts as here, but it has no page to send a reader to.
+ */
+async function openableKey(database: Parameters<typeof previewPapers>[0], config: LibraryServerConfig, itemKey: string | undefined) {
+	if (!itemKey) return undefined;
+	const [open] = await database.select({ key: item.key }).from(item).where(and(eq(item.key, itemKey), publicParentVisibility(database, config.content.tags.hidden))).limit(1);
+	return open?.key;
 }
 
 /**

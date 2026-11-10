@@ -18,14 +18,17 @@ const ReaderAdmin = createContext<{ admin: boolean; join: JoinStanding; refresh:
 /** The server reads the session with the page, so the header is right on its first frame. */
 export function ReaderSessionProvider({ reader, admin, join, children }: { reader: Reader | null; admin: boolean; join: JoinStanding; children: ReactNode }) {
 	// The server's answer until the menu asks again (`refresh`), as it does each time it opens.
-	const [live, setLive] = useState<{ admin: boolean; join: JoinStanding } | null>(null);
+	// Kept with whose it is: signing out or in leaves the last reader's answer behind, for the server's own.
+	const [heard, setHeard] = useState<{ reader: string | null; admin: boolean; join: JoinStanding } | null>(null);
+	const readerId = reader ? reader.id : null;
+	const live = heard && heard.reader === readerId ? heard : null;
 	const refresh = useCallback(
 		() =>
 			void fetch("/api/reader/team", { cache: "no-store" })
 				.then((response) => (response.ok ? response.json() : null))
-				.then((body: { admin?: boolean; join?: unknown } | null) => { if (body) setLive({ admin: body.admin === true, join: parseJoinStanding(body.join) }); })
+				.then((body: { admin?: boolean; join?: unknown } | null) => { if (body) setHeard({ reader: readerId, admin: body.admin === true, join: parseJoinStanding(body.join) }); })
 				.catch(() => {}),
-		[],
+		[readerId],
 	);
 	// The window coming back into focus is the outside system: a reader who applied on OpenScholar in another tab
 	// returns to a page that already says their application was sent.
