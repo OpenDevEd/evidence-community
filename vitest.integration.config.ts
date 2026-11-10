@@ -28,6 +28,7 @@ export default defineConfig({
 			"tools/verifyCrossrefActivation.ts",
 			"tools/verifyZenodoActivation.ts",
 			"tools/verifyPublicationWorker.ts",
+			"tests/integration/publication-record-extras.test.ts",
 			"tools/verifyPublicationReconciler.ts",
 			"tools/verifyNativeFileLifecycle.ts",
             "tests/integration/editorial-reviews.test.ts",

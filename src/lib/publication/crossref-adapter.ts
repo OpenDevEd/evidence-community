@@ -26,6 +26,7 @@ import { resolveBibliographicDoi } from "./bibliographic-doi";
 import { readPublicationRepositorySnapshot } from "./repository";
 import { settlePublicationProviderAudit } from "./provider-audit";
 import { currentManagedDoi, providerState, targetFor, publicationPlanData } from "./state-adapter";
+import { loadPublicationRecordExtras, type PublicationExtrasConfig } from "./record-extras";
 import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
@@ -38,7 +39,7 @@ import {
 	withPublicationJobHeartbeat,
 } from "./queue";
 
-type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
+type PublicationConfig = PublicationExtrasConfig;
 
 function requireConfig(config: PublicationConfig) {
 	const crossref = config.services.publication.crossref;
@@ -109,7 +110,8 @@ export async function buildCrossrefPlan(
 			"The record DOI does not match its reserved Crossref DOI",
 		);
 	}
-	const { record, files, identifiers } = publicationPlanData(snapshot, snapshot.record, config, bibliographicDoi.doi, managedCrossrefDoi);
+	const extras = await loadPublicationRecordExtras(database as Database, snapshot, config);
+	const { record, files, identifiers } = publicationPlanData(snapshot, snapshot.record, config, bibliographicDoi.doi, managedCrossrefDoi, extras);
 	const crossrefState = providerState(
 		snapshot,
 		"crossref",

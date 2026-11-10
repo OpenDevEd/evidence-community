@@ -82,14 +82,20 @@ function depositionJson(deposition) {
 	};
 }
 
+// The DOI a deposit names: the external one its draft was given, else the one Zenodo would mint.
+function doiOf(deposition) {
+	return deposition.draft.pids?.doi?.identifier ?? deposition.metadata.doi ?? null;
+}
+
 function publishedRecord(deposition) {
-	const doi = deposition.metadata.doi ?? `10.5072/zenodo.${deposition.id}`;
+	const doi = doiOf(deposition) ?? `10.5072/zenodo.${deposition.id}`;
 	return {
 		created: deposition.publishedAt,
 		id: deposition.id,
 		parent: { id: deposition.parentId, pids: {} },
-		pids: { doi: { identifier: doi } },
-		metadata: deposition.metadata,
+		pids: { ...deposition.draft.pids, doi: deposition.draft.pids?.doi ?? { identifier: doi } },
+		metadata: deposition.draft.metadata,
+		custom_fields: deposition.draft.custom_fields,
 		links: {
 			self_html: `https://sandbox.zenodo.org/records/${deposition.id}`,
 		},
@@ -354,7 +360,7 @@ async function handle(request, response) {
 			zenodo: [...depositions.values()].map((deposition) => ({
 				id: deposition.id,
 				published: deposition.published,
-				doi: deposition.metadata.doi ?? null,
+				doi: doiOf(deposition),
 				files: [...deposition.files.keys()],
 			})),
 		});
@@ -497,6 +503,8 @@ async function handle(request, response) {
 			id,
 			parentId: String(Number(id) - 1),
 			metadata: {},
+			// What the InvenioRDM draft holds: the metadata the package writes, in that format.
+			draft: { metadata: {}, custom_fields: {}, pids: {} },
 			files: new Map(),
 			pendingFiles: new Set(),
 			published: false,
@@ -551,6 +559,15 @@ async function handle(request, response) {
 	const recordDraftMatch = url.pathname.match(
 		/^\/api\/records\/(\d+)\/draft$/u,
 	);
+	if (recordDraftMatch && (method === "GET" || method === "PUT")) {
+		const deposition = depositions.get(recordDraftMatch[1]);
+		if (!deposition) return json(response, 404, { message: "missing draft" });
+		if (method === "PUT") {
+			const body = JSON.parse((await readBody(request)).toString("utf8"));
+			deposition.draft = { metadata: body.metadata ?? {}, custom_fields: body.custom_fields ?? {}, pids: body.pids ?? {} };
+		}
+		return json(response, 200, { id: deposition.id, ...deposition.draft, errors: [] });
+	}
 	if (recordDraftMatch && method === "POST") {
 		const deposition = depositions.get(recordDraftMatch[1]);
 		if (!deposition?.published)

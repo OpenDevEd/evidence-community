@@ -5,6 +5,9 @@ import {
 	type PublicationMetadata,
 } from "@opendeved/doi-sync-core/metadata";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
+import { studyType } from "@/lib/readings/study-types";
+import { institutionNameKey } from "@/config/library-config/institutions";
+import type { PublicationRecordExtras } from "./record-extras";
 type EvidenceLibraryCreator = {
 	creatorType: string;
 	firstName?: string | null;
@@ -12,6 +15,8 @@ type EvidenceLibraryCreator = {
 	name?: string | null;
 	institution?: string | null;
 	institutions?: readonly {
+		id?: string | null;
+		country_code?: string | null;
 		display_name?: string | null;
 	}[];
 };
@@ -27,6 +32,9 @@ export type EvidenceLibraryPublicationMetadata = Readonly<
 	publisher: string | null;
 	rights: string | null;
 	creators: EvidenceLibraryCreator[] | null;
+	numPages?: string | null;
+	countryFocus?: string[] | null;
+	studyType?: string | null;
 };
 
 const PRIVATE_TAGS = new Set([
@@ -54,6 +62,7 @@ function normalizeText(value: string | null | undefined) {
 
 function normalizeCreators(
 	creators: readonly EvidenceLibraryCreator[],
+	institutions: PublicationRecordExtras["institutions"],
 ): readonly PublicationCreator[] {
 	return creators.map((creator, index) => {
 		const givenName = normalizeText(creator.firstName);
@@ -61,7 +70,7 @@ function normalizeCreators(
 		const organizationName = normalizeText(
 			creator.name ?? creator.institution,
 		);
-		const common = creatorMetadata(creator);
+		const common = creatorMetadata(creator, institutions);
 
 		if (givenName && !familyName) {
 			throw new Error(`Creator ${index + 1} needs a family name`);
@@ -149,6 +158,7 @@ export function publicationRecordMetadata(
 	record: EvidenceLibraryPublicationMetadata,
 	tags: readonly string[],
 	license: string,
+	extras?: PublicationRecordExtras,
 ): PublicationMetadata & { fields: JsonObject } {
 	const optional = {
 		abstract: normalizeText(record.abstractNote),
@@ -162,9 +172,10 @@ export function publicationRecordMetadata(
 		itemType: record.itemType,
 		title: normalizeText(record.title) ?? "",
 		publicationDate: normalizePublicationDate(record.date),
-		creators: normalizeCreators(record.creators ?? []),
+		creators: normalizeCreators(record.creators ?? [], extras?.institutions ?? {}),
 		tags: publicTags(tags),
 		fields: providerFields(record),
+		...extraMetadata(record, extras),
 		...Object.fromEntries(
 			Object.entries(optional).filter(
 				(entry): entry is [string, string] => Boolean(entry[1]),
@@ -173,14 +184,67 @@ export function publicationRecordMetadata(
 	};
 }
 
-function creatorMetadata(creator: EvidenceLibraryCreator) {
+/** A creator's role and every institution it names, each with its ROR and country where known. */
+function creatorMetadata(creator: EvidenceLibraryCreator, institutions: PublicationRecordExtras["institutions"]) {
 	const creatorType = normalizeText(creator.creatorType);
-	const affiliation = normalizeText(
-		creator.institutions?.find((entry) => entry.display_name)
-			?.display_name ?? creator.institution,
-	);
+	const affiliation = (name: string, ownCountry?: string | null) => {
+		const known = institutions[institutionNameKey(name)];
+		const ror = rorKey(known?.ror);
+		const country = (normalizeText(ownCountry) ?? known?.country)?.toUpperCase();
+		return { name, ...(ror ? { ror } : {}), ...(country && /^[A-Z]{2}$/u.test(country) ? { country } : {}) };
+	};
+	const affiliations = (creator.institutions ?? []).flatMap((institution) => {
+		const name = normalizeText(institution.display_name);
+		return name ? [affiliation(name, institution.country_code)] : [];
+	});
+	const typed = normalizeText(creator.institution);
+	if (!affiliations.length && typed) affiliations.push(affiliation(typed));
 	return {
 		...(creatorType ? { creatorType } : {}),
-		...(affiliation ? { affiliation } : {}),
+		...(affiliations.length ? { affiliations } : {}),
 	};
+}
+
+/** A ROR ID as the registrars take it: its nine characters, however OpenAlex wrote it. */
+const rorKey = (value: string | undefined) => value?.trim().replace(/^https?:\/\/ror\.org\//iu, "").toLowerCase().match(/^0[a-z0-9]{6}\d{2}$/u)?.[0];
+
+/** Places in English, which both registrars read: a country's name, or a region's ("eastern_africa": "Eastern Africa"). */
+const COUNTRY = new Intl.DisplayNames(["en"], { type: "region" });
+const placeOf = (code: string) =>
+	/^[A-Z]{2}$/u.test(code) ? { place: COUNTRY.of(code) ?? code, country: code } : { place: code.replace(/_/gu, " ").replace(/\b\w/gu, (letter) => letter.toUpperCase()) };
+
+/** A list with something in it, or nothing. */
+const filled = <T,>(list: readonly T[] | null | undefined) => (list?.length ? [...list] : undefined);
+
+/** The DOIs of the records this one links to in one way. */
+const linkedDois = (extras: PublicationRecordExtras | undefined, kind: "cites" | "related") =>
+	(extras?.links ?? []).flatMap((link) => (link.kind === kind && link.doi ? [link.doi] : []));
+
+/** The study type in words, as readers see it: an editor's choice, else what was read from the record. */
+const designOf = (record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined) =>
+	studyType(extras?.studyType ?? record.studyType ?? "")?.label;
+
+/** The places the record is about, as readers see them: an editor's choice, else what was found in its text. */
+const placesOf = (record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined) =>
+	filled((extras?.countries ?? record.countryFocus)?.map(placeOf));
+
+/** How many pages the record runs to, when it says. */
+function pageCount(record: EvidenceLibraryPublicationMetadata) {
+	const pages = Number(normalizeText(record.numPages));
+	return Number.isSafeInteger(pages) && pages > 0 ? pages : undefined;
+}
+
+/** What a record holds beyond its basic fields, for registrars that take it: subjects, places, design, pages, links, its file. */
+function extraMetadata(record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined): Partial<PublicationMetadata> {
+	const fields = {
+		subjects: filled(extras?.topicNames),
+		methods: designOf(record, extras),
+		locations: placesOf(record, extras),
+		pages: pageCount(record),
+		formats: filled(extras?.formats),
+		fullTextUrl: extras?.fullTextUrl,
+		references: filled(linkedDois(extras, "cites")),
+		relations: filled(linkedDois(extras, "related").map((identifier) => ({ type: "isRelatedMaterial" as const, identifierType: "doi" as const, identifier }))),
+	};
+	return Object.fromEntries(Object.entries(fields).filter((entry) => entry[1] !== undefined));
 }

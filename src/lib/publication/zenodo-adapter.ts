@@ -1,4 +1,5 @@
 import type { PublicationSettlement } from "./queue";
+import { loadPublicationRecordExtras, type PublicationExtrasConfig } from "./record-extras";
 import type {
 	ZenodoIdentifierPolicy,
 	ZenodoPublicationEnvironment,
@@ -9,7 +10,7 @@ import {
 	settleProviderSyncFailure,
 	settlePublicationSyncState,
 	ZenodoApiClient,
-	parseZenodoLegacyDepositionPayload,
+	parseZenodoRecordPayload,
 	type ClearZenodoOrphanDraftCleanupInput,
 	type ClearZenodoPublishDraftInput,
 	type MarkZenodoPublishDraftPublishedInput,
@@ -64,7 +65,7 @@ import {
 	publicationPlanData,
 } from "./state-adapter";
 
-type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
+type PublicationConfig = PublicationExtrasConfig;
 function zenodoEndpoint(config: PublicationConfig) {
 	return config.services.publication.zenodo.environment === "production"
 		? "https://zenodo.org"
@@ -215,6 +216,7 @@ async function buildZenodoPlan(
 		config,
 		bibliographicDoi.doi,
 		managedCrossrefDoi,
+		await loadPublicationRecordExtras(database, snapshot, config),
 	);
 	const previousState = providerState(snapshot, "zenodo", publicationConfig);
 	assertArchivedExternalDoiMatches({
@@ -925,7 +927,7 @@ async function auditZenodoPublishedState(
 			return provider.verifyPublishedState({
 				token: requireConfig(config).token,
 				recordId: identifiers.latestRecordId,
-				expectedPayload: parseZenodoLegacyDepositionPayload(
+				expectedPayload: parseZenodoRecordPayload(
 					lastSuccess.payloadSnapshot,
 				),
 				files: input.built.snapshot.files.map((file) => ({

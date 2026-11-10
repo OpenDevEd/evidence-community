@@ -10,6 +10,7 @@ import {
 	publicationRecordMetadata,
 	type EvidenceLibraryPublicationMetadata,
 } from "./record-metadata";
+import type { PublicationRecordExtras } from "./record-extras";
 
 export type EvidenceLibraryPublicationRecord =
 	EvidenceLibraryPublicationMetadata & {
@@ -32,6 +33,7 @@ export function buildPublicationRecordSnapshot(input: {
 	tags: readonly string[];
 	baseUrl: string;
 	license: string;
+	extras?: PublicationRecordExtras;
 }): PublicationRecordSnapshot {
 	const inspected = inspectPublicationRecordSnapshot(input);
 	if (inspected.issues.length) throw new Error(inspected.issues.join("; "));
@@ -43,6 +45,7 @@ export function inspectPublicationRecordSnapshot(input: {
 	tags: readonly string[];
 	baseUrl: string;
 	license: string;
+	extras?: PublicationRecordExtras;
 }): {
 	issues: readonly string[];
 	record: PublicationRecordSnapshot;
@@ -59,6 +62,7 @@ export function inspectPublicationRecordSnapshot(input: {
 				input.record,
 				input.tags,
 				input.license,
+				input.extras,
 			),
 			recordKey: input.record.key,
 			canonicalRevision: input.record.revision,

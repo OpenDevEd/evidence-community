@@ -66,7 +66,7 @@ describe("publication record adapter", () => {
 					creatorType: "author",
 					givenName: "Ada",
 					familyName: "Lovelace",
-					affiliation: "Analytical Society",
+					affiliations: [{ name: "Analytical Society" }],
 				},
 			],
 			tags: ["Evidence"],
@@ -109,9 +109,53 @@ describe("publication record adapter", () => {
 		expect(snapshot("Thesis").institution).toBe("Record Institute");
 		expect(snapshot("JournalArticle")).not.toHaveProperty("institution");
 		expect(snapshot("Standard")).not.toHaveProperty("institution");
-		expect(snapshot("Report").creators[0]?.affiliation).toBe(
-			"Analytical Society",
-		);
+		expect(snapshot("Report").creators[0]?.affiliations).toEqual([
+			{ name: "Analytical Society" },
+		]);
+	});
+
+	it("carries every field a record holds: affiliations by ROR and country, topics, design, places, pages, its file and the records it cites", () => {
+		const snapshot = buildPublicationRecordSnapshot({
+			record: record({
+				creators: [
+					{ creatorType: "author", firstName: "Ada", lastName: "Lovelace", institutions: [{ id: "https://openalex.org/I4210087849", display_name: "University of Rwanda", country_code: "rw" }, { display_name: "Analytical Society" }] },
+					{ creatorType: "editor", firstName: "Grace", lastName: "Hopper" },
+				],
+				numPages: "12",
+			}),
+			tags: [],
+			baseUrl: "https://library.example.org",
+			license: "cc-by-4.0",
+			extras: {
+				links: [
+					{ kind: "cites", key: "CITED001", doi: "10.1000/cited.1" },
+					{ kind: "cites", key: "NODOI001", doi: null },
+					{ kind: "related", key: "RELATED1", doi: "10.1000/related.1" },
+				],
+				topicNames: ["Climate change impacts on agriculture"],
+				// Read from the record, as readers see them: no editor chose either.
+				studyType: "meta-analysis",
+				countries: ["RW", "eastern_africa"],
+				institutions: { "university of rwanda": { ror: "https://ror.org/00286hs46", country: "RW" } },
+				fullTextUrl: "https://library.example.org/api/item/ABCDEFGH/download/PDF00001",
+				formats: ["application/pdf"],
+			},
+		});
+
+		expect(snapshot.creators).toEqual([
+			{ type: "personal", name: "Lovelace, Ada", creatorType: "author", givenName: "Ada", familyName: "Lovelace", affiliations: [{ name: "University of Rwanda", ror: "00286hs46", country: "RW" }, { name: "Analytical Society" }] },
+			{ type: "personal", name: "Hopper, Grace", creatorType: "editor", givenName: "Grace", familyName: "Hopper" },
+		]);
+		expect(snapshot).toMatchObject({
+			subjects: ["Climate change impacts on agriculture"],
+			methods: "Meta-analysis",
+			locations: [{ place: "Rwanda", country: "RW" }, { place: "Eastern Africa" }],
+			pages: 12,
+			formats: ["application/pdf"],
+			fullTextUrl: "https://library.example.org/api/item/ABCDEFGH/download/PDF00001",
+			references: ["10.1000/cited.1"],
+			relations: [{ type: "isRelatedMaterial", identifierType: "doi", identifier: "10.1000/related.1" }],
+		});
 	});
 
 	it("rejects incomplete creators with a useful message", () => {

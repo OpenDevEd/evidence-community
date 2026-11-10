@@ -7,6 +7,7 @@ import {
 	buildAdminPublicationViewFromSnapshot,
 	type AdminPublicationView,
 } from "./admin-publication-view";
+import { loadPublicationRecordExtras } from "./record-extras";
 import { readPublicationRepositorySnapshot } from "./repository";
 
 export async function buildAdminPublicationView(
@@ -19,5 +20,8 @@ export async function buildAdminPublicationView(
 		itemKey,
 		config.services.publication.crossref.environment,
 	);
-	return buildAdminPublicationViewFromSnapshot({ itemKey, snapshot, config });
+	const extras = await loadPublicationRecordExtras(database, snapshot, config).catch(
+		(error: unknown) => new Error(`The details its deposit carries couldn't be read, so it can't be compared now: ${error instanceof Error ? error.message : String(error)}`),
+	);
+	return buildAdminPublicationViewFromSnapshot({ itemKey, snapshot, config, extras });
 }
