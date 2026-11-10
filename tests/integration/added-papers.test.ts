@@ -495,6 +495,33 @@ it("tells Openscholar when a sent paper is approved or returned, until it answer
 	});
 });
 
+it("tells Openscholar an accepted paper is removed once the community unpublishes its record, and published again once it's back", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(70, "Reading partners")]);
+		const { results } = await addPapers(db, storage, config, { requestId: "rm1", publish: true, actor: owner, papers: [{ openalexId: "W70" }] }, lookup);
+		const key = results[0]!.itemKey!;
+		const sent: Record<string, unknown>[] = [];
+		const openscholar = (async (_url: string | URL, init?: RequestInit) => {
+			const body = JSON.parse(String(init?.body));
+			sent.push(body);
+			return Response.json({ idempotencyKey: body.idempotencyKey, generation: body.generation });
+		}) as typeof globalThis.fetch;
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(sent.at(-1)).toMatchObject({ itemKey: key, status: "published" });
+
+		await unpublishNativeItem(db, key);
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(sent.at(-1)).toMatchObject({ itemKey: key, status: "removed", clerkUserId: "user_owner", at: (await record(db, key))!.deletedAt!.toISOString() });
+
+		// Restored by any path, it's live again.
+		await db.update(item).set({ deleted: 0, deletedAt: null }).where(eq(item.key, key));
+		await runSubmissionStatusCycle(db, config, undefined, openscholar);
+		expect(sent.at(-1)).toMatchObject({ itemKey: key, status: "published" });
+		expect(new Set(sent.map((body) => body.generation)).size).toBe(sent.length);
+	});
+});
+
 it("sends a resubmitted paper as waiting again, from its new sender, and keeps an accepted paper published whatever later edits do", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
