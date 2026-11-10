@@ -1,11 +1,11 @@
-import { buildZenodoWritePayload, jsonValueSchema, type ZenodoWriter } from "@opendeved/doi-sync-core";
+import { buildZenodoRecordPayload, jsonValueSchema, type ZenodoWriter } from "@opendeved/doi-sync-core";
 
 type PrepareRequest = Pick<Parameters<ZenodoWriter["prepareUpdateRecordMetadata"]>[0], "doiPolicy" | "metadata" | "resourceUrl" | "onPreparedDraft">;
 
 async function preparedZenodoTestDraft(request: PrepareRequest, id: string, parentId: string) {
  const draft = {
   depositionId: id, draftRecordId: id, parentId,
-  payloadSnapshot: jsonValueSchema.parse(buildZenodoWritePayload({doiPolicy: request.doiPolicy, metadata: request.metadata, resourceUrl: request.resourceUrl})),
+  payloadSnapshot: jsonValueSchema.parse(buildZenodoRecordPayload({doiPolicy: request.doiPolicy, metadata: request.metadata, resourceUrl: request.resourceUrl})),
  };
  await request.onPreparedDraft?.(draft);
  return draft;

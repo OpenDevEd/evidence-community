@@ -13,6 +13,7 @@ import type { PublicationProvider } from "@/db/schema/publication";
 
 import { fileCorrectionApprovalFromRow } from "./file-correction-approval";
 import type { PublicationRepositorySnapshot } from "./repository";
+import type { PublicationRecordExtras } from "./record-extras";
 
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
 type PublicationEnvironment = "test" | "sandbox" | "production";
@@ -258,6 +259,7 @@ export function publicationPlanData(
 	config: Pick<LibraryServerConfig, "identity" | "services">,
 	bibliographicDoi: string | null,
 	managedCrossrefDoi: string | undefined,
+	extras?: PublicationRecordExtras,
 ) {
 	return {
 		record: buildPublicationRecordSnapshot({
@@ -265,6 +267,7 @@ export function publicationPlanData(
 			tags: snapshot.tags,
 			baseUrl: config.identity.baseUrl,
 			license: config.services.publication.zenodo.license,
+			...(extras ? { extras } : {}),
 		}),
 		files: buildPublicationFileManifest(snapshot.files),
 		identifiers: buildPublicationIdentifiers({
