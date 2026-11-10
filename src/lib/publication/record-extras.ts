@@ -5,11 +5,11 @@ import type { Database } from "@/db/database-schema";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { item } from "@/db/schema/tables/item";
 import { itemLink } from "@/db/schema/tables/itemLink";
-import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { resolveCountryFocus } from "@/lib/country-focus";
 import { readStudyReading } from "@/lib/readings/reading";
 import { resolveTopicNodes } from "@/lib/topics/catalog";
-import { resolveBibliographicDoi } from "./bibliographic-doi";
+import { readPublicDoiAttachments, readPublicIdentifiers } from "./public-identifiers";
+import { resolvePublicDoi } from "./publication-identifier-summary";
 import type { PublicationRepositorySnapshot } from "./repository";
 
 /**
@@ -32,7 +32,7 @@ export type PublicationRecordExtras = {
 export type InstitutionFacts = { ror?: string; country?: string };
 
 export type PublicationExtrasConfig = Pick<LibraryServerConfig, "identity" | "services"> &
-	Partial<Pick<LibraryServerConfig, "topics" | "authentication">>;
+	Partial<Pick<LibraryServerConfig, "topics" | "authentication" | "content">>;
 
 /** An OpenAlex ID as one short key, however it was kept. */
 const openAlexKey = (id: string) => id.replace(/^https?:\/\/openalex\.org\//i, "").toUpperCase();
@@ -68,7 +68,7 @@ export async function loadPublicationRecordExtras(
 	const pdf = snapshot.files.find((file) => file.contentType === "application/pdf");
 	return {
 		// A linked record's DOI wherever it keeps one: its DOI field, its Extra, or an attachment tagged as its DOI.
-		links: await linkedDois(database, links),
+		links: await linkedDois(database, links, config),
 		topicNames: [...new Set(topicNames)].sort(),
 		...((record.studyType ?? reading?.type) ? { studyType: (record.studyType ?? reading?.type)! } : {}),
 		countries: resolveCountryFocus({ title: record.title, abstractNote: record.abstractNote, countryFocus: record.countryFocus }),
@@ -78,26 +78,23 @@ export async function loadPublicationRecordExtras(
 	};
 }
 
-/** Each linked record with its DOI, read as the record's own is (`resolveBibliographicDoi`), attachments included. */
+/**
+ * Each linked record with the DOI its public page shows (`resolvePublicDoi`): its own, one an attachment tagged as its
+ * DOI holds, or the one its Crossref or Zenodo registration confirmed.
+ */
 async function linkedDois(
 	database: Database,
 	links: readonly { kind: "cites" | "related"; key: string; DOI: string | null; extra: string | null }[],
+	config: PublicationExtrasConfig,
 ): Promise<PublicationRecordExtras["links"]> {
-	const attachments = links.length
-		? await database
-				.select({ parentItem: item.parentItem, url: item.url, tag: itemToTag.tagName })
-				.from(item)
-				.innerJoin(itemToTag, eq(itemToTag.itemKey, item.key))
-				.where(and(inArray(item.parentItem, [...new Set(links.map((link) => link.key))]), eq(item.deleted, 0)))
-		: [];
-	return links.map((link) => ({
-		kind: link.kind,
-		key: link.key,
-		doi: resolveBibliographicDoi({
-			DOI: link.DOI,
-			extra: link.extra,
-			attachments: attachments.filter((attachment) => attachment.parentItem === link.key).map(({ url, tag }) => ({ url, tags: [tag] })),
-		}).doi,
+	const keys = [...new Set(links.map((link) => link.key))];
+	const attachments = await readPublicDoiAttachments(database, keys, config.content?.tags.hidden ?? []);
+	const records = links.map((link) => ({ key: link.key, DOI: link.DOI, extra: link.extra, attachments: attachments.get(link.key) ?? [] }));
+	const identifiers = await readPublicIdentifiers(database, records, config.services.publication);
+	return records.map((record, index) => ({
+		kind: links[index]!.kind,
+		key: record.key,
+		doi: resolvePublicDoi({ ...record, publicationIdentifiers: identifiers.get(record.key) ?? null }),
 	}));
 }
 

@@ -527,11 +527,18 @@ export async function runCrossrefPublicationJobsOnce(
 		});
 		if (!job) break;
 		try {
-			const built = await buildCrossrefPlan(
+			const built = await withPublicationJobHeartbeat(
 				database,
-				job.itemKey,
-				config,
-				now(),
+				{
+					jobId: job.id,
+					workerId,
+					leaseSeconds: workerConfig.leaseSeconds,
+					heartbeatIntervalMs: options.heartbeatIntervalMs,
+					now,
+					signal: options.signal,
+				},
+				// Planning reads what the deposit carries from OpenAlex and the topic catalog, which can outlast a lease.
+				() => buildCrossrefPlan(database, job.itemKey, config, now()),
 			);
 			if (job.reason === "provider_audit") {
 				const audit = await auditCrossrefPublishedState(
