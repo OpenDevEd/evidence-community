@@ -135,7 +135,7 @@ it("delivers stable retry bodies and new generations for visibility changes with
     delivered.shift();
     expect(delivered[0]).toMatchObject({state: "published", topicIds: ["T12260"], doi: null, openalexId: null, publishedRevision: published.revision});
     await runTopicAssociationCycle(db, {...config, topics: {enabled: false}, updatedAt: "2026-09-25T00:00:00Z"}, undefined, request);
-    expect(delivered[1]).toMatchObject({state: "unpublished", topicIds: [], publishedRevision: published.revision});
+    expect(delivered[1]).toMatchObject({state: "published", topicIds: [], publishedRevision: published.revision});
     expect(Number(delivered[1]!.generation)).toBeGreaterThan(Number(delivered[0]!.generation));
     await runTopicAssociationCycle(db, {...config, updatedAt: "2026-09-26T00:00:00Z"}, undefined, request);
     expect(delivered[2]).toMatchObject({state: "published", topicIds: ["T12260"]});
@@ -174,15 +174,18 @@ it("sends a record's PDF and its cover with it, and sends the record again when 
   });
 });
 
-it("stores the settings without queuing deliveries on the first run while Topics are off", async () => {
+it("sends every published record on the first run while Topics are off, without topics", async () => {
   await withIsolatedPublicationDatabase(async db => {
     const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Never topical"});
     await publishItemDraft(db, draft.itemKey);
     await db.delete(topicAssociationDelivery);
-    const request = vi.fn<typeof fetch>();
+    const delivered: Record<string, unknown>[] = [];
+    const request: typeof fetch = async (_url, init) => {
+      const body = JSON.parse(String(init?.body)); delivered.push(body);
+      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
+    };
     await runTopicAssociationCycle(db, {...config, topics: {enabled: false}}, undefined, request);
-    expect(await db.select().from(topicAssociationDelivery)).toEqual([]);
-    expect(request).not.toHaveBeenCalled();
+    expect(delivered).toEqual([expect.objectContaining({itemKey: draft.itemKey, state: "published", topicIds: [], metadata: expect.objectContaining({title: "Never topical"})})]);
     expect(await db.select().from(topicDeliveryConfiguration)).toHaveLength(1);
   });
 });
