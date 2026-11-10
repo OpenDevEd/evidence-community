@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# inasubiri ukaguzi} other {# zinasubiri ukaguzi}}",
       "missing": "{count, plural, one {# haikupatikana} other {# hazikupatikana}}"
     },
-    "basketFull": "{count, plural, one {Hiyo ndiyo makala # unayoweza kupendekeza hapa leo.} other {Hizo ndizo makala # unazoweza kupendekeza hapa leo.}}"
+    "basketFull": "{count, plural, one {Hiyo ndiyo makala # unayoweza kupendekeza hapa leo.} other {Hizo ndizo makala # unazoweza kupendekeza hapa leo.}}",
+    "tooLong": "Hii ni ndefu mno kuwa kichwa. Tafuta kifupi zaidi, au bandika DOI na viungo."
   },
   "browse": {
     "title": "Vinjari kwa mwaka",

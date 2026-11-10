@@ -5,6 +5,7 @@ import { connection, NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import { fromError } from "zod-validation-error";
 
@@ -18,6 +19,8 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import { READER_RESPONSE_HEADERS, readerError, readJsonBody, readReaderRequest } from "@/lib/readers/http";
 import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 import { paperLinkOf } from "@/lib/paper-links";
+import { publicParentVisibility } from "@/lib/public-item-visibility";
+import { item } from "@/db/schema/tables/item";
 
 /** What suggesting these papers would find, saving nothing: the dialog shows it before the reader sends them. */
 const previewSchema = z.object({ preview: z.literal(true), papers: papersSchema }).strict();
@@ -38,6 +41,9 @@ async function suggesterOf(request: Request) {
 
 /** A title a reader types, to find the papers it may name. */
 const searchSchema = z.object({ search: z.string().trim().min(3).max(300) }).strict();
+
+/** Whether a request is a title search, whatever its title is like. */
+const asksForTitle = (json: unknown) => typeof json === "object" && json !== null && "search" in json;
 
 /** A link, DOI or ID as the lookups take it. A link only Openscholar can follow goes as given, which asks it. */
 function referenceOf(raw: string) {
@@ -91,9 +97,21 @@ async function paperNamed(request: Request, raw: string) {
 	const refused = reader ? null : await visitorRefusal(request, config, reference);
 	if (refused) return refused;
 	return withinLookups(async () => {
-		const { results } = await previewPapers((await getNativeFileRuntime()).db, config, [reference], paperLookupFor(config, reader?.clerkUserId));
-		return NextResponse.json(results[0], { headers: READER_RESPONSE_HEADERS });
+		const { db } = await getNativeFileRuntime();
+		const { results } = await previewPapers(db, config, [reference], paperLookupFor(config, reader?.clerkUserId));
+		const [named] = results;
+		return NextResponse.json({ ...named, itemKey: await openableKey(db, config, named?.itemKey) }, { headers: READER_RESPONSE_HEADERS });
 	});
+}
+
+/**
+ * A record's key when anyone may open its page. A record the team took down, or keeps hidden, is still the
+ * community's, so the paper counts as here, but it has no page to send a reader to.
+ */
+async function openableKey(database: Parameters<typeof previewPapers>[0], config: LibraryServerConfig, itemKey: string | undefined) {
+	if (!itemKey) return undefined;
+	const [open] = await database.select({ key: item.key }).from(item).where(and(eq(item.key, itemKey), publicParentVisibility(database, config.content.tags.hidden))).limit(1);
+	return open?.key;
 }
 
 /**
@@ -122,6 +140,18 @@ export async function GET(request: Request) {
 	return NextResponse.json({ left: Math.max(0, await suggestionsLeft(access.database, access.actor)) }, { headers: READER_RESPONSE_HEADERS });
 }
 
+/** What a reader's request asks for, as the answer to give it: a title search, a lookup of pasted papers, or sending them. */
+function answerFor(json: unknown, access: { config: LibraryServerConfig; actor: Actor }): () => Promise<Response> {
+	const answered = (body: unknown) => NextResponse.json(body, { headers: READER_RESPONSE_HEADERS });
+	const search = searchSchema.safeParse(json);
+	if (search.success) return async () => answered(await titleMatches(access, search.data.search));
+	if (asksForTitle(json)) return async () => readerError(400, "Search for a title of 3 to 300 characters.");
+	const preview = previewSchema.safeParse(json);
+	if (!preview.success) return () => suggest(json, access);
+	const lookup = paperLookupFor(access.config, access.actor.userId);
+	return async () => answered(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers, lookup));
+}
+
 /**
  * Finds the papers a title may name, looks up papers a reader pastes, or sends them to the community's review queue as
  * their suggestions: the team reviews each, and the reader follows them in Openscholar's Your submissions.
@@ -129,13 +159,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
 	const access = await suggesterOf(request);
 	if (access.response) return access.response;
-	const json = await readJsonBody(request);
-	const search = searchSchema.safeParse(json);
-	if (search.success) return withinLookups(async () => NextResponse.json(await titleMatches(access, search.data.search), { headers: READER_RESPONSE_HEADERS }));
-	const preview = previewSchema.safeParse(json);
-	if (!preview.success) return withinLookups(() => suggest(json, access));
-	const lookup = paperLookupFor(access.config, access.actor.userId);
-	return withinLookups(async () => NextResponse.json(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers, lookup), { headers: READER_RESPONSE_HEADERS }));
+	return withinLookups(answerFor(await readJsonBody(request), access));
 }
 
 /** What a failed lookup tells the reader: the community's own refusal as given, or that their Openscholar allowance is spent. Null for a failure that isn't theirs to hear. */

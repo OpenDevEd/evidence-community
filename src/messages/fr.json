@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# en attente d’examen} other {# en attente d’examen}}",
       "missing": "{count, plural, one {# introuvable} other {# introuvables}}"
     },
-    "basketFull": "{count, plural, one {C’est le # article que vous pouvez suggérer ici aujourd’hui.} other {Ce sont les # articles que vous pouvez suggérer ici aujourd’hui.}}"
+    "basketFull": "{count, plural, one {C’est le # article que vous pouvez suggérer ici aujourd’hui.} other {Ce sont les # articles que vous pouvez suggérer ici aujourd’hui.}}",
+    "tooLong": "C’est trop long pour être un titre. Cherchez-en un plus court, ou collez des DOI et des liens."
   },
   "browse": {
     "title": "Parcourir par année",

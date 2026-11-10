@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# lilinde ukubuyekezwa} other {# alinde ukubuyekezwa}}",
       "missing": "{count, plural, one {# alitholakalanga} other {# awatholakalanga}}"
     },
-    "basketFull": "{count, plural, one {Yilelo phepha elingu-# ongaliphakamisa lapha namuhla.} other {Yilawo maphepha angu-# ongawaphakamisa lapha namuhla.}}"
+    "basketFull": "{count, plural, one {Yilelo phepha elingu-# ongaliphakamisa lapha namuhla.} other {Yilawo maphepha angu-# ongawaphakamisa lapha namuhla.}}",
+    "tooLong": "Lokhu kude kakhulu ukuba kube yisihloko. Sesha esifushane, noma unamathisele ama-DOI nezixhumanisi."
   },
   "browse": {
     "title": "Phequlula ngonyaka",

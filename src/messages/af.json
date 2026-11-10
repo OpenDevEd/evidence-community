@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# wag vir hersiening} other {# wag vir hersiening}}",
       "missing": "{count, plural, one {# nie gevind nie} other {# nie gevind nie}}"
     },
-    "basketFull": "{count, plural, one {Dit is die # artikel wat jy vandag hier kan voorstel.} other {Dit is al # artikels wat jy vandag hier kan voorstel.}}"
+    "basketFull": "{count, plural, one {Dit is die # artikel wat jy vandag hier kan voorstel.} other {Dit is al # artikels wat jy vandag hier kan voorstel.}}",
+    "tooLong": "Dit is te lank om ’n titel te wees. Soek ’n korter een, of plak DOI’s en skakels."
   },
   "browse": {
     "title": "Blaai per jaar",

@@ -15,9 +15,10 @@ import { Spinner } from "@/components/nextui/Spinner";
 import { SUGGEST_PARAM, useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebouncedValue } from "@/hooks/useDebounce";
-import { call, findPapers, messageOf, parse, PER_REQUEST, post, TITLE_MIN, unnamed, type Row } from "./papers";
+import { call, findPapers, messageOf, parse, PER_REQUEST, post, TITLE_MAX, TITLE_MIN, unnamed, type Row } from "./papers";
 
 type Translate = ReturnType<typeof useTranslations<"suggestPapers">>;
+type Picks = ReturnType<typeof useBasket>;
 
 const OPEN_EVENT = "suggest-papers:open";
 /** What the page is searching for, if anything: the dialog starts from it, since that is what the reader was looking for. */
@@ -40,7 +41,7 @@ export function useSuggest() {
 
 /** How many more papers the reader may suggest here today, read while they are signed in so the dialog opens knowing it. */
 const LEFT_KEY = "suggest-papers-left";
-const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
+const useLeft = () => useSWR(LEFT_KEY, () => call<{ left: number }>().then(({ left }) => left));
 /** The day's allowance as the dialog takes it: how many are left once known, and whether it couldn't be read, which is tried again by itself. */
 type Allowance = { left: number | undefined; failed: boolean };
 
@@ -72,7 +73,7 @@ function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolea
 					<HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />
 				</span>
 				<div className={`min-w-0 flex-1 ${dimmed}`}>
-					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
+					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span dir="ltr" className="font-mono text-xs">{row.raw}</span>}</p>
 					{row.title ? <RowDetail row={row} /> : null}
 				</div>
 				{children}
@@ -163,21 +164,37 @@ function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string
 	);
 }
 
-/** The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day still allows. */
+/** Nothing picked yet, in a request of its own. */
+const emptyBasket = () => ({ basket: [] as Row[], requestId: crypto.randomUUID(), failure: "" });
+
+/**
+ * The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day
+ * still allows. With them, the request they go in and why its last try failed, so what a failed send left behind goes
+ * again as the same request. Kept by the dialog's host, not its inside, so a dialog closed by mistake opens again with
+ * all of it. Once every paper is gone, the next ones start a request of their own.
+ */
 function useBasket(room: number) {
-	const [basket, setBasket] = useState<Row[]>([]);
-	const fresh = (held: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !held.some((other) => other.key === row.key));
+	const [held, setHeld] = useState(emptyBasket);
+	const fresh = (basket: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !basket.some((other) => other.key === row.key));
 	return {
-		basket,
-		add: (rows: Row[]) => setBasket((held) => [...held, ...fresh(held, rows).slice(0, Math.max(0, room - held.length))]),
-		remove: (keys: string[]) => setBasket((held) => held.filter((row) => !keys.includes(row.key))),
+		...held,
+		add: (rows: Row[]) => setHeld((was) => ({ ...was, basket: [...was.basket, ...fresh(was.basket, rows).slice(0, Math.max(0, room - was.basket.length))] })),
+		remove: (keys: string[]) => setHeld((was) => {
+			const basket = was.basket.filter((row) => !keys.includes(row.key));
+			return basket.length ? { ...was, basket } : emptyBasket();
+		}),
+		fail: (failure: string) => setHeld((was) => ({ ...was, failure })),
+		/** A request that went whole is done with: what is still picked goes in the next. */
+		renew: () => setHeld((was) => ({ ...emptyBasket(), basket: was.basket })),
 	};
 }
 
 /** What a text asks for, as the day's allowance lets it: the papers it names, or the title it is, when it is long enough to be one. */
 function askedBy(query: string, room: number) {
 	const named = parse(query).length;
-	return { named, searchable: room > 0 && (named > 0 || query.length >= TITLE_MIN) };
+	const title = named === 0 && query.length >= TITLE_MIN;
+	const tooLong = title && query.length > TITLE_MAX;
+	return { named, tooLong, searchable: room > 0 && (named > 0 || (title && !tooLong)) };
 }
 
 /**
@@ -187,16 +204,18 @@ function askedBy(query: string, room: number) {
 function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	const typed = text.trim();
 	const query = useDebouncedValue(typed, 350);
-	const { named, searchable } = askedBy(query, room);
-	// The text whose papers were picked already. The same text read again behind the reader's back (after a send, on
-	// reconnecting) picks nothing back that they took out; typing again (`rearm`) makes the next answer pick.
+	const { named, tooLong, searchable } = askedBy(query, room);
+	// What the field holds now, and the text whose papers were picked already. An answer to a text the reader has since
+	// changed picks nothing; nor does the same text read again behind their back (after a send, on reconnecting), which
+	// would put back a paper they took out. Typing (`retype`) makes the next answer pick.
+	const held = useRef(typed);
 	const pickedFor = useRef<string | null>(null);
-	const pick = (answer: { named: boolean; rows: Row[] }) => {
-		if (!answer.named || pickedFor.current === query) return;
-		pickedFor.current = query;
+	const pick = (answer: { named: boolean; rows: Row[]; query: string }) => {
+		if (!answer.named || answer.query !== held.current || pickedFor.current === answer.query) return;
+		pickedFor.current = answer.query;
 		onNamed(answer.rows);
 	};
-	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room), {
+	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room).then((answer) => ({ ...answer, query })), {
 		keepPreviousData: true,
 		revalidateOnFocus: false,
 		// Asked again each time the same text comes back, never answered from a moment ago: `onSuccess` is what picks a paste's papers.
@@ -205,7 +224,7 @@ function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	});
 	const settled = typed === query && !search.isValidating;
 	const rows = typed && searchable ? (search.data?.rows ?? []) : [];
-	return { query, named, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, rearm: () => { pickedFor.current = null; } };
+	return { query, named, tooLong, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, retype: (value: string) => { held.current = value.trim(); pickedFor.current = null; } };
 }
 
 /** What the dialog says above its list when something needs saying: the day's limit, why the last try failed, or what a paste holds that names no paper. */
@@ -214,50 +233,55 @@ function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed
 	if (left === 0) return t("noneLeft");
 	if (find.named > room) return t("overLimit", { count: room });
 	if (failure) return failure;
+	if (find.tooLong) return t("tooLong");
 	if (find.error) return messageOf(find.error, t("failed"));
 	const invalid = find.named ? unnamed(find.query) : [];
 	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "";
 }
 
+/** A paper the community didn't take: sending it failed, or it could no longer be found. It stays picked, with why. */
+const stayed = (result: { outcome: string } | undefined) => result?.outcome === "failed" || result?.outcome === "not_found";
+
 /**
- * Sending the picked papers, no more than `room` of them: the ones that went leave the list (`onGone`), and one that
- * didn't stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
+ * Sending the picked papers, no more than `room` of them: the ones that went leave the list, and one that didn't
+ * stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
  * the community counted those papers when it took the request, and takes the same request again.
  */
-function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) {
+function useSend({ basket, requestId, failure, remove, fail, renew }: Picks, room: number) {
 	const t = useTranslations("suggestPapers");
 	const { mutate } = useSWRConfig();
 	const [sent, setSent] = useState<number | null>(null);
 	const [sending, setSending] = useState(false);
-	const [failure, setFailure] = useState("");
-	const [requestId] = useState(() => crypto.randomUUID());
 	const ready = failure ? basket : basket.slice(0, room);
 	const went = (results: { outcome: string; message?: string }[]) => {
 		// Where each paper now stands is read again.
 		void mutate((key) => Array.isArray(key) && String(key[0]).startsWith("suggest-"));
-		const refused = results.find((result) => result.outcome === "failed");
+		const refused = results.find(stayed);
+		remove(ready.filter((_, at) => !stayed(results[at])).map((row) => row.key));
+		if (refused) return fail(refused.message ?? t("failed"));
 		// What the day still allows is read again once everything went.
-		if (!refused) {
-			void mutate(LEFT_KEY);
-			return setSent(results.filter((result) => result.outcome === "queued").length);
-		}
-		onGone(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
-		setFailure(refused.message ?? t("failed"));
+		void mutate(LEFT_KEY);
+		renew();
+		setSent(results.filter((result) => result.outcome === "queued").length);
 	};
 	const send = async () => {
+		if (sending) return;
 		setSending(true);
-		setFailure("");
+		fail("");
 		await post<{ results: { outcome: string; message?: string }[] }>({ requestId, papers: ready.map((row) => row.ref) })
-			.then(({ results }) => went(results), (error: unknown) => setFailure(messageOf(error, t("failed"))));
+			.then(({ results }) => went(results), (error: unknown) => fail(messageOf(error, t("failed"))));
 		setSending(false);
 	};
-	return { ready, sent, sending, failure, send };
+	return { ready, sent, sending, send };
 }
 
 /**
  * The dialog's state: what is typed, what it finds, the papers picked to send, and sending them. `first` is the text
  * its field opens with: the page's search, or the paper a row offered.
  */
+/** How many papers may be looked up, picked and sent: none until the day's allowance is known, and no more than it or one request holds. */
+const roomOf = (left: number | undefined) => Math.min(left ?? 0, PER_REQUEST);
+
 /** Whether the allowance is in, one way or the other: one that couldn't be read is an answer too, said in place of waiting on it. */
 const allowanceIn = ({ left, failed }: Allowance) => left !== undefined || failed;
 
@@ -275,25 +299,24 @@ function listStateOf(typed: boolean, find: ReturnType<typeof useFind>, allowance
 	};
 }
 
-function useSuggestion(first: string, allowance: Allowance) {
+function useSuggestion(first: string, allowance: Allowance, picks: Picks) {
+	const { basket, add, remove } = picks;
 	const t = useTranslations("suggestPapers");
 	const [text, setText] = useState(first);
-	// Nothing is looked up until the day's allowance is known, and no more than it is picked or sent.
-	const room = Math.min(allowance.left ?? 0, PER_REQUEST);
-	const { basket, add, remove } = useBasket(room);
+	const room = roomOf(allowance.left);
 	const find = useFind(text, room, add);
-	const sending = useSend(basket, room, remove);
+	const sending = useSend(picks, room);
 	return {
 		...sending, text, basket,
 		...listStateOf(Boolean(text.trim()), find, allowance),
 		/** The day allows no more than are picked already: nothing more is added. */
 		full: room > 0 && basket.length >= room,
 		found: find.rows,
-		type: (value: string) => { find.rearm(); setText(value); },
+		type: (value: string) => { find.retype(value); setText(value); },
 		add: (row: Row) => add([row]),
 		remove: (key: string) => remove([key]),
 		isPicked: (key: string) => basket.some((row) => row.key === key),
-		notice: noticeOf(t, find, allowance, room, sending.failure),
+		notice: noticeOf(t, find, allowance, room, picks.failure),
 	};
 }
 type Suggestion = ReturnType<typeof useSuggestion>;
@@ -387,7 +410,7 @@ function FieldIcon({ busy }: { busy: boolean }) {
 }
 
 /** One line for a title, growing to hold a pasted list with a paper on each line; a list longer than it fades at the end that has more. */
-function FindField({ suggestion, disabled }: { suggestion: Suggestion; disabled: boolean }) {
+function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; disabled: boolean; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
 	// Which ends of a long pasted list are out of the field's sight, as its own scrolling says.
 	const [hidden, setHidden] = useState({ above: false, below: false });
@@ -402,11 +425,17 @@ function FindField({ suggestion, disabled }: { suggestion: Suggestion; disabled:
 			minRows={1}
 			maxRows={FIELD_ROWS}
 			autoCorrect="off"
+			// A DOI or a link reads left to right in a right-to-left language too; a title follows its own script.
+			dir="auto"
 			value={suggestion.text}
 			onValueChange={suggestion.type}
 			onClear={() => suggestion.type("")}
-			// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
-			onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) event.preventDefault(); }}
+			onKeyDown={(event) => {
+				// The field keeps Escape to itself otherwise, and the dialog would stay.
+				if (event.key === "Escape") onClose();
+				// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
+				if (event.key === "Enter" && !event.shiftKey) event.preventDefault();
+			}}
 			onScroll={(event) => {
 				const field = event.currentTarget;
 				setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
@@ -423,12 +452,14 @@ function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: 
 	const t = useTranslations("suggestPapers");
 	const padded = "px-4 xl:px-4";
 	if (suggestion.sent !== null) return <Button size="md" className={`ms-auto ${padded}`} color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>;
+	// While it sends the button is inert, not disabled: a disabled button drops the focus out of the dialog.
+	const busy = suggestion.sending ? "pointer-events-none opacity-disabled" : "";
 	return (
 		<>
 			<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: suggestion.ready.length })}</span>
 			<span className="ms-auto flex gap-2">
 				<Button size="md" className={padded} variant="light" onPress={onClose}>{t("cancel")}</Button>
-				<Button size="md" className={`${padded} xl:gap-2`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={<HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
+				<Button size="md" className={`${padded} xl:gap-2 ${busy}`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} aria-busy={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? <Spinner size="sm" color="current" classNames={{ wrapper: "h-4 w-4" }} /> : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
 					{t("send")}
 				</Button>
 			</span>
@@ -437,9 +468,9 @@ function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: 
 }
 
 /** The dialog's inside, made when it opens, with the text it opens on already in its field. */
-function SuggestContent({ first, allowance, onClose }: { first: string; allowance: Allowance; onClose: () => void }) {
+function SuggestContent({ first, allowance, picks, onClose }: { first: string; allowance: Allowance; picks: Picks; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
-	const suggestion = useSuggestion(first, allowance);
+	const suggestion = useSuggestion(first, allowance, picks);
 	const done = suggestion.sent !== null;
 	return (
 		<>
@@ -449,7 +480,7 @@ function SuggestContent({ first, allowance, onClose }: { first: string; allowanc
 					<p className="text-lg font-semibold">{t("title")}</p>
 					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
 				</div>
-				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} />}
+				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} onClose={onClose} />}
 			</ModalHeader>
 			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
 			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] flex-none p-0">
@@ -473,20 +504,25 @@ function SuggestContent({ first, allowance, onClose }: { first: string; allowanc
  */
 export function SuggestPapersDialog() {
 	const { reader } = useReaderSession();
+	// What a reader picked is theirs: once the session is another reader's, here or from another tab, the dialog starts with nothing.
+	return reader ? <ReaderSuggestDialog key={reader.id} /> : null;
+}
+
+function ReaderSuggestDialog() {
 	const [text, setText] = useQueryState(SUGGEST_PARAM, parseAsString);
-	const left = useLeft(Boolean(reader));
+	const left = useLeft();
+	const picks = useBasket(roomOf(left.data));
 	// A window event, so the reader's menu and every Suggest button open the same dialog.
 	useEffect(() => {
 		const show = (event: Event) => void setText((event as CustomEvent<string>).detail);
 		window.addEventListener(OPEN_EVENT, show);
 		return () => window.removeEventListener(OPEN_EVENT, show);
 	}, [setText]);
-	if (!reader) return null;
 	const close = () => void setText(null);
 	return (
 		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
 			<ModalContent>
-				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} onClose={close} />
+				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} picks={picks} onClose={close} />
 			</ModalContent>
 		</DialogModal>
 	);

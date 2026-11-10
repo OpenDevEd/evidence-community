@@ -15,29 +15,42 @@ const ServerReader = createContext<Reader | null>(null);
 /** Whether the reader has a role here above viewer, where they stand with joining, and a way to ask again. */
 const ReaderAdmin = createContext<{ admin: boolean; join: JoinStanding; refresh: () => void }>({ admin: false, join: "open", refresh: () => {} });
 
+/** What one reader's standing says of anyone else: whether the community takes applications, never that theirs waits. */
+const othersJoin = (join: JoinStanding): JoinStanding => (join === "closed" ? "closed" : "open");
+
 /** The server reads the session with the page, so the header is right on its first frame. */
 export function ReaderSessionProvider({ reader, admin, join, children }: { reader: Reader | null; admin: boolean; join: JoinStanding; children: ReactNode }) {
-	// The server's answer until the menu asks again (`refresh`), as it does each time it opens.
-	const [live, setLive] = useState<{ admin: boolean; join: JoinStanding } | null>(null);
+	// The server's answer until the menu asks again (`refresh`), as it does each time it opens. Both are one reader's:
+	// once the session is someone else's, or no one's (a sign-out in another tab), neither is said of them.
+	const [heard, setHeard] = useState<{ reader: string | null; admin: boolean; join: JoinStanding } | null>(null);
+	const session = readerAuthClient.useSession();
+	const readerId = session.isPending ? (reader?.id ?? null) : (session.data?.user.id ?? null);
+	const live = heard && heard.reader === readerId ? heard : null;
+	const served = readerId === (reader?.id ?? null) ? { admin, join } : { admin: false, join: othersJoin(join) };
 	const refresh = useCallback(
 		() =>
 			void fetch("/api/reader/team", { cache: "no-store" })
 				.then((response) => (response.ok ? response.json() : null))
-				.then((body: { admin?: boolean; join?: unknown } | null) => { if (body) setLive({ admin: body.admin === true, join: parseJoinStanding(body.join) }); })
+				.then((body: { admin?: boolean; join?: unknown } | null) => { if (body) setHeard({ reader: readerId, admin: body.admin === true, join: parseJoinStanding(body.join) }); })
 				.catch(() => {}),
-		[],
+		[readerId],
 	);
-	// The window coming back into focus is the outside system: a reader who applied on OpenScholar in another tab
-	// returns to a page that already says their application was sent.
-	const signedIn = reader !== null;
+	// The window coming back into focus, or its tab coming back into view, is the outside system: a reader who applied
+	// on OpenScholar in another tab returns to a page that already says their application was sent.
+	const signedIn = readerId !== null;
 	useEffect(() => {
 		if (!signedIn) return;
-		window.addEventListener("focus", refresh);
-		return () => window.removeEventListener("focus", refresh);
+		const back = () => { if (document.visibilityState === "visible") refresh(); };
+		window.addEventListener("focus", back);
+		document.addEventListener("visibilitychange", back);
+		return () => {
+			window.removeEventListener("focus", back);
+			document.removeEventListener("visibilitychange", back);
+		};
 	}, [signedIn, refresh]);
 	return (
 		<ServerReader value={reader}>
-			<ReaderAdmin value={{ admin: live?.admin ?? admin, join: live?.join ?? join, refresh }}>{children}</ReaderAdmin>
+			<ReaderAdmin value={{ admin: live?.admin ?? served.admin, join: live?.join ?? served.join, refresh }}>{children}</ReaderAdmin>
 		</ServerReader>
 	);
 }
