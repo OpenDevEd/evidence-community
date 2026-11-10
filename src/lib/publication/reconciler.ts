@@ -17,8 +17,9 @@ import { item } from "@/db/schema/tables/item";
 import { buildAdminPublicationViewFromSnapshot } from "./admin-publication-view";
 import { enqueuePublicationJobsForItem } from "./queue";
 import { readPublicationRepositorySnapshot } from "./repository";
+import { loadPublicationRecordExtras, type PublicationExtrasConfig } from "./record-extras";
 
-type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
+type PublicationConfig = PublicationExtrasConfig;
 
 type ReconciliationCursor = {
 	itemKey: string;
@@ -240,6 +241,7 @@ async function reconcileTarget(
 			itemKey: target.itemKey,
 			snapshot,
 			config,
+			extras: await loadPublicationRecordExtras(transaction, snapshot, config),
 			now,
 		});
 		const displayState = view.providers[target.provider].displayState;

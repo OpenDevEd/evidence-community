@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { buildAdminPublicationViewFromSnapshot } from "@/lib/publication/admin-publication-view";
 import { PublicationItemNotFoundError } from "@/lib/publication/errors";
+import type { PublicationRecordExtras } from "@/lib/publication/record-extras";
 import type { PublicationRepositorySnapshot } from "@/lib/publication/repository";
 
 type Snapshot = PublicationRepositorySnapshot;
@@ -184,9 +185,13 @@ function syncState(changes: Record<string, unknown> = {}) {
 	} as Snapshot["states"][number];
 }
 
+// A record that cites nothing and names no topics, countries or institutions.
+const extras: PublicationRecordExtras = { links: [], topicNames: [], countries: [], institutionRors: {}, formats: [] };
+
 describe("admin publication view", () => {
 	it("shows the namespace before activation without guessing the next DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot(),
 			config,
@@ -216,6 +221,7 @@ describe("admin publication view", () => {
 
 	it("does not expose the saved next namespace sequence", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				namespace: {
@@ -239,6 +245,7 @@ describe("admin publication view", () => {
 
 	it("shows a record with a DOI from another source as settled, not blocked", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
 			config,
@@ -259,6 +266,7 @@ describe("admin publication view", () => {
 
 	it("treats a metadata-only DOI on this library's prefix as external too", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ DOI: "10.5555/existing" }) }),
 			config,
@@ -276,6 +284,7 @@ describe("admin publication view", () => {
 			ownership: "external",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: external.doi }),
@@ -297,6 +306,7 @@ describe("admin publication view", () => {
 
 	it("blocks an unclassified external Zenodo DOI from all new DOI allocation", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: "10.5281/zenodo.123" }),
@@ -319,6 +329,7 @@ describe("admin publication view", () => {
 			role: "version",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managedZenodo.doi }),
@@ -339,6 +350,7 @@ describe("admin publication view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -376,6 +388,7 @@ describe("admin publication view", () => {
 			doi: "10.5555/library.000001",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({
@@ -439,6 +452,7 @@ describe("admin publication view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -466,6 +480,7 @@ describe("admin publication view", () => {
 	it("exposes saved Crossref submission evidence while verification is pending", () => {
 		const submittedAt = new Date("2026-08-17T12:00:00.000Z");
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				targets: [target("crossref")],
@@ -497,6 +512,7 @@ describe("admin publication view", () => {
 
 	it("prepares the first archive draft without requiring archive metadata", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			config,
 			snapshot: snapshot({
@@ -514,6 +530,7 @@ describe("admin publication view", () => {
 
 	it("waits locally for a published file before minting a Zenodo DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ targets: [target("zenodo", "mint-zenodo")] }),
 			config,
@@ -534,6 +551,7 @@ describe("admin publication view", () => {
 
 	it("blocks unsupported Crossref item types with the provider message", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ itemType: "Artwork" }) }),
 			config,
@@ -552,6 +570,7 @@ describe("admin publication view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -580,6 +599,7 @@ describe("admin publication view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -609,6 +629,7 @@ describe("admin publication view", () => {
 
 	it("keeps a journaled Zenodo publish visible even before state settlement", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				targets: [target("zenodo", "mint-zenodo")],
@@ -662,6 +683,7 @@ describe("admin publication view", () => {
 			role: "concept",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: crossref.doi }),
@@ -689,6 +711,7 @@ describe("admin publication view", () => {
 			role: "version",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: crossref.doi, title: "AI" }),
@@ -720,6 +743,7 @@ describe("admin publication view", () => {
 
 	it("reports every provider issue even when the title is missing", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({
@@ -749,6 +773,7 @@ describe("admin publication view", () => {
 
 	it("blocks a changed namespace after the first reservation", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				namespace: {
@@ -770,6 +795,7 @@ describe("admin publication view", () => {
 
 	it("attributes corrupt Zenodo state only to Zenodo", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				targets: [target("zenodo", "mint-zenodo")],
@@ -796,6 +822,7 @@ describe("admin publication view", () => {
 			sha256: "a".repeat(64),
 		} as Snapshot["files"][number];
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				files: [file, { ...file, itemKey: "FILE0002" }],
@@ -814,6 +841,7 @@ describe("admin publication view", () => {
 	it("fails clearly when the item does not exist", () => {
 		expect(() =>
 			buildAdminPublicationViewFromSnapshot({
+				extras,
 				itemKey: "MISSING1",
 				snapshot: snapshot({ record: null }),
 				config,
@@ -825,6 +853,7 @@ describe("admin publication view", () => {
 describe("identifiers view", () => {
 	it("treats a record with no DOI as optional work, not a problem", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ abstractNote: undefined }) }),
 			config,
@@ -846,6 +875,7 @@ describe("identifiers view", () => {
 
 	it("reports a ready action with one positive line instead of an empty list", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot(),
 			config,
@@ -861,6 +891,7 @@ describe("identifiers view", () => {
 
 	it("shows a DOI the record brought with it as a fact and drops Crossref", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
 			config,
@@ -884,6 +915,7 @@ describe("identifiers view", () => {
 
 	it("does not claim field-level provenance for a source-linked record", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({
@@ -903,6 +935,7 @@ describe("identifiers view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -932,6 +965,7 @@ describe("identifiers view", () => {
 			lifecycle: "reserved",
 		});
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				record: record({ DOI: managed.doi }),
@@ -954,6 +988,7 @@ describe("identifiers view", () => {
 
 	it("does not offer manual retry while the worker owns automatic retries", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				targets: [target("zenodo", "mint-zenodo")],
@@ -982,6 +1017,7 @@ describe("identifiers view", () => {
 	it("does not offer manual retry when the plan needs attention", () => {
 		const archived = archivedUnderOwnDoi("10.9999/external");
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
 				...archived,
@@ -1054,6 +1090,7 @@ describe("identifiers view", () => {
 
 	it("keeps the record's own DOI as the record's after Zenodo archived under it", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: archivedUnderOwnDoi("10.9999/external"),
 			config,
@@ -1067,6 +1104,7 @@ describe("identifiers view", () => {
 
 	it("blocks Zenodo when the record DOI was changed after archiving under it", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
+			extras,
 			itemKey: "ABCDEFGH",
 			snapshot: archivedUnderOwnDoi("10.9999/changed"),
 			config,

@@ -29,6 +29,7 @@ import {
 	inspectPublicationRecordSnapshot,
 } from "./record-adapter";
 import type { PublicationRepositorySnapshot } from "./repository";
+import type { PublicationRecordExtras } from "./record-extras";
 import { PublicationItemNotFoundError } from "./errors";
 import { describeProviderIssue } from "./provider-issue";
 import {
@@ -497,6 +498,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	itemKey: string;
 	snapshot: PublicationRepositorySnapshot;
 	config: Pick<LibraryServerConfig, "identity" | "services">;
+	/** What the deposit carries beyond the record's row, so the view compares the payload the worker would send. */
+	extras: PublicationRecordExtras;
 	now?: Date;
 }): AdminPublicationView {
 	const { snapshot } = input;
@@ -571,6 +574,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			tags: snapshot.tags,
 			baseUrl: input.config.identity.baseUrl,
 			license: publicationConfig.zenodo.license,
+			extras: input.extras,
 		});
 		validationRecord = inspected.record;
 		recordErrors = inspected.issues;

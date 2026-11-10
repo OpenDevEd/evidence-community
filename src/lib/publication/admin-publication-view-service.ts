@@ -7,6 +7,7 @@ import {
 	buildAdminPublicationViewFromSnapshot,
 	type AdminPublicationView,
 } from "./admin-publication-view";
+import { loadPublicationRecordExtras } from "./record-extras";
 import { readPublicationRepositorySnapshot } from "./repository";
 
 export async function buildAdminPublicationView(
@@ -19,5 +20,5 @@ export async function buildAdminPublicationView(
 		itemKey,
 		config.services.publication.crossref.environment,
 	);
-	return buildAdminPublicationViewFromSnapshot({ itemKey, snapshot, config });
+	return buildAdminPublicationViewFromSnapshot({ itemKey, snapshot, config, extras: await loadPublicationRecordExtras(database, snapshot, config) });
 }
