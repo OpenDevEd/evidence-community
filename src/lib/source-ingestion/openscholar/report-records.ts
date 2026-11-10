@@ -65,9 +65,10 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 		});
 	}
 	// An unpublish is remembered as the team's own deletion, which a source never undoes. This one is Openscholar's:
-	// forgotten here, the record and its PDF come back when the report is reinstated, the team's edits with them. A
-	// record the team had unpublished itself wasn't public, so its deletion isn't among these.
-	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, keys), eq(itemFieldOverride.field, "deleted")));
+	// forgotten here, the record and its PDF come back when the report is reinstated, the team's edits with them.
+	// Only for what this withdrawal unpublished: a record or a PDF the team had unpublished itself wasn't public, and
+	// keeps its deletion.
+	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, stillPublic.map(({ key }) => key)), eq(itemFieldOverride.field, "deleted")));
 }
 
 /** Live reports one batch writes. */
