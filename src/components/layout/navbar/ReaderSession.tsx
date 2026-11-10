@@ -30,13 +30,18 @@ export function ReaderSessionProvider({ reader, admin, join, children }: { reade
 				.catch(() => {}),
 		[readerId],
 	);
-	// The window coming back into focus is the outside system: a reader who applied on OpenScholar in another tab
-	// returns to a page that already says their application was sent.
+	// The window coming back into focus, or its tab coming back into view, is the outside system: a reader who applied
+	// on OpenScholar in another tab returns to a page that already says their application was sent.
 	const signedIn = reader !== null;
 	useEffect(() => {
 		if (!signedIn) return;
-		window.addEventListener("focus", refresh);
-		return () => window.removeEventListener("focus", refresh);
+		const back = () => { if (document.visibilityState === "visible") refresh(); };
+		window.addEventListener("focus", back);
+		document.addEventListener("visibilitychange", back);
+		return () => {
+			window.removeEventListener("focus", back);
+			document.removeEventListener("visibilitychange", back);
+		};
 	}, [signedIn, refresh]);
 	return (
 		<ServerReader value={reader}>
