@@ -340,6 +340,7 @@ function PickerControls({ search, onSearch, sort, onSort }: { search: string; on
 				value={search}
 				onValueChange={onSearch}
 				isClearable
+				clearButtonLabel={t("clearSearch")}
 				startContent={<HugeiconsIcon icon={Search01Icon} className="size-5 shrink-0 text-black/40 dark:text-white/40" aria-hidden />}
 				classNames={{ base: "flex-1" }}
 			/>

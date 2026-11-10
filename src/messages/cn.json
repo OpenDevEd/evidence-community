@@ -161,6 +161,7 @@
     "helpAriaLabel": "帮助",
     "helpIconAriaLabel": "帮助图标",
     "searchIconAriaLabel": "搜索图标",
+    "clearSearch": "清除搜索",
     "viewAsListAriaLabel": "以列表形式查看",
     "viewAsGridAriaLabel": "以网格形式查看",
     "aiMenuAriaLabel": "人工智能菜单",

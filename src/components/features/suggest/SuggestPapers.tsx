@@ -414,6 +414,7 @@ function FieldIcon({ busy }: { busy: boolean }) {
 /** One line for a title, growing to hold a pasted list with a paper on each line; a list longer than it fades at the end that has more. */
 function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; disabled: boolean; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
+	const tUi = useTranslations("ui");
 	// Which ends of a long pasted list are out of the field's sight, as its own scrolling says.
 	const [hidden, setHidden] = useState({ above: false, below: false });
 	const fade = suggestion.text.split("\n").length > FIELD_ROWS ? FIELD_FADE[`${hidden.above}-${hidden.below}`] : "";
@@ -421,6 +422,7 @@ function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; 
 		<Textarea
 			autoFocus
 			isClearable
+			clearButtonLabel={tUi("clearSearch")}
 			isDisabled={disabled}
 			aria-label={t("inputLabel")}
 			placeholder={t("placeholder")}

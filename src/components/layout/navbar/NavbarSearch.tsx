@@ -448,6 +448,7 @@ export default function NavbarSearch() {
 									"h-10 lg:h-12 min-h-10 lg:min-h-12",
 							}}
 							isClearable
+							clearButtonLabel={t("clearSearch")}
 							startContent={
 								<HugeiconsIcon
 									icon={Search01Icon}

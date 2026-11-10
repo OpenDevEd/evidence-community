@@ -161,6 +161,7 @@
     "helpAriaLabel": "Hilfe",
     "helpIconAriaLabel": "Hilfesymbol",
     "searchIconAriaLabel": "Suchsymbol",
+    "clearSearch": "Suche löschen",
     "viewAsListAriaLabel": "Als Liste anzeigen",
     "viewAsGridAriaLabel": "Als Raster anzeigen",
     "aiMenuAriaLabel": "KI-Menü",

@@ -161,6 +161,7 @@
     "helpAriaLabel": "मदद",
     "helpIconAriaLabel": "सहायता आइकन",
     "searchIconAriaLabel": "खोज आइकन",
+    "clearSearch": "खोज साफ़ करें",
     "viewAsListAriaLabel": "सूची के रूप में देखें",
     "viewAsGridAriaLabel": "ग्रिड के रूप में देखें",
     "aiMenuAriaLabel": "एआई मेनू",
