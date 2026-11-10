@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemReview } from "@/db/schema/review";
+import { item } from "@/db/schema/tables/item";
 import { addedPaper, submissionStatusDelivery } from "@/db/schema/source";
 import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
 import { summaryOf } from "./paper-summary";
@@ -20,7 +21,7 @@ const submissionStatusSchema = z
 		generation: z.number().int().positive(),
 		/** The person who sent it, by their Openscholar (Clerk) user. */
 		clerkUserId: z.string().min(1).max(128),
-		status: z.enum(["queued", "published", "returned", "withdrawn"]),
+		status: z.enum(["queued", "published", "returned", "withdrawn", "removed"]),
 		/** Why a reviewer returned it, when they said. */
 		note: z.string().max(4000).nullable(),
 		at: z.string(),
@@ -35,7 +36,8 @@ const receiptSchema = z.object({ idempotencyKey: z.string(), generation: z.numbe
 
 /**
  * Sends Openscholar where these records stand now, when they're added papers: submitted, approved, returned or
- * withdrawn. Runs in
+ * withdrawn. A record unpublished or deleted here, or published again, is sent by a trigger on `item`
+ * (drizzle/0104_submission-removed.sql), whatever path changed it. Runs in
  * the change's own transaction, so a change that's saved is always sent; a later one takes the row over.
  */
 export async function queueSubmissionStatus(transaction: DatabaseTransaction, itemKeys: readonly string[]) {
@@ -65,11 +67,22 @@ async function payloadOf(transaction: DatabaseTransaction, config: LibraryServer
 		itemKey: job.itemKey,
 		generation: Number(job.generation),
 		clerkUserId: review.submittedBy,
-		status: accepted ? "published" : STATUS_OF_REVIEW[review.state as keyof typeof STATUS_OF_REVIEW],
-		note: !accepted && review.state === "returned" ? review.note : null,
-		at: (review.resolvedAt ?? review.submittedAt).toISOString(),
+		...(await standingOf(transaction, job.itemKey, accepted, review)),
 		paper: summaryForOpenScholar(review.snapshot, job.itemKey, paper),
 	});
+}
+
+/**
+ * Where the paper stands, with the reviewer's note and when it got there. Accepted, then unpublished or deleted here,
+ * it's removed for whoever sent it, until it's published again.
+ */
+async function standingOf(transaction: DatabaseTransaction, itemKey: string, accepted: boolean, review: NonNullable<Awaited<ReturnType<typeof reviewOf>>>) {
+	const reviewed = review.resolvedAt ?? review.submittedAt;
+	if (!accepted) return { status: STATUS_OF_REVIEW[review.state as keyof typeof STATUS_OF_REVIEW], note: review.state === "returned" ? review.note : null, at: reviewed.toISOString() };
+	const [record] = await transaction.select({ deleted: item.deleted, deletedAt: item.deletedAt }).from(item).where(eq(item.key, itemKey));
+	return record?.deleted === 1
+		? { status: "removed" as const, note: null, at: (record.deletedAt ?? reviewed).toISOString() }
+		: { status: "published" as const, note: null, at: reviewed.toISOString() };
 }
 
 /** The paper's review to tell of: the one that accepted it, or else its latest. */
