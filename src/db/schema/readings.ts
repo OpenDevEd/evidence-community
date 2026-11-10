@@ -63,7 +63,7 @@ export const itemReadingQueue = pgTable("itemReadingQueue", {
 	generation: bigint("generation", { mode: "number" }).notNull().default(1),
 	requestedFor: text("requestedFor").array(),
 	...associationDeliveryColumns,
-}, (table) => [index("itemReadingQueue_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
+}, (table) => [index("itemReadingQueue_pending_idx").on(table.nextAttemptAt, table.itemKey).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
 
 /**
  * The screening of each source that screens, as its configuration last set it, so the database alone can say which

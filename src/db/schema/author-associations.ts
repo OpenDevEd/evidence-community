@@ -14,4 +14,4 @@ export const associationDeliveryColumns = {
 export const authorAssociationDelivery = pgTable("authorAssociationDelivery", {
 	itemKey: varchar("itemKey", {length: 8}).primaryKey(),
 	...associationDeliveryColumns,
-}, table => [index("authorAssociationDelivery_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
+}, table => [index("authorAssociationDelivery_pending_idx").on(table.nextAttemptAt, table.itemKey).where(sql`${table.nextAttemptAt} IS NOT NULL`)]);
