@@ -6,7 +6,8 @@ import {
 } from "@opendeved/doi-sync-core/metadata";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { studyType } from "@/lib/readings/study-types";
-import { openAlexKey, type PublicationRecordExtras } from "./record-extras";
+import { institutionNameKey } from "@/config/library-config/institutions";
+import type { PublicationRecordExtras } from "./record-extras";
 type EvidenceLibraryCreator = {
 	creatorType: string;
 	firstName?: string | null;
@@ -61,7 +62,7 @@ function normalizeText(value: string | null | undefined) {
 
 function normalizeCreators(
 	creators: readonly EvidenceLibraryCreator[],
-	rors: PublicationRecordExtras["institutionRors"],
+	institutions: PublicationRecordExtras["institutions"],
 ): readonly PublicationCreator[] {
 	return creators.map((creator, index) => {
 		const givenName = normalizeText(creator.firstName);
@@ -69,7 +70,7 @@ function normalizeCreators(
 		const organizationName = normalizeText(
 			creator.name ?? creator.institution,
 		);
-		const common = creatorMetadata(creator, rors);
+		const common = creatorMetadata(creator, institutions);
 
 		if (givenName && !familyName) {
 			throw new Error(`Creator ${index + 1} needs a family name`);
@@ -171,7 +172,7 @@ export function publicationRecordMetadata(
 		itemType: record.itemType,
 		title: normalizeText(record.title) ?? "",
 		publicationDate: normalizePublicationDate(record.date),
-		creators: normalizeCreators(record.creators ?? [], extras?.institutionRors ?? {}),
+		creators: normalizeCreators(record.creators ?? [], extras?.institutions ?? {}),
 		tags: publicTags(tags),
 		fields: providerFields(record),
 		...extraMetadata(record, extras),
@@ -184,17 +185,20 @@ export function publicationRecordMetadata(
 }
 
 /** A creator's role and every institution it names, each with its ROR and country where known. */
-function creatorMetadata(creator: EvidenceLibraryCreator, rors: PublicationRecordExtras["institutionRors"]) {
+function creatorMetadata(creator: EvidenceLibraryCreator, institutions: PublicationRecordExtras["institutions"]) {
 	const creatorType = normalizeText(creator.creatorType);
+	const affiliation = (name: string, ownCountry?: string | null) => {
+		const known = institutions[institutionNameKey(name)];
+		const ror = rorKey(known?.ror);
+		const country = (normalizeText(ownCountry) ?? known?.country)?.toUpperCase();
+		return { name, ...(ror ? { ror } : {}), ...(country && /^[A-Z]{2}$/u.test(country) ? { country } : {}) };
+	};
 	const affiliations = (creator.institutions ?? []).flatMap((institution) => {
 		const name = normalizeText(institution.display_name);
-		if (!name) return [];
-		const ror = institution.id ? rorKey(rors[openAlexKey(institution.id)]) : undefined;
-		const country = normalizeText(institution.country_code)?.toUpperCase();
-		return [{ name, ...(ror ? { ror } : {}), ...(country && /^[A-Z]{2}$/u.test(country) ? { country } : {}) }];
+		return name ? [affiliation(name, institution.country_code)] : [];
 	});
 	const typed = normalizeText(creator.institution);
-	if (!affiliations.length && typed) affiliations.push({ name: typed });
+	if (!affiliations.length && typed) affiliations.push(affiliation(typed));
 	return {
 		...(creatorType ? { creatorType } : {}),
 		...(affiliations.length ? { affiliations } : {}),

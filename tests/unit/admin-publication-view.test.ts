@@ -186,7 +186,7 @@ function syncState(changes: Record<string, unknown> = {}) {
 }
 
 // A record that cites nothing and names no topics, countries or institutions.
-const extras: PublicationRecordExtras = { links: [], topicNames: [], countries: [], institutionRors: {}, formats: [] };
+const extras: PublicationRecordExtras = { links: [], topicNames: [], countries: [], institutions: {}, formats: [] };
 
 describe("admin publication view", () => {
 	it("shows details it couldn't read as what blocks the record, instead of failing the page", () => {

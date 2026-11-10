@@ -136,7 +136,7 @@ describe("publication record adapter", () => {
 				// Read from the record, as readers see them: no editor chose either.
 				studyType: "meta-analysis",
 				countries: ["RW", "eastern_africa"],
-				institutionRors: { I4210087849: "https://ror.org/00286hs46" },
+				institutions: { "university of rwanda": { ror: "https://ror.org/00286hs46", country: "RW" } },
 				fullTextUrl: "https://library.example.org/api/item/ABCDEFGH/download/PDF00001",
 				formats: ["application/pdf"],
 			},
