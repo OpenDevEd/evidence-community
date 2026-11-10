@@ -4,9 +4,7 @@ import { twMerge } from "@/lib/tw-merge";
 /**
  * One look for the header's menus (the condensed actions menu and the
  * reader's account menu): the same padding on every side, 40px rows, full
- * contrast labels and icons in one colour. At large text a label wraps and its
- * row grows, and what sits at a row's end moves under the label when both
- * don't fit, so no label is cut off.
+ * contrast labels and icons in one colour.
  */
 export const navbarMenuDropdownClasses = { content: "p-1.5 min-w-[min(15rem,calc(100vw-1.5rem))]" };
 
@@ -17,14 +15,12 @@ export const navbarMenuClasses = {
 
 export const navbarMenuItemClasses = {
 	base: twMerge(
-		"min-h-10 px-3 gap-x-3 gap-y-0.5 flex-wrap rounded-xl",
+		"h-10 px-3 gap-3 rounded-xl",
 		"text-foreground dark:text-white",
 		"data-[hover=true]:bg-black/[0.05] dark:data-[hover=true]:bg-white/[0.07]",
 		"data-[focus-visible=true]:outline-accent",
 	),
-	// The label keeps its own width beside the row's icon (1.25rem and a 0.75rem gap) instead of shrinking to nothing,
-	// so what follows it wraps to the next line; a word longer than that breaks.
-	title: "basis-auto [&:not(:first-child)]:max-w-[calc(100%-2rem)] whitespace-normal break-words text-medium font-medium",
+	title: "text-medium font-medium",
 };
 
 /** Sections carry no margins of their own; the divider gives the only gap. */
@@ -43,7 +39,7 @@ export function NavbarMenuSwitch({ on }: { on: boolean }) {
 		<span
 			aria-hidden
 			className={twMerge(
-				"relative ms-auto h-5 w-9 shrink-0 rounded-full transition-colors motion-reduce:transition-none",
+				"relative h-5 w-9 shrink-0 rounded-full transition-colors motion-reduce:transition-none",
 				on ? "bg-accent" : "bg-black/15 dark:bg-white/20",
 			)}
 		>
