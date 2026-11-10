@@ -488,8 +488,8 @@ function SuggestContent({ first, allowance, picks, onClose }: { first: string; a
 				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} onClose={onClose} />}
 			</ModalHeader>
 			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
-			{/* The list gives way before the dialog outgrows a short window, so the field and the buttons stay in it. */}
-			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] min-h-0 flex-initial p-0">
+			{/* The list gives way, down to a row, before the dialog outgrows a short window; past that the dialog itself scrolls. */}
+			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] min-h-[4.25rem] flex-initial p-0">
 				{/* Papers past the edge fade out under it, at whichever end has more. */}
 				<ScrollShadow size={32} className="h-full px-1">{done ? <SentPanel count={suggestion.sent ?? 0} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
 			</ModalBody>
@@ -526,7 +526,7 @@ function ReaderSuggestDialog() {
 	}, [setText]);
 	const close = () => void setText(null);
 	return (
-		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl" classNames={{ base: "max-h-[calc(100dvh-0.5rem)]" }}>
+		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl" classNames={{ base: "max-h-[calc(100dvh-0.5rem)] overflow-y-auto" }}>
 			<ModalContent>
 				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} picks={picks} onClose={close} />
 			</ModalContent>
