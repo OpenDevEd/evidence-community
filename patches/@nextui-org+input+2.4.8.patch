@@ -1,0 +1,125 @@
+diff --git a/node_modules/@nextui-org/input/dist/chunk-IEGJY7W3.mjs b/node_modules/@nextui-org/input/dist/chunk-IEGJY7W3.mjs
+index 4ffd5e9..4d35383 100644
+--- a/node_modules/@nextui-org/input/dist/chunk-IEGJY7W3.mjs
++++ b/node_modules/@nextui-org/input/dist/chunk-IEGJY7W3.mjs
+@@ -370,7 +370,7 @@ function useInput(originalProps) {
+         type: "button",
+         tabIndex: -1,
+         disabled: originalProps.isDisabled,
+-        "aria-label": "clear input",
++        "aria-label": originalProps.clearButtonLabel ?? "clear input",
+         "data-slot": "clear-button",
+         "data-focus-visible": dataAttr(isClearButtonFocusVisible),
+         className: slots.clearButton({
+@@ -379,7 +379,7 @@ function useInput(originalProps) {
+         ...mergeProps(clearPressProps, clearFocusProps)
+       };
+     },
+-    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton]
++    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton, originalProps.clearButtonLabel]
+   );
+   return {
+     Component,
+diff --git a/node_modules/@nextui-org/input/dist/index.js b/node_modules/@nextui-org/input/dist/index.js
+index 88bf0f2..50e228e 100644
+--- a/node_modules/@nextui-org/input/dist/index.js
++++ b/node_modules/@nextui-org/input/dist/index.js
+@@ -405,7 +405,7 @@ function useInput(originalProps) {
+         type: "button",
+         tabIndex: -1,
+         disabled: originalProps.isDisabled,
+-        "aria-label": "clear input",
++        "aria-label": originalProps.clearButtonLabel ?? "clear input",
+         "data-slot": "clear-button",
+         "data-focus-visible": (0, import_shared_utils.dataAttr)(isClearButtonFocusVisible),
+         className: slots.clearButton({
+@@ -414,7 +414,7 @@ function useInput(originalProps) {
+         ...(0, import_utils2.mergeProps)(clearPressProps, clearFocusProps)
+       };
+     },
+-    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton]
++    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton, originalProps.clearButtonLabel]
+   );
+   return {
+     Component,
+diff --git a/node_modules/@nextui-org/input/dist/input.js b/node_modules/@nextui-org/input/dist/input.js
+index a21dadb..ed976bd 100644
+--- a/node_modules/@nextui-org/input/dist/input.js
++++ b/node_modules/@nextui-org/input/dist/input.js
+@@ -395,7 +395,7 @@ function useInput(originalProps) {
+         type: "button",
+         tabIndex: -1,
+         disabled: originalProps.isDisabled,
+-        "aria-label": "clear input",
++        "aria-label": originalProps.clearButtonLabel ?? "clear input",
+         "data-slot": "clear-button",
+         "data-focus-visible": (0, import_shared_utils.dataAttr)(isClearButtonFocusVisible),
+         className: slots.clearButton({
+@@ -404,7 +404,7 @@ function useInput(originalProps) {
+         ...(0, import_utils2.mergeProps)(clearPressProps, clearFocusProps)
+       };
+     },
+-    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton]
++    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton, originalProps.clearButtonLabel]
+   );
+   return {
+     Component,
+diff --git a/node_modules/@nextui-org/input/dist/textarea.js b/node_modules/@nextui-org/input/dist/textarea.js
+index a48691d..ea83622 100644
+--- a/node_modules/@nextui-org/input/dist/textarea.js
++++ b/node_modules/@nextui-org/input/dist/textarea.js
+@@ -404,7 +404,7 @@ function useInput(originalProps) {
+         type: "button",
+         tabIndex: -1,
+         disabled: originalProps.isDisabled,
+-        "aria-label": "clear input",
++        "aria-label": originalProps.clearButtonLabel ?? "clear input",
+         "data-slot": "clear-button",
+         "data-focus-visible": (0, import_shared_utils.dataAttr)(isClearButtonFocusVisible),
+         className: slots.clearButton({
+@@ -413,7 +413,7 @@ function useInput(originalProps) {
+         ...(0, import_utils2.mergeProps)(clearPressProps, clearFocusProps)
+       };
+     },
+-    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton]
++    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton, originalProps.clearButtonLabel]
+   );
+   return {
+     Component,
+diff --git a/node_modules/@nextui-org/input/dist/use-input.d.ts b/node_modules/@nextui-org/input/dist/use-input.d.ts
+index fc54768..d842960 100644
+--- a/node_modules/@nextui-org/input/dist/use-input.d.ts
++++ b/node_modules/@nextui-org/input/dist/use-input.d.ts
+@@ -62,6 +62,10 @@ interface Props<T extends HTMLInputElement | HTMLTextAreaElement = HTMLInputElem
+      * if you pass this prop, the clear button will be shown.
+      */
+     onClear?: () => void;
++    /**
++     * The clear button's accessible name, in the page's language. Defaults to "clear input".
++     */
++    clearButtonLabel?: string;
+     /**
+      * React aria onChange event.
+      */
+diff --git a/node_modules/@nextui-org/input/dist/use-input.js b/node_modules/@nextui-org/input/dist/use-input.js
+index 3fafed4..0461e02 100644
+--- a/node_modules/@nextui-org/input/dist/use-input.js
++++ b/node_modules/@nextui-org/input/dist/use-input.js
+@@ -390,7 +390,7 @@ function useInput(originalProps) {
+         type: "button",
+         tabIndex: -1,
+         disabled: originalProps.isDisabled,
+-        "aria-label": "clear input",
++        "aria-label": originalProps.clearButtonLabel ?? "clear input",
+         "data-slot": "clear-button",
+         "data-focus-visible": (0, import_shared_utils.dataAttr)(isClearButtonFocusVisible),
+         className: slots.clearButton({
+@@ -399,7 +399,7 @@ function useInput(originalProps) {
+         ...(0, import_utils2.mergeProps)(clearPressProps, clearFocusProps)
+       };
+     },
+-    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton]
++    [slots, isClearButtonFocusVisible, clearPressProps, clearFocusProps, classNames == null ? void 0 : classNames.clearButton, originalProps.clearButtonLabel]
+   );
+   return {
+     Component,

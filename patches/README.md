@@ -63,3 +63,8 @@ for every row, so each arrow key scrolled the list back to its start.
 popovers, dropdown-to-dialog transitions, Tabs inside dialogs, and touch input
 under `overlay lifecycle`. These tests use the real admin components and mock
 only their API data, following the existing admin browser fixtures.
+
+Input takes `clearButtonLabel`, the clear button's accessible name. NextUI
+writes `"clear input"` after the caller's props, and HeroUI 2.4.33 still does, so
+the button was English on every page in every language. Callers pass the
+site's translated "Clear search".

@@ -161,6 +161,7 @@
     "helpAriaLabel": "مساعدة",
     "helpIconAriaLabel": "أيقونة المساعدة",
     "searchIconAriaLabel": "أيقونة البحث",
+    "clearSearch": "مسح البحث",
     "viewAsListAriaLabel": "عرض كقائمة",
     "viewAsGridAriaLabel": "عرض كشبكة",
     "aiMenuAriaLabel": "قائمة الذكاء الاصطناعي",

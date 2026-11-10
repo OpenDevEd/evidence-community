@@ -161,6 +161,7 @@
     "helpAriaLabel": "Ajuda",
     "helpIconAriaLabel": "Ícone de ajuda",
     "searchIconAriaLabel": "Ícone de pesquisa",
+    "clearSearch": "Limpar pesquisa",
     "viewAsListAriaLabel": "Ver como lista",
     "viewAsGridAriaLabel": "Ver como grade",
     "aiMenuAriaLabel": "Menu de IA",

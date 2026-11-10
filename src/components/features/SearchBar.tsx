@@ -199,6 +199,7 @@ export function SearchBar({
 				...(trailing ? { clearButton: twMerge("end-36", classNames?.clearButton), input: twMerge("pe-32", classNames?.input) } : {}),
 			}}
 			isClearable
+			clearButtonLabel={t("clearSearch")}
 			startContent={
 				<HugeiconsIcon icon={Search01Icon}
 					aria-label={t("searchIconAriaLabel")}

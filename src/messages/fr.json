@@ -161,6 +161,7 @@
     "helpAriaLabel": "Aide",
     "helpIconAriaLabel": "Icône d'aide",
     "searchIconAriaLabel": "Icône de recherche",
+    "clearSearch": "Effacer la recherche",
     "viewAsListAriaLabel": "Afficher sous forme de liste",
     "viewAsGridAriaLabel": "Afficher sous forme de grille",
     "aiMenuAriaLabel": "Menu IA",
