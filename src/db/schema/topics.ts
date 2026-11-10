@@ -35,7 +35,7 @@ export const topicAssociationDelivery = pgTable("topicAssociationDelivery", {
   generation: bigint("generation", {mode: "number"}).notNull().default(1),
   payload: jsonb("payload").$type<Record<string, unknown>>(),
   ...associationDeliveryColumns,
-}, t => [index("topicAssociationDelivery_pending_idx").on(t.nextAttemptAt).where(sql`${t.nextAttemptAt} IS NOT NULL`)]);
+}, t => [index("topicAssociationDelivery_pending_idx").on(t.nextAttemptAt, t.itemKey).where(sql`${t.nextAttemptAt} IS NOT NULL`)]);
 
 export const topicDeliveryConfiguration = pgTable("topicDeliveryConfiguration", {
   key: text("key").primaryKey(), signature: text("signature").notNull(), revisionAt: timestamp("revisionAt", {withTimezone: true}).notNull(),

@@ -277,5 +277,5 @@ export const submissionStatusDelivery = pgTable(
 		payload: jsonb("payload").$type<Record<string, unknown>>(),
 		...associationDeliveryColumns,
 	},
-	(table) => [index("submissionStatusDelivery_pending_idx").on(table.nextAttemptAt).where(sql`${table.nextAttemptAt} IS NOT NULL`)],
+	(table) => [index("submissionStatusDelivery_pending_idx").on(table.nextAttemptAt, table.itemKey).where(sql`${table.nextAttemptAt} IS NOT NULL`)],
 );

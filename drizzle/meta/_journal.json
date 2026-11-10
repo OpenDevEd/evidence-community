@@ -736,6 +736,13 @@
       "when": 1793200000000,
       "tag": "0104_submission-removed",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1793300000000,
+      "tag": "0105_queue-claim-order",
+      "breakpoints": true
     }
   ]
 }
