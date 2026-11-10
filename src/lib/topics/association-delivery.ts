@@ -50,14 +50,19 @@ async function publicPdfOf(database: Database, key: string, config: LibraryServe
   return url ? {url, cover: addressOf(pdf.PDFCoverPageImage, base)} : null;
 }
 
+/**
+ * What a delivery depends on besides the record. 2: a record goes to Openscholar's paper pages whether Topics is on or
+ * not, so every community sends each of its records once more.
+ */
+const DELIVERY_FORMAT = 2;
+
 async function reconcileVisibility(database: Database, config: LibraryServerConfig) {
-  const signature = JSON.stringify([config.topics.enabled, config.content.tags.hidden, config.authentication.openScholar.libraryId, config.identity.baseUrl]);
+  const signature = JSON.stringify([DELIVERY_FORMAT, config.topics.enabled, config.content.tags.hidden, config.authentication.openScholar.libraryId, config.identity.baseUrl]);
   await database.transaction(async tx => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended('new-el:topic-visibility', 0))`);
     const [previous] = await tx.select().from(topicDeliveryConfiguration).where(eq(topicDeliveryConfiguration.key, "active")).limit(1);
     if (previous && (previous.signature === signature || previous.revisionAt.getTime() > Date.parse(config.updatedAt))) return;
-    // A library that has never had Topics on has no associations in OpenScholar to clear.
-    if (previous || config.topics.enabled) await tx.execute(sql`INSERT INTO "topicAssociationDelivery" ("itemKey", "revision")
+    await tx.execute(sql`INSERT INTO "topicAssociationDelivery" ("itemKey", "revision")
       SELECT "key", "revision" FROM "item" WHERE "parentItem" IS NULL
       ON CONFLICT ("itemKey") DO UPDATE SET "generation" = "topicAssociationDelivery"."generation" + 1,
         "revision" = EXCLUDED."revision", "payload" = NULL, "attempts" = 0, "nextAttemptAt" = now(),
@@ -71,7 +76,8 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 /** What the record's delivery says now: its topics, its public metadata with its PDF and cover, and its OpenAlex work. */
 async function deliveryOf(tx: Transaction, database: Database, config: LibraryServerConfig, job: {itemKey: string; generation: number | string; revision: number | string}) {
-  const card = config.topics.enabled ? await getPublicItemCard(tx, job.itemKey, config) : null;
+  // Topics off, the record still goes, without its topics (the card leaves them out), so its paper page lists this community.
+  const card = await getPublicItemCard(tx, job.itemKey, config);
   const pdf = card ? await publicPdfOf(database, job.itemKey, config) : null;
   const [source] = await tx.select({id: itemSourceLink.sourceRecordKey}).from(itemSourceLink)
     .innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
