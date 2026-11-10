@@ -8,6 +8,8 @@ import { publicationIdentifier } from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
+import { reportZoteroItem } from "@/lib/openscholar-report";
+import type { OpenscholarReport } from "@/lib/openscholar-service";
 import type { PaperIds } from "@/lib/paper-links";
 import { zoteroDataToCanonicalMetadata } from "@/lib/source-ingestion/zotero/mapper";
 import {
@@ -278,6 +280,14 @@ export type TranslatedEntry =
 	| { source: string; zoteroItem: Record<string, unknown> }
 	| { message: string; source: string };
 
+/** What an import asks of Openscholar (lib/openscholar-service.ts). */
+export type OpenscholarLookups = {
+	/** Follows an address given in place of a DOI. */
+	papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>;
+	/** The Openscholar Reports among these DOIs, by DOI. */
+	reportsByDoi: (dois: readonly string[]) => Promise<Map<string, OpenscholarReport>>;
+};
+
 /** The DOI of each address given in place of one, as Openscholar follows it, 100 at a time; null where it finds none. */
 async function doisAtLinks(entries: readonly string[], papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>) {
 	const links = entries.filter((entry) => !normalizeDoi(entry));
@@ -304,11 +314,18 @@ async function lookUpDoi(doi: string, translationUrl: string, waits: readonly nu
 	}
 }
 
-async function translateDois(dois: readonly string[], translationUrl: string, papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>) {
+async function translateDois(dois: readonly string[], translationUrl: string, { papersAtLinks, reportsByDoi }: OpenscholarLookups) {
 	const followed = await doisAtLinks(dois, papersAtLinks);
+	const doiOf = (raw: string) => normalizeDoi(raw) ?? followed.get(raw)?.doi ?? null;
+	// Openscholar is asked first, once for all of them (OpenDevEd/new-el#814): a report published there is in no DOI
+	// lookup until its deposit is indexed, and is imported from Openscholar's own details.
+	const asked = [...new Set(dois.flatMap((raw) => doiOf(raw) ?? []))];
+	const reports = asked.length ? await reportsByDoi(asked) : new Map<string, OpenscholarReport>();
 	return mapWithConcurrency(dois, DOI_LOOKUP_CONCURRENCY, async (raw): Promise<TranslatedEntry[]> => {
-		const doi = normalizeDoi(raw) ?? followed.get(raw)?.doi ?? null;
+		const doi = doiOf(raw);
 		if (!doi) return [{ message: !followed.has(raw) ? "This is not a valid DOI." : followed.get(raw) ? "Openscholar knows this paper but not its DOI." : "Openscholar finds no paper at this address.", source: raw }];
+		const report = reports.get(doi);
+		if (report) return report.state === "live" ? [{ source: doi, zoteroItem: reportZoteroItem(report) }] : [{ message: "This report was withdrawn on Openscholar.", source: doi }];
 		try {
 			const [found] = await lookUpDoi(doi, translationUrl);
 			return found
@@ -342,11 +359,10 @@ export async function previewImportRecords(
 	db: Executor,
 	input: AdminImportPreviewRequest,
 	translationUrl: string,
-	/** Follows an address given in place of a DOI (lib/openscholar-service.ts papersAtLinks). */
-	papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>,
+	openscholar: OpenscholarLookups,
 ): Promise<AdminImportPreviewResponse> {
 	const [doiEntries, fileEntries] = await Promise.all([
-		translateDois(input.dois, translationUrl, papersAtLinks),
+		translateDois(input.dois, translationUrl, openscholar),
 		translateFiles(input.files, translationUrl),
 	]);
 	return previewEntries(db, [

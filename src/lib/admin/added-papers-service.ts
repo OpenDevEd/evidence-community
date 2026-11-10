@@ -11,7 +11,8 @@ import { itemReview } from "@/db/schema/review";
 import { itemSourceValue } from "@/db/schema/topics";
 import { normalizeDoi } from "@/lib/doi";
 import { paperLinkOf, type PaperIds } from "@/lib/paper-links";
-import { papersAtLinks } from "@/lib/openscholar-service";
+import { papersAtLinks, reportsByDoi, type OpenscholarReport } from "@/lib/openscholar-service";
+import { reportPayload } from "@/lib/source-ingestion/openscholar/report-record";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { OPENALEX_MAX_IDS_PER_FILTER, OpenAlexClient, worksWithIds } from "@/lib/source-ingestion/openalex/client";
 import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
@@ -86,6 +87,8 @@ export type PaperLookup = {
 	recordByDoi: (doi: string) => Promise<Record<string, unknown> | null>;
 	/** The paper each link names that only Openscholar can follow, or null where it finds none. */
 	papersAtLinks: (links: readonly string[]) => Promise<Array<PaperIds | null>>;
+	/** The Openscholar Reports among these DOIs, by DOI: asked before OpenAlex, whose record a report's never becomes. */
+	reportsByDoi: (dois: readonly string[]) => Promise<Map<string, OpenscholarReport>>;
 };
 
 const workOf = (id: string | null | undefined) => id?.trim().match(/(?:^|\/)(W[1-9]\d*)$/iu)?.[1]?.toUpperCase() ?? null;
@@ -125,6 +128,7 @@ export function paperLookupFor(config: LibraryServerConfig, reader?: string): Pa
 			return found ? importPayloadFromZoteroItem(found) : null;
 		},
 		papersAtLinks: (links) => papersAtLinks(config.authentication.openScholar, links, reader),
+		reportsByDoi: (dois) => reportsByDoi(config.authentication.openScholar, dois),
 	};
 }
 
@@ -163,6 +167,23 @@ type Reference = { at: number; openalexId: string | null; doi: string | null };
 export type Results = Map<number, AddedPaperResult>;
 /** `again`: a paper waiting in the community, sent by another request, which submits it again if its review ended. */
 type Made = { at: number; itemKey: string; foundBy: "openalex" | "doi"; again?: boolean };
+
+/**
+ * The papers that are Openscholar Reports, from Openscholar's own details, in one request (OpenDevEd/new-el#814): a
+ * report is in neither OpenAlex nor the DOI lookup until its deposit is indexed. One withdrawn there isn't added.
+ */
+async function findOnOpenscholar(refs: readonly Reference[], lookup: PaperLookup, results: Results) {
+	const dois = [...new Set(refs.flatMap((ref) => ref.doi ?? []))];
+	const reports = dois.length ? await lookup.reportsByDoi(dois) : new Map<string, OpenscholarReport>();
+	const found: Found[] = [];
+	for (const ref of refs) {
+		const report = ref.doi ? reports.get(ref.doi) : undefined;
+		if (!report) continue;
+		if (report.state === "withdrawn") results.set(ref.at, { at: ref.at, outcome: "not_found", message: "This report was withdrawn on Openscholar." });
+		else found.push({ at: ref.at, openalexId: null, doi: ref.doi, payload: validateNativeItemDraft(reportPayload(report), { allowIncompleteCreators: true }).payload, remoteVersion: report.version });
+	}
+	return found;
+}
 
 /** Looks each paper up on OpenAlex, by work and then by DOI. Returns the ones found and the DOIs it didn't have. */
 async function findOnOpenAlex(refs: readonly Reference[], lookup: PaperLookup, results: Results) {
@@ -377,8 +398,10 @@ export async function lookUpPapers(papers: readonly PaperReference[], lookup: Pa
 		if (ref.openalexId || ref.doi) continue;
 		results.set(ref.at, { at: ref.at, outcome: "not_found", message: linked.get(ref.at) === null ? "Openscholar finds no paper at this address." : "This is not an OpenAlex ID, a DOI or a link to a paper." });
 	}
-	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at)), lookup, results);
-	return [...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
+	const reports = await findOnOpenscholar(refs.filter((ref) => !results.has(ref.at)), lookup, results);
+	const taken = new Set(reports.map((paper) => paper.at));
+	const onOpenAlex = await findOnOpenAlex(refs.filter((ref) => !results.has(ref.at) && !taken.has(ref.at)), lookup, results);
+	return [...reports, ...onOpenAlex.found, ...(await findByDoi(onOpenAlex.doiOnly, lookup, results))];
 }
 
 /**

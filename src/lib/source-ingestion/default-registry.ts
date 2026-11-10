@@ -1,5 +1,5 @@
 import { SourceAdapterRegistry, type SourceAdapter } from "./adapter";
-import { createAddedPapersSourceAdapter } from "./added/sync";
+import { createAddedPapersSourceAdapter, type AddedPapersSourceOptions } from "./added/sync";
 import { createOpenAlexSourceAdapter } from "./openalex/adapter";
 import type { OpenAlexSourceOptions } from "./openalex/sync";
 import { createOpenScholarSourceAdapter } from "./openscholar/adapter";
@@ -16,7 +16,7 @@ export type DefaultSourceAdapterRegistryOptions = {
 	/** Without it, OpenScholar collections have no adapter, as in tools that only read other sources. */
 	openscholar?: OpenScholarSourceOptions;
 	/** Without it, the Added papers source has no adapter, as in tools that only read other sources. */
-	added?: OpenAlexSourceOptions;
+	added?: AddedPapersSourceOptions;
 };
 
 export function createDefaultSourceAdapterRegistry(

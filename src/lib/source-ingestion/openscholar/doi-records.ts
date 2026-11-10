@@ -1,11 +1,14 @@
 import { itemIdentity, itemSourceLink } from "@opendeved/evidence-library-core";
-import { and, eq, like, ne } from "drizzle-orm";
+import { and, eq, like, ne, notLike } from "drizzle-orm";
 
 import type { SourceAdapterContext } from "../adapter";
 import type { JsonValue } from "../batch-schema";
 import { inUnchangedSource, withdrawSourceRecords } from "../openalex/reconciliation";
 import { openAlexItemKeys } from "../openalex/references";
 import { writeSourceIngestionBatch } from "../transactional-writer";
+import type { OpenscholarReport } from "@/lib/openscholar-service";
+import { PDF_RECORD } from "./report-record";
+import { asRead, keepReports } from "./report-records";
 
 /** A collection paper's record made from its DOI, under this key, until OpenAlex has its work. */
 const DOI_RECORD = "doi:";
@@ -15,20 +18,13 @@ const LOOKUPS_PER_SYNC = 50;
 
 export type RecordByDoi = (doi: string) => Promise<Record<string, unknown> | null>;
 
-/** The source's configuration and cursor as this sync read them: a change it writes holds only while they stand. */
-const asRead = (context: SourceAdapterContext) => ({
-	sourceConnectionKey: context.sourceConnection.key,
-	configuration: context.sourceConnection.config as Record<string, unknown>,
-	cursor: (context.sourceConnection.syncCursor ?? {}) as Record<string, JsonValue>,
-	sourceSyncRunId: context.run?.id,
-});
-
 /** The source's records made from a DOI, by their DOI. */
-async function doiRecordsOf(context: SourceAdapterContext) {
+export async function doiRecordsOf(context: SourceAdapterContext) {
 	const rows = await context.database
 		.select({ itemKey: itemSourceLink.itemKey, recordKey: itemSourceLink.sourceRecordKey })
 		.from(itemSourceLink)
-		.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), like(itemSourceLink.sourceRecordKey, `${DOI_RECORD}%`), eq(itemSourceLink.remoteDeleted, false)));
+		// A report's PDF is its report's, not a paper of its own.
+		.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), like(itemSourceLink.sourceRecordKey, `${DOI_RECORD}%`), notLike(itemSourceLink.sourceRecordKey, `${PDF_RECORD}%`), eq(itemSourceLink.remoteDeleted, false)));
 	return new Map(rows.map((row) => [row.recordKey.slice(DOI_RECORD.length), row.itemKey]));
 }
 
@@ -107,15 +103,24 @@ async function lookUp(dois: readonly string[], recordByDoi: RecordByDoi) {
  */
 export async function syncDoiRecords(
 	context: SourceAdapterContext,
-	{ dois, works, recordByDoi }: { dois: readonly string[]; works: ReadonlyMap<string, string>; recordByDoi?: RecordByDoi },
+	{ dois, works, recordByDoi, reports = new Map() }: {
+		dois: readonly string[];
+		works: ReadonlyMap<string, string>;
+		recordByDoi?: RecordByDoi;
+		/** The Openscholar Reports among the DOIs: their records are Openscholar's, kept by `keepReports`, never OpenAlex's or the lookup's. */
+		reports?: ReadonlyMap<string, OpenscholarReport>;
+	},
 ) {
 	const records = await doiRecordsOf(context);
-	const inCollection = new Set(dois);
+	// A withdrawn report has left the collection as far as the library goes: its record is withdrawn with a reason of its own.
+	const inCollection = new Set(dois.filter((doi) => reports.get(doi)?.state !== "withdrawn"));
+	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `${DOI_RECORD}${doi}`, itemKey: records.get(doi), report })));
+	for (const [doi, report] of reports) if (report.state === "withdrawn") records.delete(doi);
 	const repeats = await linkResolved(context, records, works);
 	const left = [...records].flatMap(([doi, itemKey]) => (!inCollection.has(doi) && !works.has(doi) ? [itemKey] : []));
 	await withdrawSourceRecords(context.database, asRead(context), [...repeats, ...left], "This edited record is no longer in the connected Openscholar collection.");
 	const before = recordByDoi ? await becameWorks(context) : new Set<string>();
-	const looked = recordByDoi ? await lookUp(dois.filter((doi) => !works.has(doi) && !records.has(doi) && !before.has(doi)), recordByDoi) : [];
+	const looked = recordByDoi ? await lookUp(dois.filter((doi) => !works.has(doi) && !records.has(doi) && !before.has(doi) && !reports.has(doi)), recordByDoi) : [];
 	if (looked.length) {
 		const cursor = asRead(context).cursor;
 		await writeSourceIngestionBatch(context.database, {
@@ -132,7 +137,8 @@ export async function syncDoiRecords(
 		});
 	}
 	const kept = [...records.keys()].filter((doi) => inCollection.has(doi) && !works.has(doi));
-	return new Set([...kept, ...looked.map(({ doi }) => doi)]);
+	// A report is accounted for, live or withdrawn: it is never listed as a paper nothing finds.
+	return new Set([...kept, ...looked.map(({ doi }) => doi), ...reports.keys()]);
 }
 
 /** Withdraws every record the source made from a DOI, as when the library loses the collection. */

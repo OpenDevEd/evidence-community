@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { OpenScholarServiceError, type OpenScholarService } from "@/lib/openscholar-service";
+import { OpenScholarServiceError, reportsByDoi, type OpenScholarService } from "@/lib/openscholar-service";
 
 import type { SourceAdapterContext, SourceSyncResult } from "../adapter";
 import { saveSourceDisplayName } from "../display-name";
@@ -19,7 +19,8 @@ import {
 	type OpenAlexSourceOptions,
 } from "../openalex/sync";
 import { OpenScholarCollectionGoneError, readOpenScholarCollection } from "./client";
-import { syncDoiRecords, withdrawDoiRecords, type RecordByDoi } from "./doi-records";
+import { doiRecordsOf, syncDoiRecords, withdrawDoiRecords, type RecordByDoi } from "./doi-records";
+import { keepReports } from "./report-records";
 
 export type OpenScholarSourceOptions = OpenAlexSourceOptions & {
 	service: OpenScholarService;
@@ -64,16 +65,23 @@ export async function syncOpenScholarCollection(
 	await saveSourceDisplayName(context.database, connection, async () => collection.name);
 	if (collection.unchanged) {
 		const due = openAlexWorksAreDue(connection.syncCursor, { version: saved ?? collection.version, downloadPdfs: config.downloadPdfs }, new Date());
-		if (!due) return { unchanged: true, version: collection.version };
+		if (!due) {
+			await followReports(context, options);
+			return { unchanged: true, version: collection.version };
+		}
 		collection = await read(null);
 		if (collection.unchanged) throw new Error(`Openscholar collection ${collectionId} answered without its items`);
 	}
+	// Openscholar is asked first, once for all of them: a report published there is in neither OpenAlex nor the DOI
+	// lookup until its deposit is indexed, and its record stays Openscholar's when they have it.
+	const reports = await reportsByDoi(options.service, collection.dois, { fetch: options.fetch });
 	// A paper with only a DOI is found on OpenAlex by it; the ones OpenAlex doesn't have are listed as issues.
-	const byDoi = await worksForDois(context, collection.dois, options);
+	const byDoi = await worksForDois(context, collection.dois.filter((doi) => !reports.has(doi)), options);
 	// One OpenAlex doesn't have is made from its DOI; the ones nothing finds are listed as issues.
 	// A record made from a DOI becomes its work's once OpenAlex has the DOI, or once the collection names the work itself.
-	const works = new Map([...collection.doiWorks, ...byDoi]);
-	const recorded = await syncDoiRecords(context, { dois: collection.dois, works, recordByDoi: options.recordByDoi });
+	// ponytail: a collection that also holds the OpenAlex work of a report keeps both records; merge them when OpenAlex indexes reports.
+	const works = new Map([...collection.doiWorks, ...byDoi].filter(([doi]) => !reports.has(doi)));
+	const recorded = await syncDoiRecords(context, { dois: collection.dois, works, recordByDoi: options.recordByDoi, reports });
 	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
 	const ids = [...new Set([...collection.openAlexIds, ...byDoi.values()])].sort();
 	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list
@@ -81,6 +89,18 @@ export async function syncOpenScholarCollection(
 	const version = byDoi.size ? `${collection.version}${RESOLVED}${createHash("sha256").update(ids.join(",")).digest("hex").slice(0, 16)}` : collection.version;
 	const result = await syncOpenAlexWorks(context, openAlexIdStream(ids, version, config.downloadPdfs), options);
 	return { ...result, unresolved: collection.unresolved + collection.dois.length - byDoi.size - recorded.size };
+}
+
+/**
+ * With the collection unchanged, its reports can still have changed on Openscholar: one small request asks about the
+ * DOIs the source holds records of, so a correction or a withdrawal reaches the library on the next sweep.
+ * ponytail: a report reinstated after a withdrawal comes back when the collection is next read whole, not here.
+ */
+async function followReports(context: SourceAdapterContext, options: OpenScholarSourceOptions) {
+	const records = await doiRecordsOf(context);
+	if (!records.size) return;
+	const reports = await reportsByDoi(options.service, [...records.keys()], { fetch: options.fetch });
+	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `doi:${doi}`, itemKey: records.get(doi), report })));
 }
 
 /** The OpenAlex works these DOIs name, by DOI: those OpenAlex has. */
