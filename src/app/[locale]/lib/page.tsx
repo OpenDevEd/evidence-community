@@ -65,6 +65,14 @@ export async function libraryMetadata(props: {
     libraryConfig.features.atomFeed &&
     Boolean(libraryConfig.exports.atom);
 
+  // A filtered, searched or sorted list names the plain list as its canonical address, so search engines spend their
+  // visits on records rather than on every combination of filters. Only a plain list's own pages keep their number.
+  const plain = [...currentUrl.searchParams.keys()].every((key) => key === "page");
+  const canonicalPath = plain ? builtUrl : props.pathname;
+  const canonical = plain
+    ? currentUrl
+    : new URL(buildLocalizedSiteUrl(canonicalPath, locale as typeof libraryConfig.localization.defaultLocale, libraryConfig.localization, siteOrigin));
+
   // Links name numbered pages only: past them, a page needs the cursor its neighbour's results give.
   const numbered = lastNumberedPage(paginationMeta.perPage, resultLimitOf(libraryConfig));
   const pageUrl = (target: number) => {
@@ -80,9 +88,9 @@ export async function libraryMetadata(props: {
   return {
     generator: "new-el",
     alternates: {
-      canonical: currentUrl,
+      canonical,
       languages: buildLanguageAlternates(
-        builtUrl,
+        canonicalPath,
         libraryConfig.localization,
         siteOrigin,
       ),
