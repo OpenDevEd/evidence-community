@@ -73,7 +73,8 @@ function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolea
 					<HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />
 				</span>
 				<div className={`min-w-0 flex-1 ${dimmed}`}>
-					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span dir="ltr" className="font-mono text-xs">{row.raw}</span>}</p>
+					{/* On a phone the button leaves a title a few words: it takes the row's second line there. */}
+					<p className="line-clamp-2 text-sm/5 font-medium sm:line-clamp-1">{row.title ?? <span dir="ltr" className="font-mono text-xs">{row.raw}</span>}</p>
 					{row.title ? <RowDetail row={row} /> : null}
 				</div>
 				{children}
@@ -325,7 +326,8 @@ type Suggestion = ReturnType<typeof useSuggestion>;
 function FoundList({ suggestion }: { suggestion: Suggestion }) {
 	const t = useTranslations("suggestPapers");
 	return (
-		<ul aria-label={t("resultsLabel")} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
+		// Answers to an earlier text can't be picked while the next ones are on their way.
+		<ul aria-label={t("resultsLabel")} inert={suggestion.stale} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
 			{suggestion.found.map((row) => (
 				<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
 					<FoundEnd row={row} picked={suggestion.isPicked(row.key)} full={suggestion.full} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
@@ -425,8 +427,6 @@ function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; 
 			minRows={1}
 			maxRows={FIELD_ROWS}
 			autoCorrect="off"
-			// A DOI or a link reads left to right in a right-to-left language too; a title follows its own script.
-			dir="auto"
 			value={suggestion.text}
 			onValueChange={suggestion.type}
 			onClear={() => suggestion.type("")}
@@ -440,23 +440,28 @@ function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; 
 				const field = event.currentTarget;
 				setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
 			}}
-			// The clear button sits on the first line, level with the search icon and as far from its own edge.
-			classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", clearButton: "top-3.5 right-3.5 rtl:left-3.5", input: `py-0.5 text-base font-normal ${fade}` }}
+			// The clear button sits on the first line, level with the search icon and as far from its own edge; the text
+			// stops short of it. Each line reads the way its own script does (a DOI left to right in Arabic too, a title
+			// in Arabic right to left in English), and starts on the page's side, beside the search icon.
+			classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", clearButton: "top-3.5 right-3.5 rtl:left-3.5", input: `py-0.5 pr-8 text-left text-base font-normal [unicode-bidi:plaintext] rtl:pl-8 rtl:pr-0 rtl:text-right ${fade}` }}
 			startContent={<FieldIcon busy={suggestion.stale} />}
 		/>
 	);
 }
 
 /** How many papers go, and the buttons that send them or close the dialog. */
+/** The button that sent the papers is gone once they went: the one that closes takes the focus, so Enter and Escape still answer. */
+const focusOnMount = (button: unknown) => { if (button instanceof HTMLElement) button.focus(); };
+
 function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
 	const padded = "px-4 xl:px-4";
-	if (suggestion.sent !== null) return <Button size="md" className={`ms-auto ${padded}`} color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>;
+	if (suggestion.sent !== null) return <Button ref={focusOnMount} size="md" className={`ms-auto ${padded}`} color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>;
 	// While it sends the button is inert, not disabled: a disabled button drops the focus out of the dialog.
 	const busy = suggestion.sending ? "pointer-events-none opacity-disabled" : "";
 	return (
 		<>
-			<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: suggestion.ready.length })}</span>
+			<span role="status" className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: suggestion.ready.length })}</span>
 			<span className="ms-auto flex gap-2">
 				<Button size="md" className={padded} variant="light" onPress={onClose}>{t("cancel")}</Button>
 				<Button size="md" className={`${padded} xl:gap-2 ${busy}`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} aria-busy={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? <Spinner size="sm" color="current" classNames={{ wrapper: "h-4 w-4" }} /> : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
@@ -483,7 +488,8 @@ function SuggestContent({ first, allowance, picks, onClose }: { first: string; a
 				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} onClose={onClose} />}
 			</ModalHeader>
 			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
-			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] flex-none p-0">
+			{/* The list gives way before the dialog outgrows a short window, so the field and the buttons stay in it. */}
+			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] min-h-0 flex-initial p-0">
 				{/* Papers past the edge fade out under it, at whichever end has more. */}
 				<ScrollShadow size={32} className="h-full px-1">{done ? <SentPanel count={suggestion.sent ?? 0} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
 			</ModalBody>
@@ -520,7 +526,7 @@ function ReaderSuggestDialog() {
 	}, [setText]);
 	const close = () => void setText(null);
 	return (
-		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
+		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl" classNames={{ base: "max-h-[calc(100dvh-0.5rem)]" }}>
 			<ModalContent>
 				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} picks={picks} onClose={close} />
 			</ModalContent>
