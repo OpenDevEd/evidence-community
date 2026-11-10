@@ -6,7 +6,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { addedPaper, submissionStatusDelivery } from "@/db/schema/source";
-import { postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
+import { drainAssociationQueue, eachAssociation, postOpenScholarAssociation, runAssociationDeliveryCycle } from "@/lib/publication/association-queue";
 import { summaryOf } from "./paper-summary";
 
 /** Where a submitted paper stands, as Openscholar keeps it (OpenDevEd/new-el#778). */
@@ -106,32 +106,28 @@ function summaryForOpenScholar(snapshot: unknown, itemKey: string, paper: { open
 	return { title: title.slice(0, 1000), authors: authors.slice(0, 2000), year, openalexId: paper.openalexId, doi: paper.doi, requestId: paper.resendRequestIds.at(-1) ?? paper.requestId };
 }
 
+/** Changes sent at once, each in its own call. */
+const AT_ONCE = 10;
+
 /** Sends waiting changes of submitted papers to Openscholar for up to five seconds; true when it sent any. */
 export async function runSubmissionStatusCycle(database: Database, config: LibraryServerConfig, signal?: AbortSignal, request: typeof fetch = fetch) {
-	const deadline = Date.now() + 5_000;
-	let processed = false;
-	while (Date.now() < deadline && !signal?.aborted) {
-		const claimed = await runAssociationDeliveryCycle(database, "submissionStatusDelivery", async (job, leaseToken) => {
-			const payload = await database.transaction(async (transaction) => {
-				const [current] = await transaction
-					.select()
-					.from(submissionStatusDelivery)
-					.where(and(eq(submissionStatusDelivery.itemKey, job.itemKey), eq(submissionStatusDelivery.leaseToken, leaseToken)))
-					.for("update")
-					.limit(1);
-				if (!current) return null;
-				if (current.payload) return submissionStatusSchema.parse(current.payload);
-				const made = await payloadOf(transaction, config, job);
-				if (made) await transaction.update(submissionStatusDelivery).set({ payload: made }).where(eq(submissionStatusDelivery.itemKey, job.itemKey));
-				return made;
-			});
-			if (!payload) return;
-			const response = await postOpenScholarAssociation(config, "/api/v1/evidence-libraries/paper-submissions", "submission status", payload, signal, request);
-			const receipt = receiptSchema.parse(await response.json());
-			if (receipt.idempotencyKey !== payload.idempotencyKey || receipt.generation !== payload.generation) throw new Error("Submission status receipt did not match the delivery");
+	return drainAssociationQueue(() => runAssociationDeliveryCycle(database, "submissionStatusDelivery", eachAssociation(async (job, leaseToken) => {
+		const payload = await database.transaction(async (transaction) => {
+			const [current] = await transaction
+				.select()
+				.from(submissionStatusDelivery)
+				.where(and(eq(submissionStatusDelivery.itemKey, job.itemKey), eq(submissionStatusDelivery.leaseToken, leaseToken)))
+				.for("update")
+				.limit(1);
+			if (!current) return null;
+			if (current.payload) return submissionStatusSchema.parse(current.payload);
+			const made = await payloadOf(transaction, config, job);
+			if (made) await transaction.update(submissionStatusDelivery).set({ payload: made }).where(eq(submissionStatusDelivery.itemKey, job.itemKey));
+			return made;
 		});
-		if (!claimed) break;
-		processed = true;
-	}
-	return processed;
+		if (!payload) return;
+		const response = await postOpenScholarAssociation(config, "/api/v1/evidence-libraries/paper-submissions", "submission status", payload, signal, request);
+		const receipt = receiptSchema.parse(await response.json());
+		if (receipt.idempotencyKey !== payload.idempotencyKey || receipt.generation !== payload.generation) throw new Error("Submission status receipt did not match the delivery");
+	}), AT_ONCE), signal);
 }

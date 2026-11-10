@@ -25,6 +25,12 @@ import type { Database } from "@/db/database-schema";
 const settings = {name: "Schools", searchUrl: "/results/saved-search-1", approvedQuery: {version: "v1", approvedAt: "2026-09-24T10:00:00Z", query: {search: "schools"}}, downloadPdfs: false};
 const config = libraryConfigSchema.parse({...maximalLibraryConfig, topics: {enabled: true}});
 const policy = {writebackConfig: {...config, sources: [{key: "oa", writebackEnabled: false}]}};
+/** Openscholar's batch route as these tests see it: it notes each record and saves it. */
+const receiving = (delivered: unknown[]): typeof fetch => async (_url, init) => {
+  const {deliveries} = JSON.parse(String(init?.body)) as {deliveries: {idempotencyKey: string; generation: number}[]};
+  delivered.push(...deliveries);
+  return Response.json({contractVersion: 1, receipts: deliveries.map(({idempotencyKey, generation}) => ({contractVersion: 1, idempotencyKey, generation, status: "applied"}))});
+};
 async function seedTopics(db: Database) {
   await db.insert(topicCatalogCache).values(["T12260", "T12345"].map(id => ({id, kind: "node", payload: {id, name: `Topic ${id}`, level: "topic", parent: "subfields/3304", path: ["Social Sciences", "Social Sciences", "Education"], childCount: 0}, fetchedAt: new Date()})));
 }
@@ -123,10 +129,7 @@ it("delivers stable retry bodies and new generations for visibility changes with
     const published = await publishItemDraft(db, draft.itemKey, policy);
     const config = libraryConfigSchema.parse({...maximalLibraryConfig, topics: {enabled: true}});
     const delivered: Record<string, unknown>[] = [];
-    const request: typeof fetch = async (_url, init) => {
-      const body = JSON.parse(String(init?.body)); delivered.push(body);
-      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
-    };
+    const request = receiving(delivered);
     await runTopicAssociationCycle(db, config, undefined, async (url, init) => { await request(url, init); throw new Error("response lost after acceptance"); });
     const frozen = (await db.select().from(topicAssociationDelivery))[0]!.payload;
     await db.update(topicAssociationDelivery).set({nextAttemptAt: new Date(0)});
@@ -150,10 +153,7 @@ it("sends a record's PDF and its cover with it, and sends the record again when 
     const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Coaching", topics: ["T12260"]}, policy);
     const published = await publishItemDraft(db, draft.itemKey, policy);
     const delivered: {metadata?: {pdf?: unknown}}[] = [];
-    const request: typeof fetch = async (_url, init) => {
-      const body = JSON.parse(String(init?.body)); delivered.push(body);
-      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
-    };
+    const request = receiving(delivered);
     await runTopicAssociationCycle(db, config, undefined, request);
     expect(delivered.at(-1)?.metadata?.pdf).toBeNull();
     // A stored PDF arrives, written as an attachment and its outbox entry. Without its cover it isn't public yet.
@@ -180,10 +180,7 @@ it("sends every published record on the first run while Topics are off, without 
     await publishItemDraft(db, draft.itemKey);
     await db.delete(topicAssociationDelivery);
     const delivered: Record<string, unknown>[] = [];
-    const request: typeof fetch = async (_url, init) => {
-      const body = JSON.parse(String(init?.body)); delivered.push(body);
-      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
-    };
+    const request = receiving(delivered);
     await runTopicAssociationCycle(db, {...config, topics: {enabled: false}}, undefined, request);
     expect(delivered).toEqual([expect.objectContaining({itemKey: draft.itemKey, state: "published", topicIds: [], metadata: expect.objectContaining({title: "Never topical"})})]);
     expect(await db.select().from(topicDeliveryConfiguration)).toHaveLength(1);
@@ -331,12 +328,37 @@ it("drains multiple topic deliveries in one cycle and bounds very long creator l
     }
     await db.update(item).set({creators: Array.from({length: 1001}, (_, index) => ({creatorType: "author", name: `Author ${index}`, fieldMode: 1}))}).where(eq(item.key, keys[0]!));
     const delivered: Array<{itemKey: string; metadata: {creators: string[]}}> = [];
-    await runTopicAssociationCycle(db, config, undefined, async (_url, init) => {
-      const body = JSON.parse(String(init?.body)); delivered.push(body);
-      return Response.json({contractVersion: 1, idempotencyKey: body.idempotencyKey, generation: body.generation, status: "applied"});
-    });
+    await runTopicAssociationCycle(db, config, undefined, receiving(delivered));
     expect(delivered.map(body => body.itemKey).sort()).toEqual(keys.sort());
     expect(Math.max(...delivered.map(body => body.metadata.creators.length))).toBe(1000);
     expect((await db.select().from(topicAssociationDelivery)).every(row => row.nextAttemptAt === null && row.lastError === null)).toBe(true);
+  });
+});
+
+it("sends waiting records in one call and holds back only a record Openscholar refused or that can't be built", async () => {
+  await withIsolatedPublicationDatabase(async db => {
+    await seedTopics(db);
+    const keys: string[] = [];
+    for (const title of ["First", "Second", "Third", "Fourth"]) {
+      const draft = await createNativeItemDraft(db, {itemType: "Report", title, topics: ["T12260"]}, policy);
+      await publishItemDraft(db, draft.itemKey, policy);
+      keys.push(draft.itemKey);
+    }
+    await db.update(item).set({topics: ["not-a-topic"]}).where(eq(item.key, keys[3]!));
+    const calls: string[] = [];
+    await runTopicAssociationCycle(db, config, undefined, async (url, init) => {
+      calls.push(new URL(String(url)).pathname);
+      const {deliveries} = JSON.parse(String(init?.body)) as {deliveries: {itemKey: string; idempotencyKey: string; generation: number}[]};
+      return Response.json({contractVersion: 1, receipts: deliveries.map(({itemKey, idempotencyKey, generation}) => itemKey === keys[1]
+        ? {idempotencyKey, generation, error: {code: "CONFLICT"}}
+        : {contractVersion: 1, idempotencyKey, generation, status: "applied"})});
+    });
+    expect(calls).toEqual(["/api/v1/evidence-libraries/topic-associations/batch"]);
+    const rows = new Map((await db.select().from(topicAssociationDelivery)).map(row => [row.itemKey, row]));
+    expect(rows.get(keys[1]!)).toMatchObject({attempts: 1, lastError: "Openscholar refused the topic delivery: CONFLICT"});
+    expect(rows.get(keys[1]!)?.nextAttemptAt).not.toBeNull();
+    for (const key of [keys[0]!, keys[2]!]) expect(rows.get(key)).toMatchObject({nextAttemptAt: null, lastError: null});
+    expect(rows.get(keys[3]!)).toMatchObject({attempts: 1, payload: null});
+    expect(rows.get(keys[3]!)?.lastError).toMatch(/^Topic delivery is invalid/);
   });
 });
