@@ -19,6 +19,14 @@ vi.mock("@/i18n/routing", () => ({
 	Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => <a href={href} {...props}>{children}</a>,
 	useRouter: () => ({ push: vi.fn() }),
 }));
+// Who is reading, as the page's shell would have read it: where they stand with joining, and what its buttons opened.
+const reader = vi.hoisted(() => ({ admin: false, join: "open" as "open" | "waiting" | "closed", opened: [] as string[] }));
+vi.mock("@/components/layout/navbar/ReaderSession", () => ({
+	SUGGEST_PARAM: "suggest",
+	useOpenScholarUrl: () => (path: string) => path,
+	useReaderSession: () => ({ reader: null, signInToSuggest: (text: string) => reader.opened.push(`sign in to suggest "${text}"`) }),
+	useReaderLinks: () => ({ admin: reader.admin, join: reader.join, openJoin: () => reader.opened.push("join") }),
+}));
 // The explorer asks the listing for each row's publications; these tests read the page itself.
 vi.mock("swr", () => ({ default: () => ({ data: undefined }) }));
 vi.mock("@/components/features/items/Resource", () => ({ default: () => null }));
@@ -31,6 +39,8 @@ import { minimalLibraryConfig } from "../fixtures/library-config";
 import { homeRich } from "@/components/pages/HomeRichText";
 
 const config = projectPublicLibraryConfig(libraryConfigSchema.parse(minimalLibraryConfig));
+/** The same community with reader accounts on, which its Suggest papers button needs. */
+const withAccounts = projectPublicLibraryConfig(libraryConfigSchema.parse({ ...minimalLibraryConfig, features: { readerAccounts: true } }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -111,11 +121,11 @@ describe("the library's home page", () => {
 		vi.unstubAllGlobals();
 	});
 
-	async function render(contact: { email: string | null; page: boolean }, figures: HomeData = data, content: HomeContent = about) {
+	async function render(figures: HomeData = data, content: HomeContent = about, community = config) {
 		await act(async () => {
 			root.render(
-				<LibraryConfigProvider config={config}>
-					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" contact={contact} today="2026-09-23" about={content} rich={rich} data={Promise.resolve(figures)} tones={tones} ramp={[tone, tone]} shapes={[]} />
+				<LibraryConfigProvider config={community}>
+					<HomePage name="Teacher Evidence Library" siteUrl="https://library.example.org" today="2026-09-23" about={content} rich={rich} data={Promise.resolve(figures)} tones={tones} ramp={[tone, tone]} shapes={[]} />
 				</LibraryConfigProvider>,
 			);
 		});
@@ -125,7 +135,7 @@ describe("the library's home page", () => {
 	const headings = () => [...container.querySelectorAll("h2, h3")].map((heading) => heading.textContent);
 
 	it("shows what the library wrote about itself and how it curates", async () => {
-		await render({ email: "editors@example.org", page: false });
+		await render();
 
 		expect(container.querySelector("h1")?.textContent).toBe("Teacher Evidence Library");
 		expect(container.textContent).toContain("We gather teacher research from East Africa.");
@@ -142,7 +152,7 @@ describe("the library's home page", () => {
 
 	it("follows a publication that was only added, without a review date", async () => {
 		const added = "2026-06-02T00:00:00.000Z";
-		await render({ email: null, page: false }, { ...data, journey: { ...data.journey!, reviewed: false, reviewer: null, submittedAt: added, publishedAt: added } });
+		await render({ ...data, journey: { ...data.journey!, reviewed: false, reviewer: null, submittedAt: added, publishedAt: added } });
 
 		expect(container.textContent).toContain("Added to the community");
 		expect(container.textContent).not.toContain("Arrived for review");
@@ -155,7 +165,7 @@ describe("the library's home page", () => {
 			...(["search", "sync", "duplicates", "fulltext"] as const).map((type) => ({ type, title: type, text: "" })),
 			{ type: "text" as const, title: "screened", text: "", figure: { value: "25,000", label: "AI screening judgements" } },
 		];
-		await render({ email: null, page: false }, { ...data, pipeline: { terms: 159, topics: 29, added: 1240, merged: 0 } }, { ...about, curation: { steps } });
+		await render({ ...data, pipeline: { terms: 159, topics: 29, added: 1240, merged: 0 } }, { ...about, curation: { steps } });
 
 		const bodies = steps.map(({ title }) => [...container.querySelectorAll("li")].find((step) => step.querySelector("h3")?.textContent === title)?.textContent);
 		// The page test translates to message keys: the topics join the terms' label.
@@ -169,14 +179,14 @@ describe("the library's home page", () => {
 	});
 
 	it("shows a link it cannot follow as its words", async () => {
-		await render({ email: null, page: true });
+		await render();
 
 		expect(container.textContent).toContain("See our Website.");
 		expect([...container.querySelectorAll("a")].some((link) => link.textContent === "Website")).toBe(false);
 	});
 
 	it("counts the publications without a top language as one row", async () => {
-		await render({ email: null, page: true });
+		await render();
 
 		const tab = [...container.querySelectorAll('[role="tab"]')].find((element) => element.textContent === "Languages");
 		expect(tab).toBeDefined();
@@ -187,15 +197,28 @@ describe("the library's home page", () => {
 	});
 
 	it("offers the involvement buttons only where they lead somewhere", async () => {
-		await render({ email: "editors@example.org", page: false });
-		const links = () => [...container.querySelectorAll("a")].map((link) => link.getAttribute("href") ?? "");
-		expect(links()).toContain(`mailto:editors@example.org?subject=${encodeURIComponent("suggestSubject")}`);
-		expect(container.textContent).toContain("join");
-
-		await render({ email: null, page: false });
-		expect(links().some((href) => href.startsWith("mailto:") || href === "/contact")).toBe(false);
-		expect(container.textContent).not.toContain("suggest");
-		expect(container.textContent).not.toContain("join");
+		const ways = () => [...container.querySelectorAll("button, a")].map((way) => way.textContent ?? "").filter((text) => /^(suggest|join)/.test(text));
+		// Suggesting papers needs reader accounts to sign in with; joining is open to anyone.
+		await render();
+		expect(ways()).toEqual(["joinjoinHint"]);
+		await render(data, about, withAccounts);
+		expect(ways()).toEqual(["suggestsuggestHint", "joinjoinHint"]);
+		// Signed out, Suggest papers signs the reader in first and comes back with its dialog open; Join opens applying.
+		for (const way of container.querySelectorAll("button")) if (/^(suggest|join)/.test(way.textContent ?? "")) await act(async () => way.click());
+		expect(reader.opened).toEqual(['sign in to suggest ""', "join"]);
+		// An application sent says so; the team's own open the admin; a community taking none offers no way to join.
+		reader.join = "waiting";
+		await render(data, about, withAccounts);
+		expect(ways()).toEqual(["suggestsuggestHint", "joinWaitingjoinWaitingHint"]);
+		reader.admin = true;
+		await render(data, about, withAccounts);
+		expect(ways()).toEqual(["suggestsuggestHint", "joinAdminjoinAdminHint"]);
+		expect(container.querySelector('a[href="/admin"]')?.textContent).toContain("joinAdmin");
+		Object.assign(reader, { admin: false, join: "closed" });
+		await render(data, about, withAccounts);
+		expect(ways()).toEqual(["suggestsuggestHint"]);
+		await render();
+		expect(ways()).toEqual([]);
 		// The people still have their band.
 		expect(container.textContent).toContain("Amina Yusuf");
 	});

@@ -1,98 +1,111 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip } from "@nextui-org/react";
-import { Cancel01Icon, CheckmarkCircle02Icon, InboxIcon, Search01Icon, ArrowUpRight01Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useRef, useState } from "react";
+import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip, ScrollShadow } from "@nextui-org/react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Add01Icon, ArrowUpRight01Icon, Cancel01Icon, CheckmarkCircle02Icon, File01Icon, InboxIcon, Search01Icon, TaskAdd01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
+import { parseAsString, useQueryState } from "nuqs";
+import useSWR, { useSWRConfig } from "swr";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Button } from "@/components/nextui/Button";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Spinner } from "@/components/nextui/Spinner";
-import { useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
+import { SUGGEST_PARAM, useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
-import { paperLinkKey, paperLinkOf } from "@/lib/paper-links";
+import { useDebouncedValue } from "@/hooks/useDebounce";
+import { call, findPapers, messageOf, parse, PER_REQUEST, post, TITLE_MIN, unnamed, type Row } from "./papers";
 
-/** Opens the dialog from anywhere on the page: the reader's menu and an empty search both do. */
-export const openSuggestPapers = () => window.dispatchEvent(new Event("suggest-papers:open"));
+type Translate = ReturnType<typeof useTranslations<"suggestPapers">>;
 
-/** Papers one request looks up or sends at most, as the community takes them. */
-const PER_REQUEST = 100;
+const OPEN_EVENT = "suggest-papers:open";
+/** What the page is searching for, if anything: the dialog starts from it, since that is what the reader was looking for. */
+const searchedFor = () => new URLSearchParams(window.location.search).get("search") ?? "";
 
-type Reference = { openalexId?: string; doi?: string; link?: string };
-type Looked = { key: string; raw: string; ref: Reference };
-type Answer = { outcome: "found" | "existing" | "queued" | "returned" | "not_found"; paper?: { title: string; authors: string; year: number | null } };
-type Row = Looked & { state: "looking" | "found" | "here" | "waiting" | "missing"; title?: string; authors?: string; year?: number | null };
-type Sent = { outcome: string; message?: string };
+/**
+ * Opens the dialog from anywhere on the page, for a signed-in reader. Its field starts with the text given (a title,
+ * or a paper's link, DOI or ID), and otherwise with the page's own search.
+ */
+export const openSuggestPapers = (text?: unknown) => window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: typeof text === "string" ? text : searchedFor() }));
 
-/** The papers a paste names: DOIs, OpenAlex IDs and every address that names one, Openscholar's and communities' included; each once. */
-function parse(text: string): Looked[] {
-	const seen = new Set<string>();
-	return text.split(/\s+/u).filter(Boolean).flatMap((raw) => {
-		const link = paperLinkOf(raw);
-		const key = link ? paperLinkKey(link) : null;
-		if (!link || !key || seen.has(key)) return [];
-		seen.add(key);
-		// A link only Openscholar can follow goes to the server as given, which asks it.
-		const ref = link.kind === "work" ? { openalexId: link.openalexId } : link.kind === "doi" ? { doi: link.doi } : { link: raw };
-		return [{ key, raw, ref }];
-	});
+/**
+ * What every Suggest button does: opens the dialog on the text given, or on the page's search. Someone signed out
+ * signs in first and comes back to this page with the dialog open, as if they had been signed in when they pressed.
+ */
+export function useSuggest() {
+	const { reader, signInToSuggest } = useReaderSession();
+	return (text?: string) => (reader ? void openSuggestPapers(text) : signInToSuggest(text ?? searchedFor()));
 }
 
-/** What a paste holds that names no paper, said back so the reader knows what was left out. */
-const unnamed = (text: string) => text.split(/\s+/u).filter((raw) => raw && !paperLinkOf(raw));
+/** How many more papers the reader may suggest here today, read while they are signed in so the dialog opens knowing it. */
+const LEFT_KEY = "suggest-papers-left";
+const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
+/** The day's allowance as the dialog takes it: how many are left once known, and whether it couldn't be read, which is tried again by itself. */
+type Allowance = { left: number | undefined; failed: boolean };
 
-/** Where a paper looked up stands: new here (or returned before, so it can be sent again), already here, waiting, or not found. */
-const STATE_OF: Record<Answer["outcome"], Row["state"]> = { found: "found", returned: "found", existing: "here", queued: "waiting", not_found: "missing" };
+/** A paper's name: its title, or what was pasted for it when nothing was found. */
+const nameOf = (row: Row) => row.title ?? row.raw;
 
-/** Asks the community, as the signed-in reader; the refusal it gives, if any, is the error's message. */
-async function call<T>(init?: RequestInit): Promise<T> {
-	const response = await fetch("/api/reader/papers", { ...init, headers: { "Content-Type": "application/json" } });
-	const body = (await response.json().catch(() => null)) as (T & { error?: string }) | null;
-	if (!response.ok || !body) throw new Error(body?.error ?? "");
-	return body;
-}
+// A row fades in where it stands, so a whole answer arriving moves nothing; one taken out closes its place.
+const rowMotion = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2 } };
 
-const post = <T,>(body: object) => call<T>({ method: "POST", body: JSON.stringify(body) });
-// A request that never reached the community fails as a TypeError whose words are the browser's ("Load failed", "Failed
-// to fetch"): it says it couldn't reach the community instead. Any other error is the community's own words.
-const messageOf = (error: unknown, fallback: string) => (error instanceof Error && !(error instanceof TypeError) && error.message ? error.message : fallback);
-
-/** One paper looked up: what it is, and where it stands here, or a button to leave it out. */
-function PaperRow({ row, onLeaveOut }: { row: Row; onLeaveOut: () => void }) {
+/** A paper's authors and year, under its title. */
+function RowDetail({ row }: { row: Row }) {
 	const t = useTranslations("suggestPapers");
-	const known = row.state === "here" || row.state === "waiting";
 	return (
-		<li className={`flex h-14 items-center gap-3 px-3 ${known ? "opacity-60" : ""}`}>
-			{row.state === "looking" ? <Spinner size="sm" /> : null}
-			<div className="min-w-0 flex-1">
-				<p className="line-clamp-2 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
-				{row.title ? (
-					<p className="flex min-w-0 gap-2 text-xs text-foreground/60 dark:text-white/60">
-						<span className="truncate">{row.authors || t("noAuthors")}</span>
-						{row.year ? <span className="shrink-0 tabular-nums">{row.year}</span> : null}
-					</p>
-				) : null}
-			</div>
-			<RowEnd row={row} onLeaveOut={onLeaveOut} />
-		</li>
+		<p className="flex min-w-0 gap-2 text-xs/5 text-foreground/60 dark:text-white/60">
+			<span className="truncate">{row.authors || t("noAuthors")}</span>
+			{row.year ? <span className="shrink-0 tabular-nums">{row.year}</span> : null}
+		</p>
 	);
 }
 
-/** Where a paper looked up stands here, or the button that leaves a new one out. */
-function RowEnd({ row, onLeaveOut }: { row: Row; onLeaveOut: () => void }) {
-	const t = useTranslations("suggestPapers");
-	if (row.state === "here" || row.state === "waiting")
-		return (
-			<Chip size="sm" variant="flat" startContent={<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-3.5" aria-hidden />}>
-				{row.state === "here" ? t("alreadyHere") : t("waiting")}
-			</Chip>
-		);
-	if (row.state === "missing") return <Chip size="sm" variant="flat" color="danger">{t("notFound")}</Chip>;
-	if (row.state !== "found") return null;
+/** One paper: what it is, with what can be done with it at its end. `picked` marks one that goes with the next send. */
+function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolean; children: React.ReactNode }) {
+	// One that can't be suggested (already here, waiting, not found) stands back.
+	const dimmed = row.state === "found" ? "" : "opacity-60";
 	return (
-		<Button isIconOnly size="sm" variant="light" aria-label={t("leaveOut", { title: row.title ?? row.raw })} onPress={onLeaveOut}>
-			<HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+		<motion.li {...rowMotion} className="h-[4.25rem] overflow-hidden">
+			<div className="flex h-[4.25rem] items-center gap-3 rounded-xl px-3 hover:bg-black/[3%] dark:hover:bg-white/[4%]">
+				<span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${picked ? "bg-accent/15 text-accent" : "bg-black/5 text-foreground/50 dark:bg-white/5 dark:text-white/50"}`}>
+					<HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />
+				</span>
+				<div className={`min-w-0 flex-1 ${dimmed}`}>
+					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
+					{row.title ? <RowDetail row={row} /> : null}
+				</div>
+				{children}
+			</div>
+		</motion.li>
+	);
+}
+
+/** Where a paper that can't be suggested stands, said in a chip. */
+const STANDING = {
+	here: { label: "alreadyHere", color: "default" },
+	waiting: { label: "waiting", color: "default" },
+	missing: { label: "notFound", color: "danger" },
+} as const;
+
+function StandingChip({ state }: { state: keyof typeof STANDING }) {
+	const t = useTranslations("suggestPapers");
+	const { label, color } = STANDING[state];
+	return <Chip size="sm" variant="flat" color={color}>{t(label)}</Chip>;
+}
+
+/** How the button that adds a paper reads before and after: one button in one place, which then takes the paper back out. */
+const ADD = { variant: "bordered", color: "default", label: "add", says: "addTitle", icon: Add01Icon } as const;
+const ADDED = { variant: "flat", color: "accent", label: "added", says: "leaveOut", icon: CheckmarkCircle02Icon } as const;
+
+/** What a paper the search found offers: adding it, taking it back out, or where it already stands here. */
+function FoundEnd({ row, picked, full, onAdd, onRemove }: { row: Row; picked: boolean; /** The day allows no more: one not picked can't be added. */ full: boolean; onAdd: () => void; onRemove: () => void }) {
+	const t = useTranslations("suggestPapers");
+	if (row.state !== "found") return <StandingChip state={row.state} />;
+	const look = picked ? ADDED : ADD;
+	return (
+		<Button size="sm" variant={look.variant} color={look.color} className="w-24 shrink-0" aria-label={t(look.says, { title: nameOf(row) })} isDisabled={full && !picked} onPress={picked ? onRemove : onAdd} startContent={<HugeiconsIcon icon={look.icon} className="size-4" aria-hidden />}>
+			{t(look.label)}
 		</Button>
 	);
 }
@@ -102,7 +115,7 @@ function SentPanel({ count }: { count: number }) {
 	const t = useTranslations("suggestPapers");
 	const openScholar = useOpenScholarUrl();
 	return (
-		<div className="flex flex-col items-center gap-3 py-8 text-center">
+		<div className="flex h-full flex-col items-center justify-center gap-3 text-center">
 			<HugeiconsIcon icon={CheckmarkCircle02Icon} className="size-10 text-success" aria-hidden />
 			<p className="text-base font-medium">{t("sent", { count })}</p>
 			<p className="max-w-sm text-sm text-foreground/60 dark:text-white/60">{t("sentHint")}</p>
@@ -113,192 +126,385 @@ function SentPanel({ count }: { count: number }) {
 	);
 }
 
-/** What the paste field says beside Find papers: the day's limit, or why the last try failed. */
-function hintOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: number | null, named: number, room: number, problem: string, invalid: string[]) {
-	// Until the allowance is known, only why it couldn't be read.
-	if (left === null) return problem;
-	if (left === 0) return t("noneLeft");
-	if (named > room) return t("overLimit", { count: room });
-	// A failed lookup or send says why first: the entries it didn't recognise matter less.
-	return problem || (invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "");
+/** Before anything is typed or picked: the two things the box takes, side by side in the room the papers will fill. */
+function EmptyHint() {
+	const t = useTranslations("suggestPapers");
+	const ways = [
+		{ icon: Search01Icon, title: t("emptyTitle"), hint: t("emptyHint") },
+		{ icon: TaskAdd01Icon, title: t("pasteTitle"), hint: t("pasteHint") },
+	];
+	return (
+		<div className="grid h-full content-center gap-3 px-3 sm:grid-cols-2">
+			{ways.map((way) => (
+				<div key={way.title} className="flex flex-col items-center gap-1 rounded-2xl bg-black/[3%] px-4 py-6 text-center dark:bg-white/[4%]">
+					<HugeiconsIcon icon={way.icon} className="mb-2 size-7 text-foreground/50 dark:text-white/50" aria-hidden />
+					<p className="font-medium">{way.title}</p>
+					<p className="text-sm text-foreground/60 dark:text-white/60">{way.hint}</p>
+				</div>
+			))}
+		</div>
+	);
 }
 
-/** The dialog's state: the paste, what it found, and sending it. */
-function useSuggestion() {
-	const [text, setText] = useState("");
-	const [left, setLeft] = useState<number | null>(null);
-	const [rows, setRows] = useState<Row[] | null>(null);
-	const [sent, setSent] = useState<number | null>(null);
-	const [sending, setSending] = useState(false);
-	const [problem, setProblem] = useState("");
-	const [requestId, setRequestId] = useState("");
-	// Each paste, lookup and reset moves this on, so a lookup that comes back after its paste changed is dropped.
-	const turn = useRef(0);
-	/** A new request, with how many papers the reader may still suggest here today. Kept, so the dialog listens once. */
-	const start = useCallback((failed: string) => {
-		setRequestId(crypto.randomUUID());
-		setLeft(null);
-		void call<{ left: number }>().then(({ left }) => setLeft(left), (error: unknown) => setProblem(messageOf(error, failed)));
-	}, []);
-	const named = parse(text);
-	// Nothing is looked up until the day's allowance is known, and no more than it is sent.
-	const room = Math.min(left ?? 0, PER_REQUEST);
-	const pasted = named.slice(0, room);
-	const ready = (rows ?? []).filter((row) => row.state === "found").slice(0, room);
+/** A pasted list in one line: how many of its papers were added, are already here, wait for review, or weren't found. */
+function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string) => boolean }) {
+	const t = useTranslations("suggestPapers");
+	const count = (state: Row["state"]) => rows.filter((row) => row.state === state).length;
+	const parts = [
+		{ key: "added" as const, count: rows.filter((row) => isPicked(row.key)).length, classNames: { base: "bg-accent/15", content: "text-accent" } },
+		{ key: "here" as const, count: count("here") },
+		{ key: "waiting" as const, count: count("waiting") },
+		{ key: "missing" as const, count: count("missing"), color: "danger" as const },
+	].filter((part) => part.count > 0);
+	return (
+		<p className="flex flex-wrap gap-2 px-3 pb-2">
+			{parts.map(({ key, count: papers, ...look }) => <Chip key={key} size="sm" variant="flat" {...look}>{t(`pasted.${key}`, { count: papers })}</Chip>)}
+		</p>
+	);
+}
+
+/** The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day still allows. */
+function useBasket(room: number) {
+	const [basket, setBasket] = useState<Row[]>([]);
+	const fresh = (held: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !held.some((other) => other.key === row.key));
 	return {
-		text, left, rows, sent, sending, problem, named, room, pasted, ready,
-		looking: rows?.some((row) => row.state === "looking") ?? false,
-		start,
-		type: (value: string) => {
-			turn.current++;
-			setText(value);
-			setRows(null);
-		},
-		reset: () => {
-			turn.current++;
-			setText("");
-			setRows(null);
-			setSent(null);
-			setProblem("");
-		},
-		leaveOut: (key: string) => setRows((all) => all?.filter((row) => row.key !== key) ?? all),
-		find: async (failed: string) => {
-			const mine = ++turn.current;
-			setProblem("");
-			setRows(pasted.map((paper) => ({ ...paper, state: "looking" })));
-			try {
-				const { results } = await post<{ results: Answer[] }>({ preview: true, papers: pasted.map((paper) => paper.ref) });
-				if (mine === turn.current) setRows(pasted.map((paper, at) => ({ ...paper, state: STATE_OF[results[at]?.outcome ?? "not_found"], ...results[at]?.paper })));
-			} catch (error) {
-				if (mine !== turn.current) return;
-				setRows(null);
-				setProblem(messageOf(error, failed));
-			}
-		},
-		send: async (failed: string) => {
-			// A dialog closed or changed while this was on its way doesn't take its answer.
-			const mine = ++turn.current;
-			setSending(true);
-			setProblem("");
-			try {
-				const { results } = await post<{ results: Sent[] }>({ requestId, papers: ready.map((row) => row.ref) });
-				if (mine !== turn.current) return;
-				const failures = results.filter((result) => result.outcome === "failed");
-				if (!failures.length) return setSent(results.filter((result) => result.outcome === "queued").length);
-				// Some didn't go: the ones that did now wait for review, and the rest stay here to send again, with why.
-				const waiting = new Set(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
-				setRows((all) => all?.map((row) => (waiting.has(row.key) ? { ...row, state: "waiting" } : row)) ?? all);
-				setProblem(failures[0]?.message ?? failed);
-			} catch (error) {
-				if (mine === turn.current) setProblem(messageOf(error, failed));
-			} finally {
-				setSending(false);
-			}
-		},
+		basket,
+		add: (rows: Row[]) => setBasket((held) => [...held, ...fresh(held, rows).slice(0, Math.max(0, room - held.length))]),
+		remove: (keys: string[]) => setBasket((held) => held.filter((row) => !keys.includes(row.key))),
 	};
 }
 
-/** The paste, the day's limit or what went wrong beside Find papers, and the papers it found. */
-function PastePanel({ suggestion }: { suggestion: ReturnType<typeof useSuggestion> }) {
+/** What a text asks for, as the day's allowance lets it: the papers it names, or the title it is, when it is long enough to be one. */
+function askedBy(query: string, room: number) {
+	const named = parse(query).length;
+	return { named, searchable: room > 0 && (named > 0 || query.length >= TITLE_MIN) };
+}
+
+/**
+ * What the field's text finds, once the typing stops: the last answer stays, dimmed (`stale`), until the next one is
+ * in. Papers named outright are what the reader means to send, so they are picked (`onNamed`) as they are found.
+ */
+function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
+	const typed = text.trim();
+	const query = useDebouncedValue(typed, 350);
+	const { named, searchable } = askedBy(query, room);
+	// The text whose papers were picked already. The same text read again behind the reader's back (after a send, on
+	// reconnecting) picks nothing back that they took out; typing again (`rearm`) makes the next answer pick.
+	const pickedFor = useRef<string | null>(null);
+	const pick = (answer: { named: boolean; rows: Row[] }) => {
+		if (!answer.named || pickedFor.current === query) return;
+		pickedFor.current = query;
+		onNamed(answer.rows);
+	};
+	const search = useSWR(searchable ? ["suggest-find", query, room] : null, () => findPapers(query, room), {
+		keepPreviousData: true,
+		revalidateOnFocus: false,
+		// Asked again each time the same text comes back, never answered from a moment ago: `onSuccess` is what picks a paste's papers.
+		dedupingInterval: 0,
+		onSuccess: pick,
+	});
+	const settled = typed === query && !search.isValidating;
+	const rows = typed && searchable ? (search.data?.rows ?? []) : [];
+	return { query, named, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, rearm: () => { pickedFor.current = null; } };
+}
+
+/** What the dialog says above its list when something needs saying: the day's limit, why the last try failed, or what a paste holds that names no paper. */
+function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed }: Allowance, room: number, failure: string) {
+	if (failed) return t("failed");
+	if (left === 0) return t("noneLeft");
+	if (find.named > room) return t("overLimit", { count: room });
+	if (failure) return failure;
+	if (find.error) return messageOf(find.error, t("failed"));
+	const invalid = find.named ? unnamed(find.query) : [];
+	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "";
+}
+
+/**
+ * Sending the picked papers, no more than `room` of them: the ones that went leave the list (`onGone`), and one that
+ * didn't stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
+ * the community counted those papers when it took the request, and takes the same request again.
+ */
+function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) {
 	const t = useTranslations("suggestPapers");
-	const { rows } = suggestion;
+	const { mutate } = useSWRConfig();
+	const [sent, setSent] = useState<number | null>(null);
+	const [sending, setSending] = useState(false);
+	const [failure, setFailure] = useState("");
+	const [requestId] = useState(() => crypto.randomUUID());
+	const ready = failure ? basket : basket.slice(0, room);
+	const went = (results: { outcome: string; message?: string }[]) => {
+		// Where each paper now stands is read again.
+		void mutate((key) => Array.isArray(key) && String(key[0]).startsWith("suggest-"));
+		const refused = results.find((result) => result.outcome === "failed");
+		// What the day still allows is read again once everything went.
+		if (!refused) {
+			void mutate(LEFT_KEY);
+			return setSent(results.filter((result) => result.outcome === "queued").length);
+		}
+		onGone(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
+		setFailure(refused.message ?? t("failed"));
+	};
+	const send = async () => {
+		setSending(true);
+		setFailure("");
+		await post<{ results: { outcome: string; message?: string }[] }>({ requestId, papers: ready.map((row) => row.ref) })
+			.then(({ results }) => went(results), (error: unknown) => setFailure(messageOf(error, t("failed"))));
+		setSending(false);
+	};
+	return { ready, sent, sending, failure, send };
+}
+
+/**
+ * The dialog's state: what is typed, what it finds, the papers picked to send, and sending them. `first` is the text
+ * its field opens with: the page's search, or the paper a row offered.
+ */
+/** Whether the allowance is in, one way or the other: one that couldn't be read is an answer too, said in place of waiting on it. */
+const allowanceIn = ({ left, failed }: Allowance) => left !== undefined || failed;
+
+/** What the list has to say about the text typed, once its search and the day's allowance are both in. */
+function listStateOf(typed: boolean, find: ReturnType<typeof useFind>, allowance: Allowance) {
+	const answered = find.settled && allowanceIn(allowance);
+	const nothing = !find.named && find.rows.length === 0 && !find.error;
+	return {
+		/** The list still shows the answer to an earlier text. */
+		stale: typed && !answered,
+		/** What the list shows is a pasted list's papers, with more than one to count. */
+		summarised: find.pasted && find.rows.length > 1,
+		/** A title that found nothing, said in the list's place. */
+		noMatches: typed && answered && nothing,
+	};
+}
+
+function useSuggestion(first: string, allowance: Allowance) {
+	const t = useTranslations("suggestPapers");
+	const [text, setText] = useState(first);
+	// Nothing is looked up until the day's allowance is known, and no more than it is picked or sent.
+	const room = Math.min(allowance.left ?? 0, PER_REQUEST);
+	const { basket, add, remove } = useBasket(room);
+	const find = useFind(text, room, add);
+	const sending = useSend(basket, room, remove);
+	return {
+		...sending, text, basket,
+		...listStateOf(Boolean(text.trim()), find, allowance),
+		/** The day allows no more than are picked already: nothing more is added. */
+		full: room > 0 && basket.length >= room,
+		found: find.rows,
+		type: (value: string) => { find.rearm(); setText(value); },
+		add: (row: Row) => add([row]),
+		remove: (key: string) => remove([key]),
+		isPicked: (key: string) => basket.some((row) => row.key === key),
+		notice: noticeOf(t, find, allowance, room, sending.failure),
+	};
+}
+type Suggestion = ReturnType<typeof useSuggestion>;
+
+/** The papers the search found, each with its button; one answer takes the last one's place, row for row. */
+function FoundList({ suggestion }: { suggestion: Suggestion }) {
+	const t = useTranslations("suggestPapers");
+	return (
+		<ul aria-label={t("resultsLabel")} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
+			{suggestion.found.map((row) => (
+				<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
+					<FoundEnd row={row} picked={suggestion.isPicked(row.key)} full={suggestion.full} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
+				</PaperRow>
+			))}
+		</ul>
+	);
+}
+
+/** The papers picked to send that the search isn't showing now: a paper picked shows once. */
+function Basket({ suggestion }: { suggestion: Suggestion }) {
+	const t = useTranslations("suggestPapers");
+	const kept = suggestion.basket.filter((row) => !suggestion.found.some((match) => match.key === row.key));
+	if (!kept.length) return null;
 	return (
 		<>
-			<Textarea
-				aria-label={t("inputLabel")}
-				placeholder={"10.1016/j.tate.2015.06.010\nhttps://openalex.org/W2126314681"}
-				minRows={4}
-				maxRows={8}
-				isDisabled={suggestion.left === 0}
-				value={suggestion.text}
-				onValueChange={suggestion.type}
-				classNames={{ input: "font-mono text-xs" }}
-			/>
-			<div className="flex items-center justify-between gap-3">
-				<span className="text-sm text-warning-600 dark:text-warning">{hintOf(t, suggestion.left, suggestion.named.length, suggestion.room, suggestion.problem, unnamed(suggestion.text))}</span>
-				<Button className="shrink-0" size="sm" variant="bordered" isDisabled={!suggestion.pasted.length || rows !== null} onPress={() => void suggestion.find(t("failed"))} startContent={<HugeiconsIcon icon={Search01Icon} className="size-4" aria-hidden />}>
-					{t("find")}
+			<motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="flex h-8 items-end px-3 text-xs font-medium text-foreground/50 dark:text-white/50">
+				{t("toSuggestLabel")}
+			</motion.p>
+			<ul aria-label={t("toSuggestLabel")}>
+				<AnimatePresence initial={false}>
+					{kept.map((row) => (
+						<PaperRow key={row.key} row={row} picked>
+							<Button isIconOnly size="sm" variant="light" aria-label={t("leaveOut", { title: nameOf(row) })} onPress={() => suggestion.remove(row.key)}>
+								<HugeiconsIcon icon={Cancel01Icon} className="size-4" aria-hidden />
+							</Button>
+						</PaperRow>
+					))}
+				</AnimatePresence>
+			</ul>
+		</>
+	);
+}
+
+/** What the dialog has to say above its lists, when it has something: a warning, or that a title found nothing. */
+function Notices({ suggestion }: { suggestion: Suggestion }) {
+	const t = useTranslations("suggestPapers");
+	return (
+		<>
+			{suggestion.notice ? <p className="px-3 pb-2 text-sm text-warning-600 dark:text-warning">{suggestion.notice}</p> : null}
+			{suggestion.noMatches ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("noMatches")}</p> : null}
+			{suggestion.full ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("basketFull", { count: suggestion.basket.length })}</p> : null}
+			{suggestion.summarised ? <PastedSummary rows={suggestion.found} isPicked={suggestion.isPicked} /> : null}
+		</>
+	);
+}
+
+/** The papers the search found, then the ones picked to send, in a room that keeps its height. */
+function PaperLists({ suggestion }: { suggestion: Suggestion }) {
+	const idle = !suggestion.text.trim() && !suggestion.basket.length && !suggestion.notice;
+	if (idle) return <EmptyHint />;
+	return (
+		<>
+			<Notices suggestion={suggestion} />
+			<FoundList suggestion={suggestion} />
+			<Basket suggestion={suggestion} />
+		</>
+	);
+}
+
+/** The lines of a pasted list the field shows before it scrolls. */
+const FIELD_ROWS = 5;
+/** The field's fade over the lines scrolled out of sight: above, below, or both. */
+const FIELD_FADE: Record<string, string> = {
+	"true-false": "[mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]",
+	"false-true": "[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]",
+	"true-true": "[mask-image:linear-gradient(to_bottom,transparent,black_1.5rem,black_calc(100%-1.5rem),transparent)]",
+	"false-false": "",
+};
+
+/** The search icon and the spinner share one place and fade into each other, so neither arrives at once. */
+function FieldIcon({ busy }: { busy: boolean }) {
+	const fade = "absolute inset-0 transition-opacity duration-200 motion-reduce:transition-none";
+	return (
+		<span className="relative size-6 shrink-0">
+			<HugeiconsIcon icon={Search01Icon} aria-hidden className={`${fade} size-6 text-black/60 dark:text-white/40 ${busy ? "opacity-0" : ""}`} />
+			<span className={`${fade} flex items-center justify-center ${busy ? "" : "opacity-0"}`}>
+				<Spinner size="sm" />
+			</span>
+		</span>
+	);
+}
+
+/** One line for a title, growing to hold a pasted list with a paper on each line; a list longer than it fades at the end that has more. */
+function FindField({ suggestion, disabled }: { suggestion: Suggestion; disabled: boolean }) {
+	const t = useTranslations("suggestPapers");
+	// Which ends of a long pasted list are out of the field's sight, as its own scrolling says.
+	const [hidden, setHidden] = useState({ above: false, below: false });
+	const fade = suggestion.text.split("\n").length > FIELD_ROWS ? FIELD_FADE[`${hidden.above}-${hidden.below}`] : "";
+	return (
+		<Textarea
+			autoFocus
+			isClearable
+			isDisabled={disabled}
+			aria-label={t("inputLabel")}
+			placeholder={t("placeholder")}
+			minRows={1}
+			maxRows={FIELD_ROWS}
+			autoCorrect="off"
+			value={suggestion.text}
+			onValueChange={suggestion.type}
+			onClear={() => suggestion.type("")}
+			// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
+			onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) event.preventDefault(); }}
+			onScroll={(event) => {
+				const field = event.currentTarget;
+				setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
+			}}
+			// The clear button sits on the first line, level with the search icon and as far from its own edge.
+			classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", clearButton: "top-3.5 right-3.5 rtl:left-3.5", input: `py-0.5 text-base font-normal ${fade}` }}
+			startContent={<FieldIcon busy={suggestion.stale} />}
+		/>
+	);
+}
+
+/** How many papers go, and the buttons that send them or close the dialog. */
+function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: () => void }) {
+	const t = useTranslations("suggestPapers");
+	const padded = "px-4 xl:px-4";
+	if (suggestion.sent !== null) return <Button size="md" className={`ms-auto ${padded}`} color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>;
+	return (
+		<>
+			<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: suggestion.ready.length })}</span>
+			<span className="ms-auto flex gap-2">
+				<Button size="md" className={padded} variant="light" onPress={onClose}>{t("cancel")}</Button>
+				<Button size="md" className={`${padded} xl:gap-2`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={<HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
+					{t("send")}
 				</Button>
-			</div>
-			{rows ? (
-				<ul aria-label={t("resultsLabel")} className="max-h-[calc(6*3.5rem+5px)] shrink-0 divide-y overflow-y-auto divide-black/10 rounded-xl border border-black/10 dark:divide-white/10 dark:border-white/10">
-					{rows.map((row) => <PaperRow key={row.key} row={row} onLeaveOut={() => suggestion.leaveOut(row.key)} />)}
-				</ul>
-			) : null}
+			</span>
+		</>
+	);
+}
+
+/** The dialog's inside, made when it opens, with the text it opens on already in its field. */
+function SuggestContent({ first, allowance, onClose }: { first: string; allowance: Allowance; onClose: () => void }) {
+	const t = useTranslations("suggestPapers");
+	const suggestion = useSuggestion(first, allowance);
+	const done = suggestion.sent !== null;
+	return (
+		<>
+			{/* The same distance from the dialog's edge on every side: its top, its sides and under its buttons. */}
+			<ModalHeader className="flex flex-col gap-3 px-4 pb-2 pt-4">
+				<div>
+					<p className="text-lg font-semibold">{t("title")}</p>
+					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
+				</div>
+				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} />}
+			</ModalHeader>
+			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
+			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] flex-none p-0">
+				{/* Papers past the edge fade out under it, at whichever end has more. */}
+				<ScrollShadow size={32} className="h-full px-1">{done ? <SentPanel count={suggestion.sent ?? 0} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
+			</ModalBody>
+			<ModalFooter className="flex-wrap items-center justify-between gap-y-3 px-4 pb-4 pt-3">
+				<SendFooter suggestion={suggestion} onClose={onClose} />
+			</ModalFooter>
 		</>
 	);
 }
 
 /**
- * Suggest papers to this community: a signed-in reader pastes DOIs or OpenAlex IDs, sees what they are, and sends
- * them to the community's review queue (OpenDevEd/new-el#777). The team reviews each before it goes live; the reader
- * follows them in Openscholar's Your submissions. As many as the community takes from them today are looked up.
+ * Suggest papers to this community: a signed-in reader searches by title, or pastes links, DOIs or OpenAlex IDs,
+ * picks the papers, and sends them to the community's review queue (OpenDevEd/new-el#777). The team reviews each
+ * before it goes live; the reader follows them in Openscholar's Your submissions.
+ *
+ * It is open while the address says so (`?suggest`, with the text its field starts on): a sign-in started from a
+ * Suggest button comes back to that address, so the dialog is open when the page returns.
  */
 export function SuggestPapersDialog() {
-	const t = useTranslations("suggestPapers");
 	const { reader } = useReaderSession();
-	const [open, setOpen] = useState(false);
-	const suggestion = useSuggestion();
-	const { start } = suggestion;
-	// A window event, so the reader's menu and an empty search open the same dialog.
+	const [text, setText] = useQueryState(SUGGEST_PARAM, parseAsString);
+	const left = useLeft(Boolean(reader));
+	// A window event, so the reader's menu and every Suggest button open the same dialog.
 	useEffect(() => {
-		const show = () => {
-			setOpen(true);
-			start(t("failed"));
-		};
-		window.addEventListener("suggest-papers:open", show);
-		return () => window.removeEventListener("suggest-papers:open", show);
-	}, [start, t]);
+		const show = (event: Event) => void setText((event as CustomEvent<string>).detail);
+		window.addEventListener(OPEN_EVENT, show);
+		return () => window.removeEventListener(OPEN_EVENT, show);
+	}, [setText]);
 	if (!reader) return null;
-	const { rows, sent, looking, ready } = suggestion;
-	const close = () => {
-		setOpen(false);
-		suggestion.reset();
-	};
-
+	const close = () => void setText(null);
 	return (
-		<DialogModal isOpen={open} onOpenChange={(next) => (next ? setOpen(true) : close())} size="3xl" scrollBehavior="inside">
+		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
 			<ModalContent>
-				<ModalHeader className="flex flex-col gap-1">
-					<span className="text-lg font-semibold">{t("title")}</span>
-					<span className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</span>
-				</ModalHeader>
-				<ModalBody>
-					{sent !== null ? <SentPanel count={sent} /> : <PastePanel suggestion={suggestion} />}
-				</ModalBody>
-				<ModalFooter className="items-center justify-between">
-					{sent !== null ? (
-						<Button className="ms-auto" color="accent" variant="solid" onPress={close}>{t("done")}</Button>
-					) : (
-						<>
-							<span className="text-sm text-foreground/60 dark:text-white/60 tabular-nums">{rows && !looking ? t("toSuggest", { count: ready.length }) : null}</span>
-							<span className="flex gap-2">
-								<Button variant="light" onPress={close}>{t("cancel")}</Button>
-								<Button color="accent" variant="solid" isDisabled={!rows || looking || !ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send(t("failed"))} startContent={suggestion.sending ? null : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
-									{t("send")}
-								</Button>
-							</span>
-						</>
-					)}
-				</ModalFooter>
+				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} onClose={close} />
 			</ModalContent>
 		</DialogModal>
 	);
 }
 
-/**
- * Under a search that found nothing: a paper that isn't here can be suggested. Someone signed out signs in with
- * Openscholar first.
- */
-export function SuggestLink() {
+/** How the button that suggests papers is drawn beside the search's own buttons, and `small` under a search that found nothing, as the button under results that failed to load is. */
+const BESIDE_SEARCH = { size: "lg", icon: "size-6", at: "endContent" } as const;
+const UNDER_EMPTY = { size: "sm", icon: "size-4", at: "startContent" } as const;
+
+/** The button that suggests papers. Gone where the community has no reader accounts. */
+export function SuggestButton({ small = false }: { small?: boolean }) {
 	const t = useTranslations("suggestPapers");
-	const { reader, signIn } = useReaderSession();
+	const suggest = useSuggest();
+	const look = small ? UNDER_EMPTY : BESIDE_SEARCH;
 	if (!useLibraryFeature("readerAccounts")) return null;
 	return (
-		<span className="mt-2 block">
-			<button type="button" onClick={reader ? openSuggestPapers : signIn} className="text-accent underline-offset-2 hover:underline">
-				{t("emptyLink")}
-			</button>
-		</span>
+		<Button size={look.size} onPress={() => suggest()} {...{ [look.at]: <HugeiconsIcon icon={InboxIcon} className={look.icon} aria-hidden /> }}>
+			{t("title")}
+		</Button>
 	);
 }

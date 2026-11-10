@@ -8,7 +8,7 @@ import { minimalLibraryConfig } from "../fixtures/library-config";
 
 vi.mock("server-only", () => ({}));
 vi.mock("nuqs", () => ({ useQueryState: () => [null, vi.fn()] }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/lib" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/lib", useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("@/i18n/routing", () => ({
 	Link: ({ children }: { children: React.ReactNode }) => children,
 	useRouter: () => ({ push: vi.fn() }),
@@ -41,6 +41,8 @@ const configState = { poweredBy: true };
 const openScholar = `${new URL(libraryConfigSchema.parse(minimalLibraryConfig).authentication.openScholar.libraryUrl).origin}/`;
 
 vi.mock("@/context/LibraryConfigProvider", () => ({
+	// The footer's Suggest papers link shows with reader accounts, which this community has off.
+	useLibraryFeature: () => false,
 	useLibraryConfig: () => {
 		const config = projectPublicLibraryConfig(
 			libraryConfigSchema.parse({

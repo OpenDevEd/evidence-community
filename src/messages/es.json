@@ -620,7 +620,8 @@
     "rateLimitedMessage": "Has alcanzado el límite de solicitudes. Vuelve a intentarlo en {seconds} segundos.",
     "suggestPapers": "Sugerir artículos",
     "adminMenuItem": "Administración",
-    "joinThisTeam": "Unirse a este equipo"
+    "joinThisTeam": "Unirse a este equipo",
+    "applicationSent": "Solicitud enviada"
   },
   "ai": {
     "sourcesTitle": "Fuentes",
@@ -1019,10 +1020,8 @@
     "curation": "Cómo se selecciona el contenido de la comunidad",
     "team": "Quién está detrás",
     "involvement": "Participe",
-    "suggest": "Sugerir una publicación",
-    "suggestSubject": "Sugerencia de una publicación",
-    "join": "Unirse como editor",
-    "joinSubject": "Solicitud para unirse como editor",
+    "suggest": "Sugerir artículos",
+    "join": "Unirse a este equipo",
     "stepArrival": "Enviada",
     "stepCheck": "Revisada por un editor",
     "stepPublication": "Publicada",
@@ -1036,7 +1035,13 @@
     "figureAdded": "nuevas en los últimos 30 días",
     "figureMerged": "{count, plural, one {registro repetido fusionado} other {registros repetidos fusionados}}",
     "figureFullText": "{count, plural, one {registro con texto completo} other {registros con texto completo}}",
-    "defaultIntro": "**{name}** reúne la investigación en un solo lugar para que pueda buscarla, leerla y citarla. Cada publicación incluye sus datos y, cuando la licencia lo permite, el texto completo."
+    "defaultIntro": "**{name}** reúne la investigación en un solo lugar para que pueda buscarla, leerla y citarla. Cada publicación incluye sus datos y, cuando la licencia lo permite, el texto completo.",
+    "suggestHint": "El equipo revisa cada uno antes de publicarlo",
+    "joinHint": "Añade artículos y edita registros como creador",
+    "joinWaiting": "Solicitud enviada",
+    "joinWaitingHint": "El equipo responde por correo electrónico",
+    "joinAdmin": "Abrir la administración",
+    "joinAdminHint": "Formas parte de este equipo"
   },
   "sidebar": {
     "years": "Años",
@@ -1669,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "Sugerir artículos",
-    "description": "Pega enlaces a artículos (de Openscholar, este sitio, OpenAlex o doi.org), DOI o ID de OpenAlex. El equipo de la comunidad revisa cada uno antes de publicarlo.",
-    "inputLabel": "Enlaces a artículos, DOI o ID de OpenAlex",
-    "find": "Buscar artículos",
+    "description": "El equipo revisa cada artículo antes de publicarlo.",
+    "inputLabel": "Un título, o una lista de DOI, ID de OpenAlex o enlaces a artículos",
     "overLimit": "{count, plural, one {Hoy puedes sugerir # artículo más aquí, así que solo se busca el primero.} other {Hoy puedes sugerir # artículos más aquí, así que se buscan los primeros #.}}",
     "noneLeft": "Hoy ya sugeriste aquí tantos artículos como puede una persona. Vuelve a intentarlo mañana.",
     "failed": "No se pudo conectar con la comunidad. Inténtalo de nuevo.",
@@ -1688,8 +1692,29 @@
     "sent": "{count, plural, one {# artículo enviado a revisión} other {# artículos enviados a revisión}}",
     "sentHint": "Verás en qué punto está cada uno en Tus envíos en Openscholar: en espera, publicado o rechazado con el motivo del equipo.",
     "yourSubmissions": "Tus envíos",
-    "emptyLink": "¿Conoces un artículo que debería estar aquí? Sugiérelo",
-    "invalid": "{count, plural, one {Esto no es un enlace a un artículo, un DOI ni un ID, así que se omite: {values}} other {Esto no son enlaces a artículos, DOI ni ID, así que se omiten: {values}}}"
+    "invalid": "{count, plural, one {Esto no es un enlace a un artículo, un DOI ni un ID, así que se omite: {values}} other {Esto no son enlaces a artículos, DOI ni ID, así que se omiten: {values}}}",
+    "placeholder": "Busca por título, o pega DOI y enlaces",
+    "add": "Añadir",
+    "addTitle": "Añadir {title}",
+    "noMatches": "No se encontró ningún artículo con ese título. Escribe más del título o pega su DOI.",
+    "suggestThis": "Sugerir este artículo",
+    "inCommunity": "En esta comunidad",
+    "open": "Abrir",
+    "lookingUp": "Buscando este artículo",
+    "noPaperNamed": "No se encontró ningún artículo para esto",
+    "added": "Añadido",
+    "toSuggestLabel": "Para sugerir",
+    "emptyTitle": "Buscar por título",
+    "emptyHint": "Elige entre los artículos que encuentre",
+    "pasteTitle": "Pegar una lista",
+    "pasteHint": "DOI, ID de OpenAlex o enlaces a artículos, todos los que tengas",
+    "pasted": {
+      "added": "{count, plural, one {# añadido} other {# añadidos}}",
+      "here": "{count, plural, one {# ya está aquí} other {# ya están aquí}}",
+      "waiting": "{count, plural, one {# esperando revisión} other {# esperando revisión}}",
+      "missing": "{count, plural, one {# no encontrado} other {# no encontrados}}"
+    },
+    "basketFull": "{count, plural, one {Ese es el # artículo que puedes sugerir aquí hoy.} other {Esos son los # artículos que puedes sugerir aquí hoy.}}"
   },
   "browse": {
     "title": "Explorar por año",

@@ -5,7 +5,6 @@ import { contentFrom, defaultContent } from "@/components/pages/home-content";
 import { loadHomeData } from "@/components/pages/home-data";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { getLibraryConfig } from "@/config/library-config/server";
-import { getRuntimePageAvailability } from "@/config/library-config/pages";
 import { redirect } from "@/i18n/routing";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -69,7 +68,6 @@ export default async function Home({ params }: Props) {
 			shapes={shapes}
 			name={config.identity.name}
 			siteUrl={config.identity.baseUrl}
-			contact={{ email: config.contact.email ?? null, page: getRuntimePageAvailability(config)["/contact"] }}
 			today={new Date().toISOString().slice(0, 10)}
 			about={about}
 			data={data}

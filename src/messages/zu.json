@@ -620,7 +620,8 @@
     "rateLimitedMessage": "Ufinyelele umkhawulo wezicelo. Zama futhi emasekhondeni angu-{seconds}.",
     "suggestPapers": "Phakamisa amaphepha",
     "adminMenuItem": "Ukuphatha",
-    "joinThisTeam": "Joyina leli qembu"
+    "joinThisTeam": "Joyina leli qembu",
+    "applicationSent": "Isicelo sithunyelwe"
   },
   "ai": {
     "sourcesTitle": "Imithombo",
@@ -1019,10 +1020,8 @@
     "curation": "Indlela umphakathi ohlelwe ngayo",
     "team": "Ubani ongemuva kwalo",
     "involvement": "Zibandakanye",
-    "suggest": "Phakamisa ukushicilelwa",
-    "suggestSubject": "Ukuphakamisa ukushicilelwa",
-    "join": "Joyina njengomhleli",
-    "joinSubject": "Ukujoyina njengomhleli",
+    "suggest": "Phakamisa amaphepha",
+    "join": "Joyina leli qembu",
     "stepArrival": "Kuthunyelwe",
     "stepCheck": "Kuhlolwe umhleli",
     "stepPublication": "Kushicilelwe",
@@ -1036,7 +1035,13 @@
     "figureAdded": "okusha ezinsukwini ezingu-30 ezedlule",
     "figureMerged": "{count, plural, one {irekhodi eliphindiwe lihlanganisiwe} other {amarekhodi aphindiwe ahlanganisiwe}}",
     "figureFullText": "{count, plural, one {irekhodi elinombhalo ogcwele} other {amarekhodi anombhalo ogcwele}}",
-    "defaultIntro": "**{name}** uhlanganisa ucwaningo endaweni eyodwa, ukuze ukwazi ukukusesha, ukukufunda nokukubhekisela. Ukushicilelwa ngakunye kunemininingwane yakho, futhi lapho ilayisense ivumela, kunombhalo ogcwele."
+    "defaultIntro": "**{name}** uhlanganisa ucwaningo endaweni eyodwa, ukuze ukwazi ukukusesha, ukukufunda nokukubhekisela. Ukushicilelwa ngakunye kunemininingwane yakho, futhi lapho ilayisense ivumela, kunombhalo ogcwele.",
+    "suggestHint": "Ithimba libuyekeza ngalinye ngaphambi kokuthi lishicilelwe",
+    "joinHint": "Engeza amaphepha futhi uhlele amarekhodi njengo-Mdali",
+    "joinWaiting": "Isicelo sithunyelwe",
+    "joinWaitingHint": "Ithimba liphendula nge-imeyili",
+    "joinAdmin": "Vula ukuphatha",
+    "joinAdminHint": "Ukuleli qembu"
   },
   "sidebar": {
     "years": "Iminyaka",
@@ -1669,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "Phakamisa amaphepha",
-    "description": "Namathisela izixhumanisi zamaphepha (ezivela ku-Openscholar, kule sayithi, ku-OpenAlex noma ku-doi.org), ama-DOI noma ama-ID e-OpenAlex. Ithimba lomphakathi libuyekeza ngalinye ngaphambi kokuthi lishicilelwe.",
-    "inputLabel": "Izixhumanisi zamaphepha, ama-DOI noma ama-ID e-OpenAlex",
-    "find": "Thola amaphepha",
+    "description": "Ithimba libuyekeza iphepha ngalinye ngaphambi kokuthi lishicilelwe.",
+    "inputLabel": "Isihloko, noma uhlu lwama-DOI, ama-ID e-OpenAlex noma izixhumanisi zamaphepha",
     "overLimit": "{count, plural, one {Namuhla ungaphakamisa elinye iphepha elingu-# lapha, ngakho kufunwa elokuqala kuphela.} other {Namuhla ungaphakamisa amanye amaphepha angu-# lapha, ngakho kufunwa angu-# okuqala.}}",
     "noneLeft": "Namuhla usuphakamise lapha amaphepha amaningi ngangokuthi umuntu oyedwa angakwazi. Zama futhi kusasa.",
     "failed": "Akukwazanga ukufinyelela umphakathi. Zama futhi.",
@@ -1688,8 +1692,29 @@
     "sent": "{count, plural, one {Iphepha elingu-# lithunyelwe ukuze libuyekezwe} other {Amaphepha angu-# athunyelwe ukuze abuyekezwe}}",
     "sentHint": "Uzobona ukuthi ngalinye limi kuphi kokuthumele ku-Openscholar: lilinde, lishicilelwe, noma lenqatshwe nesizathu sethimba.",
     "yourSubmissions": "Okuthunyelwe yimi",
-    "emptyLink": "Wazi iphepha elifanele lapha? Liphakamise",
-    "invalid": "{count, plural, one {Lokhu akusona isixhumanisi sephepha, i-DOI noma i-ID, ngakho kushiyiwe: {values}} other {Lokhu akuzona izixhumanisi zamaphepha, ama-DOI noma ama-ID, ngakho kushiyiwe: {values}}}"
+    "invalid": "{count, plural, one {Lokhu akusona isixhumanisi sephepha, i-DOI noma i-ID, ngakho kushiyiwe: {values}} other {Lokhu akuzona izixhumanisi zamaphepha, ama-DOI noma ama-ID, ngakho kushiyiwe: {values}}}",
+    "placeholder": "Sesha ngesihloko, noma unamathisele ama-DOI nezixhumanisi",
+    "add": "Engeza",
+    "addTitle": "Engeza {title}",
+    "noMatches": "Alikho iphepha elitholakele elinaleso sihloko. Bhala okwengeziwe kwaso, noma unamathisele i-DOI yalo.",
+    "suggestThis": "Phakamisa leli phepha",
+    "inCommunity": "Kulo mphakathi",
+    "open": "Vula",
+    "lookingUp": "Kuseshwa leli phepha",
+    "noPaperNamed": "Alikho iphepha elitholakele lalokhu",
+    "added": "Kwengeziwe",
+    "toSuggestLabel": "Okokuphakamisa",
+    "emptyTitle": "Sesha ngesihloko",
+    "emptyHint": "Khetha kumaphepha atholakele",
+    "pasteTitle": "Namathisela uhlu",
+    "pasteHint": "Ama-DOI, ama-ID e-OpenAlex noma izixhumanisi zamaphepha, noma mangaki onawo",
+    "pasted": {
+      "added": "{count, plural, one {# lengeziwe} other {# engeziwe}}",
+      "here": "{count, plural, one {# selikhona lapha} other {# asekhona lapha}}",
+      "waiting": "{count, plural, one {# lilinde ukubuyekezwa} other {# alinde ukubuyekezwa}}",
+      "missing": "{count, plural, one {# alitholakalanga} other {# awatholakalanga}}"
+    },
+    "basketFull": "{count, plural, one {Yilelo phepha elingu-# ongaliphakamisa lapha namuhla.} other {Yilawo maphepha angu-# ongawaphakamisa lapha namuhla.}}"
   },
   "browse": {
     "title": "Phequlula ngonyaka",

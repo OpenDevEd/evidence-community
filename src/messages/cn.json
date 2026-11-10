@@ -620,7 +620,8 @@
     "rateLimitedMessage": "已达到请求次数上限。请在 {seconds} 秒后重试。",
     "suggestPapers": "推荐论文",
     "adminMenuItem": "管理",
-    "joinThisTeam": "加入这个团队"
+    "joinThisTeam": "加入这个团队",
+    "applicationSent": "申请已发送"
   },
   "ai": {
     "sourcesTitle": "来源",
@@ -1019,10 +1020,8 @@
     "curation": "本社区如何整理",
     "team": "关于我们",
     "involvement": "参与其中",
-    "suggest": "推荐文献",
-    "suggestSubject": "推荐文献",
-    "join": "成为编辑",
-    "joinSubject": "申请成为编辑",
+    "suggest": "推荐论文",
+    "join": "加入这个团队",
     "stepArrival": "已提交",
     "stepCheck": "经编辑审核",
     "stepPublication": "已发布",
@@ -1036,7 +1035,13 @@
     "figureAdded": "过去 30 天新增",
     "figureMerged": "{count, plural, other {条重复记录已合并}}",
     "figureFullText": "{count, plural, other {条记录有全文}}",
-    "defaultIntro": "**{name}** 将研究汇集于一处，方便您检索、阅读和引用。每篇文献都附有详细信息，并在许可允许的情况下提供全文。"
+    "defaultIntro": "**{name}** 将研究汇集于一处，方便您检索、阅读和引用。每篇文献都附有详细信息，并在许可允许的情况下提供全文。",
+    "suggestHint": "团队会在发布前审核每一篇",
+    "joinHint": "以创作者身份添加论文、编辑记录",
+    "joinWaiting": "申请已发送",
+    "joinWaitingHint": "团队会通过电子邮件答复",
+    "joinAdmin": "打开管理",
+    "joinAdminHint": "你已在这个团队中"
   },
   "sidebar": {
     "years": "年份",
@@ -1669,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "推荐论文",
-    "description": "粘贴论文链接（来自 Openscholar、本站、OpenAlex 或 doi.org）、DOI 或 OpenAlex ID。社区团队会在发布前审核每一篇。",
-    "inputLabel": "论文链接、DOI 或 OpenAlex ID",
-    "find": "查找论文",
+    "description": "团队会在发布前审核每篇论文。",
+    "inputLabel": "标题，或 DOI、OpenAlex ID、论文链接的列表",
     "overLimit": "{count, plural, other {你今天还能在这里推荐 # 篇论文，因此只查找前 # 篇。}}",
     "noneLeft": "你今天在这里推荐的论文已达到个人上限。请明天再试。",
     "failed": "无法连接社区。请重试。",
@@ -1688,8 +1692,29 @@
     "sent": "{count, plural, other {已发送 # 篇论文待审核}}",
     "sentHint": "你可以在 Openscholar 的“你的提交”中看到每篇的状态：等待审核、已发布，或附团队理由的已拒绝。",
     "yourSubmissions": "你的提交",
-    "emptyLink": "知道应该收录在这里的论文？推荐它",
-    "invalid": "{count, plural, other {这些不是论文链接、DOI 或 ID，已被略过：{values}}}"
+    "invalid": "{count, plural, other {这些不是论文链接、DOI 或 ID，已被略过：{values}}}",
+    "placeholder": "按标题搜索，或粘贴 DOI 和链接",
+    "add": "添加",
+    "addTitle": "添加 {title}",
+    "noMatches": "未找到该标题的论文。请输入更完整的标题，或粘贴其 DOI。",
+    "suggestThis": "推荐这篇论文",
+    "inCommunity": "已在本社区",
+    "open": "打开",
+    "lookingUp": "正在查找这篇论文",
+    "noPaperNamed": "未找到对应的论文",
+    "added": "已添加",
+    "toSuggestLabel": "待推荐",
+    "emptyTitle": "按标题搜索",
+    "emptyHint": "从找到的论文中选择",
+    "pasteTitle": "粘贴列表",
+    "pasteHint": "DOI、OpenAlex ID 或论文链接，数量不限",
+    "pasted": {
+      "added": "{count, plural, other {已添加 # 篇}}",
+      "here": "{count, plural, other {# 篇已在这里}}",
+      "waiting": "{count, plural, other {# 篇等待审核}}",
+      "missing": "{count, plural, other {# 篇未找到}}"
+    },
+    "basketFull": "{count, plural, other {今天你在这里最多可推荐这 # 篇论文。}}"
   },
   "browse": {
     "title": "按年份浏览",

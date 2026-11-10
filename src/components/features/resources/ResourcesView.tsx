@@ -39,7 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
-import { SuggestLink } from "@/components/features/suggest/SuggestPapers";
+import { SearchedPaper, SuggestBesideSearch, SuggestUnderEmpty } from "@/components/features/suggest/SearchSuggest";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -151,9 +151,10 @@ function ResourcesList({
 						</Button>
 					</li>
 				) : actuallyNoData ? (
-					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
+					// Laid out as the failed-to-load state above is: what happened, then the one thing to do about it.
+					<li className="mb-4 flex flex-col items-center gap-4 py-12 text-center text-sm text-black/40 dark:text-white/40">
 						{t("noResourcesFound")}
-						<SuggestLink />
+						<SuggestUnderEmpty />
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
@@ -292,6 +293,8 @@ function ContentActions() {
 	};
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
+			{/* The community's own results, not a reader's list: a paper they didn't find here can be suggested. */}
+			<SuggestBesideSearch />
 			{items.userData && !collectionId ? null : <OpenInOpenScholar label={t("openInOpenScholar")} handoff={handoff} />}
 			{isDownloadEnabled && <LibraryDownload />}
 			{isAtomFeedEnabled && exports.atom && (
@@ -752,6 +755,8 @@ function LibraryResultsPanel({
 				engaged && engagedView === "sources" && "hidden",
 			)}
 		>
+			{/* A search that names a paper says what it is and whether it is here, above whatever the words matched. */}
+			<SearchedPaper />
 			<ResourcesList
 				abstract={abstract}
 				view={view}

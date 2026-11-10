@@ -33,6 +33,7 @@ import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { ReaderSessionProvider, type Reader } from "@/components/layout/navbar/ReaderSession";
 import { SuggestPapersDialog } from "@/components/features/suggest/SuggestPapers";
+import type { JoinStanding } from "@/lib/readers/join";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
@@ -218,6 +219,7 @@ export default function Providers({
 	storedConsent,
 	reader,
 	readerAdmin,
+	readerJoin,
 }: {
 	children: ReactNode;
 	status: RuntimeStatus;
@@ -228,6 +230,8 @@ export default function Providers({
 	reader: Reader | null;
 	/** Whether they have a role in this library above viewer, as the server read it. */
 	readerAdmin: boolean;
+	/** Where they stand with joining its team, as the server read it. */
+	readerJoin: JoinStanding;
 }) {
 	const router = useRouter();
 	// The component library's own labels (a combobox's "Show suggestions", a field's "Clear input", "Dismiss") in the
@@ -245,7 +249,7 @@ export default function Providers({
 		>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<ReaderSessionProvider reader={reader} admin={readerAdmin}>
+					<ReaderSessionProvider reader={reader} admin={readerAdmin} join={readerJoin}>
 						<AnalyticsConsentProvider
 							storedConsentFromServer={storedConsent}
 						>
