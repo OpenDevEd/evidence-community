@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip } from "@nextui-org/react";
+import { ModalBody, ModalContent, ModalFooter, ModalHeader, Chip, ScrollShadow } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Add01Icon, ArrowUpRight01Icon, Cancel01Icon, CheckmarkCircle02Icon, File01Icon, InboxIcon, Search01Icon, TaskAdd01Icon } from "@hugeicons/core-free-icons";
 import { useTranslations } from "next-intl";
@@ -19,16 +19,22 @@ import { Link } from "@/i18n/routing";
 import { paperLinkKey, paperLinkOf } from "@/lib/paper-links";
 
 const OPEN_EVENT = "suggest-papers:open";
-/** Opens the dialog from anywhere on the page, on a paper (a link, DOI or ID) when one is named. For a signed-in reader. */
-export const openSuggestPapers = (paper?: unknown) => window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: typeof paper === "string" ? paper : "" }));
+/** What the page is searching for, if anything: the dialog starts from it, since that is what the reader was looking for. */
+const searchedFor = () => new URLSearchParams(window.location.search).get("search") ?? "";
 
 /**
- * What every Suggest button does: opens the dialog, on the paper named if any. Someone signed out signs in first and
- * comes back to this page with the dialog open, as if they had been signed in when they pressed.
+ * Opens the dialog from anywhere on the page, for a signed-in reader. Its field starts with the text given (a title,
+ * or a paper's link, DOI or ID), and otherwise with the page's own search.
+ */
+export const openSuggestPapers = (text?: unknown) => window.dispatchEvent(new CustomEvent(OPEN_EVENT, { detail: typeof text === "string" ? text : searchedFor() }));
+
+/**
+ * What every Suggest button does: opens the dialog on the text given, or on the page's search. Someone signed out
+ * signs in first and comes back to this page with the dialog open, as if they had been signed in when they pressed.
  */
 export function useSuggest() {
 	const { reader, signInToSuggest } = useReaderSession();
-	return (paper = "") => (reader ? void openSuggestPapers(paper) : signInToSuggest(paper));
+	return (text?: string) => (reader ? void openSuggestPapers(text) : signInToSuggest(text ?? searchedFor()));
 }
 
 /** Papers one request looks up or sends at most, as the community takes them. */
@@ -93,14 +99,15 @@ function usePaperNamed(raw: string | null) {
 const LEFT_KEY = "suggest-papers-left";
 const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
 
-const rowMotion = { initial: { height: 0, opacity: 0 }, animate: { height: "4.25rem", opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2 } };
+// A row fades in where it stands, so a whole answer arriving moves nothing; one taken out closes its place.
+const rowMotion = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { height: 0, opacity: 0 }, transition: { duration: 0.2 } };
 
 /** One paper: what it is, with what can be done with it at its end. */
 function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolean; children: React.ReactNode }) {
 	const t = useTranslations("suggestPapers");
 	const known = row.state === "here" || row.state === "waiting";
 	return (
-		<motion.li {...rowMotion} className="overflow-hidden">
+		<motion.li {...rowMotion} className="h-[4.25rem] overflow-hidden">
 			<div className="flex h-[4.25rem] items-center gap-3 rounded-xl px-3 hover:bg-black/[3%] dark:hover:bg-white/[4%]">
 				<span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${picked ? "bg-accent/15 text-accent" : "bg-black/5 text-foreground/50 dark:bg-white/5 dark:text-white/50"}`}>
 					{row.state === "looking" ? <Spinner size="sm" /> : <HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />}
@@ -160,7 +167,12 @@ async function findPapers(query: string, room: number): Promise<{ named: boolean
 	const pasted = parse(query).slice(0, room);
 	if (pasted.length) {
 		const { results } = await post<{ results: Answer[] }>({ preview: true, papers: pasted.map((paper) => paper.ref) });
-		return { named: true, rows: pasted.map((paper, at) => ({ ...paper, state: STATE_OF[results[at]?.outcome ?? "not_found"], ...results[at]?.paper })) };
+		// A paper is known by its work once found, so its DOI, its ID and a title that finds it are one row.
+		const rows = pasted.map((paper, at): Row => {
+			const answer = results[at];
+			return { ...paper, key: answer?.paper?.openalexId ? `work:${answer.paper.openalexId}` : paper.key, state: STATE_OF[answer?.outcome ?? "not_found"], ...answer?.paper };
+		});
+		return { named: true, rows: rows.filter((row, at) => rows.findIndex((other) => other.key === row.key) === at) };
 	}
 	const { matches } = await post<{ matches: (Answer & { ref: Reference })[] }>({ search: query });
 	return { named: false, rows: matches.map((match) => ({ key: `work:${match.ref.openalexId}`, raw: query, ref: match.ref, state: STATE_OF[match.outcome], ...match.paper })) };
@@ -176,23 +188,17 @@ function noticeOf(t: ReturnType<typeof useTranslations<"suggestPapers">>, left: 
 
 /**
  * The dialog's state: what is typed, what it finds as the typing stops, the papers picked to send, and sending them.
- * `first` is the paper it opened on, picked from the start.
+ * `first` is the text its field opens with: the page's search, or the paper a row offered.
  */
 function useSuggestion(first: string, left: number | undefined) {
 	const t = useTranslations("suggestPapers");
 	const { mutate } = useSWRConfig();
-	const [text, setText] = useState("");
-	const [picked, setPicked] = useState<Row[]>([]);
-	const [firstLeftOut, setFirstLeftOut] = useState(false);
+	const [text, setText] = useState(first);
+	const [basket, setPicked] = useState<Row[]>([]);
 	const [sent, setSent] = useState<number | null>(null);
 	const [sending, setSending] = useState(false);
 	const [failure, setFailure] = useState("");
 	const [requestId] = useState(() => crypto.randomUUID());
-	// The paper the dialog opened on is the search row's, already read there, or read now after a sign-in.
-	const opened = looked(first);
-	const named = usePaperNamed(opened ? first : null);
-	const firstRow: Row | null = !opened || firstLeftOut ? null : { ...opened, state: named.data ? STATE_OF[named.data.outcome] : named.error ? "missing" : "looking", ...named.data?.paper };
-	const basket = firstRow ? [firstRow, ...picked.filter((row) => row.key !== firstRow.key)] : picked;
 	// Nothing is looked up until the day's allowance is known, and no more than it is sent.
 	const room = Math.min(left ?? 0, PER_REQUEST);
 	const ready = basket.filter((row) => row.state === "found").slice(0, room);
@@ -216,12 +222,12 @@ function useSuggestion(first: string, left: number | undefined) {
 		type: setText,
 		isPicked: (key: string) => basket.some((row) => row.key === key),
 		/** The list still shows the answer to an earlier text. */
-		stale: Boolean(typed) && (typed !== query || search.isValidating),
+		stale: Boolean(typed) && (typed !== query || search.isValidating || left === undefined),
 		/** A title that found nothing, said in the list's place. */
 		noMatches: Boolean(typed) && typed === query && searchable && !pastes && !search.isValidating && search.data?.rows.length === 0,
 		notice: noticeOf(t, left, pastes, room, failure || (search.error ? messageOf(search.error, t("failed")) : ""), unnamed(query)),
 		add: (row: Row) => add([row]),
-		remove: (key: string) => (key === firstRow?.key ? setFirstLeftOut(true) : setPicked((current) => current.filter((row) => row.key !== key))),
+		remove: (key: string) => setPicked((current) => current.filter((row) => row.key !== key)),
 		send: async () => {
 			setSending(true);
 			setFailure("");
@@ -234,7 +240,6 @@ function useSuggestion(first: string, left: number | undefined) {
 				// Some didn't go: the ones that did leave the list, and the rest stay to send again, with why.
 				const gone = new Set(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
 				setPicked((current) => current.filter((row) => !gone.has(row.key)));
-				if (firstRow && gone.has(firstRow.key)) setFirstLeftOut(true);
 				setFailure(failures[0]?.message ?? t("failed"));
 			} catch (error) {
 				setFailure(messageOf(error, t("failed")));
@@ -288,28 +293,25 @@ function PaperLists({ suggestion }: { suggestion: ReturnType<typeof useSuggestio
 	const { basket, found } = suggestion;
 	// A paper picked shows once, among the picked, unless the search is showing it now.
 	const kept = basket.filter((row) => !found.some((match) => match.key === row.key));
-	if (!found.length && !basket.length && !suggestion.noMatches && !suggestion.notice) return <EmptyHint />;
+	if (!suggestion.text.trim() && !basket.length && !suggestion.notice) return <EmptyHint />;
 	return (
 		<>
 			{suggestion.notice ? <p className="px-3 pb-2 text-sm text-warning-600 dark:text-warning">{suggestion.notice}</p> : null}
 			{suggestion.noMatches ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("noMatches")}</p> : null}
 			{suggestion.pasted && found.length > 1 ? <PastedSummary rows={found} isPicked={suggestion.isPicked} /> : null}
 			<ul aria-label={t("resultsLabel")} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
-				<AnimatePresence initial={false}>
-					{found.map((row) => (
-						<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
-							<FoundEnd row={row} picked={suggestion.isPicked(row.key)} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
-						</PaperRow>
-					))}
-				</AnimatePresence>
+				{/* One answer takes the last one’s place, row for row. */}
+				{found.map((row) => (
+					<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
+						<FoundEnd row={row} picked={suggestion.isPicked(row.key)} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
+					</PaperRow>
+				))}
 			</ul>
-			<AnimatePresence initial={false}>
-				{kept.length ? (
-					<motion.p key="label" initial={{ height: 0, opacity: 0 }} animate={{ height: "2rem", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="flex items-end overflow-hidden px-3 text-xs font-medium text-foreground/50 dark:text-white/50">
-						{t("toSuggestLabel")}
-					</motion.p>
-				) : null}
-			</AnimatePresence>
+			{kept.length ? (
+				<motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }} className="flex h-8 items-end px-3 text-xs font-medium text-foreground/50 dark:text-white/50">
+					{t("toSuggestLabel")}
+				</motion.p>
+			) : null}
 			<ul aria-label={t("toSuggestLabel")}>
 				<AnimatePresence initial={false}>
 					{kept.map((row) => (
@@ -329,11 +331,24 @@ function PaperLists({ suggestion }: { suggestion: ReturnType<typeof useSuggestio
 	);
 }
 
-/** The dialog's inside, made when it opens: the paper it opened on is in the list from its first frame. */
+/** The lines of a pasted list the field shows before it scrolls. */
+const FIELD_ROWS = 5;
+/** The field's fade over the lines scrolled out of sight: above, below, or both. */
+const FIELD_FADE: Record<string, string> = {
+	"true-false": "[mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)]",
+	"false-true": "[mask-image:linear-gradient(to_bottom,black_calc(100%-1.5rem),transparent)]",
+	"true-true": "[mask-image:linear-gradient(to_bottom,transparent,black_1.5rem,black_calc(100%-1.5rem),transparent)]",
+	"false-false": "",
+};
+
+/** The dialog's inside, made when it opens, with the text it opens on already in its field. */
 function SuggestContent({ first, left, onClose }: { first: string; left: number | undefined; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
 	const suggestion = useSuggestion(first, left);
 	const { sent, ready } = suggestion;
+	// Which ends of a long pasted list are out of the field's sight, as its own scrolling says.
+	const [hidden, setHidden] = useState({ above: false, below: false });
+	const long = suggestion.text.split("\n").length > FIELD_ROWS;
 	return (
 		<>
 			<ModalHeader className="flex flex-col gap-3 pb-3">
@@ -350,19 +365,35 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 						aria-label={t("inputLabel")}
 						placeholder={t("placeholder")}
 						minRows={1}
-						maxRows={5}
+						maxRows={FIELD_ROWS}
 						autoCorrect="off"
 						value={suggestion.text}
 						onValueChange={suggestion.type}
 						onClear={() => suggestion.type("")}
 						// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
 						onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) event.preventDefault(); }}
-						classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", input: "py-0.5 text-base font-normal" }}
-						startContent={suggestion.stale ? <Spinner size="sm" className="size-6 shrink-0" /> : <HugeiconsIcon icon={Search01Icon} aria-hidden className="size-6 shrink-0 text-black/60 dark:text-white/40" />}
+						// A list longer than the field fades out at the end that has more of it.
+						onScroll={(event) => {
+							const field = event.currentTarget;
+							setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
+						}}
+						classNames={{ inputWrapper: "min-h-12 py-2.5", innerWrapper: "items-start gap-2", input: `py-0.5 text-base font-normal ${long ? FIELD_FADE[`${hidden.above}-${hidden.below}`] : ""}` }}
+						// The search icon and the spinner share one place and fade into each other, so neither arrives at once.
+						startContent={
+							<span className="relative size-6 shrink-0">
+								<HugeiconsIcon icon={Search01Icon} aria-hidden className={`absolute inset-0 size-6 text-black/60 transition-opacity duration-200 motion-reduce:transition-none dark:text-white/40 ${suggestion.stale ? "opacity-0" : ""}`} />
+								<span className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "" : "opacity-0"}`}>
+									<Spinner size="sm" />
+								</span>
+							</span>
+						}
 					/>
 				) : null}
 			</ModalHeader>
-			<ModalBody className="h-[min(21rem,50dvh)] flex-none gap-0 overflow-y-auto px-3 py-0">{sent !== null ? <SentPanel count={sent} /> : <PaperLists suggestion={suggestion} />}</ModalBody>
+			<ModalBody className="h-[min(21rem,50dvh)] flex-none p-0">
+				{/* Papers past the edge fade out under it, at whichever end has more. */}
+				<ScrollShadow size={32} className="h-full px-3">{sent !== null ? <SentPanel count={sent} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
+			</ModalBody>
 			<ModalFooter className="flex-wrap items-center justify-between gap-y-3">
 				{sent !== null ? (
 					<Button className="ms-auto" color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>
