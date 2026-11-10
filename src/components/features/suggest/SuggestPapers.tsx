@@ -164,17 +164,28 @@ function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string
 	);
 }
 
+/** Nothing picked yet, in a request of its own. */
+const emptyBasket = () => ({ basket: [] as Row[], requestId: crypto.randomUUID(), failure: "" });
+
 /**
  * The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day
- * still allows. Kept by the dialog's host, not its inside, so a dialog closed by mistake opens again with them.
+ * still allows. With them, the request they go in and why its last try failed, so what a failed send left behind goes
+ * again as the same request. Kept by the dialog's host, not its inside, so a dialog closed by mistake opens again with
+ * all of it. Once every paper is gone, the next ones start a request of their own.
  */
 function useBasket(room: number) {
-	const [basket, setBasket] = useState<Row[]>([]);
-	const fresh = (held: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !held.some((other) => other.key === row.key));
+	const [held, setHeld] = useState(emptyBasket);
+	const fresh = (basket: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !basket.some((other) => other.key === row.key));
 	return {
-		basket,
-		add: (rows: Row[]) => setBasket((held) => [...held, ...fresh(held, rows).slice(0, Math.max(0, room - held.length))]),
-		remove: (keys: string[]) => setBasket((held) => held.filter((row) => !keys.includes(row.key))),
+		...held,
+		add: (rows: Row[]) => setHeld((was) => ({ ...was, basket: [...was.basket, ...fresh(was.basket, rows).slice(0, Math.max(0, room - was.basket.length))] })),
+		remove: (keys: string[]) => setHeld((was) => {
+			const basket = was.basket.filter((row) => !keys.includes(row.key));
+			return basket.length ? { ...was, basket } : emptyBasket();
+		}),
+		fail: (failure: string) => setHeld((was) => ({ ...was, failure })),
+		/** A request that went whole is done with: what is still picked goes in the next. */
+		renew: () => setHeld((was) => ({ ...emptyBasket(), basket: was.basket })),
 	};
 }
 
@@ -228,39 +239,40 @@ function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed
 	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "";
 }
 
+/** A paper the community didn't take: sending it failed, or it could no longer be found. It stays picked, with why. */
+const stayed = (result: { outcome: string } | undefined) => result?.outcome === "failed" || result?.outcome === "not_found";
+
 /**
- * Sending the picked papers, no more than `room` of them: the ones that went leave the list (`onGone`), and one that
- * didn't stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
+ * Sending the picked papers, no more than `room` of them: the ones that went leave the list, and one that didn't
+ * stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
  * the community counted those papers when it took the request, and takes the same request again.
  */
-function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) {
+function useSend({ basket, requestId, failure, remove, fail, renew }: Picks, room: number) {
 	const t = useTranslations("suggestPapers");
 	const { mutate } = useSWRConfig();
 	const [sent, setSent] = useState<number | null>(null);
 	const [sending, setSending] = useState(false);
-	const [failure, setFailure] = useState("");
-	const [requestId] = useState(() => crypto.randomUUID());
 	const ready = failure ? basket : basket.slice(0, room);
 	const went = (results: { outcome: string; message?: string }[]) => {
 		// Where each paper now stands is read again.
 		void mutate((key) => Array.isArray(key) && String(key[0]).startsWith("suggest-"));
-		const refused = results.find((result) => result.outcome === "failed");
+		const refused = results.find(stayed);
+		remove(ready.filter((_, at) => !stayed(results[at])).map((row) => row.key));
+		if (refused) return fail(refused.message ?? t("failed"));
 		// What the day still allows is read again once everything went.
-		onGone(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
-		if (!refused) {
-			void mutate(LEFT_KEY);
-			return setSent(results.filter((result) => result.outcome === "queued").length);
-		}
-		setFailure(refused.message ?? t("failed"));
+		void mutate(LEFT_KEY);
+		renew();
+		setSent(results.filter((result) => result.outcome === "queued").length);
 	};
 	const send = async () => {
+		if (sending) return;
 		setSending(true);
-		setFailure("");
+		fail("");
 		await post<{ results: { outcome: string; message?: string }[] }>({ requestId, papers: ready.map((row) => row.ref) })
-			.then(({ results }) => went(results), (error: unknown) => setFailure(messageOf(error, t("failed"))));
+			.then(({ results }) => went(results), (error: unknown) => fail(messageOf(error, t("failed"))));
 		setSending(false);
 	};
-	return { ready, sent, sending, failure, send };
+	return { ready, sent, sending, send };
 }
 
 /**
@@ -287,12 +299,13 @@ function listStateOf(typed: boolean, find: ReturnType<typeof useFind>, allowance
 	};
 }
 
-function useSuggestion(first: string, allowance: Allowance, { basket, add, remove }: Picks) {
+function useSuggestion(first: string, allowance: Allowance, picks: Picks) {
+	const { basket, add, remove } = picks;
 	const t = useTranslations("suggestPapers");
 	const [text, setText] = useState(first);
 	const room = roomOf(allowance.left);
 	const find = useFind(text, room, add);
-	const sending = useSend(basket, room, remove);
+	const sending = useSend(picks, room);
 	return {
 		...sending, text, basket,
 		...listStateOf(Boolean(text.trim()), find, allowance),
@@ -303,7 +316,7 @@ function useSuggestion(first: string, allowance: Allowance, { basket, add, remov
 		add: (row: Row) => add([row]),
 		remove: (key: string) => remove([key]),
 		isPicked: (key: string) => basket.some((row) => row.key === key),
-		notice: noticeOf(t, find, allowance, room, sending.failure),
+		notice: noticeOf(t, find, allowance, room, picks.failure),
 	};
 }
 type Suggestion = ReturnType<typeof useSuggestion>;
@@ -439,12 +452,14 @@ function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: 
 	const t = useTranslations("suggestPapers");
 	const padded = "px-4 xl:px-4";
 	if (suggestion.sent !== null) return <Button size="md" className={`ms-auto ${padded}`} color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>;
+	// While it sends the button is inert, not disabled: a disabled button drops the focus out of the dialog.
+	const busy = suggestion.sending ? "pointer-events-none opacity-disabled" : "";
 	return (
 		<>
 			<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: suggestion.ready.length })}</span>
 			<span className="ms-auto flex gap-2">
 				<Button size="md" className={padded} variant="light" onPress={onClose}>{t("cancel")}</Button>
-				<Button size="md" className={`${padded} xl:gap-2`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={<HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
+				<Button size="md" className={`${padded} xl:gap-2 ${busy}`} color="accent" variant="solid" isDisabled={!suggestion.ready.length} aria-busy={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? <Spinner size="sm" color="current" classNames={{ wrapper: "h-4 w-4" }} /> : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
 					{t("send")}
 				</Button>
 			</span>

@@ -15,13 +15,18 @@ const ServerReader = createContext<Reader | null>(null);
 /** Whether the reader has a role here above viewer, where they stand with joining, and a way to ask again. */
 const ReaderAdmin = createContext<{ admin: boolean; join: JoinStanding; refresh: () => void }>({ admin: false, join: "open", refresh: () => {} });
 
+/** What one reader's standing says of anyone else: whether the community takes applications, never that theirs waits. */
+const othersJoin = (join: JoinStanding): JoinStanding => (join === "closed" ? "closed" : "open");
+
 /** The server reads the session with the page, so the header is right on its first frame. */
 export function ReaderSessionProvider({ reader, admin, join, children }: { reader: Reader | null; admin: boolean; join: JoinStanding; children: ReactNode }) {
-	// The server's answer until the menu asks again (`refresh`), as it does each time it opens.
-	// Kept with whose it is: signing out or in leaves the last reader's answer behind, for the server's own.
+	// The server's answer until the menu asks again (`refresh`), as it does each time it opens. Both are one reader's:
+	// once the session is someone else's, or no one's (a sign-out in another tab), neither is said of them.
 	const [heard, setHeard] = useState<{ reader: string | null; admin: boolean; join: JoinStanding } | null>(null);
-	const readerId = reader ? reader.id : null;
+	const session = readerAuthClient.useSession();
+	const readerId = session.isPending ? (reader?.id ?? null) : (session.data?.user.id ?? null);
 	const live = heard && heard.reader === readerId ? heard : null;
+	const served = readerId === (reader?.id ?? null) ? { admin, join } : { admin: false, join: othersJoin(join) };
 	const refresh = useCallback(
 		() =>
 			void fetch("/api/reader/team", { cache: "no-store" })
@@ -32,7 +37,7 @@ export function ReaderSessionProvider({ reader, admin, join, children }: { reade
 	);
 	// The window coming back into focus, or its tab coming back into view, is the outside system: a reader who applied
 	// on OpenScholar in another tab returns to a page that already says their application was sent.
-	const signedIn = reader !== null;
+	const signedIn = readerId !== null;
 	useEffect(() => {
 		if (!signedIn) return;
 		const back = () => { if (document.visibilityState === "visible") refresh(); };
@@ -45,7 +50,7 @@ export function ReaderSessionProvider({ reader, admin, join, children }: { reade
 	}, [signedIn, refresh]);
 	return (
 		<ServerReader value={reader}>
-			<ReaderAdmin value={{ admin: live?.admin ?? admin, join: live?.join ?? join, refresh }}>{children}</ReaderAdmin>
+			<ReaderAdmin value={{ admin: live?.admin ?? served.admin, join: live?.join ?? served.join, refresh }}>{children}</ReaderAdmin>
 		</ServerReader>
 	);
 }
