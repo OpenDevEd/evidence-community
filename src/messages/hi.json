@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# पहले से यहाँ है} other {# पहले से यहाँ हैं}}",
       "waiting": "{count, plural, one {# समीक्षा की प्रतीक्षा में} other {# समीक्षा की प्रतीक्षा में}}",
       "missing": "{count, plural, one {# नहीं मिला} other {# नहीं मिले}}"
-    }
+    },
+    "basketFull": "{count, plural, one {आज आप यहाँ यही # पेपर सुझा सकते हैं।} other {आज आप यहाँ यही # पेपर सुझा सकते हैं।}}"
   },
   "browse": {
     "title": "वर्ष के अनुसार देखें",

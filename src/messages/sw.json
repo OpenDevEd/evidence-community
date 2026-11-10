@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# tayari ipo hapa} other {# tayari zipo hapa}}",
       "waiting": "{count, plural, one {# inasubiri ukaguzi} other {# zinasubiri ukaguzi}}",
       "missing": "{count, plural, one {# haikupatikana} other {# hazikupatikana}}"
-    }
+    },
+    "basketFull": "{count, plural, one {Hiyo ndiyo makala # unayoweza kupendekeza hapa leo.} other {Hizo ndizo makala # unazoweza kupendekeza hapa leo.}}"
   },
   "browse": {
     "title": "Vinjari kwa mwaka",

@@ -41,6 +41,8 @@ export function useSuggest() {
 /** How many more papers the reader may suggest here today, read while they are signed in so the dialog opens knowing it. */
 const LEFT_KEY = "suggest-papers-left";
 const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
+/** The day's allowance as the dialog takes it: how many are left once known, and whether it couldn't be read, which is tried again by itself. */
+type Allowance = { left: number | undefined; failed: boolean };
 
 /** A paper's name: its title, or what was pasted for it when nothing was found. */
 const nameOf = (row: Row) => row.title ?? row.raw;
@@ -97,12 +99,12 @@ const ADD = { variant: "bordered", color: "default", label: "add", says: "addTit
 const ADDED = { variant: "flat", color: "accent", label: "added", says: "leaveOut", icon: CheckmarkCircle02Icon } as const;
 
 /** What a paper the search found offers: adding it, taking it back out, or where it already stands here. */
-function FoundEnd({ row, picked, onAdd, onRemove }: { row: Row; picked: boolean; onAdd: () => void; onRemove: () => void }) {
+function FoundEnd({ row, picked, full, onAdd, onRemove }: { row: Row; picked: boolean; /** The day allows no more: one not picked can't be added. */ full: boolean; onAdd: () => void; onRemove: () => void }) {
 	const t = useTranslations("suggestPapers");
 	if (row.state !== "found") return <StandingChip state={row.state} />;
 	const look = picked ? ADDED : ADD;
 	return (
-		<Button size="sm" variant={look.variant} color={look.color} className="w-24 shrink-0" aria-label={t(look.says, { title: nameOf(row) })} onPress={picked ? onRemove : onAdd} startContent={<HugeiconsIcon icon={look.icon} className="size-4" aria-hidden />}>
+		<Button size="sm" variant={look.variant} color={look.color} className="w-24 shrink-0" aria-label={t(look.says, { title: nameOf(row) })} isDisabled={full && !picked} onPress={picked ? onRemove : onAdd} startContent={<HugeiconsIcon icon={look.icon} className="size-4" aria-hidden />}>
 			{t(look.label)}
 		</Button>
 	);
@@ -161,13 +163,13 @@ function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string
 	);
 }
 
-/** The papers picked to send: added once each, and only ones the community can take. */
-function useBasket() {
+/** The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day still allows. */
+function useBasket(room: number) {
 	const [basket, setBasket] = useState<Row[]>([]);
 	const fresh = (held: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !held.some((other) => other.key === row.key));
 	return {
 		basket,
-		add: (rows: Row[]) => setBasket((held) => [...held, ...fresh(held, rows)]),
+		add: (rows: Row[]) => setBasket((held) => [...held, ...fresh(held, rows).slice(0, Math.max(0, room - held.length))]),
 		remove: (keys: string[]) => setBasket((held) => held.filter((row) => !keys.includes(row.key))),
 	};
 }
@@ -199,7 +201,8 @@ function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 }
 
 /** What the dialog says above its list when something needs saying: the day's limit, why the last try failed, or what a paste holds that names no paper. */
-function noticeOf(t: Translate, find: ReturnType<typeof useFind>, left: number | undefined, room: number, failure: string) {
+function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed }: Allowance, room: number, failure: string) {
+	if (failed) return t("failed");
 	if (left === 0) return t("noneLeft");
 	if (find.named > room) return t("overLimit", { count: room });
 	if (failure) return failure;
@@ -243,31 +246,43 @@ function useSend(ready: Row[], onGone: (keys: string[]) => void) {
  * The dialog's state: what is typed, what it finds, the papers picked to send, and sending them. `first` is the text
  * its field opens with: the page's search, or the paper a row offered.
  */
-function useSuggestion(first: string, left: number | undefined) {
-	const t = useTranslations("suggestPapers");
-	const [text, setText] = useState(first);
-	const { basket, add, remove } = useBasket();
-	// Nothing is looked up until the day's allowance is known, and no more than it is sent.
-	const room = Math.min(left ?? 0, PER_REQUEST);
-	const find = useFind(text, room, add);
-	const ready = basket.slice(0, room);
-	const sending = useSend(ready, remove);
-	const typed = Boolean(text.trim());
-	const answered = find.settled && left !== undefined;
+/** Whether the allowance is in, one way or the other: one that couldn't be read is an answer too, said in place of waiting on it. */
+const allowanceIn = ({ left, failed }: Allowance) => left !== undefined || failed;
+
+/** What the list has to say about the text typed, once its search and the day's allowance are both in. */
+function listStateOf(typed: boolean, find: ReturnType<typeof useFind>, allowance: Allowance) {
+	const answered = find.settled && allowanceIn(allowance);
+	const nothing = !find.named && find.rows.length === 0 && !find.error;
 	return {
-		...sending, text, basket, ready,
-		found: find.rows,
-		type: setText,
-		add: (row: Row) => add([row]),
-		remove: (key: string) => remove([key]),
-		isPicked: (key: string) => basket.some((row) => row.key === key),
 		/** The list still shows the answer to an earlier text. */
 		stale: typed && !answered,
 		/** What the list shows is a pasted list's papers, with more than one to count. */
 		summarised: find.pasted && find.rows.length > 1,
 		/** A title that found nothing, said in the list's place. */
-		noMatches: typed && answered && !find.named && find.rows.length === 0 && !find.error,
-		notice: noticeOf(t, find, left, room, sending.failure),
+		noMatches: typed && answered && nothing,
+	};
+}
+
+function useSuggestion(first: string, allowance: Allowance) {
+	const t = useTranslations("suggestPapers");
+	const [text, setText] = useState(first);
+	// Nothing is looked up until the day's allowance is known, and no more than it is picked or sent.
+	const room = Math.min(allowance.left ?? 0, PER_REQUEST);
+	const { basket, add, remove } = useBasket(room);
+	const find = useFind(text, room, add);
+	const ready = basket.slice(0, room);
+	const sending = useSend(ready, remove);
+	return {
+		...sending, text, basket, ready,
+		...listStateOf(Boolean(text.trim()), find, allowance),
+		/** The day allows no more than are picked already: nothing more is added. */
+		full: room > 0 && basket.length >= room,
+		found: find.rows,
+		type: setText,
+		add: (row: Row) => add([row]),
+		remove: (key: string) => remove([key]),
+		isPicked: (key: string) => basket.some((row) => row.key === key),
+		notice: noticeOf(t, find, allowance, room, sending.failure),
 	};
 }
 type Suggestion = ReturnType<typeof useSuggestion>;
@@ -279,7 +294,7 @@ function FoundList({ suggestion }: { suggestion: Suggestion }) {
 		<ul aria-label={t("resultsLabel")} className={`transition-opacity duration-200 motion-reduce:transition-none ${suggestion.stale ? "opacity-50" : ""}`}>
 			{suggestion.found.map((row) => (
 				<PaperRow key={row.key} row={row} picked={suggestion.isPicked(row.key)}>
-					<FoundEnd row={row} picked={suggestion.isPicked(row.key)} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
+					<FoundEnd row={row} picked={suggestion.isPicked(row.key)} full={suggestion.full} onAdd={() => suggestion.add(row)} onRemove={() => suggestion.remove(row.key)} />
 				</PaperRow>
 			))}
 		</ul>
@@ -318,6 +333,7 @@ function Notices({ suggestion }: { suggestion: Suggestion }) {
 		<>
 			{suggestion.notice ? <p className="px-3 pb-2 text-sm text-warning-600 dark:text-warning">{suggestion.notice}</p> : null}
 			{suggestion.noMatches ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("noMatches")}</p> : null}
+			{suggestion.full ? <p className="px-3 pb-2 text-sm text-foreground/60 dark:text-white/60">{t("basketFull", { count: suggestion.basket.length })}</p> : null}
 			{suggestion.summarised ? <PastedSummary rows={suggestion.found} isPicked={suggestion.isPicked} /> : null}
 		</>
 	);
@@ -410,9 +426,9 @@ function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: 
 }
 
 /** The dialog's inside, made when it opens, with the text it opens on already in its field. */
-function SuggestContent({ first, left, onClose }: { first: string; left: number | undefined; onClose: () => void }) {
+function SuggestContent({ first, allowance, onClose }: { first: string; allowance: Allowance; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
-	const suggestion = useSuggestion(first, left);
+	const suggestion = useSuggestion(first, allowance);
 	const done = suggestion.sent !== null;
 	return (
 		<>
@@ -422,7 +438,7 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 					<p className="text-lg font-semibold">{t("title")}</p>
 					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
 				</div>
-				{done ? null : <FindField suggestion={suggestion} disabled={left === 0} />}
+				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0} />}
 			</ModalHeader>
 			<ModalBody className="h-[min(21rem,50dvh)] flex-none p-0">
 				{/* Papers past the edge fade out under it, at whichever end has more. */}
@@ -446,7 +462,7 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 export function SuggestPapersDialog() {
 	const { reader } = useReaderSession();
 	const [text, setText] = useQueryState(SUGGEST_PARAM, parseAsString);
-	const left = useLeft(Boolean(reader)).data;
+	const left = useLeft(Boolean(reader));
 	// A window event, so the reader's menu and every Suggest button open the same dialog.
 	useEffect(() => {
 		const show = (event: Event) => void setText((event as CustomEvent<string>).detail);
@@ -458,7 +474,7 @@ export function SuggestPapersDialog() {
 	return (
 		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
 			<ModalContent>
-				<SuggestContent first={text ?? ""} left={left} onClose={close} />
+				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} onClose={close} />
 			</ModalContent>
 		</DialogModal>
 	);

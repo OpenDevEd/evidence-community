@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# already here} other {# already here}}",
       "waiting": "{count, plural, one {# waiting for review} other {# waiting for review}}",
       "missing": "{count, plural, one {# not found} other {# not found}}"
-    }
+    },
+    "basketFull": "{count, plural, one {That’s the # paper you can suggest here today.} other {That’s all # papers you can suggest here today.}}"
   },
   "browse": {
     "title": "Browse by year",

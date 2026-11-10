@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# déjà présent} other {# déjà présents}}",
       "waiting": "{count, plural, one {# en attente d’examen} other {# en attente d’examen}}",
       "missing": "{count, plural, one {# introuvable} other {# introuvables}}"
-    }
+    },
+    "basketFull": "{count, plural, one {C’est le # article que vous pouvez suggérer ici aujourd’hui.} other {Ce sont les # articles que vous pouvez suggérer ici aujourd’hui.}}"
   },
   "browse": {
     "title": "Parcourir par année",

@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# selikhona lapha} other {# asekhona lapha}}",
       "waiting": "{count, plural, one {# lilinde ukubuyekezwa} other {# alinde ukubuyekezwa}}",
       "missing": "{count, plural, one {# alitholakalanga} other {# awatholakalanga}}"
-    }
+    },
+    "basketFull": "{count, plural, one {Yilelo phepha elingu-# ongaliphakamisa lapha namuhla.} other {Yilawo maphepha angu-# ongawaphakamisa lapha namuhla.}}"
   },
   "browse": {
     "title": "Phequlula ngonyaka",

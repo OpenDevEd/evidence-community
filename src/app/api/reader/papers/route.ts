@@ -49,7 +49,8 @@ function referenceOf(raw: string) {
 /** Lookups one visitor who isn't signed in makes of the papers their searches name: each reads OpenAlex with the community's own key. */
 async function visitorMayLookUp(request: Request, config: LibraryServerConfig) {
 	const ip = request.headers.get("x-real-ip")?.slice(0, 128) || "unresolved-client";
-	const limit = await consumeConfiguredRateLimit({ clientId: createHash("sha256").update(ip).digest("hex"), clientIp: ip, persistentClient: false }, config, {
+	// The identity is the address itself, the same on every request, so every window counts against it, the day's too.
+	const limit = await consumeConfiguredRateLimit({ clientId: createHash("sha256").update(ip).digest("hex"), clientIp: ip, persistentClient: true }, config, {
 		clientWindows: [{ name: "minute", limit: 10, windowMs: 60_000 }, { name: "day", limit: 200, windowMs: 86_400_000 }],
 		networkWindow: { name: "minute", limit: 120, windowMs: 60_000 },
 		keyPrefix: `evidence-library:paper-lookups:${config.authentication.openScholar.libraryId}`,

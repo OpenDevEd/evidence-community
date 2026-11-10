@@ -1713,7 +1713,8 @@
       "here": "{count, plural, other {# 篇已在这里}}",
       "waiting": "{count, plural, other {# 篇等待审核}}",
       "missing": "{count, plural, other {# 篇未找到}}"
-    }
+    },
+    "basketFull": "{count, plural, other {今天你在这里最多可推荐这 # 篇论文。}}"
   },
   "browse": {
     "title": "按年份浏览",

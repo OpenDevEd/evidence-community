@@ -1713,7 +1713,8 @@
       "here": "{count, plural, one {# já está aqui} other {# já estão aqui}}",
       "waiting": "{count, plural, one {# em análise} other {# em análise}}",
       "missing": "{count, plural, one {# não encontrado} other {# não encontrados}}"
-    }
+    },
+    "basketFull": "{count, plural, one {Esse é o # artigo que você pode sugerir aqui hoje.} other {Esses são os # artigos que você pode sugerir aqui hoje.}}"
   },
   "browse": {
     "title": "Explorar por ano",
