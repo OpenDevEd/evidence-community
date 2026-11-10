@@ -137,7 +137,7 @@ function settingsItems(input: {
 				onPress={input.onLanguages}
 				startContent={<NavbarMenuIcon icon={LanguageSkillIcon} />}
 				endContent={
-					<span className="flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
+					<span className="ms-auto flex items-center gap-1 text-small text-foreground/60 dark:text-white/60">
 						{languageName(input.currentLocale)}
 						<NavbarMenuIcon icon={ArrowRight01Icon} className="size-4 rtl:rotate-180" />
 					</span>

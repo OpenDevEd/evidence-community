@@ -37,7 +37,7 @@ export function languageMenuItems<Locale extends string>(input: {
 			onPress={() => input.onSelect(locale)}
 			endContent={
 				locale === input.current ? (
-					<NavbarMenuIcon icon={Tick02Icon} className="text-accent dark:text-accent" />
+					<NavbarMenuIcon icon={Tick02Icon} className="ms-auto text-accent dark:text-accent" />
 				) : null
 			}
 		>
