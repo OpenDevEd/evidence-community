@@ -369,9 +369,11 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		});
 		const reports = new Map<string, object>([[doi, live("Shade trees and maize yields", "2026-11-10T08:00:00.000Z")]]);
 		let version = "v1";
-		const items = [
+		let items: { itemId: string; openalexId: string | null; doi: string | null }[] = [
 			{ itemId: "item-2", openalexId: "W2", doi: null },
 			{ itemId: "item-r", openalexId: null, doi },
+			// The same report saved from OpenAlex too, once OpenAlex has indexed it: still one record, Openscholar's.
+			{ itemId: "item-rw", openalexId: "W99", doi },
 			{ itemId: "item-6", openalexId: null, doi: "10.1000/w6" },
 		];
 		const askedOfOpenAlex: string[] = [];
@@ -435,5 +437,11 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		const back = await activeKeys(db, "openscholar-c1");
 		expect([...back.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", `doi:${doi}`, `doi:pdf:${doi}`]);
 		expect(askedOfOpenAlex.filter((asked) => asked === doi)).toEqual([]);
+
+		// Taken out of the collection, the report and its PDF both go.
+		items = items.filter((entry) => entry.doi !== doi);
+		version = "v3";
+		await sync();
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "doi:10.1000/w6"]);
 	});
 }, 120_000);

@@ -27,8 +27,10 @@ export type HeldReport = { recordKey: string; itemKey?: string; report: Openscho
  * with an issue that says why.
  */
 export async function keepReports(context: SourceAdapterContext, held: readonly HeldReport[]) {
-	const items = held.flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : []));
-	if (items.length) {
+	const live = held.filter(({ report }) => report.state === "live");
+	// A batch holds 5,000 items, and a report is two with its PDF.
+	for (let at = 0; at < live.length; at += REPORTS_PER_BATCH) {
+		const items = live.slice(at, at + REPORTS_PER_BATCH).flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : []));
 		const { cursor } = asRead(context);
 		await writeSourceIngestionBatch(context.database, {
 			sourceConnectionKey: context.sourceConnection.key,
@@ -45,9 +47,23 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 	}
 	const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 	if (!withdrawn.length) return;
-	const pdfs = await context.database
-		.select({ itemKey: itemSourceLink.itemKey })
-		.from(itemSourceLink)
-		.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), inArray(itemSourceLink.sourceRecordKey, withdrawn.map(({ report }) => reportPdfRecordKey(report.doi))), eq(itemSourceLink.remoteDeleted, false)));
-	await withdrawSourceRecords(context.database, asRead(context), [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs.map((pdf) => pdf.itemKey)], "This edited record's report was withdrawn on Openscholar.");
+	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
+	await withdrawSourceRecords(context.database, asRead(context), [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs], "This edited record's report was withdrawn on Openscholar.");
+}
+
+/** Live reports one batch writes. */
+const REPORTS_PER_BATCH = 2_000;
+
+/** The source's records that are the PDFs of these DOIs' reports: a report's PDF goes when its record does. */
+export async function reportPdfItems(context: SourceAdapterContext, dois: readonly string[]) {
+	const keys: string[] = [];
+	// A statement holds 65,535 parameters.
+	for (let at = 0; at < dois.length; at += 10_000) {
+		const rows = await context.database
+			.select({ itemKey: itemSourceLink.itemKey })
+			.from(itemSourceLink)
+			.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), inArray(itemSourceLink.sourceRecordKey, dois.slice(at, at + 10_000).map(reportPdfRecordKey)), eq(itemSourceLink.remoteDeleted, false)));
+		keys.push(...rows.map((row) => row.itemKey));
+	}
+	return keys;
 }

@@ -74,21 +74,24 @@ export async function syncOpenScholarCollection(
 	}
 	// Openscholar is asked first, once for all of them: a report published there is in neither OpenAlex nor the DOI
 	// lookup until its deposit is indexed, and its record stays Openscholar's when they have it.
-	const reports = await reportsByDoi(options.service, collection.dois, { fetch: options.fetch });
+	// An entry that names an OpenAlex work beside its DOI is asked about too: a report OpenAlex has indexed is still
+	// Openscholar's record here, under its DOI, and its OpenAlex work isn't imported beside it.
+	const reports = await reportsByDoi(options.service, [...new Set([...collection.dois, ...collection.doiWorks.map(([doi]) => doi)])], { fetch: options.fetch });
+	const reportWorks = new Set(collection.doiWorks.flatMap(([doi, work]) => (reports.has(doi) ? [work] : [])));
+	const dois = [...new Set([...collection.dois, ...collection.doiWorks.flatMap(([doi]) => (reports.has(doi) ? [doi] : []))])];
 	// A paper with only a DOI is found on OpenAlex by it; the ones OpenAlex doesn't have are listed as issues.
-	const byDoi = await worksForDois(context, collection.dois.filter((doi) => !reports.has(doi)), options);
+	const byDoi = await worksForDois(context, dois.filter((doi) => !reports.has(doi)), options);
 	// One OpenAlex doesn't have is made from its DOI; the ones nothing finds are listed as issues.
 	// A record made from a DOI becomes its work's once OpenAlex has the DOI, or once the collection names the work itself.
-	// ponytail: a collection that also holds the OpenAlex work of a report keeps both records; merge them when OpenAlex indexes reports.
 	const works = new Map([...collection.doiWorks, ...byDoi].filter(([doi]) => !reports.has(doi)));
-	const recorded = await syncDoiRecords(context, { dois: collection.dois, works, recordByDoi: options.recordByDoi, reports });
-	await listMissing(context, collection.dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
-	const ids = [...new Set([...collection.openAlexIds, ...byDoi.values()])].sort();
+	const recorded = await syncDoiRecords(context, { dois, works, recordByDoi: options.recordByDoi, reports });
+	await listMissing(context, dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
+	const ids = [...new Set([...collection.openAlexIds.filter((id) => !reportWorks.has(id)), ...byDoi.values()])].sort();
 	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list
 	// isn't resumed over the new one.
 	const version = byDoi.size ? `${collection.version}${RESOLVED}${createHash("sha256").update(ids.join(",")).digest("hex").slice(0, 16)}` : collection.version;
 	const result = await syncOpenAlexWorks(context, openAlexIdStream(ids, version, config.downloadPdfs), options);
-	return { ...result, unresolved: collection.unresolved + collection.dois.length - byDoi.size - recorded.size };
+	return { ...result, unresolved: collection.unresolved + dois.length - byDoi.size - recorded.size };
 }
 
 /**
