@@ -335,15 +335,16 @@ it("drains multiple topic deliveries in one cycle and bounds very long creator l
   });
 });
 
-it("sends waiting records in one call and holds back only a record Openscholar refused", async () => {
+it("sends waiting records in one call and holds back only a record Openscholar refused or that can't be built", async () => {
   await withIsolatedPublicationDatabase(async db => {
     await seedTopics(db);
     const keys: string[] = [];
-    for (const title of ["First", "Second", "Third"]) {
+    for (const title of ["First", "Second", "Third", "Fourth"]) {
       const draft = await createNativeItemDraft(db, {itemType: "Report", title, topics: ["T12260"]}, policy);
       await publishItemDraft(db, draft.itemKey, policy);
       keys.push(draft.itemKey);
     }
+    await db.update(item).set({topics: ["not-a-topic"]}).where(eq(item.key, keys[3]!));
     const calls: string[] = [];
     await runTopicAssociationCycle(db, config, undefined, async (url, init) => {
       calls.push(new URL(String(url)).pathname);
@@ -357,5 +358,7 @@ it("sends waiting records in one call and holds back only a record Openscholar r
     expect(rows.get(keys[1]!)).toMatchObject({attempts: 1, lastError: "Openscholar refused the topic delivery: CONFLICT"});
     expect(rows.get(keys[1]!)?.nextAttemptAt).not.toBeNull();
     for (const key of [keys[0]!, keys[2]!]) expect(rows.get(key)).toMatchObject({nextAttemptAt: null, lastError: null});
+    expect(rows.get(keys[3]!)).toMatchObject({attempts: 1, payload: null});
+    expect(rows.get(keys[3]!)?.lastError).toMatch(/^Topic delivery is invalid/);
   });
 });

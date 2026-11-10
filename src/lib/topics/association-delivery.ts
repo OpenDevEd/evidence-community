@@ -75,12 +75,20 @@ async function reconcileVisibility(database: Database, config: LibraryServerConf
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
-/** Most records one call carries, and the longest body it builds up to: Openscholar saves a call in one transaction. */
+/**
+ * Most records one call carries, the longest body it builds up to, and its most weight, a record weighing one plus its
+ * topics: Openscholar saves a call in one transaction, which may make 4,096 index reads (OpenDevEd/openalex-count#1258).
+ */
 const BATCH_MAX = 50;
 const BATCH_BODY_MAX = 1_000_000;
+const BATCH_WEIGHT_MAX = 300;
+const weightOf = (delivery: TopicDelivery) => 1 + delivery.topicIds.length;
 
-/** What each record's delivery says now: its topics, its public metadata with its PDF and cover, and its OpenAlex work. */
-async function deliveriesOf(tx: Transaction, database: Database, config: LibraryServerConfig, jobs: AssociationJob[]): Promise<TopicDelivery[]> {
+/**
+ * What each record's delivery says now: its topics, its public metadata with its PDF and cover, and its OpenAlex work;
+ * or why it can't be sent, for that record alone.
+ */
+async function deliveriesOf(tx: Transaction, database: Database, config: LibraryServerConfig, jobs: AssociationJob[]): Promise<(TopicDelivery | Error)[]> {
   const keys = jobs.map(job => job.itemKey);
   // Topics off, the record still goes, without its topics (the card leaves them out), so its paper page lists this community.
   const cards = new Map((await getPublicItemCards(tx, keys, config)).map(card => [card.key, card]));
@@ -95,25 +103,28 @@ async function deliveriesOf(tx: Transaction, database: Database, config: Library
   return jobs.map(job => {
     const card = cards.get(job.itemKey) ?? null;
     const source = sources.get(job.itemKey);
-    return topicAssociationRequestSchema.parse({contractVersion: 1,
+    const parsed = topicAssociationRequestSchema.safeParse({contractVersion: 1,
       idempotencyKey: `${libraryId}:${job.itemKey}:${job.generation}`,
       libraryId, itemKey: job.itemKey, generation: Number(job.generation),
       publishedRevision: Math.max(Number(job.revision), card?.revision ?? 0),
       openalexId: source && /^W[1-9]\d*$/.test(source) ? source : null,
       ...publicationFields(card, card ? publicPdfOf(records.get(job.itemKey), job.itemKey, config) : null),
     });
+    return parsed.success ? parsed.data : new Error(`Topic delivery is invalid: ${parsed.error.message.slice(0, 1000)}`);
   });
 }
 
-/** The deliveries in calls of up to BATCH_MAX records and about BATCH_BODY_MAX characters; a larger record goes alone. */
+/** The deliveries in calls within BATCH_MAX, BATCH_WEIGHT_MAX and about BATCH_BODY_MAX characters; a larger record goes alone. */
 function batchesOf<T extends {delivery: TopicDelivery}>(entries: T[]) {
   const batches: T[][] = [];
   let size = 0;
+  let weight = 0;
   for (const entry of entries) {
     const length = JSON.stringify(entry.delivery).length;
     const last = batches.at(-1);
-    if (last && last.length < BATCH_MAX && size + length <= BATCH_BODY_MAX) { last.push(entry); size += length; }
-    else { batches.push([entry]); size = length; }
+    if (last && last.length < BATCH_MAX && size + length <= BATCH_BODY_MAX && weight + weightOf(entry.delivery) <= BATCH_WEIGHT_MAX) {
+      last.push(entry); size += length; weight += weightOf(entry.delivery);
+    } else { batches.push([entry]); size = length; weight = weightOf(entry.delivery); }
   }
   return batches;
 }
@@ -127,18 +138,20 @@ export async function runTopicAssociationCycle(database: Database, config: Libra
       const current = new Map((await tx.select().from(topicAssociationDelivery)
         .where(and(inArray(topicAssociationDelivery.itemKey, jobs.map(job => job.itemKey)), eq(topicAssociationDelivery.leaseToken, leaseToken)))
         .for("update")).map(row => [row.itemKey, row]));
-      const made = new Map((await deliveriesOf(tx, database, config, jobs.filter(job => current.has(job.itemKey) && !current.get(job.itemKey)!.payload)))
-        .map(delivery => [delivery.itemKey, delivery]));
-      for (const delivery of made.values()) await tx.update(topicAssociationDelivery).set({payload: delivery}).where(eq(topicAssociationDelivery.itemKey, delivery.itemKey));
+      const unbuilt = jobs.filter(job => current.has(job.itemKey) && !current.get(job.itemKey)!.payload);
+      const made = new Map((await deliveriesOf(tx, database, config, unbuilt)).map((delivery, index) => [unbuilt[index]!.itemKey, delivery]));
+      for (const delivery of made.values()) {
+        if (!(delivery instanceof Error)) await tx.update(topicAssociationDelivery).set({payload: delivery}).where(eq(topicAssociationDelivery.itemKey, delivery.itemKey));
+      }
       return jobs.map(job => {
         const row = current.get(job.itemKey);
         return row?.payload ? topicAssociationRequestSchema.parse(row.payload) : made.get(job.itemKey) ?? null;
       });
     });
-    // A record whose lease another worker took is that worker's to send.
-    const errors: unknown[] = jobs.map(() => null);
+    // A record whose lease another worker took is that worker's to send; one that can't be built waits alone.
+    const errors: unknown[] = deliveries.map(delivery => delivery instanceof Error ? delivery : null);
     const libraryId = config.authentication.openScholar.libraryId;
-    for (const batch of batchesOf(deliveries.flatMap((delivery, index) => delivery ? [{delivery, index}] : []))) {
+    for (const batch of batchesOf(deliveries.flatMap((delivery, index) => delivery && !(delivery instanceof Error) ? [{delivery, index}] : []))) {
       try {
         const response = await postOpenScholarAssociation(config, "/api/v1/evidence-libraries/topic-associations/batch", "topic delivery",
           {contractVersion: 1, libraryId, deliveries: batch.map(entry => entry.delivery)}, signal, request);
