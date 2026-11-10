@@ -50,7 +50,7 @@ import { HOVER_CARD_CLOSE_DELAY, HOVER_CARD_DELAY, Tooltip } from "@/components/
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useOpenScholarUrl } from "@/components/layout/navbar/ReaderSession";
-import { openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
+import { openAlexWorkOf, openScholarList, type OpenScholarList } from "@/lib/links/openscholar-lists";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import {
@@ -776,7 +776,8 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 
 type CanonicalWebsiteLink = {
 	provider: "website";
-	kind: "canonical";
+	/** `openscholar`: the paper's page on Openscholar. */
+	kind: "canonical" | "openscholar";
 	label: string;
 	value: string;
 	url: string;
@@ -801,6 +802,14 @@ function buildCanonicalWebsiteLink(
 		url: itemUrl.toString(),
 		iconUrl: faviconUrl,
 	};
+}
+
+/** The paper's page on Openscholar, which leads back here: by its OpenAlex work, which Openscholar sends on to its own address. */
+function buildOpenScholarPaperLink(item: Item, openScholar: (path: string) => string): CanonicalWebsiteLink | null {
+	const work = openAlexWorkOf(item);
+	if (!work) return null;
+	const url = new URL(openScholar(`/papers/${work}`));
+	return { provider: "website", kind: "openscholar", label: "Openscholar", value: `${url.host}${url.pathname}`, url: url.toString(), iconUrl: openScholar("/icon.svg") };
 }
 
 function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
@@ -835,7 +844,7 @@ function getIdentifierDisplayTitle(
 	link: IdentifierDisplayLink,
 	t: ReturnType<typeof useTranslations>,
 ) {
-	if (link.provider === "website") return t("itemIdentifierEvidenceLibrary");
+	if (link.provider === "website") return link.kind === "openscholar" ? link.label : t("itemIdentifierEvidenceLibrary");
 	if (link.provider !== "zenodo") return link.label;
 	if (link.kind === "record") return t("itemIdentifierArchiveRecord");
 	if (link.kind === "concept-record") return t("itemIdentifierConceptRecord");
@@ -888,6 +897,7 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const { identity } = useLibraryConfig();
 	const faviconUrl = identity.assets.favicon;
+	const openScholar = useOpenScholarUrl();
 	const links = useMemo(() => {
 		if (!item) return [];
 
@@ -903,8 +913,8 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 			faviconUrl,
 			identity.baseUrl,
 		);
-		return canonicalLink ? [...doiLinks, canonicalLink] : doiLinks;
-	}, [faviconUrl, identity.baseUrl, item]);
+		return [...doiLinks, canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
+	}, [faviconUrl, identity.baseUrl, item, openScholar]);
 
 	if (!links.length) return null;
 

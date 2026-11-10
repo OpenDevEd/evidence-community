@@ -23,8 +23,16 @@ export function openAlexTotals<Metric extends { workId?: string | null }>(record
  * OpenAlex does not know.
  */
 export function openScholarList(record: CountedRecord | undefined, list: OpenScholarList | undefined) {
-	const totals = openAlexTotals(record);
-	const work = totals?.workId ?? record?.sourceRecordKey ?? "";
-	if (!list || !/^W\d+$/.test(work)) return null;
-	return { total: totals?.[LISTS[list].count] ?? null, path: `/results?${LISTS[list].filter}=${work}` };
+	const work = openAlexWorkOf(record);
+	if (!list || !work) return null;
+	return { total: openAlexTotals(record)?.[LISTS[list].count] ?? null, path: `/results?${LISTS[list].filter}=${work}` };
+}
+
+/**
+ * The OpenAlex work a record is: the one its counts are for, when it was matched from another source, or its own key
+ * when it came from OpenAlex. Null for a record OpenAlex does not know.
+ */
+export function openAlexWorkOf(record: CountedRecord | undefined) {
+	const work = openAlexTotals(record)?.workId ?? record?.sourceRecordKey ?? "";
+	return /^W\d+$/.test(work) ? work : null;
 }
