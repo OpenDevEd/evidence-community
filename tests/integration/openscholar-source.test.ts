@@ -5,6 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { itemSourceLink, sourceConnection, sourceRecordIssue } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { REPORTS_PATH } from "@/lib/openscholar-service";
 import { COLLECTION_ITEMS_PATH } from "@/lib/source-ingestion/openscholar/client";
 import { syncOpenScholarCollection } from "@/lib/source-ingestion/openscholar/sync";
 import { classifySourceError } from "@/lib/source-ingestion/source-status";
@@ -67,6 +68,13 @@ const context = async (db: Database, key: string) => ({
 	credentialResolver: async () => "test-key",
 	heartbeat: async () => {},
 });
+
+/** Openscholar's answer about which DOIs are its reports, or null for a request that asks something else. */
+function reportsAnswer(url: URL, init: RequestInit | undefined, reports: ReadonlyMap<string, object> = new Map()) {
+	if (url.pathname !== REPORTS_PATH) return null;
+	const { dois } = JSON.parse(String(init?.body)) as { dois: string[] };
+	return Response.json({ reports: dois.map((doi) => reports.get(doi) ?? null) });
+}
 
 const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => from + index);
 
@@ -236,6 +244,8 @@ it("finds a collection paper that has only a DOI on OpenAlex by it, and lists th
 				const base = { contractVersion: 1, version, name: "Reading list" };
 				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
 			}
+			// An Openscholar that doesn't publish reports yet: the sync goes on as if none of the DOIs were one.
+			if (url.pathname === REPORTS_PATH) return new Response("Not found", { status: 404 });
 			const filter = url.searchParams.get("filter")!;
 			const meta = (count: number) => ({ count, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) });
 			const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
@@ -296,6 +306,8 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 				const base = { contractVersion: 1, version, name: "Reading list" };
 				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
 			}
+			const none = reportsAnswer(url, init);
+			if (none) return none;
 			const filter = url.searchParams.get("filter")!;
 			const meta = (count: number) => ({ count, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) });
 			const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
@@ -343,5 +355,93 @@ it("makes a collection paper OpenAlex doesn't have from its DOI, makes it its wo
 		gone = true;
 		await expect(sync()).rejects.toThrow(/owner_left|left|access/iu);
 		expect([...(await activeKeys(db, "openscholar-c1")).keys()]).toEqual([]);
+	});
+}, 120_000);
+
+it("takes an Openscholar Report from Openscholar alone, with its PDF, and follows its correction, withdrawal and return", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await seed(db);
+		const doi = "10.53832/openscholar-r.r100001";
+		const live = (title: string, version: string) => ({
+			state: "live", key: "R100001", doi, version, title, subtitle: "Evidence from three seasons", type: "report", language: "en", date: "2026-11-10", licence: "CC BY 4.0",
+			abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["maize"], series: "Openscholar Reports",
+			pageUrl: "https://openscholar.test/papers/R100001", pdfUrl: "https://openscholar.test/papers/R100001/report.pdf",
+		});
+		const reports = new Map<string, object>([[doi, live("Shade trees and maize yields", "2026-11-10T08:00:00.000Z")]]);
+		let version = "v1";
+		let items: { itemId: string; openalexId: string | null; doi: string | null }[] = [
+			{ itemId: "item-2", openalexId: "W2", doi: null },
+			{ itemId: "item-r", openalexId: null, doi },
+			// The same report saved from OpenAlex too, once OpenAlex has indexed it: still one record, Openscholar's.
+			{ itemId: "item-rw", openalexId: "W99", doi },
+			{ itemId: "item-6", openalexId: null, doi: "10.1000/w6" },
+		];
+		const askedOfOpenAlex: string[] = [];
+		const request = (async (input: string | URL, init?: RequestInit) => {
+			const url = new URL(String(input));
+			if (url.pathname === COLLECTION_ITEMS_PATH) {
+				const body = JSON.parse(String(init?.body)) as { knownVersion: string | null };
+				const base = { contractVersion: 1, version, name: "Reading list" };
+				return Response.json(body.knownVersion === version ? { ...base, unchanged: true } : { ...base, items, nextCursor: null });
+			}
+			const answered = reportsAnswer(url, init, reports);
+			if (answered) return answered;
+			const filter = url.searchParams.get("filter")!;
+			const meta = (count: number) => ({ count, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) });
+			const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
+			if (dois) {
+				askedOfOpenAlex.push(...dois);
+				// OpenAlex has the report too by now: it must never take the record over.
+				const results = dois.flatMap((asked) => (asked === doi ? [{ ...work(99), doi: `https://doi.org/${doi}` }] : []));
+				return Response.json({ meta: meta(results.length), results });
+			}
+			const ids = filter.match(/^ids\.openalex:([^,]+)/u)![1]!.split("|");
+			return Response.json({ meta: meta(ids.length), results: ids.map((id) => work(Number(id.slice(1)))) });
+		}) as typeof fetch;
+		const lookedUp: string[] = [];
+		const recordByDoi = async (asked: string) => {
+			lookedUp.push(asked);
+			return { itemType: "journalArticle", title: `Found by ${asked}`, DOI: asked, collections: [] };
+		};
+		const sync = async () => syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request, recordByDoi });
+		const record = async (key: string) => (await db.select({ title: item.title, url: item.url, deleted: item.deleted }).from(item).where(eq(item.key, key)))[0];
+		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => row.sourceRecordKey);
+
+		await sync();
+		const made = await activeKeys(db, "openscholar-c1");
+		expect([...made.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", `doi:${doi}`, `doi:pdf:${doi}`]);
+		// Its record is Openscholar's: neither OpenAlex nor the DOI lookup was asked about it, and it isn't listed as missing.
+		expect(askedOfOpenAlex).toEqual(["10.1000/w6"]);
+		expect(lookedUp).toEqual(["10.1000/w6"]);
+		expect(await issues()).toEqual([]);
+		const reportKey = made.get(`doi:${doi}`)!;
+		expect(await record(reportKey)).toMatchObject({ title: "Shade trees and maize yields: Evidence from three seasons", url: "https://openscholar.test/papers/R100001" });
+		expect(await record(made.get(`doi:pdf:${doi}`)!)).toMatchObject({ url: "https://openscholar.test/papers/R100001/report.pdf" });
+
+		// Corrected on Openscholar while the collection itself is unchanged: the next sweep brings the correction.
+		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
+		await sync();
+		expect((await record(reportKey))?.title).toBe("Shade trees and maize yields, corrected: Evidence from three seasons");
+		expect((await activeKeys(db, "openscholar-c1")).get(`doi:${doi}`)).toBe(reportKey);
+
+		// Withdrawn on Openscholar: withdrawn here on the next sweep, record and PDF, and still not OpenAlex's.
+		reports.set(doi, { state: "withdrawn", key: "R100001", doi, version: "2026-11-12T09:00:00.000Z" });
+		await sync();
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "doi:10.1000/w6"]);
+		expect(await issues()).toEqual([]);
+
+		// Reinstated, it comes back when the collection is next read whole, as the same record.
+		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
+		version = "v2";
+		await sync();
+		const back = await activeKeys(db, "openscholar-c1");
+		expect([...back.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", `doi:${doi}`, `doi:pdf:${doi}`]);
+		expect(askedOfOpenAlex.filter((asked) => asked === doi)).toEqual([]);
+
+		// Taken out of the collection, the report and its PDF both go.
+		items = items.filter((entry) => entry.doi !== doi);
+		version = "v3";
+		await sync();
+		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "doi:10.1000/w6"]);
 	});
 }, 120_000);

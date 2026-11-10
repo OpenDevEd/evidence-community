@@ -11,11 +11,13 @@ import { item } from "@/db/schema/tables/item";
 import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
+import { previewImportRecords } from "@/lib/admin/item-import-service";
 import { getAdminReviewSnapshot } from "@/lib/admin/review-query";
 import { openAlexWorkOf } from "@/lib/admin/library-query-service";
 import { runSubmissionStatusCycle } from "@/lib/admin/submission-status";
 import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { REPORTS_PATH, type OpenscholarReport } from "@/lib/openscholar-service";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
@@ -41,31 +43,36 @@ const work = (id: number, title = `Work ${id}`, doi = `10.1000/w${id}`, publishe
 });
 
 /** OpenAlex as the lookup and the sync both read it, holding `works`; and a DOI lookup holding `byDoi`. */
-function services(works: ReturnType<typeof work>[], byDoi: Record<string, Record<string, unknown>> = {}) {
+function services(works: ReturnType<typeof work>[], byDoi: Record<string, Record<string, unknown>> = {}, reports: ReadonlyMap<string, OpenscholarReport> = new Map()) {
 	const doiOf = (w: ReturnType<typeof work>) => w.doi.replace("https://doi.org/", "");
+	const askedOfOpenAlex: string[] = [];
 	const lookup: PaperLookup = {
 		worksById: async (ids) => new Map(works.filter((w) => ids.includes(w.id.split("/").pop()!)).map((w) => [w.id.split("/").pop()!, w])),
 		worksByDoi: async (dois) => new Map(works.filter((w) => dois.includes(doiOf(w))).map((w) => [doiOf(w), w])),
 		recordByDoi: async (doi) => byDoi[doi] ?? null,
 		// Openscholar following its own links: a paper only its index has is W30's DOI; anything else, nothing.
 		papersAtLinks: async (links) => links.map((link) => (link.includes("OS30") ? { openalexId: null, doi: "10.1000/w30" } : null)),
+		reportsByDoi: async (dois) => new Map(dois.flatMap((doi) => (reports.has(doi) ? [[doi, reports.get(doi)!] as const] : []))),
 	};
-	const openAlex = (async (input: string | URL) => {
+	const openAlex = (async (input: string | URL, init?: RequestInit) => {
 		const url = new URL(String(input));
+		// The sync asks Openscholar which accepted papers are its reports.
+		if (url.pathname === REPORTS_PATH) return Response.json({ reports: (JSON.parse(String(init?.body)) as { dois: string[] }).dois.map((doi) => reports.get(doi) ?? null) });
 		const filter = url.searchParams.get("filter") ?? "";
+		askedOfOpenAlex.push(filter);
 		const ids = filter.match(/^ids\.openalex:([^,]+)/u)?.[1]?.split("|");
 		const dois = filter.match(/^doi:([^,]+)/u)?.[1]?.split("|");
 		const results = ids ? works.filter((w) => ids.includes(w.id.split("/").pop()!)) : works.filter((w) => dois?.includes(doiOf(w)));
 		return Response.json({ meta: { count: results.length, ...(url.searchParams.has("cursor") ? { next_cursor: null } : {}) }, results });
 	}) as typeof globalThis.fetch;
-	return { lookup, fetch: openAlex };
+	return { lookup, fetch: openAlex, askedOfOpenAlex };
 }
 
 async function sync(db: Database, fetch: typeof globalThis.fetch) {
 	// PDFs need the attachment pipeline, which this test leaves out.
 	await db.update(sourceConnection).set({ config: { downloadPdfs: false } }).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
 	const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
-	return syncAddedPapers({ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch });
+	return syncAddedPapers({ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch, service: config.authentication.openScholar });
 }
 
 const record = async (db: Database, key: string) => (await db.select().from(item).where(eq(item.key, key)))[0];
@@ -560,5 +567,73 @@ it("leaves a paper found by its DOI on its DOI when another source brought its w
 		// Linked to its work only if it's the record the search holds too.
 		const [paper] = await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key));
 		expect(paper!.openalexId === null || holders.has(key)).toBe(true);
+	});
+});
+
+it("adds an Openscholar Report from Openscholar alone, and its sync follows a correction and a withdrawal without OpenAlex taking it", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const doi = "10.53832/openscholar-r.r100001";
+		const live = (title: string, version: string): OpenscholarReport => ({
+			state: "live", key: "R100001", doi, version, title, subtitle: "", type: "report", language: "en", date: "2026-11-10", licence: "CC BY 4.0",
+			abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["maize"], series: "Openscholar Reports",
+			pageUrl: "https://openscholar.test/papers/R100001", pdfUrl: "https://openscholar.test/papers/R100001/report.pdf",
+		});
+		const reports = new Map<string, OpenscholarReport>([[doi, live("Shade trees and maize yields", "2026-11-10T08:00:00.000Z")]]);
+		// OpenAlex has a work under the same DOI, and the DOI lookup a record: neither is the one taken.
+		const world = services([work(99, "OpenAlex's copy", doi)], { [doi]: { itemType: "journalArticle", title: "The lookup's copy", DOI: doi } }, reports);
+		const { results } = await addPapers(db, storage, config, { requestId: "r-report", publish: true, actor: owner, papers: [{ doi }] }, world.lookup);
+		expect(results).toMatchObject([{ at: 0, outcome: "added", itemKey: expect.any(String), foundBy: "doi" }]);
+		const key = results[0]!.itemKey!;
+		expect(await record(db, key)).toMatchObject({ title: "Shade trees and maize yields", url: "https://openscholar.test/papers/R100001", deleted: 0 });
+
+		// Its sync keeps it Openscholar's: OpenAlex is never asked about its DOI, and its PDF is linked from Openscholar.
+		expect((await sync(db, world.fetch)).unresolved).toBe(0);
+		expect(world.askedOfOpenAlex.filter((filter) => filter.includes(doi))).toEqual([]);
+		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBeNull();
+		expect((await db.select({ url: item.url }).from(item).where(eq(item.parentItem, key))).map((row) => row.url)).toEqual(["https://openscholar.test/papers/R100001/report.pdf"]);
+
+		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
+		await sync(db, world.fetch);
+		expect(await record(db, key)).toMatchObject({ title: "Shade trees and maize yields, corrected", deleted: 0 });
+
+		reports.set(doi, { state: "withdrawn", key: "R100001", doi, version: "2026-11-12T09:00:00.000Z" });
+		await sync(db, world.fetch);
+		expect((await record(db, key))?.deleted).toBe(1);
+		expect(await linked(db, key)).toBe(true);
+
+		// A withdrawn report isn't added.
+		const again = await addPapers(db, storage, config, { requestId: "r-report-2", publish: true, actor: owner, papers: [{ doi: "10.53832/openscholar-r.r100009" }] }, services([], {}, new Map([["10.53832/openscholar-r.r100009", { state: "withdrawn", key: "R100009", doi: "10.53832/openscholar-r.r100009", version: "2026-11-12T09:00:00.000Z" }]])).lookup);
+		expect(again.results).toMatchObject([{ at: 0, outcome: "not_found", message: "This report was withdrawn on Openscholar." }]);
+	});
+});
+
+it("imports an Openscholar Report by its DOI from Openscholar's own details, and never one withdrawn there", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const live = "10.53832/openscholar-r.r100001";
+		const withdrawn = "10.53832/openscholar-r.r100009";
+		const reports = new Map<string, OpenscholarReport>([
+			[live, {
+				state: "live", key: "R100001", doi: live, version: "2026-11-10T08:00:00.000Z", title: "Shade trees and maize yields", subtitle: "Evidence from three seasons", type: "report", language: "en", date: "2026-11-10",
+				licence: "CC BY 4.0", abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["maize"], series: "Openscholar Reports",
+				pageUrl: "https://openscholar.test/papers/R100001", pdfUrl: "https://openscholar.test/papers/R100001/report.pdf",
+			}],
+			[withdrawn, { state: "withdrawn", key: "R100009", doi: withdrawn, version: "2026-11-12T09:00:00.000Z" }],
+		]);
+		const asked: string[][] = [];
+		// The translation server isn't there: a report's record needs no DOI lookup.
+		const preview = await previewImportRecords(db, { action: "preview", dois: [`https://doi.org/${live}`, withdrawn], files: [] }, "http://127.0.0.1:9", {
+			papersAtLinks: async () => [],
+			reportsByDoi: async (dois) => {
+				asked.push([...dois]);
+				return new Map(dois.flatMap((doi) => (reports.has(doi) ? [[doi, reports.get(doi)!] as const] : [])));
+			},
+		});
+		// One request for all of them.
+		expect(asked).toEqual([[live, withdrawn]]);
+		expect(preview.records).toMatchObject([
+			{ state: "ready", method: "doi", source: live, title: "Shade trees and maize yields: Evidence from three seasons", year: 2026, creators: ["Chikondi Banda"], payload: { DOI: live, url: "https://openscholar.test/papers/R100001" } },
+			{ state: "unresolved", source: withdrawn, message: "This report was withdrawn on Openscholar." },
+		]);
 	});
 });

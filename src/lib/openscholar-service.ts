@@ -93,3 +93,55 @@ const foundSchema = z.object({ papers: z.array(z.object({ openalexId: z.string()
 export async function papersByTitle(service: OpenScholarService, title: string, reader: string): Promise<PaperIds[]> {
 	return foundSchema.parse(await postToOpenScholar(service, SEARCH_PATH, { contractVersion: 1, query: title, clerkUserId: reader })).papers;
 }
+
+export const REPORTS_PATH = "/api/v1/evidence-libraries/reports/records";
+/** DOIs one request asks Openscholar about. */
+const REPORTS_PER_REQUEST = 100;
+
+const liveReportSchema = z.object({
+	state: z.literal("live"),
+	key: z.string().min(1).max(64),
+	doi: z.string().min(1).max(512),
+	/** When the report's details were last set, as an ISO time. */
+	version: z.string().min(1).max(64),
+	title: z.string(),
+	subtitle: z.string(),
+	type: z.string(),
+	language: z.string(),
+	date: z.string(),
+	licence: z.string(),
+	abstract: z.string(),
+	authors: z.array(z.object({ name: z.string(), orcid: z.string().nullable() })).max(1_000),
+	keywords: z.array(z.string()).max(1_000),
+	series: z.string(),
+	pageUrl: z.string().url().max(2048),
+	pdfUrl: z.string().url().max(2048).nullable(),
+});
+const withdrawnReportSchema = z.object({ state: z.literal("withdrawn"), key: z.string().min(1).max(64), doi: z.string().min(1).max(512), version: z.string().min(1).max(64) });
+const reportsSchema = z.object({ reports: z.array(z.union([liveReportSchema, withdrawnReportSchema]).nullable()) });
+
+export type LiveOpenscholarReport = z.infer<typeof liveReportSchema>;
+/** A report published on Openscholar, as it stands there now: live with its details, or withdrawn. */
+export type OpenscholarReport = LiveOpenscholarReport | z.infer<typeof withdrawnReportSchema>;
+
+/**
+ * The Openscholar Reports among these DOIs, by the DOI as it was asked. Openscholar is asked before OpenAlex and the
+ * DOI lookup: a report is in neither until its deposit is indexed, and its record stays Openscholar's (OpenDevEd/new-el#814).
+ * A hundred DOIs a request, so a sync asks once for all it holds.
+ */
+export async function reportsByDoi(service: OpenScholarService, dois: readonly string[], options: { fetch?: typeof fetch } = {}): Promise<Map<string, OpenscholarReport>> {
+	const found = new Map<string, OpenscholarReport>();
+	for (let at = 0; at < dois.length; at += REPORTS_PER_REQUEST) {
+		const asked = dois.slice(at, at + REPORTS_PER_REQUEST);
+		const answer = await postToOpenScholar(service, REPORTS_PATH, { contractVersion: 1, dois: asked }, { fetch: options.fetch, timeoutMs: 30_000, maxBytes: 8_000_000 }).catch((error: unknown) => {
+			// An Openscholar that doesn't publish reports yet has no such address: none of the DOIs is a report of its.
+			if (error instanceof OpenScholarServiceError && error.status === 404) return null;
+			throw error;
+		});
+		if (!answer) return found;
+		const { reports } = reportsSchema.parse(answer);
+		if (reports.length !== asked.length) throw new Error("Openscholar answered a different number of reports than it was asked about.");
+		reports.forEach((report, index) => report && found.set(asked[index]!, report));
+	}
+	return found;
+}

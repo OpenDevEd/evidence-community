@@ -39,7 +39,8 @@ export function createSourceSyncRuntime(
 			openalex,
 			// A collection paper OpenAlex doesn't have is made from its DOI, as Added papers makes one.
 			openscholar: { ...openalex, service: config.authentication.openScholar, recordByDoi: paperLookupFor(config).recordByDoi },
-			added: openalex,
+			// Openscholar says which added papers are its reports, so they follow it and not OpenAlex.
+			added: { ...openalex, service: config.authentication.openScholar },
 		}),
 		storage,
 	};
