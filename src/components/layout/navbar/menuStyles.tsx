@@ -6,7 +6,7 @@ import { twMerge } from "@/lib/tw-merge";
  * reader's account menu): the same padding on every side, 40px rows, full
  * contrast labels and icons in one colour.
  */
-export const navbarMenuDropdownClasses = { content: "p-1.5 min-w-60" };
+export const navbarMenuDropdownClasses = { content: "p-1.5 min-w-[min(15rem,calc(100vw-1.5rem))]" };
 
 export const navbarMenuClasses = {
 	base: "p-0 gap-0",

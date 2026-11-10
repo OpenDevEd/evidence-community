@@ -20,8 +20,11 @@ const StyledDropdown = extendVariants(NextUIDropdown, {
 			},
 		},
 		custom: {
+			// React Aria gives the popover the height left below its button; the layers inside take it, so a menu taller than
+			// that (large text on a phone) scrolls instead of running off the screen, where the page can't be scrolled to it.
 			default: {
-				content: "rounded-2xl",
+				base: "max-h-[inherit]",
+				content: "rounded-2xl max-h-[inherit] max-w-[calc(100vw-1.5rem)] overflow-y-auto",
 			},
 		},
 	},
@@ -38,5 +41,5 @@ const StyledDropdown = extendVariants(NextUIDropdown, {
  * left visible.
  */
 export function Dropdown(props: ComponentProps<typeof StyledDropdown>) {
-	return <StyledDropdown data-react-aria-top-layer="true" {...props} />;
+	return <StyledDropdown data-react-aria-top-layer="true" motionProps={{ className: "max-h-[inherit]" }} {...props} />;
 }
