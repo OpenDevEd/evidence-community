@@ -216,6 +216,14 @@ const filled = <T,>(list: readonly T[] | null | undefined) => (list?.length ? [.
 const linkedDois = (extras: PublicationRecordExtras | undefined, kind: "cites" | "related") =>
 	(extras?.links ?? []).flatMap((link) => (link.kind === kind && link.doi ? [link.doi] : []));
 
+/** The study type in words, as readers see it: an editor's choice, else what was read from the record. */
+const designOf = (record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined) =>
+	studyType(extras?.studyType ?? record.studyType ?? "")?.label;
+
+/** The places the record is about, as readers see them: an editor's choice, else what was found in its text. */
+const placesOf = (record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined) =>
+	filled((extras?.countries ?? record.countryFocus)?.map(placeOf));
+
 /** How many pages the record runs to, when it says. */
 function pageCount(record: EvidenceLibraryPublicationMetadata) {
 	const pages = Number(normalizeText(record.numPages));
@@ -226,8 +234,8 @@ function pageCount(record: EvidenceLibraryPublicationMetadata) {
 function extraMetadata(record: EvidenceLibraryPublicationMetadata, extras: PublicationRecordExtras | undefined): Partial<PublicationMetadata> {
 	const fields = {
 		subjects: filled(extras?.topicNames),
-		methods: studyType(record.studyType ?? "")?.label,
-		locations: filled(record.countryFocus?.map(placeOf)),
+		methods: designOf(record, extras),
+		locations: placesOf(record, extras),
 		pages: pageCount(record),
 		formats: filled(extras?.formats),
 		fullTextUrl: extras?.fullTextUrl,

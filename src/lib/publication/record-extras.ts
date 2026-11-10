@@ -3,7 +3,10 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { itemLink } from "@/db/schema/tables/itemLink";
+import { resolveCountryFocus } from "@/lib/country-focus";
+import { readStudyReading } from "@/lib/readings/reading";
 import { resolveTopicNodes } from "@/lib/topics/catalog";
+import { resolveBibliographicDoi } from "./bibliographic-doi";
 import type { PublicationRepositorySnapshot } from "./repository";
 
 /**
@@ -14,6 +17,9 @@ import type { PublicationRepositorySnapshot } from "./repository";
 export type PublicationRecordExtras = {
 	links: readonly { kind: "cites" | "related"; key: string; doi: string | null }[];
 	topicNames: readonly string[];
+	/** The study type and the countries as readers see them: an editor's choice, else what was read from the record. */
+	studyType?: string;
+	countries: readonly string[];
 	/** Each institution's ROR, by its OpenAlex ID (`I4210087849`). */
 	institutionRors: Readonly<Record<string, string>>;
 	fullTextUrl?: string;
@@ -35,12 +41,20 @@ export async function loadPublicationRecordExtras(
 	request: typeof fetch = fetch,
 ): Promise<PublicationRecordExtras> {
 	const record = snapshot.record;
-	if (!record) return { links: [], topicNames: [], institutionRors: {}, formats: [] };
-	const links = await database
-		.select({ kind: itemLink.kind, key: itemLink.toKey, doi: item.DOI })
+	if (!record) return { links: [], topicNames: [], countries: [], institutionRors: {}, formats: [] };
+	// The records this one cites, and the ones related to it whichever way the link was made: related is both ways.
+	const outgoing = await database
+		.select({ kind: itemLink.kind, key: itemLink.toKey, DOI: item.DOI, extra: item.extra })
 		.from(itemLink)
 		.innerJoin(item, eq(item.key, itemLink.toKey))
 		.where(and(eq(itemLink.fromKey, record.key), inArray(itemLink.kind, ["cites", "related"])));
+	const incoming = await database
+		.select({ kind: itemLink.kind, key: itemLink.fromKey, DOI: item.DOI, extra: item.extra })
+		.from(itemLink)
+		.innerJoin(item, eq(item.key, itemLink.fromKey))
+		.where(and(eq(itemLink.toKey, record.key), eq(itemLink.kind, "related")));
+	const links = [...outgoing, ...incoming].filter((link, index, all) => all.findIndex((other) => other.kind === link.kind && other.key === link.key) === index);
+	const reading = record.studyType ? null : await readStudyReading(database, record.key);
 	// Topics are named by the catalog the library reads them from.
 	const topicNames =
 		config.topics?.enabled && config.authentication && record.topics.length
@@ -48,8 +62,11 @@ export async function loadPublicationRecordExtras(
 			: [];
 	const pdf = snapshot.files.find((file) => file.contentType === "application/pdf");
 	return {
-		links: links.map((link) => ({ kind: link.kind, key: link.key, doi: link.doi?.trim() || null })),
+		// A linked record's DOI wherever it keeps one: its DOI field or its Extra.
+		links: links.map((link) => ({ kind: link.kind, key: link.key, doi: resolveBibliographicDoi({ DOI: link.DOI, extra: link.extra }).doi })),
 		topicNames: [...new Set(topicNames)].sort(),
+		...((record.studyType ?? reading?.type) ? { studyType: (record.studyType ?? reading?.type)! } : {}),
+		countries: resolveCountryFocus({ title: record.title, abstractNote: record.abstractNote, countryFocus: record.countryFocus }),
 		institutionRors: await institutionRors(record.creators ?? [], config.services.openAlex?.apiKey, request),
 		...(pdf ? { fullTextUrl: new URL(`/api/item/${record.key}/download/${pdf.itemKey}`, config.identity.baseUrl).toString() } : {}),
 		formats: [...new Set(snapshot.files.map((file) => file.contentType))].sort(),

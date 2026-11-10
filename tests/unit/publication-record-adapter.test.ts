@@ -122,8 +122,6 @@ describe("publication record adapter", () => {
 					{ creatorType: "editor", firstName: "Grace", lastName: "Hopper" },
 				],
 				numPages: "12",
-				countryFocus: ["RW", "eastern_africa"],
-				studyType: "meta-analysis",
 			}),
 			tags: [],
 			baseUrl: "https://library.example.org",
@@ -135,6 +133,9 @@ describe("publication record adapter", () => {
 					{ kind: "related", key: "RELATED1", doi: "10.1000/related.1" },
 				],
 				topicNames: ["Climate change impacts on agriculture"],
+				// Read from the record, as readers see them: no editor chose either.
+				studyType: "meta-analysis",
+				countries: ["RW", "eastern_africa"],
 				institutionRors: { I4210087849: "https://ror.org/00286hs46" },
 				fullTextUrl: "https://library.example.org/api/item/ABCDEFGH/download/PDF00001",
 				formats: ["application/pdf"],
