@@ -620,6 +620,7 @@ export function AdminCollectionPicker({
 					<HugeiconsIcon icon={Search01Icon} aria-hidden className="text-black/35 dark:text-white/35" size={14} />
 				}
 				value={query}
+				clearButtonLabel="Clear search"
 				onClear={() => setQuery("")}
 				onValueChange={setQuery}
 			/>

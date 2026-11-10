@@ -2302,6 +2302,7 @@ export default function AdminWorkbench({
 							inputWrapper: "h-10 min-h-10 rounded-xl",
 						}}
 						isClearable
+						clearButtonLabel="Clear search"
 						placeholder="Search title, creator, date or tag"
 						startContent={
 							<HugeiconsIcon
