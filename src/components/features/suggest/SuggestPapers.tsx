@@ -41,7 +41,7 @@ export function useSuggest() {
 
 /** How many more papers the reader may suggest here today, read while they are signed in so the dialog opens knowing it. */
 const LEFT_KEY = "suggest-papers-left";
-const useLeft = (signedIn: boolean) => useSWR(signedIn ? LEFT_KEY : null, () => call<{ left: number }>().then(({ left }) => left));
+const useLeft = () => useSWR(LEFT_KEY, () => call<{ left: number }>().then(({ left }) => left));
 /** The day's allowance as the dialog takes it: how many are left once known, and whether it couldn't be read, which is tried again by itself. */
 type Allowance = { left: number | undefined; failed: boolean };
 
@@ -504,8 +504,13 @@ function SuggestContent({ first, allowance, picks, onClose }: { first: string; a
  */
 export function SuggestPapersDialog() {
 	const { reader } = useReaderSession();
+	// What a reader picked is theirs: once the session is another reader's, here or from another tab, the dialog starts with nothing.
+	return reader ? <ReaderSuggestDialog key={reader.id} /> : null;
+}
+
+function ReaderSuggestDialog() {
 	const [text, setText] = useQueryState(SUGGEST_PARAM, parseAsString);
-	const left = useLeft(Boolean(reader));
+	const left = useLeft();
 	const picks = useBasket(roomOf(left.data));
 	// A window event, so the reader's menu and every Suggest button open the same dialog.
 	useEffect(() => {
@@ -513,7 +518,6 @@ export function SuggestPapersDialog() {
 		window.addEventListener(OPEN_EVENT, show);
 		return () => window.removeEventListener(OPEN_EVENT, show);
 	}, [setText]);
-	if (!reader) return null;
 	const close = () => void setText(null);
 	return (
 		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
