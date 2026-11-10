@@ -352,7 +352,7 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 	return (
 		<>
 			{/* The same distance from the dialog's edge on every side: its top, its sides and under its buttons. */}
-			<ModalHeader className="flex flex-col gap-3 px-6 pb-3 pt-6">
+			<ModalHeader className="flex flex-col gap-3 px-4 pb-2 pt-4">
 				<div>
 					<p className="text-lg font-semibold">{t("title")}</p>
 					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
@@ -393,17 +393,17 @@ function SuggestContent({ first, left, onClose }: { first: string; left: number 
 			</ModalHeader>
 			<ModalBody className="h-[min(21rem,50dvh)] flex-none p-0">
 				{/* Papers past the edge fade out under it, at whichever end has more. */}
-				<ScrollShadow size={32} className="h-full px-3">{sent !== null ? <SentPanel count={sent} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
+				<ScrollShadow size={32} className="h-full px-1">{sent !== null ? <SentPanel count={sent} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
 			</ModalBody>
-			<ModalFooter className="flex-wrap items-center justify-between gap-y-3 px-6 pb-6 pt-4">
+			<ModalFooter className="flex-wrap items-center justify-between gap-y-3 px-4 pb-4 pt-3">
 				{sent !== null ? (
-					<Button size="md" className="ms-auto" color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>
+					<Button size="md" className="ms-auto px-4 xl:px-4" color="accent" variant="solid" onPress={onClose}>{t("done")}</Button>
 				) : (
 					<>
 						<span className="whitespace-nowrap text-sm tabular-nums text-foreground/60 dark:text-white/60">{t("toSuggest", { count: ready.length })}</span>
 						<span className="ms-auto flex gap-2">
-							<Button size="md" variant="light" onPress={onClose}>{t("cancel")}</Button>
-							<Button size="md" color="accent" variant="solid" isDisabled={!ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? null : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
+							<Button size="md" className="px-4 xl:px-4" variant="light" onPress={onClose}>{t("cancel")}</Button>
+							<Button size="md" className="px-4 xl:gap-2 xl:px-4" color="accent" variant="solid" isDisabled={!ready.length} isLoading={suggestion.sending} onPress={() => void suggestion.send()} startContent={suggestion.sending ? null : <HugeiconsIcon icon={InboxIcon} className="size-4" aria-hidden />}>
 								{t("send")}
 							</Button>
 						</span>
