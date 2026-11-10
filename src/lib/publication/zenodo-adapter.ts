@@ -1243,11 +1243,18 @@ export async function runZenodoPublicationJobsOnce(
 					continue;
 				}
 			}
-			const built = await buildZenodoPlan(
+			const built = await withPublicationJobHeartbeat(
 				database,
-				job.itemKey,
-				config,
-				now(),
+				{
+					jobId: job.id,
+					workerId,
+					leaseSeconds: workerConfig.leaseSeconds,
+					heartbeatIntervalMs: options.heartbeatIntervalMs,
+					now,
+					signal: options.signal,
+				},
+				// Planning reads what the deposit carries from OpenAlex and the topic catalog, which can outlast a lease.
+				() => buildZenodoPlan(database, job.itemKey, config, now()),
 			);
 			if (job.reason === "provider_audit") {
 				const audit = await auditZenodoPublishedState(
