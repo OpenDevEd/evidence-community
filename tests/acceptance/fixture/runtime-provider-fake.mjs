@@ -93,7 +93,7 @@ function publishedRecord(deposition) {
 		created: deposition.publishedAt,
 		id: deposition.id,
 		parent: { id: deposition.parentId, pids: {} },
-		pids: { doi: { identifier: doi } },
+		pids: { ...deposition.draft.pids, doi: deposition.draft.pids?.doi ?? { identifier: doi } },
 		metadata: deposition.draft.metadata,
 		custom_fields: deposition.draft.custom_fields,
 		links: {

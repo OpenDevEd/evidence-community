@@ -498,8 +498,11 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	itemKey: string;
 	snapshot: PublicationRepositorySnapshot;
 	config: Pick<LibraryServerConfig, "identity" | "services">;
-	/** What the deposit carries beyond the record's row, so the view compares the payload the worker would send. */
-	extras: PublicationRecordExtras;
+	/**
+	 * What the deposit carries beyond the record's row, so the view compares the payload the worker would send. An
+	 * error when it couldn't be read: the record then shows that as what blocks it, as its deposit would wait.
+	 */
+	extras: PublicationRecordExtras | Error;
 	now?: Date;
 }): AdminPublicationView {
 	const { snapshot } = input;
@@ -569,6 +572,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	let validationRecord = null;
 	let recordErrors: readonly string[] = [];
 	try {
+		if (input.extras instanceof Error) throw input.extras;
 		const inspected = inspectPublicationRecordSnapshot({
 			record,
 			tags: snapshot.tags,

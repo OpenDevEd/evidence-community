@@ -17,7 +17,7 @@ import { item } from "@/db/schema/tables/item";
 import { buildAdminPublicationViewFromSnapshot } from "./admin-publication-view";
 import { enqueuePublicationJobsForItem } from "./queue";
 import { readPublicationRepositorySnapshot } from "./repository";
-import { loadPublicationRecordExtras, type PublicationExtrasConfig } from "./record-extras";
+import { loadPublicationRecordExtras, type PublicationExtrasConfig, type PublicationRecordExtras } from "./record-extras";
 
 type PublicationConfig = PublicationExtrasConfig;
 
@@ -212,6 +212,21 @@ async function reconcileTarget(
 	now: Date,
 ) {
 	if (target.environment !== config.services.publication[target.provider].environment) return 0;
+	// What the deposit carries beyond the row comes from OpenAlex, so it is read before the item is locked. A record
+	// whose lookup fails waits for the next night; one edited meanwhile has its own job.
+	const read = await readPublicationRepositorySnapshot(database, target.itemKey, config.services.publication.crossref.environment);
+	if (!read.record) return 0;
+	let extras: PublicationRecordExtras;
+	try {
+		extras = await loadPublicationRecordExtras(database, read, config);
+	} catch (error) {
+		console.warn("Nightly reconciliation skipped a record whose deposit details couldn't be read", {
+			itemKey: target.itemKey,
+			provider: target.provider,
+			error: error instanceof Error ? error.message : String(error),
+		});
+		return 0;
+	}
 	return database.transaction(async (transaction) => {
 		if (!(await tryLockItemMutation(transaction, target.itemKey))) return 0;
 		const [currentTarget] = await transaction
@@ -230,7 +245,7 @@ async function reconcileTarget(
 				),
 			)
 			.limit(1);
-		if (!currentTarget) return 0;
+		if (!currentTarget || currentTarget.revision !== read.record?.revision) return 0;
 
 		const snapshot = await readPublicationRepositorySnapshot(
 			transaction,
@@ -241,7 +256,7 @@ async function reconcileTarget(
 			itemKey: target.itemKey,
 			snapshot,
 			config,
-			extras: await loadPublicationRecordExtras(transaction, snapshot, config),
+			extras,
 			now,
 		});
 		const displayState = view.providers[target.provider].displayState;

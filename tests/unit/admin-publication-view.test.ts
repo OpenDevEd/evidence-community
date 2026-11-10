@@ -189,6 +189,18 @@ function syncState(changes: Record<string, unknown> = {}) {
 const extras: PublicationRecordExtras = { links: [], topicNames: [], countries: [], institutionRors: {}, formats: [] };
 
 describe("admin publication view", () => {
+	it("shows details it couldn't read as what blocks the record, instead of failing the page", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			extras: new Error("OpenAlex answered 503"),
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot(),
+			config,
+		});
+
+		expect(view.providers.crossref.blockers).toContain("OpenAlex answered 503");
+		expect(view.providers.zenodo.blockers).toContain("OpenAlex answered 503");
+	});
+
 	it("shows the namespace before activation without guessing the next DOI", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			extras,
