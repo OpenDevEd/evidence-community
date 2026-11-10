@@ -2,6 +2,7 @@ import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { item } from "@/db/schema/tables/item";
+import { itemFieldOverride } from "@/db/schema/topics";
 import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
 import type { OpenscholarReport } from "@/lib/openscholar-service";
 
@@ -63,6 +64,10 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 			console.error("[reports] couldn't unpublish a withdrawn report's record", { itemKey: key, error: String(error) });
 		});
 	}
+	// An unpublish is remembered as the team's own deletion, which a source never undoes. This one is Openscholar's:
+	// forgotten here, the record and its PDF come back when the report is reinstated, the team's edits with them. A
+	// record the team had unpublished itself wasn't public, so its deletion isn't among these.
+	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, keys), eq(itemFieldOverride.field, "deleted")));
 }
 
 /** Live reports one batch writes. */

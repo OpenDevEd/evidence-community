@@ -428,13 +428,13 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		// Withdrawn on Openscholar: withdrawn here on the next sweep, record and PDF, and still not OpenAlex's. The team
 		// had corrected a field of the record: a scan would leave such a record public, a withdrawn report never is.
 		await db.insert(itemFieldOverride).values({ itemKey: reportKey, field: "title", value: "The team's own title", sourceValue: "Shade trees and maize yields, corrected: Evidence from three seasons", sourceConnectionKey: "openscholar-c1" });
+		await db.update(item).set({ title: "The team's own title" }).where(eq(item.key, reportKey));
 		reports.set(doi, { state: "withdrawn", key: "R100001", doi, version: "2026-11-12T09:00:00.000Z" });
 		await sync();
 		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "doi:10.1000/w6"]);
 		expect((await record(reportKey))?.deleted).toBe(1);
 		expect((await db.select({ deleted: item.deleted }).from(item).where(eq(item.parentItem, reportKey))).map((row) => row.deleted)).toEqual([1]);
 		expect(await issues()).toEqual([`doi:${doi}`]);
-		await db.delete(itemFieldOverride).where(eq(itemFieldOverride.itemKey, reportKey));
 
 		// Reinstated, it comes back when the collection is next read whole, as the same record.
 		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
@@ -442,7 +442,10 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		await sync();
 		const back = await activeKeys(db, "openscholar-c1");
 		expect([...back.keys()].sort()).toEqual(["W2", "doi:10.1000/w6", `doi:${doi}`, `doi:pdf:${doi}`]);
-		expect(await record(back.get(`doi:${doi}`)!)).toMatchObject({ title: "Shade trees and maize yields, corrected: Evidence from three seasons", deleted: 0 });
+		// Public again, and still with the title the team gave it.
+		expect(back.get(`doi:${doi}`)).toBe(reportKey);
+		expect(await record(reportKey)).toMatchObject({ title: "The team's own title", deleted: 0 });
+		expect((await db.select({ deleted: item.deleted }).from(item).where(eq(item.parentItem, reportKey))).map((row) => row.deleted)).toEqual([0]);
 		expect(askedOfOpenAlex.filter((asked) => asked === doi)).toEqual([]);
 
 		// Taken out of the collection, the report and its PDF both go.
