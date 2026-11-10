@@ -81,7 +81,7 @@ export function readerMenuGroups(input: {
 }) {
 	const { reader, t } = input;
 	const openAccount = () => window.open(input.links.accountUrl, "_blank", "noopener");
-	const external = <NavbarMenuIcon icon={ArrowUpRight01Icon} className="size-4 text-foreground/40 dark:text-white/40" />;
+	const external = <NavbarMenuIcon icon={ArrowUpRight01Icon} className="ms-auto size-4 text-foreground/40 dark:text-white/40" />;
 	const name = readerDisplayName(reader, t);
 	return {
 		identity: (
