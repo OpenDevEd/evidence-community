@@ -211,20 +211,24 @@ function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed
 	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "";
 }
 
-/** Sending the picked papers: the ones that went leave the list (`onGone`), and one that didn't stays, with why. */
-function useSend(ready: Row[], onGone: (keys: string[]) => void) {
+/**
+ * Sending the picked papers, no more than `room` of them: the ones that went leave the list (`onGone`), and one that
+ * didn't stays, with why. What a failed send left behind is sent again whole, whatever the day's allowance has become:
+ * the community counted those papers when it took the request, and takes the same request again.
+ */
+function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) {
 	const t = useTranslations("suggestPapers");
 	const { mutate } = useSWRConfig();
 	const [sent, setSent] = useState<number | null>(null);
 	const [sending, setSending] = useState(false);
 	const [failure, setFailure] = useState("");
 	const [requestId] = useState(() => crypto.randomUUID());
+	const ready = failure ? basket : basket.slice(0, room);
 	const went = (results: { outcome: string; message?: string }[]) => {
 		// Where each paper now stands is read again.
 		void mutate((key) => Array.isArray(key) && String(key[0]).startsWith("suggest-"));
 		const refused = results.find((result) => result.outcome === "failed");
-		// What the day still allows is read again once everything went. While something is left to send again, the
-		// allowance it was first sent under stands: the community takes that request again, though the day's count is spent.
+		// What the day still allows is read again once everything went.
 		if (!refused) {
 			void mutate(LEFT_KEY);
 			return setSent(results.filter((result) => result.outcome === "queued").length);
@@ -239,7 +243,7 @@ function useSend(ready: Row[], onGone: (keys: string[]) => void) {
 			.then(({ results }) => went(results), (error: unknown) => setFailure(messageOf(error, t("failed"))));
 		setSending(false);
 	};
-	return { sent, sending, failure, send };
+	return { ready, sent, sending, failure, send };
 }
 
 /**
@@ -270,10 +274,9 @@ function useSuggestion(first: string, allowance: Allowance) {
 	const room = Math.min(allowance.left ?? 0, PER_REQUEST);
 	const { basket, add, remove } = useBasket(room);
 	const find = useFind(text, room, add);
-	const ready = basket.slice(0, room);
-	const sending = useSend(ready, remove);
+	const sending = useSend(basket, room, remove);
 	return {
-		...sending, text, basket, ready,
+		...sending, text, basket,
 		...listStateOf(Boolean(text.trim()), find, allowance),
 		/** The day allows no more than are picked already: nothing more is added. */
 		full: room > 0 && basket.length >= room,
@@ -438,9 +441,10 @@ function SuggestContent({ first, allowance, onClose }: { first: string; allowanc
 					<p className="text-lg font-semibold">{t("title")}</p>
 					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
 				</div>
-				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0} />}
+				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} />}
 			</ModalHeader>
-			<ModalBody className="h-[min(21rem,50dvh)] flex-none p-0">
+			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
+			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] flex-none p-0">
 				{/* Papers past the edge fade out under it, at whichever end has more. */}
 				<ScrollShadow size={32} className="h-full px-1">{done ? <SentPanel count={suggestion.sent ?? 0} /> : <PaperLists suggestion={suggestion} />}</ScrollShadow>
 			</ModalBody>
