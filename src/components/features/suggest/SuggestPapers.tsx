@@ -15,9 +15,10 @@ import { Spinner } from "@/components/nextui/Spinner";
 import { SUGGEST_PARAM, useOpenScholarUrl, useReaderSession } from "@/components/layout/navbar/ReaderSession";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useDebouncedValue } from "@/hooks/useDebounce";
-import { call, findPapers, messageOf, parse, PER_REQUEST, post, TITLE_MIN, unnamed, type Row } from "./papers";
+import { call, findPapers, messageOf, parse, PER_REQUEST, post, TITLE_MAX, TITLE_MIN, unnamed, type Row } from "./papers";
 
 type Translate = ReturnType<typeof useTranslations<"suggestPapers">>;
+type Picks = ReturnType<typeof useBasket>;
 
 const OPEN_EVENT = "suggest-papers:open";
 /** What the page is searching for, if anything: the dialog starts from it, since that is what the reader was looking for. */
@@ -72,7 +73,7 @@ function PaperRow({ row, picked = false, children }: { row: Row; picked?: boolea
 					<HugeiconsIcon icon={picked ? CheckmarkCircle02Icon : File01Icon} className="size-5" aria-hidden />
 				</span>
 				<div className={`min-w-0 flex-1 ${dimmed}`}>
-					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span className="font-mono text-xs">{row.raw}</span>}</p>
+					<p className="line-clamp-1 text-sm/5 font-medium">{row.title ?? <span dir="ltr" className="font-mono text-xs">{row.raw}</span>}</p>
 					{row.title ? <RowDetail row={row} /> : null}
 				</div>
 				{children}
@@ -163,7 +164,10 @@ function PastedSummary({ rows, isPicked }: { rows: Row[]; isPicked: (key: string
 	);
 }
 
-/** The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day still allows. */
+/**
+ * The papers picked to send: added once each, only ones the community can take, and no more than `room`, what the day
+ * still allows. Kept by the dialog's host, not its inside, so a dialog closed by mistake opens again with them.
+ */
 function useBasket(room: number) {
 	const [basket, setBasket] = useState<Row[]>([]);
 	const fresh = (held: Row[], rows: Row[]) => rows.filter((row) => row.state === "found" && !held.some((other) => other.key === row.key));
@@ -177,7 +181,9 @@ function useBasket(room: number) {
 /** What a text asks for, as the day's allowance lets it: the papers it names, or the title it is, when it is long enough to be one. */
 function askedBy(query: string, room: number) {
 	const named = parse(query).length;
-	return { named, searchable: room > 0 && (named > 0 || query.length >= TITLE_MIN) };
+	const title = named === 0 && query.length >= TITLE_MIN;
+	const tooLong = title && query.length > TITLE_MAX;
+	return { named, tooLong, searchable: room > 0 && (named > 0 || (title && !tooLong)) };
 }
 
 /**
@@ -187,7 +193,7 @@ function askedBy(query: string, room: number) {
 function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	const typed = text.trim();
 	const query = useDebouncedValue(typed, 350);
-	const { named, searchable } = askedBy(query, room);
+	const { named, tooLong, searchable } = askedBy(query, room);
 	// What the field holds now, and the text whose papers were picked already. An answer to a text the reader has since
 	// changed picks nothing; nor does the same text read again behind their back (after a send, on reconnecting), which
 	// would put back a paper they took out. Typing (`retype`) makes the next answer pick.
@@ -207,7 +213,7 @@ function useFind(text: string, room: number, onNamed: (rows: Row[]) => void) {
 	});
 	const settled = typed === query && !search.isValidating;
 	const rows = typed && searchable ? (search.data?.rows ?? []) : [];
-	return { query, named, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, retype: (value: string) => { held.current = value.trim(); pickedFor.current = null; } };
+	return { query, named, tooLong, rows, settled, pasted: search.data?.named === true, error: search.error as unknown, retype: (value: string) => { held.current = value.trim(); pickedFor.current = null; } };
 }
 
 /** What the dialog says above its list when something needs saying: the day's limit, why the last try failed, or what a paste holds that names no paper. */
@@ -216,6 +222,7 @@ function noticeOf(t: Translate, find: ReturnType<typeof useFind>, { left, failed
 	if (left === 0) return t("noneLeft");
 	if (find.named > room) return t("overLimit", { count: room });
 	if (failure) return failure;
+	if (find.tooLong) return t("tooLong");
 	if (find.error) return messageOf(find.error, t("failed"));
 	const invalid = find.named ? unnamed(find.query) : [];
 	return invalid.length ? t("invalid", { values: invalid.slice(0, 3).join(" "), count: invalid.length }) : "";
@@ -239,11 +246,11 @@ function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) 
 		void mutate((key) => Array.isArray(key) && String(key[0]).startsWith("suggest-"));
 		const refused = results.find((result) => result.outcome === "failed");
 		// What the day still allows is read again once everything went.
+		onGone(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
 		if (!refused) {
 			void mutate(LEFT_KEY);
 			return setSent(results.filter((result) => result.outcome === "queued").length);
 		}
-		onGone(ready.filter((_, at) => results[at]?.outcome !== "failed").map((row) => row.key));
 		setFailure(refused.message ?? t("failed"));
 	};
 	const send = async () => {
@@ -260,6 +267,9 @@ function useSend(basket: Row[], room: number, onGone: (keys: string[]) => void) 
  * The dialog's state: what is typed, what it finds, the papers picked to send, and sending them. `first` is the text
  * its field opens with: the page's search, or the paper a row offered.
  */
+/** How many papers may be looked up, picked and sent: none until the day's allowance is known, and no more than it or one request holds. */
+const roomOf = (left: number | undefined) => Math.min(left ?? 0, PER_REQUEST);
+
 /** Whether the allowance is in, one way or the other: one that couldn't be read is an answer too, said in place of waiting on it. */
 const allowanceIn = ({ left, failed }: Allowance) => left !== undefined || failed;
 
@@ -277,12 +287,10 @@ function listStateOf(typed: boolean, find: ReturnType<typeof useFind>, allowance
 	};
 }
 
-function useSuggestion(first: string, allowance: Allowance) {
+function useSuggestion(first: string, allowance: Allowance, { basket, add, remove }: Picks) {
 	const t = useTranslations("suggestPapers");
 	const [text, setText] = useState(first);
-	// Nothing is looked up until the day's allowance is known, and no more than it is picked or sent.
-	const room = Math.min(allowance.left ?? 0, PER_REQUEST);
-	const { basket, add, remove } = useBasket(room);
+	const room = roomOf(allowance.left);
 	const find = useFind(text, room, add);
 	const sending = useSend(basket, room, remove);
 	return {
@@ -389,7 +397,7 @@ function FieldIcon({ busy }: { busy: boolean }) {
 }
 
 /** One line for a title, growing to hold a pasted list with a paper on each line; a list longer than it fades at the end that has more. */
-function FindField({ suggestion, disabled }: { suggestion: Suggestion; disabled: boolean }) {
+function FindField({ suggestion, disabled, onClose }: { suggestion: Suggestion; disabled: boolean; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
 	// Which ends of a long pasted list are out of the field's sight, as its own scrolling says.
 	const [hidden, setHidden] = useState({ above: false, below: false });
@@ -404,11 +412,17 @@ function FindField({ suggestion, disabled }: { suggestion: Suggestion; disabled:
 			minRows={1}
 			maxRows={FIELD_ROWS}
 			autoCorrect="off"
+			// A DOI or a link reads left to right in a right-to-left language too; a title follows its own script.
+			dir="auto"
 			value={suggestion.text}
 			onValueChange={suggestion.type}
 			onClear={() => suggestion.type("")}
-			// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
-			onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) event.preventDefault(); }}
+			onKeyDown={(event) => {
+				// The field keeps Escape to itself otherwise, and the dialog would stay.
+				if (event.key === "Escape") onClose();
+				// The search runs as the typing stops, so Enter has nothing to do; a list's lines come from the paste.
+				if (event.key === "Enter" && !event.shiftKey) event.preventDefault();
+			}}
 			onScroll={(event) => {
 				const field = event.currentTarget;
 				setHidden({ above: field.scrollTop > 1, below: field.scrollTop + field.clientHeight < field.scrollHeight - 1 });
@@ -439,9 +453,9 @@ function SendFooter({ suggestion, onClose }: { suggestion: Suggestion; onClose: 
 }
 
 /** The dialog's inside, made when it opens, with the text it opens on already in its field. */
-function SuggestContent({ first, allowance, onClose }: { first: string; allowance: Allowance; onClose: () => void }) {
+function SuggestContent({ first, allowance, picks, onClose }: { first: string; allowance: Allowance; picks: Picks; onClose: () => void }) {
 	const t = useTranslations("suggestPapers");
-	const suggestion = useSuggestion(first, allowance);
+	const suggestion = useSuggestion(first, allowance, picks);
 	const done = suggestion.sent !== null;
 	return (
 		<>
@@ -451,7 +465,7 @@ function SuggestContent({ first, allowance, onClose }: { first: string; allowanc
 					<p className="text-lg font-semibold">{t("title")}</p>
 					<p className="text-sm font-normal text-foreground/60 dark:text-white/60">{t("description")}</p>
 				</div>
-				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} />}
+				{done ? null : <FindField suggestion={suggestion} disabled={allowance.left === 0 || suggestion.sending} onClose={onClose} />}
 			</ModalHeader>
 			{/* Nothing is added or taken out while a send is on its way: what goes is what was picked. */}
 			<ModalBody inert={suggestion.sending} className="h-[min(21rem,50dvh)] flex-none p-0">
@@ -477,6 +491,7 @@ export function SuggestPapersDialog() {
 	const { reader } = useReaderSession();
 	const [text, setText] = useQueryState(SUGGEST_PARAM, parseAsString);
 	const left = useLeft(Boolean(reader));
+	const picks = useBasket(roomOf(left.data));
 	// A window event, so the reader's menu and every Suggest button open the same dialog.
 	useEffect(() => {
 		const show = (event: Event) => void setText((event as CustomEvent<string>).detail);
@@ -488,7 +503,7 @@ export function SuggestPapersDialog() {
 	return (
 		<DialogModal isOpen={text !== null} onOpenChange={(next) => { if (!next) close(); }} size="2xl">
 			<ModalContent>
-				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} onClose={close} />
+				<SuggestContent first={text ?? ""} allowance={{ left: left.data, failed: Boolean(left.error) }} picks={picks} onClose={close} />
 			</ModalContent>
 		</DialogModal>
 	);

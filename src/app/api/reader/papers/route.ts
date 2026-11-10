@@ -42,6 +42,9 @@ async function suggesterOf(request: Request) {
 /** A title a reader types, to find the papers it may name. */
 const searchSchema = z.object({ search: z.string().trim().min(3).max(300) }).strict();
 
+/** Whether a request is a title search, whatever its title is like. */
+const asksForTitle = (json: unknown) => typeof json === "object" && json !== null && "search" in json;
+
 /** A link, DOI or ID as the lookups take it. A link only Openscholar can follow goes as given, which asks it. */
 function referenceOf(raw: string) {
 	const link = paperLinkOf(raw);
@@ -137,6 +140,18 @@ export async function GET(request: Request) {
 	return NextResponse.json({ left: Math.max(0, await suggestionsLeft(access.database, access.actor)) }, { headers: READER_RESPONSE_HEADERS });
 }
 
+/** What a reader's request asks for, as the answer to give it: a title search, a lookup of pasted papers, or sending them. */
+function answerFor(json: unknown, access: { config: LibraryServerConfig; actor: Actor }): () => Promise<Response> {
+	const answered = (body: unknown) => NextResponse.json(body, { headers: READER_RESPONSE_HEADERS });
+	const search = searchSchema.safeParse(json);
+	if (search.success) return async () => answered(await titleMatches(access, search.data.search));
+	if (asksForTitle(json)) return async () => readerError(400, "Search for a title of 3 to 300 characters.");
+	const preview = previewSchema.safeParse(json);
+	if (!preview.success) return () => suggest(json, access);
+	const lookup = paperLookupFor(access.config, access.actor.userId);
+	return async () => answered(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers, lookup));
+}
+
 /**
  * Finds the papers a title may name, looks up papers a reader pastes, or sends them to the community's review queue as
  * their suggestions: the team reviews each, and the reader follows them in Openscholar's Your submissions.
@@ -144,13 +159,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
 	const access = await suggesterOf(request);
 	if (access.response) return access.response;
-	const json = await readJsonBody(request);
-	const search = searchSchema.safeParse(json);
-	if (search.success) return withinLookups(async () => NextResponse.json(await titleMatches(access, search.data.search), { headers: READER_RESPONSE_HEADERS }));
-	const preview = previewSchema.safeParse(json);
-	if (!preview.success) return withinLookups(() => suggest(json, access));
-	const lookup = paperLookupFor(access.config, access.actor.userId);
-	return withinLookups(async () => NextResponse.json(await previewPapers((await getNativeFileRuntime()).db, access.config, preview.data.papers, lookup), { headers: READER_RESPONSE_HEADERS }));
+	return withinLookups(answerFor(await readJsonBody(request), access));
 }
 
 /** What a failed lookup tells the reader: the community's own refusal as given, or that their Openscholar allowance is spent. Null for a failure that isn't theirs to hear. */

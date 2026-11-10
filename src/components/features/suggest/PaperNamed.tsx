@@ -88,7 +88,7 @@ export function PaperNamed({ search }: { search: string }) {
 							<HugeiconsIcon icon={File01Icon} className="size-6" aria-hidden />
 						</span>
 						<div className="min-w-0 flex-1 basis-48">
-							<p className="line-clamp-2 font-medium sm:line-clamp-1">{data?.paper?.title ?? <span className="break-all font-mono text-sm">{raw}</span>}</p>
+							<p className="line-clamp-2 font-medium sm:line-clamp-1">{data?.paper?.title ?? <span dir="ltr" className="break-all font-mono text-sm">{raw}</span>}</p>
 							<p className="flex min-w-0 gap-2 text-sm text-foreground/60 dark:text-white/60">
 								<NamedDetail standing={standing} answer={data} />
 							</p>

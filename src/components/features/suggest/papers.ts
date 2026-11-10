@@ -2,8 +2,9 @@ import { paperLinkKey, paperLinkOf } from "@/lib/paper-links";
 
 /** Papers one request looks up or sends at most, as the community takes them. */
 export const PER_REQUEST = 100;
-/** The shortest title worth searching for. */
+/** The shortest title worth searching for, and the longest the community takes as one. */
 export const TITLE_MIN = 3;
+export const TITLE_MAX = 300;
 
 type Reference = { openalexId?: string; doi?: string; link?: string };
 type Looked = { key: string; raw: string; ref: Reference };

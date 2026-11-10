@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# waiting for review} other {# waiting for review}}",
       "missing": "{count, plural, one {# not found} other {# not found}}"
     },
-    "basketFull": "{count, plural, one {That’s the # paper you can suggest here today.} other {That’s all # papers you can suggest here today.}}"
+    "basketFull": "{count, plural, one {That’s the # paper you can suggest here today.} other {That’s all # papers you can suggest here today.}}",
+    "tooLong": "That’s too long to be a title. Search for a shorter one, or paste DOIs and links."
   },
   "browse": {
     "title": "Browse by year",

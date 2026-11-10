@@ -1714,7 +1714,8 @@
       "waiting": "{count, plural, one {# em análise} other {# em análise}}",
       "missing": "{count, plural, one {# não encontrado} other {# não encontrados}}"
     },
-    "basketFull": "{count, plural, one {Esse é o # artigo que você pode sugerir aqui hoje.} other {Esses são os # artigos que você pode sugerir aqui hoje.}}"
+    "basketFull": "{count, plural, one {Esse é o # artigo que você pode sugerir aqui hoje.} other {Esses são os # artigos que você pode sugerir aqui hoje.}}",
+    "tooLong": "Isso é longo demais para ser um título. Busque um mais curto, ou cole DOIs e links."
   },
   "browse": {
     "title": "Explorar por ano",
