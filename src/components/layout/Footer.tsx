@@ -1,6 +1,6 @@
 "use client";
 
-import { Linkedin01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
+import { CheckmarkCircle02Icon, InboxIcon, Linkedin01Icon, UserAdd01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -25,8 +25,9 @@ import {
 	type RuntimeLeafLink,
 } from "@/config/library-config/links";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useReaderLinks } from "@/components/layout/navbar/ReaderSession";
+import { useSuggest } from "@/components/features/suggest/SuggestPapers";
 import { Link, useRouter } from "@/i18n/routing";
 import { hasContactDetails } from "@/config/library-config/pages";
 import { getRuntimeLinkHref } from "@/config/library-config/links";
@@ -102,17 +103,27 @@ function FooterFoot() {
 	const tBrowse = useTranslations("browse");
 	const tUI = useTranslations("ui");
 	const team = useReaderLinks();
+	const suggest = useSuggest();
+	const accounts = useLibraryFeature("readerAccounts");
+	const way = "inline-flex items-center gap-1 text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent";
 	return (
 		<div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
 			{/* Google Scholar asks for plain links to every record, and readers can use them too. */}
 			<Link href="/browse" className="text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
 				{tBrowse("footerLink")}
 			</Link>
-			{/* Applying happens on OpenScholar, which asks anyone signed out to sign in first. Its team has Admin in the menu. */}
-			{team.admin ? null : (
-				<a href={team.joinUrl} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent">
-					<HugeiconsIcon icon={UserAdd01Icon} aria-hidden className="size-4" />
-					{tUI("joinThisTeam")}
+			{/* On every page, signed in or not: someone signed out signs in first and comes back with the dialog open. */}
+			{accounts ? (
+				<button type="button" onClick={() => suggest()} className={way}>
+					<HugeiconsIcon icon={InboxIcon} aria-hidden className="size-4" />
+					{tUI("suggestPapers")}
+				</button>
+			) : null}
+			{/* Applying happens on OpenScholar. The team has Admin in the menu, and the link is gone while the community takes no applications. */}
+			{team.admin || team.join === "closed" ? null : (
+				<a href={team.joinUrl} target="_blank" rel="noopener" onClick={(event) => { event.preventDefault(); team.openJoin(); }} className={way}>
+					<HugeiconsIcon icon={team.join === "waiting" ? CheckmarkCircle02Icon : UserAdd01Icon} aria-hidden className="size-4" />
+					{tUI(team.join === "waiting" ? "applicationSent" : "joinThisTeam")}
 				</a>
 			)}
 		</div>

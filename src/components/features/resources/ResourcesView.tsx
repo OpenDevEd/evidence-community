@@ -39,7 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
-import { SuggestLink } from "@/components/features/suggest/SuggestPapers";
+import { namesPaper, PaperNamed, SuggestButton, SuggestEmpty } from "@/components/features/suggest/SuggestPapers";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -153,7 +153,8 @@ function ResourcesList({
 				) : actuallyNoData ? (
 					<li className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
-						<SuggestLink />
+						{/* In the community's own search; a search that names a paper already offers that paper above. */}
+						{itemsContext.userData || namesPaper(itemsContext.queryParams.search ?? "") ? null : <SuggestEmpty />}
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
@@ -292,6 +293,9 @@ function ContentActions() {
 	};
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
+			{/* The community's own results, not a reader's list: a paper they didn't find here can be suggested. */}
+			{/* A search that found nothing offers it in the list's place, so not here as well. */}
+			{items.userData || items.itemsData?.items.length === 0 ? null : <SuggestButton />}
 			{items.userData && !collectionId ? null : <OpenInOpenScholar label={t("openInOpenScholar")} handoff={handoff} />}
 			{isDownloadEnabled && <LibraryDownload />}
 			{isAtomFeedEnabled && exports.atom && (
@@ -739,6 +743,7 @@ function LibraryResultsPanel({
 	abstract: boolean;
 	view: string;
 }) {
+	const items = use(ItemsContext);
 	return (
 		<div
 			{...(engaged && {
@@ -752,6 +757,8 @@ function LibraryResultsPanel({
 				engaged && engagedView === "sources" && "hidden",
 			)}
 		>
+			{/* A search that names a paper says what it is and whether it is here, above whatever the words matched. */}
+			{items.userData ? null : <PaperNamed search={items.queryParams.search ?? ""} />}
 			<ResourcesList
 				abstract={abstract}
 				view={view}

@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { ArrowUpRight01Icon, DashboardSquare01Icon, InboxIcon, Logout01Icon, UserAdd01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { ArrowUpRight01Icon, CheckmarkCircle02Icon, DashboardSquare01Icon, InboxIcon, Logout01Icon, UserAdd01Icon, UserEdit01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { openSuggestPapers } from "@/components/features/suggest/SuggestPapers";
 import { useTranslations } from "next-intl";
 import { Avatar, DropdownItem, DropdownMenu, DropdownSection, DropdownTrigger } from "@nextui-org/react";
@@ -123,20 +123,25 @@ export function readerMenuGroups(input: {
 						</DropdownItem>,
 					]
 				: []),
-			input.links.admin ? (
-				<DropdownItem key="admin" href="/admin" startContent={<NavbarMenuIcon icon={DashboardSquare01Icon} />}>
-					{t("adminMenuItem")}
-				</DropdownItem>
-			) : (
-				<DropdownItem
-					key="join"
-					onPress={() => window.open(input.links.joinUrl, "_blank", "noopener")}
-					startContent={<NavbarMenuIcon icon={UserAdd01Icon} />}
-					endContent={external}
-				>
-					{t("joinThisTeam")}
-				</DropdownItem>
-			),
+			// The team has Admin. Anyone else joins, or sees their application was sent; nothing while the community takes none.
+			...(input.links.admin
+				? [
+						<DropdownItem key="admin" href="/admin" startContent={<NavbarMenuIcon icon={DashboardSquare01Icon} />}>
+							{t("adminMenuItem")}
+						</DropdownItem>,
+					]
+				: input.links.join === "closed"
+					? []
+					: [
+							<DropdownItem
+								key="join"
+								onPress={input.links.openJoin}
+								startContent={<NavbarMenuIcon icon={input.links.join === "waiting" ? CheckmarkCircle02Icon : UserAdd01Icon} />}
+								endContent={external}
+							>
+								{t(input.links.join === "waiting" ? "applicationSent" : "joinThisTeam")}
+							</DropdownItem>,
+						]),
 			// Papers sent to this community's review queue (#777).
 			<DropdownItem key="suggest" onPress={openSuggestPapers} startContent={<NavbarMenuIcon icon={InboxIcon} />}>
 				{input.t("suggestPapers")}

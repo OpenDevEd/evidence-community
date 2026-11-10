@@ -27,14 +27,16 @@ import type { DigestSummary } from "@/lib/notifications/public";
 import { PdfCover, preloadItemCovers } from "@/components/features/items/PdfCover";
 import { AuthorAvatar } from "@/components/authors/AuthorAvatar";
 import type { CitationItem } from "@/lib/citation-formats";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useReaderLinks } from "@/components/layout/navbar/ReaderSession";
+import { useSuggest } from "@/components/features/suggest/SuggestPapers";
 import { hasOwnLogo, LibraryLogo } from "@/components/library/LibraryIdentity";
 import type { ListItem } from "@/app/api/item/types";
 import type { LibraryHomeConfig } from "@/config/library-config/schema";
 import HomeMap, { type MapShape } from "./HomeMap";
 import { examplesKey, listedRows, type Row } from "./home-explorer";
 import { intlLocale } from "@/i18n/intl-locale";
-import { Analytics01Icon, Book02Icon, Mail01Icon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { Analytics01Icon, ArrowRight01Icon, ArrowUpRight01Icon, Book02Icon, CheckmarkCircle02Icon, DashboardSquare01Icon, InboxIcon, UserAdd01Icon, Building03Icon, Calendar03Icon, Folder01Icon, Globe02Icon, LanguageSkillIcon, BubbleChatQuestionIcon, Layers01Icon, Location01Icon, SentIcon, Notification03Icon, Pdf01Icon, QuoteUpIcon, Search01Icon, Tag01Icon, UniversityIcon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
@@ -810,33 +812,64 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 const MARQUEE_MINIMUM = 6;
 
 /** The closing band: who runs the library set large, and the ways in as buttons in the band's own colours. */
-function Team({ team, teamText, editors, involvement, contact, heading }: { team?: string; teamText: React.ReactNode; editors?: HomeContent["editors"]; involvement?: HomeContent["involvement"]; contact: Contact; heading: (key: "team" | "involvement") => string }) {
+function Team({ team, teamText, editors, ways, heading }: { team?: string; teamText: React.ReactNode; editors?: HomeContent["editors"]; ways: Way[]; heading: (key: "team" | "involvement") => string }) {
 	const people = Boolean(team || editors?.length);
 	return (
 		<>
 			<Heading>{heading(people ? "team" : "involvement")}</Heading>
 			{team && <Reading className={leadFor(team)}>{teamText}</Reading>}
 			{editors?.length ? <EditorMarquee editors={editors} /> : null}
-			<Involvement involvement={involvement} contact={contact} spaced={people} />
+			<Involvement ways={ways} spaced={people} />
 		</>
 	);
 }
 
-/** The ways in, where the library has them on; `spaced` sets them apart from the people above. */
-function Involvement({ involvement, contact, spaced }: { involvement?: HomeContent["involvement"]; contact: Contact; spaced: boolean }) {
+/** One way in: what it is called, what pressing it leads to, and the page or action it opens. */
+type Way = { key: string; label: string; hint: string; icon: IconSvgElement; end: IconSvgElement } & ({ href: string } | { onPress: () => void });
+
+/**
+ * The ways in the community has on that lead somewhere for this reader. Suggesting papers needs reader accounts.
+ * Joining follows where the reader stands: the team's own see Admin, an application sent says so, and the button is
+ * gone while the community takes no applications.
+ */
+function useWays(involvement: HomeContent["involvement"]): Way[] {
 	const t = useTranslations("homePage");
-	// The buttons only exist where they lead somewhere: an email, else the contact page (checked by the caller).
-	const write = (subject: string) => (contact.email ? `mailto:${contact.email}?subject=${encodeURIComponent(subject)}` : "/contact");
-	const buttons = [
-		involvement?.suggestions && { label: t("suggest"), icon: Mail01Icon, href: write(t("suggestSubject")) },
-		involvement?.editors && { label: t("join"), icon: UserAdd01Icon, href: write(t("joinSubject")) },
-	].filter((button): button is { label: string; icon: IconSvgElement; href: string } => Boolean(button));
-	if (buttons.length === 0) return null;
+	const suggest = useSuggest();
+	const accounts = useLibraryFeature("readerAccounts");
+	const team = useReaderLinks();
+	const join: Way | null = team.admin
+		? { key: "join", label: t("joinAdmin"), hint: t("joinAdminHint"), icon: DashboardSquare01Icon, end: ArrowRight01Icon, href: "/admin" }
+		: team.join === "waiting"
+			? { key: "join", label: t("joinWaiting"), hint: t("joinWaitingHint"), icon: CheckmarkCircle02Icon, end: ArrowUpRight01Icon, onPress: team.openJoin }
+			: team.join === "open"
+				? { key: "join", label: t("join"), hint: t("joinHint"), icon: UserAdd01Icon, end: ArrowUpRight01Icon, onPress: team.openJoin }
+				: null;
+	const suggestion: Way = { key: "suggest", label: t("suggest"), hint: t("suggestHint"), icon: InboxIcon, end: ArrowRight01Icon, onPress: () => suggest() };
+	return [involvement?.suggestions && accounts ? suggestion : null, involvement?.editors ? join : null].filter((way): way is Way => way !== null);
+}
+
+/** The ways in, each a button that says what it does and what follows; `spaced` sets them apart from the people above. */
+function Involvement({ ways, spaced }: { ways: Way[]; spaced: boolean }) {
+	if (ways.length === 0) return null;
 	return (
-		<div className={`${spaced ? "mt-12 lg:mt-16" : ""} flex flex-wrap gap-3`}>
-			{buttons.map((button, index) => (
-				<Button key={button.label} as={button.href.startsWith("/") ? Link : "a"} href={button.href} size="md" startContent={<HugeiconsIcon icon={button.icon} aria-hidden size={18} />} className={index === 0 ? "bg-[rgb(var(--ink-rgb))] font-semibold dark:bg-[rgb(var(--ink-rgb))] text-[var(--band-bg)] dark:text-[var(--band-bg-dark)]" : "border border-[rgb(var(--ink-rgb)/0.35)] bg-transparent font-semibold text-current"}>{button.label}</Button>
-			))}
+		<div className={`${spaced ? "mt-12 lg:mt-16" : ""} grid max-w-4xl gap-3 ${ways.length > 1 ? "sm:grid-cols-2" : "sm:max-w-md"}`}>
+			{ways.map((way, index) => {
+				const first = index === 0;
+				const className = `group flex items-center gap-4 rounded-2xl p-5 text-start transition-[transform,background-color] duration-200 active:scale-[0.99] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[rgb(var(--ink-rgb))] ${first ? "bg-[rgb(var(--ink-rgb))] text-[var(--band-bg)] dark:text-[var(--band-bg-dark)]" : "border border-[rgb(var(--ink-rgb)/0.35)] hover:bg-[rgb(var(--ink-rgb)/0.08)]"}`;
+				const inside = (
+					<>
+						<span className={`flex size-12 shrink-0 items-center justify-center rounded-xl ${first ? "bg-[var(--band-bg)] text-[rgb(var(--ink-rgb))] dark:bg-[var(--band-bg-dark)]" : "bg-[rgb(var(--ink-rgb)/0.12)]"}`}>
+							<HugeiconsIcon icon={way.icon} aria-hidden size={24} />
+						</span>
+						<span className="min-w-0 flex-1">
+							<span className="block text-lg font-semibold leading-tight">{way.label}</span>
+							<span className="mt-1 block text-sm opacity-75">{way.hint}</span>
+						</span>
+						<HugeiconsIcon icon={way.end} aria-hidden size={20} className="shrink-0 transition-transform duration-200 group-hover:translate-x-1 motion-reduce:transition-none rtl:-scale-x-100" />
+					</>
+				);
+				return "href" in way ? <Link key={way.key} href={way.href} className={className}>{inside}</Link> : <button key={way.key} type="button" onClick={way.onPress} className={className}>{inside}</button>;
+			})}
 		</div>
 	);
 }
@@ -1502,9 +1535,6 @@ function HeroText({ name, intro, unseen = false }: { name: string; intro?: React
 }
 
 /** Each answered question gets a band of its own, in the order the page reads; a blank one drops out and the seams close up. */
-function offeredInvolvement(about: HomeContent, contact: Contact) {
-	return contact.email || contact.page ? about.involvement : undefined;
-}
 
 function headingOf(about: HomeContent, key: keyof NonNullable<HomeContent["headings"]>) {
 	return about.headings?.[key]?.trim();
@@ -1522,13 +1552,13 @@ function readNumber(text: string, locale: string) {
 	return { value: Number(plain), decimals: plain.split(".")[1]?.length ?? 0, before: text.slice(0, match.index), after: text.slice(match.index! + match[0].length) };
 }
 
-function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, shapes }: Props) {
+function Bands({ name, siteUrl, today, about, rich, data, tones, ramp, shapes }: Props) {
 	const tLabels = useTranslations("home");
 	const t = useTranslations("homePage");
 	const { citations } = useLibraryConfig();
 	const heading = (key: keyof NonNullable<HomeContent["headings"]>) => headingOf(about, key) || t(key);
-	// The ways in are offered only where they lead somewhere: an email, else the contact page.
-	const involvement = offeredInvolvement(about, contact);
+	// The ways in are offered only where they lead somewhere for this reader.
+	const ways = useWays(about.involvement);
 	const bands = [
 		{
 			key: "inside",
@@ -1555,7 +1585,7 @@ function Bands({ name, siteUrl, contact, today, about, rich, data, tones, ramp, 
 		hasCuration(about.curation) && { key: "curation", tone: tones.deep, body: <Curation curation={about.curation!} statement={rich.curation} heading={heading("curation")} data={data} /> },
 		// The library's citation, with the owner's closing answer beside it; with citations off and no answer, no band.
 		(citations.enabled || about.extra?.text.trim()) && { key: "cite", tone: tones.card, body: <Cite extra={about.extra} answerText={rich.extra} cites={citations.enabled} name={name} siteUrl={siteUrl} today={today} /> },
-		hasTeam(about, involvement) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} teamText={rich.team} editors={about.editors} involvement={involvement} contact={contact} heading={heading} /> },
+		hasTeam(about, ways) && { key: "team", tone: tones.tertiary, body: <Team team={about.team} teamText={rich.team} editors={about.editors} ways={ways} heading={heading} /> },
 	].filter((band): band is { key: string; tone: Tone; sections?: boolean; body: React.JSX.Element } => Boolean(band));
 
 	return (
@@ -1572,8 +1602,8 @@ function hasCuration(curation: HomeContent["curation"]) {
 }
 
 /** The team band has people to show, words about them, or a way in that leads somewhere. */
-function hasTeam(about: HomeContent, involvement: HomeContent["involvement"]) {
-	return Boolean(about.team || about.editors?.length || involvement?.suggestions || involvement?.editors);
+function hasTeam(about: HomeContent, ways: Way[]) {
+	return Boolean(about.team || about.editors?.length || ways.length);
 }
 
 /** The owner's closing answer, if any, beside how to cite the library; with citations off, the answer alone at full width. */

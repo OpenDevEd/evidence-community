@@ -23,6 +23,7 @@ import { NavbarFitStyles } from "@/components/layout/navbar/NavbarFitStyles";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { getSignedInOpenScholarUser } from "@/lib/readers/session";
 import { adminRoleOf } from "@/lib/admin/access";
+import { joinStandingOf, MOCK_JOIN_COOKIE } from "@/lib/readers/join";
 import PageFallback, { LoadPageFallback } from "@/components/pages/PageFallback";
 import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { homePlaceholderContent } from "@/components/pages/HomeRichText";
@@ -49,6 +50,8 @@ async function BaseContent({
 	// Only what other readers may see goes to the browser, and whether they have a role here, for the menu's Admin.
 	const reader = signedIn ? { id: signedIn.id, name: signedIn.name, image: signedIn.image } : null;
 	const readerAdmin = signedIn ? (await adminRoleOf(config, signedIn.clerkUserId)) !== null : false;
+	// MOCK: Openscholar answers where they stand with joining beside the role once its route exists.
+	const readerJoin = joinStandingOf((await cookies()).get(MOCK_JOIN_COOKIE)?.value);
 
 	return (
 		<NextIntlClientProvider messages={messages}>
@@ -58,6 +61,7 @@ async function BaseContent({
 				storedConsent={storedConsent}
 				reader={reader}
 				readerAdmin={readerAdmin}
+				readerJoin={readerJoin}
 			>
 				{/* Single shared filter state for the whole app — lives above the
 				    navbar AND the page so collections/params stay resident across
