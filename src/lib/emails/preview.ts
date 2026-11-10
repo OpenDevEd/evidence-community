@@ -6,7 +6,6 @@ import {
 	type EmailEdition,
 } from "@/lib/notifications/message";
 import { renderLibraryInvitation } from "./library-template";
-import { suggestionAnswerMessage } from "./suggestion";
 
 /** Development fixtures pass through the same renderers as sent messages. */
 export async function libraryEmailPreviews(config: LibraryServerConfig) {
@@ -122,19 +121,5 @@ export async function libraryEmailPreviews(config: LibraryServerConfig) {
 			subject: confirm.subject,
 			html: confirm.html,
 		},
-		...[
-			{ id: "suggestion-live", label: "Suggestion published", published: true, reason: null },
-			{ id: "suggestion-declined", label: "Suggestion declined", published: false, reason: "It studies university students. We collect research on primary and secondary schools." },
-		].map(({ id, label, ...answer }) => ({
-			id,
-			label,
-			...suggestionAnswerMessage({
-				...answer,
-				identity: libraryEmailIdentity(config),
-				paper: { title: "Feedback that moves learning forward", authors: "Sam Patel, Maya Chen", year: 2024 },
-				recordUrl: new URL("/lib/YPLK86VH", config.identity.baseUrl).href,
-				submissionsUrl: new URL("/evidence-communities?view=submissions", new URL(config.authentication.openScholar.accountUrl).origin).href,
-			}),
-		})),
 	];
 }

@@ -620,7 +620,8 @@
     "rateLimitedMessage": "Umefikia kikomo cha maombi. Jaribu tena baada ya sekunde {seconds}.",
     "suggestPapers": "Pendekeza makala",
     "adminMenuItem": "Usimamizi",
-    "joinThisTeam": "Jiunge na timu hii"
+    "joinThisTeam": "Jiunge na timu hii",
+    "applicationSent": "Ombi limetumwa"
   },
   "ai": {
     "sourcesTitle": "Vyanzo",
@@ -1019,10 +1020,8 @@
     "curation": "Jinsi jumuiya inavyoratibiwa",
     "team": "Walio nyuma yake",
     "involvement": "Shiriki",
-    "suggest": "Pendekeza chapisho",
-    "suggestSubject": "Kupendekeza chapisho",
-    "join": "Jiunge kama mhariri",
-    "joinSubject": "Kujiunga kama mhariri",
+    "suggest": "Pendekeza makala",
+    "join": "Jiunge na timu hii",
     "stepArrival": "Imewasilishwa",
     "stepCheck": "Imekaguliwa na mhariri",
     "stepPublication": "Imechapishwa",
@@ -1036,7 +1035,13 @@
     "figureAdded": "mapya katika siku 30 zilizopita",
     "figureMerged": "{count, plural, one {rekodi rudufu imeunganishwa} other {rekodi rudufu zimeunganishwa}}",
     "figureFullText": "{count, plural, one {rekodi yenye maandishi kamili} other {rekodi zenye maandishi kamili}}",
-    "defaultIntro": "**{name}** inakusanya utafiti mahali pamoja, ili uweze kuutafuta, kuusoma na kuunukuu. Kila chapisho linakuja na maelezo yake na, pale leseni inaporuhusu, maandishi kamili."
+    "defaultIntro": "**{name}** inakusanya utafiti mahali pamoja, ili uweze kuutafuta, kuusoma na kuunukuu. Kila chapisho linakuja na maelezo yake na, pale leseni inaporuhusu, maandishi kamili.",
+    "suggestHint": "Timu hukagua kila moja kabla ya kuchapishwa",
+    "joinHint": "Ongeza makala na uhariri rekodi kama Mtayarishaji",
+    "joinWaiting": "Ombi limetumwa",
+    "joinWaitingHint": "Timu hujibu kwa barua pepe",
+    "joinAdmin": "Fungua usimamizi",
+    "joinAdminHint": "Uko kwenye timu hii"
   },
   "sidebar": {
     "years": "Miaka",
@@ -1669,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "Pendekeza makala",
-    "description": "Bandika viungo vya makala (kutoka Openscholar, tovuti hii, OpenAlex au doi.org), DOI au vitambulisho vya OpenAlex. Timu ya jumuiya hukagua kila moja kabla ya kuchapishwa.",
-    "inputLabel": "Viungo vya makala, DOI au vitambulisho vya OpenAlex",
-    "find": "Tafuta makala",
+    "description": "Timu hukagua kila makala kabla ya kuchapishwa.",
+    "inputLabel": "Kichwa, au orodha ya DOI, vitambulisho vya OpenAlex au viungo vya makala",
     "overLimit": "{count, plural, one {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo ya kwanza tu inatafutwa.} other {Unaweza kupendekeza makala # zaidi hapa leo, kwa hivyo # za kwanza zinatafutwa.}}",
     "noneLeft": "Umependekeza hapa leo makala nyingi kadiri mtu mmoja anavyoweza. Jaribu tena kesho.",
     "failed": "Imeshindwa kufikia jumuiya. Jaribu tena.",
@@ -1688,8 +1692,28 @@
     "sent": "{count, plural, one {Makala # imetumwa kwa ukaguzi} other {Makala # zimetumwa kwa ukaguzi}}",
     "sentHint": "Utaona hali ya kila moja katika Ulichotuma kwenye Openscholar: inasubiri, imechapishwa, au imekataliwa pamoja na sababu ya timu.",
     "yourSubmissions": "Mawasilisho yako",
-    "emptyLink": "Unajua makala inayofaa kuwa hapa? Ipendekeze",
-    "invalid": "{count, plural, one {Hiki si kiungo cha makala, DOI wala kitambulisho, kwa hivyo kimeachwa: {values}} other {Hivi si viungo vya makala, DOI wala vitambulisho, kwa hivyo vimeachwa: {values}}}"
+    "invalid": "{count, plural, one {Hiki si kiungo cha makala, DOI wala kitambulisho, kwa hivyo kimeachwa: {values}} other {Hivi si viungo vya makala, DOI wala vitambulisho, kwa hivyo vimeachwa: {values}}}",
+    "placeholder": "Tafuta kwa kichwa, au bandika DOI na viungo",
+    "add": "Ongeza",
+    "addTitle": "Ongeza {title}",
+    "noMatches": "Hakuna makala yenye kichwa hicho iliyopatikana. Andika zaidi ya kichwa, au bandika DOI yake.",
+    "suggestThis": "Pendekeza makala hii",
+    "inCommunity": "Ipo kwenye jumuiya hii",
+    "open": "Fungua",
+    "lookingUp": "Makala hii inatafutwa",
+    "noPaperNamed": "Hakuna makala iliyopatikana kwa hili",
+    "added": "Imeongezwa",
+    "toSuggestLabel": "Za kupendekeza",
+    "emptyTitle": "Tafuta kwa kichwa",
+    "emptyHint": "Chagua kati ya makala zinazopatikana",
+    "pasteTitle": "Bandika orodha",
+    "pasteHint": "DOI, vitambulisho vya OpenAlex au viungo vya makala, nyingi upendavyo",
+    "pasted": {
+      "added": "{count, plural, one {# imeongezwa} other {# zimeongezwa}}",
+      "here": "{count, plural, one {# tayari ipo hapa} other {# tayari zipo hapa}}",
+      "waiting": "{count, plural, one {# inasubiri ukaguzi} other {# zinasubiri ukaguzi}}",
+      "missing": "{count, plural, one {# haikupatikana} other {# hazikupatikana}}"
+    }
   },
   "browse": {
     "title": "Vinjari kwa mwaka",

@@ -4,10 +4,5 @@
  */
 export type JoinStanding = "open" | "waiting" | "closed";
 
-export const joinStandingOf = (value: unknown): JoinStanding => (value === "waiting" || value === "closed" ? value : "open");
-
-/**
- * MOCK: Openscholar will answer this on a service route, beside the reader's role (admin-session/check). The mock
- * reads a cookie that /api/mock sets.
- */
-export const MOCK_JOIN_COOKIE = "mock_join";
+/** The standing an answer names; anything else reads as `open`, where Join leads to Openscholar's own word on it. */
+export const parseJoinStanding = (value: unknown): JoinStanding => (value === "waiting" || value === "closed" ? value : "open");

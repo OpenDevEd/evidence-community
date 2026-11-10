@@ -620,7 +620,8 @@
     "rateLimitedMessage": "Você atingiu o limite de solicitações. Tente novamente em {seconds} segundos.",
     "suggestPapers": "Sugerir artigos",
     "adminMenuItem": "Administração",
-    "joinThisTeam": "Entrar nesta equipe"
+    "joinThisTeam": "Entrar nesta equipe",
+    "applicationSent": "Pedido enviado"
   },
   "ai": {
     "sourcesTitle": "Fontes",
@@ -1019,10 +1020,8 @@
     "curation": "Como a comunidade é organizada",
     "team": "Quem está por trás",
     "involvement": "Participe",
-    "suggest": "Sugerir uma publicação",
-    "suggestSubject": "Sugestão de publicação",
-    "join": "Seja editor",
-    "joinSubject": "Quero ser editor",
+    "suggest": "Sugerir artigos",
+    "join": "Entrar nesta equipe",
     "stepArrival": "Enviado",
     "stepCheck": "Verificado por um editor",
     "stepPublication": "Publicado",
@@ -1036,7 +1035,13 @@
     "figureAdded": "novos nos últimos 30 dias",
     "figureMerged": "{count, plural, one {registro duplicado unido} other {registros duplicados unidos}}",
     "figureFullText": "{count, plural, one {registro com texto completo} other {registros com texto completo}}",
-    "defaultIntro": "**{name}** reúne pesquisas em um só lugar, para que você possa pesquisá-las, lê-las e citá-las. Cada publicação vem com seus detalhes e, quando a licença permitir, com o texto completo."
+    "defaultIntro": "**{name}** reúne pesquisas em um só lugar, para que você possa pesquisá-las, lê-las e citá-las. Cada publicação vem com seus detalhes e, quando a licença permitir, com o texto completo.",
+    "suggestHint": "A equipe revisa cada um antes de publicá-lo",
+    "joinHint": "Adicione artigos e edite registros como criador",
+    "joinWaiting": "Pedido enviado",
+    "joinWaitingHint": "A equipe responde por e-mail",
+    "joinAdmin": "Abrir a administração",
+    "joinAdminHint": "Você faz parte desta equipe"
   },
   "sidebar": {
     "years": "Anos",
@@ -1669,9 +1674,8 @@
   },
   "suggestPapers": {
     "title": "Sugerir artigos",
-    "description": "Cole links de artigos (do Openscholar, deste site, do OpenAlex ou do doi.org), DOIs ou IDs do OpenAlex. A equipe da comunidade revisa cada um antes de publicá-lo.",
-    "inputLabel": "Links de artigos, DOIs ou IDs do OpenAlex",
-    "find": "Encontrar artigos",
+    "description": "A equipe revisa cada artigo antes de publicá-lo.",
+    "inputLabel": "Um título, ou uma lista de DOIs, IDs do OpenAlex ou links de artigos",
     "overLimit": "{count, plural, one {Hoje pode sugerir mais # artigo aqui, por isso só o primeiro é procurado.} other {Hoje pode sugerir mais # artigos aqui, por isso só os primeiros # são procurados.}}",
     "noneLeft": "Hoje já sugeriu aqui tantos artigos quanto uma pessoa pode. Tente novamente amanhã.",
     "failed": "Não foi possível contactar a comunidade. Tente novamente.",
@@ -1688,8 +1692,28 @@
     "sent": "{count, plural, one {# artigo enviado para análise} other {# artigos enviados para análise}}",
     "sentHint": "Você verá a situação de cada um em Seus envios no Openscholar: aguardando, publicado ou recusado com o motivo da equipe.",
     "yourSubmissions": "As suas submissões",
-    "emptyLink": "Conhece um artigo que pertence aqui? Sugira-o",
-    "invalid": "{count, plural, one {Isto não é um link de artigo, DOI ou ID, então foi deixado de fora: {values}} other {Estes não são links de artigos, DOIs ou IDs, então foram deixados de fora: {values}}}"
+    "invalid": "{count, plural, one {Isto não é um link de artigo, DOI ou ID, então foi deixado de fora: {values}} other {Estes não são links de artigos, DOIs ou IDs, então foram deixados de fora: {values}}}",
+    "placeholder": "Busque por título, ou cole DOIs e links",
+    "add": "Adicionar",
+    "addTitle": "Adicionar {title}",
+    "noMatches": "Nenhum artigo encontrado com esse título. Digite mais do título ou cole o DOI.",
+    "suggestThis": "Sugerir este artigo",
+    "inCommunity": "Nesta comunidade",
+    "open": "Abrir",
+    "lookingUp": "Procurando este artigo",
+    "noPaperNamed": "Nenhum artigo encontrado para isto",
+    "added": "Adicionado",
+    "toSuggestLabel": "Para sugerir",
+    "emptyTitle": "Buscar por título",
+    "emptyHint": "Escolha entre os artigos encontrados",
+    "pasteTitle": "Colar uma lista",
+    "pasteHint": "DOIs, IDs do OpenAlex ou links de artigos, quantos você tiver",
+    "pasted": {
+      "added": "{count, plural, one {# adicionado} other {# adicionados}}",
+      "here": "{count, plural, one {# já está aqui} other {# já estão aqui}}",
+      "waiting": "{count, plural, one {# em análise} other {# em análise}}",
+      "missing": "{count, plural, one {# não encontrado} other {# não encontrados}}"
+    }
   },
   "browse": {
     "title": "Explorar por ano",

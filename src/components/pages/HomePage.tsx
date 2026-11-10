@@ -1411,11 +1411,8 @@ function WithData({ data, children }: { data: Promise<HomeData>; children: (data
 	return <>{children(use(data))}</>;
 }
 
-/** How readers reach the library: its public email, and whether it serves a contact page. */
-type Contact = { email: string | null; page: boolean };
-
 /** `today` is the server's date, so the citation's access date is the same in the server's page and the browser's. */
-type Props = { name: string; siteUrl: string; contact: Contact; today: string; about: HomeContent; rich: HomeRich; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
+type Props = { name: string; siteUrl: string; today: string; about: HomeContent; rich: HomeRich; data: Promise<HomeData>; tones: Tones; ramp: Tone[]; shapes: MapShape[] };
 
 /**
  * Everything the library wrote and the page's structure render at once; the parts built from the library's figures

@@ -39,7 +39,7 @@ import {
 } from "framer-motion";
 import type { useItemsList } from "@/hooks/useItemsList";
 import { useDebounce } from "@/hooks/useDebounce";
-import { namesPaper, PaperNamed, SuggestButton } from "@/components/features/suggest/SuggestPapers";
+import { SearchedPaper, SuggestBesideSearch, SuggestUnderEmpty } from "@/components/features/suggest/SearchSuggest";
 import { Button } from "@/components/nextui/Button";
 import { OpenInOpenScholar } from "@/components/features/openscholar/OpenInOpenScholar";
 import { searchOf, type OpenScholarHandoff } from "@/lib/openscholar/handoff";
@@ -154,8 +154,7 @@ function ResourcesList({
 					// Laid out as the failed-to-load state above is: what happened, then the one thing to do about it.
 					<li className="mb-4 flex flex-col items-center gap-4 py-12 text-center text-sm text-black/40 dark:text-white/40">
 						{t("noResourcesFound")}
-						{/* In the community's own search; a search that names a paper already offers that paper above. */}
-						{itemsContext.userData || namesPaper(itemsContext.queryParams.search ?? "") ? null : <SuggestButton small />}
+						<SuggestUnderEmpty />
 					</li>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
@@ -295,8 +294,7 @@ function ContentActions() {
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
 			{/* The community's own results, not a reader's list: a paper they didn't find here can be suggested. */}
-			{/* A search that found nothing offers it in the list's place, so not here as well. */}
-			{items.userData || items.itemsData?.items.length === 0 ? null : <SuggestButton />}
+			<SuggestBesideSearch />
 			{items.userData && !collectionId ? null : <OpenInOpenScholar label={t("openInOpenScholar")} handoff={handoff} />}
 			{isDownloadEnabled && <LibraryDownload />}
 			{isAtomFeedEnabled && exports.atom && (
@@ -744,7 +742,6 @@ function LibraryResultsPanel({
 	abstract: boolean;
 	view: string;
 }) {
-	const items = use(ItemsContext);
 	return (
 		<div
 			{...(engaged && {
@@ -759,7 +756,7 @@ function LibraryResultsPanel({
 			)}
 		>
 			{/* A search that names a paper says what it is and whether it is here, above whatever the words matched. */}
-			{items.userData ? null : <PaperNamed search={items.queryParams.search ?? ""} />}
+			<SearchedPaper />
 			<ResourcesList
 				abstract={abstract}
 				view={view}

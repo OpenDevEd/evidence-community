@@ -35,6 +35,9 @@ const openScholarLibraries = new Map([
 		requiredEnvironment("OPENSCHOLAR_INDIGO_LIBRARY_ID"),
 	],
 ]);
+/** Whether the community takes applications to join, as a test last said, and the reader whose application waits. */
+let joinStanding = "open";
+const APPLIED_READER = "user_acceptance_applied";
 let nextDepositionId = 7001;
 let crossrefXml = null;
 let crossrefDeposits = 0;
@@ -357,8 +360,19 @@ async function handle(request, response) {
 		});
 	}
 
+	// A test says whether the community takes applications: `open` until it says otherwise.
+	if (url.pathname === "/_test/join-standing" && method === "POST") {
+		joinStanding = JSON.parse((await readBody(request)).toString("utf8")).join ?? "open";
+		return json(response, 200, { join: joinStanding });
+	}
+
 	if (
-		["/api/v1/evidence-libraries/admin-session/check", "/api/v1/evidence-libraries/reader-status"].includes(url.pathname) &&
+		[
+			"/api/v1/evidence-libraries/admin-session/check",
+			"/api/v1/evidence-libraries/reader-status",
+			"/api/v1/evidence-libraries/join-standing",
+			"/api/v1/evidence-libraries/papers/search",
+		].includes(url.pathname) &&
 		method === "POST"
 	) {
 		const credential =
@@ -378,6 +392,14 @@ async function handle(request, response) {
 		}
 		if (url.pathname === "/api/v1/evidence-libraries/reader-status") {
 			return json(response, 200, { status: "active" });
+		}
+		// Where a reader stands with joining: the one reader who applied waits; everyone else has the community's word.
+		if (url.pathname === "/api/v1/evidence-libraries/join-standing") {
+			return json(response, 200, { join: joinStanding === "open" && body?.clerkUserId === APPLIED_READER ? "waiting" : joinStanding });
+		}
+		// A title finds one paper OpenAlex has, and none for a title of nonsense.
+		if (url.pathname === "/api/v1/evidence-libraries/papers/search") {
+			return json(response, 200, { papers: /^z+q+/iu.test(String(body?.query ?? "")) ? [] : [{ openalexId: "W2741809807", doi: "10.7717/peerj.4375" }] });
 		}
 		const role = Object.keys(adminUsers).find((name) => adminUsers[name] === body?.clerkUserId);
 		if (body?.libraryId !== credentialLibraryId || !role) {

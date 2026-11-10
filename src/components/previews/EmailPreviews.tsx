@@ -12,8 +12,6 @@ import {
 	SmartPhone01Icon,
 	Message01Icon,
 	Flag01Icon,
-	CheckmarkCircle02Icon,
-	InboxIcon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
@@ -28,8 +26,6 @@ const icons: Record<string, typeof Calendar03Icon> = {
 	confirm: Mail01Icon,
 	contact: Message01Icon,
 	takedown: Flag01Icon,
-	"suggestion-live": CheckmarkCircle02Icon,
-	"suggestion-declined": InboxIcon,
 };
 export default function EmailPreviews({
 	editions,

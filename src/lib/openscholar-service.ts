@@ -82,3 +82,14 @@ export async function papersAtLinks(service: OpenScholarService, links: readonly
 	if (papers.length !== links.length) throw new Error("Openscholar answered a different number of papers than it was asked about.");
 	return papers;
 }
+
+const SEARCH_PATH = "/api/v1/evidence-libraries/papers/search";
+const foundSchema = z.object({ papers: z.array(z.object({ openalexId: z.string().nullable(), doi: z.string().nullable() })) });
+
+/**
+ * The first papers a title finds on the index Openscholar's own search reads, each by its OpenAlex work and its DOI
+ * where one is known. It is the `reader`'s search: it counts against their Openscholar search allowance.
+ */
+export async function papersByTitle(service: OpenScholarService, title: string, reader: string): Promise<PaperIds[]> {
+	return foundSchema.parse(await postToOpenScholar(service, SEARCH_PATH, { contractVersion: 1, query: title, clerkUserId: reader })).papers;
+}
