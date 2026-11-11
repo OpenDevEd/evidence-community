@@ -114,8 +114,15 @@ const liveReportSchema = z.object({
 	date: z.string(),
 	licence: z.string(),
 	abstract: z.string(),
-	authors: z.array(z.object({ name: z.string(), orcid: z.string().nullable() })).max(1_000),
+	authors: z.array(z.object({
+		name: z.string(),
+		orcid: z.string().nullable(),
+		/** Where the author was for this work: OpenAlex's institution (I…) where it has one, its country, its ROR ID. An Openscholar older than these sends none. */
+		affiliations: z.array(z.object({ id: z.string().nullable(), name: z.string(), country: z.string(), ror: z.string().optional() })).max(50).default([]),
+	})).max(1_000),
 	keywords: z.array(z.string()).max(1_000),
+	/** OpenAlex topics (T…) with how sure the reader was, which a record of an OpenAlex works source imports from its raw details. */
+	topics: z.array(z.object({ id: z.string(), name: z.string(), score: z.number().min(0).max(1) })).max(100).default([]),
 	series: z.string(),
 	pageUrl: z.string().url().max(2048),
 	pdfUrl: z.string().url().max(2048).nullable(),
