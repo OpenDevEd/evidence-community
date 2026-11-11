@@ -16,11 +16,12 @@ import { SourceConflictEditor, type SourceResolution } from "./SourceConflictEdi
 import { describeCountryFocus } from "@/lib/country-focus";
 import { CountryFocusInput } from "./CountryFocusInput";
 import { OpenAccessInput } from "./OpenAccessInput";
+import { resolvePublicDoi } from "@/lib/publication/publication-identifier-summary";
 import { StudyTypeInput } from "./StudyTypeInput";
 import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
-import { PublishingChoicePanel } from "./PublishingChoicePanel";
+import { RecordDoiPanel } from "./PublishingChoicePanel";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import OpenScholar from "@/components/icons/OpenScholar";
@@ -525,8 +526,13 @@ const CountryFocusEditor = memo(function CountryFocusEditor({
 	);
 });
 
+/** Whether a record shows a DOI, in its DOI field or its Extra. */
+const showsDoi = ({ DOI, extra }: Record<string, unknown>) =>
+	Boolean(resolvePublicDoi({ DOI: typeof DOI === "string" ? DOI : null, extra: typeof extra === "string" ? extra : null }));
+
 const OpenAccessEditor = memo(function OpenAccessEditor({
 	value,
+	fromDoi,
 	fromSources,
 	change,
 	onChange,
@@ -534,6 +540,7 @@ const OpenAccessEditor = memo(function OpenAccessEditor({
 	error,
 }: {
 	value: unknown;
+	fromDoi: boolean;
 	fromSources: boolean | null;
 	change: AdminDraftDiff["openAccess"];
 	onChange: (payload: Record<string, unknown>) => void;
@@ -558,7 +565,8 @@ const OpenAccessEditor = memo(function OpenAccessEditor({
 			<OpenAccessInput
 				disabled={readOnly}
 				value={typeof value === "boolean" ? value : null}
-				fromSources={fromSources}
+				fromDoi={fromDoi}
+				lookedUp={fromSources}
 				onChange={(openAccess) => onChange({ openAccess })}
 			/>
 			{error && (
@@ -650,6 +658,7 @@ function MetadataEditor({
 	payload,
 	readOnly,
 	lockedDoi,
+	registersDoi,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail;
@@ -660,6 +669,8 @@ function MetadataEditor({
 	payload: Record<string, unknown>;
 	readOnly: boolean;
 	lockedDoi: string | null;
+	/** The community registers this record's DOI itself, so nothing outside lists it. */
+	registersDoi: boolean;
 }) {
 	const definition = definitionFor(
 		definitions,
@@ -815,6 +826,7 @@ function MetadataEditor({
 										/>
 										<OpenAccessEditor
 											value={payload.openAccess}
+											fromDoi={!registersDoi && showsDoi(payload)}
 											fromSources={detail.openAccessFromSources}
 											change={diff.openAccess}
 											onChange={onChange}
@@ -2220,7 +2232,7 @@ export function AdminInspector({
 						title="Identifiers"
 					>
 						{publishing && (
-							<PublishingChoicePanel
+							<RecordDoiPanel
 								detail={detail}
 								readOnly={readOnlyVersion || readOnly}
 								filesReadOnly={filesReadOnly}
@@ -2249,6 +2261,8 @@ export function AdminInspector({
 						onChange={patchPayload}
 						payload={payload}
 						readOnly={readOnly}
+						// Until a record made here is known to have no DOI choice, it counts as registering its own.
+						registersDoi={readOnlyVersion ? Boolean(publishingChoice) : detail.kind === "created" && publishing?.saved.data?.choice !== null}
 						lockedDoi={
 							publication.publication?.providers.zenodo.exact
 								.targetActive &&

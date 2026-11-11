@@ -26,6 +26,14 @@ import { readPdfProperties } from "../../src/lib/admin/pdf-properties";
 import { reserveCrossrefDoi } from "../../src/lib/publication/crossref-activation-service";
 const reviewConfig = libraryConfigSchema.parse({...maximalLibraryConfig, sources: []});
 const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
+it("refuses a DOI choice in a community that hasn't set up Zenodo", async () => {
+	const withoutDois = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], services: {...maximalLibraryConfig.services, publication: {}}});
+	await withIsolatedPublicationDatabase(async db => {
+		const draft = await createNativeItemDraft(db, {itemType: "Report", title: "No DOI to register", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
+		await assert.rejects(setItemPublishingChoice(db, draft.itemKey, {route: "zenodo", identifierPolicy: "mint-zenodo"}, withoutDois), AdminValidationError);
+		assert.equal((await getItemPublishingChoice(db, draft.itemKey, withoutDois)).choice, null);
+	});
+});
 it.each(["reuse-crossref", "mint-zenodo"] as const)("rejects incompatible %s choices before save and submission, while preserving valid routes", async (policy) => {
 	await withIsolatedPublicationDatabase(async db => {
 		const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Locked identifier", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});

@@ -8,7 +8,7 @@ export function shownOpenAccess(openAccess: boolean | null | undefined, label: O
 	return openAccess || label === "both" ? openAccess : null;
 }
 
-/** An editor's open-access choice in words: open, closed, or left to OpenAlex. */
+/** An editor's open-access choice in words: open, closed, or not chosen, which follows what is listed for the record. */
 export function describeOpenAccessChoice(value: unknown) {
-	return value === true ? "Open access" : value === false ? "Closed access" : "From OpenAlex";
+	return value === true ? "Open access" : value === false ? "Closed access" : "Not chosen";
 }
