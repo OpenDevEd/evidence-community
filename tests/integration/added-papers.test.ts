@@ -11,6 +11,7 @@ import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
+import { itemFieldOverride } from "@/db/schema/topics";
 import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
@@ -734,6 +735,9 @@ it("takes down a report no source follows any more once Openscholar withdraws it
 		await sync(db, world.fetch, storage);
 		expect(await record(db, key!)).toMatchObject({ deleted: 1 });
 		expect(storage.publicFiles.size).toBe(0);
+		// Openscholar's withdrawal, not the team's: nothing marks the record deleted for good, so a source that takes the
+		// report back after a reinstatement brings it back.
+		expect(await db.select().from(itemFieldOverride).where(eq(itemFieldOverride.field, "deleted"))).toEqual([]);
 	});
 });
 
@@ -751,8 +755,11 @@ it("keeps one record for a report a collection takes back after Added papers add
 		expect(await publicWithDoi(db, doi)).toEqual([]);
 		const { results } = await addPapers(db, storage, config, { requestId: "r-back", publish: true, actor: owner, papers: [{ doi }] }, world.lookup);
 		await sync(db, world.fetch, storage);
-		// Then the collection has it again: it joins that record rather than bring back its own.
+		// Then the collection has it again: it joins that record rather than bring back its own, and the record is
+		// searched again with the collection among its sources.
+		await db.update(outbox).set({ processedAt: new Date() });
 		await collection.hold([doi], reports);
+		expect(await db.select({ key: outbox.entityKey }).from(outbox).where(and(eq(outbox.entityKey, results[0]!.itemKey!), isNull(outbox.processedAt)))).toEqual([{ key: results[0]!.itemKey }]);
 		expect(await publicWithDoi(db, doi)).toEqual([results[0]!.itemKey]);
 		expect((await db.select({ source: itemSourceLink.sourceConnectionKey }).from(itemSourceLink).where(eq(itemSourceLink.itemKey, results[0]!.itemKey!))).map((row) => row.source).sort()).toEqual(["added-papers", "openscholar-c1"]);
 	});

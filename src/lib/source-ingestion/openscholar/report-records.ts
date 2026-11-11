@@ -74,29 +74,42 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
  */
 export async function followOrphanedReports(context: SourceAdapterContext, options: OpenAlexSourceOptions & { service?: OpenScholarService }) {
 	if (!options.service) return;
+	try {
+		await takeDownWithdrawnOrphans(context, options.service, options.fetch);
+	} finally {
+		// Every sweep, so files whose cleanup failed are tried again even once nothing is left to take down.
+		await options.attachmentProcessor?.flushCleanup(context.sourceConnection.key).catch((error: unknown) => {
+			console.error("[reports] couldn't clean up report PDFs' files", { sourceConnectionKey: context.sourceConnection.key, error: String(error) });
+		});
+	}
+}
+
+async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: OpenScholarService, fetch: typeof globalThis.fetch | undefined) {
+	// All of them, a few DOIs a request: a community has few reports no source holds.
 	const orphans = await context.database.execute<{ itemKey: string; doi: string }>(sql`
 		SELECT DISTINCT i.key AS "itemKey", snapshot.payload ->> 'doi' AS doi
 		FROM "item" i JOIN "sourceSnapshot" snapshot ON snapshot."itemKey" = i.key
 		WHERE i.deleted = 0 AND snapshot.payload ? 'pageUrl' AND snapshot.payload ->> 'state' = 'live'
 			AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" link JOIN "sourceConnection" c ON c.key = link."sourceConnectionKey"
-				WHERE link."itemKey" = i.key AND NOT link."remoteDeleted" AND c.status <> 'removed')
-		LIMIT ${ORPHANS_PER_SWEEP}`);
+				WHERE link."itemKey" = i.key AND NOT link."remoteDeleted" AND c.status <> 'removed')`);
 	if (!orphans.rows.length) return;
-	const reports = await reportsByDoi(options.service, [...new Set(orphans.rows.map((row) => row.doi))], { fetch: options.fetch });
+	const reports = await reportsByDoi(service, [...new Set(orphans.rows.map((row) => row.doi))], { fetch });
 	const withdrawn = orphans.rows.filter((row) => reports.get(row.doi)?.state === "withdrawn").map((row) => row.itemKey);
 	if (!withdrawn.length) return;
-	const pdfs = (await context.database.select({ key: item.key }).from(item).where(inArray(item.parentItem, withdrawn))).map((row) => row.key);
-	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, pdfs));
+	const children = await context.database.select({ key: item.key, parent: item.parentItem, deleted: item.deleted }).from(item).where(inArray(item.parentItem, withdrawn));
+	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, children.map((child) => child.key)));
+	const takenDown: string[] = [];
 	for (const itemKey of withdrawn) {
-		await unpublishNativeItemWithOutcome(context.database, itemKey).catch((error: unknown) => {
-			console.error("[reports] couldn't take down a withdrawn report no source follows", { itemKey, error: String(error) });
-		});
+		await unpublishNativeItemWithOutcome(context.database, itemKey).then(
+			() => takenDown.push(itemKey),
+			(error: unknown) => console.error("[reports] couldn't take down a withdrawn report no source follows", { itemKey, error: String(error) }),
+		);
 	}
-	await options.attachmentProcessor?.flushCleanup(context.sourceConnection.key);
+	// The unpublish is remembered as the team's own deletion, which no source undoes. This one is Openscholar's: forgotten,
+	// so the report comes back if it is reinstated and a source takes it again. Children the team had hidden keep theirs.
+	const marked = [...takenDown, ...children.filter((child) => child.deleted === 0 && takenDown.includes(child.parent!)).map((child) => child.key)];
+	if (takenDown.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, marked), eq(itemFieldOverride.field, "deleted")));
 }
-
-/** Orphaned reports asked about in one sweep; the rest wait for the next. */
-const ORPHANS_PER_SWEEP = 500;
 
 /** Reports' PDFs downloaded at once: they all come from Openscholar. */
 const PDFS_AT_ONCE = 4;
