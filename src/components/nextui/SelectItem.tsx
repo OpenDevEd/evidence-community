@@ -14,7 +14,9 @@ export const SelectItem = extendVariants(NextUISelectItem, {
     },
     variant: {
       default: {
-        title: "font-medium text-base",
+        // A label wider than its list (large text, a narrow field) wraps and its row grows instead of being cut off,
+        // as the menus' labels do.
+        title: "font-medium text-base whitespace-normal break-words",
       },
     },
   },
