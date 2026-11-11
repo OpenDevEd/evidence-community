@@ -1,9 +1,10 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, like, sql } from "drizzle-orm";
+import { and, eq, inArray, like, notExists, sql } from "drizzle-orm";
 
 import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemFieldOverride } from "@/db/schema/topics";
+import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
 import { reportsByDoi, type OpenScholarService, type OpenscholarReport } from "@/lib/openscholar-service";
 
@@ -84,6 +85,22 @@ export async function followOrphanedReports(context: SourceAdapterContext, optio
 	}
 }
 
+/**
+ * Takes a withdrawn report's record off the community. Notes the team added under it are unpublished first, which the
+ * record's own unpublish requires: a withdrawn report is public nowhere, and the team's additions stay, out of sight,
+ * for an editor to restore with it.
+ * ponytail: a file the team uploaded under it is unpublished from the admin (it may hold a Zenodo deposit), so it keeps
+ * the record up, logged by the caller, until an editor takes it down.
+ */
+async function unpublishReport(database: SourceAdapterContext["database"], itemKey: string) {
+	const added = await database
+		.select({ key: item.key })
+		.from(item)
+		.where(and(eq(item.parentItem, itemKey), eq(item.sourceConnectionKey, NATIVE_SOURCE_CONNECTION_KEY), eq(item.deleted, 0), notExists(database.select({ one: sql`1` }).from(itemFilePublication).where(eq(itemFilePublication.itemKey, item.key)))));
+	for (const { key } of added) await unpublishNativeItemWithOutcome(database, key);
+	return await unpublishNativeItemWithOutcome(database, itemKey);
+}
+
 async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: OpenScholarService, fetch: typeof globalThis.fetch | undefined) {
 	// All of them, a few DOIs a request: a community has few reports no source holds.
 	const orphans = await context.database.execute<{ itemKey: string; doi: string }>(sql`
@@ -96,11 +113,16 @@ async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: 
 	const reports = await reportsByDoi(service, [...new Set(orphans.rows.map((row) => row.doi))], { fetch });
 	const withdrawn = orphans.rows.filter((row) => reports.get(row.doi)?.state === "withdrawn").map((row) => row.itemKey);
 	if (!withdrawn.length) return;
-	const children = await context.database.select({ key: item.key, parent: item.parentItem, deleted: item.deleted }).from(item).where(inArray(item.parentItem, withdrawn));
+	// Only the reports' own PDFs: an attachment the team uploaded is the team's, and goes with its record's unpublish.
+	const children = await context.database
+		.selectDistinct({ key: item.key, parent: item.parentItem, deleted: item.deleted })
+		.from(item)
+		.innerJoin(itemSourceLink, and(eq(itemSourceLink.itemKey, item.key), like(itemSourceLink.sourceRecordKey, `${PDF_RECORD}%`)))
+		.where(inArray(item.parentItem, withdrawn));
 	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, children.map((child) => child.key)));
 	const takenDown: string[] = [];
 	for (const itemKey of withdrawn) {
-		await unpublishNativeItemWithOutcome(context.database, itemKey).then(
+		await unpublishReport(context.database, itemKey).then(
 			() => takenDown.push(itemKey),
 			(error: unknown) => console.error("[reports] couldn't take down a withdrawn report no source follows", { itemKey, error: String(error) }),
 		);
@@ -144,7 +166,7 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
 	// Attachments first: a record with a public child isn't unpublished.
 	const pdfKeys = new Set(pdfs);
 	for (const { key } of [...stillPublic].sort((a, b) => Number(pdfKeys.has(b.key)) - Number(pdfKeys.has(a.key)))) {
-		await unpublishNativeItemWithOutcome(context.database, key).catch((error: unknown) => {
+		await unpublishReport(context.database, key).catch((error: unknown) => {
 			console.error("[reports] couldn't unpublish a withdrawn report's record", { itemKey: key, error: String(error) });
 		});
 	}

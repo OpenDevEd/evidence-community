@@ -23,7 +23,7 @@ import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { REPORTS_PATH, type OpenscholarReport } from "@/lib/openscholar-service";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { createNativeItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
@@ -728,16 +728,20 @@ it("takes down a report no source follows any more once Openscholar withdraws it
 		await collection.hold([doi], reports);
 		const [key] = await publicWithDoi(db, doi);
 		expect(storage.publicFiles.size).toBe(2);
+		// The team wrote a note under it, which the record's unpublish would otherwise refuse.
+		const note = await createNativeItemDraft(db, { itemType: "Note", note: "Read with the 2025 baseline.", parentItem: key! });
+		await publishItemDraft(db, note.itemKey);
 
 		// Its collection is removed, which keeps the records it brought; then Openscholar withdraws the report.
 		await collection.remove();
 		reports.set(doi, { state: "withdrawn", key: "R100035", doi, version: "2026-11-12T09:00:00.000Z" });
 		await sync(db, world.fetch, storage);
 		expect(await record(db, key!)).toMatchObject({ deleted: 1 });
+		expect(await record(db, note.itemKey)).toMatchObject({ deleted: 1 });
 		expect(storage.publicFiles.size).toBe(0);
 		// Openscholar's withdrawal, not the team's: nothing marks the record deleted for good, so a source that takes the
 		// report back after a reinstatement brings it back.
-		expect(await db.select().from(itemFieldOverride).where(eq(itemFieldOverride.field, "deleted"))).toEqual([]);
+		expect(await db.select({ key: itemFieldOverride.itemKey }).from(itemFieldOverride).where(and(eq(itemFieldOverride.field, "deleted"), eq(itemFieldOverride.itemKey, key!)))).toEqual([]);
 	});
 });
 
