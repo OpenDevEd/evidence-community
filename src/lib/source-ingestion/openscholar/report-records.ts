@@ -12,7 +12,7 @@ import type { JsonValue } from "../batch-schema";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 
 import { itemUpsertSchema } from "../batch-schema";
-import { withdrawSourceRecords } from "../openalex/reconciliation";
+import { inUnchangedSource, withdrawSourceRecords } from "../openalex/reconciliation";
 import { writeChunks, type OpenAlexSourceOptions } from "../openalex/sync";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { reportPdfRecordKey, reportSourceItems } from "./report-record";
@@ -87,9 +87,10 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 async function withdrawReports(context: SourceAdapterContext, withdrawn: readonly HeldReport[]) {
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
 	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
+	// The files go first, refused like the withdrawal if the source changed meanwhile. Should the withdrawal then fail,
+	// its records still hold the source's links, so the next sync withdraws them again.
+	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, pdfs));
 	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
-	// Only once the withdrawal held: it is refused if the source changed meanwhile, and then the files stay.
-	await removeHostedPdfs(context, pdfs);
 	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
 	// Openscholar is public nowhere: what is still live is unpublished, which keeps the team's edits out of sight
 	// with the record, for an editor to restore if the report is reinstated.
@@ -112,24 +113,24 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
  * Deletes the files a withdrawn report's PDF holds here, whichever source hosted them: they are public, and Openscholar
  * took the report down. A reinstatement downloads the PDF again, since its record no longer has a file.
  */
-async function removeHostedPdfs(context: SourceAdapterContext, itemKeys: readonly string[]) {
+async function removeHostedPdfs(transaction: Transaction, sourceConnectionKey: string, itemKeys: readonly string[]) {
 	if (!itemKeys.length) return;
-	await context.database.transaction(async (transaction) => {
-		const removed = await transaction
-			.delete(itemFilePublication)
-			.where(inArray(itemFilePublication.itemKey, [...itemKeys]))
-			.returning({ objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath });
-		const now = new Date();
-		const paths = removed.flatMap((row) => [row.objectPath, row.coverObjectPath]);
-		// Queued under this source, whose cleanup at the end of keepReports removes them.
-		if (paths.length) {
-			await transaction
-				.insert(sourceFileCleanup)
-				.values(paths.map((objectPath) => ({ sourceConnectionKey: context.sourceConnection.key, objectPath, updatedAt: now })))
-				.onConflictDoUpdate({ target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath], set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now } });
-		}
-	});
+	const removed = await transaction
+		.delete(itemFilePublication)
+		.where(inArray(itemFilePublication.itemKey, [...itemKeys]))
+		.returning({ objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath });
+	const now = new Date();
+	const paths = removed.flatMap((row) => [row.objectPath, row.coverObjectPath]);
+	// Queued under this source, whose cleanup at the end of keepReports removes them.
+	if (paths.length) {
+		await transaction
+			.insert(sourceFileCleanup)
+			.values(paths.map((objectPath) => ({ sourceConnectionKey, objectPath, updatedAt: now })))
+			.onConflictDoUpdate({ target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath], set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now } });
+	}
 }
+
+type Transaction = Parameters<Parameters<SourceAdapterContext["database"]["transaction"]>[0]>[0];
 
 /** Live reports whose PDFs are processed together before they are written: each holds up to 1.5 MB of text. */
 const REPORTS_PER_BATCH = 50;
