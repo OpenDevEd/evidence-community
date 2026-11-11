@@ -737,13 +737,18 @@ const INSTITUTION_SAMPLE = 20;
 /** How many of these results list the author, by the name the index files them under, at each institution. */
 export function ownInstitutions(hits: readonly Pick<ListItem, "creators">[], name: string) {
 	const counts: Record<string, number> = {};
+	// The search finds them ignoring case and accents, so their entries may spell the name another way.
+	const theirs = folded(name);
 	for (const hit of hits) {
-		const creator = ((hit.creators ?? []) as Author[]).find((entry) => creatorFullName(entry) === name);
+		const creator = ((hit.creators ?? []) as Author[]).find((entry) => folded(creatorFullName(entry)) === theirs);
 		for (const institution of new Set((creator?.institutions ?? []).map((entry) => entry.display_name?.trim()).filter(Boolean)))
 			counts[institution!] = (counts[institution!] ?? 0) + 1;
 	}
 	return counts;
 }
+
+/** A name as the search compares it: case and accents left out. */
+const folded = (name: string) => name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** The institution most of these results list the author at, if any does and the library shows institutions. */
 const ownInstitution = (shown: boolean, hits: readonly Pick<ListItem, "creators">[] | undefined, name: string) => (shown ? mostNamed(ownInstitutions(hits ?? [], name)) : null);

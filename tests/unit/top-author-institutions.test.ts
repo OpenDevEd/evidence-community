@@ -13,4 +13,6 @@ it("counts only the institutions a top author is listed with on their own result
 	];
 	expect(ownInstitutions(hits, "Nadia Recheckeleven")).toEqual({ "University of Ghana": 2, "University of Cape Town": 1 });
 	expect(ownInstitutions(hits, "Ibrahim Recheckeleven")).toEqual({ "University of Oxford": 1 });
+	// The search finds an author ignoring case and accents, so an entry may spell their name another way.
+	expect(ownInstitutions([{ creators: [{ creatorType: "author" as const, name: "Jose Garcia", institutions: [{ display_name: "Universidad de Chile" }] }] }], "José García")).toEqual({ "Universidad de Chile": 1 });
 });

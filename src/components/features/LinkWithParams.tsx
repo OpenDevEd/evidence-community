@@ -16,7 +16,8 @@ function LinkWithParams({ href, params, children, className, ...props }: { param
 	return (
 		<Link
 			isDisabled={isDisabled}
-			href={href + (params ? serializeSearchParams(params) : "")}
+			// No address while it goes nowhere, so a middle click or the context menu can't open one either.
+			href={isDisabled ? undefined : href + (params ? serializeSearchParams(params) : "")}
 			className={isDisabled ? twMerge(className, "pointer-events-auto") : className}
 			{...props}
 		>
