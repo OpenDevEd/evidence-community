@@ -713,7 +713,7 @@ async function readTopAuthors(
 			count,
 			years: distribution.year ?? {},
 			together: sharedWith(name, names, distribution.fullNames ?? {}),
-			institution: institutions ? mostNamed(ownInstitutions(perAuthor[position]?.hits ?? [], name)) : null,
+			institution: institutions ? ownInstitution(perAuthor[position]?.hits, name) : null,
 			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
 		};
 	});
@@ -744,6 +744,9 @@ export function ownInstitutions(hits: readonly Pick<ListItem, "creators">[], nam
 	}
 	return counts;
 }
+
+/** The institution most of these results list the author at, if any does. */
+const ownInstitution = (hits: readonly Pick<ListItem, "creators">[] | undefined, name: string) => mostNamed(ownInstitutions(hits ?? [], name));
 
 /** The value most results name in a facet, if any does. */
 function mostNamed(counts: Record<string, number>) {
