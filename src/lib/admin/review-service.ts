@@ -107,6 +107,12 @@ export async function setItemPublishingChoice(
 	config: Pick<LibraryServerConfig, "services">,
 ) {
 	const choice = publishingChoiceSchema.nullable().parse(input);
+	// Refused when it is chosen, not when the record is published: every DOI here is archived on Zenodo.
+	const { crossref, zenodo } = config.services.publication;
+	if (choice && !zenodo.enabled)
+		throw new AdminValidationError("This community hasn't set up Zenodo, so it can't register DOIs.");
+	if (choice?.route === "crossref-zenodo" && !crossref.enabled)
+		throw new AdminValidationError("This community hasn't set up Crossref.");
 	return db.transaction(async (transaction) => {
 		await lockItemMutations(transaction, [itemKey]);
 		const [identity] = await transaction

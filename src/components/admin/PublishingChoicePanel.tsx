@@ -12,6 +12,11 @@ import { CrossrefIdentifierControls } from "./CrossrefIdentifierControls";
 import { PublicationArchiveFiles } from "./PublicationArchiveFiles";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { zenodoPolicyChangeReason } from "@/lib/publication/identifier-policy";
+import { useAdminSession } from "./AdminSessionProvider";
+
+/** Said in place of a DOI choice the community can't make: every DOI here is archived on Zenodo. */
+const NO_DOI_PROVIDER = "This community hasn't set up Zenodo, so it can't register DOIs. Records publish without one.";
+const NO_CROSSREF = "This community hasn't set up Crossref.";
 
 function defaultPublishingChoice(lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined): PublishingChoice {
 	return lockedPolicy === "reuse-crossref"
@@ -23,6 +28,8 @@ function defaultPublishingChoice(lockedPolicy: PublishingChoiceState["lockedIden
 export function doiProviderOptions(
 	lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined,
 	crossrefPolicy: "reuse-crossref" | "mint-zenodo",
+	/** Whether the community has set up Crossref: without it, only Zenodo is offered to choose. */
+	crossref: boolean,
 ) {
 	return [
 		{
@@ -33,7 +40,7 @@ export function doiProviderOptions(
 		},
 		{
 			key: "crossref-zenodo",
-			disabledReason: zenodoPolicyChangeReason(lockedPolicy, crossrefPolicy),
+			disabledReason: crossref ? zenodoPolicyChangeReason(lockedPolicy, crossrefPolicy) : NO_CROSSREF,
 			label: "Crossref + Zenodo",
 			content: (
 				<>
@@ -52,27 +59,127 @@ export const DOI_PROVIDER_HELP = {
 	"crossref-zenodo": "Register with Crossref. Archive the files on Zenodo.",
 } as const;
 
-export function PublishingChoicePanel({
-	detail,
-	readOnly = false,
-	filesReadOnly,
-	choice,
-	model,
-}: {
+type PanelProps = {
 	detail: AdminItemDetail;
 	readOnly?: boolean;
 	filesReadOnly: boolean;
 	choice?: PublishingChoice | null;
 	model: ReturnType<typeof usePublishingChoice>;
+};
+
+/** A record's DOI: kept as it came, chosen here, or not on offer in a community that hasn't set up Zenodo. */
+export function RecordDoiPanel(props: PanelProps) {
+	const { doiProviders } = useAdminSession();
+	const { saved, saving } = props.model;
+	const chosen = props.choice === undefined ? saved.data?.choice : props.choice;
+	if (props.detail.kind === "imported") return <ExistingPublication />;
+	// A choice saved before Zenodo was switched off stays in view, so it can be switched off: publishing refuses it.
+	if (!doiProviders.zenodo && !chosen)
+		return <p className="py-1 text-[11px] leading-relaxed text-black/50 dark:text-white/50">{NO_DOI_PROVIDER}</p>;
+	return (
+		<PublishingChoicePanel
+			detail={props.detail}
+			readOnly={props.readOnly ?? false}
+			filesReadOnly={props.filesReadOnly}
+			value={chosen ?? null}
+			disabled={props.readOnly || saving || saved.isLoading || Boolean(saved.error)}
+			model={props.model}
+			crossref={doiProviders.crossref}
+		/>
+	);
+}
+
+function ExistingPublication() {
+	return (
+		<div className="flex items-start gap-3 py-1">
+			<HugeiconsIcon icon={Link01Icon} size={17} className="mt-0.5 text-black/35 dark:text-white/35" />
+			<div>
+				<p className="text-xs font-medium">Existing publication</p>
+				<p className="mt-1 text-[11px] leading-relaxed text-black/45 dark:text-white/45">
+					Keeps its original DOI. No new archive required.
+				</p>
+			</div>
+		</div>
+	);
+}
+
+function PublishingChoicePanel({
+	detail,
+	readOnly,
+	filesReadOnly,
+	value,
+	disabled,
+	model,
+	crossref,
+}: Pick<PanelProps, "detail" | "filesReadOnly" | "model"> & {
+	readOnly: boolean;
+	/** The route chosen: the saved one, or a submitted version's. */
+	value: PublishingChoice | null;
+	/** Nothing here can be changed now: read-only, saving, or not loaded. */
+	disabled: boolean;
+	crossref: boolean;
+}) {
+	const { saved, save } = model;
+	const lockedPolicy = saved.data?.lockedIdentifierPolicy;
+	const held = Boolean(value) && saved.data?.canClear === false;
+	return (
+		<div className="overflow-hidden rounded-xl bg-black/[0.025] ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
+			<IdentifierError model={model} />
+			<div className="flex items-center justify-between gap-3 px-3 py-3">
+				<span className="text-xs font-medium text-black/80 dark:text-white/85">
+					Register a DOI
+				</span>
+				<Tooltip
+					content="Identifiers have already been activated for this item."
+					isDisabled={!held}
+				>
+					<span className="inline-flex">
+						<Switch
+							aria-label="Register a DOI"
+							color="accent"
+							isSelected={Boolean(value)}
+							isDisabled={disabled || held}
+							onValueChange={(selected) => {
+								void save(
+									selected ? defaultPublishingChoice(lockedPolicy) : null,
+								);
+							}}
+						/>
+					</span>
+				</Tooltip>
+			</div>
+			{value ? (
+				<ChosenRoute value={value} detail={detail} readOnly={readOnly} filesReadOnly={filesReadOnly} disabled={disabled} model={model} crossref={crossref} />
+			) : (
+				<p className="px-3 pb-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
+					Publish without a DOI or Zenodo archive.
+				</p>
+			)}
+		</div>
+	);
+}
+
+/** The provider a record's DOI comes from, and what that provider needs: a reserved Crossref DOI, and the files to archive. */
+function ChosenRoute({
+	value,
+	detail,
+	readOnly,
+	filesReadOnly,
+	disabled,
+	model,
+	crossref,
+}: {
+	value: PublishingChoice;
+	detail: AdminItemDetail;
+	readOnly: boolean;
+	filesReadOnly: boolean;
+	disabled: boolean;
+	model: ReturnType<typeof usePublishingChoice>;
+	crossref: boolean;
 }) {
 	const { saved, reservation, saving, save, onReserve } = model;
-	const value = choice === undefined ? saved.data?.choice : choice;
-	const route = value?.route;
-	const enabled = Boolean(value);
 	const lockedPolicy = saved.data?.lockedIdentifierPolicy;
 	const crossrefPolicy = lockedPolicy === "mint-zenodo" ? "mint-zenodo" : "reuse-crossref";
-	const controlsDisabled =
-		readOnly || saving || saved.isLoading || Boolean(saved.error);
 	const setRoute = (route: string) =>
 		void save(
 			route === "zenodo"
@@ -84,87 +191,36 @@ export function PublishingChoicePanel({
 		);
 	const setPolicy = (identifierPolicy: "reuse-crossref" | "mint-zenodo") =>
 		void save({ route: "crossref-zenodo", identifierPolicy });
-	if (detail.kind === "imported")
-		return (
-			<div className="flex items-start gap-3 py-1">
-				<HugeiconsIcon
-					icon={Link01Icon}
-					size={17}
-					className="mt-0.5 text-black/35 dark:text-white/35"
-				/>
-				<div>
-					<p className="text-xs font-medium">Existing publication</p>
-					<p className="mt-1 text-[11px] leading-relaxed text-black/45 dark:text-white/45">
-						Keeps its original DOI. No new archive required.
-					</p>
-				</div>
-			</div>
-		);
 	return (
-		<div className="overflow-hidden rounded-xl bg-black/[0.025] ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
-			<IdentifierError model={model} />
-			<div className="flex items-center justify-between gap-3 px-3 py-3">
-				<span className="text-xs font-medium text-black/80 dark:text-white/85">
-					Register a DOI
-				</span>
-				<Tooltip
-					content="Identifiers have already been activated for this item."
-					isDisabled={!(enabled && saved.data?.canClear === false)}
-				>
-					<span className="inline-flex">
-						<Switch
-							aria-label="Register a DOI"
-							color="accent"
-							isSelected={enabled}
-							isDisabled={
-								controlsDisabled ||
-								(enabled && saved.data?.canClear === false)
-							}
-							onValueChange={(selected) => {
-								void save(
-									selected ? defaultPublishingChoice(lockedPolicy) : null,
-								);
-							}}
-						/>
-					</span>
-				</Tooltip>
-			</div>
-			{!enabled ? (
-				<p className="px-3 pb-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
-					Publish without a DOI or Zenodo archive.
-				</p>
-			) : (
-				<>
-					<InspectorChoices
-						label="DOI provider"
-						value={route}
-						onChange={setRoute}
-						disabled={controlsDisabled}
-						options={doiProviderOptions(lockedPolicy, crossrefPolicy)}
+		<>
+			<InspectorChoices
+				label="DOI provider"
+				value={value.route}
+				onChange={setRoute}
+				disabled={disabled}
+				options={doiProviderOptions(lockedPolicy, crossrefPolicy, crossref)}
+			/>
+			<p className="px-3 py-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
+				{DOI_PROVIDER_HELP[value.route]}
+			</p>
+			<div>
+				{value.route === "crossref-zenodo" && (
+					<CrossrefIdentifierControls
+						reservation={reservation.data}
+						policy={value.identifierPolicy}
+						lockedPolicy={lockedPolicy}
+						readOnly={readOnly}
+						saving={saving}
+						onReserve={onReserve}
+						setPolicy={setPolicy}
 					/>
-					<p className="px-3 py-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
-						{DOI_PROVIDER_HELP[route ?? "zenodo"]}
-					</p>
-					<div>
-						{route === "crossref-zenodo" && (
-							<CrossrefIdentifierControls
-								reservation={reservation.data}
-								policy={value?.identifierPolicy}
-								lockedPolicy={lockedPolicy}
-								readOnly={readOnly}
-								saving={saving}
-								onReserve={onReserve}
-								setPolicy={setPolicy}
-							/>
-						)}
-						<PublicationArchiveFiles
-							attachments={detail.attachments}
-							readOnly={filesReadOnly}
-						/>
-					</div>
-				</>
-			)}
-		</div>
+				)}
+				<PublicationArchiveFiles
+					attachments={detail.attachments}
+					readOnly={filesReadOnly}
+				/>
+			</div>
+		</>
 	);
 }
 
@@ -174,8 +230,14 @@ function IdentifierError({
 	model: ReturnType<typeof usePublishingChoice>;
 }) {
 	const { error, saved, reservation } = model;
+	const { doiProviders } = useAdminSession();
 	return (
 		<>
+			{!doiProviders.zenodo && (
+				<p role="alert" className="px-3 pt-3 text-xs text-danger">
+					This community hasn&apos;t set up Zenodo, so this record can&apos;t publish with a DOI. Switch this off to publish without one.
+				</p>
+			)}
 			{(error || saved.error || reservation.error) && (
 				<p role="alert" className="px-3 pt-3 text-xs text-danger">
 					{error ??

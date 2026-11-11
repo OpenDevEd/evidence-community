@@ -3,8 +3,11 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { ADMIN_PUBLISH_PERMISSION, adminRoleHasPermission, type AdminRole } from "@/lib/admin/permissions";
 
-/** Who is signed in to the admin: their role, their OpenScholar account, and their name and photo as that account has them. */
-type LibraryAdminSession = { role: AdminRole; userId: string; name: string; image: string | null };
+/**
+ * Who is signed in to the admin: their role, their OpenScholar account, and their name and photo as that account has
+ * them. With it, which DOI providers the community has set up, so nothing offers a DOI it can't register.
+ */
+type LibraryAdminSession = { role: AdminRole; userId: string; name: string; image: string | null; doiProviders: { crossref: boolean; zenodo: boolean } };
 const SessionContext = createContext<LibraryAdminSession | null>(null);
 export function AdminSessionProvider({ session, children }: { session: LibraryAdminSession; children: ReactNode }) {
 	return <SessionContext value={session}>{children}</SessionContext>;

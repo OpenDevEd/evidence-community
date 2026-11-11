@@ -56,7 +56,7 @@ async function show(start: string, role: "creator" | "editor", address = "") {
 	await act(async () => root.render(
 		<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
 			<NextUIProvider disableAnimation>
-				<NuqsTestingAdapter searchParams={address}><AdminSessionProvider session={{ role, userId: role === "creator" ? creator.id : "user_editor", name: role === "creator" ? creator.name : "Gugulethu Dube", image: null }}><Panes start={start} /></AdminSessionProvider></NuqsTestingAdapter>
+				<NuqsTestingAdapter searchParams={address}><AdminSessionProvider session={{ role, userId: role === "creator" ? creator.id : "user_editor", name: role === "creator" ? creator.name : "Gugulethu Dube", image: null, doiProviders: { crossref: true, zenodo: true } }}><Panes start={start} /></AdminSessionProvider></NuqsTestingAdapter>
 			</NextUIProvider>
 		</SWRConfig>,
 	));
