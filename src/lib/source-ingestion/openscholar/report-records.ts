@@ -1,6 +1,7 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemFieldOverride } from "@/db/schema/topics";
 import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
@@ -84,11 +85,8 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 }
 
 async function withdrawReports(context: SourceAdapterContext, withdrawn: readonly HeldReport[]) {
-	// A withdrawn report's PDF is deleted with the file it holds here, which is public: a reinstatement downloads it again.
-	// With no version, so a reinstatement is never taken for an older copy.
-	// Read before the delete: a PDF another source holds stays public after it, and is unpublished below like the record.
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
-	await writeReports(context, withdrawn.map(({ report }) => ({ operation: "delete", sourceRecordKey: reportPdfRecordKey(report.doi), remoteVersion: null })));
+	await removeHostedPdfs(context, pdfs);
 	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
 	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
 	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
@@ -107,6 +105,29 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
 	// Only for what this withdrawal unpublished: a record or a PDF the team had unpublished itself wasn't public, and
 	// keeps its deletion.
 	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, stillPublic.map(({ key }) => key)), eq(itemFieldOverride.field, "deleted")));
+}
+
+/**
+ * Deletes the files a withdrawn report's PDF holds here, whichever source hosted them: they are public, and Openscholar
+ * took the report down. A reinstatement downloads the PDF again, since its record no longer has a file.
+ */
+async function removeHostedPdfs(context: SourceAdapterContext, itemKeys: readonly string[]) {
+	if (!itemKeys.length) return;
+	await context.database.transaction(async (transaction) => {
+		const removed = await transaction
+			.delete(itemFilePublication)
+			.where(inArray(itemFilePublication.itemKey, [...itemKeys]))
+			.returning({ objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath });
+		const now = new Date();
+		const paths = removed.flatMap((row) => [row.objectPath, row.coverObjectPath]);
+		// Queued under this source, whose cleanup at the end of keepReports removes them.
+		if (paths.length) {
+			await transaction
+				.insert(sourceFileCleanup)
+				.values(paths.map((objectPath) => ({ sourceConnectionKey: context.sourceConnection.key, objectPath, updatedAt: now })))
+				.onConflictDoUpdate({ target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath], set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now } });
+		}
+	});
 }
 
 /** Live reports whose PDFs are processed together before they are written: each holds up to 1.5 MB of text. */
