@@ -9,7 +9,7 @@ import { writeSourceIngestionBatch } from "../transactional-writer";
 import type { OpenscholarReport } from "@/lib/openscholar-service";
 import { PDF_RECORD } from "./report-record";
 import type { OpenAlexSourceOptions } from "../openalex/sync";
-import { asRead, keepReports, reportPdfItems } from "./report-records";
+import { asRead, keepReports, removeLeftReportFiles, reportPdfItems } from "./report-records";
 
 /** A collection paper's record made from its DOI, under this key, until OpenAlex has its work. */
 const DOI_RECORD = "doi:";
@@ -124,6 +124,11 @@ export async function syncDoiRecords(
 	// A report's PDF leaves with it: nothing else withdraws a record under a DOI's key.
 	const pdfs = await reportPdfItems(context, left.map(([doi]) => doi));
 	await withdrawSourceRecords(context.database, asRead(context), [...repeats, ...left.map(([, itemKey]) => itemKey), ...pdfs], "This edited record is no longer in the connected Openscholar collection.");
+	// A report that left takes its stored PDF with it, unless something else still keeps its record.
+	if (pdfs.length) {
+		await removeLeftReportFiles(context);
+		await options.attachmentProcessor?.flushCleanup(context.sourceConnection.key);
+	}
 	const before = recordByDoi ? await becameWorks(context) : new Set<string>();
 	const looked = recordByDoi ? await lookUp(dois.filter((doi) => !works.has(doi) && !records.has(doi) && !before.has(doi) && !reports.has(doi)), recordByDoi) : [];
 	if (looked.length) {

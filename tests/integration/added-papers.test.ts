@@ -655,6 +655,26 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
 		expect(pdfs.publicFiles.size).toBe(2);
 
+		// Taken off Added papers it leaves, PDF and all; added again by its DOI, it comes back as a new record with a PDF
+		// of its own.
+		expect(await removeAddedPaper(db, key, { userId: owner.userId, role: "owner" })).toBe("removed");
+		expect(await record(db, key)).toMatchObject({ deleted: 1 });
+		const readded = await addPapers(db, storage, config, { requestId: "r-report-again", publish: true, actor: owner, papers: [{ doi }] }, world.lookup);
+		expect(readded.results).toMatchObject([{ at: 0, outcome: "added" }]);
+		const newKey = readded.results[0]!.itemKey!;
+		const pdfOf = (parent: string) => db.select({ url: item.url, deleted: item.deleted }).from(item).where(eq(item.parentItem, parent));
+		await sync(db, world.fetch, pdfs);
+		expect(await pdfOf(newKey)).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\/.+\/document\.pdf$/u), deleted: 0 }]);
+		// The old record's copy is gone from storage: only the new one's PDF and cover are left.
+		expect(pdfs.publicFiles.size).toBe(2);
+
+		// While a connected collection brings it too, taking it off Added papers leaves it public, PDF and all.
+		await db.insert(sourceConnection).values({ key: "openscholar-c1", provider: "openscholar", scopeKind: "collection", externalScopeKey: "c1", config: {} });
+		await db.insert(itemSourceLink).values({ itemKey: newKey, sourceConnectionKey: "openscholar-c1", sourceRecordKey: `doi:${doi}` });
+		expect(await removeAddedPaper(db, newKey, { userId: owner.userId, role: "owner" })).toBe("removed");
+		expect(await record(db, newKey)).toMatchObject({ deleted: 0 });
+		expect(await pdfOf(newKey)).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
+
 		// Given by its OpenAlex work alone, a report is still taken from Openscholar: its DOI is learned from the work.
 		const other = "10.53832/openscholar-r.r100002";
 		const second = services([work(98, "OpenAlex's copy of another report", other)], {}, new Map([[other, { ...live("Rain gauges and bean yields", "2026-11-10T08:00:00.000Z"), key: "R100002", doi: other, pageUrl: "https://openscholar.test/papers/R100002", pdfUrl: null }]]));
