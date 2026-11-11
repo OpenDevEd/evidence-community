@@ -12,7 +12,7 @@ import { OPENALEX_MAX_IDS_PER_FILTER, OpenAlexClient } from "../openalex/client"
 import { openAlexIdStream } from "../openalex/id-stream";
 import { addedPapersConfigSchema } from "../openalex/schema";
 import { openAlexWorksAreDue, syncOpenAlexWorks, type OpenAlexSourceOptions } from "../openalex/sync";
-import { keepReports } from "../openscholar/report-records";
+import { followOrphanedReports, keepReports } from "../openscholar/report-records";
 import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { reportsByDoi, type OpenScholarService } from "@/lib/openscholar-service";
 
@@ -94,6 +94,8 @@ export async function syncAddedPapers(context: SourceAdapterContext, options: Ad
 		.from(addedPaper)
 		.where(eq(addedPaper.state, "accepted"));
 	const synced = Object.keys(connection.syncCursor ?? {}).length > 0;
+	// Reports no source follows any more are still the community's to take down when Openscholar withdraws them.
+	await followOrphanedReports(context, options);
 	// Nothing added yet and nothing to withdraw: no OpenAlex request, so a community without a key isn't refused.
 	if (!count && !synced) return { unchanged: true, version: "empty" };
 	// Before the OpenAlex key is asked for: a community's reports are followed without one.
