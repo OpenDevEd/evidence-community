@@ -66,6 +66,11 @@ function services(works: ReturnType<typeof work>[], byDoi: Record<string, Record
 		const url = new URL(String(input));
 		// The sync asks Openscholar which accepted papers are its reports.
 		if (url.pathname === REPORTS_PATH) return Response.json({ reports: (JSON.parse(String(init?.body)) as { dois: string[] }).dois.map((doi) => reports.get(doi) ?? null) });
+		// And OpenAlex where the institutions those reports name are.
+		if (url.pathname === "/institutions") {
+			const ids = url.searchParams.get("filter")!.replace("openalex:", "").split("|");
+			return Response.json({ meta: { count: ids.length }, results: ids.map((id) => ({ id: `https://openalex.org/${id}`, geo: { city: "Kigali", latitude: -1.95, longitude: 30.06 } })) });
+		}
 		const filter = url.searchParams.get("filter") ?? "";
 		askedOfOpenAlex.push(filter);
 		const ids = filter.match(/^ids\.openalex:([^,]+)/u)?.[1]?.split("|");
@@ -633,7 +638,8 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		// Its author's affiliation is the creator's institution, placed in its country with its OpenAlex ID, and its topic is
 		// the record's, as an OpenAlex work's are.
 		expect(await db.select({ creators: item.creators, topics: item.topics }).from(item).where(eq(item.key, key))).toEqual([{ creators: [{ creatorType: "author", name: "Chikondi Banda", institutions: [{ display_name: "University of Rwanda" }] }], topics: ["T10017"] }]);
-		expect(await db.select({ countryCode: institutionCountry.countryCode, openalexId: institutionCountry.openalexId }).from(institutionCountry)).toEqual([{ countryCode: "RW", openalexId: "I4210087849" }]);
+		// Placed where OpenAlex says it is, for the map, as an OpenAlex work's institutions are.
+		expect(await db.select({ countryCode: institutionCountry.countryCode, openalexId: institutionCountry.openalexId, city: institutionCountry.city, latitude: institutionCountry.latitude }).from(institutionCountry)).toEqual([{ countryCode: "RW", openalexId: "I4210087849", city: "Kigali", latitude: -1.95 }]);
 		expect(world.askedOfOpenAlex.filter((filter) => filter.includes(doi))).toEqual([]);
 		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBeNull();
 		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\/.+\/document\.pdf$/u), deleted: 0 }]);

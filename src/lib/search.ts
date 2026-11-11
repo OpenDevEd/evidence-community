@@ -696,10 +696,11 @@ async function readTopAuthors(
 		...names.map((name) => ({
 			...searched,
 			filters: [...finalFilters, fieldEquals("fullNames", name)],
-			// One of their results, to find the profile their name is linked to on it.
-			size: 1,
+			// Some of their results: the profile their name is linked to, and the institutions they themselves are listed
+			// with, not their co-authors' (a record's institution facet counts everyone's).
+			size: INSTITUTION_SAMPLE,
 			returned: { only: ["creators"] },
-			facets: ["year", "fullNames", ...(institutions ? [INSTITUTION_FILTER_FIELD] : [])],
+			facets: ["year", "fullNames"],
 		})),
 	]);
 	const profileIds = names.map((name, position) => profileIdOf(perAuthor[position]?.hits[0], name));
@@ -712,7 +713,7 @@ async function readTopAuthors(
 			count,
 			years: distribution.year ?? {},
 			together: sharedWith(name, names, distribution.fullNames ?? {}),
-			institution: mostNamed(distribution[INSTITUTION_FILTER_FIELD] ?? {}),
+			institution: ownInstitution(institutions, perAuthor[position]?.hits, name),
 			photo: profileId ? (profiles.get(profileId)?.photo ?? null) : null,
 		};
 	});
@@ -729,6 +730,28 @@ function profileIdOf(hit: ListItem | undefined, name: string) {
 function sharedWith(name: string, names: readonly string[], coauthors: Record<string, number>) {
 	return Object.fromEntries(names.filter((other) => other !== name && coauthors[other]).map((other) => [other, coauthors[other]]));
 }
+
+/** Results read for each top author to tell their own institution. */
+const INSTITUTION_SAMPLE = 20;
+
+/** How many of these results list the author, by the name the index files them under, at each institution. */
+export function ownInstitutions(hits: readonly Pick<ListItem, "creators">[], name: string) {
+	const counts: Record<string, number> = {};
+	// The search finds them ignoring case and accents, so their entries may spell the name another way.
+	const theirs = folded(name);
+	for (const hit of hits) {
+		const creator = ((hit.creators ?? []) as Author[]).find((entry) => folded(creatorFullName(entry)) === theirs);
+		for (const institution of new Set((creator?.institutions ?? []).map((entry) => entry.display_name?.trim()).filter(Boolean)))
+			counts[institution!] = (counts[institution!] ?? 0) + 1;
+	}
+	return counts;
+}
+
+/** A name as the search compares it: case and accents left out. */
+const folded = (name: string) => name.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase();
+
+/** The institution most of these results list the author at, if any does and the library shows institutions. */
+const ownInstitution = (shown: boolean, hits: readonly Pick<ListItem, "creators">[] | undefined, name: string) => (shown ? mostNamed(ownInstitutions(hits ?? [], name)) : null);
 
 /** The value most results name in a facet, if any does. */
 function mostNamed(counts: Record<string, number>) {
