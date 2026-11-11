@@ -160,7 +160,7 @@ const sourceDatesSchema = z
 	})
 	.strict();
 
-const itemUpsertSchema = z
+export const itemUpsertSchema = z
 	.object({
 		operation: z.literal("upsert"),
 		sourceRecordKey: sourceRecordKeySchema,

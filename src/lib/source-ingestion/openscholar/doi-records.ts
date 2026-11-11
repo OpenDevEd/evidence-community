@@ -8,6 +8,7 @@ import { openAlexItemKeys } from "../openalex/references";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import type { OpenscholarReport } from "@/lib/openscholar-service";
 import { PDF_RECORD } from "./report-record";
+import type { OpenAlexSourceOptions } from "../openalex/sync";
 import { asRead, keepReports, reportPdfItems } from "./report-records";
 
 /** A collection paper's record made from its DOI, under this key, until OpenAlex has its work. */
@@ -110,11 +111,13 @@ export async function syncDoiRecords(
 		/** The Openscholar Reports among the DOIs: their records are Openscholar's, kept by `keepReports`, never OpenAlex's or the lookup's. */
 		reports?: ReadonlyMap<string, OpenscholarReport>;
 	},
+	/** The source's PDF stage, which hosts the reports' PDFs. */
+	options: OpenAlexSourceOptions = {},
 ) {
 	const records = await doiRecordsOf(context);
 	// A withdrawn report has left the collection as far as the library goes: its record is withdrawn with a reason of its own.
 	const inCollection = new Set(dois.filter((doi) => reports.get(doi)?.state !== "withdrawn"));
-	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `${DOI_RECORD}${doi}`, itemKey: records.get(doi), report })));
+	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `${DOI_RECORD}${doi}`, itemKey: records.get(doi), report })), options);
 	for (const [doi, report] of reports) if (report.state === "withdrawn") records.delete(doi);
 	const repeats = await linkResolved(context, records, works);
 	const left = [...records].filter(([doi]) => !inCollection.has(doi) && !works.has(doi));

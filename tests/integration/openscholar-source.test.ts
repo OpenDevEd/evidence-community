@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
+import { fetch as transport, Response as TransportResponse } from "undici";
 vi.mock("server-only", () => ({}));
+// A report's PDF is downloaded from Openscholar through the public fetch.
+vi.mock("undici", async (importOriginal) => ({ ...(await importOriginal<typeof import("undici")>()), fetch: vi.fn() }));
 
 import { and, eq, isNull } from "drizzle-orm";
 import { itemSourceLink, sourceConnection, sourceRecordIssue } from "@opendeved/evidence-library-core";
@@ -13,6 +16,8 @@ import { classifySourceError } from "@/lib/source-ingestion/source-status";
 import type { Database } from "@/db/database-schema";
 import type { SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
+import { MemoryFileStorage, createPdf } from "../helpers/file-storage";
+import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
 
 const service = {
 	convexSiteUrl: "https://openscholar.test",
@@ -404,7 +409,10 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 			lookedUp.push(asked);
 			return { itemType: "journalArticle", title: `Found by ${asked}`, DOI: asked, collections: [] };
 		};
-		const sync = async () => syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request, recordByDoi });
+		vi.mocked(transport).mockReset().mockImplementation(async () => new TransportResponse(await createPdf("Shade trees and maize yields")));
+		const pdfs = new MemoryFileStorage();
+		const attachmentProcessor = createOpenAlexAttachmentProcessor({ database: db, storage: pdfs, maxPdfBytes: 20 * 1024 * 1024 });
+		const sync = async () => syncOpenScholarCollection(await context(db, "openscholar-c1"), { service, fetch: request, recordByDoi, attachmentProcessor });
 		const record = async (key: string) => (await db.select({ title: item.title, url: item.url, deleted: item.deleted }).from(item).where(eq(item.key, key)))[0];
 		const issues = async () => (await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "openscholar-c1"))).map((row) => row.sourceRecordKey);
 
@@ -417,7 +425,10 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		expect(await issues()).toEqual([]);
 		const reportKey = made.get(`doi:${doi}`)!;
 		expect(await record(reportKey)).toMatchObject({ title: "Shade trees and maize yields: Evidence from three seasons", url: "https://openscholar.test/papers/R100001" });
-		expect(await record(made.get(`doi:pdf:${doi}`)!)).toMatchObject({ url: "https://openscholar.test/papers/R100001/report.pdf" });
+		// Its PDF is downloaded from Openscholar and hosted here, cover and all.
+		expect((await record(made.get(`doi:pdf:${doi}`)!))?.url).toMatch(/^http:\/\/storage\.local\/public\/.+\/document\.pdf$/u);
+		expect(vi.mocked(transport).mock.calls.map(([url]) => String(url))).toEqual(["https://openscholar.test/papers/R100001/report.pdf"]);
+		expect(pdfs.publicFiles.size).toBe(2);
 
 		// Corrected on Openscholar while the collection itself is unchanged: the next sweep brings the correction.
 		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
@@ -435,6 +446,8 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		expect((await record(reportKey))?.deleted).toBe(1);
 		expect((await db.select({ deleted: item.deleted }).from(item).where(eq(item.parentItem, reportKey))).map((row) => row.deleted)).toEqual([1]);
 		expect(await issues()).toEqual([`doi:${doi}`]);
+		// Its hosted PDF is deleted: the file is public, and Openscholar took the report down.
+		expect(pdfs.publicFiles.size).toBe(0);
 
 		// Reinstated, it comes back when the collection is next read whole, as the same record.
 		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
@@ -446,6 +459,7 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		expect(back.get(`doi:${doi}`)).toBe(reportKey);
 		expect(await record(reportKey)).toMatchObject({ title: "The team's own title", deleted: 0 });
 		expect((await db.select({ deleted: item.deleted }).from(item).where(eq(item.parentItem, reportKey))).map((row) => row.deleted)).toEqual([0]);
+		expect(pdfs.publicFiles.size).toBe(2);
 		expect(askedOfOpenAlex.filter((asked) => asked === doi)).toEqual([]);
 
 		// Taken out of the collection, the report and its PDF both go.
