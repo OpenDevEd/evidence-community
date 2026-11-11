@@ -18,10 +18,13 @@ import {
 	MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH,
 	type SourceItemUpsert,
 } from "../batch-schema";
+import { PDF_RECORD } from "../openscholar/report-record";
 import { downloadAnyCopy } from "./pdf-download";
 
+/** The address a record's PDF came from: an OpenAlex location's, or an Openscholar Report's own (report-record.ts). */
 function originalPdfUrl(raw: Record<string, unknown>) {
 	const location = raw.location;
+	if (typeof raw.openscholarReport === "string" && typeof raw.url === "string") return raw.url.trim();
 	return location &&
 		typeof location === "object" &&
 		!Array.isArray(location) &&
@@ -121,7 +124,7 @@ function assertPublicationIdentity(
 ) {
 	if (
 		!isSourceConnectionKey(sourceConnectionKey) ||
-		!/^W\d+:pdf$/u.test(record.sourceRecordKey) ||
+		!(/^W\d+:pdf$/u.test(record.sourceRecordKey) || record.sourceRecordKey.startsWith(PDF_RECORD)) ||
 		!record.parentSourceRecordKey
 	) {
 		throw new Error("Invalid OpenAlex attachment publication identity");

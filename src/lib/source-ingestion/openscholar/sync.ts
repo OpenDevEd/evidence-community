@@ -84,7 +84,7 @@ export async function syncOpenScholarCollection(
 	// One OpenAlex doesn't have is made from its DOI; the ones nothing finds are listed as issues.
 	// A record made from a DOI becomes its work's once OpenAlex has the DOI, or once the collection names the work itself.
 	const works = new Map([...collection.doiWorks, ...byDoi].filter(([doi]) => !reports.has(doi)));
-	const recorded = await syncDoiRecords(context, { dois, works, recordByDoi: options.recordByDoi, reports });
+	const recorded = await syncDoiRecords(context, { dois, works, recordByDoi: options.recordByDoi, reports }, options);
 	await listMissing(context, dois.filter((doi) => !byDoi.has(doi) && !recorded.has(doi)));
 	const ids = [...new Set([...collection.openAlexIds.filter((id) => !reportWorks.has(id)), ...byDoi.values()])].sort();
 	// A DOI OpenAlex finds since changes the works without changing the collection: a scan saved over the old list
@@ -103,7 +103,7 @@ async function followReports(context: SourceAdapterContext, options: OpenScholar
 	const records = await doiRecordsOf(context);
 	if (!records.size) return;
 	const reports = await reportsByDoi(options.service, [...records.keys()], { fetch: options.fetch });
-	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `doi:${doi}`, itemKey: records.get(doi), report })));
+	await keepReports(context, [...reports].map(([doi, report]) => ({ recordKey: `doi:${doi}`, itemKey: records.get(doi), report })), options);
 }
 
 /** The OpenAlex works these DOIs name, by DOI: those OpenAlex has. */

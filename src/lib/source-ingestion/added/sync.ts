@@ -48,7 +48,7 @@ async function followReports(context: SourceAdapterContext, options: AddedPapers
 			.set({ sourceRecordKey: recordKey })
 			.where(and(eq(itemSourceLink.itemKey, itemKey), eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), eq(itemSourceLink.sourceRecordKey, itemKey)));
 	}
-	await keepReports(context, held);
+	await keepReports(context, held, options);
 	return new Set(reports.keys());
 }
 

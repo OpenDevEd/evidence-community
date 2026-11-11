@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
+import { fetch as transport, Response as TransportResponse } from "undici";
 vi.mock("server-only", () => ({}));
+// A report's PDF is downloaded from Openscholar through the public fetch.
+vi.mock("undici", async (importOriginal) => ({ ...(await importOriginal<typeof import("undici")>()), fetch: vi.fn() }));
 
 import { and, desc, eq } from "drizzle-orm";
 import { itemDraft, itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
@@ -25,7 +28,9 @@ import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { readItemSources } from "@/lib/search-index/item-sources";
 import { maximalLibraryConfig } from "../fixtures/library-config";
-import { MemoryFileStorage } from "../helpers/file-storage";
+import { itemFilePublication } from "@/db/schema/source";
+import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
+import { MemoryFileStorage, createPdf } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
 const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
@@ -68,11 +73,12 @@ function services(works: ReturnType<typeof work>[], byDoi: Record<string, Record
 	return { lookup, fetch: openAlex, askedOfOpenAlex };
 }
 
-async function sync(db: Database, fetch: typeof globalThis.fetch) {
-	// PDFs need the attachment pipeline, which this test leaves out.
+async function sync(db: Database, fetch: typeof globalThis.fetch, storage = new MemoryFileStorage()) {
+	// OpenAlex works' PDFs stay off here; a report's PDF is always hosted, through the same PDF stage.
 	await db.update(sourceConnection).set({ config: { downloadPdfs: false } }).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
 	const [connection] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, ADDED_PAPERS_SOURCE_CONNECTION_KEY));
-	return syncAddedPapers({ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch, service: config.authentication.openScholar });
+	const attachmentProcessor = createOpenAlexAttachmentProcessor({ database: db, storage, maxPdfBytes: 20 * 1024 * 1024 });
+	return syncAddedPapers({ database: db, sourceConnection: connection!, credentialResolver: async () => "test-key", heartbeat: async () => {} }, { fetch, service: config.authentication.openScholar, attachmentProcessor });
 }
 
 const record = async (db: Database, key: string) => (await db.select().from(item).where(eq(item.key, key)))[0];
@@ -614,20 +620,40 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		const key = results[0]!.itemKey!;
 		expect(await record(db, key)).toMatchObject({ title: "Shade trees and maize yields", url: "https://openscholar.test/papers/R100001", deleted: 0 });
 
-		// Its sync keeps it Openscholar's: OpenAlex is never asked about its DOI, and its PDF is linked from Openscholar.
-		expect((await sync(db, world.fetch)).unresolved).toBe(0);
+		// Its sync keeps it Openscholar's: OpenAlex is never asked about its DOI, and its PDF is downloaded from
+		// Openscholar once and hosted here, cover and all.
+		vi.mocked(transport).mockReset().mockImplementation(async () => new TransportResponse(await createPdf("Shade trees and maize yields")));
+		const pdfs = new MemoryFileStorage();
+		const downloads = () => vi.mocked(transport).mock.calls.map(([url]) => String(url));
+		const hosted = async () => (await db.select({ url: item.url, deleted: item.deleted }).from(item).where(eq(item.parentItem, key)));
+		expect((await sync(db, world.fetch, pdfs)).unresolved).toBe(0);
 		expect(world.askedOfOpenAlex.filter((filter) => filter.includes(doi))).toEqual([]);
 		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBeNull();
-		expect((await db.select({ url: item.url }).from(item).where(eq(item.parentItem, key))).map((row) => row.url)).toEqual(["https://openscholar.test/papers/R100001/report.pdf"]);
+		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\/.+\/document\.pdf$/u), deleted: 0 }]);
+		expect([...pdfs.publicFiles.keys()].map((path) => path.split("/").at(-1)).sort()).toEqual(["cover.jpg", "document.pdf"]);
+		expect(downloads()).toEqual(["https://openscholar.test/papers/R100001/report.pdf"]);
 
+		// A correction changes the record and keeps the PDF it holds, without downloading it again.
 		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-11T09:00:00.000Z"));
-		await sync(db, world.fetch);
+		await sync(db, world.fetch, pdfs);
 		expect(await record(db, key)).toMatchObject({ title: "Shade trees and maize yields, corrected", deleted: 0 });
+		expect(downloads()).toHaveLength(1);
+		expect(pdfs.publicFiles.size).toBe(2);
 
+		// Withdrawn on Openscholar, its PDF is deleted here too: the file is public.
 		reports.set(doi, { state: "withdrawn", key: "R100001", doi, version: "2026-11-12T09:00:00.000Z" });
-		await sync(db, world.fetch);
+		await sync(db, world.fetch, pdfs);
 		expect((await record(db, key))?.deleted).toBe(1);
 		expect(await linked(db, key)).toBe(true);
+		expect(await db.select().from(itemFilePublication)).toEqual([]);
+		expect(pdfs.publicFiles.size).toBe(0);
+
+		// Reinstated, it is back with its PDF, downloaded again.
+		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-13T09:00:00.000Z"));
+		await sync(db, world.fetch, pdfs);
+		expect(await record(db, key)).toMatchObject({ deleted: 0 });
+		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
+		expect(pdfs.publicFiles.size).toBe(2);
 
 		// Given by its OpenAlex work alone, a report is still taken from Openscholar: its DOI is learned from the work.
 		const other = "10.53832/openscholar-r.r100002";
