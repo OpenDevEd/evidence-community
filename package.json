@@ -45,7 +45,7 @@
 		"d3-zoom": "^3.0.0",
 		"dotenv": "^16.4.7",
 		"drizzle-orm": "^0.45.1",
-		"framer-motion": "^14.0.0",
+		"framer-motion": "^14.12.0",
 		"hast-util-to-text": "^4.0.2",
 		"jsdom": "^27.0.0",
 		"lucide-react": "^0.562.0",
