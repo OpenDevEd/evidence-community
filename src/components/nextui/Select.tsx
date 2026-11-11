@@ -70,7 +70,11 @@ const VariantSelect = extendVariants(NextUISelect, {
 /**
  * A list stays open when the panel around it scrolls. React Aria stops the page scrolling while a list is open, and
  * Firefox answers that with a scroll event on every scrolling panel, which would shut a list in one at once.
+ *
+ * Each option is as tall as its label, which wraps when it is wider than the list (SelectItem). NextUI virtualizes a
+ * list of more than 50 options with rows of a fixed 36px, where a wrapped label would run over the next one, so it
+ * doesn't virtualize.
  */
 export function Select(props: ComponentProps<typeof VariantSelect>) {
-	return <VariantSelect {...props} popoverProps={{ shouldCloseOnScroll: false, ...props.popoverProps }} />;
+	return <VariantSelect isVirtualized={false} {...props} popoverProps={{ shouldCloseOnScroll: false, ...props.popoverProps }} />;
 }
