@@ -126,7 +126,7 @@ h6 {
  * container queries plugin has no max-width variant.
  */
 @media (max-width: 639px) {
-	@container admin (max-width: 20rem) {
+	@container admin (width < 20rem) {
 		.admin-toolbar-tools {
 			grid-column: 1 / -1;
 			grid-row-start: 2;
