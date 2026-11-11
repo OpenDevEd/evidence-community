@@ -1373,7 +1373,14 @@
     "listedCount": "{count} listadas",
     "listedOfTotal": "{listed} de {total}",
     "publicationsWord": "publicaciones",
-    "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>",
+    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "aiNotice": {
+      "title": "AI wrote this digest",
+      "made": "It worked from the titles and abstracts of <em>{read}</em> of the period’s <em>{total}</em> publications, not from the full papers. A second AI model checked each sentence against the title and abstract of the paper it cites.",
+      "readBy": "<em>{name}</em> read it before it was published.",
+      "caution": "It can still be wrong, so open a publication before you rely on what the digest says about it."
+    }
   },
   "home": {
     "earlierIssues": "Ediciones anteriores",
