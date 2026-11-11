@@ -15,6 +15,8 @@ import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 import { itemUpsertSchema, MAX_INSTITUTION_FACTS } from "../batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
 import { reportInstitutionFacts } from "@/lib/openscholar-report";
+import { OpenAlexClient } from "../openalex/client";
+import { locateInstitutions } from "../openalex/institution-locations";
 import { inUnchangedSource, withdrawSourceRecords } from "../openalex/reconciliation";
 import { writeChunks, type OpenAlexSourceOptions } from "../openalex/sync";
 import { writeSourceIngestionBatch } from "../transactional-writer";
@@ -47,6 +49,7 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 	const pdfs = options.attachmentProcessor;
 	if (!pdfs) throw new Error("A source that holds Openscholar Reports needs the PDF stage to host their PDFs");
 	const live = held.filter(({ report }) => report.state === "live");
+	let placed = false;
 	try {
 		for (let at = 0; at < live.length; at += REPORTS_PER_BATCH) {
 			const batch = live.slice(at, at + REPORTS_PER_BATCH);
@@ -60,10 +63,12 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 			const chunks = writeChunks(items);
 			const facts = chunkValues(reportInstitutionFacts(batch.flatMap(({ report }) => (report.state === "live" ? [report] : []))), MAX_INSTITUTION_FACTS);
 			for (let at = 0; at < Math.max(chunks.length, facts.length); at++) await writeReports(context, chunks[at] ?? [], facts[at] ?? []);
+			placed ||= facts.length > 0;
 		}
 		const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 		if (withdrawn.length) await withdrawReports(context, withdrawn);
 		await removeLeftReportFiles(context);
+		if (placed) await placeInstitutions(context, options);
 	} finally {
 		// Files a write replaced or deleted, and ones staged for a write that failed or never came. Left queued if this
 		// fails, for the next sync.
@@ -137,6 +142,19 @@ async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: 
 	// so the report comes back if it is reinstated and a source takes it again. Children the team had hidden keep theirs.
 	const marked = [...takenDown, ...children.filter((child) => child.deleted === 0 && takenDown.includes(child.parent!)).map((child) => child.key)];
 	if (takenDown.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, marked), eq(itemFieldOverride.field, "deleted")));
+}
+
+/**
+ * Where OpenAlex places the institutions a report's affiliations name, as a scan places its works': the map needs it.
+ * Only those not placed yet are asked about. A failure leaves them for the next sync; the reports are all in.
+ */
+async function placeInstitutions(context: SourceAdapterContext, options: OpenAlexSourceOptions) {
+	const apiKey = await context.credentialResolver?.(context.sourceConnection.key).catch(() => null);
+	if (!apiKey) return;
+	const client = new OpenAlexClient({ apiKey, fetch: options.fetch, sleep: options.sleep });
+	await locateInstitutions(context.database, (ids) => client.institutionLocations(ids), context.heartbeat).catch((error: unknown) => {
+		console.warn("[reports] couldn't place the institutions reports name; the next sync tries again", { source: context.sourceConnection.key, error: String(error) });
+	});
 }
 
 /** Reports' PDFs downloaded at once: they all come from Openscholar. */
