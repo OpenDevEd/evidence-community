@@ -13,6 +13,7 @@ import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { canonicalItemFieldToDatabaseField, primaryCreatorType } from "@/lib/item-field-codec";
+import { languageCode } from "@/lib/languages";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import type { PdfReading } from "./item-import-contract";
@@ -23,7 +24,6 @@ import { readImportPdf } from "./pdf-import";
 import { keepImportChecks } from "./import-checks";
 import { sendImportedDraft, sendingOf } from "./pdf-import-send";
 import { readPdfProperties } from "./pdf-properties";
-import { languageTag } from "./pdf-record-mapping";
 
 // The worker's side of the PDF import: it reads each uploaded PDF with the
 // library's AI and, once the records are imported, gives each draft its PDF.
@@ -64,9 +64,6 @@ async function previewReading(db: Database, source: string, zoteroItem: Record<s
 	return (await previewEntries(db, [{ method: "pdf", source, zoteroItem: kept }])).records[0]!;
 }
 
-/** A language as the ISO 639 code publishing needs, from the name or tag the PDF gives ("English", "en-GB"); "" when it isn't one. */
-const languageCode = (value: unknown) => languageTag(typeof value === "string" ? value.trim() : "").split("-")[0]!;
-
 /**
  * The AI's record in the forms the library keeps: its language as a code,
  * and each creator in a role its type has, the type's own (author, a
@@ -78,7 +75,8 @@ function inLibraryForms(zoteroItem: Record<string, unknown>) {
 	const roles = new Set(getZoteroItemType(itemType)?.creatorTypes.map(({ creatorType }) => creatorType));
 	const creators = (Array.isArray(zoteroItem.creators) ? zoteroItem.creators : []).map((creator: Record<string, unknown>) => (roles.has(String(creator.creatorType)) ? creator : { ...creator, creatorType: primaryCreatorType(itemType) }));
 	const { language, ...rest } = zoteroItem;
-	const code = languageCode(language);
+	// The ISO 639 code publishing needs, from the name or tag the PDF gives ("English", "en-GB").
+	const code = languageCode(typeof language === "string" ? language : "");
 	return { ...rest, creators, ...(code ? { language: code } : {}) };
 }
 

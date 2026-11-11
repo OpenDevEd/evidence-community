@@ -1,5 +1,6 @@
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { normalizeDoi } from "@/lib/doi";
+import { languageTag } from "@/lib/languages";
 import { publicTags } from "@/lib/publication/record-metadata";
 
 /** What a PDF says about itself in its document properties and XMP block. Empty when unset. */
@@ -30,31 +31,6 @@ const textOf = (value: unknown) => (typeof value === "string" ? value.trim() : "
 
 // XMP dates and language tags have set forms; a record's value is only written when it has them.
 export const xmpDate = (value: string) => (parseBibliographicDate(value).kind === "parsed" ? value : "");
-
-const codesByName = new Map<number, Map<string, string>>();
-/** Language codes of one length by their English names: "swahili" to "sw", "cebuano" to "ceb". */
-function languageCodes(length: 2 | 3) {
-	const known = codesByName.get(length);
-	if (known) return known;
-	const names = new Intl.DisplayNames(["en"], { fallback: "none", type: "language" });
-	const letters = [..."abcdefghijklmnopqrstuvwxyz"];
-	const codes = length === 2 ? letters.flatMap((first) => letters.map((second) => first + second)) : letters.flatMap((first) => letters.flatMap((second) => letters.map((third) => first + second + third)));
-	const found = new Map(codes.flatMap((code) => {
-		const name = names.of(code);
-		// A retired code names the same language as its successor: "iw" is "he".
-		return name ? [[name.toLowerCase(), Intl.getCanonicalLocales(code)[0]!] as const] : [];
-	}));
-	codesByName.set(length, found);
-	return found;
-}
-
-/**
- * A record's language as XMP writes it: the tag it holds ("en-GB"), or the
- * code of the language it names ("English"); otherwise none. Tags prefer
- * two-letter codes, and the three-letter list takes a moment to build, so
- * it is read only for a name the two-letter one doesn't have.
- */
-export const languageTag = (value: string) => (!value || /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(value) ? value : (languageCodes(2).get(value.toLowerCase()) ?? languageCodes(3).get(value.toLowerCase()) ?? ""));
 
 /**
  * What a published PDF carries in its own metadata: the record as the

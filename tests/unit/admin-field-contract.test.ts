@@ -9,6 +9,7 @@ import {
 	normalizeAccessDate,
 	normalizeAdminFieldValue,
 } from "@/lib/admin/field-contract";
+import { LANGUAGES, languageCode } from "@/lib/languages";
 
 describe("admin metadata field contract", () => {
 	it("classifies every vendored field from one complete policy", () => {
@@ -36,7 +37,9 @@ describe("admin metadata field contract", () => {
 									? "institution-list"
 									: multiline.has(descriptor.field)
 										? "multiline"
-										: "text";
+										: descriptor.field === "language"
+											? "language"
+											: "text";
 				expect(adminFieldContract(descriptor).kind).toBe(expected);
 				distinctFields.add(descriptor.field);
 				checked += 1;
@@ -119,6 +122,7 @@ describe("admin metadata field contract", () => {
 		["annotationText", "multiline"],
 		["annotationType", "annotation-type"],
 		["annotationColor", "color"],
+		["language", "language"],
 	])("uses a %s control", (field, kind) => {
 		expect(
 			adminFieldContract({
@@ -239,6 +243,21 @@ describe("admin metadata field contract", () => {
 				"é".repeat(32_768),
 			).error,
 		).toBe("This value is too long. Shorten it and try again.");
+	});
+
+	it("keeps a language an editor saves as a code the registrars take", () => {
+		const language = { field: "language", semanticField: "language", type: "text" } as const;
+		// Written out before the editor offered a list: its code. A tag stays the tag it is.
+		expect(normalizeAdminFieldValue(language, " English ")).toEqual({ value: "en" });
+		expect(normalizeAdminFieldValue(language, "en-GB")).toEqual({ value: "en-GB" });
+		// Text that names no one language is kept for an editor to replace, never dropped and never a refused save.
+		expect(normalizeAdminFieldValue(language, "English; French")).toEqual({ value: "English; French" });
+		// A source's own text stays as the source wrote it.
+		expect(normalizeAdminFieldValue(language, "English", { keepUnparsed: true })).toEqual({ value: "English" });
+		// Every language the editor offers reads back as itself, and each of these forms is that language.
+		for (const { code, name } of LANGUAGES) expect([languageCode(code), languageCode(name)]).toEqual([code, code]);
+		expect(["eng", "en-US", "iw", "tw", "Kiswahili", "English; French", "xx"].map(languageCode)).toEqual(["en", "en", "he", "ak", "", "", ""]);
+		expect(new Set(LANGUAGES.map(({ name }) => name)).size).toBe(LANGUAGES.length);
 	});
 
 	it("exposes the access date rule the public page uses to hide non-dates", () => {

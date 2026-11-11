@@ -5,6 +5,7 @@ import {
 	type PublicationMetadata,
 } from "@opendeved/doi-sync-core/metadata";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
+import { languageCode } from "@/lib/languages";
 import { studyType } from "@/lib/readings/study-types";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import type { PublicationRecordExtras } from "./record-extras";
@@ -162,7 +163,8 @@ export function publicationRecordMetadata(
 ): PublicationMetadata & { fields: JsonObject } {
 	const optional = {
 		abstract: normalizeText(record.abstractNote),
-		language: normalizeText(record.languageName),
+		// The code of the language the record names ("English" is "en"); text that names none goes as it is, and the provider says so.
+		language: normalizeText(languageCode(record.languageName ?? "") || record.languageName),
 		publisher: normalizeText(record.publisher),
 		institution: recordInstitution(record),
 		rights: normalizeText(record.rights),
