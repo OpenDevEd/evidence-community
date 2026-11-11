@@ -118,3 +118,33 @@ h6 {
 [data-offscreen] *::after {
 	animation-play-state: paused !important;
 }
+
+/*
+ * On a phone whose admin header is too narrow for its first row's buttons at the text size in use (large text, where
+ * a rem is large and 20rem is wider than the screen), the community tools take a row of their own under the logo, on
+ * the right, and wrap if they still don't fit. At normal text, and from sm up, the header is as it was. Plain CSS: the
+ * container queries plugin has no max-width variant.
+ */
+@media (max-width: 639px) {
+	@container admin (width < 20rem) {
+		.admin-toolbar-tools {
+			grid-column: 1 / -1;
+			grid-row-start: 2;
+			justify-self: end;
+		}
+
+		.admin-toolbar-tools > [role="group"] {
+			height: auto;
+			flex-wrap: wrap;
+			justify-content: flex-end;
+		}
+
+		.admin-toolbar-search {
+			grid-row-start: 3;
+		}
+
+		.admin-toolbar-views {
+			grid-row-start: 4;
+		}
+	}
+}
