@@ -784,6 +784,15 @@ for (const profileAvailable of [true, false]) {
 				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && !url.searchParams.has("author"));
 				await expect(page.getByRole("heading", { name: expectedSearchItemTitle, exact: true })).toBeVisible();
 				await expect(authorChip).toHaveCount(0);
+				// A filter that ends while the list is hidden behind a record takes its chip with it.
+				await page.getByRole("link", { name: expectedSearchItemTitle }).click();
+				await author.click();
+				await expect(authorChip).toBeVisible();
+				await page.goBack();
+				await expect(page).toHaveURL(url => url.pathname.endsWith(`/lib/${expectedSearchItemKey}`));
+				await page.goBack();
+				await expect(page).toHaveURL(url => url.pathname.endsWith("/lib") && !url.searchParams.has("author"));
+				await expect(authorChip).toHaveCount(0);
 			} else {
 				await expect(author).not.toHaveAttribute("href", /[?&]author=/);
 				const itemUrl = page.url();
