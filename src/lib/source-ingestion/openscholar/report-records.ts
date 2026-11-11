@@ -12,7 +12,7 @@ import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 
 import { itemUpsertSchema } from "../batch-schema";
 import { withdrawSourceRecords } from "../openalex/reconciliation";
-import type { OpenAlexSourceOptions } from "../openalex/sync";
+import { writeChunks, type OpenAlexSourceOptions } from "../openalex/sync";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { reportPdfRecordKey, reportSourceItems } from "./report-record";
 
@@ -43,19 +43,25 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 	const pdfs = options.attachmentProcessor;
 	if (!pdfs) throw new Error("A source that holds Openscholar Reports needs the PDF stage to host their PDFs");
 	const live = held.filter(({ report }) => report.state === "live");
-	// A batch holds 5,000 items, and a report is two with its PDF.
-	for (let at = 0; at < live.length; at += REPORTS_PER_BATCH) {
-		const items = live.slice(at, at + REPORTS_PER_BATCH).flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : [])).map((record) => itemUpsertSchema.parse(record));
-		await mapWithConcurrency(items.flatMap((record, index) => (record.file ? [index] : [])), PDFS_AT_ONCE, async (index) => {
-			await context.heartbeat();
-			items[index] = await pdfs(items[index]!, context.sourceConnection.key);
+	try {
+		for (let at = 0; at < live.length; at += REPORTS_PER_BATCH) {
+			const items = live.slice(at, at + REPORTS_PER_BATCH).flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : [])).map((record) => itemUpsertSchema.parse(record));
+			await mapWithConcurrency(items.flatMap((record, index) => (record.file ? [index] : [])), PDFS_AT_ONCE, async (index) => {
+				await context.heartbeat();
+				items[index] = await pdfs(items[index]!, context.sourceConnection.key);
+			});
+			// A PDF carries its text, so a batch is split by its size, as a scan's page is.
+			for (const chunk of writeChunks(items)) await writeReports(context, chunk);
+		}
+		const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
+		if (withdrawn.length) await withdrawReports(context, withdrawn);
+	} finally {
+		// Files a write replaced or deleted, and ones staged for a write that failed or never came. Left queued if this
+		// fails, for the next sync.
+		await pdfs.flushCleanup(context.sourceConnection.key).catch((error: unknown) => {
+			console.error("[reports] couldn't clean up report PDFs' files", { sourceConnectionKey: context.sourceConnection.key, error: String(error) });
 		});
-		await writeReports(context, items);
 	}
-	const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
-	if (withdrawn.length) await withdrawReports(context, withdrawn);
-	// Files a write replaced or deleted, and ones staged for a write that failed.
-	if (live.length || withdrawn.length) await pdfs.flushCleanup(context.sourceConnection.key);
 }
 
 /** Reports' PDFs downloaded at once: they all come from Openscholar. */
@@ -80,8 +86,9 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 async function withdrawReports(context: SourceAdapterContext, withdrawn: readonly HeldReport[]) {
 	// A withdrawn report's PDF is deleted with the file it holds here, which is public: a reinstatement downloads it again.
 	// With no version, so a reinstatement is never taken for an older copy.
-	await writeReports(context, withdrawn.map(({ report }) => ({ operation: "delete", sourceRecordKey: reportPdfRecordKey(report.doi), remoteVersion: null })));
+	// Read before the delete: a PDF another source holds stays public after it, and is unpublished below like the record.
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
+	await writeReports(context, withdrawn.map(({ report }) => ({ operation: "delete", sourceRecordKey: reportPdfRecordKey(report.doi), remoteVersion: null })));
 	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
 	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
 	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
@@ -102,8 +109,8 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
 	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, stillPublic.map(({ key }) => key)), eq(itemFieldOverride.field, "deleted")));
 }
 
-/** Live reports one batch writes. */
-const REPORTS_PER_BATCH = 2_000;
+/** Live reports whose PDFs are processed together before they are written: each holds up to 1.5 MB of text. */
+const REPORTS_PER_BATCH = 50;
 
 /** The source's records that are the PDFs of these DOIs' reports: a report's PDF goes when its record does. */
 export async function reportPdfItems(context: SourceAdapterContext, dois: readonly string[]) {

@@ -341,7 +341,7 @@ async function processAttachments(
 }
 
 /** Splits a page into writes under the batch limit, keeping record order. */
-function writeChunks(items: SourceItemUpsert[]) {
+export function writeChunks(items: SourceItemUpsert[]) {
 	const chunks: SourceItemUpsert[][] = [[]];
 	let bytes = 0;
 	for (const record of items) {
