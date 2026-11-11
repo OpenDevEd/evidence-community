@@ -52,6 +52,18 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 		return "withdrawn";
 	}
 	if (actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can remove a paper from the community.");
+	await removePublishedPaper(db, itemKey);
+	return "removed";
+}
+
+/**
+ * Takes a published paper off Added papers: unpublished unless another source still brings it, and the source lets go
+ * of it and of what it brought with it.
+ */
+async function removePublishedPaper(db: Database, itemKey: string) {
+	// Children still public now: only their deleted marks can come from this removal. One the team had unpublished
+	// itself keeps its mark.
+	const liveChildren = (await db.select({ key: item.key }).from(item).where(and(eq(item.parentItem, itemKey), eq(item.deleted, 0)))).map((child) => child.key);
 	const keptBefore = await keptElsewhere(db, itemKey);
 	if (!keptBefore) await unpublishNativeItemWithOutcome(db, itemKey);
 	// Taken off, it's no longer one of the added papers: the source lets go of its work and of what it brought with it,
@@ -75,8 +87,7 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 	// A child keeps its source record key, such as a report PDF's `doi:pdf:<doi>`, so the paper added again brings the
 	// same child back. The unpublish marked it deleted as the team's own choice, which no source undoes: that mark goes
 	// with the paper, or the child would stay deleted under the new record.
-	if (!keptAfter) await db.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, childrenOf(db, itemKey)), eq(itemFieldOverride.field, "deleted")));
-	return "removed";
+	if (!keptAfter && liveChildren.length) await db.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, liveChildren), eq(itemFieldOverride.field, "deleted")));
 }
 
 const childrenOf = (db: Database | DatabaseTransaction, itemKey: string) => db.select({ key: item.key }).from(item).where(eq(item.parentItem, itemKey));
