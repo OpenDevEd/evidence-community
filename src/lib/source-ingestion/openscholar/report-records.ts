@@ -86,9 +86,10 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 
 async function withdrawReports(context: SourceAdapterContext, withdrawn: readonly HeldReport[]) {
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
-	await removeHostedPdfs(context, pdfs);
 	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
 	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
+	// Only once the withdrawal held: it is refused if the source changed meanwhile, and then the files stay.
+	await removeHostedPdfs(context, pdfs);
 	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
 	// Openscholar is public nowhere: what is still live is unpublished, which keeps the team's edits out of sight
 	// with the record, for an editor to restore if the report is reinstated.
