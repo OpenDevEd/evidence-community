@@ -4,8 +4,8 @@ vi.mock("server-only", () => ({}));
 // A report's PDF is downloaded from Openscholar through the public fetch.
 vi.mock("undici", async (importOriginal) => ({ ...(await importOriginal<typeof import("undici")>()), fetch: vi.fn() }));
 
-import { and, desc, eq } from "drizzle-orm";
-import { itemDraft, itemSourceLink, sourceConnection } from "@opendeved/evidence-library-core";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { itemDraft, itemSourceLink, outbox, sourceConnection } from "@opendeved/evidence-library-core";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
@@ -671,8 +671,11 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		// While a connected collection brings it too, taking it off Added papers leaves it public, PDF and all.
 		await db.insert(sourceConnection).values({ key: "openscholar-c1", provider: "openscholar", scopeKind: "collection", externalScopeKey: "c1", config: {} });
 		await db.insert(itemSourceLink).values({ itemKey: newKey, sourceConnectionKey: "openscholar-c1", sourceRecordKey: `doi:${doi}` });
+		await db.update(outbox).set({ processedAt: new Date() }).where(eq(outbox.entityKey, newKey));
 		expect(await removeAddedPaper(db, newKey, { userId: owner.userId, role: "owner" })).toBe("removed");
 		expect(await record(db, newKey)).toMatchObject({ deleted: 0 });
+		// It is searched again, without Added papers among its sources.
+		expect(await db.select({ operation: outbox.operation }).from(outbox).where(and(eq(outbox.entityKey, newKey), isNull(outbox.processedAt)))).toEqual([{ operation: "upsert" }]);
 		expect(await pdfOf(newKey)).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
 
 		// Given by its OpenAlex work alone, a report is still taken from Openscholar: its DOI is learned from the work.

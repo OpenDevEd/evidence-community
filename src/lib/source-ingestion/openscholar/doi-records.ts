@@ -124,11 +124,10 @@ export async function syncDoiRecords(
 	// A report's PDF leaves with it: nothing else withdraws a record under a DOI's key.
 	const pdfs = await reportPdfItems(context, left.map(([doi]) => doi));
 	await withdrawSourceRecords(context.database, asRead(context), [...repeats, ...left.map(([, itemKey]) => itemKey), ...pdfs], "This edited record is no longer in the connected Openscholar collection.");
-	// A report that left takes its stored PDF with it, unless something else still keeps its record.
-	if (pdfs.length) {
-		await removeLeftReportFiles(context);
-		await options.attachmentProcessor?.flushCleanup(context.sourceConnection.key);
-	}
+	// A report that left takes its stored PDF with it, unless something else still keeps its record. Every sync, so one
+	// that stopped after the withdrawal is finished by the next.
+	await removeLeftReportFiles(context);
+	await options.attachmentProcessor?.flushCleanup(context.sourceConnection.key);
 	const before = recordByDoi ? await becameWorks(context) : new Set<string>();
 	const looked = recordByDoi ? await lookUp(dois.filter((doi) => !works.has(doi) && !records.has(doi) && !before.has(doi) && !reports.has(doi)), recordByDoi) : [];
 	if (looked.length) {
@@ -152,6 +151,6 @@ export async function syncDoiRecords(
 }
 
 /** Withdraws every record the source made from a DOI, as when the library loses the collection. */
-export async function withdrawDoiRecords(context: SourceAdapterContext) {
-	await syncDoiRecords(context, { dois: [], works: new Map() });
+export async function withdrawDoiRecords(context: SourceAdapterContext, options: OpenAlexSourceOptions) {
+	await syncDoiRecords(context, { dois: [], works: new Map() }, options);
 }

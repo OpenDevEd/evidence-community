@@ -2,7 +2,8 @@ import { itemSourceLink } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { addedPaper, sourceConnection } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemFieldOverride } from "@/db/schema/topics";
@@ -51,27 +52,37 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 		return "withdrawn";
 	}
 	if (actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can remove a paper from the community.");
-	const unpublished = !(await keptElsewhere(db, itemKey));
-	if (unpublished) await unpublishNativeItemWithOutcome(db, itemKey);
+	const keptBefore = await keptElsewhere(db, itemKey);
+	if (!keptBefore) await unpublishNativeItemWithOutcome(db, itemKey);
 	// Taken off, it's no longer one of the added papers: the source lets go of its work and of what it brought with it,
 	// such as a report's PDF, so the paper can be added again as a new record with its own, and its sync doesn't bring
-	// it back.
-	await db.transaction(async (transaction) => {
-		const children = transaction.select({ key: item.key }).from(item).where(eq(item.parentItem, itemKey));
+	// it back. Under the source writers' lock, so a collection letting go of the same record meanwhile is counted here,
+	// and counts this removal in turn.
+	const keptAfter = await db.transaction(async (transaction) => {
+		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+		const kept = await keptElsewhere(transaction, itemKey);
 		await transaction
 			.delete(itemSourceLink)
-			.where(and(eq(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY), or(eq(itemSourceLink.itemKey, itemKey), inArray(itemSourceLink.itemKey, children))));
-		// A child keeps its source record key, such as a report PDF's `doi:pdf:<doi>`, so the paper added again brings
-		// the same child back. The unpublish above marked it deleted as the team's own choice, which no source undoes:
-		// that mark goes with the paper, or the child would stay deleted under the new record.
-		if (unpublished) await transaction.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, children), eq(itemFieldOverride.field, "deleted")));
+			.where(and(eq(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY), or(eq(itemSourceLink.itemKey, itemKey), inArray(itemSourceLink.itemKey, childrenOf(transaction, itemKey)))));
 		await transaction.delete(addedPaper).where(eq(addedPaper.itemKey, itemKey));
+		// Kept as another source's, it is searched again: Added papers no longer counts among its sources.
+		const [record] = kept ? await transaction.select({ itemKey: item.key, revision: item.revision }).from(item).where(and(eq(item.key, itemKey), eq(item.deleted, 0))) : [];
+		if (record) await enqueueItemSearchReprojections(transaction, [record], new Date(), null);
+		return kept;
 	});
+	// The other source let it go meanwhile: nothing brings it now.
+	if (keptBefore && !keptAfter) await unpublishNativeItemWithOutcome(db, itemKey);
+	// A child keeps its source record key, such as a report PDF's `doi:pdf:<doi>`, so the paper added again brings the
+	// same child back. The unpublish marked it deleted as the team's own choice, which no source undoes: that mark goes
+	// with the paper, or the child would stay deleted under the new record.
+	if (!keptAfter) await db.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, childrenOf(db, itemKey)), eq(itemFieldOverride.field, "deleted")));
 	return "removed";
 }
 
+const childrenOf = (db: Database | DatabaseTransaction, itemKey: string) => db.select({ key: item.key }).from(item).where(eq(item.parentItem, itemKey));
+
 /** Whether a source other than Added papers still brings this record, as a withdrawal counts one. */
-async function keptElsewhere(db: Database, itemKey: string) {
+async function keptElsewhere(db: Database | DatabaseTransaction, itemKey: string) {
 	const [other] = await db
 		.select({ key: itemSourceLink.sourceConnectionKey })
 		.from(itemSourceLink)
