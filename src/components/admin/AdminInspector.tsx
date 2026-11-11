@@ -2261,7 +2261,8 @@ export function AdminInspector({
 						onChange={patchPayload}
 						payload={payload}
 						readOnly={readOnly}
-						registersDoi={Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice)}
+						// Until a record made here is known to have no DOI choice, it counts as registering its own.
+						registersDoi={readOnlyVersion ? Boolean(publishingChoice) : detail.kind === "created" && publishing?.saved.data?.choice !== null}
 						lockedDoi={
 							publication.publication?.providers.zenodo.exact
 								.targetActive &&

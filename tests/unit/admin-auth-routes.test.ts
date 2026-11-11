@@ -23,6 +23,7 @@ vi.mock("@/config/library-config/server", () => ({
 		},
 		identity: { baseUrl: "https://library.example.org" },
 		localization: { defaultLocale: "en-GB" },
+		services: { publication: { crossref: { enabled: false }, zenodo: { enabled: false } } },
 	}),
 }));
 vi.mock("@/lib/readers/instance", () => ({

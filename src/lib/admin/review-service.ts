@@ -95,8 +95,18 @@ export async function getItemPublishingChoice(
 	};
 }
 
-function assertPublishingChoiceAllowed(state: PublishingChoiceState, choice: PublishingChoice | null) {
-	if (choice && zenodoPolicyChangeReason(state.lockedIdentifierPolicy, choice.identifierPolicy))
+/**
+ * Refuses a DOI route the community can't follow, when it is chosen and again when it is submitted: one saved before
+ * a provider was switched off would otherwise only fail at publishing. Every DOI here is archived on Zenodo.
+ */
+function assertPublishingChoiceAllowed(state: PublishingChoiceState, choice: PublishingChoice | null, config: Pick<LibraryServerConfig, "services">) {
+	if (!choice) return;
+	const { crossref, zenodo } = config.services.publication;
+	if (!zenodo.enabled)
+		throw new AdminValidationError("This community hasn't set up Zenodo, so it can't register DOIs. Switch \"Register a DOI\" off to publish without one.");
+	if (choice.route === "crossref-zenodo" && !crossref.enabled)
+		throw new AdminValidationError("This community hasn't set up Crossref. Choose Zenodo, or switch \"Register a DOI\" off.");
+	if (zenodoPolicyChangeReason(state.lockedIdentifierPolicy, choice.identifierPolicy))
 		throw new ZenodoIdentifierPolicyLockedError();
 }
 
@@ -107,12 +117,6 @@ export async function setItemPublishingChoice(
 	config: Pick<LibraryServerConfig, "services">,
 ) {
 	const choice = publishingChoiceSchema.nullable().parse(input);
-	// Refused when it is chosen, not when the record is published: every DOI here is archived on Zenodo.
-	const { crossref, zenodo } = config.services.publication;
-	if (choice && !zenodo.enabled)
-		throw new AdminValidationError("This community hasn't set up Zenodo, so it can't register DOIs.");
-	if (choice?.route === "crossref-zenodo" && !crossref.enabled)
-		throw new AdminValidationError("This community hasn't set up Crossref.");
 	return db.transaction(async (transaction) => {
 		await lockItemMutations(transaction, [itemKey]);
 		const [identity] = await transaction
@@ -131,7 +135,7 @@ export async function setItemPublishingChoice(
 				"Choose identifiers on the parent item.",
 			);
 		const state = await getItemPublishingChoice(transaction, itemKey, config);
-		assertPublishingChoiceAllowed(state, choice);
+		assertPublishingChoiceAllowed(state, choice, config);
 		if (choice === null) {
 			if (!state.canClear)
 				throw new AdminValidationError(
@@ -186,7 +190,7 @@ async function submissionPublishingChoice(
 			"Resolve the working draft conflicts before submitting again.",
 		);
 	const state = await getItemPublishingChoice(transaction, itemKey, config);
-	assertPublishingChoiceAllowed(state, state.choice);
+	assertPublishingChoiceAllowed(state, state.choice, config);
 	return state.choice;
 }
 

@@ -16,6 +16,20 @@ import { useAdminSession } from "./AdminSessionProvider";
 
 /** Said in place of a DOI choice the community can't make: every DOI here is archived on Zenodo. */
 const NO_DOI_PROVIDER = "This community hasn't set up Zenodo, so it can't register DOIs. Records publish without one.";
+/** Said beside a DOI choice saved before Zenodo was switched off: it stays in view so it can be switched off. */
+export function ZenodoOff({ className }: { className: string }) {
+	return useAdminSession().doiProviders.zenodo ? null : (
+		<p role="alert" className={className}>
+			This community hasn&apos;t set up Zenodo, so nothing can publish with a DOI. Switch this off to publish without one.
+		</p>
+	);
+}
+
+/** Whether a DOI choice shows: where Zenodo is set up, or to switch off a route chosen before it was switched off. */
+export function useDoiOffer(chosen: boolean) {
+	const { doiProviders } = useAdminSession();
+	return { crossref: doiProviders.crossref, shown: doiProviders.zenodo || chosen };
+}
 const NO_CROSSREF = "This community hasn't set up Crossref.";
 
 function defaultPublishingChoice(lockedPolicy: PublishingChoiceState["lockedIdentifierPolicy"] | undefined): PublishingChoice {
@@ -69,12 +83,11 @@ type PanelProps = {
 
 /** A record's DOI: kept as it came, chosen here, or not on offer in a community that hasn't set up Zenodo. */
 export function RecordDoiPanel(props: PanelProps) {
-	const { doiProviders } = useAdminSession();
 	const { saved, saving } = props.model;
 	const chosen = props.choice === undefined ? saved.data?.choice : props.choice;
+	const offer = useDoiOffer(Boolean(chosen));
 	if (props.detail.kind === "imported") return <ExistingPublication />;
-	// A choice saved before Zenodo was switched off stays in view, so it can be switched off: publishing refuses it.
-	if (!doiProviders.zenodo && !chosen)
+	if (!offer.shown)
 		return <p className="py-1 text-[11px] leading-relaxed text-black/50 dark:text-white/50">{NO_DOI_PROVIDER}</p>;
 	return (
 		<PublishingChoicePanel
@@ -84,7 +97,7 @@ export function RecordDoiPanel(props: PanelProps) {
 			value={chosen ?? null}
 			disabled={props.readOnly || saving || saved.isLoading || Boolean(saved.error)}
 			model={props.model}
-			crossref={doiProviders.crossref}
+			crossref={offer.crossref}
 		/>
 	);
 }
@@ -230,14 +243,9 @@ function IdentifierError({
 	model: ReturnType<typeof usePublishingChoice>;
 }) {
 	const { error, saved, reservation } = model;
-	const { doiProviders } = useAdminSession();
 	return (
 		<>
-			{!doiProviders.zenodo && (
-				<p role="alert" className="px-3 pt-3 text-xs text-danger">
-					This community hasn&apos;t set up Zenodo, so this record can&apos;t publish with a DOI. Switch this off to publish without one.
-				</p>
-			)}
+			<ZenodoOff className="px-3 pt-3 text-xs text-danger" />
 			{(error || saved.error || reservation.error) && (
 				<p role="alert" className="px-3 pt-3 text-xs text-danger">
 					{error ??
