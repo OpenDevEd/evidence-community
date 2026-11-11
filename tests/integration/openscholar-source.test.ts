@@ -467,5 +467,7 @@ it("takes an Openscholar Report from Openscholar alone, with its PDF, and follow
 		version = "v3";
 		await sync();
 		expect([...(await activeKeys(db, "openscholar-c1")).keys()].sort()).toEqual(["W2", "doi:10.1000/w6"]);
+		// Its stored PDF is deleted too: a withdrawal on Openscholar no longer reaches a community that let it go.
+		expect(pdfs.publicFiles.size).toBe(0);
 	});
 }, 120_000);

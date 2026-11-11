@@ -1,9 +1,12 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { enqueueItemSearchReprojections } from "@/lib/publication/queue";
 import { addedPaper, sourceConnection } from "@/db/schema/source";
+import { item } from "@/db/schema/tables/item";
+import { itemFieldOverride } from "@/db/schema/topics";
 import { addedPapersConfigSchema } from "@/lib/source-ingestion/openalex/schema";
 import { requestSourceRun } from "@/lib/source-ingestion/run-requests";
 
@@ -31,7 +34,8 @@ export const actorSchema = z
 
 /**
  * Takes a paper off the community's added papers. One waiting for review is withdrawn from the queue: a Creator
- * withdraws only their own. One on the community is unpublished, as the admin's Unpublish does, by an Editor or Owner.
+ * withdraws only their own. One on the community is unpublished, as the admin's Unpublish does, by an Editor or Owner,
+ * unless another source still brings it, such as a connected collection: then it stays, as theirs.
  */
 export async function removeAddedPaper(db: Database, itemKey: string, sender: { userId: string; role: ReviewActor["role"] | "reader" }): Promise<"withdrawn" | "removed"> {
 	const actor = reviewerOf(sender);
@@ -48,14 +52,55 @@ export async function removeAddedPaper(db: Database, itemKey: string, sender: { 
 		return "withdrawn";
 	}
 	if (actor.role === "creator") throw new AdminValidationError("Only an Editor or Owner can remove a paper from the community.");
-	await unpublishNativeItemWithOutcome(db, itemKey);
-	// Taken off, it's no longer one of the added papers: the source lets go of its work, so the paper can be added again
-	// as a new record, and its sync doesn't bring it back.
-	await db.transaction(async (transaction) => {
-		await transaction.delete(itemSourceLink).where(and(eq(itemSourceLink.itemKey, itemKey), eq(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY)));
-		await transaction.delete(addedPaper).where(eq(addedPaper.itemKey, itemKey));
-	});
+	await removePublishedPaper(db, itemKey);
 	return "removed";
+}
+
+/**
+ * Takes a published paper off Added papers: unpublished unless another source still brings it, and the source lets go
+ * of it and of what it brought with it.
+ */
+async function removePublishedPaper(db: Database, itemKey: string) {
+	// Children still public now: only their deleted marks can come from this removal. One the team had unpublished
+	// itself keeps its mark.
+	const liveChildren = (await db.select({ key: item.key }).from(item).where(and(eq(item.parentItem, itemKey), eq(item.deleted, 0)))).map((child) => child.key);
+	const keptBefore = await keptElsewhere(db, itemKey);
+	if (!keptBefore) await unpublishNativeItemWithOutcome(db, itemKey);
+	// Taken off, it's no longer one of the added papers: the source lets go of its work and of what it brought with it,
+	// such as a report's PDF, so the paper can be added again as a new record with its own, and its sync doesn't bring
+	// it back. Under the source writers' lock, so a collection letting go of the same record meanwhile is counted here,
+	// and counts this removal in turn.
+	const keptAfter = await db.transaction(async (transaction) => {
+		await transaction.execute(sql`select pg_advisory_xact_lock(hashtext('new-el:openalex-records'))`);
+		const kept = await keptElsewhere(transaction, itemKey);
+		await transaction
+			.delete(itemSourceLink)
+			.where(and(eq(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY), or(eq(itemSourceLink.itemKey, itemKey), inArray(itemSourceLink.itemKey, childrenOf(transaction, itemKey)))));
+		await transaction.delete(addedPaper).where(eq(addedPaper.itemKey, itemKey));
+		// Kept as another source's, it is searched again: Added papers no longer counts among its sources.
+		const [record] = kept ? await transaction.select({ itemKey: item.key, revision: item.revision }).from(item).where(and(eq(item.key, itemKey), eq(item.deleted, 0))) : [];
+		if (record) await enqueueItemSearchReprojections(transaction, [record], new Date(), null);
+		return kept;
+	});
+	// The other source let it go meanwhile: nothing brings it now.
+	if (keptBefore && !keptAfter) await unpublishNativeItemWithOutcome(db, itemKey);
+	// A child keeps its source record key, such as a report PDF's `doi:pdf:<doi>`, so the paper added again brings the
+	// same child back. The unpublish marked it deleted as the team's own choice, which no source undoes: that mark goes
+	// with the paper, or the child would stay deleted under the new record.
+	if (!keptAfter && liveChildren.length) await db.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, liveChildren), eq(itemFieldOverride.field, "deleted")));
+}
+
+const childrenOf = (db: Database | DatabaseTransaction, itemKey: string) => db.select({ key: item.key }).from(item).where(eq(item.parentItem, itemKey));
+
+/** Whether a source other than Added papers still brings this record, as a withdrawal counts one. */
+async function keptElsewhere(db: Database | DatabaseTransaction, itemKey: string) {
+	const [other] = await db
+		.select({ key: itemSourceLink.sourceConnectionKey })
+		.from(itemSourceLink)
+		.innerJoin(sourceConnection, eq(sourceConnection.key, itemSourceLink.sourceConnectionKey))
+		.where(and(eq(itemSourceLink.itemKey, itemKey), ne(itemSourceLink.sourceConnectionKey, ADDED_PAPERS_SOURCE_CONNECTION_KEY), eq(itemSourceLink.remoteDeleted, false), ne(sourceConnection.status, "removed")))
+		.limit(1);
+	return Boolean(other);
 }
 
 /** Whether the Added papers source syncs, and whether it fetches its papers' PDFs. */

@@ -53,7 +53,7 @@ export async function syncOpenScholarCollection(
 			const gone = goneCode(error);
 			if (!gone) throw error;
 			// Before the works: withdrawing them resets the cursor the DOI records are withdrawn against.
-			await withdrawDoiRecords(context);
+			await withdrawDoiRecords(context, options);
 			await withdrawOpenAlexWorks(context);
 			throw new OpenScholarCollectionGoneError(gone, collectionId);
 		}

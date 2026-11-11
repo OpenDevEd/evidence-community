@@ -1,5 +1,5 @@
 import { itemSourceLink } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 
 import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
@@ -15,7 +15,7 @@ import { itemUpsertSchema } from "../batch-schema";
 import { inUnchangedSource, withdrawSourceRecords } from "../openalex/reconciliation";
 import { writeChunks, type OpenAlexSourceOptions } from "../openalex/sync";
 import { writeSourceIngestionBatch } from "../transactional-writer";
-import { reportPdfRecordKey, reportSourceItems } from "./report-record";
+import { PDF_RECORD, reportPdfRecordKey, reportSourceItems } from "./report-record";
 
 /** The source's configuration and cursor as this sync read them: a change it writes holds only while they stand. */
 export const asRead = (context: SourceAdapterContext) => ({
@@ -56,6 +56,7 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 		}
 		const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 		if (withdrawn.length) await withdrawReports(context, withdrawn);
+		await removeLeftReportFiles(context);
 	} finally {
 		// Files a write replaced or deleted, and ones staged for a write that failed or never came. Left queued if this
 		// fails, for the next sync.
@@ -107,6 +108,24 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
 	// Only for what this withdrawal unpublished: a record or a PDF the team had unpublished itself wasn't public, and
 	// keeps its deletion.
 	if (stillPublic.length) await context.database.delete(itemFieldOverride).where(and(inArray(itemFieldOverride.itemKey, stillPublic.map(({ key }) => key)), eq(itemFieldOverride.field, "deleted")));
+}
+
+/**
+ * Deletes the files of every report PDF whose record is deleted here: a report that left the community, by its
+ * collection, by Added papers or with its source, takes its public copy with it, since a later withdrawal on Openscholar
+ * no longer reaches a community that let it go. Asked every sync, so one that stopped half way is finished by the next.
+ * An OpenAlex work's stored PDF stays for a work that comes back; a report's is downloaded again.
+ */
+export async function removeLeftReportFiles(context: SourceAdapterContext) {
+	await inUnchangedSource(context.database, asRead(context), async (transaction) => {
+		const rows = await transaction
+			.selectDistinct({ itemKey: item.key })
+			.from(item)
+			.innerJoin(itemFilePublication, eq(itemFilePublication.itemKey, item.key))
+			.innerJoin(itemSourceLink, eq(itemSourceLink.itemKey, item.key))
+			.where(and(eq(item.deleted, 1), like(itemSourceLink.sourceRecordKey, `${PDF_RECORD}%`)));
+		await removeHostedPdfs(transaction, context.sourceConnection.key, rows.map((row) => row.itemKey));
+	});
 }
 
 /**
