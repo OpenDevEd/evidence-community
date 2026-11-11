@@ -12,7 +12,9 @@ import type { SourceAdapterContext } from "../adapter";
 import type { JsonValue } from "../batch-schema";
 import { mapWithConcurrency } from "@/lib/map-with-concurrency";
 
-import { itemUpsertSchema } from "../batch-schema";
+import { itemUpsertSchema, MAX_INSTITUTION_FACTS } from "../batch-schema";
+import { chunkValues } from "@/lib/chunk-values";
+import { reportInstitutionFacts } from "@/lib/openscholar-report";
 import { inUnchangedSource, withdrawSourceRecords } from "../openalex/reconciliation";
 import { writeChunks, type OpenAlexSourceOptions } from "../openalex/sync";
 import { writeSourceIngestionBatch } from "../transactional-writer";
@@ -47,13 +49,17 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 	const live = held.filter(({ report }) => report.state === "live");
 	try {
 		for (let at = 0; at < live.length; at += REPORTS_PER_BATCH) {
-			const items = live.slice(at, at + REPORTS_PER_BATCH).flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : [])).map((record) => itemUpsertSchema.parse(record));
+			const batch = live.slice(at, at + REPORTS_PER_BATCH);
+			const items = batch.flatMap(({ recordKey, report }) => (report.state === "live" ? reportSourceItems(report, recordKey) : [])).map((record) => itemUpsertSchema.parse(record));
 			await mapWithConcurrency(items.flatMap((record, index) => (record.file ? [index] : [])), PDFS_AT_ONCE, async (index) => {
 				await context.heartbeat();
 				items[index] = await pdfs(items[index]!, context.sourceConnection.key);
 			});
-			// A PDF carries its text, so a batch is split by its size, as a scan's page is.
-			for (const chunk of writeChunks(items)) await writeReports(context, chunk);
+			// A PDF carries its text, so a batch is split by its size, as a scan's page is; the institutions its reports'
+			// affiliations name go with it.
+			const chunks = writeChunks(items);
+			const facts = chunkValues(reportInstitutionFacts(batch.flatMap(({ report }) => (report.state === "live" ? [report] : []))), MAX_INSTITUTION_FACTS);
+			for (let at = 0; at < Math.max(chunks.length, facts.length); at++) await writeReports(context, chunks[at] ?? [], facts[at] ?? []);
 		}
 		const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 		if (withdrawn.length) await withdrawReports(context, withdrawn);
@@ -136,7 +142,7 @@ async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: 
 /** Reports' PDFs downloaded at once: they all come from Openscholar. */
 const PDFS_AT_ONCE = 4;
 
-async function writeReports(context: SourceAdapterContext, items: readonly unknown[]) {
+async function writeReports(context: SourceAdapterContext, items: readonly unknown[], institutionCountries: readonly unknown[] = []) {
 	const { cursor } = asRead(context);
 	await writeSourceIngestionBatch(context.database, {
 		sourceConnectionKey: context.sourceConnection.key,
@@ -144,11 +150,13 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 		// The source's own cursor stays as it is: these records are outside its scan.
 		expectedCursor: cursor,
 		nextCursor: cursor,
-		mappingProfileVersion: "openscholar-report-v1",
+		// v2: affiliations and topics.
+		mappingProfileVersion: "openscholar-report-v2",
 		sourceSyncRunId: context.run?.id,
 		fetchedAt: new Date(),
 		items,
 		collections: [],
+		institutionCountries,
 	});
 }
 

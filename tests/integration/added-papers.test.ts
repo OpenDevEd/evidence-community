@@ -11,6 +11,7 @@ import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
+import { institutionCountry } from "@/db/schema/tables/institutionCountry";
 import { itemFieldOverride } from "@/db/schema/topics";
 import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
@@ -611,7 +612,7 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		const doi = "10.53832/openscholar-r.r100001";
 		const live = (title: string, version: string): OpenscholarReport => ({
 			state: "live", key: "R100001", doi, version, title, subtitle: "", type: "report", language: "en", date: "2026-11-10", licence: "CC BY 4.0",
-			abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["maize"], series: "Openscholar Reports",
+			abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null, affiliations: [{ id: "https://openalex.org/I4210087849", name: "University of Rwanda", country: "RW", ror: "https://ror.org/00286hs46" }] }], keywords: ["maize"], topics: [{ id: "T10017", name: "Soil and water conservation", score: 0.82 }], series: "Openscholar Reports",
 			pageUrl: "https://openscholar.test/papers/R100001", pdfUrl: "https://openscholar.test/papers/R100001/report.pdf",
 		});
 		const reports = new Map<string, OpenscholarReport>([[doi, live("Shade trees and maize yields", "2026-11-10T08:00:00.000Z")]]);
@@ -629,6 +630,10 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		const downloads = () => vi.mocked(transport).mock.calls.map(([url]) => String(url));
 		const hosted = async () => (await db.select({ url: item.url, deleted: item.deleted }).from(item).where(eq(item.parentItem, key)));
 		expect((await sync(db, world.fetch, pdfs)).unresolved).toBe(0);
+		// Its author's affiliation is the creator's institution, placed in its country with its OpenAlex ID, and its topic is
+		// the record's, as an OpenAlex work's are.
+		expect(await db.select({ creators: item.creators, topics: item.topics }).from(item).where(eq(item.key, key))).toEqual([{ creators: [{ creatorType: "author", name: "Chikondi Banda", institutions: [{ display_name: "University of Rwanda" }] }], topics: ["T10017"] }]);
+		expect(await db.select({ countryCode: institutionCountry.countryCode, openalexId: institutionCountry.openalexId }).from(institutionCountry)).toEqual([{ countryCode: "RW", openalexId: "I4210087849" }]);
 		expect(world.askedOfOpenAlex.filter((filter) => filter.includes(doi))).toEqual([]);
 		expect((await db.select().from(addedPaper).where(eq(addedPaper.itemKey, key)))[0]?.openalexId).toBeNull();
 		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\/.+\/document\.pdf$/u), deleted: 0 }]);
@@ -700,7 +705,7 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 /** A report as Openscholar answers for it while it is live. */
 const liveReport = (doi: string, key: string): OpenscholarReport => ({
 	state: "live", key, doi, version: "2026-11-10T08:00:00.000Z", title: "Mulch and school gardens", subtitle: "", type: "report", language: "en", date: "2026-11-10",
-	licence: "CC BY 4.0", abstract: "We measure infiltration.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["mulch"], series: "Openscholar Reports",
+	licence: "CC BY 4.0", abstract: "We measure infiltration.", authors: [{ name: "Chikondi Banda", orcid: null, affiliations: [] }], keywords: ["mulch"], topics: [], series: "Openscholar Reports",
 	pageUrl: `https://openscholar.test/papers/${key}`, pdfUrl: `https://openscholar.test/papers/${key}/report.pdf`,
 });
 
@@ -776,7 +781,7 @@ it("imports an Openscholar Report by its DOI from Openscholar's own details, and
 		const reports = new Map<string, OpenscholarReport>([
 			[live, {
 				state: "live", key: "R100001", doi: live, version: "2026-11-10T08:00:00.000Z", title: "Shade trees and maize yields", subtitle: "Evidence from three seasons", type: "report", language: "en", date: "2026-11-10",
-				licence: "CC BY 4.0", abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["maize"], series: "Openscholar Reports",
+				licence: "CC BY 4.0", abstract: "We measure maize yields on 640 plots.", authors: [{ name: "Chikondi Banda", orcid: null, affiliations: [] }], keywords: ["maize"], topics: [], series: "Openscholar Reports",
 				pageUrl: "https://openscholar.test/papers/R100001", pdfUrl: "https://openscholar.test/papers/R100001/report.pdf",
 			}],
 			[withdrawn, { state: "withdrawn", key: "R100009", doi: withdrawn, version: "2026-11-12T09:00:00.000Z" }],
