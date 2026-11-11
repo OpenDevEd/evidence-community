@@ -11,6 +11,7 @@ import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
+import { itemFieldOverride } from "@/db/schema/topics";
 import { addedPapersSettings, removeAddedPaper, setAddedPapersSettings } from "@/lib/admin/added-papers-manage";
 import { listAddedPapers, previewPapers } from "@/lib/admin/added-papers-reads";
 import { addPapers, SUGGESTIONS_PER_PERSON_DAY, type PaperLookup } from "@/lib/admin/added-papers-service";
@@ -22,7 +23,7 @@ import { submissionStatusDelivery } from "@/db/schema/source";
 import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { REPORTS_PATH, type OpenscholarReport } from "@/lib/openscholar-service";
 import { AdminValidationError } from "@/lib/admin/errors";
-import { unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { createNativeItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
 import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
@@ -30,6 +31,7 @@ import { readItemSources } from "@/lib/search-index/item-sources";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { itemFilePublication } from "@/db/schema/source";
 import { createOpenAlexAttachmentProcessor } from "@/lib/source-ingestion/openalex/attachment-processor";
+import { syncDoiRecords } from "@/lib/source-ingestion/openscholar/doi-records";
 import { MemoryFileStorage, createPdf } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 
@@ -692,6 +694,78 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		// A withdrawn report isn't added.
 		const again = await addPapers(db, storage, config, { requestId: "r-report-2", publish: true, actor: owner, papers: [{ doi: "10.53832/openscholar-r.r100009" }] }, services([], {}, new Map([["10.53832/openscholar-r.r100009", { state: "withdrawn", key: "R100009", doi: "10.53832/openscholar-r.r100009", version: "2026-11-12T09:00:00.000Z" }]])).lookup);
 		expect(again.results).toMatchObject([{ at: 0, outcome: "not_found", message: "This report was withdrawn on Openscholar." }]);
+	});
+});
+
+/** A report as Openscholar answers for it while it is live. */
+const liveReport = (doi: string, key: string): OpenscholarReport => ({
+	state: "live", key, doi, version: "2026-11-10T08:00:00.000Z", title: "Mulch and school gardens", subtitle: "", type: "report", language: "en", date: "2026-11-10",
+	licence: "CC BY 4.0", abstract: "We measure infiltration.", authors: [{ name: "Chikondi Banda", orcid: null }], keywords: ["mulch"], series: "Openscholar Reports",
+	pageUrl: `https://openscholar.test/papers/${key}`, pdfUrl: `https://openscholar.test/papers/${key}/report.pdf`,
+});
+
+/** A connected collection's source, writing a report as its own sync does. */
+async function collectionSource(db: Database, storage: MemoryFileStorage) {
+	await db.insert(sourceConnection).values({ key: "openscholar-c1", provider: "openscholar", scopeKind: "collection", externalScopeKey: "c1", config: {} });
+	const context = async () => ({ database: db, sourceConnection: (await db.select().from(sourceConnection).where(eq(sourceConnection.key, "openscholar-c1")))[0]!, credentialResolver: async () => "test-key", heartbeat: async () => {} });
+	const options = { attachmentProcessor: createOpenAlexAttachmentProcessor({ database: db, storage, maxPdfBytes: 20 * 1024 * 1024 }) };
+	return {
+		hold: async (dois: string[], reports: ReadonlyMap<string, OpenscholarReport>) => syncDoiRecords(await context(), { dois, works: new Map(), reports }, options),
+		remove: () => db.update(sourceConnection).set({ status: "removed" }).where(eq(sourceConnection.key, "openscholar-c1")),
+	};
+}
+
+const publicWithDoi = async (db: Database, doi: string) => (await db.select({ key: item.key }).from(item).where(and(eq(item.DOI, doi), eq(item.deleted, 0)))).map((row) => row.key);
+
+it("takes down a report no source follows any more once Openscholar withdraws it, stored PDF and all", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		vi.mocked(transport).mockReset().mockImplementation(async () => new TransportResponse(await createPdf("Mulch and school gardens")));
+		const storage = new MemoryFileStorage();
+		const doi = "10.53832/openscholar-r.r100035";
+		const reports = new Map([[doi, liveReport(doi, "R100035")]]);
+		const world = services([], {}, reports);
+		const collection = await collectionSource(db, storage);
+		await collection.hold([doi], reports);
+		const [key] = await publicWithDoi(db, doi);
+		expect(storage.publicFiles.size).toBe(2);
+		// The team wrote a note under it, which the record's unpublish would otherwise refuse.
+		const note = await createNativeItemDraft(db, { itemType: "Note", note: "Read with the 2025 baseline.", parentItem: key! });
+		await publishItemDraft(db, note.itemKey);
+
+		// Its collection is removed, which keeps the records it brought; then Openscholar withdraws the report.
+		await collection.remove();
+		reports.set(doi, { state: "withdrawn", key: "R100035", doi, version: "2026-11-12T09:00:00.000Z" });
+		await sync(db, world.fetch, storage);
+		expect(await record(db, key!)).toMatchObject({ deleted: 1 });
+		expect(await record(db, note.itemKey)).toMatchObject({ deleted: 1 });
+		expect(storage.publicFiles.size).toBe(0);
+		// Openscholar's withdrawal, not the team's: nothing marks the record deleted for good, so a source that takes the
+		// report back after a reinstatement brings it back.
+		expect(await db.select({ key: itemFieldOverride.itemKey }).from(itemFieldOverride).where(and(eq(itemFieldOverride.field, "deleted"), eq(itemFieldOverride.itemKey, key!)))).toEqual([]);
+	});
+});
+
+it("keeps one record for a report a collection takes back after Added papers added it again", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		vi.mocked(transport).mockReset().mockImplementation(async () => new TransportResponse(await createPdf("Mulch and school gardens")));
+		const storage = new MemoryFileStorage();
+		const doi = "10.53832/openscholar-r.r100025";
+		const reports = new Map([[doi, liveReport(doi, "R100025")]]);
+		const world = services([], {}, reports);
+		const collection = await collectionSource(db, storage);
+		await collection.hold([doi], reports);
+		// The collection lets it go, and Added papers adds it again: a new record.
+		await collection.hold([], new Map());
+		expect(await publicWithDoi(db, doi)).toEqual([]);
+		const { results } = await addPapers(db, storage, config, { requestId: "r-back", publish: true, actor: owner, papers: [{ doi }] }, world.lookup);
+		await sync(db, world.fetch, storage);
+		// Then the collection has it again: it joins that record rather than bring back its own, and the record is
+		// searched again with the collection among its sources.
+		await db.update(outbox).set({ processedAt: new Date() });
+		await collection.hold([doi], reports);
+		expect(await db.select({ key: outbox.entityKey }).from(outbox).where(and(eq(outbox.entityKey, results[0]!.itemKey!), isNull(outbox.processedAt)))).toEqual([{ key: results[0]!.itemKey }]);
+		expect(await publicWithDoi(db, doi)).toEqual([results[0]!.itemKey]);
+		expect((await db.select({ source: itemSourceLink.sourceConnectionKey }).from(itemSourceLink).where(eq(itemSourceLink.itemKey, results[0]!.itemKey!))).map((row) => row.source).sort()).toEqual(["added-papers", "openscholar-c1"]);
 	});
 });
 

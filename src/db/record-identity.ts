@@ -7,7 +7,7 @@ import {
 	sourceConnection,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, ne, notExists } from "drizzle-orm";
+import { and, eq, inArray, ne, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "./database-schema";
@@ -138,6 +138,34 @@ export async function reserveItemIdentities(
 	return reserveRecordIdentities(db, itemIdentity, options);
 }
 
+/**
+ * This source's own record under a key is deleted, while another source of OpenAlex works holds a public record under
+ * the same key: a paper this source let go of and then took back, such as a report its collection dropped and Added
+ * papers added again meanwhile. This source joins the public record instead of bringing its own back, so one paper is
+ * never two records.
+ */
+async function joinKeptRecords(db: Executor, sourceConnectionKey: string, sourceRecordKeys: readonly string[]) {
+	const keys = sql`ARRAY[${sql.join(sourceRecordKeys.map((key) => sql`${key}`), sql`, `)}]::varchar[]`;
+	const providers = sql`ARRAY[${sql.join(OPENALEX_WORK_PROVIDERS.map((provider) => sql`${provider}`), sql`, `)}]::text[]`;
+	const moves = await db.execute<{ sourceRecordKey: string; kept: string }>(sql`
+		SELECT DISTINCT ON (mine."sourceRecordKey") mine."sourceRecordKey", other."itemKey" AS kept
+		FROM "itemSourceLink" mine
+		JOIN "item" gone ON gone.key = mine."itemKey" AND gone.deleted = 1
+		JOIN "itemSourceLink" other ON other."sourceRecordKey" = mine."sourceRecordKey" AND other."sourceConnectionKey" <> mine."sourceConnectionKey" AND NOT other."remoteDeleted"
+		JOIN "sourceConnection" c ON c.key = other."sourceConnectionKey" AND c.status <> 'removed' AND c.provider = ANY(${providers})
+		JOIN "item" kept ON kept.key = other."itemKey" AND kept.deleted = 0
+		WHERE mine."sourceConnectionKey" = ${sourceConnectionKey} AND mine."sourceRecordKey" = ANY(${keys})
+			AND NOT EXISTS (SELECT 1 FROM "itemSourceLink" taken WHERE taken."itemKey" = other."itemKey" AND taken."sourceConnectionKey" = ${sourceConnectionKey})
+		ORDER BY mine."sourceRecordKey", other."itemKey"`);
+	if (!moves.rows.length) return [];
+	// The deleted record's copy from this source goes with its link (its snapshot cascades); the write that follows
+	// gives the kept record this source's copy.
+	await db.delete(itemSourceLink).where(and(eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey), inArray(itemSourceLink.sourceRecordKey, moves.rows.map((row) => row.sourceRecordKey))));
+	await db.insert(itemSourceLink).values(moves.rows.map((row) => ({ itemKey: row.kept, sourceConnectionKey, sourceRecordKey: row.sourceRecordKey }))).onConflictDoNothing();
+	// Joined as a newly shared record is, so it is searched again with this source among its sources.
+	return moves.rows.map((row) => row.kept);
+}
+
 export async function reserveItemSourceLinks(
 	db: Executor,
 	{
@@ -201,6 +229,7 @@ export async function reserveItemSourceLinks(
 				ne(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
 				inArray(itemSourceLink.sourceRecordKey, uniqueSourceRecordKeys),
 			));
+		for (const itemKey of await joinKeptRecords(db, sourceConnectionKey, uniqueSourceRecordKeys)) joined.add(itemKey);
 		const shared = [...new Map([...byLink, ...byIdentity].map((row) => [row.sourceRecordKey, row])).values()];
 		if (shared.length) {
 			const added = await db.insert(itemSourceLink)
