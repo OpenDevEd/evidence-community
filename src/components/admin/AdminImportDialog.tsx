@@ -139,7 +139,7 @@ function reviewNote(flow: ImportFlowState, canPublish: boolean) {
 function sendNote(flow: ImportFlowState, canPublish: boolean) {
 	const held = flow.selected.size - sendableCount(flow);
 	if (held) return `${held} ${held === 1 ? "stays a draft" : "stay drafts"} to complete in the editor`;
-	return canPublish ? "Each goes on as its PDF attaches" : "Sent to the review queue as their PDFs attach";
+	return canPublish ? "Each goes on as its PDF attaches" : "Sent to an editor for review as their PDFs attach";
 }
 
 /** The import's main button: importing alone, or importing and sending on, published or to the review queue. */

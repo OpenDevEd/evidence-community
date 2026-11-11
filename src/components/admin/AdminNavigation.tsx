@@ -208,13 +208,15 @@ function SourceList({ source, sources, onSelectSource, onOpenSourceSync }: { sou
 function KindList({ kind, reviewQueue, onSelectKind, onSelectReviewQueue }: { kind: string | null; reviewQueue: boolean; onSelectKind: (kind: "all" | "created" | "imported") => void; onSelectReviewQueue: () => void }) {
 	const digests = useContext(DigestsPage);
 	const { data: awaitingReview = 0 } = useSWR("admin-review-count", getAdminReviewCount);
+	const { canPublish } = useAdminSession();
 	const onDigests = digests?.selected ?? false;
 	return (
 		<div className="shrink-0">
 			<NavigationHeading icon={ListIcon} title="Kind" />
 			<div className={navigationListSurfaceClass}>
 				{kindOptions.map(({ key, label, icon }) => <NavigationItem key={key} icon={icon} label={label} pressed={!onDigests && kind === key} onPress={() => onSelectKind(key)} />)}
-				<NavigationItem icon={InboxIcon} label="Review queue" count={awaitingReview} pressed={!onDigests && reviewQueue} onPress={onSelectReviewQueue} />
+				{/* A queue is something to work through, which only an Editor or Owner does: a Creator is shown the same records as what waits for one. */}
+				<NavigationItem icon={InboxIcon} label={canPublish ? "Review queue" : "Waiting for an editor"} count={awaitingReview} pressed={!onDigests && reviewQueue} onPress={onSelectReviewQueue} />
 				{digests && <NavigationItem icon={News01Icon} label="Digests" count={digests.waiting} pressed={onDigests} onPress={digests.onOpen} />}
 			</div>
 		</div>
