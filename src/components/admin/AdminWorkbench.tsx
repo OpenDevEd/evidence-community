@@ -2277,7 +2277,7 @@ export default function AdminWorkbench({
 								/>), [filters.reviewQueue, filters.filters, selectNavigationFilter, collectionFilter, busy, openCreateCollection, removeCollection, openRenameCollection, openMoveCollection, restoreCollection, sourceFilter, library.sources, stateFilter]);
 
 	return (
-		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
+		<main className="@container/admin fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Community administration</h1>
 			<header
 				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
@@ -2290,7 +2290,7 @@ export default function AdminWorkbench({
 				>
 					<LibraryLogo className="max-w-full" place="admin" />
 				</Link>
-				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:col-span-1 sm:col-start-1 xl:min-w-64 xl:max-w-lg xl:flex-1">
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 admin-toolbar-search sm:col-span-1 sm:col-start-1 xl:min-w-64 xl:max-w-lg xl:flex-1">
 					<Input
 						color="filled"
 						aria-label="Search records"
@@ -2342,7 +2342,7 @@ export default function AdminWorkbench({
 				<div
 					role="group"
 					aria-label="Community panels"
-					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:min-w-72 xl:hidden dark:bg-white/[0.035]"
+					className="col-span-3 row-start-3 flex min-w-0 rounded-xl bg-black/[0.035] p-1 admin-toolbar-views sm:col-span-2 sm:col-start-2 sm:row-start-2 sm:min-w-72 xl:hidden dark:bg-white/[0.035]"
 				>
 					{[
 						{
@@ -2389,7 +2389,8 @@ export default function AdminWorkbench({
 					})}
 				</div>
 				<div className="hidden flex-1 xl:block" />
-				<div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1">
+				{/* On a phone at large text the community tools take a row of their own (admin-toolbar-tools in globals.css). */}
+				<div className="col-start-2 row-start-1 admin-toolbar-tools flex shrink-0 items-center gap-1">
 					<div
 						aria-label="Community tools"
 						className="flex h-10 items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.035]"
