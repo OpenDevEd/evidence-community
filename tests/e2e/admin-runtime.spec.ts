@@ -9,8 +9,6 @@ const runtimeE2e = process.env.PLAYWRIGHT_RUNTIME_E2E === "true";
 /** Picks a record's language from the editor's list, which keeps it as its code. */
 async function chooseLanguage(pane: Locator, name: string) {
 	const language = pane.getByRole("combobox", { name: "Language", exact: true });
-	// In the middle of the pane, so the list has room and reaching an option scrolls nothing: a scroll closes it.
-	await language.evaluate((element) => element.scrollIntoView({ block: "center" }));
 	await language.fill(name);
 	await pane.page().getByRole("option", { name, exact: true }).click();
 }
@@ -204,11 +202,10 @@ test("resolves concurrent draft fields without losing either session's other cha
 		await expect
 			.poll(async () => (await readDraft()).publisher)
 			.toBe("First session publisher");
-		// The language first: the notice that an edit needs a choice moves the pane, which would close its open list.
-		await chooseLanguage(other, "French");
 		await other
 			.getByRole("textbox", { name: "Title", exact: true })
 			.fill("Second session title");
+		await chooseLanguage(other, "French");
 		await other
 			.getByRole("textbox", { name: "Place", exact: true })
 			.fill("Second session place");

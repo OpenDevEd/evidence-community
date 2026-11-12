@@ -3095,8 +3095,6 @@ test("uses controls that preserve every supported metadata value", async ({
 		.toBe(true);
 	// A language is chosen from the list and saved as its code, which the registrars take.
 	const language = inspector.getByRole("combobox", { name: "Language", exact: true });
-	// In the middle of the pane, so the list has room and reaching an option scrolls nothing: a scroll closes it.
-	await language.evaluate((element) => element.scrollIntoView({ block: "center" }));
 	await language.fill("Fren");
 	await page.getByRole("option", { name: "French", exact: true }).click();
 	await expect

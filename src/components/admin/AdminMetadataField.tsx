@@ -278,6 +278,8 @@ function LanguageField(props: CommonFieldProps) {
 			isInvalid={Boolean(error)}
 			menuTrigger="focus"
 			placeholder="Find a language"
+			// The pane scrolls a little when the field takes focus near its edge, and when a notice arrives: the list stays open through it.
+			popoverProps={{ shouldCloseOnScroll: false }}
 			selectedKey={code || null}
 			onSelectionChange={(key) => {
 				const next = typeof key === "string" ? key : "";
