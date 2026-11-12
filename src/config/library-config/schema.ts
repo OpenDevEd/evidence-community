@@ -2401,6 +2401,8 @@ const publicAuthenticationSchema = z
 			accountUrl: publicHttpsUrlSchema,
 			/** Its ID in OpenScholar, which the link to apply to join it names. */
 			libraryId: z.string().regex(/^[a-z0-9]+$/u).max(128),
+			/** The cookie a community on OpenScholar's site follows its session by; null where there is none to follow. */
+			sessionCookie: z.string().regex(/^__client_uat_[\w-]{8}$/u).nullable(),
 			/** The OpenScholar this library belongs to, which every link to OpenScholar is built on. */
 			siteUrl: publicHttpsOriginSchema,
 		}).strict(),

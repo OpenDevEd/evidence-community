@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 export const OPENSCHOLAR_PROVIDER_ID = "openscholar";
@@ -32,4 +34,17 @@ export function openScholarReader(profile: OpenScholarProfile) {
 
 export function openScholarDiscoveryUrl(config: LibraryServerConfig) {
 	return new URL("/.well-known/openid-configuration", config.authentication.openScholar.oauth.issuer).toString();
+}
+
+/**
+ * The cookie Clerk keeps on the whole of OpenScholar's site, holding when its session last changed ("0" once nobody
+ * is signed in). A community on that site reads it to follow the session (`session-follow.ts`). Clerk names it after
+ * the instance's publishable key, which is made from its host. Null for a development instance: its sign-in session
+ * lives on its own Account Portal site, apart from the OpenScholar app's, so there is nothing here to follow.
+ */
+export function openScholarSessionCookie(issuer: string) {
+	const host = new URL(issuer).host;
+	if (host.endsWith(".accounts.dev")) return null;
+	const publishableKey = `pk_live_${Buffer.from(`${host}$`).toString("base64")}`;
+	return `__client_uat_${createHash("sha1").update(publishableKey).digest("base64url").slice(0, 8)}`;
 }

@@ -6,6 +6,7 @@ import {
 import { getEnabledGapMaps } from "./gap-maps";
 import { getRuntimePagePath } from "./links";
 import { getRuntimePageAvailability } from "./pages";
+import { openScholarSessionCookie } from "@/lib/readers/openscholar";
 import { sourcePublishTags } from "@/lib/tags";
 import { offersSources } from "@/lib/search-query";
 import { libraryResultLimit } from "@/lib/search-filter-constants";
@@ -72,6 +73,7 @@ export function projectPublicLibraryConfig(
 			openScholar: {
 				accountUrl: config.authentication.openScholar.accountUrl,
 				libraryId: config.authentication.openScholar.libraryId,
+				sessionCookie: openScholarSessionCookie(config.authentication.openScholar.oauth.issuer),
 				// The site of the library's own page there: a library set up from another OpenScholar links to that one.
 				siteUrl: new URL(config.authentication.openScholar.libraryUrl).origin,
 			},
