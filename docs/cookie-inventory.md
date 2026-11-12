@@ -1,12 +1,13 @@
 # Cookie Inventory
 
-This inventory reflects the current application behavior as of September 12, 2026.
+This inventory reflects the current application behavior as of November 12, 2026.
 
 ## Essential cookies
 
 | Name                                                      | Owner                             | Purpose                                                                                   | Required               | Retention                       | Notes                                                                                                    |
 | --------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `analytics_consent`                                       | First-party application           | Stores analytics and replay preferences, tenant scope, library and built-in policy versions, and decision time. | Yes                    | 180 days                        | PostHog and Google Analytics do not load in the browser unless product analytics is allowed.             |
+| `analytics_consent`                                       | First-party application           | Stores analytics and replay preferences, tenant scope, library and built-in policy versions, and decision time. | Yes                    | 180 days                        | PostHog and Google Analytics do not load in the browser unless product analytics is allowed. Used only by a community outside openscholar.ai. |
+| `openscholar_consent`                                     | Openscholar (domain `openscholar.ai`) | Stores one analytics answer (`granted` or `denied`), its time and Openscholar's policy version, in Openscholar's format (openalex-count `lib/consent-cookie.ts`). | Yes | 1 year | Used instead of `analytics_consent` by a community at an openscholar.ai address, so Openscholar and all those communities share one answer. A yes covers session replay too. |
 | `NEXT_LOCALE`                                             | First-party application / Next.js | Stores the user's language preference.                                                    | Yes                    | Browser-managed                 | Functional cookie for localized routing.                                                                 |
 | `ai_rate_limit_id`                                        | First-party application           | Keeps one anonymous browser quota across AI requests and web processes.                   | Yes when AI is used    | 365 days                        | HTTP-only, same-site cookie scoped to `/api/ai`; it contains a random identifier, not an account ID.     |
 | `__cf_bm`                                                 | Cloudflare                        | Bot-management and abuse detection.                                                       | Yes                    | Cloudflare-managed, short-lived | Security/infrastructure cookie.                                                                          |
@@ -21,7 +22,7 @@ These must not exist before explicit consent is granted.
 
 | Name                                                  | Owner                   | Purpose                                               | Required | Retention          | Notes                                                                  |
 | ----------------------------------------------------- | ----------------------- | ----------------------------------------------------- | -------- | ------------------ | ---------------------------------------------------------------------- |
-| `community_ga` and `community_ga_*`                   | Google Analytics        | Analytics measurement and visit/session attribution.  | No       | Google-managed     | Only loaded when a current `analytics_consent` record allows product analytics.                         |
+| `community_ga` and `community_ga_*`                   | Google Analytics        | Analytics measurement and visit/session attribution.  | No       | Google-managed     | Only loaded when the current consent cookie allows product analytics.                         |
 | `ph_*` cookies                                        | PostHog                 | Analytics persistence for consented PostHog sessions. | No       | PostHog-managed    | Only created after consent. The app clears these on denial/revocation. |
 | `ph_*`, `posthog*`, `posthog-opted` in `localStorage` | PostHog                 | Client analytics persistence.                         | No       | PostHog-managed    | Stored locally, not cookies, but relevant for privacy review.          |
 | `utm:active` in `localStorage`                        | First-party application | Stores consented UTM campaign attribution data.       | No       | Runtime-configured | Removed whenever product analytics is not allowed.                     |
@@ -29,6 +30,6 @@ These must not exist before explicit consent is granted.
 ## Notes for policy drafting
 
 - The security, locale, and sign-in cookies above are not analytics cookies.
-- `analytics_consent` is the only first-party consent cookie introduced by this application for analytics gating. `ai_rate_limit_id` is an essential abuse-prevention cookie and does not enable analytics.
+- `analytics_consent` (outside openscholar.ai) or `openscholar_consent` (at an openscholar.ai address) is the only consent cookie a community reads for analytics gating. `ai_rate_limit_id` is an essential abuse-prevention cookie and does not enable analytics.
 - Google Analytics and PostHog are designed not to load before consent. If they appear before consent, that is a regression.
 - Declined visitors can send strict same-origin aggregate events. Those requests use the consent cookie but create no browser analytics identifier or vendor storage.

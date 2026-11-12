@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { redirect as redirectLocalized } from "@/i18n/routing";
+import { sharesConsentOnHost } from "@/lib/analytics-consent";
 import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getRuntimeLinkHref, getRuntimePagePath } from "@/config/library-config/links";
 
@@ -47,12 +48,12 @@ function hasEnvValue(rawValue: string | undefined) {
 	return Boolean(rawValue?.trim());
 }
 
-function getPolicyConditionalTags() {
-	return new Set(
-		POLICY_VERCEL_ENV_KEYS.some((envKey) => hasEnvValue(process.env[envKey]))
-			? ["Vercel"]
-			: ["DigitalOcean"]
-	);
+function getPolicyConditionalTags(siteHost: string) {
+	return new Set([
+		POLICY_VERCEL_ENV_KEYS.some((envKey) => hasEnvValue(process.env[envKey])) ? "Vercel" : "DigitalOcean",
+		// Whether the cookie choice is Openscholar's shared one (analytics-consent.ts).
+		sharesConsentOnHost(new URL(`https://${siteHost}`).hostname) ? "SharedConsent" : "OwnConsent",
+	]);
 }
 
 function parsePolicyTemplate(content: string): PolicyTemplateNode[] {
@@ -126,7 +127,7 @@ function parsePolicyTemplate(content: string): PolicyTemplateNode[] {
 }
 
 function populatePolicyDocument(content: string, siteHost: string) {
-	const enabledTags = getPolicyConditionalTags();
+	const enabledTags = getPolicyConditionalTags(siteHost);
 
 	return parsePolicyTemplate(content)
 		.map((node) => {

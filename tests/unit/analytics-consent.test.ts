@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS,
 	ANALYTICS_CONSENT_COOKIE_NAME,
+	analyticsConsentCookie,
 	analyticsConsentState,
 	asksAnalyticsConsent,
 	createAnalyticsConsentRecord,
@@ -125,6 +126,64 @@ describe("analytics consent records", () => {
 			readAnalyticsConsentCookieHeader(
 				header,
 				{ ...policy, scope: "https://other.example.org" },
+				now,
+			),
+		).toBeNull();
+	});
+});
+
+// The cookie and its format are Openscholar's (openalex-count `lib/consent-cookie.ts`): its banner and every community
+// on openscholar.ai read and write the same answer.
+describe("one answer across openscholar.ai", () => {
+	const community = { scope: "https://aied.openscholar.ai", version: 3 };
+	const fromOpenscholar = (choice: string) =>
+		encodeURIComponent(JSON.stringify({ choice, timestamp: "2026-11-12T10:00:00.000Z", policyVersion: "1.0" }));
+
+	it("takes the answer given on Openscholar, replay included", () => {
+		expect(
+			readAnalyticsConsentCookieHeader(`NEXT_LOCALE=en; openscholar_consent=${fromOpenscholar("granted")}`, community, now)
+				?.preferences,
+		).toEqual({ analytics: true, sessionReplay: true });
+		expect(
+			analyticsConsentState(readAnalyticsConsentCookieHeader(`openscholar_consent=${fromOpenscholar("denied")}`, community, now)),
+		).toBe("denied");
+		expect(readAnalyticsConsentCookieHeader(`openscholar_consent=${fromOpenscholar("maybe")}`, community, now)).toBeNull();
+	});
+
+	it("ignores a community's own earlier answer there", () => {
+		const own = serializeAnalyticsConsentRecord(createAnalyticsConsentRecord(community, { analytics: true, sessionReplay: true }, now));
+		expect(readAnalyticsConsentCookieHeader(`${ANALYTICS_CONSENT_COOKIE_NAME}=${own}`, community, now)).toBeNull();
+	});
+
+	it("writes the answer where Openscholar reads it", () => {
+		const cookie = analyticsConsentCookie(community, { analytics: true, sessionReplay: false }, { now, secure: true });
+		const [pair, ...attributes] = cookie.split("; ");
+		const [name, value] = pair.split("=");
+		expect(name).toBe("openscholar_consent");
+		expect(JSON.parse(decodeURIComponent(value))).toEqual({
+			choice: "granted",
+			timestamp: new Date(now).toISOString(),
+			policyVersion: "1.0",
+		});
+		expect(attributes).toEqual(expect.arrayContaining(["Domain=openscholar.ai", "Path=/", "Secure"]));
+		expect(analyticsConsentCookie(community, { analytics: false, sessionReplay: false }, { now, secure: true })).toContain(
+			encodeURIComponent('"choice":"denied"'),
+		);
+	});
+
+	it("keeps a community on its own domain to itself", () => {
+		expect(readAnalyticsConsentCookieHeader(`openscholar_consent=${fromOpenscholar("granted")}`, policy, now)).toBeNull();
+		const cookie = analyticsConsentCookie(policy, { analytics: true, sessionReplay: false }, { now, secure: true });
+		expect(cookie.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`)).toBe(true);
+		expect(cookie).not.toContain("Domain=");
+		expect(readAnalyticsConsentCookieHeader(cookie.split("; ")[0], policy, now)?.preferences).toEqual({
+			analytics: true,
+			sessionReplay: false,
+		});
+		expect(
+			readAnalyticsConsentCookieHeader(
+				`openscholar_consent=${fromOpenscholar("granted")}`,
+				{ scope: "https://openscholar.ai.example.org", version: 3 },
 				now,
 			),
 		).toBeNull();

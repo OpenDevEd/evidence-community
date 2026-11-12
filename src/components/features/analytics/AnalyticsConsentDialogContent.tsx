@@ -1,6 +1,7 @@
 "use client";
 
 import { AnalyticsConsentPreferencesForm } from "@/components/features/analytics/AnalyticsConsentPreferencesForm";
+import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import { LibraryLogo } from "@/components/library/LibraryIdentity";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link } from "@/i18n/routing";
@@ -13,6 +14,7 @@ export function AnalyticsConsentDialogContent({
 	onComplete?: () => void;
 }) {
 	const { legal } = useLibraryConfig();
+	const { sharesAnswer } = useAnalyticsConsent();
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
 
@@ -34,7 +36,7 @@ export function AnalyticsConsentDialogContent({
 						{t("cookieConsentTitle")}
 					</h2>
 					<p className="mt-2 max-w-lg text-pretty text-sm leading-5 text-default-500">
-						{t("cookieConsentMessage")}
+						{t(sharesAnswer ? "cookieConsentSharedMessage" : "cookieConsentMessage")}
 					</p>
 					<nav
 						aria-label={t("cookieConsentTitle")}

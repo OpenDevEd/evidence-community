@@ -10,8 +10,9 @@ This storage is needed for the site to work or remember a choice you asked it to
 
 | **Name**                | **Owner**               | **Purpose**                                                                                                                          | **Expires**                        |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
-| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the community they apply to, the policy versions, and when you made the choice.       | 180 days                           |
-| `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
+{{OwnConsent::}}| `analytics_consent`     | {{SITE_HOST}}           | Stores your analytics and session replay choices, the community they apply to, the policy versions, and when you made the choice.       | 180 days                           |
+{{::}}{{SharedConsent::}}| `openscholar_consent`   | openscholar.ai          | Stores your analytics choice and when you made it. Openscholar and every community at an openscholar.ai address read the same choice. | 1 year                             |
+{{::}}| `NEXT_LOCALE`           | {{SITE_HOST}} / Next.js | Stores your language preference.                                                                                                     | Browser-managed                    |
 | `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your Openscholar account and tie the return from Openscholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
 
@@ -30,12 +31,13 @@ We remove or mask free-text searches, form values, passwords, document text, AI 
 
 ## **Session replay and diagnostics (optional)**
 
-Session replay is a separate choice. It can only be enabled when product analytics is enabled.
-
+{{OwnConsent::}}Session replay is a separate choice. It can only be enabled when product analytics is enabled.
+{{::}}{{SharedConsent::}}Allowing product analytics also allows session replay.
+{{::}}
 When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
-Turning session replay off stops new replay recording without turning off ordinary product analytics.
-
+{{OwnConsent::}}Turning session replay off stops new replay recording without turning off ordinary product analytics.
+{{::}}
 ## **When product analytics is declined**
 
 The browser does not load PostHog or Google Analytics and does not create a browser analytics profile. The site may send a small set of same-site aggregate events to its own server. These events contain only fixed categories and counts, such as a page path without its query string, result totals, or the type of file action. They do not include browser identifiers, free-text searches, document content, AI conversations, or user-provided text.
@@ -44,14 +46,17 @@ The server groups these aggregate events by community and day before sending the
 
 ## **Managing your choices**
 
-Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
+{{OwnConsent::}}Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
 
 If the built-in analytics policy or this community’s policy version changes, or if you move to a different community with a different site address, the site asks again. Deleting the consent cookie also makes the site ask again.
+{{::}}{{SharedConsent::}}Use **Cookie settings** in the footer to change your choice at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the switch as shown. **Decline** disables both.
 
+Your choice holds on Openscholar and on every community at an openscholar.ai address, so you are asked once. Changing it on any of them changes it on all of them. Deleting the `openscholar_consent` cookie makes them ask again.
+{{::}}
 Most browsers also let you inspect or delete stored site data in their privacy settings.
 
 ## **Get in touch**
 
 For questions about our use of cookies and similar storage, email habari@openscholar.ai.
 
-**Last updated**: September 12, 2026
+**Last updated**: November 12, 2026

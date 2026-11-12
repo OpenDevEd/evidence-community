@@ -2,15 +2,14 @@
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
-	ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS,
-	ANALYTICS_CONSENT_COOKIE_NAME,
 	DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
+	analyticsConsentCookie,
+	analyticsConsentCookieName,
+	analyticsConsentPolicy,
 	analyticsConsentState,
 	analyticsCapabilities,
-	createAnalyticsConsentRecord,
-	normalizeAnalyticsConsentScope,
 	parseAnalyticsConsentRecord,
-	serializeAnalyticsConsentRecord,
+	sharesAnalyticsConsent,
 	type AnalyticsConsentPreferences,
 	type AnalyticsConsentPolicy,
 	type AnalyticsConsentState,
@@ -36,6 +35,8 @@ type AnalyticsConsentContextValue = {
 	openPreferences: () => void;
 	savePreferences: (preferences: AnalyticsConsentPreferences) => void;
 	setConsentState: (nextState: AnalyticsConsentState) => void;
+	/** The answer is Openscholar's, shared with every community on openscholar.ai, and one yes covers replay too. */
+	sharesAnswer: boolean;
 };
 
 const AnalyticsConsentContext =
@@ -46,37 +47,44 @@ function writeConsentCookie(
 	preferences: AnalyticsConsentPreferences,
 	capabilities: AnalyticsConsentPreferences,
 ) {
-	const secureCookie =
-		typeof window !== "undefined" && window.location.protocol === "https:"
-			? "; Secure"
-			: "";
-	const value = serializeAnalyticsConsentRecord(
-		createAnalyticsConsentRecord(policy, {
+	document.cookie = analyticsConsentCookie(
+		policy,
+		{
 			analytics: capabilities.analytics && preferences.analytics,
 			sessionReplay: capabilities.sessionReplay && preferences.sessionReplay,
-		}),
+		},
+		{ secure: window.location.protocol === "https:" },
 	);
-	document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${value}; Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
 }
 
 /**
- * The decision is kept in a cookie, which nothing tells us about when it
- * changes, so anything reading it is told by hand after it is written.
+ * The decision is kept in a cookie, which nothing reports a change to on its own: an answer given here tells the
+ * readers by hand, and one given in another tab (on Openscholar or another community, for a shared answer) is read
+ * again when this tab comes back into view or focus, or as soon as the browser reports the cookie changed.
  */
 const consentReaders = new Set<() => void>();
 
+type CookieStoreWindow = Window & { cookieStore?: EventTarget };
+
 function subscribeToConsentCookie(onChange: () => void) {
 	consentReaders.add(onChange);
+	const cookieStore = (window as CookieStoreWindow).cookieStore;
+	window.addEventListener("focus", onChange);
+	document.addEventListener("visibilitychange", onChange);
+	cookieStore?.addEventListener("change", onChange);
 
 	return () => {
 		consentReaders.delete(onChange);
+		window.removeEventListener("focus", onChange);
+		document.removeEventListener("visibilitychange", onChange);
+		cookieStore?.removeEventListener("change", onChange);
 	};
 }
 
 /** The stored answer as the browser has it, or null when there is none. */
-function consentCookieValue() {
+function consentCookieValue(name: string) {
 	if (typeof document === "undefined") return null;
-	const prefix = `${ANALYTICS_CONSENT_COOKIE_NAME}=`;
+	const prefix = `${name}=`;
 	const entry = document.cookie
 		.split("; ")
 		.find((cookie) => cookie.startsWith(prefix));
@@ -101,19 +109,18 @@ export function AnalyticsConsentProvider({
 	const { capabilities, policy } = useMemo(
 		() => ({
 			capabilities: analyticsCapabilities(config.analytics),
-			policy: {
-				scope: normalizeAnalyticsConsentScope(config.identity.baseUrl),
-				version: config.analytics.consentPolicyVersion,
-			},
+			policy: analyticsConsentPolicy({ analytics: config.analytics, identity: { baseUrl: config.identity.baseUrl } }),
 		}),
 		[config.analytics, config.identity.baseUrl],
 	);
+	const sharesAnswer = sharesAnalyticsConsent(policy);
+	const cookieName = analyticsConsentCookieName(policy);
 	// The decision is read as the page is drawn, so a reader who has already
 	// answered is never asked again, and one who has not is asked in the same
 	// breath as the page appearing rather than a moment after it.
 	const storedConsent = useSyncExternalStore(
 		subscribeToConsentCookie,
-		consentCookieValue,
+		() => consentCookieValue(cookieName),
 		() => storedConsentFromServer,
 	);
 	const record = useMemo(
@@ -179,6 +186,7 @@ export function AnalyticsConsentProvider({
 			openPreferences,
 			savePreferences,
 			setConsentState,
+			sharesAnswer,
 		}),
 		[
 			analyticsReady,
@@ -190,6 +198,7 @@ export function AnalyticsConsentProvider({
 			openPreferences,
 			savePreferences,
 			setConsentState,
+			sharesAnswer,
 		],
 	);
 

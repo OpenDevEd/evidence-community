@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
+	analyticsConsentPolicy,
 	analyticsConsentState,
 	readAnalyticsConsentCookieHeader,
 } from "@/lib/analytics-consent";
@@ -17,13 +18,6 @@ type AnalyticsRuntimeConfig = {
 	identity: Pick<LibraryServerConfig["identity"], "baseUrl">;
 };
 
-function consentPolicy(config: AnalyticsRuntimeConfig) {
-	return {
-		scope: config.identity.baseUrl,
-		version: config.analytics.consentPolicyVersion,
-	};
-}
-
 function validDistinctId(value: string | null | undefined) {
 	const normalized = value?.trim();
 	return normalized && normalized.length <= 200 ? normalized : null;
@@ -36,7 +30,7 @@ export function getServerAnalyticsContext(
 ): ServerAnalyticsContext {
 	const consent = readAnalyticsConsentCookieHeader(
 		request.headers.get("cookie"),
-		consentPolicy(config),
+		analyticsConsentPolicy(config),
 	);
 	const distinctId = validDistinctId(requestedDistinctId);
 
