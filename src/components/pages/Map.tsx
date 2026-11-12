@@ -813,6 +813,7 @@ export default function Map({ focus, places, counts, pending }: { focus?: [numbe
 		<main
 			id="main-content"
 			tabIndex={-1}
+			data-full-window
 			className="relative w-full h-screen overflow-hidden [--map-land:rgb(246_244_239)] [--map-sea-lit:rgb(234_241_247)] [--map-sea-rim:rgb(200_214_227)] [--map-sea:rgb(216_228_238)] dark:[--map-land:rgb(62_66_74)] dark:[--map-sea-lit:rgb(30_39_53)] dark:[--map-sea-rim:rgb(17_22_31)] dark:[--map-sea:rgb(23_30_42)]"
 		>
 			<MouseTooltip

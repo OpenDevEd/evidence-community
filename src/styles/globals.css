@@ -37,6 +37,12 @@ html {
 	scrollbar-gutter: stable;
 }
 
+/* A page that fills the window and never scrolls (the map, the admin) has nothing to keep still beside it, so no
+   empty strip for a scrollbar it will never show. */
+html:has([data-full-window]) {
+	scrollbar-gutter: auto;
+}
+
 /* NextUI's modals lock the page's scroll through an older React Aria, which pads the page by the bar's width; the
    gutter already keeps that width, so counted twice the page would move left as a modal opens. */
 html {
