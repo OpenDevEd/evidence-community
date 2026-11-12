@@ -424,8 +424,9 @@ function EditionBody({edition: pending, cards, path, settings}: {edition: Promis
   return <>
     <EditionHeader edition={edition} invite={settings.enabled && <InboxButton schedule={settings.schedule} />} />
     <div className={withRail}>
-      <article className="min-w-0">
-        <HowChosen edition={edition} locale={locale} />
+      {/* The notice is the first thing under the header on a phone too, above the rail that leads there; on a wide screen it heads the text column. */}
+      <div className="order-first min-w-0 lg:order-none lg:col-start-1 lg:row-start-1"><HowChosen edition={edition} locale={locale} /></div>
+      <article className="min-w-0 lg:col-start-1 lg:row-start-2">
         <EditorNote edition={edition} />
         <CitedPublications value={records.cited}>
           {intro && <AIMarkdown>{intro}</AIMarkdown>}
@@ -438,7 +439,7 @@ function EditionBody({edition: pending, cards, path, settings}: {edition: Promis
         <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
       {/* The publications scroll away with the page; the contents, last in the rail, stay in view to move between sections. */}
-      <aside className="order-first flex flex-col gap-4 lg:order-none lg:self-stretch">
+      <aside className="order-first flex flex-col gap-4 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-stretch">
         <EditionShare edition={edition} locale={locale} />
         <div className="lg:sticky lg:top-8"><Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} /></div>
       </aside>
@@ -660,7 +661,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
       <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{tLabels(what)}</dd>
     </Fragment>)}</dl>},
   ];
-  return <section aria-labelledby="ai-notice-title" className="mb-10 overflow-hidden rounded-2xl bg-card_light dark:bg-card">
+  return <section aria-labelledby="ai-notice-title" className="overflow-hidden rounded-2xl bg-card_light dark:bg-card">
     <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3 bg-warning-50 px-6 py-5 dark:bg-warning-50/50">
       <span className="mt-0.5 text-warning-600 dark:text-warning-500"><Icon value={Alert02Icon} size={20} /></span>
       <div>
