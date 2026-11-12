@@ -18,8 +18,8 @@ export const TRIES_MAX = 3;
 export const HEADER_SLIDE_MS = 200;
 /** Where the hidden sign-in ends: a small file of this community, so nothing of the site loads twice. */
 export const QUIET_SIGN_IN_END = "/robots.txt";
-/** The address parameter a sign-out comes back with, for the page to say the reader is signed out (`Providers.tsx`). */
-export const SIGNED_OUT_PARAM = "signed-out";
+/** Left in this tab's storage as the reader signs out, for the page they come back to to say so once. */
+const SIGNED_OUT_KEY = "openscholar-signed-out";
 
 /**
  * `stamp` is the cookie's value now (null when this page can't read it, "0" when nobody is signed in), `seen` the
@@ -78,4 +78,24 @@ export function keepOutcome(stamp: string, worked: boolean) {
 	if (worked) kept.set(SEEN_KEY, stamp);
 	kept.set(TRIES_KEY, worked ? null : `${stamp}:${tries}`);
 	return tries;
+}
+
+/** Marks this tab as signing out. This tab's storage outlasts the trip to Openscholar and back, and no other tab reads it. */
+export function markSignedOut() {
+	try {
+		sessionStorage.setItem(SIGNED_OUT_KEY, "1");
+	} catch {
+		// Storage turned off: the reader comes back signed out, without the notice.
+	}
+}
+
+/** Whether this tab has just signed out, once: the mark goes as it is read. */
+export function takeSignedOut() {
+	try {
+		const marked = sessionStorage.getItem(SIGNED_OUT_KEY) !== null;
+		sessionStorage.removeItem(SIGNED_OUT_KEY);
+		return marked;
+	} catch {
+		return false;
+	}
 }

@@ -29,7 +29,6 @@ import {
 import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
 import type { PublicLibraryStatus } from "@/lib/library-export-records";
 import { toast as toastComponent } from "@/components/layout/Toast";
-import { SIGNED_OUT_PARAM } from "@/lib/readers/session-follow";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { ReaderSessionProvider, type Reader } from "@/components/layout/navbar/ReaderSession";
@@ -181,7 +180,7 @@ function ToastAdapter({ children }: { children: ReactNode }) {
 			{/*
 			 * A top layer to react-aria: toasts stay readable, focusable and clickable while a dialog is open, and a click on
 			 * one does not close it. Before the page, so the Toaster listens before anything on the page can raise a toast as
-			 * it loads (`?signed-out`, `?error`): sonner drops a toast raised while no Toaster listens.
+			 * it loads (a sign-out's notice, `?error`): sonner drops a toast raised while no Toaster listens.
 			 */}
 			<div data-react-aria-top-layer="true">
 				<Toaster />
@@ -194,7 +193,6 @@ function ToastAdapter({ children }: { children: ReactNode }) {
 function PramNotificationProvider({ children }: { children: ReactNode }) {
 	const [error, setError] = useQueryState("error");
 	const [message, setMessage] = useQueryState("message");
-	const [signedOut, setSignedOut] = useQueryState(SIGNED_OUT_PARAM);
 	const t = useTranslations("ui");
 
 	useEffect(() => {
@@ -213,11 +211,7 @@ function PramNotificationProvider({ children }: { children: ReactNode }) {
 			});
 			setMessage(null);
 		}
-		if (signedOut) {
-			toastComponent({ title: t("signedOutHereAndOnOpenScholar") });
-			setSignedOut(null);
-		}
-	}, [error, message, signedOut, setError, setMessage, setSignedOut, t]);
+	}, [error, message, setError, setMessage, t]);
 
 	return <>{children}</>;
 }
