@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { libraryConfigSchema } from "@/config/library-config/schema";
+import { openScholarSessionCookie } from "@/lib/readers/openscholar";
 import {
 	LibraryConfigProvider,
 	useLibraryConfig,
@@ -132,6 +133,7 @@ describe("public library configuration", () => {
 				accountUrl: serverConfig.authentication.openScholar.accountUrl,
 				// For the link to apply to join its team.
 				libraryId: serverConfig.authentication.openScholar.libraryId,
+				sessionCookie: openScholarSessionCookie(serverConfig.authentication.openScholar.oauth.issuer),
 				// Only the site of the library's page on OpenScholar, never the page itself.
 				siteUrl: new URL(serverConfig.authentication.openScholar.libraryUrl).origin,
 			},

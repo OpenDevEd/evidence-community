@@ -45,6 +45,19 @@ Libraries carry two separate login systems and neither is right:
    the library's own `/api/admin/sign-in?return=<path>`, a GET route that
    starts the OAuth flow. OpenScholar's readiness check relies on that exact
    path (added 2026-10-01, see phase 1).
+   Changed 2026-11-11 (user decision): a community on OpenScholar's own site
+   follows the OpenScholar session. Opening it signs in whoever is signed in
+   there, through the same OAuth sign-in run in a hidden frame, and it signs
+   out once they sign out there. The page itself still never redirects. Sign
+   out in a community also signs out of OpenScholar, through its `/sign-out`
+   page, and the next sign-in sends `prompt=login` so another account can be
+   chosen. Reason: a person signed in to OpenScholar was asked to sign in
+   again on each community, and could not switch accounts there. Proof: the
+   hidden-frame sign-in signed a browser in on eccar.openscholar.ai in 0.8 s
+   against production Clerk, and a development Clerk instance honoured
+   `prompt=login`. A community on its own domain, and any community of a
+   development Clerk instance, can't read the session and keeps the button
+   (`openScholarSessionCookie`, `session-follow.ts`).
 5. Background check: while a reader is active, the server refreshes the Clerk
    token at most every 15 minutes (`auth.api.getAccessToken`) and updates the
    stored name and avatar from Clerk's userinfo. Better Auth reports every
