@@ -27,7 +27,6 @@ vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 }));
 vi.mock("@/components/library/LibraryIdentity", () => ({
 	FunderLogo: () => null,
-	FundingPartners: () => null,
 	InstitutionLogo: () => null,
 	LibraryLogo: () => null,
 	useLibraryLogo: () => ({

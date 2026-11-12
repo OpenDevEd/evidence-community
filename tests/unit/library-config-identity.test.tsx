@@ -2,10 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NextIntlClientProvider } from "next-intl";
 
-import {
-	FundingPartners,
-	LibraryLogo,
-} from "@/components/library/LibraryIdentity";
+import { LibraryLogo } from "@/components/library/LibraryIdentity";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import {
 	buildLibraryLogoCss,
@@ -35,14 +32,12 @@ function renderIdentity(
 			locale="en-GB"
 			messages={{
 				ui: {
-					fundingPartner: "Funding partner",
 					logoAlt: "Logo for {company} in {theme} mode",
 				},
 			}}
 		>
 			<LibraryConfigProvider config={config}>
 				<LibraryLogo place="header" />
-				<FundingPartners />
 			</LibraryConfigProvider>
 		</NextIntlClientProvider>,
 	);
@@ -229,15 +224,20 @@ describe("runtime library identity", () => {
 		});
 	});
 
-	it("renders funding partners in manifest order", () => {
-		const markup = renderIdentity(maximalConfig);
-
-		expect(markup.indexOf("Partner One")).toBeLessThan(
-			markup.indexOf("Partner Two"),
-		);
-		expect(renderIdentity(minimalConfig)).not.toContain(
-			'aria-label="Funding partner"',
-		);
+	it("lists the partners of settings saved before the one funders list after the funders, once each", () => {
+		// Pages read one list. A partner whose name a funder already has is that funder.
+		expect(maximalConfig.footer.funders.map(({ id, name }) => [id, name])).toEqual([
+			["funder-one", "Funder One"],
+			["partner-one", "Partner One"],
+			["partner-two", "Partner Two"],
+		]);
+		const twice = structuredClone(maximalLibraryConfig);
+		twice.identity.fundingPartners = [{ id: "same-name", name: " funder one " }, { id: "funder-one", name: "Partner Three" }];
+		expect(projectPublicLibraryConfig(libraryConfigSchema.parse(twice)).footer.funders.map(({ id, name }) => [id, name])).toEqual([
+			["funder-one", "Funder One"],
+			["partner-1", "Partner Three"],
+		]);
+		expect(minimalConfig.footer.funders).toEqual([]);
 	});
 
 	it("emits the configured raw logo CSS against the shared logo selector", () => {

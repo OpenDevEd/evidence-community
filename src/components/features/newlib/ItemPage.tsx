@@ -527,16 +527,17 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	);
 }
 
+/** Who funds the community, on each of its records: the funders its footer lists. */
 function ItemFundingPartners() {
-	const { fundingPartners } = useLibraryConfig().identity;
+	const { funders } = useLibraryConfig().footer;
 	const t = useTranslations("ui");
-	if (fundingPartners.length === 0) return null;
+	if (funders.length === 0) return null;
 
 	return (
-		<SidebarCard title={t("fundingPartner")} count={fundingPartners.length}>
-			{fundingPartners.map((partner) => (
+		<SidebarCard title={t("fundingPartner")} count={funders.length}>
+			{funders.map((funder) => (
 				<ItemRow
-					key={partner.id}
+					key={funder.id}
 					icon={
 						<InstitutionLogo
 							alt=""
@@ -544,7 +545,7 @@ function ItemFundingPartners() {
 							size="row"
 						/>
 					}
-					title={partner.name}
+					title={funder.name}
 				/>
 			))}
 		</SidebarCard>

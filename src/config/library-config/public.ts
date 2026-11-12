@@ -10,6 +10,9 @@ import { sourcePublishTags } from "@/lib/tags";
 import { offersSources } from "@/lib/search-query";
 import { libraryResultLimit } from "@/lib/search-filter-constants";
 
+/** The most funders a footer holds (`footerSchema`). */
+const FUNDERS_MAX = 20;
+
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
 	LibraryPublicConfig
@@ -18,6 +21,27 @@ const publicConfigCache = new WeakMap<
 function projectPublicSearch(search: LibraryServerConfig["search"]) {
 	const { embedder, ...options } = search;
 	return { ...options, embeddings: embedder !== null };
+}
+
+/**
+ * Who funds the community, as one list. Settings saved before the two lists became one also name partners under
+ * `identity`, by name alone: each is listed after the funders, unless a funder already has its name.
+ */
+function fundersOf(config: LibraryServerConfig) {
+	const funders = config.footer.funders;
+	const named = new Set(funders.map((funder) => funder.name.trim().toLowerCase()));
+	const taken = new Set(funders.map((funder) => funder.id));
+	const partners = config.identity.fundingPartners
+		.filter((partner) => !named.has(partner.name.trim().toLowerCase()))
+		.map((partner) => {
+			// The two lists were checked apart, so a partner's id may be a funder's too.
+			let id = partner.id;
+			for (let n = 1; taken.has(id); n += 1) id = `partner-${n}`;
+			taken.add(id);
+			return { id, name: partner.name };
+		});
+	// A footer holds twenty funders at most, which each list did on its own.
+	return [...funders, ...partners].slice(0, FUNDERS_MAX);
 }
 
 export function projectPublicLibraryConfig(
@@ -40,7 +64,7 @@ export function projectPublicLibraryConfig(
 		institutions: config.institutions,
 		theme: config.theme,
 		navigation: { ...config.navigation, links: config.navigation.links.filter(pageAvailable).map(link => ({ ...link, children: link.children.filter(pageAvailable) })) },
-		footer: { ...config.footer, sections: config.footer.sections.map(section => ({ ...section, links: section.links.filter(pageAvailable) })) },
+		footer: { ...config.footer, funders: fundersOf(config), sections: config.footer.sections.map(section => ({ ...section, links: section.links.filter(pageAvailable) })) },
 		contact: config.contact,
 		legal: config.legal,
 		localization: config.localization,

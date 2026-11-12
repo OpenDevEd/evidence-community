@@ -364,6 +364,9 @@ const identitySchema = z
 		/** The name beside the logo in the header; off for a logo that already spells it. */
 		showName: z.boolean().default(true),
 		baseUrl: publicHttpsOriginSchema,
+		// Read from settings saved before the footer's funders became the one list, and never written since. Pages
+		// show each partner as a funder (`projectPublicLibraryConfig`). Openscholar moves saved partners into the
+		// funders, after which this goes (openalex-count docs/evidence-library-follow-ups.md).
 		fundingPartners: z
 			.array(fundingPartnerSchema)
 			.max(20)
