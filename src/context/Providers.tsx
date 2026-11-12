@@ -177,11 +177,15 @@ export function useLastFetchedData() {
 function ToastAdapter({ children }: { children: ReactNode }) {
 	return (
 		<>
-			{children}
-			{/* A top layer to react-aria: toasts stay readable, focusable and clickable while a dialog is open, and a click on one does not close it. */}
+			{/*
+			 * A top layer to react-aria: toasts stay readable, focusable and clickable while a dialog is open, and a click on
+			 * one does not close it. Before the page, so the Toaster listens before anything on the page can raise a toast as
+			 * it loads (a sign-out's notice, `?error`): sonner drops a toast raised while no Toaster listens.
+			 */}
 			<div data-react-aria-top-layer="true">
 				<Toaster />
 			</div>
+			{children}
 		</>
 	);
 }
