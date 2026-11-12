@@ -23,7 +23,8 @@ BEGIN
     'adminItemListProjection', 'sourceTopicAssignment', 'tag', 'collection', 'collectionIdentity',
     'collectionSourceLink', 'sourceConnection', 'sourceSyncState', 'sourceSyncRun', 'sourceRecordIssue',
     'publicationIdentifier', 'publicationSyncJob', 'publicationTarget', 'zenodoFileCorrectionApproval',
-    'notificationEdition', 'notificationEditionEvent', 'notificationDelivery', 'pdfImport', 'pdfImportFile'
+    'notificationEdition', 'notificationEditionEvent', 'notificationDelivery', 'notificationSubscriber', 'pdfImport',
+    'pdfImportFile'
   ] LOOP
     EXECUTE format('CREATE TRIGGER admin_changed_insert AFTER INSERT ON %I REFERENCING NEW TABLE AS changed_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_admin_changed()', watched);
     EXECUTE format('CREATE TRIGGER admin_changed_update AFTER UPDATE ON %I REFERENCING NEW TABLE AS changed_rows FOR EACH STATEMENT EXECUTE FUNCTION notify_admin_changed()', watched);

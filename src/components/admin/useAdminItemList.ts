@@ -12,7 +12,7 @@ import type {
 } from "@/lib/admin/types";
 
 import { adminErrorMessage, getAdminItems } from "./admin-api";
-import { oneAtATime } from "./admin-live";
+import { oneAtATime, until } from "./admin-live";
 
 
 import { adminItemViewParsers, paramsFromView, viewFromParams } from "@/lib/admin/item-filter-state";
@@ -88,11 +88,6 @@ function keepShownRows(before: AdminItemListRow[], rows: readonly AdminItemListR
 	const shown = new Map(before.map((row) => [row.key, row]));
 	const next = rows.map((row) => sameRow(shown.get(row.key), row));
 	return next.length === before.length && next.every((row, index) => row === before[index]) ? before : next;
-}
-
-/** Waits for something another part of the page is doing to end. */
-async function until(done: () => boolean) {
-	while (!done()) await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
 /** The ticked rows that are still in the list: the same set when all of them are. */

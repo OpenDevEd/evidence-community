@@ -52,6 +52,8 @@ export const ADMIN_LIVE_TABLES: Readonly<Record<string, readonly AdminLiveTopic[
 	notificationEdition: ["digests"],
 	notificationEditionEvent: ["digests"],
 	notificationDelivery: ["digests"],
+	// The digests view counts confirmed subscribers.
+	notificationSubscriber: ["digests"],
 	pdfImport: ["import"],
 	pdfImportFile: ["import"],
 };
@@ -77,7 +79,6 @@ export const ADMIN_LIVE_UNWATCHED: readonly string[] = [
 	"language",
 	"notificationItem",
 	"notificationState",
-	"notificationSubscriber",
 	"openAlexQueryApproval",
 	"outbox",
 	"publicationSyncRun",

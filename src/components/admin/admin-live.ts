@@ -104,6 +104,11 @@ export function oneAtATime(read: () => Promise<unknown>) {
 	};
 }
 
+/** Waits for something another part of the page is doing to end. */
+export async function until(done: () => boolean) {
+	while (!done()) await new Promise((resolve) => setTimeout(resolve, 100));
+}
+
 /** Starts a read now and resolves when it is done, whether it worked or not: a read that failed waits for the next change. */
 async function started(read: () => unknown) {
 	try {

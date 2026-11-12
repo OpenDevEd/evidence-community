@@ -134,7 +134,7 @@ import {
 } from "./admin-validation";
 import { FirstCollections } from "./useAdminCollectionCatalogue";
 import { useAdminItemList } from "./useAdminItemList";
-import { oneAtATime, useAdminLive } from "./admin-live";
+import { oneAtATime, until, useAdminLive } from "./admin-live";
 import { noteAdminCollectionsChangedElsewhere } from "./admin-collection-events";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
@@ -665,6 +665,7 @@ export default function AdminWorkbench({
 	const selectedKeyRef = useRef<string | null>(null);
 	const detailRef = useRef<AdminItemDetail | null>(null);
 	const detailGoneRef = useRef(false);
+	const detailLoadingRef = useRef(false);
 	const draftPayloadRef = useRef<Record<string, unknown>>({});
 	const saveQueue = useRef<Promise<void>>(Promise.resolve());
 	const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -695,6 +696,7 @@ export default function AdminWorkbench({
 	selectedKeyRef.current = selectedKey;
 	detailRef.current = detail;
 	detailGoneRef.current = detailGone;
+	detailLoadingRef.current = detailLoading;
 	draftPayloadRef.current = draftPayload;
 
 	useEffect(() => {
@@ -1002,6 +1004,9 @@ export default function AdminWorkbench({
 		[applyDetail],
 	);
 	const readOpenRecordAgain = useCallback(async () => {
+		// A load under way lands first. It may have asked before the change that asked for this, so its answer can be
+		// the older one, and read before it this one would be overwritten.
+		await until(() => !detailLoadingRef.current);
 		const key = selectedKeyRef.current;
 		// A record that is gone has nothing to read: asking again would only say so again.
 		if (!key || detailGoneRef.current) return;
