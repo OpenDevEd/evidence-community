@@ -111,9 +111,10 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 	return (
 		<div className="px-4 w-full">
 			<Skeleton isLoaded={!showSkeleton} className="rounded-2xl w-full">
-				<div className="flex items-center gap-3">
+				{/* One line of text sits level with the icon's middle. More than one, a line under the title too, starts at the icon's top. */}
+				<div className="flex items-start gap-3">
 					{icon}
-					<div className="flex min-w-0 flex-col">
+					<div className="flex min-w-0 flex-col self-center">
 						<div className="text-base font-medium text-black/80 dark:text-white/80 text-wrap-anywhere">
 							{title || "-"}
 						</div>
