@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "next-intl";
 import { useSWRConfig } from "swr";
 
@@ -69,6 +69,7 @@ export function ReaderSessionProvider({ reader, admin, join, children }: { reade
 		};
 	}, [signedIn, refresh]);
 	useFollowOpenScholarSession(pending ? undefined : readerId, sessionId);
+	useReadAgainForReader(readerId);
 	return (
 		<ServerReader value={servedReader}>
 			<ReaderAdmin value={{ admin: live?.admin ?? served.admin, join: live?.join ?? served.join, refresh }}>{children}</ReaderAdmin>
@@ -166,8 +167,6 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 	const { sessionCookie } = useLibraryConfig().authentication.openScholar;
 	// Only where readers have accounts: a community without them signs nobody in but its admins, who ask to be.
 	const readerAccounts = useLibraryFeature("readerAccounts");
-	const router = useRouter();
-	const { mutate } = useSWRConfig();
 	useEffect(() => {
 		if (readerId) kept.set(ASK_AGAIN_KEY, null);
 		if (!sessionCookie || !readerAccounts || readerId === undefined) return;
@@ -182,13 +181,6 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 				// The header and what the server rendered for the reader change only when the reader did.
 				if (!(await takeStep(step, stamp, here))) return;
 				readerAuthClient.$store.notify("$sessionSignal");
-				// The header slides to the new reader first; drawing the page again at the same moment would take its frames.
-				window.setTimeout(() => {
-					// What the page had read for the last reader, their bookmarks and private collections, goes with them.
-					// Everything it shows is read again as the new one; for someone signing in, what anyone may see stays up meanwhile.
-					void (readerId ? mutate(() => true, undefined, { revalidate: true }) : mutate(() => true));
-					router.refresh();
-				}, HEADER_SLIDE_MS);
 			} catch (error) {
 				// OpenScholar or the network didn't answer: the session stays as it was, and the button still works.
 				noteNotFollowed({ step, stage: "error", error: String(error).slice(0, 200) });
@@ -211,7 +203,31 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 			window.removeEventListener("pageshow", restored);
 			document.removeEventListener("visibilitychange", follow);
 		};
-	}, [sessionCookie, readerAccounts, readerId, sessionId, router, mutate]);
+	}, [sessionCookie, readerAccounts, readerId, sessionId]);
+}
+
+/**
+ * Reads the page again when the reader changes while it is open, whatever changed them: the session followed here,
+ * a sign-in or sign-out in another tab of this community. What the page had read for the last reader, their
+ * bookmarks and private collections, goes with them, and everything it shows is read again as the new one; for
+ * someone signing in, what anyone may see stays up meanwhile. The outside system is the session, which other tabs
+ * change too.
+ */
+function useReadAgainForReader(readerId: string | null) {
+	const router = useRouter();
+	const { mutate } = useSWRConfig();
+	const last = useRef(readerId);
+	useEffect(() => {
+		const before = last.current;
+		if (before === readerId) return;
+		last.current = readerId;
+		// The header slides to the new reader first; drawing the page again at the same moment would take its frames.
+		const later = window.setTimeout(() => {
+			void (before ? mutate(() => true, undefined, { revalidate: true }) : mutate(() => true));
+			router.refresh();
+		}, HEADER_SLIDE_MS);
+		return () => window.clearTimeout(later);
+	}, [readerId, mutate, router]);
 }
 
 /** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */

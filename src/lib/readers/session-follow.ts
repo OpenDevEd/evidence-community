@@ -44,13 +44,19 @@ export function readCookie(name: string): string | null {
 	return found ? found.slice(name.length + 1) : null;
 }
 
-/** Browser storage that may be turned off: a browser that keeps nothing follows every change again, which is harmless. */
+/** What a browser that refuses storage is told to keep, for as long as the page lives. */
+const remembered = new Map<string, string>();
+
+/**
+ * What this browser keeps between pages. Storage may be turned off: the page then remembers for itself, so a sign-in
+ * that worked still counts as followed and doesn't start again.
+ */
 export const kept = {
 	get(key: string) {
 		try {
 			return window.localStorage.getItem(key);
 		} catch {
-			return null;
+			return remembered.get(key) ?? null;
 		}
 	},
 	set(key: string, value: string | null) {
@@ -58,7 +64,8 @@ export const kept = {
 			if (value === null) window.localStorage.removeItem(key);
 			else window.localStorage.setItem(key, value);
 		} catch {
-			// Nothing to keep it in.
+			if (value === null) remembered.delete(key);
+			else remembered.set(key, value);
 		}
 	},
 };
