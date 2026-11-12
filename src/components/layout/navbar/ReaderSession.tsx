@@ -62,25 +62,39 @@ let following = false;
 /** The reader's own sign-in has started and the page is leaving: a hidden one started now would replace the state the library checks theirs against. */
 let leaving = false;
 
+/** The start of a hidden sign-in still on its way to the library: the reader's own waits for it, so the state the library keeps for theirs is the last one set. */
+let starting: Promise<unknown> | null = null;
+
+/**
+ * Says in the console why the session wasn't followed, for whoever looks into one that didn't: what was tried and
+ * how far it got. The library's own log has the rest (a sign-in the library refused is logged there). Nothing here
+ * names the reader.
+ */
+function noteNotFollowed(detail: Record<string, unknown>) {
+	console.warn(JSON.stringify({ event: "openscholar-session-not-followed", ...detail }));
+}
+
 /**
  * The same sign-in the button starts, in a frame nobody sees. Clerk answers it at once for whoever is signed in to
  * OpenScholar, the library makes its session as for any sign-in, and the page never leaves. The frame ends on a small
- * file of this site when it worked, and on Clerk's sign-in page when it didn't; either way it has loaded. False when
- * the sign-in couldn't start: the library takes only a few at once from one address.
+ * file of this site when it worked, and on Clerk's sign-in page when it didn't; either way it has loaded. `started`
+ * is false when the sign-in couldn't start: the library takes only a few at once from one address.
  */
-async function signInQuietly() {
-	const { data } = await readerAuthClient.signIn.social({ provider: "openscholar", callbackURL: QUIET_SIGN_IN_END, errorCallbackURL: QUIET_SIGN_IN_END, disableRedirect: true });
-	if (!data?.url) return false;
+async function signInQuietly(): Promise<{ started: boolean; detail: Record<string, unknown> }> {
+	const start = readerAuthClient.signIn.social({ provider: "openscholar", callbackURL: QUIET_SIGN_IN_END, errorCallbackURL: QUIET_SIGN_IN_END, disableRedirect: true });
+	starting = start;
+	const { data, error } = await start.finally(() => { starting = null; });
+	if (!data?.url) return { started: false, detail: { stage: "start", status: error?.status ?? null } };
 	const frame = document.createElement("iframe");
 	frame.hidden = true;
 	frame.src = data.url;
-	await new Promise<void>((done) => {
-		frame.addEventListener("load", () => done(), { once: true });
-		window.setTimeout(done, 10_000);
+	const frameEnd = await new Promise<"loaded" | "timed out">((done) => {
+		frame.addEventListener("load", () => done("loaded"), { once: true });
+		window.setTimeout(() => done("timed out"), 10_000);
 		document.body.append(frame);
 	});
 	frame.remove();
-	return true;
+	return { started: true, detail: { stage: "frame", frameEnd } };
 }
 
 /** Who is signed in here, as the page has read it: undefined until it has. */
@@ -104,13 +118,16 @@ function stepFor(stamp: string | null, here: NonNullable<Here>) {
  * tried again the next time the page is looked at, a few times (`TRIES_MAX`).
  */
 async function takeStep(step: "sign-in" | "sign-out", stamp: string, here: NonNullable<Here>) {
+	const quiet = step === "sign-in" ? await signInQuietly() : { started: true, detail: { stage: "sign-out" } };
 	if (step === "sign-out") await readerAuthClient.signOut();
 	// A sign-in that couldn't start says nothing about OpenScholar: it doesn't count as a try.
-	else if (!(await signInQuietly())) return false;
+	if (!quiet.started) return noteNotFollowed({ step, ...quiet.detail }), false;
 	const { data } = await readerAuthClient.getSession({ query: { disableCookieCache: true } });
 	const worked = step === "sign-out" ? !data : !!data && data.session.id !== here.sessionId;
+	const tries = triesFor(stamp, kept.get(TRIES_KEY)) + 1;
 	if (worked) kept.set(SEEN_KEY, stamp);
-	kept.set(TRIES_KEY, worked ? null : `${stamp}:${triesFor(stamp, kept.get(TRIES_KEY)) + 1}`);
+	else noteNotFollowed({ step, ...quiet.detail, signedIn: !!data, tries });
+	kept.set(TRIES_KEY, worked ? null : `${stamp}:${tries}`);
 	return (data?.user.id ?? null) !== here.readerId;
 }
 
@@ -139,8 +156,9 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 				readerAuthClient.$store.notify("$sessionSignal");
 				// The header slides to the new reader first; drawing the page again at the same moment would take its frames.
 				window.setTimeout(() => router.refresh(), HEADER_SLIDE_MS);
-			} catch {
+			} catch (error) {
 				// OpenScholar or the network didn't answer: the session stays as it was, and the button still works.
+				noteNotFollowed({ step, stage: "error", error: String(error).slice(0, 200) });
 			} finally {
 				following = false;
 			}
@@ -195,6 +213,7 @@ export function useReaderSession() {
 		const back = new URL(window.location.href);
 		if (suggest !== undefined) back.searchParams.set(SUGGEST_PARAM, suggest);
 		leaving = true;
+		await starting?.catch(() => null);
 		const { data: started } = await readerAuthClient.signIn.social({ provider: "openscholar", callbackURL: `${back.pathname}${back.search}`, disableRedirect: true }).catch(() => ({ data: null }));
 		if (!started?.url) return void (leaving = false);
 		kept.set(SIGNING_IN_KEY, "1");
