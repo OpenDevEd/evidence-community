@@ -134,7 +134,7 @@ import {
 } from "./admin-validation";
 import { FirstCollections } from "./useAdminCollectionCatalogue";
 import { useAdminItemList } from "./useAdminItemList";
-import { useAdminLive } from "./admin-live";
+import { oneAtATime, useAdminLive } from "./admin-live";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { AdminPublicPages } from "./AdminPublicPages";
@@ -984,25 +984,33 @@ export default function AdminWorkbench({
 		},
 		[loadDetail],
 	);
-	/** Shows a record read again, unless a load started meanwhile, another record was opened since, or nothing changed. */
+	/**
+	 * Shows a record read again, unless nothing changed, a load started meanwhile (opening another record starts one),
+	 * or the person has typed something that hasn't saved: a record someone just published has no draft left, and
+	 * showing it would drop those keystrokes. The save in hand says what happened to them, and its own change reads again.
+	 */
 	const showRefreshed = useCallback(
 		(next: AdminItemDetail, request: number) => {
-			const current = request === detailRequest.current && selectedKeyRef.current === next.key;
-			if (current && JSON.stringify(next) !== JSON.stringify(detailRef.current)) applyDetail(next);
+			if (pendingPayloadByKey.current.has(next.key) || request !== detailRequest.current) return;
+			if (JSON.stringify(next) !== JSON.stringify(detailRef.current)) applyDetail(next);
 		},
 		[applyDetail],
 	);
-	/**
-	 * Reads the open record again for a change someone else made. Nothing shows as loading, what is being typed stays
-	 * (applyDetail keeps a draft that hasn't saved), and a record that didn't change isn't drawn again.
-	 */
-	const refreshDetail = useCallback(async () => {
+	const readOpenRecordAgain = useCallback(async () => {
 		const key = selectedKeyRef.current;
 		if (!key) return;
 		const request = detailRequest.current;
 		const next = await readOpenRecord(key);
 		if (next) showRefreshed(next, request);
 	}, [readOpenRecord, showRefreshed]);
+	const latestReadOpenRecordAgain = useRef(readOpenRecordAgain);
+	latestReadOpenRecordAgain.current = readOpenRecordAgain;
+	/**
+	 * Reads the open record again for a change someone else made. Nothing shows as loading, what is being typed stays,
+	 * and a record that didn't change isn't drawn again. Asked for by more than one part of the page, it reads once at
+	 * a time.
+	 */
+	const [refreshDetail] = useState(() => oneAtATime(() => latestReadOpenRecordAgain.current()));
 
 	/** What the inspector reads of the open record besides the record: its review, DOI choice, reservation and publication. */
 	const refreshOpenRecordReads = useCallback(() => {

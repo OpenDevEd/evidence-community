@@ -24,11 +24,13 @@ const KEEP_ALIVE_MS = 25_000;
  */
 type Hub = {
 	pages: Set<Tell>;
-	/** The listening connection, or the attempt to open it. */
+	/** The listening connection, or the attempt to open it. Null while there is none. */
 	listening: Promise<Client | null> | null;
+	/** Counts the attempts to listen, so one that was replaced while it connected changes nothing when it ends. */
+	attempt: number;
+	/** Counts the listeners that came up. Each one tells every page to read everything, since nothing was heard before it. */
+	listeners: number;
 	databaseUrl: string | null;
-	/** Whether notices may have been missed since pages were last told, so they read everything once it listens again. */
-	missed: boolean;
 	failures: number;
 	gathered: Set<AdminLiveTopic>;
 	gatherTimer: ReturnType<typeof setTimeout> | null;
@@ -40,8 +42,9 @@ const globalHub = globalThis as typeof globalThis & { __evidenceLibraryAdminLive
 const hub = (globalHub.__evidenceLibraryAdminLive ??= {
 	pages: new Set(),
 	listening: null,
+	attempt: 0,
+	listeners: 0,
 	databaseUrl: null,
-	missed: false,
 	failures: 0,
 	gathered: new Set(),
 	gatherTimer: null,
@@ -67,29 +70,29 @@ function gather(table: string) {
 	hub.gatherTimer ??= setTimeout(tellGathered, GATHER_MS);
 }
 
-function lost(client: Client, error?: unknown) {
-	// A connection that was replaced, or closed on purpose, has nothing to recover.
-	void hub.listening?.then((current) => {
-		if (current !== client) return;
-		if (error) console.error("The admin's change listener lost its database connection", error);
-		hub.listening = null;
-		hub.missed = true;
-		void client.end().catch(() => undefined);
-		retry();
-	});
-}
-
+/** Listens again after a wait, longer each time, while a page is still open. */
 function retry() {
 	if (!hub.pages.size || hub.retryTimer) return;
 	const wait = RETRY_MS[Math.min(hub.failures, RETRY_MS.length - 1)]!;
 	hub.failures += 1;
 	hub.retryTimer = setTimeout(() => {
 		hub.retryTimer = null;
-		if (hub.pages.size) void listen();
+		listenAgain();
 	}, wait);
 }
 
-async function open(databaseUrl: string) {
+function lost(client: Client, error?: unknown) {
+	// A connection that was replaced, or closed on purpose, has nothing to recover.
+	void hub.listening?.then((current) => {
+		if (current !== client) return;
+		if (error) console.error("The admin's change listener lost its database connection", error);
+		hub.listening = null;
+		void client.end().catch(() => undefined);
+		retry();
+	});
+}
+
+async function open(databaseUrl: string, attempt: number) {
 	// TCP keep-alive, so a connection the network dropped without a word is noticed.
 	const client = new Client({ connectionString: databaseUrl, keepAlive: true, keepAliveInitialDelayMillis: 10_000 });
 	try {
@@ -99,51 +102,74 @@ async function open(databaseUrl: string) {
 		client.on("end", () => lost(client));
 		await client.query(`LISTEN ${ADMIN_LIVE_CHANNEL}`);
 	} catch (error) {
-		console.error("The admin's change listener could not reach the database", error);
 		void client.end().catch(() => undefined);
-		hub.listening = null;
-		hub.missed = true;
-		retry();
+		if (attempt === hub.attempt) failedToListen(error);
+		return null;
+	}
+	// Replaced while it connected: the newer attempt is the listener, and this one must not stay beside it.
+	if (attempt !== hub.attempt) {
+		void client.end().catch(() => undefined);
 		return null;
 	}
 	hub.failures = 0;
-	if (hub.missed) {
-		hub.missed = false;
-		tellPages({ all: true });
-	}
+	hub.listeners += 1;
+	// Whatever changed before this moment went unheard, for pages that waited through a lost connection and for
+	// pages that have only just arrived.
+	tellPages({ all: true });
 	return client;
 }
 
-/** Listens on the library's database as its configuration has it now, replacing a listener on an older address. */
-async function listen() {
+function failedToListen(error: unknown) {
+	console.error("The admin's change listener could not reach the database", error);
+	hub.listening = null;
+	retry();
+}
+
+/**
+ * Resolves once the library's database is listened to, as its configuration has it now: true when it is. A listener
+ * on an address an older configuration had is replaced.
+ */
+async function listening() {
 	const databaseUrl = (await getLibraryConfig()).services.database.url;
-	if (hub.listening && hub.databaseUrl === databaseUrl) return;
-	const replaced = hub.listening;
-	hub.databaseUrl = databaseUrl;
-	hub.missed ||= Boolean(replaced);
-	hub.listening = open(databaseUrl);
-	void replaced?.then((client) => client?.end()).catch(() => undefined);
+	if (!hub.listening || hub.databaseUrl !== databaseUrl) {
+		const replaced = hub.listening;
+		hub.databaseUrl = databaseUrl;
+		hub.attempt += 1;
+		hub.listening = open(databaseUrl, hub.attempt);
+		void replaced?.then((client) => client?.end()).catch(() => undefined);
+	}
+	return (await hub.listening) !== null;
+}
+
+/** Makes sure the database is listened to, for a page that is open: a failure is tried again after a wait. */
+function listenAgain() {
+	if (hub.pages.size) void listening().catch(failedToListen);
 }
 
 async function stopListening() {
 	const closing = hub.listening;
 	hub.listening = null;
-	hub.missed = false;
+	// An attempt still connecting is not the listener any more.
+	hub.attempt += 1;
 	hub.failures = 0;
 	if (hub.retryTimer) clearTimeout(hub.retryTimer);
 	hub.retryTimer = null;
 	await closing?.then((client) => client?.end()).catch(() => undefined);
 }
 
+/** A page that arrives while the listener is already up reads everything once, for what changed since it was served. */
+async function tellWhenListening(tell: Tell) {
+	const listeners = hub.listeners;
+	const ready = await listening();
+	// A listener that came up meanwhile has told every page, this one included.
+	if (ready && listeners === hub.listeners && hub.pages.has(tell)) tell({ all: true });
+}
+
 function subscribe(tell: Tell) {
 	hub.pages.add(tell);
 	if (hub.lingerTimer) clearTimeout(hub.lingerTimer);
 	hub.lingerTimer = null;
-	void listen().catch((error: unknown) => {
-		console.error("The admin's change listener could not start", error);
-		hub.missed = true;
-		retry();
-	});
+	void tellWhenListening(tell).catch(failedToListen);
 	return () => {
 		hub.pages.delete(tell);
 		if (hub.pages.size || hub.lingerTimer) return;
@@ -171,7 +197,12 @@ export function adminLiveResponse(signal: AbortSignal) {
 			// How long the browser waits before it opens the stream again after losing it.
 			write("retry: 3000\n\n");
 			const unsubscribe = subscribe((message) => write(`data: ${JSON.stringify(message)}\n\n`));
-			const keepAlive = setInterval(() => write(": keep-alive\n\n"), KEEP_ALIVE_MS);
+			// With each keep-alive the listener is checked: a configuration that moved the database since, or a listener
+			// that went without a retry, is put right within one beat.
+			const keepAlive = setInterval(() => {
+				write(": keep-alive\n\n");
+				listenAgain();
+			}, KEEP_ALIVE_MS);
 			close = () => {
 				close = () => {};
 				clearInterval(keepAlive);

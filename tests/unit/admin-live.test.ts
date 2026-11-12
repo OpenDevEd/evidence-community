@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { noteOwnAdminWrite, paceReads } from "@/components/admin/admin-live";
+import { noteOwnAdminWrite, oneAtATime, paceReads } from "@/components/admin/admin-live";
 
 describe("how often a part of the admin reads itself again", () => {
 	let hidden = false;
+	let clock = Date.now();
 	beforeEach(() => {
 		hidden = false;
 		vi.useFakeTimers();
-		// Past the wait a save made in an earlier test leaves behind.
-		vi.setSystemTime(Date.now() + 60_000);
+		// Each test starts ten minutes after the last, past the wait a save made in an earlier one leaves behind.
+		clock += 600_000;
+		vi.setSystemTime(clock);
 		vi.stubGlobal("document", { get hidden() { return hidden; } });
 	});
 	afterEach(() => {
@@ -90,6 +92,67 @@ describe("how often a part of the admin reads itself again", () => {
 		expect(read).not.toHaveBeenCalled();
 		hidden = false;
 		paced.shown();
+		expect(read).toHaveBeenCalledTimes(1);
+	});
+
+	it("waits for a read under way, then reads once more for what changed meanwhile", async () => {
+		let finish!: () => void;
+		const read = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+		const paced = paceReads(read, 1_000);
+		paced.changed();
+		paced.changed();
+		paced.changed();
+		expect(read).toHaveBeenCalledTimes(1);
+		finish();
+		await vi.advanceTimersByTimeAsync(2_000);
+		expect(read).toHaveBeenCalledTimes(2);
+	});
+
+	it("reads nothing more once it is stopped, even with a read under way and a change waiting", async () => {
+		let finish!: () => void;
+		const read = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+		const paced = paceReads(read, 1_000);
+		paced.changed();
+		paced.changed();
+		paced.stop();
+		finish();
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(read).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("a read two parts of the page share", () => {
+	it("never runs twice at once, and runs once more when asked for while it ran", async () => {
+		const finishes: (() => void)[] = [];
+		const read = vi.fn(() => new Promise<void>((resolve) => { finishes.push(resolve); }));
+		const shared = oneAtATime(read);
+		const first = shared();
+		// Asked again in the same moment: the read hasn't left yet, so it answers this too.
+		void shared();
+		await Promise.resolve();
+		// Asked again once it is on its way: what changed since may not be in its answer.
+		void shared();
+		void shared();
+		expect(read).toHaveBeenCalledTimes(1);
+		finishes[0]!();
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(read).toHaveBeenCalledTimes(2);
+		finishes[1]!();
+		await first;
+		expect(read).toHaveBeenCalledTimes(2);
+		void shared();
+		expect(read).toHaveBeenCalledTimes(3);
+	});
+
+	it("reads once for two requests made in the same moment", async () => {
+		const finishes: (() => void)[] = [];
+		const read = vi.fn(() => new Promise<void>((resolve) => { finishes.push(resolve); }));
+		const shared = oneAtATime(read);
+		const first = shared();
+		void shared();
+		finishes[0]!();
+		await first;
 		expect(read).toHaveBeenCalledTimes(1);
 	});
 });

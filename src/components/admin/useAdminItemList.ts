@@ -4,7 +4,6 @@ import { debounce, parseAsString, useQueryState, useQueryStates } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import { toast } from "sonner";
 
-import { ADMIN_ITEM_MAX_PAGE_SIZE } from "@/lib/admin/constants";
 import type { AdminItemColumnId } from "@/lib/admin/item-list-contract";
 import type {
 	AdminItemListPage,
@@ -13,6 +12,7 @@ import type {
 } from "@/lib/admin/types";
 
 import { adminErrorMessage, getAdminItems } from "./admin-api";
+import { oneAtATime } from "./admin-live";
 
 
 import { adminItemViewParsers, paramsFromView, viewFromParams } from "@/lib/admin/item-filter-state";
@@ -39,11 +39,9 @@ function buildListSearchParams(
 	filters: AdminItemViewFilters,
 	cursor: string | null,
 	requestedColumns: readonly AdminItemColumnId[],
-	pageSize?: number,
 ) {
 	return new URLSearchParams({
 		...(cursor ? { cursor } : {}),
-		...(pageSize ? { pageSize: String(pageSize) } : {}),
 		...(filters.reviewQueue ? { review: "pending" } : {}),
 		filters: JSON.stringify(filters.filters),
 		requestedColumns: JSON.stringify(requestedColumns),
@@ -54,15 +52,18 @@ function buildListSearchParams(
 	});
 }
 
-/** The rows on screen read again from the top, as far down as `wanted`, with where the next page starts. */
-async function readLoadedRows(read: (cursor: string | null) => Promise<AdminItemListPage>, wanted: number) {
+/**
+ * The rows on screen read again from the top, with where the next page starts. `wanted` is asked after every page, so
+ * rows the person loads by scrolling while this reads are read too and the list never comes back shorter.
+ */
+async function readLoadedRows(read: (cursor: string | null) => Promise<AdminItemListPage>, wanted: () => number) {
 	const rows: AdminItemListRow[] = [];
 	let cursor: string | null = null;
 	do {
 		const page = await read(cursor);
 		rows.push(...page.items);
 		cursor = page.hasMore ? page.nextCursor : null;
-	} while (cursor && rows.length < wanted);
+	} while (cursor && rows.length < wanted());
 	return { rows, cursor };
 }
 
@@ -137,8 +138,7 @@ export function useAdminItemList(
 
 	// Picking a record to link shows every record, not only those waiting for review.
 	const listParams = useCallback(
-		(cursor: string | null, pageSize?: number) =>
-			buildListSearchParams(linkPicking ? { ...filters, reviewQueue: false } : filters, cursor, requestedColumns, pageSize),
+		(cursor: string | null) => buildListSearchParams(linkPicking ? { ...filters, reviewQueue: false } : filters, cursor, requestedColumns),
 		[filters, linkPicking, requestedColumns],
 	);
 
@@ -199,15 +199,13 @@ export function useAdminItemList(
 		return () => clearTimeout(timeout);
 	}, [loadItems]);
 
-	/**
-	 * Reads the rows on screen again for a change someone else made, as far down as the list has been read. Nothing
-	 * shows as loading, the open record stays open, and a row that didn't change stays the same row. A load that starts
-	 * meanwhile brings the same answer and wins, and a read that fails waits for the next change.
-	 */
-	const refreshItems = useCallback(async () => {
-		const request = requestId.current;
-		const read = await readLoadedRows((cursor) => getAdminItems(listParams(cursor, ADMIN_ITEM_MAX_PAGE_SIZE)), itemsRef.current.length).catch(() => null);
-		if (!read || request !== requestId.current) return;
+	const latestListParams = useRef(listParams);
+	latestListParams.current = listParams;
+	const readShownRows = useCallback(async () => {
+		// In pages the size the list loads in, so a list that has just loaded comes back with the same rows.
+		const read = await readLoadedRows((cursor) => getAdminItems(listParams(cursor)), () => itemsRef.current.length).catch(() => null);
+		// A read that failed waits for the next change, and one for a view the person has left is dropped.
+		if (!read || listParams !== latestListParams.current) return;
 		const next = keepShownRows(itemsRef.current, read.rows);
 		if (next !== itemsRef.current) {
 			setItems(next);
@@ -217,6 +215,14 @@ export function useAdminItemList(
 		setHasMore(read.cursor !== null);
 		setNextCursor(read.cursor);
 	}, [listParams]);
+	const latestReadShownRows = useRef(readShownRows);
+	latestReadShownRows.current = readShownRows;
+	/**
+	 * Reads the rows on screen again for a change someone else made, as far down as the list has been read. Nothing
+	 * shows as loading, the open record stays open, and a row that didn't change stays the same row. Asked for by more
+	 * than one part of the page, it reads once at a time.
+	 */
+	const [refreshItems] = useState(() => oneAtATime(() => latestReadShownRows.current()));
 
 	useEffect(
 		() => () => {

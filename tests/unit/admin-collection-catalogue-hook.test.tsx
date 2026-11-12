@@ -328,35 +328,67 @@ describe("useAdminCollectionCatalogue", () => {
 	});
 
 	it("reads a shown branch again for someone else's change without showing it as loading, and keeps it when that read fails", async () => {
-		const page = (items: AdminCollectionCatalogEntry[]) => ({ hasMore: false, items, nextCursor: null });
+		const page = (items: AdminCollectionCatalogEntry[], nextCursor: string | null = null) => ({ hasMore: nextCursor !== null, items, nextCursor });
 		const shown = () => current.state.branches.get("native\u0000root");
+		const keys = () => shown()?.items.map(({ key }) => key);
 		api.getChildren.mockResolvedValueOnce(page([entry("FIRST001")]));
 		await act(async () => current.loadChildren("native", null));
 
 		const again = deferred<ReturnType<typeof page>>();
 		api.getChildren.mockReturnValueOnce(again.promise);
+		let reading!: Promise<unknown>;
 		await act(async () => {
-			current.refresh();
+			reading = current.refresh();
 			await Promise.resolve();
 		});
 		// Still on screen while it is read again: a tree that emptied here would collapse under the person's pointer.
 		expect(shown()?.status).toBe("ready");
-		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001"]);
+		expect(keys()).toEqual(["FIRST001"]);
 
 		await act(async () => {
 			again.resolve(page([entry("FIRST001"), entry("SECOND02")]));
-			await again.promise;
+			await reading;
 		});
-		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001", "SECOND02"]);
+		expect(keys()).toEqual(["FIRST001", "SECOND02"]);
 
 		api.getChildren.mockRejectedValueOnce(new Error("offline"));
 		await act(async () => {
-			current.refresh();
-			await Promise.resolve();
-			await Promise.resolve();
+			await current.refresh();
 		});
 		expect(shown()?.status).toBe("ready");
 		expect(shown()?.error).toBeNull();
-		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001", "SECOND02"]);
+		expect(keys()).toEqual(["FIRST001", "SECOND02"]);
+	});
+
+	it("reads a branch again through every page it had loaded, so it never comes back shorter", async () => {
+		const page = (items: AdminCollectionCatalogEntry[], nextCursor: string | null = null) => ({ hasMore: nextCursor !== null, items, nextCursor });
+		const keys = () => current.state.branches.get("native\u0000root")?.items.map(({ key }) => key);
+		api.getChildren.mockResolvedValueOnce(page([entry("PAGE1A01"), entry("PAGE1B01")], "second"));
+		await act(async () => current.loadChildren("native", null));
+		api.getChildren.mockResolvedValueOnce(page([entry("PAGE2A01")], "third"));
+		await act(async () => current.loadChildren("native", null, { more: true }));
+		expect(keys()).toEqual(["PAGE1A01", "PAGE1B01", "PAGE2A01"]);
+
+		// Someone renamed a collection on the second page.
+		api.getChildren.mockResolvedValueOnce(page([entry("PAGE1A01"), entry("PAGE1B01")], "second"));
+		api.getChildren.mockResolvedValueOnce(page([entry("PAGE2A01", "Renamed")], "third"));
+		await act(async () => {
+			await current.refresh();
+		});
+		expect(keys()).toEqual(["PAGE1A01", "PAGE1B01", "PAGE2A01"]);
+		expect(current.state.branches.get("native\u0000root")?.items[2]?.name).toBe("Renamed");
+		expect(current.state.branches.get("native\u0000root")?.nextCursor).toBe("third");
+	});
+
+	it("reads the search results on screen again for someone else's change", async () => {
+		const input = { query: "teacher", sourceConnectionKey: null, state: "active" as const };
+		api.search.mockResolvedValueOnce({ hasMore: false, items: [entry("FOUND001")], nextCursor: null });
+		await act(async () => current.loadSearch(input));
+		api.search.mockResolvedValueOnce({ hasMore: false, items: [entry("FOUND001"), entry("FOUND002")], nextCursor: null });
+		await act(async () => {
+			await current.refresh();
+		});
+		expect(current.state.search.status).toBe("ready");
+		expect(current.state.search.items.map(({ key }) => key)).toEqual(["FOUND001", "FOUND002"]);
 	});
 });

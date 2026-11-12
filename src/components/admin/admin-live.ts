@@ -13,8 +13,6 @@ type Reader = { topics: ReadonlySet<AdminLiveTopic>; changed: () => void };
 const readers = new Set<Reader>();
 let stream: EventSource | null = null;
 let reopenTimer = 0;
-/** Whether the stream has been open before: changes made while it was closed were missed, so everything reads again. */
-let openedBefore = false;
 /** Until when this page's own saves keep a read waiting, so typing isn't answered by a read after every save. */
 let ownWriteUntil = 0;
 
@@ -33,10 +31,8 @@ function tell(topics: readonly AdminLiveTopic[]) {
 
 function open() {
 	stream = new EventSource(ADMIN_LIVE_PATH);
-	stream.onopen = () => {
-		if (openedBefore) tell(ADMIN_LIVE_TOPICS);
-		openedBefore = true;
-	};
+	// The server says "all" once it listens for this stream, each time the stream opens: whatever changed since the
+	// page was read, or while the stream was closed, went unheard.
 	stream.onmessage = (event: MessageEvent<string>) => {
 		const message = JSON.parse(event.data) as AdminLiveMessage;
 		tell("all" in message ? ADMIN_LIVE_TOPICS : message.topics);
@@ -56,12 +52,39 @@ function close() {
 	stream = null;
 	window.clearTimeout(reopenTimer);
 	reopenTimer = 0;
-	openedBefore = false;
 }
 
 /** The page saved something itself, and reads what it changed itself: reads for the change it caused wait a moment. */
 export function noteOwnAdminWrite(method = "GET") {
 	if (method !== "GET") ownWriteUntil = Date.now() + AFTER_OWN_WRITE_MS;
+}
+
+/**
+ * A read that never runs twice at once, whoever asks: asked for while it runs, it reads once more when done, so the
+ * answer on screen is never older than the last request for it. Two parts of the page can ask for the same read, and
+ * when they ask in the same moment, as for one message that names both, one read answers both: it hasn't left yet.
+ */
+export function oneAtATime(read: () => Promise<unknown>) {
+	let running: Promise<void> | null = null;
+	let again = false;
+	let leaving = false;
+	const readUntilAsked = async () => {
+		try {
+			do {
+				again = false;
+				leaving = true;
+				queueMicrotask(() => (leaving = false));
+				await read();
+			} while (again);
+		} finally {
+			running = null;
+		}
+	};
+	return () => {
+		again = running !== null && !leaving;
+		running ??= readUntilAsked();
+		return running;
+	};
 }
 
 /** Starts a read now and resolves when it is done, whether it worked or not: a read that failed waits for the next change. */
@@ -84,6 +107,7 @@ export function paceReads(read: () => unknown, every: number) {
 	let timer: ReturnType<typeof setTimeout> | null = null;
 	let waiting = false;
 	let reading = false;
+	let stopped = false;
 	let lastRead = 0;
 	let quickReads = BURST;
 	let earningSince = 0;
@@ -113,7 +137,7 @@ export function paceReads(read: () => unknown, every: number) {
 		});
 	};
 	const ask = () => {
-		if (!timer && !reading) run();
+		if (!timer && !reading && !stopped) run();
 	};
 	return {
 		changed: () => {
@@ -124,6 +148,8 @@ export function paceReads(read: () => unknown, every: number) {
 			if (waiting) ask();
 		},
 		stop: () => {
+			// A read under way finishes, and nothing reads after it.
+			stopped = true;
 			if (timer) clearTimeout(timer);
 			timer = null;
 		},
