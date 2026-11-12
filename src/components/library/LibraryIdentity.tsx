@@ -315,20 +315,3 @@ export function FunderLogo({
 		</BrandLogoBox>
 	);
 }
-
-export function FundingPartners({ className }: { className?: string }) {
-	const { fundingPartners } = useLibraryConfig().identity;
-	const t = useTranslations("ui");
-	if (fundingPartners.length === 0) return null;
-
-	return (
-		<ul
-			aria-label={t("fundingPartner")}
-			className={twMerge("flex flex-wrap gap-x-3 gap-y-1", className)}
-		>
-			{fundingPartners.map((partner) => (
-				<li key={partner.id}>{partner.name}</li>
-			))}
-		</ul>
-	);
-}

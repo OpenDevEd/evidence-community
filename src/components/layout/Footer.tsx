@@ -13,7 +13,6 @@ import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsCo
 import BrandIcon from "@/components/icons/BrandIcon";
 import {
 	FunderLogo,
-	FundingPartners,
 	LibraryLogo,
 	useLibraryLogo,
 } from "@/components/library/LibraryIdentity";
@@ -160,7 +159,6 @@ export default function Footer() {
 			<div className="grid w-full max-w-site grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-4">
 				<section className="flex flex-col items-center gap-6 sm:items-start">
 					<Logo />
-					<FundingPartners className="justify-center text-black/60 dark:text-white/60 sm:justify-start" />
 					{hasContact && (
 						<dl className="flex flex-col gap-3 text-center text-black/60 dark:text-white/60 sm:text-left">
 							{contact.email && (

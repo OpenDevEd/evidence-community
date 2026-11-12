@@ -8,12 +8,6 @@
 		"tagline": "Research evidence you can search, filter, and cite.",
 		"description": "The Example Evidence Library collects peer-reviewed research and reports about education, with full-text search and citation export.",
 		"baseUrl": "https://library.example.org",
-		"fundingPartners": [
-			{
-				"id": "partner-one",
-				"name": "Partner One"
-			}
-		],
 		"assets": {
 			"logoDark": "https://assets.example.org/library/logo-dark.svg",
 			"logoLight": "https://assets.example.org/library/logo-light.webp",
