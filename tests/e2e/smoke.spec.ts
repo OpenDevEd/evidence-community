@@ -851,7 +851,8 @@ test("copies the selected citation style from a result card without opening the 
 	await page.keyboard.press("Escape");
 	await expect(page.getByRole("listbox", { name: "Citation style" })).toHaveCount(0);
 	await expect(panel.getByRole("button", { name: "Copy citation", exact: true })).toBeVisible();
-	await page.getByRole("textbox", { name: "Search", exact: true }).click();
+	// At the field's start: its Clear button follows the typed words and can sit over the middle.
+	await page.getByRole("textbox", { name: "Search", exact: true }).click({ position: { x: 8, y: 12 } });
 	await expect(panel).toHaveCount(0);
 });
 
