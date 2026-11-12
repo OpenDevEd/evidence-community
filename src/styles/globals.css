@@ -37,6 +37,12 @@ html {
 	scrollbar-gutter: stable;
 }
 
+/* NextUI's modals lock the page's scroll through an older React Aria, which pads the page by the bar's width; the
+   gutter already keeps that width, so counted twice the page would move left as a modal opens. */
+html {
+	padding-right: 0 !important;
+}
+
 ::-webkit-scrollbar {
 	width: 10px;
 	height: 10px;

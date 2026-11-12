@@ -987,7 +987,7 @@ function SourceIssues({
 					<h3 className="text-sm font-semibold">Record issues</h3>
 					<span className="text-xs font-medium tabular-nums text-black/50 dark:text-white/50">{count(total)}</span>
 				</div>
-				<div className="flex gap-1 overflow-x-auto px-2 pb-2 [scrollbar-width:none] sm:flex-col sm:overflow-y-auto">
+				<div className="flex gap-1 overflow-x-auto px-2 pb-2 max-sm:[scrollbar-width:none] sm:flex-col sm:overflow-y-auto">
 					{types.map((group) => (
 						<IssueKindButton
 							key={group.key}
