@@ -40,6 +40,15 @@ describe("reading the rows on screen again", () => {
 		expect(read).toHaveBeenCalledTimes(6);
 	});
 
+	it("doesn't read further when shown records leave and rows move up from below", async () => {
+		const old = keys("old", 300);
+		// Three of the fifty shown left the view, as when an editor decides records in the review queue.
+		const read = served(old.filter((key) => !["old3", "old20", "old41"].includes(key)));
+		const { rows } = await readLoadedRows(read, () => old.slice(0, 50).map(row));
+		expect(rows).toHaveLength(50);
+		expect(read).toHaveBeenCalledTimes(1);
+	});
+
 	it("reads one page for a list that has nothing on screen yet", async () => {
 		const read = served(keys("old", 300));
 		const { rows } = await readLoadedRows(read, () => []);

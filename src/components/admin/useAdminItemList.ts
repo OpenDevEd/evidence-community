@@ -56,13 +56,16 @@ function buildListSearchParams(
 const MOST_ARRIVALS = 200;
 
 /**
- * How many rows to read to keep what is on screen: as many as are shown, and one more for each row among those read
- * that wasn't shown before. Rows that arrive above push the ones a person is reading, or has ticked, further down.
- * Past MOST_ARRIVALS, as in an import of thousands, the list shows the newest and lets the rest go.
+ * How many rows to read to keep what is on screen: as many as are shown, and one more for each row that arrived above
+ * the last of them read so far. Rows that arrive above push the ones a person is reading, or has ticked, further down.
+ * A new row after the last shown one is a row moving up from below, as when a shown record leaves the view, and
+ * doesn't count. Past MOST_ARRIVALS, as in an import of thousands, the list shows the newest and lets the rest go.
  */
 function rowsToKeep(read: readonly AdminItemListRow[], shown: readonly AdminItemListRow[]) {
 	const known = new Set(shown.map(({ key }) => key));
-	const arrived = read.filter(({ key }) => !known.has(key)).length;
+	const lastKnown = read.findLastIndex(({ key }) => known.has(key));
+	const above = lastKnown < 0 ? read : read.slice(0, lastKnown);
+	const arrived = above.filter(({ key }) => !known.has(key)).length;
 	return shown.length + Math.min(arrived, MOST_ARRIVALS);
 }
 

@@ -295,6 +295,7 @@ function CollectionLocationButton({
 
 const ADMIN_DESKTOP_MEDIA_QUERY = "(min-width: 1280px)";
 const ADMIN_SOURCE_SYNC_POLL_MS = 10_000;
+const ADMIN_LIBRARY_POLL_MS = 60_000;
 
 function singleKey(keys: "all" | Set<React.Key>) {
 	if (keys === "all") return null;
@@ -753,13 +754,13 @@ export default function AdminWorkbench({
 	useAdminLive(["collections"], noteAdminCollectionsChangedElsewhere, 2_000);
 
 	// An import's progress is counted from work the page isn't told about row by row, so while one runs, or its dialog
-	// is open, the sidebar reads it on a timer.
+	// is open, the sidebar reads it on a timer. Otherwise it still reads once a minute: a source worker that stopped
+	// without a word fails once its lease runs out, which changes nothing in the database for the page to hear.
 	const watchingImport =
 		Boolean(syncSource?.activity) ||
 		library.sources.some(({ activity }) => activity?.state === "running");
 	useEffect(() => {
-		if (!watchingImport) return;
-		const timer = setInterval(() => void loadLibrary(), ADMIN_SOURCE_SYNC_POLL_MS);
+		const timer = setInterval(() => void loadLibrary(true), watchingImport ? ADMIN_SOURCE_SYNC_POLL_MS : ADMIN_LIBRARY_POLL_MS);
 		return () => clearInterval(timer);
 	}, [loadLibrary, watchingImport]);
 
