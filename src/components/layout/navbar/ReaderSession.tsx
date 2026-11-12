@@ -7,7 +7,7 @@ import { useSWRConfig } from "swr";
 
 import { toast } from "@/components/layout/Toast";
 import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
-import { getPathname, usePathname } from "@/i18n/routing";
+import { getPathname } from "@/i18n/routing";
 import { normalizePathname } from "@/lib/path";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
@@ -275,7 +275,6 @@ export function useReaderSession() {
 	const serverReader = useContext(ServerReader);
 	const { siteUrl, sessionCookie } = useLibraryConfig().authentication.openScholar;
 	const { data, isPending } = readerAuthClient.useSession();
-	const pathname = usePathname();
 	const locale = useLocale();
 	const reader: Reader | null = isPending
 		? serverReader
@@ -313,7 +312,7 @@ export function useReaderSession() {
 			await readerAuthClient.signOut();
 			kept.set(ASK_AGAIN_KEY, "1");
 			markSignedOut();
-			const back = reader && normalizePathname(pathname) === `/profile/${reader.id}` ? new URL(getPathname({ href: "/", locale }), window.location.origin).toString() : window.location.href;
+			const back = reader && normalizePathname(window.location.pathname).endsWith(`/profile/${reader.id}`) ? new URL(getPathname({ href: "/", locale }), window.location.origin).toString() : window.location.href;
 			// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
 			if (sessionCookie && readCookie(sessionCookie) === "0") return back === window.location.href ? window.location.reload() : window.location.assign(back);
 			const signOut = new URL("/sign-out", siteUrl);
