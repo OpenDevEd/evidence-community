@@ -2,7 +2,7 @@
 
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
 import { AutocompleteItem } from "@nextui-org/react";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 
 import { Autocomplete } from "@/components/nextui/Autocomplete";
 import { Input } from "@/components/nextui/Input";
@@ -14,7 +14,7 @@ import {
 	adminFieldContract,
 } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
-import { LANGUAGES, languageCode } from "@/lib/languages";
+import { LANGUAGES, languageCode, languageName } from "@/lib/languages";
 import { filledFieldSurface, inspectorInputClassNames } from "@/components/nextui/field-styles";
 import { InstitutionInput } from "./InstitutionInput";
 
@@ -257,12 +257,21 @@ const LANGUAGE_ROWS = LANGUAGES.map((language) => (
 ));
 
 /**
- * A record's language, chosen from the languages Crossref and Zenodo take and kept as its code. Text from before the
- * list that names no language ("English; French") stays until the editor chooses, and the field says so.
+ * A record's language, chosen from the languages that have a two-letter code and kept as that code, which Crossref
+ * and Zenodo both take. A language saved before the list by its name or a longer code ("Cebuano", "ceb") shows as
+ * itself. Text that names no language ("English; French") stays until the editor chooses, and the field says so.
  */
 function LanguageField(props: CommonFieldProps) {
-	const code = languageCode(props.value);
-	const unknown = props.value.trim() && !code ? `“${props.value.trim()}” isn't a language in the list. Choose one.` : undefined;
+	const stored = props.value.trim();
+	const code = languageCode(stored);
+	// A language the list doesn't have: one more row, so the field can show what the record holds.
+	const other = code ? undefined : languageName(stored);
+	const rows = useMemo(
+		() => (other ? [...LANGUAGE_ROWS, <AutocompleteItem key={stored} textValue={other}>{other}</AutocompleteItem>] : LANGUAGE_ROWS),
+		[other, stored],
+	);
+	const chosen = code || (other ? stored : "");
+	const unknown = stored && !chosen ? `“${stored}” isn't a language in the list. Choose one.` : undefined;
 	const error = props.error ?? unknown;
 	return (
 		<Autocomplete
@@ -280,13 +289,13 @@ function LanguageField(props: CommonFieldProps) {
 			placeholder="Find a language"
 			// The pane scrolls a little when the field takes focus near its edge, and when a notice arrives: the list stays open through it.
 			popoverProps={{ shouldCloseOnScroll: false }}
-			selectedKey={code || null}
+			selectedKey={chosen || null}
 			onSelectionChange={(key) => {
 				const next = typeof key === "string" ? key : "";
-				if (next !== code) props.onValueChange(next);
+				if (next !== chosen) props.onValueChange(next);
 			}}
 		>
-			{LANGUAGE_ROWS}
+			{rows}
 		</Autocomplete>
 	);
 }

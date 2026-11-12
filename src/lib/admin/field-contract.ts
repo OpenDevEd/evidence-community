@@ -1,7 +1,6 @@
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
 
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
-import { languageCode, languageTag } from "@/lib/languages";
 import {
 	formatInstitutionNames,
 	parseInstitutionNames,
@@ -54,6 +53,7 @@ export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 		return { kind: "annotation-type" };
 	}
 	if (descriptor.field === "annotationColor") return { kind: "color" };
+	// Chosen from a list in the editor. Text from a source or from before the list is kept as it is.
 	if (descriptor.field === "language") return { kind: "language" };
 	if (MULTILINE_FIELDS.has(descriptor.field)) return { kind: "multiline" };
 	return { kind: "text" };
@@ -128,26 +128,43 @@ export function normalizeAdminFieldValue(
 			? formatInstitutionNames(parseInstitutionNames(input))
 			: input.trim();
 	if (!value) return { value: "" };
-	return fieldLengthError(descriptor, value) ?? KIND_RULES[kind]?.(value, options.keepUnparsed ?? false) ?? { value };
-}
+	const lengthError = fieldLengthError(descriptor, value);
+	if (lengthError) return lengthError;
 
-/** What each kind of field does to a value an editor saves; a kind with no rule keeps the text as it is. */
-const KIND_RULES: Partial<Record<AdminFieldKind, (value: string, keepUnparsed: boolean) => { error?: string; value: string }>> = {
-	"bibliographic-date": (value, keepUnparsed) =>
-		!keepUnparsed && parseBibliographicDate(value).kind === "invalid" ? { error: "Enter an exact date, a month, or a four-digit year.", value } : { value },
-	// The editor uses a calendar control, so a value that is not a calendar
-	// date can only come from old stored data (for example the text
-	// CURRENT_TIMESTAMP) or an API caller. Clear it instead of blocking the
-	// save, so the next save repairs the record.
-	"access-date": (value) => ({ value: normalizeAccessDate(value) ?? "" }),
-	url: normalizeFieldUrl,
-	// The editor offers a list, so other text was typed before it did: a language written out becomes its code
-	// ("English" is "en"), and text that names none is kept for an editor to replace. A source's text stays its own.
-	language: (value, keepUnparsed) => ({ value: !keepUnparsed && languageCode(value) && languageTag(value) !== value ? languageCode(value) : value }),
-	"annotation-type": (value) =>
-		ADMIN_ANNOTATION_TYPES.includes(value as (typeof ADMIN_ANNOTATION_TYPES)[number]) ? { value } : { error: "Choose a valid annotation type.", value },
-	color: (value) => (/^#[\da-f]{6}$/iu.test(value) ? { value } : { error: "Choose a six-digit colour.", value }),
-};
+	if (kind === "bibliographic-date") {
+		if (
+			!options.keepUnparsed &&
+			parseBibliographicDate(value).kind === "invalid"
+		) {
+			return {
+				error: "Enter an exact date, a month, or a four-digit year.",
+				value,
+			};
+		}
+		return { value };
+	}
+	if (kind === "access-date") {
+		// The editor uses a calendar control, so a value that is not a calendar
+		// date can only come from old stored data (for example the text
+		// CURRENT_TIMESTAMP) or an API caller. Clear it instead of blocking the
+		// save, so the next save repairs the record.
+		return { value: normalizeAccessDate(value) ?? "" };
+	}
+	if (kind === "url") return normalizeFieldUrl(value, options.keepUnparsed);
+
+	if (
+		kind === "annotation-type" &&
+		!ADMIN_ANNOTATION_TYPES.includes(
+			value as (typeof ADMIN_ANNOTATION_TYPES)[number],
+		)
+	) {
+		return { error: "Choose a valid annotation type.", value };
+	}
+	if (kind === "color" && !/^#[\da-f]{6}$/iu.test(value)) {
+		return { error: "Choose a six-digit colour.", value };
+	}
+	return { value };
+}
 
 function fieldLengthError(descriptor: AdminFieldDescriptor, value: string) {
 	if (descriptor.field === "note") {
