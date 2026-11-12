@@ -10,6 +10,9 @@ import { sourcePublishTags } from "@/lib/tags";
 import { offersSources } from "@/lib/search-query";
 import { libraryResultLimit } from "@/lib/search-filter-constants";
 
+/** The most funders a footer holds (`footerSchema`). */
+const FUNDERS_MAX = 40;
+
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
 	LibraryPublicConfig
@@ -38,8 +41,9 @@ function fundersOf(config: LibraryServerConfig) {
 		taken.add(id);
 		return [{ id, name: partner.name }];
 	});
-	// Twenty of each at most, and the footer's list holds forty, so none is ever left out.
-	return [...funders, ...partners];
+	// Openscholar saved twenty of each at most, and the list holds forty, so none of those is left out. Settings
+	// written by hand could name more: the list stops at what the page's own check takes, which every funder fits.
+	return [...funders, ...partners].slice(0, FUNDERS_MAX);
 }
 
 export function projectPublicLibraryConfig(

@@ -242,6 +242,9 @@ describe("runtime library identity", () => {
 		full.footer.funders = Array.from({ length: 20 }, (_, n) => ({ ...full.footer.funders[0]!, id: `funder-${n}`, name: `Funder ${n}` }));
 		full.identity.fundingPartners = Array.from({ length: 20 }, (_, n) => ({ id: `partner-${n}`, name: `Partner ${n}` }));
 		expect(projectPublicLibraryConfig(libraryConfigSchema.parse(full)).footer.funders).toHaveLength(40);
+		// Settings written by hand could hold more than the page's own check takes. The page still draws.
+		full.footer.funders = Array.from({ length: 40 }, (_, n) => ({ ...full.footer.funders[0]!, id: `funder-${n}`, name: `Funder ${n}` }));
+		expect(projectPublicLibraryConfig(libraryConfigSchema.parse(full)).footer.funders).toHaveLength(40);
 		expect(minimalConfig.footer.funders).toEqual([]);
 	});
 
