@@ -54,7 +54,7 @@ export function FacetOption({ label, count, largest, share, shareValue, arrow, a
 		<span className="@container flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="relative flex min-w-0 items-center gap-2">
 				{heading && shareValue !== null && <span className={twMerge("flex shrink-0", hidden)}><ShareRing share={shareValue} /></span>}
-				<TruncatedText text={label} lines={lines} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
+				<TruncatedText text={label} lines={lines} className={twMerge("flex-1 leading-5", emphasis && "font-semibold", lines === 2 && "break-words hyphens-auto")} />
 				<Figures count={count} share={share} arrow={arrow} arrowSlot={arrowSlot} note={note} heading={heading} hidden={hidden} />
 				{selected && <HugeiconsIcon icon={Tick01Icon} aria-hidden className="absolute end-0 top-1/2 size-4 -translate-y-1/2 text-accent" />}
 			</span>
