@@ -13,6 +13,7 @@ import { pdfImport, pdfImportFile } from "@/db/schema/pdf-import";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { canonicalItemFieldToDatabaseField, primaryCreatorType } from "@/lib/item-field-codec";
+import { languageTag } from "@/lib/languages";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import type { PdfReading } from "./item-import-contract";
@@ -23,7 +24,6 @@ import { readImportPdf } from "./pdf-import";
 import { keepImportChecks } from "./import-checks";
 import { sendImportedDraft, sendingOf } from "./pdf-import-send";
 import { readPdfProperties } from "./pdf-properties";
-import { languageTag } from "./pdf-record-mapping";
 
 // The worker's side of the PDF import: it reads each uploaded PDF with the
 // library's AI and, once the records are imported, gives each draft its PDF.

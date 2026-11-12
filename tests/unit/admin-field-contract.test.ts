@@ -9,6 +9,7 @@ import {
 	normalizeAccessDate,
 	normalizeAdminFieldValue,
 } from "@/lib/admin/field-contract";
+import { LANGUAGES, languageCode, languageName } from "@/lib/languages";
 
 describe("admin metadata field contract", () => {
 	it("classifies every vendored field from one complete policy", () => {
@@ -36,7 +37,9 @@ describe("admin metadata field contract", () => {
 									? "institution-list"
 									: multiline.has(descriptor.field)
 										? "multiline"
-										: "text";
+										: descriptor.field === "language"
+											? "language"
+											: "text";
 				expect(adminFieldContract(descriptor).kind).toBe(expected);
 				distinctFields.add(descriptor.field);
 				checked += 1;
@@ -119,6 +122,7 @@ describe("admin metadata field contract", () => {
 		["annotationText", "multiline"],
 		["annotationType", "annotation-type"],
 		["annotationColor", "color"],
+		["language", "language"],
 	])("uses a %s control", (field, kind) => {
 		expect(
 			adminFieldContract({
@@ -239,6 +243,19 @@ describe("admin metadata field contract", () => {
 				"é".repeat(32_768),
 			).error,
 		).toBe("This value is too long. Shorten it and try again.");
+	});
+
+	it("reads a stored language as one the editor offers, and keeps stored text as it is", () => {
+		const language = { field: "language", semanticField: "language", type: "text" } as const;
+		// Nothing saved is rewritten: a name, a tag and text that names no one language all stay.
+		for (const stored of ["English", "en-GB", "English; French"]) expect(normalizeAdminFieldValue(language, stored)).toEqual({ value: stored });
+		// Every language the editor offers reads back as itself, by its code and by its name, and is listed once.
+		for (const { code, name } of LANGUAGES) expect([languageCode(code), languageCode(name)]).toEqual([code, code]);
+		expect(new Set(LANGUAGES.map(({ name }) => name)).size).toBe(LANGUAGES.length);
+		// The row the field shows as chosen for each stored form: one of the list's, or "" for a language it has no row for.
+		expect(["eng", "en-US", "iw", "tw", "ceb", "Kiswahili", "English; French", "xx"].map(languageCode)).toEqual(["en", "en", "he", "ak", "", "", "", ""]);
+		// A language without a two-letter code is shown by its name. Text that names none is flagged.
+		expect(["ceb", "Cebuano", "Kiswahili", "English; French", "xx"].map(languageName)).toEqual(["Cebuano", "Cebuano", undefined, undefined, undefined]);
 	});
 
 	it("exposes the access date rule the public page uses to hide non-dates", () => {

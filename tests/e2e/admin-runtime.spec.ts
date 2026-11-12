@@ -1,10 +1,17 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 
 import { openAdmin } from "./admin-login";
 import { dismissConsent } from "./consent";
 import { publishWorkingDraft } from "./admin-review";
 
 const runtimeE2e = process.env.PLAYWRIGHT_RUNTIME_E2E === "true";
+
+/** Picks a record's language from the editor's list, which keeps it as its code. */
+async function chooseLanguage(pane: Locator, name: string) {
+	const language = pane.getByRole("combobox", { name: "Language", exact: true });
+	await language.fill(name);
+	await pane.page().getByRole("option", { name, exact: true }).click();
+}
 const expectedTitle =
 	process.env.PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE ??
 	"Amber database evidence";
@@ -188,9 +195,7 @@ test("resolves concurrent draft fields without losing either session's other cha
 			other.getByRole("textbox", { name: "Title", exact: true }),
 		).toHaveValue("Shared draft");
 		await title.fill("First session title");
-		await inspector
-			.getByRole("textbox", { name: "Language", exact: true })
-			.fill("English");
+		await chooseLanguage(inspector, "English");
 		await inspector
 			.getByRole("textbox", { name: "Publisher", exact: true })
 			.fill("First session publisher");
@@ -200,9 +205,7 @@ test("resolves concurrent draft fields without losing either session's other cha
 		await other
 			.getByRole("textbox", { name: "Title", exact: true })
 			.fill("Second session title");
-		await other
-			.getByRole("textbox", { name: "Language", exact: true })
-			.fill("French");
+		await chooseLanguage(other, "French");
 		await other
 			.getByRole("textbox", { name: "Place", exact: true })
 			.fill("Second session place");
@@ -255,7 +258,7 @@ test("resolves concurrent draft fields without losing either session's other cha
 			.poll(readDraft)
 			.toMatchObject({
 				title: "Second session title",
-				language: "English",
+				language: "en",
 				publisher: "First session publisher",
 				place: "Updated second session place",
 			});
@@ -392,12 +395,12 @@ test("keeps typing and field patches intact while an autosave is in flight", asy
 		await expect(abstract).toBeFocused();
 		await expect(abstract).toHaveValue("Evidence from Kenya and Ghana.");
 		await expect.poll(() => abstract.evaluate((node: HTMLTextAreaElement) => node.selectionStart)).toBe("Evidence from Kenya and Ghana.".length);
-		await inspector.getByRole("textbox", { name: "Language", exact: true }).fill("English");
+		await chooseLanguage(inspector, "English");
 		release();
-		await expect.poll(readDraft).toMatchObject({ title: "Typing persistence check", abstractNote: "Evidence from Kenya and Ghana.", language: "English" });
+		await expect.poll(readDraft).toMatchObject({ title: "Typing persistence check", abstractNote: "Evidence from Kenya and Ghana.", language: "en" });
 		await page.reload();
 		await expect(abstract).toHaveValue("Evidence from Kenya and Ghana.");
-		await expect(inspector.getByRole("textbox", { name: "Language", exact: true })).toHaveValue("English");
+		await expect(inspector.getByRole("combobox", { name: "Language", exact: true })).toHaveValue("English");
 	} finally {
 		release();
 		await page.unrouteAll({ behavior: "wait" });

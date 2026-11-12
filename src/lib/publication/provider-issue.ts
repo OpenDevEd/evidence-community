@@ -52,7 +52,7 @@ const PATH_TEXT: readonly (readonly [RegExp, (provider: Provider) => string])[] 
 	[/^creators$/u, (provider) => `${provider} needs at least one creator ${dependsOn(provider)}`],
 	[/^creators\.\d+\.orcid$/u, (provider) => `${provider} needs a valid 16-character ORCID iD for every creator that has one, ${dependsOn(provider)}`],
 	[/^creators\.\d+$/u, (provider) => `${provider} needs a name for every creator ${dependsOn(provider)}`],
-	[/^language$/u, (provider) => `${provider} needs the language as an ISO 639 code, such as en, ${dependsOn(provider)}`],
+	[/^language$/u, (provider) => `${provider} needs a language from the list ${dependsOn(provider)}`],
 	[/^license$/u, (provider) => `Zenodo doesn't accept this licence. Choose another licence ${dependsOn(provider)}`],
 	[/^identifiers\./u, (provider) => `${provider} can't use this community's DOI prefix. Check the community's DOI settings.`],
 ];

@@ -3093,11 +3093,13 @@ test("uses controls that preserve every supported metadata value", async ({
 			),
 		)
 		.toBe(true);
-	const language = inspector.getByLabel("Language", { exact: true });
-	await language.fill("French");
+	// A language is chosen from the list and saved as its code, which the registrars take.
+	const language = inspector.getByRole("combobox", { name: "Language", exact: true });
+	await language.fill("Fren");
+	await page.getByRole("option", { name: "French", exact: true }).click();
 	await expect
 		.poll(() =>
-			savedDrafts.some((payload) => payload.language === "French"),
+			savedDrafts.some((payload) => payload.language === "fr"),
 		)
 		.toBe(true);
 	await expect(inspector.getByText("Saved", { exact: true })).toBeVisible();
