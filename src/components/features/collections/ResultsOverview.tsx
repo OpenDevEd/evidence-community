@@ -4,7 +4,8 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { AiMagicIcon, ArrowDown01Icon, ArrowRight01Icon, BalanceScaleIcon, Cancel01Icon, Database02Icon, FileSearchIcon, PercentCircleIcon, Tick01Icon, UserEdit01Icon, UserMultiple02Icon } from "@hugeicons/core-free-icons";
 import type { FacetDistribution } from "@/lib/search-engine";
 import { useFormatter, useTranslations } from "next-intl";
-import { useId, useRef, useState, useSyncExternalStore, type ReactNode, type RefObject } from "react";
+import { useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { mediaQuery, useMedia } from "@/hooks/useMedia";
 import { twMerge } from "@/lib/tw-merge";
 import { HeadFigure, SIDEBAR_GREY, SidebarCard, barWidth } from "./SidebarCard";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
@@ -288,23 +289,6 @@ function StudyTypeMethodRows() {
 			<p className={`border-t border-black/5 pt-3 text-sm leading-6 dark:border-white/10 ${MUTED}`}>{t("several")}</p>
 		</div>
 	);
-}
-
-/** A media query a component follows as the screen changes. */
-function mediaQuery(query: string) {
-	return {
-		subscribe(onChange: () => void) {
-			const list = window.matchMedia(query);
-			list.addEventListener("change", onChange);
-			return () => list.removeEventListener("change", onChange);
-		},
-		matches: () => window.matchMedia(query).matches,
-	};
-}
-
-/** Whether the screen matches a media query; false on the server. */
-function useMedia(query: ReturnType<typeof mediaQuery>) {
-	return useSyncExternalStore(query.subscribe, query.matches, () => false);
 }
 
 const WIDE = mediaQuery("(min-width: 1024px)");

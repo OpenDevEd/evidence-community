@@ -14,6 +14,7 @@ import {
 } from "react";
 import { mergeProps, useFocusable } from "react-aria";
 import { twMerge } from "@/lib/tw-merge";
+import { mediaQuery, useMedia } from "@/hooks/useMedia";
 import {
 	Tooltip as AriaTooltip,
 	TooltipTrigger,
@@ -47,7 +48,7 @@ export const HOVER_CARD_DELAY = 250;
 export const HOVER_CARD_CLOSE_DELAY = 80;
 
 /** Below Tailwind's sm, as the phone rules in globals.css. */
-const PHONE = "(max-width: 639px)";
+const PHONE = mediaQuery("(max-width: 639px)");
 
 /** The library's own tooltip colour, used unless another one is asked for. */
 const CARD_CONTENT = "bg-card_light dark:bg-card border border-white/10";
@@ -192,10 +193,9 @@ function TooltipOverlay({
 	...surface
 }: OverlayProps) {
 	// A phone has no room beside a row for a card: one asked for at the side opens above it, or below when the top has
-	// no room. React Aria only moves a tooltip along its side, so a side card ran off the screen. Read when it opens,
-	// which is never on the server.
-	const isOpen = use(TooltipTriggerStateContext)?.isOpen;
-	const placement = isOpen && /^(left|right)/.test(asked) && window.matchMedia(PHONE).matches ? "top" : asked;
+	// no room. React Aria only moves a tooltip along its side, so a side card ran off the screen.
+	const phone = useMedia(PHONE);
+	const placement = phone && /^(left|right)/.test(asked) ? "top" : asked;
 	return (
 		<AriaTooltip
 			{...(anchorRef && { triggerRef: anchorRef })}
