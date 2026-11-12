@@ -62,3 +62,11 @@ export const kept = {
 		}
 	},
 };
+
+/** Keeps what a step came to: the value as followed once it worked, or one more try against it. Returns the tries so far. */
+export function keepOutcome(stamp: string, worked: boolean) {
+	const tries = triesFor(stamp, kept.get(TRIES_KEY)) + 1;
+	if (worked) kept.set(SEEN_KEY, stamp);
+	kept.set(TRIES_KEY, worked ? null : `${stamp}:${tries}`);
+	return tries;
+}

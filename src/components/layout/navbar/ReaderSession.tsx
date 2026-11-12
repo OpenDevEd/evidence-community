@@ -3,11 +3,12 @@
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useLocale } from "next-intl";
+import { useSWRConfig } from "swr";
 
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
-import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
+import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
 
 /** Who is signed in, as other readers may see them: never their email. */
 export type Reader = { id: string; name: string; image: string | null };
@@ -112,22 +113,28 @@ function stepFor(stamp: string | null, here: NonNullable<Here>) {
 	return step;
 }
 
+/** Does the step itself. `started` is false for a sign-in that couldn't start. */
+async function attempt(step: "sign-in" | "sign-out") {
+	if (step === "sign-in") return signInQuietly();
+	await readerAuthClient.signOut();
+	return { started: true, detail: { stage: "sign-out" } };
+}
+
 /**
  * Takes the step, and says whether the reader is someone else afterwards. The value counts as followed only once the
  * step is seen to have worked: a session that isn't the one before, or none after a sign-out. One that didn't is
  * tried again the next time the page is looked at, a few times (`TRIES_MAX`).
  */
 async function takeStep(step: "sign-in" | "sign-out", stamp: string, here: NonNullable<Here>) {
-	const quiet = step === "sign-in" ? await signInQuietly() : { started: true, detail: { stage: "sign-out" } };
-	if (step === "sign-out") await readerAuthClient.signOut();
+	const { started, detail } = await attempt(step);
 	// A sign-in that couldn't start says nothing about OpenScholar: it doesn't count as a try.
-	if (!quiet.started) return noteNotFollowed({ step, ...quiet.detail }), false;
-	const { data } = await readerAuthClient.getSession({ query: { disableCookieCache: true } });
+	if (!started) return noteNotFollowed({ step, ...detail }), false;
+	const { data, error } = await readerAuthClient.getSession({ query: { disableCookieCache: true } });
+	// A session that couldn't be read says nothing either way: nothing is counted, and the next look asks again.
+	if (error) return noteNotFollowed({ step, stage: "session", status: error.status ?? null }), false;
 	const worked = step === "sign-out" ? !data : !!data && data.session.id !== here.sessionId;
-	const tries = triesFor(stamp, kept.get(TRIES_KEY)) + 1;
-	if (worked) kept.set(SEEN_KEY, stamp);
-	else noteNotFollowed({ step, ...quiet.detail, signedIn: !!data, tries });
-	kept.set(TRIES_KEY, worked ? null : `${stamp}:${tries}`);
+	const tries = keepOutcome(stamp, worked);
+	if (!worked) noteNotFollowed({ step, ...detail, signedIn: !!data, tries });
 	return (data?.user.id ?? null) !== here.readerId;
 }
 
@@ -140,6 +147,7 @@ async function takeStep(step: "sign-in" | "sign-out", stamp: string, here: NonNu
 function useFollowOpenScholarSession(readerId: string | null | undefined, sessionId: string | null) {
 	const { sessionCookie } = useLibraryConfig().authentication.openScholar;
 	const router = useRouter();
+	const { mutate } = useSWRConfig();
 	useEffect(() => {
 		if (readerId) kept.set(ASK_AGAIN_KEY, null);
 		if (!sessionCookie || readerId === undefined) return;
@@ -154,6 +162,9 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 				// The header and what the server rendered for the reader change only when the reader did.
 				if (!(await takeStep(step, stamp, here))) return;
 				readerAuthClient.$store.notify("$sessionSignal");
+				// What the page had read for the last reader, their bookmarks and private collections, goes with them. Everything
+				// it shows is read again as the new one; for someone signing in, what anyone may see stays up meanwhile.
+				void (readerId ? mutate(() => true, undefined, { revalidate: true }) : mutate(() => true));
 				// The header slides to the new reader first; drawing the page again at the same moment would take its frames.
 				window.setTimeout(() => router.refresh(), HEADER_SLIDE_MS);
 			} catch (error) {
@@ -170,7 +181,7 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 			window.removeEventListener("focus", follow);
 			document.removeEventListener("visibilitychange", follow);
 		};
-	}, [sessionCookie, readerId, sessionId, router]);
+	}, [sessionCookie, readerId, sessionId, router, mutate]);
 }
 
 /** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */
