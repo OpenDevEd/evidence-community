@@ -326,4 +326,37 @@ describe("useAdminCollectionCatalogue", () => {
 				?.items.map(({ key }) => key),
 		).toEqual(["RELOADED"]);
 	});
+
+	it("reads a shown branch again for someone else's change without showing it as loading, and keeps it when that read fails", async () => {
+		const page = (items: AdminCollectionCatalogEntry[]) => ({ hasMore: false, items, nextCursor: null });
+		const shown = () => current.state.branches.get("native\u0000root");
+		api.getChildren.mockResolvedValueOnce(page([entry("FIRST001")]));
+		await act(async () => current.loadChildren("native", null));
+
+		const again = deferred<ReturnType<typeof page>>();
+		api.getChildren.mockReturnValueOnce(again.promise);
+		await act(async () => {
+			current.refresh();
+			await Promise.resolve();
+		});
+		// Still on screen while it is read again: a tree that emptied here would collapse under the person's pointer.
+		expect(shown()?.status).toBe("ready");
+		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001"]);
+
+		await act(async () => {
+			again.resolve(page([entry("FIRST001"), entry("SECOND02")]));
+			await again.promise;
+		});
+		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001", "SECOND02"]);
+
+		api.getChildren.mockRejectedValueOnce(new Error("offline"));
+		await act(async () => {
+			current.refresh();
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(shown()?.status).toBe("ready");
+		expect(shown()?.error).toBeNull();
+		expect(shown()?.items.map(({ key }) => key)).toEqual(["FIRST001", "SECOND02"]);
+	});
 });

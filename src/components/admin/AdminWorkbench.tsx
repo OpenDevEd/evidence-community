@@ -134,6 +134,7 @@ import {
 } from "./admin-validation";
 import { FirstCollections } from "./useAdminCollectionCatalogue";
 import { useAdminItemList } from "./useAdminItemList";
+import { useAdminLive } from "./admin-live";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { AdminPublicPages } from "./AdminPublicPages";
@@ -293,7 +294,6 @@ function CollectionLocationButton({
 
 const ADMIN_DESKTOP_MEDIA_QUERY = "(min-width: 1280px)";
 const ADMIN_SOURCE_SYNC_POLL_MS = 10_000;
-const ADMIN_LIBRARY_POLL_MS = 60_000;
 
 function singleKey(keys: "all" | Set<React.Key>) {
 	if (keys === "all") return null;
@@ -399,6 +399,12 @@ const REVIEW_LIVE_ITEM = "admin-review-live-item";
 /** Whether an SWR key is one of these records' own, such as its review, DOI choice or Crossref reservation, or a submitted version's PDF. */
 const isRecordCacheOf = (keys: ReadonlySet<string>) => (key: unknown) => Array.isArray(key) && (keys.has(String(key[1])) || key[0] === REVIEW_LIVE_ITEM);
 
+/** Whether a read failed because the record no longer exists. */
+const isGone = (error: unknown) => error instanceof AdminApiError && error.status === 404;
+
+/** What stays in the inspector after a read failed: the record on screen, unless it is the one that is gone. */
+const detailKeptAfterFailure = (current: AdminItemDetail | null, key: string, gone: boolean) => (!gone && current?.key === key ? current : null);
+
 /** Whether the open record is one of these, or the PDF attached to one. */
 const showsSent = (keys: ReadonlySet<string>, open: string, detail: AdminItemDetail | null) => keys.has(detail?.parentItem ?? open);
 
@@ -493,6 +499,8 @@ export default function AdminWorkbench({
 		loading: listLoading,
 		loadItems,
 		nextCursor,
+		placeHeld,
+		refreshItems,
 		selectedKey,
 		setBulkKeys,
 		setFilters,
@@ -501,6 +509,8 @@ export default function AdminWorkbench({
 	} = useAdminItemList(requestedColumns, Boolean(linkPick?.kind), Boolean(linkPick));
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
+	// The open record no longer exists: removed by someone else while it was open, or opened from an old link.
+	const [detailGone, setDetailGone] = useState(false);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
 		{},
 	);
@@ -715,11 +725,14 @@ export default function AdminWorkbench({
 		return () => cancelAnimationFrame(frame);
 	}, [mobilePane]);
 
-	const loadLibrary = useCallback(async () => {
+	/** Reads the sources again. `quiet` is for a change someone else made: a read that fails then waits for the next change. */
+	const loadLibrary = useCallback(async (quiet = false) => {
 		try {
-			setLibrary(await getAdminLibrary());
+			const next = await getAdminLibrary();
+			// The same answer keeps the same object, so nothing below is drawn again for it.
+			setLibrary((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
 		} catch (error) {
-			toast.error(errorMessage(error));
+			if (!quiet) toast.error(errorMessage(error));
 		}
 	}, []);
 
@@ -729,16 +742,17 @@ export default function AdminWorkbench({
 		void loadLibrary();
 	}, [loadLibrary]);
 
-	// The sync worker is an outside process: keep the sidebar import state
-	// fresh, quickly while an import runs or its dialog is open.
+	// A source someone connects, pauses or starts, and a collection that comes or goes, show as they happen.
+	useAdminLive(["sources", "collections"], () => loadLibrary(true), 2_000);
+
+	// An import's progress is counted from work the page isn't told about row by row, so while one runs, or its dialog
+	// is open, the sidebar reads it on a timer.
 	const watchingImport =
 		Boolean(syncSource?.activity) ||
 		library.sources.some(({ activity }) => activity?.state === "running");
 	useEffect(() => {
-		const timer = setInterval(
-			() => void loadLibrary(),
-			watchingImport ? ADMIN_SOURCE_SYNC_POLL_MS : ADMIN_LIBRARY_POLL_MS,
-		);
+		if (!watchingImport) return;
+		const timer = setInterval(() => void loadLibrary(), ADMIN_SOURCE_SYNC_POLL_MS);
 		return () => clearInterval(timer);
 	}, [loadLibrary, watchingImport]);
 
@@ -873,11 +887,31 @@ export default function AdminWorkbench({
 		[abandonPendingDraft, definitions, rememberServerDraft],
 	);
 
+	/**
+	 * A record that couldn't be read. One that is gone leaves nothing to act on: its fields and buttons go, and what
+	 * was typed into it stops being saved. Any other failure keeps what is on screen, so nothing typed is lost to a
+	 * bad connection.
+	 */
+	const showDetailFailure = useCallback(
+		(key: string, error: unknown) => {
+			const gone = isGone(error);
+			// Said as the digests say it: nobody asked for the record, it went while they were on it.
+			const message = gone ? "This record is no longer available." : errorMessage(error);
+			if (gone) abandonPendingDraft(key);
+			setDetail((current) => detailKeptAfterFailure(current, key, gone));
+			setDetailGone(gone);
+			setDetailError(message);
+			toast.error(message);
+		},
+		[abandonPendingDraft],
+	);
+
 	const loadDetail = useCallback(
 		async (key: string, discardLocal = false) => {
 			const requestId = ++detailRequest.current;
 			setDetailLoading(true);
 			setDetailError(null);
+			setDetailGone(false);
 			if (discardLocal) {
 				serverReloadKeys.current.set(
 					key,
@@ -893,14 +927,7 @@ export default function AdminWorkbench({
 				}
 				return next;
 			} catch (error) {
-				if (requestId === detailRequest.current) {
-					const message = errorMessage(error);
-					setDetail((current) =>
-						current?.key === key ? current : null,
-					);
-					setDetailError(message);
-					toast.error(message);
-				}
+				if (requestId === detailRequest.current) showDetailFailure(key, error);
 			} finally {
 				if (discardLocal) {
 					const remaining =
@@ -916,7 +943,7 @@ export default function AdminWorkbench({
 				}
 			}
 		},
-		[abandonPendingDraft, applyDetail],
+		[abandonPendingDraft, applyDetail, showDetailFailure],
 	);
 
 	// The import's finish step sends drafts on, which changes them: what the inspector shows of them is read again, each
@@ -939,9 +966,70 @@ export default function AdminWorkbench({
 			detailRequest.current += 1;
 			setDetail(null);
 			setDetailError(null);
+			setDetailGone(false);
 			setDetailLoading(false);
 		}
 	}, [loadDetail, selectedKey]);
+
+	/** A record as the server has it now, or null after a read that failed or found it gone. */
+	const readOpenRecord = useCallback(
+		async (key: string) => {
+			try {
+				return await getAdminItem(key);
+			} catch (error) {
+				// Someone removed it: the inspector says so, as it does when a removed record is opened.
+				if (isGone(error) && selectedKeyRef.current === key) void loadDetail(key);
+				return null;
+			}
+		},
+		[loadDetail],
+	);
+	/** Shows a record read again, unless a load started meanwhile, another record was opened since, or nothing changed. */
+	const showRefreshed = useCallback(
+		(next: AdminItemDetail, request: number) => {
+			const current = request === detailRequest.current && selectedKeyRef.current === next.key;
+			if (current && JSON.stringify(next) !== JSON.stringify(detailRef.current)) applyDetail(next);
+		},
+		[applyDetail],
+	);
+	/**
+	 * Reads the open record again for a change someone else made. Nothing shows as loading, what is being typed stays
+	 * (applyDetail keeps a draft that hasn't saved), and a record that didn't change isn't drawn again.
+	 */
+	const refreshDetail = useCallback(async () => {
+		const key = selectedKeyRef.current;
+		if (!key) return;
+		const request = detailRequest.current;
+		const next = await readOpenRecord(key);
+		if (next) showRefreshed(next, request);
+	}, [readOpenRecord, showRefreshed]);
+
+	/** What the inspector reads of the open record besides the record: its review, DOI choice, reservation and publication. */
+	const refreshOpenRecordReads = useCallback(() => {
+		const open = selectedKeyRef.current;
+		if (!open) return;
+		const parent = detailRef.current?.parentItem;
+		void mutate(isRecordCacheOf(new Set(parent ? [open, parent] : [open])));
+	}, []);
+
+	// What other people and the workers change shows without a reload (admin-live.ts): the rows and the open record.
+	const readRecords = () => {
+		refreshOpenRecordReads();
+		return Promise.all([refreshItems(), refreshDetail()]);
+	};
+	useAdminLive(["records"], readRecords, 1_500);
+	// A version someone sends, publishes, returns or takes back, with the count of records waiting. Read apart from
+	// the records, so the answer to a submission shows at once while an import or someone's typing keeps those busy.
+	useAdminLive(
+		["reviews"],
+		() => {
+			void mutate("admin-review-count");
+			return readRecords();
+		},
+		500,
+	);
+	// A DOI someone else reserves or registers for the open record, and a publication a worker moves on.
+	useAdminLive(["publishing"], refreshOpenRecordReads, 1_500);
 
 	const refreshCurrent = useCallback(
 		async (detailKey: string | null = selectedKeyRef.current) => {
@@ -2700,6 +2788,7 @@ export default function AdminWorkbench({
 							hasMore={hasMore}
 							items={items}
 							loading={listLoading}
+							placeHeld={placeHeld}
 							preferences={itemTablePreferences}
 							onLoadMore={() => {
 								if (nextCursor !== null && !listLoading) {
@@ -2861,10 +2950,11 @@ export default function AdminWorkbench({
                                 await completion;
                             }}
 							onReloadDraft={reloadConflictedDraft}
-							onRetry={() =>
-								selectedKey
-									? void loadDetail(selectedKey)
-									: undefined
+							// Asking again for a record that is gone can't bring it back, so nothing offers to.
+							onRetry={
+								detailGone
+									? undefined
+									: () => (selectedKey ? void loadDetail(selectedKey) : undefined)
 							}
 							onRestore={restoreCurrent}
 							onUnpublish={unpublishCurrent}

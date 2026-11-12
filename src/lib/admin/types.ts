@@ -30,8 +30,15 @@ export type AdminItemSummary = {
 	updatedAt: string;
 };
 
+/**
+ * Where a record's latest submitted version stands, when that is what a person needs to know about it: waiting for an
+ * editor, or sent back. A paper someone added is declined, not sent back for changes.
+ */
+export type AdminRowReview = "pending" | "returned" | "declined";
+
 export type AdminItemListRow = AdminItemSummary & {
 	kind: "created" | "imported";
+	review: AdminRowReview | null;
 	importMethod: "doi" | "file" | null;
 	collections: string[];
 	creatorNames: string[];

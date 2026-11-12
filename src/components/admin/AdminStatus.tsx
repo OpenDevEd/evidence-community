@@ -3,9 +3,11 @@
 import {
 	ArchiveIcon,
 	CloudUploadIcon,
+	Comment01Icon,
 	FileAttachmentIcon,
 	FileClockIcon,
 	FileXIcon,
+	InboxIcon,
 	PencilIcon,
 	Undo02Icon,
 	Tick01Icon,
@@ -13,7 +15,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@/components/icons/Hugeicon";
 
-import type { AdminFileState, AdminRecordState } from "@/lib/admin/types";
+import type { AdminFileState, AdminRecordState, AdminRowReview } from "@/lib/admin/types";
 
 const stateConfig = {
 	deleted: {
@@ -85,7 +87,28 @@ function Status({
 	);
 }
 
-export function RecordStateChip({ state }: { state: AdminRecordState }) {
+/** A submitted version waiting for an editor, or sent back: said the same in the table and on the record. */
+export const reviewChip = {
+	pending: {
+		className: "text-sky-700 dark:text-sky-300",
+		icon: InboxIcon,
+		label: "Awaiting review",
+	},
+	returned: {
+		className: "text-rose-700 dark:text-rose-300",
+		icon: Comment01Icon,
+		label: "Changes requested",
+	},
+	declined: {
+		className: "text-rose-700 dark:text-rose-300",
+		icon: Comment01Icon,
+		label: "Declined",
+	},
+} as const;
+
+/** A record's state. One waiting for an editor, or sent back, says that: it is what the person looking for it needs to know. */
+export function RecordStateChip({ state, review = null }: { state: AdminRecordState; review?: AdminRowReview | null }) {
+	if (review && state !== "deleted") return <Status {...reviewChip[review]} />;
 	return <Status {...stateConfig[state]} />;
 }
 

@@ -47,6 +47,7 @@ import {
 	type AdminCollectionCatalogueState,
 	useAdminCollectionCatalogue,
 } from "./useAdminCollectionCatalogue";
+import { useAdminLive } from "./admin-live";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import {
 	ADMIN_COLLECTION_EXPANSION_EVENT,
@@ -604,9 +605,12 @@ export function AdminCollectionCatalogue({
 		invalidate: catalogueInvalidate,
 		loadChildren,
 		loadSearch,
+		refresh: catalogueRefresh,
 		reveal,
 		state: catalogueState,
 	} = useAdminCollectionCatalogue();
+	// A collection someone else adds, renames, moves or removes shows where it belongs without a reload.
+	useAdminLive(["collections"], catalogueRefresh, 2_000);
 	const { activeCollectionKey } = useAdminDragState();
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);

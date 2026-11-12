@@ -1,8 +1,10 @@
 import { itemReview } from "@/db/schema/review";
+import { addedPaper } from "@/db/schema/source";
 import { itemIdentity } from "@opendeved/evidence-library-core";
 import {
 	and,
 	arrayOverlaps,
+	desc,
 	eq,
 	inArray,
 	isNotNull,
@@ -21,7 +23,7 @@ import {
 	type AdminItemListRequest,
 } from "./item-list-contract";
 import { AdminValidationError } from "./errors";
-import type { AdminItemListPage, AdminItemListRow } from "./types";
+import type { AdminItemListPage, AdminItemListRow, AdminRowReview } from "./types";
 
 const cursorSchema = z
 	.object({
@@ -259,7 +261,7 @@ function cursorPredicate(
 }
 
 function rowCursor(
-	row: AdminItemListRow & { titleSort: string },
+	row: Omit<AdminItemListRow, "review"> & { titleSort: string },
 	column: AdminItemCursor["column"],
 	direction: AdminItemCursor["direction"],
 ) {
@@ -353,6 +355,29 @@ export async function applySubmittedSnapshots(
 	return rows.map((row) => submittedRow(row, payloads.get(row.key)));
 }
 
+const rowReview = (state: string | undefined, added: boolean): AdminRowReview | null => {
+	if (state === "pending") return "pending";
+	if (state === "returned") return added ? "declined" : "returned";
+	return null;
+};
+
+/** Each row with where its latest submitted version stands, so the table says what the record's own panel says. */
+async function withReviewStates<Row extends { key: string }>(database: Database, rows: Row[]): Promise<(Row & { review: AdminRowReview | null })[]> {
+	if (rows.length === 0) return [];
+	const keys = rows.map((row) => row.key);
+	const [reviews, added] = await Promise.all([
+		database
+			.selectDistinctOn([itemReview.itemKey], { itemKey: itemReview.itemKey, state: itemReview.state })
+			.from(itemReview)
+			.where(inArray(itemReview.itemKey, keys))
+			.orderBy(itemReview.itemKey, desc(itemReview.submittedAt)),
+		database.select({ itemKey: addedPaper.itemKey }).from(addedPaper).where(inArray(addedPaper.itemKey, keys)),
+	]);
+	const latest = new Map(reviews.map(({ itemKey, state }) => [itemKey, state]));
+	const addedKeys = new Set(added.map(({ itemKey }) => itemKey));
+	return rows.map((row) => ({ ...row, review: rowReview(latest.get(row.key), addedKeys.has(row.key)) }));
+}
+
 export async function getAdminItemListPage(
 	database: Database,
 	input: Partial<AdminItemListRequest> = {},
@@ -376,7 +401,7 @@ export async function getAdminItemListPage(
 		items: await applySubmittedSnapshots(
 			database,
 			request.reviewQueue,
-			pageRows,
+			await withReviewStates(database, pageRows),
 		),
 		nextCursor:
 			hasMore && last

@@ -97,6 +97,8 @@ type CatalogueAction =
 			branchKey: string;
 			cursor: string | null;
 			generation: number;
+			/** A read of a branch already shown, for a change someone else made: it stays as it is until the answer. */
+			quiet?: boolean;
 			requestId: number;
 			type: "branchStart";
 	  }
@@ -105,6 +107,7 @@ type CatalogueAction =
 			cursor: string | null;
 			error: string;
 			generation: number;
+			quiet?: boolean;
 			requestId: number;
 			type: "branchError";
 	  }
@@ -143,6 +146,14 @@ type CatalogueAction =
 			requestId: number;
 			type: "searchSuccess";
 	  };
+
+/** Stops the request a key has under way and starts another in its place. */
+function takeOver(controllers: Map<string, { context: string; controller: AbortController }>, requestKey: string, context: string) {
+	controllers.get(requestKey)?.controller.abort();
+	const controller = new AbortController();
+	controllers.set(requestKey, { context, controller });
+	return controller;
+}
 
 export function adminCollectionBranchKey(
 	sourceConnectionKey: string,
@@ -250,21 +261,28 @@ export function adminCollectionCatalogueReducer(
 			requestId: 0,
 			status: "idle" as const,
 		};
-		branches.set(action.branchKey, {
-			...current,
-			error: action.cursor ? current.error : null,
-			loadingMore: Boolean(action.cursor),
-			loadMoreError: null,
-			nextCursor: action.cursor ? current.nextCursor : null,
-			requestId: action.requestId,
-			status: action.cursor ? current.status : "loading",
-		});
+		branches.set(
+			action.branchKey,
+			action.quiet
+				? { ...current, requestId: action.requestId }
+				: {
+						...current,
+						error: action.cursor ? current.error : null,
+						loadingMore: Boolean(action.cursor),
+						loadMoreError: null,
+						nextCursor: action.cursor ? current.nextCursor : null,
+						requestId: action.requestId,
+						status: action.cursor ? current.status : "loading",
+					},
+		);
 		return { ...state, branches };
 	}
 	if (action.type === "branchError") {
 		const branches = new Map(state.branches);
 		const current = branches.get(action.branchKey);
 		if (!current || current.requestId !== action.requestId) return state;
+		// A quiet read that failed leaves the branch as it was; the next change reads it again.
+		if (action.quiet) return state;
 		branches.set(action.branchKey, {
 			...current,
 			error: action.cursor ? current.error : action.error,
@@ -578,7 +596,7 @@ export function useAdminCollectionCatalogue() {
 		async (
 			sourceConnectionKey: string,
 			parentCollection: string | null,
-			options: { force?: boolean; more?: boolean } = {},
+			options: { force?: boolean; more?: boolean; quiet?: boolean } = {},
 		) => {
 			const branchKey = adminCollectionBranchKey(
 				sourceConnectionKey,
@@ -591,6 +609,7 @@ export function useAdminCollectionCatalogue() {
 			if (options.more && branch?.loadingMore && !options.force) return;
 			if (
 				!options.force &&
+				!options.quiet &&
 				!options.more &&
 				(branch?.status === "loading" || branch?.status === "ready")
 			) {
@@ -598,20 +617,15 @@ export function useAdminCollectionCatalogue() {
 			}
 			const requestKey = `branch:${branchKey}`;
 			const requestContext = cursor ?? "first";
-			const activeOwner = controllers.current.get(requestKey);
-			if (activeOwner && !options.force) return;
-			activeOwner?.controller.abort();
-			const controller = new AbortController();
-			controllers.current.set(requestKey, {
-				context: requestContext,
-				controller,
-			});
+			if (controllers.current.has(requestKey) && !options.force) return;
+			const controller = takeOver(controllers.current, requestKey, requestContext);
 			const generation = snapshot.generation;
 			const requestId = ++requestSequence.current;
 			dispatch({
 				branchKey,
 				cursor,
 				generation,
+				quiet: options.quiet,
 				requestId,
 				type: "branchStart",
 			});
@@ -641,6 +655,7 @@ export function useAdminCollectionCatalogue() {
 						cursor,
 						error: errorMessage(error),
 						generation,
+						quiet: options.quiet,
 						requestId,
 						type: "branchError",
 					});
@@ -690,12 +705,7 @@ export function useAdminCollectionCatalogue() {
 			if (activeOwner?.context === requestContext && !options.force) {
 				return;
 			}
-			activeOwner?.controller.abort();
-			const controller = new AbortController();
-			controllers.current.set(requestKey, {
-				context: requestContext,
-				controller,
-			});
+			const controller = takeOver(controllers.current, requestKey, requestContext);
 			const generation = snapshot.generation;
 			const requestId = ++requestSequence.current;
 			dispatch({
@@ -756,6 +766,14 @@ export function useAdminCollectionCatalogue() {
 		});
 		dispatch({ type: "invalidate" });
 	}, []);
+	/** Reads every branch on screen again where it is, for a change someone else made: nothing collapses or shows as loading. */
+	const refresh = useCallback(() => {
+		for (const [branchKey, branch] of stateRef.current.branches) {
+			if (branch.status !== "ready" || branch.loadingMore) continue;
+			const [sourceConnectionKey = "", parent] = branchKey.split("\u0000");
+			void loadChildren(sourceConnectionKey, parent === "root" || !parent ? null : parent, { quiet: true });
+		}
+	}, [loadChildren]);
 	const reveal = useCallback((entries: AdminCollectionCatalogEntry[]) => {
 		stateRef.current = adminCollectionCatalogueReducer(stateRef.current, {
 			entries,
@@ -768,6 +786,7 @@ export function useAdminCollectionCatalogue() {
 		invalidate,
 		loadChildren,
 		loadSearch,
+		refresh,
 		reveal,
 		state,
 	};

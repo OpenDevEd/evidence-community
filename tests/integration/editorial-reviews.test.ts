@@ -120,6 +120,23 @@ it('allows no identifiers by default and after clearing a choice, and publishes 
  });
 }, 120_000);
 
+it("says in the list where a record's submitted version stands: waiting for an editor, sent back, then neither once it is published", async () => {
+ await withIsolatedPublicationDatabase(async db => {
+  const editor = {userId: "editor", role: "editor"} as const;
+  const standing = async (key: string) => (await getAdminItemListPage(db, parseAdminItemListRequest({}))).items.find(row => row.key === key)?.review;
+  const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Where a submitted version stands"});
+  assert.equal(await standing(draft.itemKey), null);
+  const first = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
+  assert.equal(await standing(draft.itemKey), "pending");
+  await resolveItemReview(db, {reviewId: first.id, expectedRevision: first.revision, action: "returned", note: "Add the year"}, editor);
+  assert.equal(await standing(draft.itemKey), "returned");
+  const second = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
+  assert.equal(await standing(draft.itemKey), "pending");
+  await approveItemReview(db, new MemoryFileStorage(), {reviewId: second.id, expectedRevision: second.revision}, editor, reviewConfig);
+  assert.equal(await standing(draft.itemKey), null);
+ });
+}, 120_000);
+
 it('publishes the frozen identifier choice without a PDF and resolves later draft conflicts', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();

@@ -17,7 +17,7 @@ import {
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { RecordStateChip } from "./AdminStatus";
+import { RecordStateChip, reviewChip } from "./AdminStatus";
 import type { AdminItemDetail } from "@/lib/admin/types";
 import type { AdminReviewSnapshot } from "./admin-api";
 
@@ -66,9 +66,7 @@ export function ReviewVersionTabs({
 
 const reviewStates = {
 	pending: {
-		label: "Awaiting review",
-		icon: InboxIcon,
-		className: "text-sky-700 dark:text-sky-300",
+		...reviewChip.pending,
 		headerClassName:
 			"bg-sky-100/80 text-sky-950 dark:bg-sky-500/[0.16] dark:text-sky-200",
 	},
@@ -80,9 +78,7 @@ const reviewStates = {
 			"bg-emerald-100/80 text-emerald-950 dark:bg-emerald-500/[0.16] dark:text-emerald-200",
 	},
 	returned: {
-		label: "Changes requested",
-		icon: Comment01Icon,
-		className: "text-rose-700 dark:text-rose-300",
+		...reviewChip.returned,
 		headerClassName:
 			"bg-rose-100/80 text-rose-950 dark:bg-rose-500/[0.16] dark:text-rose-200",
 	},
@@ -118,15 +114,20 @@ function reviewVersionTitle(
 	return "Published version";
 }
 
-/** On the working draft of a paper waiting for review, where the review is: its own version holds Publish and Decline. */
-function waitingHere(snapshot: AdminReviewSnapshot | undefined, viewingSubmitted: boolean) {
-	return !viewingSubmitted && snapshot?.reviewState === "pending" ? "Awaiting review: open Submitted version to publish or decline it" : null;
+/**
+ * On the working draft of a paper waiting for review, where the review is. Someone who can publish finds Publish and
+ * Decline on its own version. A creator can do neither, so they are told where the answer comes instead.
+ */
+function waitingHere(snapshot: AdminReviewSnapshot | undefined, viewingSubmitted: boolean, canPublish: boolean) {
+	if (viewingSubmitted || snapshot?.reviewState !== "pending") return null;
+	return canPublish ? "Awaiting review: open Submitted version to publish or decline it" : "Waiting for an editor: the answer shows here";
 }
 
 function reviewVersionPresentation(
 	detail: AdminItemDetail,
 	snapshot: AdminReviewSnapshot | undefined,
 	viewingSubmitted: boolean,
+	canPublish: boolean,
 ) {
 	const reviewState = selectedReviewState(
 		detail.state,
@@ -138,7 +139,7 @@ function reviewVersionPresentation(
 	return {
 		dataState: reviewState ? snapshot?.reviewState : detail.state,
 		state,
-		stateLabel: reviewState ? (snapshot?.reviewState === "returned" ? returnWordsFor(detail).state : waitingHere(snapshot, viewingSubmitted) ?? state.label) : recordReviewStateLabel(detail, state),
+		stateLabel: reviewState ? (snapshot?.reviewState === "returned" ? returnWordsFor(detail).state : waitingHere(snapshot, viewingSubmitted, canPublish) ?? state.label) : recordReviewStateLabel(detail, state),
 		title: reviewVersionTitle(detail, viewingSubmitted),
 	};
 }
@@ -276,10 +277,12 @@ export function ReviewVersionNotice({
 	viewingSubmitted: boolean;
 	detail: AdminItemDetail;
 }) {
+	const { canPublish } = useAdminSession();
 	const { dataState, state, stateLabel, title } = reviewVersionPresentation(
 		detail,
 		snapshot,
 		viewingSubmitted,
+		canPublish,
 	);
 	return (
 		<header
