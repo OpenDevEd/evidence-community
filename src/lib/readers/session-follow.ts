@@ -18,6 +18,8 @@ export const TRIES_MAX = 3;
 export const HEADER_SLIDE_MS = 200;
 /** Where the hidden sign-in ends: a small file of this community, so nothing of the site loads twice. */
 export const QUIET_SIGN_IN_END = "/robots.txt";
+/** The address parameter a sign-out comes back with, for the page to say the reader is signed out (`Providers.tsx`). */
+export const SIGNED_OUT_PARAM = "signed-out";
 
 /**
  * `stamp` is the cookie's value now (null when this page can't read it, "0" when nobody is signed in), `seen` the

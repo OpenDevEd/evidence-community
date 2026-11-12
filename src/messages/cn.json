@@ -29,6 +29,7 @@
     "darkMode": "深色模式",
     "language": "语言",
     "signedInWithOpenScholar": "已通过 Openscholar 登录",
+    "signedOutHereAndOnOpenScholar": "你已在此处和 Openscholar 退出登录",
     "readerFallbackName": "读者",
     "addYourName": "添加你的姓名",
     "openScholarAccount": "Openscholar 账户",

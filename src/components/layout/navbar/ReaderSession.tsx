@@ -6,9 +6,10 @@ import { useLocale } from "next-intl";
 import { useSWRConfig } from "swr";
 
 import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { getPathname, usePathname } from "@/i18n/routing";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
-import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
+import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNED_OUT_PARAM, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
 
 /** Who is signed in, as other readers may see them: never their email. */
 export type Reader = { id: string; name: string; image: string | null };
@@ -260,6 +261,8 @@ export function useReaderSession() {
 	const serverReader = useContext(ServerReader);
 	const { siteUrl, sessionCookie } = useLibraryConfig().authentication.openScholar;
 	const { data, isPending } = readerAuthClient.useSession();
+	const pathname = usePathname();
+	const locale = useLocale();
 	const reader: Reader | null = isPending
 		? serverReader
 		: data
@@ -288,15 +291,19 @@ export function useReaderSession() {
 		/**
 		 * Signs out here and of OpenScholar, whose sign-out page comes straight back to this one: a reader signed out
 		 * of one is signed out of both, and the next sign-in can be another account. The page loads again on the way
-		 * back, without what the server rendered for the reader, such as their private collections.
+		 * back, without what the server rendered for the reader, such as their private collections, and says they're
+		 * signed out. From their own profile they come back to the home page instead: anyone can read a profile, so
+		 * their name and bookmarks would still be there, as if they hadn't signed out.
 		 */
 		signOut: async () => {
 			await readerAuthClient.signOut();
 			kept.set(ASK_AGAIN_KEY, "1");
+			const back = new URL(reader && pathname === `/profile/${reader.id}` ? getPathname({ href: "/", locale }) : window.location.href, window.location.origin);
+			back.searchParams.set(SIGNED_OUT_PARAM, "1");
 			// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
-			if (sessionCookie && readCookie(sessionCookie) === "0") return window.location.reload();
+			if (sessionCookie && readCookie(sessionCookie) === "0") return window.location.assign(back);
 			const signOut = new URL("/sign-out", siteUrl);
-			signOut.searchParams.set("redirect_url", window.location.href);
+			signOut.searchParams.set("redirect_url", back.toString());
 			window.location.assign(signOut);
 		},
 	};
