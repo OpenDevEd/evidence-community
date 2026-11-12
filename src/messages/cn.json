@@ -1373,7 +1373,12 @@
     "listedCount": "已列出 {count}",
     "listedOfTotal": "{listed} / {total}",
     "publicationsWord": "篇出版物",
-    "listedRatio": "<strong>{listed}</strong><muted> / {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> / {total}</muted>",
+    "getThisDigestInYourInbox": "通过邮件接收此摘要",
+    "aiNotice": {
+      "title": "此摘要由 AI 撰写",
+      "caution": "摘要可能有误，请先打开文献，再采信摘要对它的描述。"
+    }
   },
   "home": {
     "earlierIssues": "往期",

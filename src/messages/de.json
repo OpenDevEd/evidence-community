@@ -1373,7 +1373,12 @@
     "listedCount": "{count} aufgeführt",
     "listedOfTotal": "{listed} von {total}",
     "publicationsWord": "Publikationen",
-    "listedRatio": "<strong>{listed}</strong><muted> von {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> von {total}</muted>",
+    "getThisDigestInYourInbox": "Diese Zusammenfassung per E-Mail erhalten",
+    "aiNotice": {
+      "title": "Eine KI hat diese Zusammenfassung geschrieben",
+      "caution": "Sie kann Fehler enthalten. Öffnen Sie eine Publikation, bevor Sie sich auf das verlassen, was die Zusammenfassung darüber sagt."
+    }
   },
   "home": {
     "earlierIssues": "Frühere Ausgaben",

@@ -1,6 +1,7 @@
 "use client";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useId, useState } from "react";
+import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { Switch } from "@/components/nextui/Switch";
@@ -9,18 +10,22 @@ import { SidebarCard } from "@/components/features/collections/SidebarCard";
 import { Icon, muted } from "./DigestPrimitives";
 import { changeSubscription, subscriptionError } from "./subscription-client";
 export type Preferences = { email: string; digest: boolean; instant: boolean; confirmed: boolean };
-type SubscriptionProps = { initial: Preferences; preferences?: boolean; token?: string; schedule: string };
+/** A reader who has not subscribed yet: digests on, as the page they are reading is one. */
+export const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
+type SubscriptionProps = { initial: Preferences; preferences?: boolean; token?: string; schedule: string; /** The form alone, for a popover that frames it. */ bare?: boolean };
 type Step = "form" | "confirm" | "subscribed" | "stopped";
-function PreferenceChoices({ value, onChange, schedule, busy }: { value: Preferences; onChange: (value: Preferences) => void; schedule: string; busy: boolean }) {
+/** The form is gone once it is sent, and focus with it: the message that replaces it takes the focus, so the keyboard stays where the reader is. */
+const focusMessage = (node: HTMLElement | null) => node?.focus({preventScroll: true});
+function PreferenceChoices({ id, value, onChange, schedule, busy }: { id: string; value: Preferences; onChange: (value: Preferences) => void; schedule: string; busy: boolean }) {
   const t = useTranslations("digests");
   return <div className="space-y-5">
     {([
       { key: "digest", icon: Calendar03Icon, label: t("libraryDigests"), help: schedule },
       { key: "instant", icon: BookOpen01Icon, label: t("newPublications"), help: t("updatesWhenAdded") },
-    ] as const).map(option => <Switch key={option.key} name={option.key} aria-labelledby={`updates-${option.key}-label`} aria-describedby={`updates-${option.key}-help`} color="accent" isDisabled={busy} isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} classNames={{base: "h-auto w-full max-w-none items-start gap-3", wrapper: "mt-0.5", label: "min-w-0 flex-1"}}>
+    ] as const).map(option => <Switch key={option.key} name={option.key} aria-labelledby={`${id}-${option.key}-label`} aria-describedby={`${id}-${option.key}-help`} color="accent" isDisabled={busy} isSelected={value[option.key]} onValueChange={checked => onChange({ ...value, [option.key]: checked })} classNames={{base: "h-auto w-full max-w-none items-start gap-3", wrapper: "mt-0.5", label: "min-w-0 flex-1"}}>
       {/* The icon belongs to the title row; the description runs full width beneath it. */}
-      <span className="flex items-center gap-2"><span className={muted}><Icon value={option.icon} size={16} /></span><span id={`updates-${option.key}-label`} className="text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</span></span>
-      <span id={`updates-${option.key}-help`} className={`mt-1 block text-xs font-normal ${muted}`}>{option.help}</span>
+      <span className="flex items-center gap-2"><span className={muted}><Icon value={option.icon} size={16} /></span><span id={`${id}-${option.key}-label`} className="text-sm font-semibold text-black/90 dark:text-white/90">{option.label}</span></span>
+      <span id={`${id}-${option.key}-help`} className={`mt-1 block text-xs font-normal ${muted}`}>{option.help}</span>
     </Switch>)}
   </div>;
 }
@@ -30,16 +35,20 @@ function useSubscriptionForm({initial, preferences, token}: SubscriptionProps) {
   const [step, setStep] = useState<Step>("form");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  async function persist(next: Preferences, nextStep: Step) {
+  // The form can be on the page twice, in its card and in a popover, so its fields take their ids from here.
+  const id = useId();
+  // A popover keeps the form's height once the form is sent: the shorter message would move it to the other side of its button.
+  const [held, setHeld] = useState<number>();
+  async function persist(next: Preferences, nextStep: Step, height?: number) {
     setBusy(true); setError("");
     try {
       await changeSubscription(preferences ? {action: "preferences", token, digest: next.digest, instant: next.instant} : {action: "subscribe", email: next.email, digest: next.digest, instant: next.instant});
-      setValue(next); setStep(nextStep);
+      setHeld(height); setValue(next); setStep(nextStep);
     } catch (error) {setError(subscriptionError(error, t("couldNotSave")));}
     finally {setBusy(false);}
   }
   const change = (next: Preferences) => {setValue(next); setStep("form"); setError("");};
-  return {value, step, error, busy, setStep, persist, change, hasSelection: value.digest || value.instant};
+  return {id, held, value, step, error, busy, setStep, persist, change, hasSelection: value.digest || value.instant};
 }
 type FormModel = ReturnType<typeof useSubscriptionForm>;
 function savedStep(preferences: boolean, value: Preferences): Step {
@@ -50,7 +59,7 @@ function SubscriptionEmail({preferences, model}: {preferences: boolean; model: F
   const t = useTranslations("digests");
   const {value, change} = model;
   if (preferences) return <p className={`break-all text-sm ${muted}`}>{value.email}</p>;
-  return <div className="space-y-2"><label htmlFor="digest-email" className="block text-sm font-semibold text-black/90 dark:text-white/90">{t("emailAddress")}</label><Input id="digest-email" aria-label={t("emailAddress")} type="email" isRequired isDisabled={model.busy} value={value.email} onValueChange={email => change({...value, email})} placeholder={t("youExampleOrg")} classNames={{ inputWrapper: "h-11 rounded-xl", input: "text-sm" }} /></div>;
+  return <div className="space-y-2"><label htmlFor={`${model.id}-email`} className="block text-sm font-semibold text-black/90 dark:text-white/90">{t("emailAddress")}</label><Input id={`${model.id}-email`} aria-label={t("emailAddress")} type="email" color="filled" isRequired isDisabled={model.busy} value={value.email} onValueChange={email => change({...value, email})} placeholder={t("youExampleOrg")} classNames={{ inputWrapper: "h-11 rounded-xl border-black/20 dark:border-white/20", input: "text-sm" }} /></div>;
 }
 function SubscriptionButtons({preferences, model}: {preferences: boolean; model: FormModel}) {
   const t = useTranslations("digests");
@@ -64,9 +73,9 @@ function SubscriptionButtons({preferences, model}: {preferences: boolean; model:
 function SubscriptionForm({preferences, schedule, model}: {preferences: boolean; schedule: string; model: FormModel}) {
   const t = useTranslations("digests");
   const {value, step, persist, change} = model;
-  return <form className="space-y-6" onSubmit={event => {event.preventDefault();void persist({...value, confirmed: preferences}, savedStep(preferences, value));}}>
+  return <form className="space-y-6" onSubmit={event => {event.preventDefault();void persist({...value, confirmed: preferences}, savedStep(preferences, value), event.currentTarget.offsetHeight);}}>
     <SubscriptionEmail preferences={preferences} model={model} />
-    <PreferenceChoices schedule={schedule} value={value} onChange={change} busy={model.busy} />
+    <PreferenceChoices id={model.id} schedule={schedule} value={value} onChange={change} busy={model.busy} />
     <SubscriptionButtons preferences={preferences} model={model} />
     {step === "subscribed" && <p role="status" className="flex items-center gap-2 text-sm"><Icon value={Tick01Icon} size={16} />{t("preferencesSaved")}</p>}
     {!preferences && <p className={`text-xs ${muted}`}>{t("noAccountNeededUnsubscribeInAny")}</p>}
@@ -75,8 +84,8 @@ function SubscriptionForm({preferences, schedule, model}: {preferences: boolean;
 function SubscriptionBody({preferences, schedule, model}: {preferences: boolean; schedule: string; model: FormModel}) {
   const t = useTranslations("digests");
   const {step, value, setStep} = model;
-  if (step === "confirm") return <div className="space-y-4" role="status"><h3 className="text-base font-semibold">{t("checkYourEmail")}</h3><p className={`text-sm leading-6 ${muted}`}>{t.rich("linkSent", { email: value.email, strong: (chunks) => <span className="break-all font-medium text-black dark:text-white">{chunks}</span> })}</p><Button size="sm" variant="transparent" onPress={() => setStep("form")}>{t("changeEmail")}</Button></div>;
-  if (step === "stopped") return <div className="space-y-4" role="status"><h2 className="flex items-center gap-2 text-lg font-semibold"><Icon value={Tick01Icon} />{t("unsubscribed")}</h2><p className={`text-sm ${muted}`}>{t("allLibraryEmailsAreSwitchedOff")}</p><Button size="md" className="rounded-xl" onPress={() => setStep("form")}>{t("changePreferences")}</Button></div>;
+  if (step === "confirm") return <div ref={focusMessage} tabIndex={-1} className="space-y-4 outline-none" role="status"><h3 className="text-base font-semibold">{t("checkYourEmail")}</h3><p className={`text-sm leading-6 ${muted}`}>{t.rich("linkSent", { email: value.email, strong: (chunks) => <span className="break-all font-medium text-black dark:text-white">{chunks}</span> })}</p><Button size="sm" variant="transparent" onPress={() => setStep("form")}>{t("changeEmail")}</Button></div>;
+  if (step === "stopped") return <div ref={focusMessage} tabIndex={-1} className="space-y-4 outline-none" role="status"><h2 className="flex items-center gap-2 text-lg font-semibold"><Icon value={Tick01Icon} />{t("unsubscribed")}</h2><p className={`text-sm ${muted}`}>{t("allLibraryEmailsAreSwitchedOff")}</p><Button size="md" className="rounded-xl" onPress={() => setStep("form")}>{t("changePreferences")}</Button></div>;
   return <SubscriptionForm preferences={preferences} schedule={schedule} model={model} />;
 }
 export function Subscription(props: SubscriptionProps) {
@@ -87,7 +96,24 @@ export function Subscription(props: SubscriptionProps) {
     <SubscriptionBody preferences={preferences} schedule={schedule} model={model} />
     {model.error && <p role="alert" className="-mt-2 text-sm text-danger">{model.error}</p>}
   </>;
+  // The popover that frames the bare form names it, so it is no region of its own.
+  if (props.bare) return <div className="flex flex-col justify-center" style={{minHeight: model.held}}>{body}</div>;
   if (preferences) return <section aria-label={t("emailUpdates")}>{body}</section>;
   // The library sidebar's card, so the form sits in the page the way the library's filters do.
   return <div id="subscribe" className="h-full scroll-mt-8 [&>section]:h-full"><SidebarCard title={t("emailUpdates")} band={<p className={`text-sm ${muted}`}>{t("chooseHowOftenYouHearFrom")}</p>}>{body}</SidebarCard></div>;
+}
+/**
+ * "Get this digest in your inbox": the subscription form in a popover, where the reader is, so subscribing never takes
+ * them away from the edition they are reading.
+ */
+export function InboxButton({ schedule, placement = "bottom-start" }: { schedule: string; /** The popover lines up with the button's edge nearest the text. */ placement?: "bottom-start" | "bottom-end" }) {
+  const t = useTranslations("digests");
+  return <Popover placement={placement} shouldCloseOnScroll={false}>
+    <PopoverTrigger>
+      <Button color="accent" size="md" className="h-auto min-h-10 max-w-full whitespace-normal rounded-xl py-2"><span className="shrink-0"><Icon value={Mail01Icon} size={16} /></span>{t("getThisDigestInYourInbox")}</Button>
+    </PopoverTrigger>
+    <PopoverContent aria-label={t("emailUpdates")} className="w-80 max-w-[calc(100vw-2rem)] items-stretch rounded-2xl border border-black/10 bg-card_light p-5 dark:border-white/10 dark:bg-card">
+      <Subscription initial={newReader} schedule={schedule} bare />
+    </PopoverContent>
+  </Popover>;
 }

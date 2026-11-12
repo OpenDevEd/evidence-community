@@ -1373,7 +1373,12 @@
     "listedCount": "{count} ohlwini",
     "listedOfTotal": "{listed} kwangu-{total}",
     "publicationsWord": "izishicilelo",
-    "listedRatio": "<strong>{listed}</strong><muted> kwangu-{total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> kwangu-{total}</muted>",
+    "getThisDigestInYourInbox": "Thola leli dayijesi nge-imeyili",
+    "aiNotice": {
+      "title": "I-AI ibhale leli dayijesi",
+      "caution": "Lingaba namaphutha, ngakho vula isishicilelo ngaphambi kokuthembela kulokho idayijesi elikushoyo ngaso."
+    }
   },
   "home": {
     "earlierIssues": "Izinguqulo zangaphambili",

@@ -1373,7 +1373,12 @@
     "listedCount": "{count} सूचीबद्ध",
     "listedOfTotal": "{total} में से {listed}",
     "publicationsWord": "प्रकाशन",
-    "listedRatio": "<muted>{total} में से </muted><strong>{listed}</strong>"
+    "listedRatio": "<muted>{total} में से </muted><strong>{listed}</strong>",
+    "getThisDigestInYourInbox": "यह सारांश अपने ईमेल में पाएँ",
+    "aiNotice": {
+      "title": "यह सारांश AI ने लिखा है",
+      "caution": "इसमें गलतियाँ हो सकती हैं, इसलिए सारांश की किसी बात पर भरोसा करने से पहले वह प्रकाशन खोलकर देखें।"
+    }
   },
   "home": {
     "earlierIssues": "पिछले अंक",

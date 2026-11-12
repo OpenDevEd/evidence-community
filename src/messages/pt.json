@@ -1373,7 +1373,12 @@
     "listedCount": "{count} listadas",
     "listedOfTotal": "{listed} de {total}",
     "publicationsWord": "publicações",
-    "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>",
+    "getThisDigestInYourInbox": "Receber este resumo por e-mail",
+    "aiNotice": {
+      "title": "Este resumo foi escrito por uma IA",
+      "caution": "Ele pode conter erros: abra uma publicação antes de confiar no que o resumo diz sobre ela."
+    }
   },
   "home": {
     "earlierIssues": "Edições anteriores",

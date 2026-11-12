@@ -8,7 +8,7 @@ import PageContainer from "@/components/layout/PageContainer";
 import { Accordion, AccordionItem } from "@nextui-org/react";
 import { useReducedMotion } from "framer-motion";
 import { ACCORDION_CONTENT_MOTION, QUESTION_ITEM } from "@/components/nextui/accordion-motion";
-import { AiMagicIcon, Calendar03Icon, BookOpen01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, FileRemoveIcon, FilterHorizontalIcon, Globe02Icon, InformationCircleIcon, Notification03Icon } from "@hugeicons/core-free-icons";
+import { AiMagicIcon, Alert02Icon, Calendar03Icon, BookOpen01Icon, Cancel01Icon, Copy01Icon, Delete02Icon, FileRemoveIcon, FilterHorizontalIcon, Globe02Icon, InformationCircleIcon, Notification03Icon } from "@hugeicons/core-free-icons";
 import type { DigestArchivePage, DigestChart, DigestDate, DigestEdition, DigestSignature, DigestSummary, EditionTypes } from "@/lib/notifications/public";
 import type { ListItem } from "@/app/api/item/types";
 import { AuthorProfilesContext } from "@/lib/authors/use-author-profiles";
@@ -35,7 +35,7 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { Facts, type Fact } from "@/components/typography/Facts";
 import { Face, Icon, TextLink, muted } from "./DigestPrimitives";
 import { DigestCover, FirstEditionCover, coverHeight, publicationCount } from "./DigestCover";
-import { Subscription, type Preferences } from "./Subscription";
+import { InboxButton, Subscription, newReader, type Preferences } from "./Subscription";
 import { editionParts, type Part } from "./edition-parts";
 
 /**
@@ -173,8 +173,19 @@ function EditorNote({ edition }: { edition: DigestEdition }) {
   </figure>;
 }
 
+/** Under the text, for a reader who has just finished it: when digests come, as the form words it, and the button that sends them by email. */
+function InboxInvite({ schedule }: { schedule: string }) {
+  const t = useTranslations("digests");
+  return <div className="mt-12 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-2xl bg-card_light p-5 dark:bg-card">
+    <div className="min-w-[min(12rem,100%)] flex-1">
+      <p className="flex items-center gap-2 font-medium"><span className={muted}><Icon value={Calendar03Icon} size={16} /></span>{t("libraryDigests")}</p>
+      <p className={`mt-1 text-sm ${muted}`}>{schedule}</p>
+    </div>
+    <InboxButton schedule={schedule} placement="bottom-end" />
+  </div>;
+}
 
-const newReader: Preferences = {email: "", digest: true, instant: false, confirmed: false};
+
 type DigestSettings = {libraryName: string; enabled: boolean; /** What a digest is about: publications dated in its period, or those added to the library. */ covers: "published" | "added"; /** Digests are going out: on and not paused. Only then is a next edition promised. */ sending: boolean; /** An editor publishes each digest, so the next one has a day and no time. */ approval: boolean; timezone: string; schedule: string};
 type Base = {settings: DigestSettings; base: string};
 type ArchiveProps = {view: "archive"; latest: Promise<DigestSummary | null>; editions: Promise<DigestArchivePage>; chart: Promise<DigestChart>; nextEdition: Promise<DigestDate | null>};
@@ -381,7 +392,7 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
       <TextLink href={base} back>{tLabels("allDigests")}</TextLink>
       {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. */}
       <Suspense fallback={<EditionLoading />}>
-        <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} />
+        <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} settings={settings} />
         {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
         <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
           <div className="min-w-0 [&>section]:h-full">
@@ -401,7 +412,7 @@ function EditionLoading() {
     <div className={withRail}><div className="space-y-3"><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-full rounded-lg" /><Skeleton className="h-4 w-4/5 rounded-lg" /></div><Skeleton className="h-80 rounded-2xl" /></div>
   </div>;
 }
-function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; path: string}) {
+function EditionBody({edition: pending, cards, path, settings}: {edition: Promise<DigestEdition | undefined>; cards: Promise<EditionCardsData>; path: string; settings: DigestSettings}) {
   const edition = use(pending);
   // The records arrive with the text: a placeholder card cannot know how tall each real one is, so a list that
   // filled in afterwards moved the page.
@@ -411,9 +422,11 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
   const {intro, parts} = editionParts(edition.markdown);
   const listAnchor = edition.reviews ? "reviews" : "publications";
   return <>
-    <EditionHeader edition={edition} />
+    <EditionHeader edition={edition} invite={settings.enabled && <InboxButton schedule={settings.schedule} />} />
     <div className={withRail}>
-      <article className="min-w-0">
+      {/* The notice is the first thing under the header on a phone too, above the rail that leads there; on a wide screen it heads the text column. */}
+      <div className="order-first min-w-0 lg:order-none lg:col-start-1 lg:row-start-1"><HowChosen edition={edition} locale={locale} /></div>
+      <article className="min-w-0 lg:col-start-1 lg:row-start-2">
         <EditorNote edition={edition} />
         <CitedPublications value={records.cited}>
           {intro && <AIMarkdown>{intro}</AIMarkdown>}
@@ -422,10 +435,11 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
             <AIMarkdown>{part.body}</AIMarkdown>
           </section>)}</div>
         </CitedPublications>
+        {settings.enabled && <InboxInvite schedule={settings.schedule} />}
         <InThisEdition edition={edition} records={records} path={path} locale={locale} />
       </article>
       {/* The publications scroll away with the page; the contents, last in the rail, stay in view to move between sections. */}
-      <aside className="order-first flex flex-col gap-4 lg:order-none lg:self-stretch">
+      <aside className="order-first flex flex-col gap-4 lg:order-none lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:self-stretch">
         <EditionShare edition={edition} locale={locale} />
         <div className="lg:sticky lg:top-8"><Contents parts={parts} edition={edition} listAnchor={listAnchor} locale={locale} /></div>
       </aside>
@@ -433,11 +447,12 @@ function EditionBody({edition: pending, cards, path}: {edition: Promise<DigestEd
   </>;
 }
 
-function EditionHeader({edition}: {edition: DigestEdition}) {
+function EditionHeader({edition, invite}: {edition: DigestEdition; /** The way to get digests by email, under the edition's facts. */ invite: ReactNode}) {
   return <header className="mb-12 mt-8 max-w-4xl">
     <h1 className="font-heading text-4xl font-semibold leading-[1.1] tracking-tight text-balance sm:text-5xl">{edition.title}</h1>
     <MarkdownExcerpt className={`mt-5 max-w-3xl text-lg leading-8 ${muted}`}>{edition.summary}</MarkdownExcerpt>
     <div className="mt-6"><EditionMeta edition={edition} /></div>
+    {invite && <div className="mt-6">{invite}</div>}
   </header>;
 }
 /** The edition's publications under their heading, with how many of the period's are listed and how they were chosen. */
@@ -445,7 +460,6 @@ function InThisEdition({edition, records, path, locale}: {edition: DigestEdition
   const tLabels = useTranslations("digests");
   return <section id="publications" className="mt-16 scroll-mt-8" aria-labelledby="publications-title">
     <SectionTitle className="mb-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1"><span id="publications-title">{tLabels("inThisEdition")}</span><span className={`text-sm font-normal tabular-nums ${muted}`}><CountHint edition={edition} locale={locale}>{tLabels("listedOfTotal", { listed: edition.listed.toLocaleString(locale), total: edition.publicationCount.toLocaleString(locale) })}</CountHint></span></SectionTitle>
-    <HowChosen edition={edition} locale={locale} />
     <EditionLists edition={edition} records={records} path={path} locale={locale} />
   </section>;
 }
@@ -632,7 +646,7 @@ const checkSteps = (by: DigestEdition["by"], t: DigestTranslator): Step[] => [
 ];
 
 /**
- * How the edition was made, as the questions a reader asks of it: what the AI read, why these publications are listed
+ * Above the text: that AI wrote it and can be wrong, over how the edition was made, as the questions a reader asks of it: what the AI read, why these publications are listed
  * in this order (`reviewStanding`, then an abstract, then the score), what is left out, and how the text was checked.
  */
 function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) {
@@ -647,9 +661,15 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
       <dt className="font-semibold tabular-nums text-accent">{weight}</dt><dd>{tLabels(what)}</dd>
     </Fragment>)}</dl>},
   ];
-  return <div className="mb-10 rounded-2xl bg-card_light px-6 pt-5 pb-1 dark:bg-card">
-    <h3 className="font-heading text-lg font-medium">{tLabels("howThisEditionWasMade")}</h3>
-    <Accordion selectionMode="multiple" className="mt-1 px-0" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
+  return <section aria-labelledby="ai-notice-title" className="overflow-hidden rounded-2xl bg-card_light dark:bg-card">
+    <div className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-3 bg-warning-50 px-6 py-5 dark:bg-warning-50/50">
+      <span className="mt-0.5 text-warning-600 dark:text-warning-500"><Icon value={Alert02Icon} size={20} /></span>
+      <div>
+        <p id="ai-notice-title" className="font-semibold leading-6">{tLabels("aiNotice.title")}</p>
+        <p className="mt-1 text-sm leading-6 text-black/70 dark:text-white/70">{tLabels("aiNotice.caution")}</p>
+      </div>
+    </div>
+    <Accordion aria-label={tLabels("howThisEditionWasMade")} selectionMode="multiple" className="px-6 pb-1" itemClasses={QUESTION_ITEM} disableAnimation={Boolean(reducedMotion)}>
       <AccordionItem key="read" aria-label={tLabels("whatDidTheAiRead")} title={tLabels("whatDidTheAiRead")} motionProps={{variants: ACCORDION_CONTENT_MOTION}}
         subtitle={tLabels.rich(edition.cited > 0 ? "subtitle.readCited" : "subtitle.read", { em: Emphasis, read: cut ? n(edition.read) : tLabels("subtitle.all"), total: n(edition.publicationCount), cited: n(edition.cited), open: n(edition.citedOpen) })}>
         <Facts rows={readRows(edition, n, tLabels)} />
@@ -671,7 +691,7 @@ function HowChosen({edition, locale}: {edition: DigestEdition; locale: string}) 
         <Steps steps={checkSteps(edition.by, tLabels)} />
       </AccordionItem>
     </Accordion>
-  </div>;
+  </section>;
 }
 
 /** The edition's publications: its reviews and syntheses first as a list of their own, by type, then the others, each with its own pages. */

@@ -1373,7 +1373,12 @@
     "listedCount": "{count} مُدرجة",
     "listedOfTotal": "{listed} من {total}",
     "publicationsWord": "منشورات",
-    "listedRatio": "<strong>{listed}</strong><muted> من {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> من {total}</muted>",
+    "getThisDigestInYourInbox": "استلم هذا الملخص في بريدك الإلكتروني",
+    "aiNotice": {
+      "title": "كتب الذكاء الاصطناعي هذا الملخص",
+      "caution": "قد يحتوي على أخطاء، فافتح المنشور قبل أن تعتمد على ما يقوله الملخص عنه."
+    }
   },
   "home": {
     "earlierIssues": "الإصدارات السابقة",

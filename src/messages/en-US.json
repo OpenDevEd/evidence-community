@@ -1373,7 +1373,12 @@
     "listedCount": "{count} listed",
     "listedOfTotal": "{listed} of {total}",
     "publicationsWord": "publications",
-    "listedRatio": "<strong>{listed}</strong><muted> of {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> of {total}</muted>",
+    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "aiNotice": {
+      "title": "AI wrote this digest",
+      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+    }
   },
   "home": {
     "earlierIssues": "Earlier issues",

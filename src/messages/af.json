@@ -1373,7 +1373,12 @@
     "listedCount": "{count} gelys",
     "listedOfTotal": "{listed} van {total}",
     "publicationsWord": "publikasies",
-    "listedRatio": "<strong>{listed}</strong><muted> van {total}</muted>"
+    "listedRatio": "<strong>{listed}</strong><muted> van {total}</muted>",
+    "getThisDigestInYourInbox": "Kry hierdie samevatting per e-pos",
+    "aiNotice": {
+      "title": "KI het hierdie samevatting geskryf",
+      "caution": "Dit kan foute bevat, so maak ’n publikasie oop voordat jy staatmaak op wat die samevatting daaroor sê."
+    }
   },
   "home": {
     "earlierIssues": "Vroeëre uitgawes",
