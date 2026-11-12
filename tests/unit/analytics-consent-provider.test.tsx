@@ -311,12 +311,12 @@ describe("analytics consent provider", () => {
 	it("uses the answer the server read, before anything is drawn", () => {
 		const answered = renderToStaticMarkup(
 			<AnalyticsConsentProvider
-				storedConsentFromServer={serializeAnalyticsConsentRecord(
+				storedConsentFromServer={`analytics_consent=${serializeAnalyticsConsentRecord(
 					createAnalyticsConsentRecord(
 						{ scope: "https://library.example.org", version: 2 },
 						{ analytics: false, sessionReplay: false },
 					),
-				)}
+				)}`}
 			>
 				<ConsentController />
 			</AnalyticsConsentProvider>,

@@ -52,6 +52,8 @@ If the built-in analytics policy or this community’s policy version changes, o
 {{::}}{{SharedConsent::}}Use **Cookie settings** in the footer to change your choice at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the switch as shown. **Decline** disables both.
 
 Your choice holds on Openscholar and on every community at an openscholar.ai address, so you are asked once. Changing it on any of them changes it on all of them. Deleting the `openscholar_consent` cookie makes them ask again.
+
+If you answered on this community before it shared Openscholar's choice, that answer stays in an `analytics_consent` cookie on {{SITE_HOST}} and applies here only, until you choose on Openscholar or on any of its communities. Your new choice then replaces it, and the site removes that cookie.
 {{::}}
 Most browsers also let you inspect or delete stored site data in their privacy settings.
 

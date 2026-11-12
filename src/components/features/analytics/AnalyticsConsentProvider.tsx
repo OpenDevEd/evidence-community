@@ -3,12 +3,12 @@
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import {
 	DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
-	analyticsConsentCookie,
-	analyticsConsentCookieName,
+	analyticsConsentCookieNames,
+	analyticsConsentCookies,
 	analyticsConsentPolicy,
 	analyticsConsentState,
 	analyticsCapabilities,
-	parseAnalyticsConsentRecord,
+	readAnalyticsConsentCookieHeader,
 	sharesAnalyticsConsent,
 	type AnalyticsConsentPreferences,
 	type AnalyticsConsentPolicy,
@@ -47,7 +47,7 @@ function writeConsentCookie(
 	preferences: AnalyticsConsentPreferences,
 	capabilities: AnalyticsConsentPreferences,
 ) {
-	document.cookie = analyticsConsentCookie(
+	const lines = analyticsConsentCookies(
 		policy,
 		{
 			analytics: capabilities.analytics && preferences.analytics,
@@ -55,6 +55,7 @@ function writeConsentCookie(
 		},
 		{ secure: window.location.protocol === "https:" },
 	);
+	for (const line of lines) document.cookie = line;
 }
 
 /**
@@ -81,15 +82,16 @@ function subscribeToConsentCookie(onChange: () => void) {
 	};
 }
 
-/** The stored answer as the browser has it, or null when there is none. */
-function consentCookieValue(name: string) {
+/**
+ * The cookies that hold the answer, as a cookie header in the order the server writes it (Base.tsx), or null when there
+ * are none. Only those cookies, so an analytics tool writing its own doesn't count as a change.
+ */
+function consentCookieEntries(names: string[]) {
 	if (typeof document === "undefined") return null;
-	const prefix = `${name}=`;
-	const entry = document.cookie
-		.split("; ")
-		.find((cookie) => cookie.startsWith(prefix));
+	const cookies = document.cookie.split("; ");
+	const entries = names.flatMap((name) => cookies.filter((cookie) => cookie.startsWith(`${name}=`)));
 
-	return entry === undefined ? null : entry.slice(prefix.length);
+	return entries.length ? entries.join("; ") : null;
 }
 
 export function AnalyticsConsentProvider({
@@ -98,7 +100,7 @@ export function AnalyticsConsentProvider({
 }: {
 	children: React.ReactNode;
 	/**
-	 * The stored answer as the server read it. Passing it means the very
+	 * The cookies holding the answer, as a cookie header, as the server read them. Passing it means the very
 	 * first drawing of the page already knows whether the reader has
 	 * answered, so a returning reader is never interrupted and a new one is
 	 * asked from the start rather than a moment later.
@@ -114,17 +116,17 @@ export function AnalyticsConsentProvider({
 		[config.analytics, config.identity.baseUrl],
 	);
 	const sharesAnswer = sharesAnalyticsConsent(policy);
-	const cookieName = analyticsConsentCookieName(policy);
+	const cookieNames = analyticsConsentCookieNames(policy);
 	// The decision is read as the page is drawn, so a reader who has already
 	// answered is never asked again, and one who has not is asked in the same
 	// breath as the page appearing rather than a moment after it.
 	const storedConsent = useSyncExternalStore(
 		subscribeToConsentCookie,
-		() => consentCookieValue(cookieName),
+		() => consentCookieEntries(cookieNames),
 		() => storedConsentFromServer,
 	);
 	const record = useMemo(
-		() => parseAnalyticsConsentRecord(storedConsent, policy),
+		() => readAnalyticsConsentCookieHeader(storedConsent, policy),
 		[policy, storedConsent],
 	);
 	const consentState = analyticsConsentState(record);
