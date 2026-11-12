@@ -213,6 +213,7 @@
     "recommendedItems": "Recursos recomendados",
     "countryFilterDescription": "Seleccione regiones y países",
     "cookieConsentMessage": "Elija qué analítica permite. Puede cambiar su elección en cualquier momento.",
+    "cookieConsentSharedMessage": "Elija qué analítica permite. Su elección también se aplica a Openscholar y sus otras comunidades, y puede cambiarla en cualquier momento.",
     "cookieConsentTitle": "Ayúdenos a mejorar su experiencia",
     "cookieAccept": "Aceptar todo y continuar",
     "cookieDecline": "Rechazar",

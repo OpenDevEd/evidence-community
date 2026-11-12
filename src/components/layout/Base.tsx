@@ -15,7 +15,7 @@ import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { cookies, headers } from "next/headers";
 
-import { ANALYTICS_CONSENT_COOKIE_NAME } from "@/lib/analytics-consent";
+import { analyticsConsentCookieNames, analyticsConsentPolicy } from "@/lib/analytics-consent";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import { LibraryThemeStyles, themeGoogleFonts } from "@/components/library/LibraryThemeStyles";
 import { PLATFORM_FONTS } from "@/components/library/platform-fonts";
@@ -93,11 +93,18 @@ export default async function Base({
 	// pages are drawn per request and the runtime settings below are never
 	// baked into a build. That is what the earlier `connection()` call was
 	// for, so it is gone.
-	const storedConsent =
-		(await cookies()).get(ANALYTICS_CONSENT_COOKIE_NAME)?.value ?? null;
+	const requestCookies = await cookies();
 	// One configuration snapshot for the page: an activation mid-render must not
 	// give the header's fit styles a different library than the header itself.
 	const serverConfig = await getLibraryConfig();
+	// The cookies that hold the answer, as a cookie header for the provider to read.
+	const storedConsent =
+		analyticsConsentCookieNames(analyticsConsentPolicy(serverConfig))
+			.flatMap((name) => {
+				const cookie = requestCookies.get(name);
+				return cookie ? [`${name}=${encodeURIComponent(cookie.value)}`] : [];
+			})
+			.join("; ") || null;
 	const libraryConfig = projectPublicLibraryConfig(serverConfig);
 	const dir = getLangDir(locale);
 	// Only the library's own fonts are set on the page, so only those are preloaded.

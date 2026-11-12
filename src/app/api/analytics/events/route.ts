@@ -1,5 +1,6 @@
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
+	analyticsConsentPolicy,
 	analyticsConsentState,
 	readAnalyticsConsentCookieHeader,
 } from "@/lib/analytics-consent";
@@ -25,10 +26,7 @@ export async function POST(request: Request) {
 	const config = await getLibraryConfig();
 	const consent = readAnalyticsConsentCookieHeader(
 		request.headers.get("cookie"),
-		{
-			scope: config.identity.baseUrl,
-			version: config.analytics.consentPolicyVersion,
-		},
+		analyticsConsentPolicy(config),
 	);
 	if (analyticsConsentState(consent) !== "denied") {
 		return new NextResponse(null, { status: 204 });

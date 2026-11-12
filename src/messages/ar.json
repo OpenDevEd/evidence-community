@@ -213,6 +213,7 @@
     "recommendedItems": "الموارد الموصى بها",
     "countryFilterDescription": "حدد المناطق والبلدان",
     "cookieConsentMessage": "اختر التحليلات التي تسمح بها. يمكنك تغيير اختيارك في أي وقت.",
+    "cookieConsentSharedMessage": "اختر التحليلات التي تسمح بها. ينطبق اختيارك أيضًا على Openscholar ومجتمعاته الأخرى، ويمكنك تغييره في أي وقت.",
     "cookieConsentTitle": "ساعدنا في تحسين تجربتك",
     "cookieAccept": "قبول الكل والمتابعة",
     "cookieDecline": "رفض",

@@ -213,6 +213,7 @@
     "recommendedItems": "推荐资源",
     "countryFilterDescription": "选择地区、国家",
     "cookieConsentMessage": "选择允许哪些分析功能。您可以随时更改选择。",
+    "cookieConsentSharedMessage": "选择允许哪些分析功能。您的选择同样适用于 Openscholar 及其其他社区，您可以随时更改。",
     "cookieConsentTitle": "帮助我们改善您的体验",
     "cookieAccept": "全部接受并继续",
     "cookieDecline": "拒绝",

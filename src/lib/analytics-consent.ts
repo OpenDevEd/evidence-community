@@ -129,6 +129,60 @@ export function analyticsConsentState(
 	return record.preferences.analytics ? "granted" : "denied";
 }
 
+/**
+ * A community on openscholar.ai shares one answer with Openscholar and every other community there: Openscholar's own
+ * cookie on the parent domain, in Openscholar's format (openalex-count `lib/consent-cookie.ts`). That answer is one
+ * yes or no, so a yes there covers session replay too. A community anywhere else keeps its own answer.
+ */
+const SHARED_CONSENT_DOMAIN = "openscholar.ai";
+const SHARED_CONSENT_COOKIE_NAME = "openscholar_consent";
+const SHARED_CONSENT_POLICY_VERSION = "1.0";
+const SHARED_CONSENT_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+
+export function sharesConsentOnHost(hostname: string) {
+	return hostname === SHARED_CONSENT_DOMAIN || hostname.endsWith(`.${SHARED_CONSENT_DOMAIN}`);
+}
+
+export function sharesAnalyticsConsent(policy: AnalyticsConsentPolicy) {
+	return sharesConsentOnHost(new URL(policy.scope).hostname);
+}
+
+export function analyticsConsentPolicy(config: {
+	analytics: Pick<LibraryPublicConfig["analytics"], "consentPolicyVersion">;
+	identity: Pick<LibraryPublicConfig["identity"], "baseUrl">;
+}): AnalyticsConsentPolicy {
+	return {
+		scope: normalizeAnalyticsConsentScope(config.identity.baseUrl),
+		version: config.analytics.consentPolicyVersion,
+	};
+}
+
+/** The cookies that can hold this community's answer, the one that wins first. */
+export function analyticsConsentCookieNames(policy: AnalyticsConsentPolicy) {
+	return sharesAnalyticsConsent(policy) ? [SHARED_CONSENT_COOKIE_NAME, ANALYTICS_CONSENT_COOKIE_NAME] : [ANALYTICS_CONSENT_COOKIE_NAME];
+}
+
+function parseSharedConsent(value: string | undefined, policy: AnalyticsConsentPolicy): AnalyticsConsentRecord | null {
+	if (!value || !isPolicy(policy)) return null;
+	try {
+		const parsed: unknown = JSON.parse(decodeURIComponent(value));
+		if (!isRecordObject(parsed) || (parsed.choice !== "granted" && parsed.choice !== "denied")) return null;
+		const decidedAt = typeof parsed.timestamp === "string" ? Date.parse(parsed.timestamp) : Number.NaN;
+		if (!Number.isFinite(decidedAt)) return null;
+		const granted = parsed.choice === "granted";
+		return {
+			scope: normalizeAnalyticsConsentScope(policy.scope),
+			version: policy.version,
+			runtimePolicyVersion: RUNTIME_ANALYTICS_POLICY_VERSION,
+			decidedAt,
+			preferences: { analytics: granted, sessionReplay: granted },
+		};
+	} catch {
+		return null;
+	}
+}
+
+/** A community's own answer, kept in `analytics_consent`. */
 export function parseAnalyticsConsentRecord(
 	value: string | null | undefined,
 	policy: AnalyticsConsentPolicy,
@@ -155,22 +209,56 @@ export function serializeAnalyticsConsentRecord(
 	return encodeURIComponent(JSON.stringify(record));
 }
 
+/**
+ * The `document.cookie` lines that save an answer where this community reads it. On openscholar.ai that is the shared
+ * cookie, and the community's own earlier answer goes, since the new one replaces it.
+ */
+export function analyticsConsentCookies(
+	policy: AnalyticsConsentPolicy,
+	preferences: AnalyticsConsentPreferences,
+	{ now = Date.now(), secure }: { now?: number; secure: boolean },
+) {
+	const attributes = ["Path=/", "SameSite=Lax", ...(secure ? ["Secure"] : [])];
+	if (!sharesAnalyticsConsent(policy)) {
+		const value = serializeAnalyticsConsentRecord(createAnalyticsConsentRecord(policy, preferences, now));
+		return [[`${ANALYTICS_CONSENT_COOKIE_NAME}=${value}`, `Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}`, ...attributes].join("; ")];
+	}
+	const value = encodeURIComponent(
+		JSON.stringify({
+			choice: preferences.analytics ? "granted" : "denied",
+			timestamp: new Date(now).toISOString(),
+			policyVersion: SHARED_CONSENT_POLICY_VERSION,
+		}),
+	);
+	return [
+		[`${SHARED_CONSENT_COOKIE_NAME}=${value}`, `Max-Age=${SHARED_CONSENT_MAX_AGE_SECONDS}`, `Domain=${SHARED_CONSENT_DOMAIN}`, ...attributes].join("; "),
+		[`${ANALYTICS_CONSENT_COOKIE_NAME}=`, "Max-Age=0", ...attributes].join("; "),
+	];
+}
+
+function cookieValue(cookieHeader: string, name: string) {
+	return cookieHeader
+		.split(";")
+		.map((entry) => entry.trim())
+		.find((entry) => entry.startsWith(`${name}=`))
+		?.split("=")
+		.slice(1)
+		.join("=");
+}
+
+/**
+ * The answer this community goes by. On openscholar.ai the shared answer wins. An answer given on the community before
+ * it shared one still holds there, and only there, until a shared one is saved: it was given for that community alone.
+ */
 export function readAnalyticsConsentCookieHeader(
 	cookieHeader: string | null | undefined,
 	policy: AnalyticsConsentPolicy,
 	now = Date.now(),
 ): AnalyticsConsentRecord | null {
 	if (!cookieHeader) return null;
-
-	const value = cookieHeader
-		.split(";")
-		.map((entry) => entry.trim())
-		.find((entry) => entry.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`))
-		?.split("=")
-		.slice(1)
-		.join("=");
-
-	return parseAnalyticsConsentRecord(value, policy, now);
+	const own = parseAnalyticsConsentRecord(cookieValue(cookieHeader, ANALYTICS_CONSENT_COOKIE_NAME), policy, now);
+	if (!sharesAnalyticsConsent(policy)) return own;
+	return parseSharedConsent(cookieValue(cookieHeader, SHARED_CONSENT_COOKIE_NAME), policy) ?? own;
 }
 
 /**

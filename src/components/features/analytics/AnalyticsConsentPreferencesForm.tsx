@@ -11,8 +11,10 @@ export function AnalyticsConsentPreferencesForm({
 }: {
 	onComplete?: () => void;
 }) {
-	const { capabilities, preferences, savePreferences, setConsentState } =
+	const { capabilities, preferences, savePreferences, setConsentState, sharesAnswer } =
 		useAnalyticsConsent();
+	// A shared answer is one yes or no, so replay has no switch of its own there: the analytics switch covers it.
+	const replaySwitch = capabilities.sessionReplay && !sharesAnswer;
 	const [analytics, setAnalytics] = useState(preferences.analytics);
 	const [sessionReplay, setSessionReplay] = useState(
 		preferences.sessionReplay,
@@ -43,6 +45,7 @@ export function AnalyticsConsentPreferencesForm({
 						</p>
 						<p className="mt-0.5 text-xs leading-4 text-default-500">
 							{t("cookieAnalyticsDescription")}
+							{capabilities.sessionReplay && sharesAnswer ? ` ${t("cookieReplayDescription")}` : null}
 						</p>
 					</div>
 					<Switch
@@ -54,7 +57,7 @@ export function AnalyticsConsentPreferencesForm({
 						}}
 					/>
 				</div>
-				{capabilities.sessionReplay && (
+				{replaySwitch && (
 					<>
 						<div className="mx-3 h-px bg-divider" />
 						<div className="flex min-h-16 items-center justify-between gap-4 rounded-xl px-3 py-2.5">
