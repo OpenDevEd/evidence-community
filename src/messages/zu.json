@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} kwangu-{total}",
     "publicationsWord": "izishicilelo",
     "listedRatio": "<strong>{listed}</strong><muted> kwangu-{total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "Thola leli dayijesi nge-imeyili",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "I-AI ibhale leli dayijesi",
+      "caution": "Lingaba namaphutha, ngakho vula isishicilelo ngaphambi kokuthembela kulokho idayijesi elikushoyo ngaso."
     }
   },
   "home": {

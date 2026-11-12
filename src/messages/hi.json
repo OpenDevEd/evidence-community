@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{total} में से {listed}",
     "publicationsWord": "प्रकाशन",
     "listedRatio": "<muted>{total} में से </muted><strong>{listed}</strong>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "यह सारांश अपने ईमेल में पाएँ",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "यह सारांश AI ने लिखा है",
+      "caution": "इसमें गलतियाँ हो सकती हैं, इसलिए सारांश की किसी बात पर भरोसा करने से पहले वह प्रकाशन खोलकर देखें।"
     }
   },
   "home": {

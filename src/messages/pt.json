@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} de {total}",
     "publicationsWord": "publicações",
     "listedRatio": "<strong>{listed}</strong><muted> de {total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "Receber este resumo por e-mail",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "Este resumo foi escrito por uma IA",
+      "caution": "Ele pode conter erros: abra uma publicação antes de confiar no que o resumo diz sobre ela."
     }
   },
   "home": {

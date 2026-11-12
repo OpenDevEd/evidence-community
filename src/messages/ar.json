@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} من {total}",
     "publicationsWord": "منشورات",
     "listedRatio": "<strong>{listed}</strong><muted> من {total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "استلم هذا الملخص في بريدك الإلكتروني",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "كتب الذكاء الاصطناعي هذا الملخص",
+      "caution": "قد يحتوي على أخطاء، فافتح المنشور قبل أن تعتمد على ما يقوله الملخص عنه."
     }
   },
   "home": {

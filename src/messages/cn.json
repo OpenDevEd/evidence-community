@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} / {total}",
     "publicationsWord": "篇出版物",
     "listedRatio": "<strong>{listed}</strong><muted> / {total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "通过邮件接收此摘要",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "此摘要由 AI 撰写",
+      "caution": "摘要可能有误，请先打开文献，再采信摘要对它的描述。"
     }
   },
   "home": {

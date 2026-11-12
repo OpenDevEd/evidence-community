@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} kati ya {total}",
     "publicationsWord": "machapisho",
     "listedRatio": "<strong>{listed}</strong><muted> kati ya {total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "Pokea muhtasari huu kwa barua pepe",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "AI iliandika muhtasari huu",
+      "caution": "Unaweza kuwa na makosa, kwa hiyo fungua chapisho kabla ya kutegemea kile muhtasari unachosema kulihusu."
     }
   },
   "home": {

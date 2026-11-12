@@ -1374,10 +1374,10 @@
     "listedOfTotal": "{listed} van {total}",
     "publicationsWord": "publikasies",
     "listedRatio": "<strong>{listed}</strong><muted> van {total}</muted>",
-    "getThisDigestInYourInbox": "Get this digest in your inbox",
+    "getThisDigestInYourInbox": "Kry hierdie samevatting per e-pos",
     "aiNotice": {
-      "title": "AI wrote this digest",
-      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
+      "title": "KI het hierdie samevatting geskryf",
+      "caution": "Dit kan foute bevat, so maak ’n publikasie oop voordat jy staatmaak op wat die samevatting daaroor sê."
     }
   },
   "home": {
