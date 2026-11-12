@@ -46,7 +46,7 @@ function Figures({ count, share, arrow, arrowSlot, note, heading, hidden }: Opti
 	);
 }
 
-export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false, selected = false }: { label: string; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean; /** A chosen option shows its name and a tick: its figures stay in place, invisible, so it keeps its height. */ selected?: boolean }) {
+export function FacetOption({ label, count, largest, share, shareValue, arrow, arrowSlot, note, emphasis = false, selected = false, lines = 1 }: { label: string; /** Two on a phone at large text, where one line holds a few letters. */ lines?: 1 | 2; count: number | null; largest: number; share: string | null; shareValue: number | null; arrow: "open" | "closed" | null; arrowSlot: boolean; note?: string; emphasis?: boolean; /** A chosen option shows its name and a tick: its figures stay in place, invisible, so it keeps its height. */ selected?: boolean }) {
 	const heading = emphasis && count !== null;
 	const hidden = selected ? "invisible" : "";
 	return (
@@ -54,7 +54,7 @@ export function FacetOption({ label, count, largest, share, shareValue, arrow, a
 		<span className="@container flex w-full min-w-0 flex-col gap-1 text-black dark:text-white">
 			<span className="relative flex min-w-0 items-center gap-2">
 				{heading && shareValue !== null && <span className={twMerge("flex shrink-0", hidden)}><ShareRing share={shareValue} /></span>}
-				<TruncatedText text={label} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
+				<TruncatedText text={label} lines={lines} className={twMerge("flex-1 leading-5", emphasis && "font-semibold")} />
 				<Figures count={count} share={share} arrow={arrow} arrowSlot={arrowSlot} note={note} heading={heading} hidden={hidden} />
 				{selected && <HugeiconsIcon icon={Tick01Icon} aria-hidden className="absolute end-0 top-1/2 size-4 -translate-y-1/2 text-accent" />}
 			</span>
