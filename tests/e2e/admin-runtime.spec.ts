@@ -189,6 +189,9 @@ test("resolves concurrent draft fields without losing either session's other cha
 		.toBe("Shared draft");
 	const second = await page.context().newPage();
 	try {
+		// The second session hasn't heard the first one's saves. A session that has heard them (/api/admin/events) reads
+		// the record again before it types, and has no conflict to resolve.
+		await second.route("**/api/admin/events", (route) => route.abort());
 		await second.goto(`/admin?item=${key}`);
 		const other = second.locator("#admin-inspector-pane");
 		await expect(
