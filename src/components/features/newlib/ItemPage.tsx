@@ -528,7 +528,7 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	);
 }
 
-/** Who funds the community, on each of its records: the funders its footer lists. */
+/** Who funds the community, on each of its records: the funders its footer lists, each with its logo and its link. */
 function ItemFundingPartners() {
 	const { funders } = useLibraryConfig().footer;
 	const t = useTranslations("ui");
@@ -537,17 +537,19 @@ function ItemFundingPartners() {
 	return (
 		<SidebarCard title={t("fundingPartner")} count={funders.length}>
 			{funders.map((funder) => (
-				<ItemRow
-					key={funder.id}
-					icon={
-						<InstitutionLogo
-							alt=""
-							fallback={<HugeiconsIcon icon={Building03Icon} />}
-							size="row"
-						/>
-					}
-					title={funder.name}
-				/>
+				<LinkWithParams key={funder.id} href={funder.href} isExternal className="opacity-100">
+					<ItemRow
+						icon={
+							<InstitutionLogo
+								alt=""
+								fallback={<HugeiconsIcon icon={Building03Icon} />}
+								logoUrl={funder.logoUrl}
+								size="row"
+							/>
+						}
+						title={funder.name}
+					/>
+				</LinkWithParams>
 			))}
 		</SidebarCard>
 	);
