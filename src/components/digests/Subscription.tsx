@@ -55,7 +55,7 @@ function SubscriptionEmail({preferences, model}: {preferences: boolean; model: F
   const t = useTranslations("digests");
   const {value, change} = model;
   if (preferences) return <p className={`break-all text-sm ${muted}`}>{value.email}</p>;
-  return <div className="space-y-2"><label htmlFor={`${model.id}-email`} className="block text-sm font-semibold text-black/90 dark:text-white/90">{t("emailAddress")}</label><Input id={`${model.id}-email`} aria-label={t("emailAddress")} type="email" isRequired isDisabled={model.busy} value={value.email} onValueChange={email => change({...value, email})} placeholder={t("youExampleOrg")} classNames={{ inputWrapper: "h-11 rounded-xl", input: "text-sm" }} /></div>;
+  return <div className="space-y-2"><label htmlFor={`${model.id}-email`} className="block text-sm font-semibold text-black/90 dark:text-white/90">{t("emailAddress")}</label><Input id={`${model.id}-email`} aria-label={t("emailAddress")} type="email" color="card" isRequired isDisabled={model.busy} value={value.email} onValueChange={email => change({...value, email})} placeholder={t("youExampleOrg")} classNames={{ inputWrapper: "h-11 rounded-xl", input: "text-sm" }} /></div>;
 }
 function SubscriptionButtons({preferences, model}: {preferences: boolean; model: FormModel}) {
   const t = useTranslations("digests");
