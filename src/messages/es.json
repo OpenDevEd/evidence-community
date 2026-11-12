@@ -1377,7 +1377,7 @@
     "getThisDigestInYourInbox": "Get this digest in your inbox",
     "aiNotice": {
       "title": "AI wrote this digest",
-      "caution": "It can still be wrong, so open a publication before you rely on what the digest says about it."
+      "caution": "It can be wrong, so open a publication before you rely on what the digest says about it."
     }
   },
   "home": {
