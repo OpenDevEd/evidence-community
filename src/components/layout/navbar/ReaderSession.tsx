@@ -178,9 +178,9 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 			if (step === "none" || stamp === null) return;
 			following = true;
 			try {
-				// The header and what the server rendered for the reader change only when the reader did.
-				if (!(await takeStep(step, stamp, here))) return;
-				readerAuthClient.$store.notify("$sessionSignal");
+				// The header changes only when the reader did. A sign-out has already told the page's session to read itself
+				// again; the hidden sign-in happened in a frame, so the page is told here.
+				if ((await takeStep(step, stamp, here)) && step === "sign-in") readerAuthClient.$store.notify("$sessionSignal");
 			} catch (error) {
 				// OpenScholar or the network didn't answer: the session stays as it was, and the button still works.
 				noteNotFollowed({ step, stage: "error", error: String(error).slice(0, 200) });
