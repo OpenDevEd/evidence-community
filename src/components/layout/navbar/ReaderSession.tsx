@@ -20,13 +20,31 @@ const ReaderAdmin = createContext<{ admin: boolean; join: JoinStanding; refresh:
 /** What one reader's standing says of anyone else: whether the community takes applications, never that theirs waits. */
 const othersJoin = (join: JoinStanding): JoinStanding => (join === "closed" ? "closed" : "open");
 
+/**
+ * Who is signed in here, as the page knows it now. The server's answer stands only until this browser has read the
+ * session itself. After that, a session being read again while nobody is signed in reports itself pending too, and
+ * the server's answer is from before whatever the page has done since: falling back to it would show the last reader
+ * again for a moment.
+ */
+function useReaderHere(reader: Reader | null) {
+	const session = readerAuthClient.useSession();
+	const [readHere, setReadHere] = useState(false);
+	if (!session.isPending && !readHere) setReadHere(true);
+	const servedReader = readHere ? null : reader;
+	return {
+		servedReader,
+		pending: session.isPending,
+		readerId: session.isPending ? (servedReader?.id ?? null) : (session.data?.user.id ?? null),
+		sessionId: session.data?.session.id ?? null,
+	};
+}
+
 /** The server reads the session with the page, so the header is right on its first frame. */
 export function ReaderSessionProvider({ reader, admin, join, children }: { reader: Reader | null; admin: boolean; join: JoinStanding; children: ReactNode }) {
 	// The server's answer until the menu asks again (`refresh`), as it does each time it opens. Both are one reader's:
 	// once the session is someone else's, or no one's (a sign-out in another tab), neither is said of them.
 	const [heard, setHeard] = useState<{ reader: string | null; admin: boolean; join: JoinStanding } | null>(null);
-	const session = readerAuthClient.useSession();
-	const readerId = session.isPending ? (reader?.id ?? null) : (session.data?.user.id ?? null);
+	const { servedReader, pending, readerId, sessionId } = useReaderHere(reader);
 	const live = heard && heard.reader === readerId ? heard : null;
 	const served = readerId === (reader?.id ?? null) ? { admin, join } : { admin: false, join: othersJoin(join) };
 	const refresh = useCallback(
@@ -50,9 +68,9 @@ export function ReaderSessionProvider({ reader, admin, join, children }: { reade
 			document.removeEventListener("visibilitychange", back);
 		};
 	}, [signedIn, refresh]);
-	useFollowOpenScholarSession(session.isPending ? undefined : readerId, session.data?.session.id ?? null);
+	useFollowOpenScholarSession(pending ? undefined : readerId, sessionId);
 	return (
-		<ServerReader value={reader}>
+		<ServerReader value={servedReader}>
 			<ReaderAdmin value={{ admin: live?.admin ?? served.admin, join: live?.join ?? served.join, refresh }}>{children}</ReaderAdmin>
 		</ServerReader>
 	);
