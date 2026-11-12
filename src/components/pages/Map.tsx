@@ -300,7 +300,7 @@ function ItemView({ props, list }: { props: ReturnType<typeof useItemsList>; lis
 						<div className={twMerge("min-h-0 flex-1 flex-col overflow-hidden xl:flex xl:rounded-2xl [@media(max-width:1279px)_and_(orientation:landscape)]:flex", open ? "flex" : "hidden")}>
 							{/* The head stays put while the results scroll under it, as the countries' panel does. */}
 							<ResultsHead props={props} />
-							<div className="min-h-0 flex-1 overflow-y-scroll overflow-x-hidden no-scrollbar">
+							<div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
 								<Card color="card" className="min-h-full rounded-none p-4 shadow-none">
 									<ItemsList props={props} contentId="map-results" headless />
 								</Card>

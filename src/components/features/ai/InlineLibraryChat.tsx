@@ -146,7 +146,7 @@ function InlineChatMessages({
 		<>
 			<div
 				ref={messagesScrollRef}
-				className="no-scrollbar h-full overflow-y-auto overflow-x-hidden"
+				className="h-full overflow-y-auto overflow-x-hidden"
 			>
 				<div
 					ref={contentRef}

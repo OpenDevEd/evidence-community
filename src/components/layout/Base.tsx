@@ -111,7 +111,7 @@ export default async function Base({
 	const fontVariables = themeGoogleFonts(libraryConfig.theme).map((family) => PLATFORM_FONTS[family].variable);
 	const fallback = { contactForm: isEmailChannelEnabled(serverConfig, "contact"), home: homePlaceholderContent(serverConfig, (await getTranslations({ locale, namespace: "homePage" }))("defaultIntro", { name: serverConfig.identity.name })) };
 	return (
-		<html lang={intlLocale(locale)} dir={dir} className={["no-scrollbar", ...fontVariables].join(" ")} suppressHydrationWarning>
+		<html lang={intlLocale(locale)} dir={dir} className={fontVariables.join(" ")} suppressHydrationWarning>
 			<body>
 				<EarlyTypingScript />
 				<ConsentDefaultsScript />

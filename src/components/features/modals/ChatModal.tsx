@@ -185,7 +185,7 @@ function ChatMessageList({
 		>
 			<div
 				ref={scrollRef}
-				className="no-scrollbar h-full w-full overflow-y-auto overflow-x-hidden"
+				className="h-full w-full overflow-y-auto overflow-x-hidden"
 			>
 				<div
 					ref={contentRef}

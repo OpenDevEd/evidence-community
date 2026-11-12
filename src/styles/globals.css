@@ -31,6 +31,18 @@
 	}
 }
 
+/* The page keeps its scrollbar's width whether or not it scrolls, so nothing moves sideways between a page that
+   scrolls and one that doesn't, such as the map. */
+html {
+	scrollbar-gutter: stable;
+}
+
+/* NextUI's modals lock the page's scroll through an older React Aria, which pads the page by the bar's width; the
+   gutter already keeps that width, so counted twice the page would move left as a modal opens. */
+html {
+	padding-right: 0 !important;
+}
+
 ::-webkit-scrollbar {
 	width: 10px;
 	height: 10px;
@@ -73,15 +85,6 @@ h6 {
 @layer utilities {
 	.text-balance {
 		text-wrap: balance;
-	}
-
-	.no-scrollbar::-webkit-scrollbar {
-		display: none;
-	}
-
-	.no-scrollbar {
-		-ms-overflow-style: none;
-		scrollbar-width: none;
 	}
 
 	.admin-toolbar-grid {
