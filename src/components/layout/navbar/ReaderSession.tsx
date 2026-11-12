@@ -164,11 +164,13 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 				// The header and what the server rendered for the reader change only when the reader did.
 				if (!(await takeStep(step, stamp, here))) return;
 				readerAuthClient.$store.notify("$sessionSignal");
-				// What the page had read for the last reader, their bookmarks and private collections, goes with them. Everything
-				// it shows is read again as the new one; for someone signing in, what anyone may see stays up meanwhile.
-				void (readerId ? mutate(() => true, undefined, { revalidate: true }) : mutate(() => true));
 				// The header slides to the new reader first; drawing the page again at the same moment would take its frames.
-				window.setTimeout(() => router.refresh(), HEADER_SLIDE_MS);
+				window.setTimeout(() => {
+					// What the page had read for the last reader, their bookmarks and private collections, goes with them.
+					// Everything it shows is read again as the new one; for someone signing in, what anyone may see stays up meanwhile.
+					void (readerId ? mutate(() => true, undefined, { revalidate: true }) : mutate(() => true));
+					router.refresh();
+				}, HEADER_SLIDE_MS);
 			} catch (error) {
 				// OpenScholar or the network didn't answer: the session stays as it was, and the button still works.
 				noteNotFollowed({ step, stage: "error", error: String(error).slice(0, 200) });
