@@ -216,6 +216,15 @@ function queueResolution(key: string) {
 	return pending;
 }
 
+/**
+ * Forgets the collections already read, so the next ask reads them again, without stopping reads under way: stopped,
+ * they fail, and what shows a collection's name would show it as missing for a moment.
+ */
+// ponytail: a read under way when someone renames a collection is reused, and can bring the old name; the next change reads it again.
+export function forgetResolvedAdminCollections() {
+	resolved.clear();
+}
+
 export function invalidateAdminCollectionResolutionCache() {
 	generation += 1;
 	resolved.clear();

@@ -29,6 +29,7 @@ import {
 	useEffect,
 	useCallback,
 	forwardRef,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -556,6 +557,7 @@ export function AdminItemTable({
 	onSort,
 	onToggleBulk,
 	onToggleVisible,
+	placeHeld,
 	preferences,
 	selectedKey,
 	sources,
@@ -587,6 +589,8 @@ export function AdminItemTable({
 	onSort: (sort: AdminItemSortColumnId) => void;
 	onToggleBulk: (key: string, selected: boolean) => void;
 	onToggleVisible: (selected: boolean) => void;
+	/** Changes each time the list read itself again for someone else's change, when the reader's place is kept. */
+	placeHeld: number;
 	preferences: AdminItemTablePreferences;
 	selectedKey: string | null;
 	sources: AdminSource[];
@@ -696,7 +700,7 @@ export function AdminItemTable({
 			},
 			{
 				cell: ({ row }) => (
-					<RecordStateChip state={row.original.state} />
+					<RecordStateChip state={row.original.state} review={row.original.review} />
 				),
 				id: "state",
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.state,
@@ -885,6 +889,31 @@ export function AdminItemTable({
 	useEffect(() => {
 		rowVirtualizer.measure();
 	}, [rowHeight, rowVirtualizer]);
+	// A list that read itself again for someone else's change keeps the rows on screen where they are: rows that came
+	// or went above them move the scroll position by as much, so nobody reading further down is pushed along. The
+	// outside system is the grid's scroll position.
+	const latestRows = useRef(tableRows);
+	latestRows.current = tableRows;
+	const latestRowHeight = useRef(rowHeight);
+	latestRowHeight.current = rowHeight;
+	const shownKeys = useRef<string[]>([]);
+	useLayoutEffect(() => {
+		const scroller = tableScrollRef.current;
+		const before = shownKeys.current;
+		const height = latestRowHeight.current;
+		if (!scroller || scroller.scrollTop <= 0) return;
+		const top = Math.floor(scroller.scrollTop / height);
+		// The first row at the top of the view that is still in the list says how far the rows moved.
+		for (let index = top; index < Math.min(before.length, top + 20); index += 1) {
+			const now = latestRows.current.findIndex((row) => row.original.key === before[index]);
+			if (now < 0) continue;
+			if (now !== index) scroller.scrollTop += (now - index) * height;
+			return;
+		}
+	}, [placeHeld]);
+	useLayoutEffect(() => {
+		shownKeys.current = tableRows.map((row) => row.original.key);
+	});
 	const activeColumnIndex = Math.max(
 		0,
 		visibleColumnIds.indexOf(effectiveActiveColumnId),

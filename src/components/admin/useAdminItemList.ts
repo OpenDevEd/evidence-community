@@ -6,11 +6,13 @@ import { toast } from "sonner";
 
 import type { AdminItemColumnId } from "@/lib/admin/item-list-contract";
 import type {
+	AdminItemListPage,
 	AdminItemListRow,
 	AdminItemViewFilters,
 } from "@/lib/admin/types";
 
 import { adminErrorMessage, getAdminItems } from "./admin-api";
+import { oneAtATime, until } from "./admin-live";
 
 
 import { adminItemViewParsers, paramsFromView, viewFromParams } from "@/lib/admin/item-filter-state";
@@ -48,6 +50,54 @@ function buildListSearchParams(
 			{ column: filters.sort, direction: filters.sortDirection },
 		]),
 	});
+}
+
+/** How many rows that arrived above the ones on screen a read goes on past, to keep those on screen in the list. */
+const MOST_ARRIVALS = 200;
+
+/**
+ * How many rows to read to keep what is on screen: as many as are shown, and one more for each row that arrived above
+ * the last of them read so far. Rows that arrive above push the ones a person is reading, or has ticked, further down.
+ * A new row after the last shown one is a row moving up from below, as when a shown record leaves the view, and
+ * doesn't count. Past MOST_ARRIVALS, as in an import of thousands, the list shows the newest and lets the rest go.
+ */
+function rowsToKeep(read: readonly AdminItemListRow[], shown: readonly AdminItemListRow[]) {
+	const known = new Set(shown.map(({ key }) => key));
+	const lastKnown = read.findLastIndex(({ key }) => known.has(key));
+	const above = lastKnown < 0 ? read : read.slice(0, lastKnown);
+	const arrived = above.filter(({ key }) => !known.has(key)).length;
+	return shown.length + Math.min(arrived, MOST_ARRIVALS);
+}
+
+/**
+ * The rows on screen read again from the top, with where the next page starts. `shown` is asked after every page, so
+ * rows the person loads by scrolling while this reads are read too and the list never comes back shorter.
+ */
+export async function readLoadedRows(read: (cursor: string | null) => Promise<AdminItemListPage>, shown: () => readonly AdminItemListRow[]) {
+	const rows: AdminItemListRow[] = [];
+	let cursor: string | null = null;
+	do {
+		const page = await read(cursor);
+		rows.push(...page.items);
+		cursor = page.hasMore ? page.nextCursor : null;
+	} while (cursor && rows.length < rowsToKeep(rows, shown()));
+	return { rows, cursor };
+}
+
+const sameRow = (shown: AdminItemListRow | undefined, row: AdminItemListRow) => (shown && JSON.stringify(shown) === JSON.stringify(row) ? shown : row);
+
+/** Rows read again, with every row that didn't change kept as the object on screen, and `before` itself when none did. */
+function keepShownRows(before: AdminItemListRow[], rows: readonly AdminItemListRow[]) {
+	const shown = new Map(before.map((row) => [row.key, row]));
+	const next = rows.map((row) => sameRow(shown.get(row.key), row));
+	return next.length === before.length && next.every((row, index) => row === before[index]) ? before : next;
+}
+
+/** The ticked rows that are still in the list: the same set when all of them are. */
+function stillListed(ticked: Set<string>, rows: readonly AdminItemListRow[]) {
+	const listed = new Set(rows.map(({ key }) => key));
+	const kept = new Set([...ticked].filter((key) => listed.has(key)));
+	return kept.size === ticked.size ? ticked : kept;
 }
 
 function keepVisibleSelection(current: string | null, visibleKeys: ReadonlySet<string>, fallback: string | null) {
@@ -91,12 +141,22 @@ export function useAdminItemList(
 		parseAsString.withOptions({ history: "push" }),
 	);
 	const [bulkKeys, setBulkKeys] = useState<Set<string>>(new Set());
+	// Counts the times the list read itself again and came back different, so the table can keep the reader's place.
+	const [placeHeld, setPlaceHeld] = useState(0);
 	const requestId = useRef(0);
 	const requestController = useRef<AbortController | null>(null);
+	const itemsRef = useRef(items);
+	itemsRef.current = items;
 	const selectionInitialized = useRef(selectedKey !== null);
 	const setSelectedKey = useCallback(
 		(key: string | null) => void setSelectedKeyInUrl(key),
 		[setSelectedKeyInUrl],
+	);
+
+	// Picking a record to link shows every record, not only those waiting for review.
+	const listParams = useCallback(
+		(cursor: string | null) => buildListSearchParams(linkPicking ? { ...filters, reviewQueue: false } : filters, cursor, requestedColumns),
+		[filters, linkPicking, requestedColumns],
 	);
 
 	const loadItems = useCallback(
@@ -107,10 +167,7 @@ export function useAdminItemList(
 			requestController.current = controller;
 			setLoading(true);
 			try {
-				const page = await getAdminItems(
-					buildListSearchParams(linkPicking ? {...filters, reviewQueue: false} : filters, cursor, requestedColumns),
-					controller.signal,
-				);
+				const page = await getAdminItems(listParams(cursor), controller.signal);
 				if (currentRequest !== requestId.current) return;
 				setError(null);
 				setItems((current) =>
@@ -120,12 +177,7 @@ export function useAdminItemList(
 					const visibleKeys = new Set(
 						page.items.map(({ key }) => key),
 					);
-					setBulkKeys((current) => {
-						const next = new Set(
-							[...current].filter((key) => visibleKeys.has(key)),
-						);
-						return next.size === current.size ? current : next;
-					});
+					setBulkKeys((current) => stillListed(current, page.items));
 					const firstVisibleKey = page.items[0]?.key ?? null;
 					if (selectingReviewQueue(filters, selectionPinned)) {
 						void setSelectedKeyInUrl((current) => keepVisibleSelection(current, visibleKeys, firstVisibleKey), { history: "replace" });
@@ -154,7 +206,7 @@ export function useAdminItemList(
 				if (currentRequest === requestId.current) setLoading(false);
 			}
 		},
-		[filters, requestedColumns, setSelectedKeyInUrl, linkPicking, selectionPinned],
+		[filters, listParams, setSelectedKeyInUrl, selectionPinned],
 	);
 
 	useEffect(() => {
@@ -163,6 +215,36 @@ export function useAdminItemList(
 		const timeout = setTimeout(() => void loadItems(), 220);
 		return () => clearTimeout(timeout);
 	}, [loadItems]);
+
+	const latestListParams = useRef(listParams);
+	latestListParams.current = listParams;
+	const loadingRef = useRef(loading);
+	loadingRef.current = loading;
+	const readShownRows = useCallback(async () => {
+		// A load under way lands first. It may have asked before the change that asked for this, so its answer can be
+		// the older one, and read before it this one would be overwritten.
+		await until(() => !loadingRef.current);
+		// In pages the size the list loads in, so a list that has just loaded comes back with the same rows.
+		const read = await readLoadedRows((cursor) => getAdminItems(listParams(cursor)), () => itemsRef.current).catch(() => null);
+		// A read that failed waits for the next change, and one for a view the person has left is dropped.
+		if (!read || listParams !== latestListParams.current) return;
+		const next = keepShownRows(itemsRef.current, read.rows);
+		if (next !== itemsRef.current) {
+			setItems(next);
+			setPlaceHeld((count) => count + 1);
+			setBulkKeys((current) => stillListed(current, next));
+		}
+		setHasMore(read.cursor !== null);
+		setNextCursor(read.cursor);
+	}, [listParams]);
+	const latestReadShownRows = useRef(readShownRows);
+	latestReadShownRows.current = readShownRows;
+	/**
+	 * Reads the rows on screen again for a change someone else made, as far down as the list has been read. Nothing
+	 * shows as loading, the open record stays open, and a row that didn't change stays the same row. Asked for by more
+	 * than one part of the page, it reads once at a time.
+	 */
+	const [refreshItems] = useState(() => oneAtATime(() => latestReadShownRows.current()));
 
 	useEffect(
 		() => () => {
@@ -181,6 +263,8 @@ export function useAdminItemList(
 		loading,
 		loadItems,
 		nextCursor,
+		placeHeld,
+		refreshItems,
 		selectedKey,
 		setBulkKeys,
 		setFilters,

@@ -203,7 +203,7 @@ function WorkingDraftInspector({
 function useSubmittedLiveDetail(
 	detail: AdminItemDetail,
 	frozen: AdminItemDetail,
-	onRetry: () => void,
+	onRetry: (() => void) | undefined,
 ) {
 	const needsLiveDetail = frozen.key !== detail.key;
 	const request = useSWR(

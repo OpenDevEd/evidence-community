@@ -44,6 +44,7 @@ import { ADDED, ChangedLine, ChangedText, REMOVED } from "./AdminDigestChanges";
 import { changesBetween, editCount } from "./digest-changes";
 import { AdminDigestEditor } from "./AdminDigestEditor";
 import { getAdminDigest, getAdminDigests, type AdminDigest, type AdminDigestList } from "./admin-api";
+import { useAdminLive } from "./admin-live";
 import { useAdminSession } from "./AdminSessionProvider";
 import { DigestSession, useDigestSnapshot } from "./digest-session";
 
@@ -76,8 +77,6 @@ const notOnPhone = "hidden sm:block";
 const day = (at: string) => new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long" });
 const time = (at: string) => `${day(at)}, ${new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
 const SHOWS = ["all", "draft", "review", "published"] as const satisfies readonly AdminDigestsQuery["show"][];
-// Another person's step shows within a minute, as the library's sources do.
-const LIST_POLL_MS = 60_000;
 
 /** Which page of editions is listed, narrowed and sorted how. Which digests are listed is in the address, so a reload keeps it. */
 function useDigestList() {
@@ -90,7 +89,9 @@ function useDigestList() {
 		void setShow(next.show);
 	}, [query, setShow]);
 	// The list also tells the navigation how many digests wait for review, so it is read while another view is open.
-	const list = useSWR(["admin-digests", query] as const, ([, value]) => getAdminDigests(value), { keepPreviousData: true, refreshInterval: LIST_POLL_MS });
+	const list = useSWR(["admin-digests", query] as const, ([, value]) => getAdminDigests(value), { keepPreviousData: true });
+	// Another person's step, and an edition the scheduler makes or sends, show as they happen.
+	useAdminLive(["digests"], () => list.mutate());
 	// Rows kept from the page or filter before are shown dimmed until the new ones arrive.
 	return { list: list.data, listStale: list.isLoading && list.data !== undefined, query, setQuery, refreshList: list.mutate };
 }
@@ -137,10 +138,12 @@ function useLeaving(session: DigestSession | null) {
 function useOpenDigest(openId: string | null) {
 	const detail = useSWR(openId ? (["admin-digest", openId] as const) : null, ([, id]) => getAdminDigest(id), {
 		revalidateOnFocus: false,
-		// An edition AI is still writing is asked for again until its text is there. Any other is read again as the
-		// list is, so another person's step shows; what this person has typed and not saved is never replaced.
-		refreshInterval: (latest) => (latest?.writing ? 15_000 : LIST_POLL_MS),
+		// An edition AI is still writing is asked for again until its text is there.
+		refreshInterval: (latest) => (latest?.writing ? 15_000 : 0),
 	});
+	// Any other is read again when it changes, so another person's step shows; what this person has typed and not saved
+	// is never replaced.
+	useAdminLive(["digests"], () => detail.mutate());
 	const sessions = useSessions();
 	const loaded = detail.data && detail.data.id === openId ? detail.data : undefined;
 	// A person's session starts once the open edition has text. Later answers never replace what they have typed.

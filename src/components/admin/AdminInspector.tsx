@@ -1622,7 +1622,8 @@ export function AdminInspector({
 	) => Promise<void>;
 	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
-	onRetry: () => void;
+	/** Reads the record again after a failure. Absent when the record no longer exists. */
+	onRetry?: () => void;
 	onRestore: () => void;
 	onUnpublish: () => void;
 	onSelectAttachment: (key: string) => void;
@@ -1742,7 +1743,7 @@ export function AdminInspector({
 		return (
 			<div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-sm text-black/40 dark:text-white/40">
 				<p>{error ?? "Select a record to edit."}</p>
-				{error ? (
+				{error && onRetry ? (
 					<Button onPress={onRetry} size="xs">
 						Try again
 					</Button>
@@ -2198,13 +2199,15 @@ export function AdminInspector({
 						className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-danger/5 px-3 py-2 text-xs text-danger"
 					>
 						<span>{error}</span>
-						<Button
-							onPress={onRetry}
-							size="xs"
-							variant="transparent"
-						>
-							Retry
-						</Button>
+						{onRetry && (
+							<Button
+								onPress={onRetry}
+								size="xs"
+								variant="transparent"
+							>
+								Retry
+							</Button>
+						)}
 					</div>
 				)}
 				{fileErrors[detail.key] && (

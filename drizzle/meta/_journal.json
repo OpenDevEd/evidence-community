@@ -743,6 +743,13 @@
       "when": 1793300000000,
       "tag": "0105_queue-claim-order",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1793400000000,
+      "tag": "0106_admin-live-updates",
+      "breakpoints": true
     }
   ]
 }

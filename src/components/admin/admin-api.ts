@@ -1,6 +1,8 @@
 "use client";
 
 import { mutate } from "swr";
+
+import { noteOwnAdminWrite } from "./admin-live";
 import type {
 	AdminInstitutionPage,
 	InstitutionCountries,
@@ -138,8 +140,21 @@ function parsedError(
 	};
 }
 
+/**
+ * Sends a request. A save is heard back as a change like anyone else's, and the page already reads what it changed
+ * itself, so it is said before and after the save that the page made it (admin-live.ts).
+ */
+async function send(path: string, init: RequestInit) {
+	noteOwnAdminWrite(init.method);
+	try {
+		return await fetch(path, init);
+	} finally {
+		noteOwnAdminWrite(init.method);
+	}
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-	const response = await fetch(path, {
+	const response = await send(path, {
 		...init,
 		cache: "no-store",
 		headers: {

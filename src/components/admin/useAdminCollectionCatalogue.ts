@@ -97,6 +97,8 @@ type CatalogueAction =
 			branchKey: string;
 			cursor: string | null;
 			generation: number;
+			/** A list already shown is read again for a change someone else made: it stays as it is until the answer. */
+			quiet?: boolean;
 			requestId: number;
 			type: "branchStart";
 	  }
@@ -105,6 +107,7 @@ type CatalogueAction =
 			cursor: string | null;
 			error: string;
 			generation: number;
+			quiet?: boolean;
 			requestId: number;
 			type: "branchError";
 	  }
@@ -123,6 +126,7 @@ type CatalogueAction =
 			context: string;
 			cursor: string | null;
 			generation: number;
+			quiet?: boolean;
 			requestId: number;
 			type: "searchStart";
 	  }
@@ -131,6 +135,7 @@ type CatalogueAction =
 			cursor: string | null;
 			error: string;
 			generation: number;
+			quiet?: boolean;
 			requestId: number;
 			type: "searchError";
 	  }
@@ -143,6 +148,31 @@ type CatalogueAction =
 			requestId: number;
 			type: "searchSuccess";
 	  };
+
+/** Stops the request a key has under way and starts another in its place. */
+function takeOver(controllers: Map<string, { context: string; controller: AbortController }>, requestKey: string, context: string) {
+	controllers.get(requestKey)?.controller.abort();
+	const controller = new AbortController();
+	controllers.set(requestKey, { context, controller });
+	return controller;
+}
+
+/** Forgets a request once it has ended, unless another has taken its place. */
+function release(controllers: Map<string, { context: string; controller: AbortController }>, requestKey: string, controller: AbortController) {
+	if (controllers.get(requestKey)?.controller === controller) controllers.delete(requestKey);
+}
+
+/** A list read again from its first page through as many rows as it had loaded, so it never comes back shorter. */
+async function readThrough(read: (cursor: string | null) => Promise<AdminCollectionCatalogPage>, loaded: number) {
+	const items: AdminCollectionCatalogEntry[] = [];
+	let cursor: string | null = null;
+	do {
+		const page = await read(cursor);
+		items.push(...page.items);
+		cursor = page.nextCursor;
+	} while (cursor && items.length < loaded);
+	return { items, nextCursor: cursor };
+}
 
 export function adminCollectionBranchKey(
 	sourceConnectionKey: string,
@@ -250,21 +280,32 @@ export function adminCollectionCatalogueReducer(
 			requestId: 0,
 			status: "idle" as const,
 		};
-		branches.set(action.branchKey, {
-			...current,
-			error: action.cursor ? current.error : null,
-			loadingMore: Boolean(action.cursor),
-			loadMoreError: null,
-			nextCursor: action.cursor ? current.nextCursor : null,
-			requestId: action.requestId,
-			status: action.cursor ? current.status : "loading",
-		});
+		branches.set(
+			action.branchKey,
+			action.quiet
+				? { ...current, requestId: action.requestId }
+				: {
+						...current,
+						error: action.cursor ? current.error : null,
+						loadingMore: Boolean(action.cursor),
+						loadMoreError: null,
+						nextCursor: action.cursor ? current.nextCursor : null,
+						requestId: action.requestId,
+						status: action.cursor ? current.status : "loading",
+					},
+		);
 		return { ...state, branches };
 	}
 	if (action.type === "branchError") {
 		const branches = new Map(state.branches);
 		const current = branches.get(action.branchKey);
 		if (!current || current.requestId !== action.requestId) return state;
+		// A quiet read that failed leaves the branch as it was, and the next change reads it again. It took over
+		// whatever the branch was reading, so a "load more" it stopped is offered again.
+		if (action.quiet) {
+			branches.set(action.branchKey, { ...current, loadingMore: false });
+			return { ...state, branches };
+		}
 		branches.set(action.branchKey, {
 			...current,
 			error: action.cursor ? current.error : action.error,
@@ -300,6 +341,7 @@ export function adminCollectionCatalogueReducer(
 		return { ...state, branches, entries };
 	}
 	if (action.type === "searchStart") {
+		if (action.quiet) return { ...state, search: { ...state.search, requestId: action.requestId } };
 		return {
 			...state,
 			search: {
@@ -327,6 +369,7 @@ export function adminCollectionCatalogueReducer(
 		) {
 			return state;
 		}
+		if (action.quiet) return { ...state, search: { ...state.search, loadingMore: false } };
 		return {
 			...state,
 			search: {
@@ -756,6 +799,62 @@ export function useAdminCollectionCatalogue() {
 		});
 		dispatch({ type: "invalidate" });
 	}, []);
+	/**
+	 * Reads a branch again through everything it has loaded, for a change someone else made. It takes over whatever the
+	 * branch was reading, so no change is skipped because a read was under way. A branch on screen shows nothing as
+	 * loading and stays as it is when the read fails; one still loading its first page carries on loading.
+	 */
+	const rereadBranch = useCallback(async (branchKey: string, branch: AdminCollectionCatalogueBranch) => {
+		const [sourceConnectionKey = "", parent = "root"] = branchKey.split("\u0000");
+		const parentCollection = parent === "root" ? null : parent;
+		const quiet = branch.status === "ready";
+		const requestKey = `branch:${branchKey}`;
+		const controller = takeOver(controllers.current, requestKey, "again");
+		const request = { branchKey, cursor: null, generation: stateRef.current.generation, quiet, requestId: ++requestSequence.current };
+		dispatch({ ...request, type: "branchStart" });
+		try {
+			const read = await readThrough(
+				(cursor) => getAdminCollectionChildren({ cursor, pageSize: ADMIN_COLLECTION_PAGE_SIZE, parentCollection, sourceConnectionKey }, controller.signal),
+				branch.items.length,
+			);
+			dispatch({ ...request, ...read, type: "branchSuccess" });
+		} catch (error) {
+			dispatch({ ...request, error: errorMessage(error), type: "branchError" });
+		} finally {
+			release(controllers.current, requestKey, controller);
+		}
+	}, []);
+	/** Reads the search results on screen again, the same way. */
+	const rereadSearch = useCallback(async () => {
+		const { context, items, status } = stateRef.current.search;
+		if (status !== "ready") return;
+		const controller = takeOver(controllers.current, "search", `${context}\u0000again`);
+		const request = { context, cursor: null, generation: stateRef.current.generation, quiet: true, requestId: ++requestSequence.current };
+		dispatch({ ...request, type: "searchStart" });
+		try {
+			const input = JSON.parse(context) as AdminCollectionSearchInput;
+			const read = await readThrough((cursor) => searchAdminCollectionCatalog({ cursor, pageSize: ADMIN_COLLECTION_PAGE_SIZE, ...input }, controller.signal), items.length);
+			dispatch({ ...request, ...read, type: "searchSuccess" });
+		} catch (error) {
+			dispatch({ ...request, error: errorMessage(error), type: "searchError" });
+		} finally {
+			release(controllers.current, "search", controller);
+		}
+	}, []);
+	/**
+	 * Reads everything the tree shows again where it is, for a change someone else made: nothing collapses, nothing
+	 * shows as loading, and it is done once every read has answered, so a change that comes meanwhile is read after.
+	 */
+	const refresh = useCallback(
+		() =>
+			Promise.all([
+				rereadSearch(),
+				...[...stateRef.current.branches]
+					.filter(([, branch]) => branch.status === "ready" || branch.status === "loading")
+					.map(([branchKey, branch]) => rereadBranch(branchKey, branch)),
+			]),
+		[rereadBranch, rereadSearch],
+	);
 	const reveal = useCallback((entries: AdminCollectionCatalogEntry[]) => {
 		stateRef.current = adminCollectionCatalogueReducer(stateRef.current, {
 			entries,
@@ -768,6 +867,7 @@ export function useAdminCollectionCatalogue() {
 		invalidate,
 		loadChildren,
 		loadSearch,
+		refresh,
 		reveal,
 		state,
 	};

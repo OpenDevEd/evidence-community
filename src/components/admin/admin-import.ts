@@ -36,6 +36,7 @@ import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import { AdminApiError, failAdminPdfImportUpload, getAdminPdfImport, PDF_IMPORT_KEY, pdfImportFileUrl } from "./admin-api";
+import { useAdminLive } from "./admin-live";
 
 
 /** A problem with what the user typed or chose, shown before any request. */
@@ -482,21 +483,19 @@ export const stillWorking = (batch: ImportBatch) => attaching(batch) || serverSe
 // Imported PDFs the worker is still attaching: those of drafts made from a stored PDF with no outcome yet.
 const attaching = (batch: ImportBatch) => Boolean(batch.results?.some(({ id, outcome }) => outcome === "created" && !batch.attach.has(id) && batch.rows.some((row) => row.id === id && row.source?.url)));
 /**
- * How often to ask the server about the PDF import: every two seconds while
- * its PDFs upload, are read or are attached, and every ten while it is open,
- * so another tab's import or close shows here too.
+ * How often to ask the server about the PDF import: every two seconds while its PDFs upload, are read or are
+ * attached. Otherwise it is read when it changes, so an import someone else starts or closes shows here too.
  */
-const pollEvery = () => {
-	if (!pdfs) return 0;
-	return pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) || serverSending(pdfs) ? 2_000 : 10_000;
-};
+const pollEvery = () => (pdfs && (pdfs.rows.some(({ state }) => settling(state)) || attaching(pdfs) || serverSending(pdfs)) ? 2_000 : 0);
 
 /** The library's PDF import from the server, checked while it is open. */
 export function usePdfImportStatus() {
 	// SWR restarts its timer whenever this option changes, so it is a number that changes only when reading starts or
 	// stops. A function would be a new one on every render, and the sheet renders more often than it polls.
 	const refreshInterval = useSyncExternalStore(subscribe, pollEvery, () => 0);
-	return useSWR(PDF_IMPORT_KEY, getAdminPdfImport, { onSuccess: syncPdfImport, refreshInterval });
+	const status = useSWR(PDF_IMPORT_KEY, getAdminPdfImport, { onSuccess: syncPdfImport, refreshInterval });
+	useAdminLive(["import"], () => status.mutate());
+	return status;
 }
 
 // The DOI or file lookup the open sheet waits for. Closing the sheet drops it, so an answer that comes later never

@@ -41,7 +41,8 @@ export const ADMIN_ITEM_TABLE_COLUMN_SIZES: Record<
 	revision: { minSize: 76, size: 88 },
 	select: { maxSize: 44, minSize: 44, size: 44 },
 	source: { minSize: 120, size: 150 },
-	state: { minSize: 92, size: 104 },
+	// Wide enough for "Changes requested", the longest thing a record's state says.
+	state: { minSize: 136, size: 144 },
 	tags: { minSize: 140, size: 200 },
 	title: { minSize: 220, size: 300 },
 	updated: { minSize: 116, size: 132 },
