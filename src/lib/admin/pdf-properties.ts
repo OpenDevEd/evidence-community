@@ -1,7 +1,8 @@
 import { decodePDFRawStream, EncryptedPDFError, PDFBool, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFRef } from "pdf-lib";
 import { create } from "xmlbuilder2";
 
-import { languageTag, xmpDate, type PdfProperties } from "./pdf-record-mapping";
+import { languageTag } from "@/lib/languages";
+import { xmpDate, type PdfProperties } from "./pdf-record-mapping";
 
 /**
  * What a PDF claims to meet: tags for screen readers, and the PDF/A and

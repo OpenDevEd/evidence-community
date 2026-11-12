@@ -12,6 +12,7 @@ export type AdminFieldKind =
 	| "bibliographic-date"
 	| "color"
 	| "institution-list"
+	| "language"
 	| "multiline"
 	| "text"
 	| "url";
@@ -52,6 +53,8 @@ export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 		return { kind: "annotation-type" };
 	}
 	if (descriptor.field === "annotationColor") return { kind: "color" };
+	// Chosen from a list in the editor. Text from a source or from before the list is kept as it is.
+	if (descriptor.field === "language") return { kind: "language" };
 	if (MULTILINE_FIELDS.has(descriptor.field)) return { kind: "multiline" };
 	return { kind: "text" };
 }

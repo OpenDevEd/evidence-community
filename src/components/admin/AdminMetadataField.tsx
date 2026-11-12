@@ -1,8 +1,10 @@
 "use client";
 
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
-import { memo, useState } from "react";
+import { AutocompleteItem } from "@nextui-org/react";
+import { memo, useMemo, useState } from "react";
 
+import { Autocomplete } from "@/components/nextui/Autocomplete";
 import { Input } from "@/components/nextui/Input";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -12,7 +14,8 @@ import {
 	adminFieldContract,
 } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
-import { filledFieldSurface } from "@/components/nextui/field-styles";
+import { LANGUAGES, languageCode, languageName } from "@/lib/languages";
+import { filledFieldSurface, inspectorInputClassNames } from "@/components/nextui/field-styles";
 import { InstitutionInput } from "./InstitutionInput";
 
 const inputClassNames = {
@@ -163,6 +166,7 @@ export const AdminMetadataField = memo(function AdminMetadataField({
 		);
 	}
 	if (kind === "annotation-type") return <AnnotationTypeField {...props} />;
+	if (kind === "language") return <LanguageField {...props} />;
 	if (kind === "color") {
 		const pickerValue = /^#[\da-f]{6}$/iu.test(props.value)
 			? props.value
@@ -242,5 +246,56 @@ function AnnotationTypeField(props: CommonFieldProps) {
 				</SelectItem>
 			))}
 		</Select>
+	);
+}
+
+// Made once: rows made again on every draw of the editor would rebuild the open list under the pointer.
+const LANGUAGE_ROWS = LANGUAGES.map((language) => (
+	<AutocompleteItem key={language.code} textValue={language.name}>
+		{language.name}
+	</AutocompleteItem>
+));
+
+/**
+ * A record's language, chosen from the languages that have a two-letter code and kept as that code, which Crossref
+ * and Zenodo both take. A language saved before the list by its name or a longer code ("Cebuano", "ceb") shows as
+ * itself. Text that names no language ("English; French") stays until the editor chooses, and the field says so.
+ */
+function LanguageField(props: CommonFieldProps) {
+	const stored = props.value.trim();
+	const code = languageCode(stored);
+	// A language the list doesn't have: one more row, so the field can show what the record holds.
+	const other = code ? undefined : languageName(stored);
+	const rows = useMemo(
+		() => (other ? [...LANGUAGE_ROWS, <AutocompleteItem key={stored} textValue={other}>{other}</AutocompleteItem>] : LANGUAGE_ROWS),
+		[other, stored],
+	);
+	const chosen = code || (other ? stored : "");
+	const unknown = stored && !chosen ? `“${stored}” isn't a language in the list. Choose one.` : undefined;
+	const error = props.error ?? unknown;
+	return (
+		<Autocomplete
+			aria-label={props.label}
+			allowsCustomValue={false}
+			className="max-w-none"
+			classNames={{ listboxWrapper: "max-h-80" }}
+			data-field-kind="language"
+			errorMessage={error}
+			id={props.id}
+			inputProps={{ classNames: inspectorInputClassNames }}
+			isDisabled={props.disabled}
+			isInvalid={Boolean(error)}
+			menuTrigger="focus"
+			placeholder="Find a language"
+			// The pane scrolls a little when the field takes focus near its edge, and when a notice arrives: the list stays open through it.
+			popoverProps={{ shouldCloseOnScroll: false }}
+			selectedKey={chosen || null}
+			onSelectionChange={(key) => {
+				const next = typeof key === "string" ? key : "";
+				if (next !== chosen) props.onValueChange(next);
+			}}
+		>
+			{rows}
+		</Autocomplete>
 	);
 }

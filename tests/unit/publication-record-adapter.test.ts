@@ -85,6 +85,13 @@ describe("publication record adapter", () => {
         }
     });
 
+	it("sends a language written out as its code, and a code or other text as stored", () => {
+		const sent = (languageName: string) =>
+			buildPublicationRecordSnapshot({ record: record({ languageName }), tags: [], baseUrl: "https://library.example.org", license: "cc-by-4.0" }).language;
+		// The registrars take codes. A code is left alone so a registered record reads as it did; text that names no language is theirs to refuse.
+		expect(["English", "eng", "en-GB", "English; French"].map(sent)).toEqual(["en", "eng", "en-GB", "English; French"]);
+	});
+
 	it("does not leak database or source bookkeeping into provider fields", () => {
 		const snapshot = buildPublicationRecordSnapshot({
 			record: record(),
