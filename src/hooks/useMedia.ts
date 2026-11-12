@@ -16,3 +16,12 @@ export function mediaQuery(query: string) {
 export function useMedia(query: ReturnType<typeof mediaQuery>) {
 	return useSyncExternalStore(query.subscribe, query.matches, () => false);
 }
+
+/**
+ * The root font size in pixels, and whether the screen is a phone at large text: under 640px and under 20rem wide.
+ * A phone at normal text is 20rem or wider (320px at 16px). Read when it's needed, such as when a list opens.
+ */
+export function readLargeText() {
+	const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+	return { rem, phone: window.innerWidth < 640 && window.innerWidth / rem < 20 };
+}
