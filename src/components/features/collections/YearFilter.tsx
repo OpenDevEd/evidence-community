@@ -198,16 +198,19 @@ export function YearFilter({
 
 	return (
 		<>
-			<div className="flex text-lg font-medium text-black/80 dark:text-white/80">
-				<span>{t("publicationYear")}</span>
-				<div className="flex flex-1 items-center justify-end gap-4">
-					<Switch
-						isSelected={isRangeMode}
-						onValueChange={handleModeChange}
-						classNames={{ label: "text-sm font-normal" }}
-					>
-						{t("yearRange")}
-					</Switch>
+			{/* On a phone at large text the switch takes a row of its own (year-filter-header in globals.css). */}
+			<div className="@container/year-header">
+				<div className="year-filter-header flex text-lg font-medium text-black/80 dark:text-white/80">
+					<span>{t("publicationYear")}</span>
+					<div className="flex flex-1 items-center justify-end gap-4">
+						<Switch
+							isSelected={isRangeMode}
+							onValueChange={handleModeChange}
+							classNames={{ label: "text-sm font-normal" }}
+						>
+							{t("yearRange")}
+						</Switch>
+					</div>
 				</div>
 			</div>
 			<div key={shown.fills}>

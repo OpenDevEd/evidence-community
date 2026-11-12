@@ -147,4 +147,15 @@ h6 {
 			grid-row-start: 4;
 		}
 	}
+
+	/* The year filter's heading and its Year Range switch need about 15.5rem on one line. */
+	@container year-header (width < 16rem) {
+		.year-filter-header {
+			flex-wrap: wrap;
+		}
+
+		.year-filter-header > :last-child {
+			flex-basis: 100%;
+		}
+	}
 }
