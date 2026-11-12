@@ -52,6 +52,7 @@ import { useTopicTree } from "@/lib/topics/client";
 import type { TopicTreeNode } from "@/lib/topics/contract";
 import { topicAncestry, toggleTopicSelection, withoutBareRoots } from "@/lib/topics/selection";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
+import { readLargeText } from "@/hooks/useMedia";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { ResultsOverview, shareOf, useFacetTotal, useMostCitedSettled } from "./ResultsOverview";
 import { SIDEBAR_GREY } from "./SidebarCard";
@@ -104,6 +105,10 @@ function FacetPicker({
 	const tLabels = useTranslations("statistics");
 	const format = useFormatter();
 	const isMultiSelect = Array.isArray(selectedKey);
+	// On a phone at large text a name takes two lines, and every row grows with the text: a virtualized list places its
+	// rows a fixed height apart (two lines of the name, its bar and the row's padding come to 3.75rem). Read as the list
+	// opens and kept while it's open, since the virtualizer keeps the row height it opened with.
+	const [{ rem, phone }, setText] = useState({ rem: 16, phone: false });
 	const [search, setSearch] = useState("");
 	const displayedList = searchedFacetItems(list, searchList, search);
 
@@ -143,6 +148,9 @@ function FacetPicker({
 					}
 					isVirtualized={fixedHeight ? false : undefined}
 					popoverProps={{ shouldCloseOnScroll: false }}
+					onOpenChange={(open) => {
+						if (open) setText(readLargeText());
+					}}
 					placeholder={placeholder}
 					label={label}
 					key={label}
@@ -213,7 +221,7 @@ function FacetPicker({
 					// 			?.startContent
 					// 	)
 					// }
-					itemHeight={48}
+					itemHeight={phone ? Math.ceil(rem * 3.75) : 48}
 				>
 					{Object.entries(groupedBySection).map(
 						([section, items]) => (
@@ -261,6 +269,7 @@ function FacetPicker({
 													note={item.note}
 													emphasis={item.emphasis}
 													selected={chosen}
+													lines={phone ? 2 : 1}
 												/>
 											</AutocompleteItem>
 										);
