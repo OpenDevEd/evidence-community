@@ -38,11 +38,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 // fallow-ignore-next-line unused-export
 export const instant = false;
 
-export default async function Home({ params }: Props) {
+export default async function Home({ params, searchParams }: Props) {
 	await connection();
 	const config = await getLibraryConfig();
-	// The proxy already sends a bare `/` to the listing; this covers the address with a locale in front, which reaches the page.
-	if (!isLibraryFeatureEnabled(config.features, "homePage")) redirect({ href: "/lib", locale: (await params).locale });
+	// The proxy already sends a bare `/` to the listing; this covers the address with a locale in front, which reaches the
+	// page. The query goes along, as the proxy's does: a sign-out lands here with `?signed-out` for the listing to show.
+	if (!isLibraryFeatureEnabled(config.features, "homePage")) redirect({ href: { pathname: "/lib", query: await searchParams }, locale: (await params).locale });
 	const { locale } = await params;
 	const t = await getTranslations({ locale, namespace: "homePage" });
 	const about = config.home
@@ -76,4 +77,4 @@ export default async function Home({ params }: Props) {
 	);
 }
 
-type Props = { params: Promise<{ locale: string }> };
+type Props = { params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };

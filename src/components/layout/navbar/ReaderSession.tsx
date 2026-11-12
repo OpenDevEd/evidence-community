@@ -7,6 +7,7 @@ import { useSWRConfig } from "swr";
 
 import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { getPathname, usePathname } from "@/i18n/routing";
+import { normalizePathname } from "@/lib/path";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
 import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNED_OUT_PARAM, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
@@ -298,7 +299,7 @@ export function useReaderSession() {
 		signOut: async () => {
 			await readerAuthClient.signOut();
 			kept.set(ASK_AGAIN_KEY, "1");
-			const back = new URL(reader && pathname === `/profile/${reader.id}` ? getPathname({ href: "/", locale }) : window.location.href, window.location.origin);
+			const back = new URL(reader && normalizePathname(pathname) === `/profile/${reader.id}` ? getPathname({ href: "/", locale }) : window.location.href, window.location.origin);
 			back.searchParams.set(SIGNED_OUT_PARAM, "1");
 			// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
 			if (sessionCookie && readCookie(sessionCookie) === "0") return window.location.assign(back);
