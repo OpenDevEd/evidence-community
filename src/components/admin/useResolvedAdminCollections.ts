@@ -9,7 +9,7 @@ import {
 	readResolvedAdminCollection,
 	resolveAdminCollectionKeys,
 } from "./admin-collection-resolution-cache";
-import { ADMIN_COLLECTION_INVALIDATION_EVENT } from "./admin-collection-events";
+import { onAdminCollectionsChanged } from "./admin-collection-events";
 
 type ResolutionState = {
 	entries: AdminCollectionCatalogEntry[];
@@ -40,14 +40,7 @@ export function useResolvedAdminCollections(
 	const [reloadToken, setReloadToken] = useState(0);
 	const refresh = useCallback(() => setReloadToken((value) => value + 1), []);
 	const retry = refresh;
-	useEffect(() => {
-		window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, refresh);
-		return () =>
-			window.removeEventListener(
-				ADMIN_COLLECTION_INVALIDATION_EVENT,
-				refresh,
-			);
-	}, [refresh]);
+	useEffect(() => onAdminCollectionsChanged(refresh), [refresh]);
 
 	useEffect(() => {
 		let cancelled = false;

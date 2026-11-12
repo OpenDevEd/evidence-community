@@ -135,6 +135,7 @@ import {
 import { FirstCollections } from "./useAdminCollectionCatalogue";
 import { useAdminItemList } from "./useAdminItemList";
 import { oneAtATime, useAdminLive } from "./admin-live";
+import { noteAdminCollectionsChangedElsewhere } from "./admin-collection-events";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
 import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
 import { AdminPublicPages } from "./AdminPublicPages";
@@ -663,6 +664,7 @@ export default function AdminWorkbench({
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
 	const selectedKeyRef = useRef<string | null>(null);
 	const detailRef = useRef<AdminItemDetail | null>(null);
+	const detailGoneRef = useRef(false);
 	const draftPayloadRef = useRef<Record<string, unknown>>({});
 	const saveQueue = useRef<Promise<void>>(Promise.resolve());
 	const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
@@ -692,6 +694,7 @@ export default function AdminWorkbench({
 	const mobilePaneMounted = useRef(false);
 	selectedKeyRef.current = selectedKey;
 	detailRef.current = detail;
+	detailGoneRef.current = detailGone;
 	draftPayloadRef.current = draftPayload;
 
 	useEffect(() => {
@@ -744,6 +747,8 @@ export default function AdminWorkbench({
 
 	// A source someone connects, pauses or starts, and a collection that comes or goes, show as they happen.
 	useAdminLive(["sources", "collections"], () => loadLibrary(true), 2_000);
+	// A collection's name on records and in the picker is kept apart from the tree, and is read again with it.
+	useAdminLive(["collections"], noteAdminCollectionsChangedElsewhere, 2_000);
 
 	// An import's progress is counted from work the page isn't told about row by row, so while one runs, or its dialog
 	// is open, the sidebar reads it on a timer.
@@ -998,7 +1003,8 @@ export default function AdminWorkbench({
 	);
 	const readOpenRecordAgain = useCallback(async () => {
 		const key = selectedKeyRef.current;
-		if (!key) return;
+		// A record that is gone has nothing to read: asking again would only say so again.
+		if (!key || detailGoneRef.current) return;
 		const request = detailRequest.current;
 		const next = await readOpenRecord(key);
 		if (next) showRefreshed(next, request);

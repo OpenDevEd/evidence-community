@@ -20,13 +20,16 @@ describe("how often a part of the admin reads itself again", () => {
 
 	it("reads at once for a change on its own", async () => {
 		const read = vi.fn();
-		paceReads(read, 1_000).changed();
+		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
+		paced.changed();
 		expect(read).toHaveBeenCalledTimes(1);
 	});
 
 	it("reads each of a few changes at once, as when two people answer each other", async () => {
 		const read = vi.fn();
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		for (let change = 1; change <= 4; change += 1) {
 			paced.changed();
 			expect(read).toHaveBeenCalledTimes(change);
@@ -37,6 +40,7 @@ describe("how often a part of the admin reads itself again", () => {
 	it("reads less often while changes keep coming, and once more after they stop", async () => {
 		const read = vi.fn();
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		// A change every 100 ms for a minute, as an import makes.
 		for (let elapsed = 0; elapsed < 60_000; elapsed += 100) {
 			paced.changed();
@@ -57,6 +61,7 @@ describe("how often a part of the admin reads itself again", () => {
 	it("reads at once again for a change that comes after a pause", async () => {
 		const read = vi.fn();
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		for (let elapsed = 0; elapsed < 20_000; elapsed += 100) {
 			paced.changed();
 			await vi.advanceTimersByTimeAsync(100);
@@ -70,6 +75,7 @@ describe("how often a part of the admin reads itself again", () => {
 	it("waits for the page's own saves to finish before it reads", async () => {
 		const read = vi.fn();
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		// The person types, each save heard back as a change.
 		for (let saved = 0; saved < 5; saved += 1) {
 			noteOwnAdminWrite("PUT");
@@ -84,6 +90,7 @@ describe("how often a part of the admin reads itself again", () => {
 	it("reads once when a hidden tab is shown again, however much changed meanwhile", async () => {
 		const read = vi.fn();
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		hidden = true;
 		for (let change = 0; change < 50; change += 1) {
 			paced.changed();
@@ -99,6 +106,7 @@ describe("how often a part of the admin reads itself again", () => {
 		let finish!: () => void;
 		const read = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		paced.changed();
 		paced.changed();
 		paced.changed();
@@ -112,11 +120,20 @@ describe("how often a part of the admin reads itself again", () => {
 		let finish!: () => void;
 		const read = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
 		const paced = paceReads(read, 1_000);
+		await vi.advanceTimersByTimeAsync(5_000);
 		paced.changed();
 		paced.changed();
 		paced.stop();
 		finish();
 		await vi.advanceTimersByTimeAsync(60_000);
+		expect(read).toHaveBeenCalledTimes(1);
+	});
+	it("waits a moment after it is made before reading, since the page has just read it", async () => {
+		const read = vi.fn();
+		const paced = paceReads(read, 1_000);
+		paced.changed();
+		expect(read).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1_000);
 		expect(read).toHaveBeenCalledTimes(1);
 	});
 });

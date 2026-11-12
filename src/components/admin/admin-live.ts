@@ -13,6 +13,7 @@ type Reader = { topics: ReadonlySet<AdminLiveTopic>; changed: () => void };
 const readers = new Set<Reader>();
 let stream: EventSource | null = null;
 let reopenTimer = 0;
+let hiddenTimer = 0;
 /** Until when this page's own saves keep a read waiting, so typing isn't answered by a read after every save. */
 let ownWriteUntil = 0;
 
@@ -20,6 +21,8 @@ let ownWriteUntil = 0;
 const AFTER_OWN_WRITE_MS = 1_500;
 /** How long to wait before opening a stream the server closed, which the browser doesn't reopen by itself. */
 const REOPEN_MS = 15_000;
+/** A tab in the background keeps its stream this long, so a glance at another tab doesn't cost a reconnection. */
+const HIDDEN_CLOSE_MS = 5_000;
 /** How many reads a part makes in quick succession before it slows down. */
 const BURST = 4;
 /** How often a part reads once changes keep coming past that, as during an import of thousands of records. */
@@ -42,7 +45,7 @@ function open() {
 		if (stream?.readyState !== EventSource.CLOSED || reopenTimer) return;
 		reopenTimer = window.setTimeout(() => {
 			reopenTimer = 0;
-			if (readers.size) open();
+			if (readers.size && !document.hidden) open();
 		}, REOPEN_MS);
 	};
 }
@@ -52,6 +55,20 @@ function close() {
 	stream = null;
 	window.clearTimeout(reopenTimer);
 	reopenTimer = 0;
+	window.clearTimeout(hiddenTimer);
+	hiddenTimer = 0;
+}
+
+/**
+ * Only a tab someone is looking at holds a stream. Over HTTP/1.1 a browser allows six connections to a site, shared by
+ * all its tabs, so six admin tabs each holding one would leave none for the pages' own requests. A tab in the
+ * background lets its stream go, and when it comes back it opens one again and the server has it read everything once.
+ */
+function followVisibility() {
+	window.clearTimeout(hiddenTimer);
+	hiddenTimer = 0;
+	if (document.hidden) hiddenTimer = window.setTimeout(close, HIDDEN_CLOSE_MS);
+	else if (!stream && readers.size) open();
 }
 
 /** The page saved something itself, and reads what it changed itself: reads for the change it caused wait a moment. */
@@ -108,7 +125,9 @@ export function paceReads(read: () => unknown, every: number) {
 	let waiting = false;
 	let reading = false;
 	let stopped = false;
-	let lastRead = 0;
+	// A part is read as it mounts, so it counts as just read: the "read everything" that comes as the stream opens is
+	// then read a moment later, once the page has loaded, instead of asking for everything a second time mid-load.
+	let lastRead = Date.now();
 	let quickReads = BURST;
 	let earningSince = 0;
 	const run = () => {
@@ -159,14 +178,17 @@ export function paceReads(read: () => unknown, every: number) {
 function subscribe(topics: readonly AdminLiveTopic[], read: () => void, every: number) {
 	const paced = paceReads(read, every);
 	const reader: Reader = { topics: new Set(topics), changed: paced.changed };
+	if (!readers.size) document.addEventListener("visibilitychange", followVisibility);
 	readers.add(reader);
 	document.addEventListener("visibilitychange", paced.shown);
-	if (!stream) open();
+	if (!stream && !document.hidden) open();
 	return () => {
 		readers.delete(reader);
 		document.removeEventListener("visibilitychange", paced.shown);
 		paced.stop();
-		if (!readers.size) close();
+		if (readers.size) return;
+		document.removeEventListener("visibilitychange", followVisibility);
+		close();
 	};
 }
 

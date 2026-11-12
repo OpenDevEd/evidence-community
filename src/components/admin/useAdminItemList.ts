@@ -52,18 +52,32 @@ function buildListSearchParams(
 	});
 }
 
+/** How many rows that arrived above the ones on screen a read goes on past, to keep those on screen in the list. */
+const MOST_ARRIVALS = 200;
+
 /**
- * The rows on screen read again from the top, with where the next page starts. `wanted` is asked after every page, so
+ * How many rows to read to keep what is on screen: as many as are shown, and one more for each row among those read
+ * that wasn't shown before. Rows that arrive above push the ones a person is reading, or has ticked, further down.
+ * Past MOST_ARRIVALS, as in an import of thousands, the list shows the newest and lets the rest go.
+ */
+function rowsToKeep(read: readonly AdminItemListRow[], shown: readonly AdminItemListRow[]) {
+	const known = new Set(shown.map(({ key }) => key));
+	const arrived = read.filter(({ key }) => !known.has(key)).length;
+	return shown.length + Math.min(arrived, MOST_ARRIVALS);
+}
+
+/**
+ * The rows on screen read again from the top, with where the next page starts. `shown` is asked after every page, so
  * rows the person loads by scrolling while this reads are read too and the list never comes back shorter.
  */
-async function readLoadedRows(read: (cursor: string | null) => Promise<AdminItemListPage>, wanted: () => number) {
+export async function readLoadedRows(read: (cursor: string | null) => Promise<AdminItemListPage>, shown: () => readonly AdminItemListRow[]) {
 	const rows: AdminItemListRow[] = [];
 	let cursor: string | null = null;
 	do {
 		const page = await read(cursor);
 		rows.push(...page.items);
 		cursor = page.hasMore ? page.nextCursor : null;
-	} while (cursor && rows.length < wanted());
+	} while (cursor && rows.length < rowsToKeep(rows, shown()));
 	return { rows, cursor };
 }
 
@@ -74,6 +88,11 @@ function keepShownRows(before: AdminItemListRow[], rows: readonly AdminItemListR
 	const shown = new Map(before.map((row) => [row.key, row]));
 	const next = rows.map((row) => sameRow(shown.get(row.key), row));
 	return next.length === before.length && next.every((row, index) => row === before[index]) ? before : next;
+}
+
+/** Waits for something another part of the page is doing to end. */
+async function until(done: () => boolean) {
+	while (!done()) await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
 /** The ticked rows that are still in the list: the same set when all of them are. */
@@ -201,9 +220,14 @@ export function useAdminItemList(
 
 	const latestListParams = useRef(listParams);
 	latestListParams.current = listParams;
+	const loadingRef = useRef(loading);
+	loadingRef.current = loading;
 	const readShownRows = useCallback(async () => {
+		// A load under way lands first. It may have asked before the change that asked for this, so its answer can be
+		// the older one, and read before it this one would be overwritten.
+		await until(() => !loadingRef.current);
 		// In pages the size the list loads in, so a list that has just loaded comes back with the same rows.
-		const read = await readLoadedRows((cursor) => getAdminItems(listParams(cursor)), () => itemsRef.current.length).catch(() => null);
+		const read = await readLoadedRows((cursor) => getAdminItems(listParams(cursor)), () => itemsRef.current).catch(() => null);
 		// A read that failed waits for the next change, and one for a view the person has left is dropped.
 		if (!read || listParams !== latestListParams.current) return;
 		const next = keepShownRows(itemsRef.current, read.rows);

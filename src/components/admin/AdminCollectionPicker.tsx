@@ -19,7 +19,7 @@ import {
 	getAdminCollectionChildren,
 	searchAdminCollectionCatalog,
 } from "./admin-api";
-import { ADMIN_COLLECTION_INVALIDATION_EVENT } from "./admin-collection-events";
+import { onAdminCollectionsChanged } from "./admin-collection-events";
 import { rememberAdminCollections } from "./admin-collection-resolution-cache";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
@@ -36,7 +36,7 @@ const preloads = new Map<string, Promise<void>>();
 // Counts invalidations, so an answer to a request made before one is not cached after it.
 let cacheGeneration = 0;
 if (typeof window !== "undefined") {
-	window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, () => {
+	onAdminCollectionsChanged(() => {
 		cacheGeneration += 1;
 		pages.clear();
 	});
