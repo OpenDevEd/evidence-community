@@ -762,7 +762,8 @@ const footerSchema = z
 			),
 		funders: z
 			.array(funderSchema)
-			.max(20)
+			// Room for the twenty funders and the twenty partners a community could name before the two lists became one.
+			.max(40)
 			.default([])
 			.superRefine((funders, context) =>
 				addDuplicateIssues(funders, context, (funder) => funder.id),

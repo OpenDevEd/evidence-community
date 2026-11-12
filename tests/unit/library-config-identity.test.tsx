@@ -232,11 +232,16 @@ describe("runtime library identity", () => {
 			["partner-two", "Partner Two"],
 		]);
 		const twice = structuredClone(maximalLibraryConfig);
-		twice.identity.fundingPartners = [{ id: "same-name", name: " funder one " }, { id: "funder-one", name: "Partner Three" }];
+		twice.identity.fundingPartners = [{ id: "same-name", name: " funder one " }, { id: "funder-one", name: "Partner Three" }, { id: "again", name: "PARTNER THREE" }];
 		expect(projectPublicLibraryConfig(libraryConfigSchema.parse(twice)).footer.funders.map(({ id, name }) => [id, name])).toEqual([
 			["funder-one", "Funder One"],
 			["partner-1", "Partner Three"],
 		]);
+		// The most a community could hold of each: every one is listed.
+		const full = structuredClone(maximalLibraryConfig);
+		full.footer.funders = Array.from({ length: 20 }, (_, n) => ({ ...full.footer.funders[0]!, id: `funder-${n}`, name: `Funder ${n}` }));
+		full.identity.fundingPartners = Array.from({ length: 20 }, (_, n) => ({ id: `partner-${n}`, name: `Partner ${n}` }));
+		expect(projectPublicLibraryConfig(libraryConfigSchema.parse(full)).footer.funders).toHaveLength(40);
 		expect(minimalConfig.footer.funders).toEqual([]);
 	});
 

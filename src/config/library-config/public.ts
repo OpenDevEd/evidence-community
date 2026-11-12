@@ -10,9 +10,6 @@ import { sourcePublishTags } from "@/lib/tags";
 import { offersSources } from "@/lib/search-query";
 import { libraryResultLimit } from "@/lib/search-filter-constants";
 
-/** The most funders a footer holds (`footerSchema`). */
-const FUNDERS_MAX = 20;
-
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
 	LibraryPublicConfig
@@ -31,17 +28,18 @@ function fundersOf(config: LibraryServerConfig) {
 	const funders = config.footer.funders;
 	const named = new Set(funders.map((funder) => funder.name.trim().toLowerCase()));
 	const taken = new Set(funders.map((funder) => funder.id));
-	const partners = config.identity.fundingPartners
-		.filter((partner) => !named.has(partner.name.trim().toLowerCase()))
-		.map((partner) => {
-			// The two lists were checked apart, so a partner's id may be a funder's too.
-			let id = partner.id;
-			for (let n = 1; taken.has(id); n += 1) id = `partner-${n}`;
-			taken.add(id);
-			return { id, name: partner.name };
-		});
-	// A footer holds twenty funders at most, which each list did on its own.
-	return [...funders, ...partners].slice(0, FUNDERS_MAX);
+	const partners = config.identity.fundingPartners.flatMap((partner) => {
+		const name = partner.name.trim().toLowerCase();
+		if (named.has(name)) return [];
+		named.add(name);
+		// The two lists were checked apart, so a partner's id may be a funder's too.
+		let id = partner.id;
+		for (let n = 1; taken.has(id); n += 1) id = `partner-${n}`;
+		taken.add(id);
+		return [{ id, name: partner.name }];
+	});
+	// Twenty of each at most, and the footer's list holds forty, so none is ever left out.
+	return [...funders, ...partners];
 }
 
 export function projectPublicLibraryConfig(
