@@ -2385,7 +2385,7 @@ export default function AdminWorkbench({
 								/>), [filters.reviewQueue, filters.filters, selectNavigationFilter, collectionFilter, busy, openCreateCollection, removeCollection, openRenameCollection, openMoveCollection, restoreCollection, sourceFilter, library.sources, stateFilter]);
 
 	return (
-		<main className="@container/admin fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
+		<main data-full-window className="@container/admin fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Community administration</h1>
 			<header
 				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
