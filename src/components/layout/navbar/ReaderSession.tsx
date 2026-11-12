@@ -5,7 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useLocale } from "next-intl";
 import { useSWRConfig } from "swr";
 
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useLibraryConfig, useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
 import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
@@ -146,11 +146,13 @@ async function takeStep(step: "sign-in" | "sign-out", stamp: string, here: NonNu
  */
 function useFollowOpenScholarSession(readerId: string | null | undefined, sessionId: string | null) {
 	const { sessionCookie } = useLibraryConfig().authentication.openScholar;
+	// Only where readers have accounts: a community without them signs nobody in but its admins, who ask to be.
+	const readerAccounts = useLibraryFeature("readerAccounts");
 	const router = useRouter();
 	const { mutate } = useSWRConfig();
 	useEffect(() => {
 		if (readerId) kept.set(ASK_AGAIN_KEY, null);
-		if (!sessionCookie || readerId === undefined) return;
+		if (!sessionCookie || !readerAccounts || readerId === undefined) return;
 		const here = { readerId, sessionId };
 		const follow = async () => {
 			if (following || leaving || document.visibilityState !== "visible") return;
@@ -174,14 +176,22 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 				following = false;
 			}
 		};
+		// Back from OpenScholar's sign-in page without signing in, to this page as the browser kept it: it isn't leaving any more.
+		const restored = (event: PageTransitionEvent) => {
+			if (!event.persisted) return;
+			leaving = false;
+			void follow();
+		};
 		void follow();
 		window.addEventListener("focus", follow);
+		window.addEventListener("pageshow", restored);
 		document.addEventListener("visibilitychange", follow);
 		return () => {
 			window.removeEventListener("focus", follow);
+			window.removeEventListener("pageshow", restored);
 			document.removeEventListener("visibilitychange", follow);
 		};
-	}, [sessionCookie, readerId, sessionId, router, mutate]);
+	}, [sessionCookie, readerAccounts, readerId, sessionId, router, mutate]);
 }
 
 /** The OpenScholar account page, where readers change their name, avatar and sign-in settings. */
