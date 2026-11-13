@@ -4,6 +4,7 @@ import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-document
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { analyticsCapabilities } from "@/lib/analytics-consent";
 import { connection } from "next/server";
 
 // Waits for the library settings instead of showing a loading state, so the click lands on the finished page.
@@ -31,7 +32,7 @@ export default async function PrivacyPage() {
 		<PolicyPage
 			content={document!.content}
 			title={tPolicy("privacy.title")}
-			description={tPolicy("privacy.description")}
+			description={tPolicy(analyticsCapabilities(config.analytics).analytics ? "privacy.description" : "privacy.descriptionNoAnalytics")}
 			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
 				href: getRuntimeLinkHref(config.legal.cookiePolicy, config.identity.baseUrl),

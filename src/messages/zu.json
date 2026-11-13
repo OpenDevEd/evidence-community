@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Inqubomgomo yobumfihlo",
       "description": "Indlela umphakathi ovulekile oqoqa, osebenzisa, ogcina futhi ovikela ngayo ulwazi lomuntu siqu ezinsizeni, ekuhlaziyeni nasekusebenzeni kwesayithi.",
+      "descriptionNoAnalytics": "Indlela umphakathi ovulekile oqoqa, osebenzisa, ogcina futhi ovikela ngayo ulwazi lomuntu siqu ezinsizeni nasekusebenzeni kwesayithi.",
       "metaDescription": "Isaziso sobumfihlo esichaza indlela ulwazi lomuntu siqu olu qoqwa, olusetshenziswa, nolwabelwana ngalo ngayo."
     },
     "terms": {

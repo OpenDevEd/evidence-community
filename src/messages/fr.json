@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Politique de confidentialité",
       "description": "Comment cette communauté publique collecte, utilise, conserve et protège les données personnelles dans le cadre de l’assistance, des analyses et du fonctionnement du site.",
+      "descriptionNoAnalytics": "Comment cette communauté publique collecte, utilise, conserve et protège les données personnelles dans le cadre de l’assistance et du fonctionnement du site.",
       "metaDescription": "Avis de confidentialité décrivant la collecte, l’utilisation et le partage des données personnelles."
     },
     "terms": {

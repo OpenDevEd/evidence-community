@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Privaatheidsbeleid",
       "description": "Hoe hierdie openbare gemeenskap persoonlike inligting versamel, gebruik, stoor en beskerm oor ondersteuning, ontleding en webwerfbedryf heen.",
+      "descriptionNoAnalytics": "Hoe hierdie openbare gemeenskap persoonlike inligting versamel, gebruik, stoor en beskerm oor ondersteuning en webwerfbedryf heen.",
       "metaDescription": "Privaatheidskennisgewing wat beskryf hoe persoonlike inligting versamel, gebruik en gedeel word."
     },
     "terms": {

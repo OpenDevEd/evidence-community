@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Sera ya Faragha",
       "description": "Jinsi jumuiya hii ya umma inavyokusanya, kutumia, kuhifadhi na kulinda taarifa binafsi katika usaidizi, uchanganuzi na uendeshaji wa tovuti.",
+      "descriptionNoAnalytics": "Jinsi jumuiya hii ya umma inavyokusanya, kutumia, kuhifadhi na kulinda taarifa binafsi katika usaidizi na uendeshaji wa tovuti.",
       "metaDescription": "Notisi ya faragha inayoeleza jinsi taarifa binafsi zinavyokusanywa, kutumiwa na kushirikiwa."
     },
     "terms": {

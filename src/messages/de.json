@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Datenschutzerklärung",
       "description": "Wie diese öffentliche Community personenbezogene Daten bei Support, Analysen und dem Betrieb der Website erhebt, verwendet, speichert und schützt.",
+      "descriptionNoAnalytics": "Wie diese öffentliche Community personenbezogene Daten bei Support und dem Betrieb der Website erhebt, verwendet, speichert und schützt.",
       "metaDescription": "Datenschutzhinweis zur Erhebung, Verwendung und Weitergabe personenbezogener Daten."
     },
     "terms": {

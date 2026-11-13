@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Privacy Policy",
       "description": "How this public community collects, uses, stores, and protects personal information across support, analytics, and site operations.",
+      "descriptionNoAnalytics": "How this public community collects, uses, stores, and protects personal information across support and site operations.",
       "metaDescription": "Privacy notice describing how personal information is collected, used, and shared."
     },
     "terms": {
