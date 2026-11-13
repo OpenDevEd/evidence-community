@@ -295,6 +295,18 @@ export function useReaderSession() {
 		if (kept.get(ASK_AGAIN_KEY)) signIn.searchParams.set("prompt", "login");
 		window.location.assign(signIn);
 	};
+	const home = () => new URL(getPathname({ href: "/", locale }), window.location.origin).toString();
+	/** Signs out here, then of OpenScholar, whose sign-out page comes back to `back`. `say` leaves the notice for that page. */
+	const leave = async (back: string, say: boolean) => {
+		await readerAuthClient.signOut();
+		kept.set(ASK_AGAIN_KEY, "1");
+		if (say) markSignedOut();
+		// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
+		if (sessionCookie && readCookie(sessionCookie) === "0") return back === window.location.href ? window.location.reload() : window.location.assign(back);
+		const signOut = new URL("/sign-out", siteUrl);
+		signOut.searchParams.set("redirect_url", back);
+		window.location.assign(signOut);
+	};
 	return {
 		reader,
 		/** Goes to OpenScholar only when the reader asks to sign in, and comes back to this page. */
@@ -308,17 +320,14 @@ export function useReaderSession() {
 		 * signed out (`useSignedOutNotice`). From their own profile they come back to the home page instead: anyone can
 		 * read a profile, so their name and bookmarks would still be there, as if they hadn't signed out.
 		 */
-		signOut: async () => {
-			await readerAuthClient.signOut();
-			kept.set(ASK_AGAIN_KEY, "1");
-			markSignedOut();
-			const back = reader && normalizePathname(window.location.pathname).endsWith(`/profile/${reader.id}`) ? new URL(getPathname({ href: "/", locale }), window.location.origin).toString() : window.location.href;
-			// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
-			if (sessionCookie && readCookie(sessionCookie) === "0") return back === window.location.href ? window.location.reload() : window.location.assign(back);
-			const signOut = new URL("/sign-out", siteUrl);
-			signOut.searchParams.set("redirect_url", back);
-			window.location.assign(signOut);
-		},
+		signOut: () => leave(reader && normalizePathname(window.location.pathname).endsWith(`/profile/${reader.id}`) ? home() : window.location.href, true),
+		/** The same from a page only some may open, such as /admin: to the home page, since that page would only ask them to sign in again. */
+		signOutToHome: () => leave(home(), true),
+		/**
+		 * For someone signed in who may not open this page: signs out of both and comes back here, where sign-in now asks
+		 * who is signing in. Nothing says they're signed out: the next page they see is the one they signed in to reach.
+		 */
+		switchAccount: () => leave(window.location.href, false),
 	};
 }
 

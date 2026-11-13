@@ -147,8 +147,7 @@ import {
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
-import { useRouter } from "next/navigation";
-import { readerAuthClient } from "@/lib/readers/client";
+import { useReaderSession } from "@/components/layout/navbar/ReaderSession";
 
 function requiredDraftValue<T>(
 	values: Map<string, T>,
@@ -465,7 +464,7 @@ export default function AdminWorkbench({
 	/** The sources as the page was served, so the sidebar's list does not arrive after it. */
 	initialLibrary: AdminLibrarySnapshot;
 }) {
-	const router = useRouter();
+	const { signOutToHome } = useReaderSession();
 	const showImportLabel = useBreakpoint("lg");
 	const finePointer = useFinePointer();
 	const { canPublish } = useAdminSession();
@@ -2537,12 +2536,8 @@ export default function AdminWorkbench({
 								aria-label="Log out"
 								className="h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 								isIconOnly
-								// Signing out ends the library session readers share, then leaves
-								// /admin so OpenScholar does not sign the person straight back in.
-								onPress={async () => {
-									await readerAuthClient.signOut();
-									router.replace("/");
-								}}
+								// Signs out here and of OpenScholar, as the reader's menu does, and leaves /admin for the home page.
+								onPress={signOutToHome}
 								size="xs"
 								type="button"
 								variant="transparent"
