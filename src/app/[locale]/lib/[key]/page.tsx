@@ -10,7 +10,7 @@ import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import ItemRoute from "./ItemRoute";
 import type { ItemGetResponse } from "@/app/api/item/types";
-import { Suspense } from "react";
+import { PageBoundary } from "@/components/layout/PageBoundary";
 import LoadingComponent from "./LoadingComponent";
 
 
@@ -142,19 +142,20 @@ export async function generateMetadata(props: {
 }
 
 // Nothing is awaited here, so a click shows the page at once. ItemRoute draws the page from the list copy or the
-// record; ServerComponent answers a missing record with the not-found page.
+// record; ServerComponent answers a missing record with the not-found page. A crawler gets both in place, with no
+// stand-in before them (PageBoundary).
 export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
 	const record = props.params.then(({ key }) => getCachedItemPage(key)) as Promise<ItemGetResponse | null>;
 	return (
 		<>
-			<Suspense fallback={<LoadingComponent />}>
+			<PageBoundary fallback={<LoadingComponent />}>
 				<ItemRoute record={record} />
-			</Suspense>
-			<Suspense fallback={null}>
+			</PageBoundary>
+			<PageBoundary fallback={null}>
 				<ServerComponent record={record} />
-			</Suspense>
+			</PageBoundary>
 		</>
 	);
 }

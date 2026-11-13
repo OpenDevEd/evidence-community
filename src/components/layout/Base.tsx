@@ -7,7 +7,8 @@ import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
 import MainWrapper from "./MainWrapper";
 import SiteChrome from "./SiteChrome";
-import { Suspense } from "react";
+import { CrawlerProvider, PageBoundary } from "./PageBoundary";
+import { readsPagesWhole } from "@/lib/crawlers.mjs";
 import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
 import EarlyTypingScript from "@/app/_components/EarlyTypingScript";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -94,6 +95,7 @@ export default async function Base({
 	// baked into a build. That is what the earlier `connection()` call was
 	// for, so it is gone.
 	const requestCookies = await cookies();
+	const crawler = readsPagesWhole((await headers()).get("user-agent") ?? "");
 	// One configuration snapshot for the page: an activation mid-render must not
 	// give the header's fit styles a different library than the header itself.
 	const serverConfig = await getLibraryConfig();
@@ -139,9 +141,14 @@ export default async function Base({
 						 * here to reach the browser as a client-side redirect.
 						 * Its fallback shows while the page is on its way: on a
 						 * first load, and on Back when the page is read again.
+						 * A crawler gets the page with no boundary and no
+						 * fallback (PageBoundary), so a redirect() or notFound()
+						 * reaches it as a real status.
 						 */}
 						<LoadPageFallback {...fallback} />
-						<Suspense fallback={<PageFallback {...fallback} />}>{children}</Suspense>
+						<CrawlerProvider crawler={crawler}>
+							<PageBoundary fallback={<PageFallback {...fallback} />}>{children}</PageBoundary>
+						</CrawlerProvider>
 					</BaseContent>
 				</LibraryConfigProvider>
 			</body>
