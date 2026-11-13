@@ -4,6 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useQueryState } from "nuqs";
 import { usePathname } from "@/i18n/routing";
 import { useResourceHref } from "@/hooks/useResourceHref";
+import { recordReferrer } from "@/constants/misc";
 import { preloadItemCovers } from "@/components/features/items/PdfCover";
 import type { Item, ListItem } from "@/app/api/item/types";
 
@@ -29,7 +30,7 @@ function countPrefetchedClick(itemKey: string) {
 }
 
 /**
- * A link to a publication's page as a result card makes it: the current search comes along with where to go back to,
+ * A link to a publication's page as a result card makes it: the current search comes along, and the profile it is on,
  * pointing at it starts loading the page's covers, and `fullPrefetch` loads the whole page ahead. A click on a page
  * loaded ahead is counted, so the page reads its record again.
  */
@@ -42,11 +43,7 @@ export function useItemLink(item: Item | ListItem | undefined, { fullPrefetch = 
 	const prepare = () => preloadItemCovers(item);
 	return {
 		href: key
-			? resourceHref(key, {
-					set: {
-						referrer: referrer ?? "/" + (currentPath.startsWith("/lib") ? "lib" : currentPath.split("/").slice(1).join("/")),
-					},
-				})
+			? resourceHref(key, { set: { referrer: recordReferrer(currentPath, referrer) } })
 			: "",
 		prefetch: Boolean(prefetched) || undefined,
 		onPointerEnter: prepare,

@@ -19,6 +19,11 @@ const nextConfig = {
 		workerThreads: true,
 	},
 	reactCompiler: true,
+	// Every crawler gets a page's title, description and canonical address in the head. Next.js sends them later, in the
+	// body, to anything it takes for a browser, Googlebot included, and Google ignores a canonical address in the body.
+	// This is Next.js's own list plus Googlebot and every other name that says bot, crawler or spider. Cubot is a phone
+	// maker, whose browsers aren't crawlers.
+	htmlLimitedBots: /(?<!cu)bot|crawler|spider|[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|yandex|sogou|tumblr|vkShare|quora link preview|ia_archiver|BingPreview|facebookexternalhit|facebookcatalog|WhatsApp|SkypeUriPreview|Yeti|googleweblight|ChatGPT-User|Claude-User|Perplexity-User/i,
 	images: {
 		// Covers and the library's logo reach the optimizer through /covers and
 		// /brand (see CoverImage and LibraryIdentity). Every other image is marked
