@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Koekiebeleid",
       "description": "Watter koekies en plaaslike bergingsinskrywings die webwerf gebruik, watter noodsaaklik is, en watter eers aktiveer nadat ontledingstoestemming gegee is.",
+      "descriptionNoAnalytics": "Watter koekies en plaaslike bergingsinskrywings die webwerf gebruik. Hierdie gemeenskap gebruik geen ontleding nie, dus is almal noodsaaklik.",
       "metaDescription": "Koekiekennisgewing wat koekies en soortgelyke blaaierberging wat die webwerf gebruik, dek."
     }
   },

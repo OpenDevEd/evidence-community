@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Inqubomgomo yama-cookie",
       "description": "Ama-cookie nezingenisi zesitoreji sendawo esetshenziswa yisayithi, ezidingekayo nokuthi yiziphi ezisebenza kuphela ngemva kokuvunyelwa kokuhlaziya.",
+      "descriptionNoAnalytics": "Ama-cookie nezingenisi zesitoreji sendawo esetshenziswa yisayithi. Lo mphakathi awusebenzisi ukuhlaziya, ngakho zonke ziyadingeka.",
       "metaDescription": "Isaziso sama-cookie esihlanganisa ama-cookie nesitoreji esifanayo sesiphequluli esisetshenziswa yisayithi."
     }
   },

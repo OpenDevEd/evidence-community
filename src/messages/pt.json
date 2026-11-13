@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Política de Cookies",
       "description": "Quais cookies e entradas de armazenamento local o site usa, quais são essenciais e quais só são ativados após o consentimento para análises.",
+      "descriptionNoAnalytics": "Quais cookies e entradas de armazenamento local o site usa. Esta comunidade não usa análises, por isso todos são essenciais.",
       "metaDescription": "Aviso de cookies que cobre cookies e armazenamento semelhante do navegador usado pelo site."
     }
   },

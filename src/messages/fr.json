@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Politique relative aux cookies",
       "description": "Les cookies et entrées de stockage local utilisés par le site, ceux qui sont essentiels, et ceux qui ne s’activent qu’après consentement aux analyses.",
+      "descriptionNoAnalytics": "Les cookies et entrées de stockage local utilisés par le site. Cette communauté n’utilise aucune analyse : tous sont donc essentiels.",
       "metaDescription": "Avis relatif aux cookies et au stockage similaire du navigateur utilisé par le site."
     }
   },
