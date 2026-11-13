@@ -310,13 +310,14 @@ async function main() {
 							);
 						}
 					},
+					// Each claim's records as soon as it is acknowledged, so a later claim's failure loses none of them.
+					onPagesChanged: indexNow ? (recordKeys) => indexNow.add(recordKeys) : undefined,
 					writer: current.writer,
 					signal: abortController.signal,
 					// A drain claim can wait behind other claims' embeddings.
 					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
 				});
-				indexNow?.add(results.flatMap((result) => result.pageKeys));
 				// Records written while the embedder failed get their vectors once it answers again. A failure here
 				// leaves the drain's result standing; the next pass tries again.
 				const embedded = await current.embedMissing(abortController.signal).catch((error: unknown) => {

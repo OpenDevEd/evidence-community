@@ -22,7 +22,6 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { hasAnyTag } from "@/lib/tags";
 
 import {
 	generateFullSearchProjectionPlans,
@@ -65,6 +64,11 @@ export type SearchOutboxConsumerOptions = {
 	maxAttempts?: number;
 	now?: () => Date;
 	onProgress?: (progress: SearchOutboxProgress) => Promise<void>;
+	/**
+	 * Told which records' pages a claim changed, once the claim is acknowledged: the ones written and the ones removed.
+	 * A record that has just been hidden is among them, as its page is gone. Not waited for, and must not throw.
+	 */
+	onPagesChanged?: (recordKeys: string[]) => void;
 	retryBaseMs?: number;
 	retryMaxMs?: number;
 	signal?: AbortSignal;
@@ -84,8 +88,6 @@ export type SearchOutboxProcessResult = {
 	deleteCount: number;
 	documentCount: number;
 	eventIds: number[];
-	/** The records whose public pages this batch changed: written ones readers may see, and removed ones. */
-	pageKeys: string[];
 	status: "processed";
 };
 
@@ -498,7 +500,6 @@ async function indexClaimedEvents(
 	let deleteCount = 0;
 	let documentCount = 0;
 	const pageKeys: string[] = [];
-	const hiddenTags = options.config.content.tags.hidden;
 	for await (const plan of generateSearchProjectionPlans(
 		options.database,
 		options.config,
@@ -525,7 +526,7 @@ async function indexClaimedEvents(
 		await batch.add(plan);
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
-		for (const document of plan.documents) if (!hasAnyTag(document.tags, hiddenTags)) pageKeys.push(document.key);
+		for (const document of plan.documents) pageKeys.push(document.key);
 		pageKeys.push(...plan.deleteKeys);
 	}
 	await batch.finish();
@@ -578,11 +579,11 @@ async function processClaimedEvents(
 		if (heartbeatFailure) throw heartbeatFailure;
 		await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		await acknowledgeEvents(options, events, workerId);
+		options.onPagesChanged?.(pageKeys);
 		return {
 			deleteCount,
 			documentCount,
 			eventIds: events.map(({ id }) => id),
-			pageKeys,
 			status: "processed",
 		};
 	} catch (error) {
