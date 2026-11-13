@@ -94,7 +94,8 @@ export default async function sitemap(props: {
 			...pages.map((pathname) => page(pathname)),
 			...(terms ? [page(POLICY_DESTINATIONS.terms.path, terms.lastUpdated)] : []),
 			...getEnabledGapMaps(libraryConfig.gapMaps).map((gapMap) => ({ url: buildSiteUrl(gapMap.href, baseUrl) })),
-			...(editions.length ? [page("/digests", editions[0].publishedAt)] : []),
+			// The archive is also where readers subscribe, so it is listed before the first edition goes out.
+			...(editions.length || libraryConfig.notifications.enabled ? [page("/digests", editions[0]?.publishedAt)] : []),
 			...editions.map(({ slug, publishedAt }) => ({ url: buildSiteUrl(`/digests/${slug}`, baseUrl), lastModified: publishedAt })),
 		];
 	}

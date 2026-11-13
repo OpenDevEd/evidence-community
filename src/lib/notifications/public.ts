@@ -45,8 +45,8 @@ export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages:
 /** The archive's chart: the latest editions whatever page the list is on, and how many there are in all. */
 export type DigestChart = {editions: DigestSummary[]; total: number};
 const CHART_EDITIONS = 24;
-/** The most editions the sitemap lists. A weekly digest reaches this after nineteen years. */
-const SITEMAP_EDITIONS = 1000;
+/** The most editions the sitemap lists, as many as it lists records in one file. A daily digest reaches this after 27 years. */
+const SITEMAP_EDITIONS = 10_000;
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {

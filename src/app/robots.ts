@@ -24,15 +24,16 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
 			{ userAgent: TRAINING_CRAWLERS, disallow: "/" },
 			{
 				userAgent: "*",
-				// A numbered page of a list is a page of its own. The longer rule wins, so these stay open under `/*?`.
-				// `/_next/` holds every page's scripts, styles and fonts, which a search engine needs to draw the page.
-				allow: ["/", "/*?page=", "/_next/"],
+				// `/_next/` holds every page's scripts, styles and fonts, which a search engine needs to draw the page, and
+				// the image optimizer, whose addresses carry a query. The longer rule wins, so it stays open under `/*?`.
+				allow: ["/", "/_next/"],
 				disallow: [
 					"/api/",
 					"/privacy",
 					"/cookie-policy",
-					// Any other address with a query repeats a page that has its own: a filtered or sorted list, a record
-					// opened from a list. Search engines spend their visits on records instead.
+					// An address with a query repeats a page that has its own, or lists records the sitemap and the browse
+					// pages already reach: a filtered, sorted or numbered list, a record opened from a list. Search engines
+					// spend their visits on records instead.
 					"/*?",
 					// A record's citation page and citation files repeat the record.
 					"/citation/",

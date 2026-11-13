@@ -120,7 +120,6 @@ describe("robots.txt", () => {
 			"/lib/ABCD2345",
 			"/de/lib/ABCD2345",
 			"/lib/ABCD2345/download/EFGH2345",
-			"/lib?page=2",
 			"/digests/2d8a5c1e-7b1f-4c55-9d0e-3f6a8b9c0d1e",
 			"/_next/static/chunks/0abc.js",
 			"/_next/static/chunks/0abc.css",
@@ -128,6 +127,10 @@ describe("robots.txt", () => {
 		]) expect(mayRead(everyone, open), open).toBe(true);
 		for (const closed of [
 			"/api/items",
+			"/api/items?page=2",
+			"/privacy?page=2",
+			"/lib?page=2",
+			"/lib?page=2&author=Jane%20Doe",
 			"/lib?author=Jane%20Doe",
 			"/de/lib?author=Jane%20Doe",
 			"/map?scope=title&author=Jane%20Doe",
