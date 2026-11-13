@@ -70,7 +70,7 @@ We do not send the following to product analytics or aggregate measurement:
 - URL query strings and fragments
 - Request or response bodies used by session replay
 
-{{::}}We do not use advertising cookies, enable Google advertising signals, or sell personal information.
+{{::}}We do not use advertising cookies{{Analytics::}}, enable Google advertising signals,{{::}} or sell personal information.
 
 # **Where information comes from**
 
