@@ -11,7 +11,7 @@ import { getPathname } from "@/i18n/routing";
 import { normalizePathname } from "@/lib/path";
 import { readerAuthClient } from "@/lib/readers/client";
 import { parseJoinStanding, type JoinStanding } from "@/lib/readers/join";
-import { ASK_AGAIN_KEY, followStep, HEADER_SLIDE_MS, keepOutcome, kept, markSignedOut, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, takeSignedOut, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
+import { askAgain, followStep, HEADER_SLIDE_MS, keepOutcome, kept, markSignedOut, QUIET_SIGN_IN_END, readCookie, SEEN_KEY, SIGNING_IN_KEY, takeSignedOut, TRIES_KEY, triesFor } from "@/lib/readers/session-follow";
 
 /** Who is signed in, as other readers may see them: never their email. */
 export type Reader = { id: string; name: string; image: string | null };
@@ -141,7 +141,7 @@ function stepFor(stamp: string | null, here: NonNullable<Here>) {
 	const step =
 		here.readerId && kept.get(SIGNING_IN_KEY)
 			? "none"
-			: followStep({ stamp, seen: kept.get(SEEN_KEY), signedIn: here.readerId !== null, tries: triesFor(stamp, kept.get(TRIES_KEY)), asked: kept.get(ASK_AGAIN_KEY) !== null });
+			: followStep({ stamp, seen: kept.get(SEEN_KEY), signedIn: here.readerId !== null, tries: triesFor(stamp, kept.get(TRIES_KEY)), asked: askAgain.get() });
 	if (here.readerId) kept.set(SIGNING_IN_KEY, null);
 	if (step === "none" && stamp !== null) kept.set(SEEN_KEY, stamp);
 	return step;
@@ -183,7 +183,7 @@ function useFollowOpenScholarSession(readerId: string | null | undefined, sessio
 	// Only where readers have accounts: a community without them signs nobody in but its admins, who ask to be.
 	const readerAccounts = useLibraryFeature("readerAccounts");
 	useEffect(() => {
-		if (readerId) kept.set(ASK_AGAIN_KEY, null);
+		if (readerId) askAgain.set(false);
 		if (!sessionCookie || !readerAccounts || readerId === undefined) return;
 		const here = { readerId, sessionId };
 		const follow = async () => {
@@ -292,14 +292,14 @@ export function useReaderSession() {
 		kept.set(SIGNING_IN_KEY, "1");
 		const signIn = new URL(started.url);
 		// After signing out here, Clerk asks who is signing in instead of taking the account it still holds: the way to switch accounts.
-		if (kept.get(ASK_AGAIN_KEY)) signIn.searchParams.set("prompt", "login");
+		if (askAgain.get()) signIn.searchParams.set("prompt", "login");
 		window.location.assign(signIn);
 	};
 	const home = () => new URL(getPathname({ href: "/", locale }), window.location.origin).toString();
 	/** Signs out here, then of OpenScholar, whose sign-out page comes back to `back`. `say` leaves the notice for that page. */
 	const leave = async (back: string, say: boolean) => {
 		await readerAuthClient.signOut();
-		kept.set(ASK_AGAIN_KEY, "1");
+		askAgain.set(true);
 		if (say) markSignedOut();
 		// Where OpenScholar is known to be signed out already, there is nothing to sign out of there.
 		if (sessionCookie && readCookie(sessionCookie) === "0") return back === window.location.href ? window.location.reload() : window.location.assign(back);

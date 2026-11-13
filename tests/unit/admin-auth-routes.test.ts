@@ -94,6 +94,13 @@ describe("admin sign-in route", () => {
 		},
 	);
 
+	it("asks which account is signing in once this browser signed out here, instead of taking the one Clerk holds", async () => {
+		const afterSignOut = new NextRequest("http://localhost/api/admin/sign-in?return=%2Fadmin", { headers: { cookie: "openscholar-sign-in-asks=1" } });
+		expect(new URL((await startSignIn(afterSignOut)).headers.get("location")!).searchParams.get("prompt")).toBe("login");
+		const fresh = new NextRequest("http://localhost/api/admin/sign-in?return=%2Fadmin");
+		expect(new URL((await startSignIn(fresh)).headers.get("location")!).searchParams.has("prompt")).toBe(false);
+	});
+
 	it("passes on Better Auth's refusal, such as its rate limit, instead of redirecting", async () => {
 		signInHandler.mockImplementation(async () => new Response(null, { status: 429 }));
 		const response = await startSignIn(new NextRequest("http://localhost/api/admin/sign-in?return=%2Fadmin"));

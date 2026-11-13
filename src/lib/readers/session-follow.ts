@@ -6,8 +6,11 @@
 
 /** Where this browser keeps the cookie value it last acted on, so each change is followed once. */
 export const SEEN_KEY = "openscholar-session-seen";
-/** Set when the reader signs out here, so their next sign-in asks which account instead of taking the one Openscholar still holds. */
-export const ASK_AGAIN_KEY = "openscholar-sign-in-asks";
+/**
+ * Set when the reader signs out here, so their next sign-in asks which account instead of taking the one Openscholar
+ * still holds. A cookie, so the admin's sign-in, which starts on the server (`/api/admin/sign-in`), asks too.
+ */
+export const ASK_AGAIN_COOKIE = "openscholar-sign-in-asks";
 /** Set when the reader starts a sign-in themselves: the session they come back with needs no second, hidden sign-in. */
 export const SIGNING_IN_KEY = "openscholar-signing-in";
 /** The cookie value a hidden sign-in last failed for and how many times, as "<value>:<times>". */
@@ -40,6 +43,14 @@ export function triesFor(stamp: string | null, kept: string | null) {
 	const [value, times] = (kept ?? "").split(":");
 	return stamp !== null && value === stamp ? Number(times) || 0 : 0;
 }
+
+/** Whether the next sign-in asks which account (`ASK_AGAIN_COOKIE`). */
+export const askAgain = {
+	get: () => readCookie(ASK_AGAIN_COOKIE) !== null,
+	set(on: boolean) {
+		document.cookie = `${ASK_AGAIN_COOKIE}=${on ? "1; max-age=31536000" : "; max-age=0"}; path=/; samesite=lax${location.protocol === "https:" ? "; secure" : ""}`;
+	},
+};
 
 export function readCookie(name: string): string | null {
 	const found = document.cookie.split("; ").find((cookie) => cookie.startsWith(`${name}=`));
