@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "Política de Privacidade",
       "description": "Como esta comunidade pública coleta, usa, armazena e protege dados pessoais no suporte, nas análises e na operação do site.",
+      "descriptionNoAnalytics": "Como esta comunidade pública coleta, usa, armazena e protege dados pessoais no suporte e na operação do site.",
       "metaDescription": "Aviso de privacidade que descreve como os dados pessoais são coletados, usados e compartilhados."
     },
     "terms": {

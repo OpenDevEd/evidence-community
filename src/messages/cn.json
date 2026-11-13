@@ -1667,6 +1667,7 @@
     "privacy": {
       "title": "隐私政策",
       "description": "本公共文献社区如何在支持、分析和网站运营中收集、使用、存储和保护个人信息。",
+      "descriptionNoAnalytics": "本公共文献社区如何在支持和网站运营中收集、使用、存储和保护个人信息。",
       "metaDescription": "说明个人信息如何被收集、使用和共享的隐私声明。"
     },
     "terms": {
