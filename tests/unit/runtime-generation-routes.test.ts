@@ -100,6 +100,48 @@ beforeEach(() => {
 	mocks.getSitemapPageCount.mockResolvedValue(2);
 });
 
+/** Whether robots.txt lets a crawler read an address, as Google reads it: the longest matching rule wins, and allow wins a tie. */
+function mayRead(rule: { allow?: string | string[]; disallow?: string | string[] }, address: string) {
+	const longest = (patterns: string | string[] | undefined) =>
+		Math.max(-1, ...[patterns ?? []].flat()
+			.filter((pattern) => new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}`).test(address))
+			.map((pattern) => pattern.length));
+	return longest(rule.allow) >= longest(rule.disallow);
+}
+
+describe("robots.txt", () => {
+	it("opens what a search engine needs to draw and list a page, and closes addresses that repeat one", async () => {
+		mocks.getLibraryConfig.mockResolvedValue(config());
+		const rules = [(await robots()).rules].flat();
+		const everyone = rules.find((rule) => rule.userAgent === "*")!;
+
+		for (const open of [
+			"/",
+			"/lib/ABCD2345",
+			"/de/lib/ABCD2345",
+			"/lib/ABCD2345/download/EFGH2345",
+			"/lib?page=2",
+			"/digests/2d8a5c1e-7b1f-4c55-9d0e-3f6a8b9c0d1e",
+			"/_next/static/chunks/0abc.js",
+			"/_next/static/chunks/0abc.css",
+			"/_next/image?url=%2Fcovers%2Fa.jpg&w=256&q=75",
+		]) expect(mayRead(everyone, open), open).toBe(true);
+		for (const closed of [
+			"/api/items",
+			"/lib?author=Jane%20Doe",
+			"/de/lib?author=Jane%20Doe",
+			"/map?scope=title&author=Jane%20Doe",
+			"/evidence?paper=ABCD2345",
+			"/lib/ABCD2345?referrer=%2Fbrowse%2F1988",
+			"/citation/ABCD2345",
+			"/de/citation/ABCD2345",
+			"/lib/ABCD2345/export/bibtex",
+		]) expect(mayRead(everyone, closed), closed).toBe(false);
+		// The shield refuses training crawlers, so robots.txt tells them not to ask.
+		expect(rules.find((rule) => [rule.userAgent].flat().includes("GoogleOther"))?.disallow).toBe("/");
+	});
+});
+
 describe("runtime sitemap routes", () => {
 	it("publishes the configured runtime sitemap origin", async () => {
 		mocks.getLibraryConfig.mockResolvedValue(config());

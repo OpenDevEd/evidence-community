@@ -9,6 +9,7 @@ import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
+import { listDigestAddresses } from "@/lib/notifications/public";
 import {
 	buildLanguageAlternates,
 	buildLocalizedSiteUrl,
@@ -87,10 +88,14 @@ export default async function sitemap(props: {
 			lastModified,
 			alternates: { languages: buildLanguageAlternates(pathname, localization, baseUrl) },
 		});
+		// The digests are the community's own writing: the archive, then each edition at its one address.
+		const editions = await listDigestAddresses(await getDatabaseForConfig(libraryConfig));
 		pageEntries = [
 			...pages.map((pathname) => page(pathname)),
 			...(terms ? [page(POLICY_DESTINATIONS.terms.path, terms.lastUpdated)] : []),
 			...getEnabledGapMaps(libraryConfig.gapMaps).map((gapMap) => ({ url: buildSiteUrl(gapMap.href, baseUrl) })),
+			...(editions.length ? [page("/digests", editions[0].publishedAt)] : []),
+			...editions.map(({ slug, publishedAt }) => ({ url: buildSiteUrl(`/digests/${slug}`, baseUrl), lastModified: publishedAt })),
 		];
 	}
 

@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
+import { buildLanguageAlternates, buildLocalizedSiteUrl } from "@/lib/language-alternates";
 import { getRuntimePageAvailability } from "@/config/library-config/pages";
 import Map from "@/components/pages/Map";
 import { MAP_HEIGHT, MAP_WIDTH, type MapShape } from "@/components/pages/HomeMap";
@@ -13,7 +16,23 @@ import { modeField, modeOf, type CountryMode } from "@/components/pages/map-meas
 
 type Places = Record<string, [number, number]>;
 type Counts = Record<string, number>;
-type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+type Props = { params: Promise<{ locale: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+/** The map's own title and address, in each language. A filtered map names the plain one, as a filtered list does. */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+	await connection();
+	const [{ locale }, config, t] = await Promise.all([params, getLibraryConfig(), getTranslations("ui")]);
+	// A community without the map answers with the not-found page, which names no address of its own.
+	if (!getRuntimePageAvailability(config)["/map"]) return {};
+	const { identity, localization } = config;
+	return {
+		title: `${t("mapTitle")}: ${identity.name}`,
+		alternates: {
+			canonical: buildLocalizedSiteUrl("/map", locale as typeof localization.defaultLocale, localization, identity.baseUrl),
+			languages: buildLanguageAlternates("/map", localization, identity.baseUrl),
+		},
+	};
+}
 
 // Waits for the library settings instead of showing a loading state, so the click lands on the finished page.
 // Next.js reads this route export. Fallow does not recognize it yet.

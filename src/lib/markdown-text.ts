@@ -20,3 +20,11 @@ export function markdownToPlainText(markdown: string, { links = "text-and-addres
 		.replace(/`([^`]+)`/g, "$1")
 		.trim();
 }
+
+/** A summary's words on one line: no formatting, list markers or line breaks. What a clamped excerpt and a page's description show. */
+export function markdownExcerptText(markdown: string) {
+	return markdownToPlainText(markdown, { links: "text" })
+		.replace(/^\s*(?:[-*+]|\d+\.)\s+/gm, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}

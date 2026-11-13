@@ -45,6 +45,8 @@ export type DigestArchivePage = {editions: DigestSummary[]; page: number; pages:
 /** The archive's chart: the latest editions whatever page the list is on, and how many there are in all. */
 export type DigestChart = {editions: DigestSummary[]; total: number};
 const CHART_EDITIONS = 24;
+/** The most editions the sitemap lists. A weekly digest reaches this after nineteen years. */
+const SITEMAP_EDITIONS = 1000;
 
 // Lists read these small columns only, never an edition's stored publications.
 const summaryColumns = {
@@ -115,6 +117,21 @@ export async function listDigestChart(db: Database, config: LibraryServerConfig,
 export async function getLatestDigest(db: Database, config: LibraryServerConfig, locale: string): Promise<DigestSummary | null> {
   const [row] = await db.select(summaryColumns).from(notificationEdition).where(visibleEdition).orderBy(desc(notificationEdition.windowEnd)).limit(1);
   return row ? editionSummary(row, locale, config) : null;
+}
+
+/** One published edition's title, summary and cover, for the details its page gives search engines and link previews. */
+export async function getDigestSummary(db: Database, config: LibraryServerConfig, locale: string, id: string): Promise<DigestSummary | null> {
+  const uuid = editionId(id);
+  if (!uuid) return null;
+  const [row] = await db.select(summaryColumns).from(notificationEdition).where(and(visibleEdition, eq(notificationEdition.id, uuid))).limit(1);
+  return row ? editionSummary(row, locale, config) : null;
+}
+
+/** Every published edition's address and the day it went out, newest first, for the sitemap. */
+export async function listDigestAddresses(db: Database): Promise<{slug: string; publishedAt: Date}[]> {
+  const rows = await db.select({slug: notificationEdition.id, publishedAt: notificationEdition.publishedAt}).from(notificationEdition)
+    .where(visibleEdition).orderBy(desc(notificationEdition.windowEnd)).limit(SITEMAP_EDITIONS);
+  return rows.map(row => ({slug: row.slug, publishedAt: row.publishedAt!}));
 }
 
 /** The editions just before this one, newest first. */

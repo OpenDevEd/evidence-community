@@ -1117,6 +1117,14 @@ export function getSafeReferrer(referrer: string | null | undefined): string {
 	return isAcceptable ? referrer : DEFAULT_REFERRER;
 }
 
+/**
+ * Where a record's link says it was opened from: the profile it is on, or the one it carries. Every other page leads
+ * back to the default list, so naming it would only give each record a second address for search engines to find.
+ */
+export function recordReferrer(path: string, carried: string | null | undefined): string | null {
+	return [carried, path].find((from) => from?.startsWith("/profile")) ?? null;
+}
+
 export const COUNTRY_COLORS: Record<string, string> = {
 	AD: "#d82626",
 	AE: "#d82a26",
