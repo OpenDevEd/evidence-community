@@ -404,6 +404,29 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	if (expectedContactAddress) await expect(contactDetails.getByText(expectedContactAddress, { exact: false })).toBeVisible();
 });
 
+// A crawler that runs no scripts reads a page as it is sent. React sends a boundary's stand-in first and its content
+// in a hidden block a script swaps in, so a record reaches a crawler with no boundary around it. A browser keeps the
+// stand-in: that is what shows the page at once.
+test("sends a crawler the record in place and a browser its stand-in first @smoke", async ({ request }) => {
+	test.skip(!expectedSearchItemKey, "needs a record known to be published");
+	const crawlerAgent = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
+	const read = async (userAgent: string) =>
+		(await request.get(`/lib/${expectedSearchItemKey}`, { headers: { "User-Agent": userAgent } })).text();
+	const [crawler, browser] = await Promise.all([
+		read(crawlerAgent),
+		read("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"),
+	]);
+	const hiddenBlocks = (html: string) => html.match(/<div hidden id="S:/g)?.length ?? 0;
+
+	expect(hiddenBlocks(crawler)).toBe(0);
+	expect(crawler.match(/<h1[\s>]/g)).toHaveLength(1);
+	expect(hiddenBlocks(browser)).toBeGreaterThan(0);
+
+	// With no boundary to stream past, a record that isn't there is a real 404 for a crawler.
+	const missing = await request.get("/lib/ZZZZ9999", { headers: { "User-Agent": crawlerAgent } });
+	expect(missing.status()).toBe(404);
+});
+
 test("keeps server-component redirects out of page caches", async ({ request }) => {
 	const response = await request.get("/lib?search=cache-protocol-check", {
 		headers: {

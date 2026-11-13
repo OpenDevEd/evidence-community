@@ -5,6 +5,7 @@ import { useLocale, useTranslations } from "next-intl";
 import { notFound } from "next/navigation";
 import { Link, useRouter } from "@/i18n/routing";
 import PageContainer from "@/components/layout/PageContainer";
+import { PageBoundary } from "@/components/layout/PageBoundary";
 import { Accordion, AccordionItem } from "@nextui-org/react";
 import { useReducedMotion } from "framer-motion";
 import { ACCORDION_CONTENT_MOTION, QUESTION_ITEM } from "@/components/nextui/accordion-motion";
@@ -390,8 +391,8 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
   const locale = useLocale();
   return <PageContainer className="mx-auto overflow-clip">
       <TextLink href={base} back>{tLabels("allDigests")}</TextLink>
-      {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. */}
-      <Suspense fallback={<EditionLoading />}>
+      {/* One boundary for the edition and the digests after it: they appear together, so nothing below the text moves when it arrives. A crawler gets the edition in place. */}
+      <PageBoundary fallback={<EditionLoading />}>
         <EditionBody edition={edition} cards={cards} path={`${base}/${slug}`} settings={settings} />
         {/* Both cards stretch to the taller one, so they start and end on the same lines. */}
         <div className={twMerge(`mt-20 ${withRail}`, "items-stretch")}>
@@ -402,7 +403,7 @@ function DigestDetail({settings, slug, earlier, edition, cards, base}: EditionPr
           </div>
           {settings.enabled && <Subscription initial={newReader} schedule={settings.schedule} />}
         </div>
-      </Suspense>
+      </PageBoundary>
   </PageContainer>;
 }
 function EditionLoading() {
