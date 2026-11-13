@@ -32,8 +32,12 @@ export async function generateMetadata({params}: Props): Promise<Metadata> {
   if (!found) return {robots: {index: false, follow: false}};
   const title = `${found.edition.title}: ${found.name}`;
   const description = markdownExcerptText(found.edition.summary);
-  // A page's own preview replaces the community's whole, so it carries the community's share image again.
-  return {title, description, alternates: {canonical: found.address}, openGraph: {title, description, url: found.address, siteName: found.name, type: "article", images: found.images}};
+  // A page's own previews replace the community's whole, so each carries the community's share image again.
+  return {
+    title, description, alternates: {canonical: found.address},
+    openGraph: {title, description, url: found.address, siteName: found.name, type: "article", images: found.images},
+    twitter: {card: found.images ? "summary_large_image" : "summary", title, description, images: found.images},
+  };
 }
 
 export default async function Page({params, searchParams}: Props) {
