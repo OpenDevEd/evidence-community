@@ -124,6 +124,22 @@ describe("policy documents", () => {
 		);
 	});
 
+	it("lists consent and analytics cookies in the built-in cookie policy only where the community runs analytics", async () => {
+		const withAnalytics = libraryConfigSchema.parse({
+			...minimalLibraryConfig,
+			analytics: { posthog: { host: "https://analytics.example.org", key: "phc_1234567890123456" } },
+		});
+		const off = await loadPolicyDocument(withBakedText, "cookiePolicy");
+		const on = await loadPolicyDocument(withAnalytics, "cookiePolicy");
+
+		// Cookie names are the inventory a cookie policy owes its readers, not its wording.
+		for (const name of ["analytics_consent", "ph_*", "community_ga"]) {
+			expect(off?.content).not.toContain(name);
+			expect(on?.content).toContain(name);
+		}
+		expect(off?.content).toContain("NEXT_LOCALE");
+	});
+
 	it("has no terms page without owner-written terms", async () => {
 		await expect(
 			loadPolicyDocument(withBakedText, "terms"),

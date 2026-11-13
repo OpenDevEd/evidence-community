@@ -2,7 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getLocale } from "next-intl/server";
 import { redirect as redirectLocalized } from "@/i18n/routing";
-import { sharesConsentOnHost } from "@/lib/analytics-consent";
+import { analyticsCapabilities, sharesConsentOnHost } from "@/lib/analytics-consent";
 import { POLICY_DESTINATIONS, type PolicyDocumentKind } from "@/lib/legal-links";
 import { getRuntimeLinkHref, getRuntimePagePath } from "@/config/library-config/links";
 
@@ -48,11 +48,14 @@ function hasEnvValue(rawValue: string | undefined) {
 	return Boolean(rawValue?.trim());
 }
 
-function getPolicyConditionalTags(siteHost: string) {
+function getPolicyConditionalTags(siteHost: string, analytics: boolean) {
 	return new Set([
 		POLICY_VERCEL_ENV_KEYS.some((envKey) => hasEnvValue(process.env[envKey])) ? "Vercel" : "DigitalOcean",
-		// Whether the cookie choice is Openscholar's shared one (analytics-consent.ts).
-		sharesConsentOnHost(new URL(`https://${siteHost}`).hostname) ? "SharedConsent" : "OwnConsent",
+		// A community that runs analytics asks for consent, Openscholar's shared choice or its own (analytics-consent.ts).
+		// One that runs none asks nothing, so it has no consent to describe.
+		...(analytics
+			? ["Analytics", sharesConsentOnHost(new URL(`https://${siteHost}`).hostname) ? "SharedConsent" : "OwnConsent"]
+			: ["NoAnalytics"]),
 	]);
 }
 
@@ -126,8 +129,8 @@ function parsePolicyTemplate(content: string): PolicyTemplateNode[] {
 	return nodes;
 }
 
-function populatePolicyDocument(content: string, siteHost: string) {
-	const enabledTags = getPolicyConditionalTags(siteHost);
+function populatePolicyDocument(content: string, siteHost: string, analytics: boolean) {
+	const enabledTags = getPolicyConditionalTags(siteHost, analytics);
 
 	return parsePolicyTemplate(content)
 		.map((node) => {
@@ -198,6 +201,7 @@ function parsePolicyLastUpdated(content: string) {
 async function readPolicyDocument(
 	document: keyof typeof POLICY_DOCUMENT_PATHS,
 	siteHost: string,
+	analytics: boolean,
 ) {
 	'use cache'
 	cacheLife({ revalidate: 3600 })
@@ -205,6 +209,7 @@ async function readPolicyDocument(
 	return populatePolicyDocument(
 		await readFile(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document], "utf-8"),
 		siteHost,
+		analytics,
 	);
 }
 
@@ -223,7 +228,7 @@ async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATH
 	return statedLastUpdated ?? (await stat(/* turbopackIgnore: true */ path)).mtime;
 }
 
-type PolicyDocumentConfig = Pick<LibraryServerConfig, "identity" | "legal" | "updatedAt">;
+type PolicyDocumentConfig = Pick<LibraryServerConfig, "identity" | "legal" | "updatedAt" | "analytics">;
 
 function getPolicyRedirect(config: PolicyDocumentConfig, document: PolicyDocumentKind) {
 	const destination = POLICY_DESTINATIONS[document];
@@ -252,17 +257,18 @@ export async function loadPolicyDocument(
 ): Promise<{ content: string; lastUpdated: Date } | null> {
 	if (getPolicyRedirect(config, document)) return null;
 	const siteHost = new URL(config.identity.baseUrl).host;
+	const analytics = analyticsCapabilities(config.analytics).analytics;
 	const manifestText = config.legal[POLICY_MANIFEST_FIELDS[document]];
 	if (manifestText) {
 		return {
-			content: populatePolicyDocument(manifestText, siteHost),
+			content: populatePolicyDocument(manifestText, siteHost, analytics),
 			lastUpdated:
 				parsePolicyLastUpdated(manifestText) ?? new Date(config.updatedAt),
 		};
 	}
 	if (document === "terms") return null;
 	const [content, lastUpdated] = await Promise.all([
-		readPolicyDocument(document, siteHost),
+		readPolicyDocument(document, siteHost, analytics),
 		getPolicyLastModified(document),
 	]);
 	return { content, lastUpdated };
