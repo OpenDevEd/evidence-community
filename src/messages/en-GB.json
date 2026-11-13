@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Cookie Policy",
       "description": "Which cookies and local storage entries the site uses, which are essential, and which only activate after analytics consent is granted.",
+      "descriptionNoAnalytics": "Which cookies and local storage entries the site uses. This community runs no analytics, so all of them are essential.",
       "metaDescription": "Cookie notice covering cookies and similar browser storage used by the site."
     }
   },

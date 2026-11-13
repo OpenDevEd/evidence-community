@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Sera ya Vidakuzi",
       "description": "Vidakuzi na ingizo za hifadhi ya ndani ambazo tovuti inatumia, zipi ni muhimu, na zipi huwashwa tu baada ya ridhaa ya uchanganuzi.",
+      "descriptionNoAnalytics": "Vidakuzi na ingizo za hifadhi ya ndani ambazo tovuti inatumia. Jumuiya hii haitumii uchanganuzi wowote, kwa hivyo zote ni muhimu.",
       "metaDescription": "Notisi ya vidakuzi inayohusu vidakuzi na hifadhi nyingine ya kivinjari inayotumiwa na tovuti."
     }
   },

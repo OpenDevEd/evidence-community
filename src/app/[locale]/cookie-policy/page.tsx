@@ -4,6 +4,7 @@ import { getPolicyMetadata, loadPolicyPageDocument } from "@/lib/policy-document
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { analyticsCapabilities } from "@/lib/analytics-consent";
 import { connection } from "next/server";
 
 // Waits for the library settings instead of showing a loading state, so the click lands on the finished page.
@@ -31,7 +32,8 @@ export default async function CookiePolicyPage() {
 		<PolicyPage
 			content={document!.content}
 			title={tPolicy("cookie.title")}
-			description={tPolicy("cookie.description")}
+			// A community that runs no analytics has no storage that waits for consent.
+			description={tPolicy(analyticsCapabilities(config.analytics).analytics ? "cookie.description" : "cookie.descriptionNoAnalytics")}
 			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
 				href: getRuntimeLinkHref(config.legal.privacyPolicy, config.identity.baseUrl),

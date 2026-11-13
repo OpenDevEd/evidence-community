@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Cookie-Richtlinie",
       "description": "Welche Cookies und lokalen Speichereinträge die Website verwendet, welche unbedingt erforderlich sind und welche erst nach Einwilligung in Analysen aktiviert werden.",
+      "descriptionNoAnalytics": "Welche Cookies und lokalen Speichereinträge die Website verwendet. Diese Community nutzt keine Analysen, daher sind alle unbedingt erforderlich.",
       "metaDescription": "Cookie-Hinweis zu Cookies und ähnlichem Browserspeicher, den die Website nutzt."
     }
   },

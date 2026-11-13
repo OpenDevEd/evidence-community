@@ -1677,6 +1677,7 @@
     "cookie": {
       "title": "Cookie 政策",
       "description": "本网站使用的 Cookie 和本地存储条目，哪些是必需的，哪些仅在获得分析同意后启用。",
+      "descriptionNoAnalytics": "本网站使用的 Cookie 和本地存储条目。本社区不使用任何分析，因此它们都是必需的。",
       "metaDescription": "涵盖本网站所用 Cookie 及类似浏览器存储的 Cookie 声明。"
     }
   },
