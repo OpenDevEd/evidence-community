@@ -24,10 +24,13 @@ export default function ItemTitle({ item, loadingProp }: { item: Item | undefine
 	const loading = loadingProp ?? contextLoading;
 
 	const escapedTitle = decodeHTMLEntities(item?.title || "");
+	// The stand-in drawn before the record arrives is the same size but no heading: a crawler that runs no scripts reads
+	// the page as it is sent, placeholders first, and would take "-" for the page's title.
+	const Heading = item ? "h1" : "div";
 
 	return (
 		<Skeleton isLoaded={!loading} className="rounded-2xl w-full min-h-9">
-			<h1 className="text-3xl font-medium">{escapedTitle || "-"}</h1>
+			<Heading className="text-3xl font-medium" aria-hidden={item ? undefined : true}>{escapedTitle || "-"}</Heading>
 		</Skeleton>
 	);
 }
