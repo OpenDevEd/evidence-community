@@ -50,6 +50,7 @@ async function main() {
 	const { abortController, config } = configProcess;
 	// Tells search engines which records' pages changed. Never waited for: indexing goes on while a list is out.
 	const indexNow = createIndexNowNotifier(config);
+	const announce = indexNow ? (recordKeys: string[]) => indexNow.add(recordKeys) : undefined;
 	const instanceId = randomUUID();
 	await writeSearchIndexWorkerInstance(
 		resolveSearchIndexWorkerInstancePath(),
@@ -252,7 +253,7 @@ async function main() {
 				databaseResource.database,
 				current.writer,
 				config,
-				{ signal: abortController.signal, taskTimeoutMs: current.rebuildTaskTimeoutMs },
+				{ signal: abortController.signal, taskTimeoutMs: current.rebuildTaskTimeoutMs, onPagesChanged: announce },
 			);
 			console.log(JSON.stringify({ ...rebuilt, rebuild: "backlog" }));
 			return rebuilt.acknowledged;
@@ -311,7 +312,7 @@ async function main() {
 						}
 					},
 					// Each claim's records as soon as it is acknowledged, so a later claim's failure loses none of them.
-					onPagesChanged: indexNow ? (recordKeys) => indexNow.add(recordKeys) : undefined,
+					onPagesChanged: announce,
 					writer: current.writer,
 					signal: abortController.signal,
 					// A drain claim can wait behind other claims' embeddings.

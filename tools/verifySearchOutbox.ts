@@ -299,6 +299,7 @@ async function verify() {
 		assert(attachmentEvent, "The attachment outbox event was not created");
 
 		const observedProgress: SearchOutboxProgress[] = [];
+		const changedPages: string[] = [];
 		const initialBatch = await drainSearchOutbox({
  config: libraryConfig,
 			database,
@@ -309,9 +310,15 @@ async function verify() {
 			onProgress: async (progress) => {
 				observedProgress.push(progress);
 			},
+			onPagesChanged: (recordKeys) => changedPages.push(...recordKeys),
 			taskTimeoutMs: 10_000,
 			workerId: "search-e2e-initial",
 		});
+		// What a search engine is told: the record, once, and never its attachment, which has no page.
+		assert(
+			changedPages.length === 1 && changedPages[0] === parentKey,
+			`The claim named the wrong pages as changed: ${JSON.stringify(changedPages)}`,
+		);
 		assert(
 			initialBatch.length === 1 &&
 				initialBatch[0]?.eventIds.length === 2 &&
@@ -463,14 +470,21 @@ async function verify() {
 			operation: "upsert",
 			revision: 2,
 		});
+		const reparentedPages: string[] = [];
 		const reparentResult = await processNextSearchOutboxEvent({
  config: libraryConfig,
 			database,
 			heartbeatIntervalMs: 100,
 			writer: engine.writer(),
 			leaseDurationMs: 1_000,
+			onPagesChanged: (recordKeys) => reparentedPages.push(...recordKeys),
 			workerId: "search-e2e-reparent",
 		});
+		// The item that became a child lost its page. Its key is removed from the index, and now names no record.
+		assert(
+			reparentedPages.length === 1 && reparentedPages[0] === parentKey,
+			`The re-parent event named the wrong pages as changed: ${JSON.stringify(reparentedPages)}`,
+		);
 		assert(
 			reparentResult?.eventIds.length === 1 &&
 				reparentResult.deleteCount === 1 &&

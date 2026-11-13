@@ -66,7 +66,8 @@ export type SearchOutboxConsumerOptions = {
 	onProgress?: (progress: SearchOutboxProgress) => Promise<void>;
 	/**
 	 * Told which records' pages a claim changed, once the claim is acknowledged: the ones written and the ones removed.
-	 * A record that has just been hidden is among them, as its page is gone. Not waited for, and must not throw.
+	 * A record that has just been hidden is among them, as its page is gone; a child item never is, as it has no page.
+	 * Not waited for, and must not throw.
 	 */
 	onPagesChanged?: (recordKeys: string[]) => void;
 	retryBaseMs?: number;
@@ -527,7 +528,7 @@ async function indexClaimedEvents(
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
 		for (const document of plan.documents) pageKeys.push(document.key);
-		pageKeys.push(...plan.deleteKeys);
+		pageKeys.push(...(plan.removedRecordKeys ?? []));
 	}
 	await batch.finish();
 	return { deleteCount, documentCount, pageKeys };
@@ -901,7 +902,7 @@ export async function rebuildForOutboxBacklog(
 	database: Database,
 	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
-	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
+	options: { signal?: AbortSignal; taskTimeoutMs?: number } & Pick<SearchOutboxConsumerOptions, "onPagesChanged"> = {},
 ) {
 	const waiting = await database
 		.select({ id: outbox.id })
@@ -935,10 +936,19 @@ export async function rebuildForOutboxBacklog(
 					),
 				),
 			)
-			.returning({ id: outbox.id }));
+			.returning({ entityKey: outbox.entityKey, entityType: outbox.entityType }));
 		acknowledged += rows.length;
+		if (options.onPagesChanged) options.onPagesChanged(await recordKeysAmong(database, rows));
 	}
 	return { ...rebuilt, acknowledged };
+}
+
+/** The records among these events' items: a child item has no page of its own. */
+async function recordKeysAmong(database: Database, events: readonly { entityKey: string; entityType: string }[]) {
+	const keys = [...new Set(events.filter((event) => event.entityType === "item").map((event) => event.entityKey))];
+	if (keys.length === 0) return [];
+	const records = await database.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), isNull(item.parentItem)));
+	return records.map((record) => record.key);
 }
 
 /**

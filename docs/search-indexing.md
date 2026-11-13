@@ -45,8 +45,9 @@ A community with `generation.indexNow` on tells IndexNow (Bing and the search en
 pages each claim changed, as soon as the claim is acknowledged: the ones written and the ones removed. A record that
 has just been hidden is among them, as its page is gone. Openscholar turns it on for live
 communities only. The indexer never waits for it: one request is out at a time, at most 10,000 addresses, with five
-seconds between requests, and a list that fails is logged and dropped, because the sitemap still names every record. A
-whole-index rebuild sends nothing. The key is served at `/indexnow-key.txt` and is made from the community's own secret
+seconds between requests, and a list that fails is logged and dropped, because the sitemap still names every record.
+A rebuild for a large backlog announces the records its events named; any other rebuild announces nothing. At most
+100,000 addresses wait, so a change larger than that is left to the sitemap. The key is served at `/indexnow-key.txt` and is made from the community's own secret
 (`src/lib/indexnow.ts`).
 
 ## Delivery guarantees
