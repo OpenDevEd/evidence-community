@@ -66,6 +66,11 @@ export type ItemSearchDocument = Record<string, unknown> & {
 export type SearchProjectionPlan = {
 	deleteKeys: string[];
 	documents: ItemSearchDocument[];
+	/**
+	 * The removed keys that are records' own, for telling search engines whose pages are gone. A child's key is cleared
+	 * from the index too, but a child has no page. Only the projection sets it; a hand-made plan has none to tell.
+	 */
+	removedRecordKeys?: string[];
 };
 
 type CollectionRow = Pick<
@@ -274,7 +279,7 @@ export function metadataSearchValues(row: ItemRow) {
 	);
 }
 
-async function resolveTopLevelItemKeys(
+export async function resolveTopLevelItemKeys(
 	database: SearchProjectionDatabase,
 	events: readonly SearchProjectionEvent[],
 	collections: readonly CollectionRow[],
@@ -593,9 +598,12 @@ async function buildSearchProjectionPlanForKeys(
 		},
 	);
 	const documentKeys = new Set(documents.map((document) => document.key));
+	const deleteKeys = topLevelKeys.filter((key) => !documentKeys.has(key));
+	const recordKeys = new Set(itemRows.filter((row) => row.item.parentItem === null).map((row) => row.item.key));
 	return {
-		deleteKeys: topLevelKeys.filter((key) => !documentKeys.has(key)),
+		deleteKeys,
 		documents,
+		removedRecordKeys: deleteKeys.filter((key) => recordKeys.has(key)),
 	};
 }
 

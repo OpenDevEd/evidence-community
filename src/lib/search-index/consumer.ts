@@ -19,6 +19,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -26,6 +27,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	generateFullSearchProjectionPlans,
 	generateSearchProjectionPlans,
+	resolveTopLevelItemKeys,
+	type SearchProjectionEvent,
 	type SearchProjectionPlan,
 } from "./projection";
 import {
@@ -64,6 +67,12 @@ export type SearchOutboxConsumerOptions = {
 	maxAttempts?: number;
 	now?: () => Date;
 	onProgress?: (progress: SearchOutboxProgress) => Promise<void>;
+	/**
+	 * Told which records' pages a claim changed, once the claim is acknowledged: the ones written and the ones removed.
+	 * A record that has just been hidden is among them, as its page is gone; a child item never is, as it has no page.
+	 * Not waited for, and must not throw.
+	 */
+	onPagesChanged?: (recordKeys: string[]) => void;
 	retryBaseMs?: number;
 	retryMaxMs?: number;
 	signal?: AbortSignal;
@@ -494,6 +503,7 @@ async function indexClaimedEvents(
 	});
 	let deleteCount = 0;
 	let documentCount = 0;
+	const pageKeys: string[] = [];
 	for await (const plan of generateSearchProjectionPlans(
 		options.database,
 		options.config,
@@ -520,9 +530,11 @@ async function indexClaimedEvents(
 		await batch.add(plan);
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
+		for (const document of plan.documents) pageKeys.push(document.key);
+		pageKeys.push(...(plan.removedRecordKeys ?? []));
 	}
 	await batch.finish();
-	return { deleteCount, documentCount };
+	return { deleteCount, documentCount, pageKeys };
 }
 
 async function processClaimedEvents(
@@ -562,7 +574,7 @@ async function processClaimedEvents(
 			stage: "projecting",
 			taskUid: null,
 		});
-		const { deleteCount, documentCount } = await indexClaimedEvents(
+		const { deleteCount, documentCount, pageKeys } = await indexClaimedEvents(
 			options,
 			events,
 			validated,
@@ -571,6 +583,7 @@ async function processClaimedEvents(
 		if (heartbeatFailure) throw heartbeatFailure;
 		await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		await acknowledgeEvents(options, events, workerId);
+		options.onPagesChanged?.(pageKeys);
 		return {
 			deleteCount,
 			documentCount,
@@ -892,7 +905,7 @@ export async function rebuildForOutboxBacklog(
 	database: Database,
 	writer: SearchIndexWriter,
 	config: LibraryServerConfig,
-	options: { signal?: AbortSignal; taskTimeoutMs?: number } = {},
+	options: { signal?: AbortSignal; taskTimeoutMs?: number } & Pick<SearchOutboxConsumerOptions, "onPagesChanged"> = {},
 ) {
 	const waiting = await database
 		.select({ id: outbox.id })
@@ -926,10 +939,25 @@ export async function rebuildForOutboxBacklog(
 					),
 				),
 			)
-			.returning({ id: outbox.id }));
+			.returning({ entityKey: outbox.entityKey, entityType: outbox.entityType }));
 		acknowledged += rows.length;
+		if (options.onPagesChanged) options.onPagesChanged(await recordKeysAmong(database, rows));
 	}
 	return { ...rebuilt, acknowledged };
+}
+
+/**
+ * The records these events changed a page of, as the drain finds them: an item's own record, a child item's record,
+ * and every record in a changed collection or below it. A child item has no page of its own.
+ */
+async function recordKeysAmong(database: Database, events: readonly SearchProjectionEvent[]) {
+	const collections = events.some((event) => event.entityType === "collection") ? await database.select().from(collection) : [];
+	const records: string[] = [];
+	for (const keys of chunkValues(await resolveTopLevelItemKeys(database, events, collections), 1_000)) {
+		const rows = await database.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), isNull(item.parentItem)));
+		records.push(...rows.map((row) => row.key));
+	}
+	return records;
 }
 
 /**
