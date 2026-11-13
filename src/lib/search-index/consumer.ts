@@ -19,6 +19,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -26,6 +27,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	generateFullSearchProjectionPlans,
 	generateSearchProjectionPlans,
+	resolveTopLevelItemKeys,
+	type SearchProjectionEvent,
 	type SearchProjectionPlan,
 } from "./projection";
 import {
@@ -943,12 +946,18 @@ export async function rebuildForOutboxBacklog(
 	return { ...rebuilt, acknowledged };
 }
 
-/** The records among these events' items: a child item has no page of its own. */
-async function recordKeysAmong(database: Database, events: readonly { entityKey: string; entityType: string }[]) {
-	const keys = [...new Set(events.filter((event) => event.entityType === "item").map((event) => event.entityKey))];
-	if (keys.length === 0) return [];
-	const records = await database.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), isNull(item.parentItem)));
-	return records.map((record) => record.key);
+/**
+ * The records these events changed a page of, as the drain finds them: an item's own record, a child item's record,
+ * and every record in a changed collection or below it. A child item has no page of its own.
+ */
+async function recordKeysAmong(database: Database, events: readonly SearchProjectionEvent[]) {
+	const collections = events.some((event) => event.entityType === "collection") ? await database.select().from(collection) : [];
+	const records: string[] = [];
+	for (const keys of chunkValues(await resolveTopLevelItemKeys(database, events, collections), 1_000)) {
+		const rows = await database.select({ key: item.key }).from(item).where(and(inArray(item.key, keys), isNull(item.parentItem)));
+		records.push(...rows.map((row) => row.key));
+	}
+	return records;
 }
 
 /**

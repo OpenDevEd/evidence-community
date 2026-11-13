@@ -994,6 +994,11 @@ async function verify() {
 			sourceRecordKey: backlogKey,
 			title: "Written during the rebuild",
 		});
+		// A renamed collection waits too: its records' pages changed, and no event names them.
+		await database.insert(itemToCollection).values({ collectionKey: secondRootKey, itemKey: backlogKey });
+		await database.update(collection).set({ name: "Second root, renamed", revision: 2 }).where(eq(collection.key, secondRootKey));
+		await database.insert(outbox).values({ entityKey: secondRootKey, entityType: "collection", operation: "upsert", revision: 2 });
+		const backlogPages: string[] = [];
 		let lateEventId: number | undefined;
 		const writeDuringRebuild = engine.intercept(async () => {
 			if (lateEventId !== undefined) return;
@@ -1007,9 +1012,13 @@ async function verify() {
 			database,
 			writeDuringRebuild.writer,
 			libraryConfig,
-			{ taskTimeoutMs: 60_000 },
+			{ onPagesChanged: (recordKeys) => backlogPages.push(...recordKeys), taskTimeoutMs: 60_000 },
 		);
 		assert(lateEventId !== undefined, "No event was written during the backlog rebuild");
+		assert(
+			[...new Set(backlogPages)].sort().join(",") === [backlogKey, parentKey].sort().join(","),
+			`The backlog rebuild announced ${backlogPages.join(",")}, not the waiting record and the renamed collection's record`,
+		);
 		const [waitingAfter] = await database.select().from(outbox).where(eq(outbox.id, waitingEvent.id));
 		const [lateAfter] = await database.select().from(outbox).where(eq(outbox.id, lateEventId));
 		assert(

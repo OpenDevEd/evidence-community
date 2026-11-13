@@ -279,7 +279,7 @@ export function metadataSearchValues(row: ItemRow) {
 	);
 }
 
-async function resolveTopLevelItemKeys(
+export async function resolveTopLevelItemKeys(
 	database: SearchProjectionDatabase,
 	events: readonly SearchProjectionEvent[],
 	collections: readonly CollectionRow[],
