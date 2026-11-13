@@ -30,7 +30,7 @@ export default function GenericHeader({
 	return (
 		<ModalHeader
 			className={twMerge(
-				"flex items-center justify-between gap-3",
+				"@container/modal-header flex items-center justify-between gap-3",
 				classNames?.base,
 			)}
 		>
@@ -41,7 +41,7 @@ export default function GenericHeader({
 					classNames?.title,
 				)}
 			>
-				<span className={twMerge("truncate", classNames?.titleSpan)}>
+				<span className={twMerge("modal-header-title truncate", classNames?.titleSpan)}>
 					{children}
 				</span>
 			</SectionTitle>

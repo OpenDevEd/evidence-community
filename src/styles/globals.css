@@ -167,4 +167,17 @@ h6 {
 			flex-basis: 100%;
 		}
 	}
+
+	/* A dialog's title takes two lines where its header holds less than 16rem of text, a long word breaking with a hyphen
+	   where the browser can (GenericHeader). At normal text a phone's header is wider than that. */
+	@container modal-header (width < 16rem) {
+		.modal-header-title {
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 2;
+			white-space: normal;
+			overflow-wrap: anywhere;
+			hyphens: auto;
+		}
+	}
 }
