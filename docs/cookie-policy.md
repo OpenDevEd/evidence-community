@@ -2,11 +2,11 @@
 
 ## **How {{SITE_HOST}} uses cookies**
 
-{{SITE_HOST}} uses browser storage for essential site features. Optional analytics storage is used only after you choose to allow product analytics.
+{{SITE_HOST}} uses browser storage for essential site features. {{Analytics::}}Optional analytics storage is used only after you choose to allow product analytics.{{::}}{{NoAnalytics::}}This community runs no analytics, so it sets only the strictly necessary storage below.{{::}}
 
 ## **Strictly necessary storage**
 
-This storage is needed for the site to work or remember a choice you asked it to remember. It cannot be disabled through our analytics settings.
+This storage is needed for the site to work or remember a choice you asked it to remember. {{Analytics::}}It cannot be disabled through our analytics settings.{{::}}
 
 | **Name**                | **Owner**               | **Purpose**                                                                                                                          | **Expires**                        |
 | ----------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
@@ -16,7 +16,7 @@ This storage is needed for the site to work or remember a choice you asked it to
 | `evidence-library.*` sign-in cookies | {{SITE_HOST}} | Keep you signed in with your Openscholar account and tie the return from Openscholar to the sign-in you started. Set only after you sign in. | Up to 30 days, extended while in use |
 | `__cf_bm`, `_cfuvid`    | Cloudflare              | Support bot protection, abuse prevention, and rate limiting when Cloudflare is used.                                                 | Cloudflare-managed and short-lived |
 
-## **Product analytics storage (optional)**
+{{Analytics::}}## **Product analytics storage (optional)**
 
 The PostHog and Google Analytics browser tools do not load until you allow product analytics. If you decline or later turn product analytics off, the site stops these tools and clears their browser storage.
 
@@ -31,20 +31,20 @@ We remove or mask free-text searches, form values, passwords, document text, AI 
 
 ## **Session replay and diagnostics (optional)**
 
-{{OwnConsent::}}Session replay is a separate choice. It can only be enabled when product analytics is enabled.
+{{::}}{{OwnConsent::}}Session replay is a separate choice. It can only be enabled when product analytics is enabled.
 {{::}}{{SharedConsent::}}Allowing product analytics also allows session replay.
-{{::}}
+{{::}}{{Analytics::}}
 When enabled, PostHog can record a visual reconstruction of a session so we can reproduce interface problems. Page text, input values, element identifiers, links, and image sources are masked. Only styling and visual-state attributes are retained to reconstruct the layout; URLs in CSS are removed. Request and response bodies, request headers, console logs, canvas content, JSON-LD, and cross-origin frames are not recorded.
 
-{{OwnConsent::}}Turning session replay off stops new replay recording without turning off ordinary product analytics.
-{{::}}
+{{::}}{{OwnConsent::}}Turning session replay off stops new replay recording without turning off ordinary product analytics.
+{{::}}{{Analytics::}}
 ## **When product analytics is declined**
 
 The browser does not load PostHog or Google Analytics and does not create a browser analytics profile. The site may send a small set of same-site aggregate events to its own server. These events contain only fixed categories and counts, such as a page path without its query string, result totals, or the type of file action. They do not include browser identifiers, free-text searches, document content, AI conversations, or user-provided text.
 
 The server groups these aggregate events by community and day before sending them to PostHog. It does not pass the visitor's IP address or create a person profile for them.
 
-## **Managing your choices**
+{{::}}## **Managing your choices**
 
 {{OwnConsent::}}Use **Cookie settings** in the footer to change your choices at any time. **Accept All & Continue** enables product analytics and session replay. **Save preferences** saves the two switches exactly as shown. **Decline** disables both.
 
@@ -61,4 +61,4 @@ Most browsers also let you inspect or delete stored site data in their privacy s
 
 For questions about our use of cookies and similar storage, email habari@openscholar.ai.
 
-**Last updated**: November 12, 2026
+**Last updated**: November 13, 2026
