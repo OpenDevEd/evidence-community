@@ -55,6 +55,7 @@ import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import {
 	createContext,
+	Fragment,
 	use,
 	useCallback,
 	useEffect,
@@ -536,8 +537,8 @@ function ItemFundingPartners() {
 
 	return (
 		<SidebarCard title={t("fundingPartner")} count={funders.length}>
-			{funders.map((funder) => (
-				<LinkWithParams key={funder.id} href={funder.href} isExternal className="opacity-100">
+			{funders.map((funder) => {
+				const row = (
 					<ItemRow
 						icon={
 							<InstitutionLogo
@@ -549,8 +550,16 @@ function ItemFundingPartners() {
 						}
 						title={funder.name}
 					/>
-				</LinkWithParams>
-			))}
+				);
+				// A funder with no site is a name, not a link that goes nowhere.
+				return funder.href ? (
+					<LinkWithParams key={funder.id} href={funder.href} isExternal className="opacity-100">
+						{row}
+					</LinkWithParams>
+				) : (
+					<Fragment key={funder.id}>{row}</Fragment>
+				);
+			})}
 		</SidebarCard>
 	);
 }
