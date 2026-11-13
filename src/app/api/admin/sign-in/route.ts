@@ -3,6 +3,7 @@ import { connection, NextRequest, NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getReaderAuthForConfig } from "@/lib/readers/instance";
 import { OPENSCHOLAR_PROVIDER_ID } from "@/lib/readers/openscholar";
+import { ASK_AGAIN_COOKIE } from "@/lib/readers/session-follow";
 import { getValidatedAdminReturnPath } from "@/lib/runtime-routing";
 
 /**
@@ -35,7 +36,10 @@ export async function GET(request: NextRequest) {
 	}
 	const { url } = (await response.json()) as { url?: string };
 	if (!url) throw new Error("Openscholar sign-in returned no authorization address");
-	const redirect = NextResponse.redirect(url, 307);
+	const signIn = new URL(url);
+	// Signed out here since: Clerk asks who is signing in instead of taking the account it still holds, as the Sign in button does.
+	if (request.cookies.has(ASK_AGAIN_COOKIE)) signIn.searchParams.set("prompt", "login");
+	const redirect = NextResponse.redirect(signIn, 307);
 	for (const setCookie of response.headers.getSetCookie()) redirect.headers.append("set-cookie", setCookie);
 	redirect.headers.set("Cache-Control", "no-store");
 	return redirect;
