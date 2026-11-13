@@ -24,6 +24,7 @@ import {
 	SearchOutboxAbortError,
 } from "../src/lib/search-index/consumer";
 import { embedderFingerprint } from "../src/lib/embedder";
+import { createIndexNowNotifier } from "../src/lib/indexnow";
 import { indexHoldsTheRecords, openSearchWriter } from "../src/lib/search-index/engine-setup";
 import { readersEngineOnFailure, settleSearchEngine, switchRetryAt, type SettledEngine } from "../src/lib/search-index/engine-switch";
 import {
@@ -47,6 +48,8 @@ async function main() {
 	);
 	const configProcess = await openLibraryConfigProcess();
 	const { abortController, config } = configProcess;
+	// Tells search engines which records' pages changed. Never waited for: indexing goes on while a list is out.
+	const indexNow = createIndexNowNotifier(config);
 	const instanceId = randomUUID();
 	await writeSearchIndexWorkerInstance(
 		resolveSearchIndexWorkerInstancePath(),
@@ -313,6 +316,7 @@ async function main() {
 					taskTimeoutMs: current.rebuildTaskTimeoutMs,
 					workerId: instanceId,
 				});
+				indexNow?.add(results.flatMap((result) => result.pageKeys));
 				// Records written while the embedder failed get their vectors once it answers again. A failure here
 				// leaves the drain's result standing; the next pass tries again.
 				const embedded = await current.embedMissing(abortController.signal).catch((error: unknown) => {

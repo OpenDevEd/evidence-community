@@ -1897,27 +1897,35 @@ function refuseWhatNeedsRecordsInTheDatabase(
 		collections: readonly unknown[];
 		features: Record<(typeof FEATURES_NEEDING_THE_DATABASE)[number], boolean>;
 		notifications: { enabled: boolean };
-		generation: { sitemap: boolean };
+		generation: { sitemap: boolean; indexNow: boolean };
 	} & Parameters<typeof linksToStatistics>[0],
 	context: z.RefinementCtx,
 ) {
 	if (config.services.search.indexOnly !== true) return;
 	const refuse = (path: (string | number)[]) =>
 		addRequiredIssue(context, path, "An index-only library's database holds no records, so this must be off");
-	if (config.sources.length > 0) refuse(["sources"]);
-	if (config.collections.length > 0) refuse(["collections"]);
-	for (const feature of FEATURES_NEEDING_THE_DATABASE) {
-		if (config.features[feature]) refuse(["features", feature]);
-	}
-	if (config.notifications.enabled) refuse(["notifications", "enabled"]);
-	if (config.generation.sitemap) refuse(["generation", "sitemap"]);
-	if (linksToStatistics(config)) refuse(["navigation", "links"]);
+	// Each setting that reads records from the database, and whether it is on.
+	const settings: [path: (string | number)[], on: boolean][] = [
+		[["sources"], config.sources.length > 0],
+		[["collections"], config.collections.length > 0],
+		...FEATURES_NEEDING_THE_DATABASE.map((feature): [(string | number)[], boolean] => [["features", feature], config.features[feature]]),
+		[["notifications", "enabled"], config.notifications.enabled],
+		[["generation", "sitemap"], config.generation.sitemap],
+		[["generation", "indexNow"], config.generation.indexNow],
+		[["navigation", "links"], linksToStatistics(config)],
+	];
+	for (const [path, on] of settings) if (on) refuse(path);
 }
 
 const generationSchema = z
 	.object({
 		sitemap: z.boolean().default(true),
 		redirects: z.boolean().default(true),
+		/**
+		 * Tell Bing and the other IndexNow search engines when a record is published, changed or taken down. Openscholar
+		 * turns it on for communities that are live: a test community would announce itself to search engines.
+		 */
+		indexNow: z.boolean().default(false),
 	})
 	.strict()
 	.prefault({});

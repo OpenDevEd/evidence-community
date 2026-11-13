@@ -22,6 +22,7 @@ import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
 import { chunkValues } from "@/lib/chunk-values";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { hasAnyTag } from "@/lib/tags";
 
 import {
 	generateFullSearchProjectionPlans,
@@ -83,6 +84,8 @@ export type SearchOutboxProcessResult = {
 	deleteCount: number;
 	documentCount: number;
 	eventIds: number[];
+	/** The records whose public pages this batch changed: written ones readers may see, and removed ones. */
+	pageKeys: string[];
 	status: "processed";
 };
 
@@ -494,6 +497,8 @@ async function indexClaimedEvents(
 	});
 	let deleteCount = 0;
 	let documentCount = 0;
+	const pageKeys: string[] = [];
+	const hiddenTags = options.config.content.tags.hidden;
 	for await (const plan of generateSearchProjectionPlans(
 		options.database,
 		options.config,
@@ -520,9 +525,11 @@ async function indexClaimedEvents(
 		await batch.add(plan);
 		deleteCount += plan.deleteKeys.length;
 		documentCount += plan.documents.length;
+		for (const document of plan.documents) if (!hasAnyTag(document.tags, hiddenTags)) pageKeys.push(document.key);
+		pageKeys.push(...plan.deleteKeys);
 	}
 	await batch.finish();
-	return { deleteCount, documentCount };
+	return { deleteCount, documentCount, pageKeys };
 }
 
 async function processClaimedEvents(
@@ -562,7 +569,7 @@ async function processClaimedEvents(
 			stage: "projecting",
 			taskUid: null,
 		});
-		const { deleteCount, documentCount } = await indexClaimedEvents(
+		const { deleteCount, documentCount, pageKeys } = await indexClaimedEvents(
 			options,
 			events,
 			validated,
@@ -575,6 +582,7 @@ async function processClaimedEvents(
 			deleteCount,
 			documentCount,
 			eventIds: events.map(({ id }) => id),
+			pageKeys,
 			status: "processed",
 		};
 	} catch (error) {

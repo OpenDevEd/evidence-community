@@ -117,9 +117,10 @@ describe("index-only records", () => {
 			config.features.downloads = true;
 			config.features.atomFeed = true;
 			config.generation.sitemap = true;
+			Object.assign(config.generation, { indexNow: true });
 			Object.assign(config, { navigation: { links: [{ id: "numbers", label: "Numbers", href: "/statistics", icon: "LibraryIcon" }] } });
 
-			expect(refusedPaths(config)).toEqual(expect.arrayContaining(["features.downloads", "features.atomFeed", "generation.sitemap", "navigation.links"]));
+			expect(refusedPaths(config)).toEqual(expect.arrayContaining(["features.downloads", "features.atomFeed", "generation.sitemap", "generation.indexNow", "navigation.links"]));
 		});
 
 		it("leaves Ask AI on, which reads its records from the index", () => {

@@ -75,6 +75,8 @@ import {
 } from "@/app/api/redirects/[...path]/route";
 import { schema } from "@/db/database-schema";
 import robots from "@/app/robots";
+import { GET as getIndexNowKey } from "@/app/indexnow-key.txt/route";
+import { indexNowKey } from "@/lib/indexnow";
 import sitemap, { generateSitemaps } from "@/app/sitemap";
 import { GET as getSitemapIndex } from "@/app/sitemap-index.xml/route";
 import { libraryConfigSchema } from "@/config/library-config/schema";
@@ -142,6 +144,22 @@ describe("robots.txt", () => {
 		]) expect(mayRead(everyone, closed), closed).toBe(false);
 		// The shield refuses training crawlers, so robots.txt tells them not to ask.
 		expect(rules.find((rule) => [rule.userAgent].flat().includes("GoogleOther"))?.disallow).toBe("/");
+	});
+});
+
+describe("the IndexNow key file", () => {
+	it("is the community's key while IndexNow is on, and not found while it is off", async () => {
+		const on = config();
+		on.generation.indexNow = true;
+		mocks.getLibraryConfig.mockResolvedValue(on);
+		const served = await getIndexNowKey();
+		expect(served.status).toBe(200);
+		expect(served.headers.get("content-type")).toContain("text/plain");
+		expect(await served.text()).toBe(indexNowKey(on));
+
+		// Off is the default: a test community must not answer for a key.
+		mocks.getLibraryConfig.mockResolvedValue(config());
+		expect((await getIndexNowKey()).status).toBe(404);
 	});
 });
 
