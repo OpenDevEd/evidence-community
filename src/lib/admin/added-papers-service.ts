@@ -59,7 +59,7 @@ export type AddPapersInput = {
 	/** Publish at once, which an owner or editor may; otherwise each paper waits in the review queue. */
 	publish: boolean;
 	/** A `reader` is anyone signed in outside the team: like a Creator, they only send papers to the review queue. */
-	actor: { userId: string; name: string | null; role: "owner" | "editor" | "creator" | "reader" };
+	actor: { userId: string; name: string | null; email?: string | null; role: "owner" | "editor" | "creator" | "reader" };
 	papers: PaperReference[];
 };
 
@@ -255,6 +255,7 @@ async function createRecord(transaction: DatabaseTransaction, paper: Found, inpu
 		state: "pending",
 		addedBy: input.actor.userId,
 		addedByName: input.actor.name,
+		addedByEmail: input.actor.email ?? null,
 		requestId: input.requestId,
 		suggested: input.actor.role === "reader",
 	});

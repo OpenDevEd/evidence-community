@@ -96,6 +96,8 @@ const submitted: AdminReviewSnapshot = {
 	submittedAt: "2026-09-09T09:00:00Z",
 	submittedBy: "creator",
 	submittedByName: null,
+	submittedByImage: null,
+	submittedByEmail: null,
 	suggested: false,
 	remainingConflicts: {},
 	note: null,

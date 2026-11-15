@@ -35,6 +35,10 @@ export function createReaderAuth(
 				verification: readerVerification,
 			},
 		}),
+		// The real address Openscholar sends at sign-in. Better Auth saves a profile field only when it is input, so the
+		// endpoint that would let a reader write their own is off: name, photo and email come from Openscholar alone.
+		user: { additionalFields: { contactEmail: { type: "string", required: false, input: true } } },
+		disabledPaths: ["/update-user"],
 		session: {
 			expiresIn: 30 * DAY_SECONDS,
 			updateAge: DAY_SECONDS,

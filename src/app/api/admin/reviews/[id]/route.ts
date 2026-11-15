@@ -122,7 +122,7 @@ export async function GET(
 	request: NextRequest,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
-	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async () => {
+	return handleAdminJson(request, ADMIN_CONTENT_PERMISSION, async (session) => {
 		const [{ id }, runtime] = await Promise.all([
 			params,
 			getNativeFileRuntime(),
@@ -131,6 +131,7 @@ export async function GET(
 			snapshot: await getAdminReviewSnapshot(
 				runtime.db,
 				z.string().uuid().parse(id),
+				{ senderEmail: adminRoleHasPermission(session.role, ADMIN_PUBLISH_PERMISSION) },
 			),
 		};
 	});

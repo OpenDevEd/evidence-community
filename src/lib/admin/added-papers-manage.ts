@@ -27,6 +27,8 @@ export const actorSchema = z
 	.object({
 		clerkUserId: z.string().min(1).max(128),
 		name: z.string().max(255).nullable(),
+		// Their address, which the review shows the Editors and Owners deciding it. Optional, as older Openscholar sends none.
+		email: z.string().email().max(320).nullable().optional(),
 		// `reader`: anyone signed in outside the team, who suggests papers like a Creator (#777).
 		role: z.enum(["owner", "editor", "creator", "reader"]),
 	})

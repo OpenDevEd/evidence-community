@@ -68,7 +68,7 @@ async function add(json: unknown, config: LibraryServerConfig) {
 	const { actor, ...input } = body.data;
 	const { db, storage } = await getNativeFileRuntime();
 	try {
-		return { body: await addPapers(db, storage, config, { ...input, actor: { userId: actor.clerkUserId, name: actor.name, role: actor.role } }) };
+		return { body: await addPapers(db, storage, config, { ...input, actor: { userId: actor.clerkUserId, name: actor.name, email: actor.email, role: actor.role } }) };
 	} catch (error) {
 		if (error instanceof AdminValidationError) return refusals.invalid(error.message);
 		throw error;

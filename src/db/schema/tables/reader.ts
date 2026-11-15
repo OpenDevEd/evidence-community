@@ -33,6 +33,8 @@ export const readerUser = pgTable("reader_user", {
 	email: text("email").notNull(),
 	emailVerified: boolean("emailVerified").notNull().default(false),
 	image: text("image"),
+	/** Their real address from Openscholar, shown only to the Editors and Owners deciding a review they sent. */
+	contactEmail: text("contactEmail"),
 	/** When the background check last confirmed the OpenScholar account. */
 	checkedAt: timestamp("checkedAt", { mode: "date" }).notNull().defaultNow(),
 	...timestamps(),

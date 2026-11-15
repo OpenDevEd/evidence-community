@@ -13,7 +13,12 @@ import {
 	Tick01Icon,
 	Comment01Icon,
 	ArrowRight01Icon,
+	UserAdd01Icon,
+	Copy01Icon,
 } from "@hugeicons/core-free-icons";
+import { toast } from "sonner";
+import { ReaderAvatar } from "@/components/layout/navbar/UserMenu";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -180,10 +185,66 @@ function formatReviewTime(value: string) {
 	});
 }
 
-/** Who sent an added paper, as the review's time says it; one suggested from outside the team says so. */
-function senderOf(snapshot: AdminReviewSnapshot | undefined) {
-	if (!snapshot?.submittedByName) return "";
-	return ` by ${snapshot.submittedByName}${snapshot.suggested ? ", outside the team" : ""}`;
+/** Copies the sender's email, as the item key's button copies the key. */
+function CopyEmail({ email }: { email: string }) {
+	return (
+		<Tooltip content="Copy email">
+			<Button
+				aria-label={`Copy email ${email}`}
+				variant="transparent"
+				size="xs"
+				isIconOnly
+				className="-my-1 size-6 min-w-0 shrink-0 rounded-md text-current opacity-50 hover:opacity-90"
+				onPress={() => {
+					void navigator.clipboard
+						.writeText(email)
+						.then(() => toast.success("Email copied"))
+						.catch(() => toast.error("Could not copy email"));
+				}}
+			>
+				<HugeiconsIcon icon={Copy01Icon} size={12} aria-hidden />
+			</Button>
+		</Tooltip>
+	);
+}
+
+/** Who sent the version, with their photo, their email for an Editor or Owner, whether they're outside the team, and when. */
+function ReviewSender({ snapshot, editedAt }: { snapshot: AdminReviewSnapshot; editedAt: string | null }) {
+	const email = snapshot.submittedByEmail;
+	// An Openscholar account may have no name: the avatar then shows a person, and the row says Reader as the library does.
+	const name = snapshot.submittedByName ?? "";
+	return (
+		<div className="mt-3 flex min-w-0 items-start gap-3 rounded-xl bg-white/70 p-2.5 dark:bg-black/20">
+			<ReaderAvatar reader={{ id: snapshot.submittedBy, name, image: snapshot.submittedByImage }} size="md" className="self-start" />
+			<div className="min-w-0 flex-1">
+				<TruncatedText text={name || "Reader"} className="block text-sm font-semibold leading-5" />
+				{email && (
+					<div className="flex min-w-0 items-center gap-0.5">
+						<TruncatedText text={email} className="block min-w-0 text-xs leading-4 opacity-70" />
+						<CopyEmail email={email} />
+					</div>
+				)}
+				<div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] leading-4">
+					{snapshot.suggested && (
+						<span className="inline-flex h-5 items-center gap-1 rounded-full bg-sky-200/70 px-2 font-medium text-sky-900 dark:bg-sky-400/20 dark:text-sky-100">
+							<HugeiconsIcon icon={UserAdd01Icon} size={12} aria-hidden />
+							Outside the team
+						</span>
+					)}
+					<span className="inline-flex items-center gap-1 opacity-70">
+						<HugeiconsIcon icon={Clock01Icon} size={12} aria-hidden />
+						<time dateTime={snapshot.submittedAt}>Sent {formatReviewTime(snapshot.submittedAt)}</time>
+					</span>
+					{editedAt && (
+						<span className="inline-flex items-center gap-1 opacity-70">
+							<HugeiconsIcon icon={FileEditIcon} size={12} aria-hidden />
+							<time dateTime={editedAt}>Draft edited {formatReviewTime(editedAt)}</time>
+						</span>
+					)}
+				</div>
+			</div>
+		</div>
+	);
 }
 
 function ReviewVersionTime({
@@ -194,12 +255,10 @@ function ReviewVersionTime({
 	updatedAt: string;
 }) {
 	const displayedAt = snapshot?.submittedAt ?? updatedAt;
-	const by = senderOf(snapshot);
 	const label = snapshot
-		? `Submitted ${formatReviewTime(snapshot.submittedAt)}${by}`
+		? `Submitted ${formatReviewTime(snapshot.submittedAt)}`
 		: `Edited ${formatReviewTime(updatedAt)}`;
-	// It also shows a sender's name the bar cuts short.
-	const explains = Boolean(snapshot) && (snapshot?.submittedAt !== updatedAt || Boolean(by));
+	const explains = Boolean(snapshot) && snapshot?.submittedAt !== updatedAt;
 
 	return (
 		<Tooltip
@@ -208,7 +267,7 @@ function ReviewVersionTime({
 				<div className="text-xs leading-5">
 					<p>Last edited {formatReviewTime(updatedAt)}</p>
 					{snapshot && (
-						<p>Submitted {formatReviewTime(snapshot.submittedAt)}{by}</p>
+						<p>Submitted {formatReviewTime(snapshot.submittedAt)}</p>
 					)}
 				</div>
 			}
@@ -266,6 +325,15 @@ export function ReviewStatusLabel({
 	);
 }
 
+/** Whether the library knows anything of the sender to show: a name, a photo or, for an Editor or Owner, an email. */
+const knowsSender = (snapshot: AdminReviewSnapshot) => Boolean(snapshot.submittedByName || snapshot.submittedByImage || snapshot.submittedByEmail);
+
+/** When the working draft was saved after the version waiting for review was sent; sending saves the draft first. */
+function draftEditedAt(detail: AdminItemDetail, snapshot: AdminReviewSnapshot, viewingSubmitted: boolean) {
+	if (viewingSubmitted || snapshot.reviewState !== "pending" || !detail.draft) return null;
+	return Date.parse(detail.draft.updatedAt) > Date.parse(snapshot.submittedAt) ? detail.draft.updatedAt : null;
+}
+
 export function ReviewVersionNotice({
 	detail,
 	snapshot,
@@ -298,10 +366,17 @@ export function ReviewVersionNotice({
 				/>
 				{title}
 			</h3>
-			<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-				<p className="text-xs font-medium opacity-80">{stateLabel}</p>
-				<ReviewVersionTime snapshot={snapshot} updatedAt={updatedAt} />
-			</div>
+			{snapshot && knowsSender(snapshot) ? (
+				<>
+					<p className="mt-0.5 text-xs font-medium opacity-80">{stateLabel}</p>
+					<ReviewSender snapshot={snapshot} editedAt={draftEditedAt(detail, snapshot, viewingSubmitted)} />
+				</>
+			) : (
+				<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+					<p className="text-xs font-medium opacity-80">{stateLabel}</p>
+					<ReviewVersionTime snapshot={snapshot} updatedAt={updatedAt} />
+				</div>
+			)}
 		</header>
 	);
 }

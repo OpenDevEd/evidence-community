@@ -750,6 +750,13 @@
       "when": 1793400000000,
       "tag": "0106_admin-live-updates",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1793500000000,
+      "tag": "0107_sender-contact-email",
+      "breakpoints": true
     }
   ]
 }
