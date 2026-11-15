@@ -394,10 +394,13 @@ function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLitera
 	return !!call && scan.loadingKeys.has(node.text.split(".").at(-1) ?? "") && shown(scan, call);
 }
 
+/** Whether a class list makes a grid that scrolls, with no columns of its own. */
+const scrollsWithoutColumns = (classes: string) => GRID_CLASS.test(classes) && SCROLL_CLASS.test(classes) && !COLUMNS_CLASS.test(classes);
+
 function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode) {
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
-	if (GRID_CLASS.test(node.text) && SCROLL_CLASS.test(node.text) && !COLUMNS_CLASS.test(node.text) && classContext(node, scan.source)) report(scan, node, "grid-scroll");
+	if (scrollsWithoutColumns(node.text) && classContext(node, scan.source)) report(scan, node, "grid-scroll");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
 	if (showsLoading(scan, node) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }
