@@ -287,7 +287,7 @@ export function ReviewVersionNotice({
 	return (
 		<header
 			data-admin-review-state={dataState}
-			className={`-mx-4 -mt-4 mb-3 px-4 py-3 ${state.headerClassName}`}
+			className={`shrink-0 px-4 py-3 ${state.headerClassName}`}
 		>
 			<h3 className="flex items-center gap-2 text-base font-semibold leading-6 tracking-tight">
 				<HugeiconsIcon
@@ -342,26 +342,25 @@ export function ReviewWithdrawButton({
 	return compact ? <Tooltip content="Withdraw"><span>{button}</span></Tooltip> : button;
 }
 
+/** What a working draft's review says beyond its band: conflicts to resolve, and the editor's note when it came back. */
 export function ReviewDraftNotice({
-	notice,
 	conflictCount,
 	onConflicts,
 	feedback,
 }: {
-	notice: ReactNode;
 	conflictCount: number;
 	onConflicts: () => void;
 	feedback: string | null | undefined;
 }) {
 	const words = useReturnWords();
+	if (conflictCount === 0 && !feedback) return null;
 	return (
-		<>
-			{notice}
+		<div className="grid gap-3">
 			{conflictCount > 0 && (
 				<Button
 					size="xs"
 					variant="transparent"
-					className="mt-3 h-8 w-full justify-between rounded-lg bg-amber-500/[0.07] px-3 text-amber-800 dark:text-amber-300"
+					className="h-8 w-full justify-between rounded-lg bg-amber-500/[0.07] px-3 text-amber-800 dark:text-amber-300"
 					onPress={onConflicts}
 				>
 					<span>{conflictCount} conflicts</span>
@@ -369,7 +368,7 @@ export function ReviewDraftNotice({
 				</Button>
 			)}
 			{feedback && (
-				<div className="mt-3 rounded-xl bg-amber-500/[0.07] p-3">
+				<div className="rounded-xl bg-amber-500/[0.07] p-3">
 					<p className="flex items-center gap-2 text-xs font-medium text-amber-800 dark:text-amber-300">
 						<HugeiconsIcon icon={Comment01Icon} size={14} />
 						{words.state}
@@ -379,6 +378,6 @@ export function ReviewDraftNotice({
 					</p>
 				</div>
 			)}
-		</>
+		</div>
 	);
 }

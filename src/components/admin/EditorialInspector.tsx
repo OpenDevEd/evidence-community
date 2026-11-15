@@ -169,7 +169,6 @@ function WorkingDraftInspector({
 	);
 	const draftNotice = (
 		<ReviewDraftNotice
-			notice={notice}
 			conflictCount={props.concurrentConflict ? 0 : fields.length}
 			feedback={returnedReviewNote(snapshot)}
 			onConflicts={conflicts.focus}
@@ -186,6 +185,7 @@ function WorkingDraftInspector({
 			publishing={model.publishing}
 			error={error instanceof Error ? error.message : props.error}
 			versionControls={controls}
+			versionBand={notice}
 			versionNotice={draftNotice}
 			editorNotice={
 				<WorkingDraftNotices
@@ -297,7 +297,7 @@ function SubmittedInspector({
 				/>
 			}
 			versionControls={controls}
-			versionNotice={notice}
+			versionBand={notice}
 			linkTargets={[
 				...(props.linkTargets ?? []),
 				...frozenDetail.links.targets,

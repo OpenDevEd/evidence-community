@@ -1519,6 +1519,7 @@ export function AdminInspector({
 	readOnlyVersion = false,
 	allowReviewCorrections = false,
 	versionControls,
+	versionBand,
 	versionNotice,
 	liveDetail,
 	editorNotice,
@@ -1576,6 +1577,9 @@ export function AdminInspector({
 	readOnlyVersion?: boolean;
 	allowReviewCorrections?: boolean;
 	versionControls?: ReactNode;
+	/** The review's coloured band, pinned above the status menu's scrolling body. */
+	versionBand?: ReactNode;
+	/** What the review says beyond its band (conflicts, an editor's note), which scrolls with the body. */
 	versionNotice?: ReactNode;
 	liveDetail?: AdminItemDetail;
 	editorNotice?: ReactNode;
@@ -1970,6 +1974,7 @@ export function AdminInspector({
 				}
 				menu={
 					<AdminRecordStatusMenu
+						header={versionBand ? <section aria-label="Review status">{versionBand}</section> : null}
  restriction={writebackRestriction || undefined}
 						canLoadRemote={!detail.parentItem}
 						itemKey={detail.key}
@@ -2055,11 +2060,12 @@ export function AdminInspector({
 							</div>
 						}
 					>
-						<section aria-label="Review status">
-							{versionNotice ?? (
+						{!versionBand && (
+							<section aria-label="Review status">
 								<RecordStateChip state={detail.state} />
-							)}
-						</section>
+							</section>
+						)}
+						{versionNotice}
 						{!detail.parentItem && (
 							<AdminItemDisplay
 								publishedDetail={liveRecord}
