@@ -420,6 +420,16 @@ export default function NavbarSearch() {
 			<div
 				ref={barRef}
 				role="search"
+				// Keyboard focus leaving the bar closes the list, as a click outside it does. No next target means the
+				// window lost focus or a click landed on nothing focusable, which the mousedown listener judges. The
+				// scope and sort pickers and Explore open in portals (a dialog around a listbox), so focus moving into
+				// one stays.
+				onBlur={(event) => {
+					const next = event.relatedTarget as Element | null;
+					if (!next || barRef.current?.contains(next)) return;
+					if (next.closest('[role="tooltip"],[role="listbox"],[role="dialog"]')) return;
+					setIsOpen(false);
+				}}
 				className="bg-secondary_light dark:bg-card border border-black/5 dark:border-white/5 xl:rounded-2xl !rounded-t-none !border-t-0 p-4 xl:p-6 flex flex-col gap-4"
 			>
 				<div className="flex flex-col gap-3 xl:flex-row xl:items-center">
