@@ -195,6 +195,14 @@ describe("telling OpenScholar who signs in", () => {
 				callbackURL: "/admin",
 			});
 			expect(signedIn).toEqual([result.data?.user.id]);
+			// Sign-in matches by the address made from the Clerk ID; the real one is kept apart, for the review a reader sends.
+			// Only Openscholar sets it: the reader can't write their own name, photo or email.
+			const auth = createReaderAuth(config, db);
+			const update = await auth.handler(new Request(`${config.identity.baseUrl}/api/auth/update-user`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contactEmail: "spoof@example.org" }) }));
+			expect(update.status).toBe(404);
+			expect(await db.select({ email: readerUser.email, contactEmail: readerUser.contactEmail }).from(readerUser).where(eq(readerUser.id, result.data!.user.id))).toEqual([
+				{ email: "user_first@readers.openscholar.invalid", contactEmail: "first@example.org" },
+			]);
 		});
 	});
 });

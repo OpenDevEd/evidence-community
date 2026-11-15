@@ -440,7 +440,7 @@ it("pauses the source and turns its PDFs off and on", async () => {
 it("takes suggestions from someone outside the team into the review queue only, names them there, and holds them to a daily number", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const reader = { userId: "user_reader", name: "Grace Otieno", role: "reader" } as const;
+		const reader = { userId: "user_reader", name: "Grace Otieno", email: "grace@openscholar.example", role: "reader" } as const;
 		const works = Array.from({ length: SUGGESTIONS_PER_PERSON_DAY + 1 }, (_, at) => work(100 + at));
 		const { lookup } = services(works);
 		await expect(addPapers(db, storage, config, { requestId: "s0", publish: true, actor: reader, papers: [{ openalexId: "W100" }] }, lookup)).rejects.toBeInstanceOf(AdminValidationError);
@@ -448,8 +448,11 @@ it("takes suggestions from someone outside the team into the review queue only, 
 		expect(results[0]).toMatchObject({ outcome: "queued" });
 		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, results[0]!.itemKey!));
 		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config })).toMatchObject({ submittedBy: "user_reader", submittedByName: "Grace Otieno", suggested: true });
-		// Once they have signed in to the library, the review shows their photo, and their email only to whoever decides it.
-		await db.insert(readerUser).values({ id: "reader-grace", name: "Grace O.", email: "grace@example.org", image: "https://example.org/grace.jpg" });
+		// Their email reaches only whoever decides the review: first as Openscholar sent it with the paper.
+		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config, senderEmail: true })).toMatchObject({ submittedByEmail: "grace@openscholar.example" });
+		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config })).toMatchObject({ submittedByEmail: null });
+		// Once they have signed in to the library, their account gives their photo and current address, never the sign-in one.
+		await db.insert(readerUser).values({ id: "reader-grace", name: "Grace O.", email: "user_reader@readers.openscholar.invalid", contactEmail: "grace@example.org", image: "https://example.org/grace.jpg" });
 		await db.insert(readerAccount).values({ id: "account-grace", accountId: "user_reader", providerId: "openscholar", userId: "reader-grace" });
 		const sender = { submittedByName: "Grace Otieno", submittedByImage: "https://example.org/grace.jpg" };
 		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config, senderEmail: true })).toMatchObject({ ...sender, submittedByEmail: "grace@example.org" });

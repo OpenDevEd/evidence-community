@@ -92,6 +92,36 @@ function heldSourcePdf(
 	return { sourcePdf, fileState, fileDraft, fileRemovalPending, sourceFileUrl };
 }
 
+const NO_PAPER = { name: null, email: null, suggested: false };
+const NO_ACCOUNT = { name: "", email: null, image: null };
+
+/**
+ * Who sent a review. An added paper keeps the name of the person who sent it, who may be outside the team (#777).
+ * Their reader account, when they have signed in to the library, gives their photo, their real email and a name the
+ * paper lacks; one who never signed in has the email Openscholar sent with the paper. The email goes only to an
+ * Editor or Owner, who decides the review.
+ */
+async function readReviewSender(db: Database, review: { itemKey: string; submittedBy: string }, withEmail: boolean) {
+	const [[paper = NO_PAPER], [account = NO_ACCOUNT]] = await Promise.all([
+		db
+			.select({ name: addedPaper.addedByName, email: addedPaper.addedByEmail, suggested: addedPaper.suggested })
+			.from(addedPaper)
+			.where(and(eq(addedPaper.itemKey, review.itemKey), eq(addedPaper.addedBy, review.submittedBy))),
+		db
+			.select({ name: readerUser.name, email: readerUser.contactEmail, image: readerUser.image })
+			.from(readerAccount)
+			.innerJoin(readerUser, eq(readerUser.id, readerAccount.userId))
+			.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, review.submittedBy))),
+	]);
+	return {
+		submittedByName: paper.name || account.name || null,
+		submittedByImage: account.image,
+		submittedByEmail: withEmail ? (account.email ?? paper.email) : null,
+		/** Whether they're outside the team. */
+		suggested: paper.suggested,
+	};
+}
+
 export async function getAdminReviewSnapshot(
 	db: Database,
 	reviewId: string,
@@ -236,19 +266,7 @@ export async function getAdminReviewSnapshot(
 	);
 	const root = details.find((detail) => detail.key === review.itemKey);
 	if (!root) throw new ItemNotFoundError(review.itemKey);
-	// An added paper keeps the name of the person who sent it, who may be outside the team (#777). Their reader
-	// account, when they have signed in to the library, gives their photo and email, and a name the paper lacks.
-	const [[sender], [account]] = await Promise.all([
-		db
-			.select({ name: addedPaper.addedByName, suggested: addedPaper.suggested })
-			.from(addedPaper)
-			.where(and(eq(addedPaper.itemKey, review.itemKey), eq(addedPaper.addedBy, review.submittedBy))),
-		db
-			.select({ name: readerUser.name, email: readerUser.email, image: readerUser.image })
-			.from(readerAccount)
-			.innerJoin(readerUser, eq(readerUser.id, readerAccount.userId))
-			.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, review.submittedBy))),
-	]);
+	const sender = await readReviewSender(db, review, options.senderEmail ?? false);
 	const frozenAttachments = details.filter(
 		(detail) => detail.parentItem === root.key,
 	);
@@ -267,11 +285,7 @@ export async function getAdminReviewSnapshot(
 		reviewState: review.state,
 		submittedAt: review.submittedAt.toISOString(),
 		submittedBy: review.submittedBy,
-		/** Who sent it, when the queue knows their name, and whether they're outside the team. */
-		submittedByName: sender?.name || account?.name || null,
-		submittedByImage: account?.image ?? null,
-		submittedByEmail: options.senderEmail ? (account?.email ?? null) : null,
-		suggested: sender?.suggested ?? false,
+		...sender,
 		remainingConflicts: review.remainingConflicts,
 		note: review.note,
 		publishing: review.snapshot.publishingChoice,

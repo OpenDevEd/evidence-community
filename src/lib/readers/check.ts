@@ -39,11 +39,12 @@ const userInfoSchema = z.object({
 	given_name: z.string().optional(),
 	family_name: z.string().optional(),
 	picture: z.string().optional(),
+	email: z.string().optional(),
 });
 
 type ReaderCheck = { auth: ReaderAuth; config: LibraryServerConfig; database: Database; userId: string };
 
-/** Refreshes the reader's Clerk token and copies their current name and avatar from OpenScholar. */
+/** Refreshes the reader's Clerk token and copies their current name, avatar and email from OpenScholar. */
 async function refreshReaderProfile({ auth, config, database, userId }: ReaderCheck, accountRowId: string) {
 	const { accessToken } = await auth.api.getAccessToken({ body: { accountId: accountRowId, userId } });
 	const { userinfo_endpoint } = await readDiscovery(config);
@@ -59,6 +60,7 @@ async function refreshReaderProfile({ auth, config, database, userId }: ReaderCh
 		.set({
 			name: openScholarProfileName(profile),
 			image: profile.picture ?? null,
+			...(profile.email ? { contactEmail: profile.email } : {}),
 			updatedAt: new Date(),
 		})
 		.where(eq(readerUser.id, userId));

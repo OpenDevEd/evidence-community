@@ -5,7 +5,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 export const OPENSCHOLAR_PROVIDER_ID = "openscholar";
 
 type ProfileName = { name?: unknown; given_name?: unknown; family_name?: unknown };
-type OpenScholarProfile = ProfileName & { sub?: unknown; picture?: unknown };
+type OpenScholarProfile = ProfileName & { sub?: unknown; picture?: unknown; email?: unknown };
 
 /** Clerk sends no name for an account without one; the library then shows "Reader". */
 export function openScholarProfileName(profile: ProfileName) {
@@ -29,6 +29,8 @@ export function openScholarReader(profile: OpenScholarProfile) {
 		emailVerified: true,
 		name: openScholarProfileName(profile),
 		image: typeof profile.picture === "string" ? profile.picture : undefined,
+		// The real address, kept apart from the one sign-in matches by.
+		contactEmail: typeof profile.email === "string" && profile.email ? profile.email : null,
 	};
 }
 

@@ -209,10 +209,8 @@ function CopyEmail({ email }: { email: string }) {
 }
 
 /** Who sent the version, with their photo, their email for an Editor or Owner, whether they're outside the team, and when. */
-function ReviewSender({ snapshot, name, updatedAt }: { snapshot: AdminReviewSnapshot; name: string; updatedAt: string }) {
+function ReviewSender({ snapshot, name, editedAt }: { snapshot: AdminReviewSnapshot; name: string; editedAt: string | null }) {
 	const email = snapshot.submittedByEmail;
-	// A draft edited after it was sent says so; the minute covers the save that sending makes.
-	const edited = Date.parse(updatedAt) > Date.parse(snapshot.submittedAt) + 60_000;
 	return (
 		<div className="mt-3 flex min-w-0 items-start gap-3 rounded-xl bg-white/70 p-2.5 dark:bg-black/20">
 			<ReaderAvatar reader={{ id: snapshot.submittedBy, name, image: snapshot.submittedByImage }} size="md" className="self-start" />
@@ -235,10 +233,10 @@ function ReviewSender({ snapshot, name, updatedAt }: { snapshot: AdminReviewSnap
 						<HugeiconsIcon icon={Clock01Icon} size={12} aria-hidden />
 						<time dateTime={snapshot.submittedAt}>Sent {formatReviewTime(snapshot.submittedAt)}</time>
 					</span>
-					{edited && (
+					{editedAt && (
 						<span className="inline-flex items-center gap-1 opacity-70">
 							<HugeiconsIcon icon={FileEditIcon} size={12} aria-hidden />
-							<time dateTime={updatedAt}>Draft edited {formatReviewTime(updatedAt)}</time>
+							<time dateTime={editedAt}>Draft edited {formatReviewTime(editedAt)}</time>
 						</span>
 					)}
 				</div>
@@ -325,6 +323,12 @@ export function ReviewStatusLabel({
 	);
 }
 
+/** When the working draft last changed, if it now differs from the version waiting for review. */
+function draftEditedAt(detail: AdminItemDetail, snapshot: AdminReviewSnapshot, viewingSubmitted: boolean) {
+	if (viewingSubmitted || snapshot.reviewState !== "pending" || !detail.draft) return null;
+	return JSON.stringify(detail.draft.payload) === JSON.stringify(snapshot.draft?.payload) ? null : detail.draft.updatedAt;
+}
+
 export function ReviewVersionNotice({
 	detail,
 	snapshot,
@@ -360,7 +364,7 @@ export function ReviewVersionNotice({
 			{snapshot?.submittedByName ? (
 				<>
 					<p className="mt-0.5 text-xs font-medium opacity-80">{stateLabel}</p>
-					<ReviewSender snapshot={snapshot} name={snapshot.submittedByName} updatedAt={updatedAt} />
+					<ReviewSender snapshot={snapshot} name={snapshot.submittedByName} editedAt={draftEditedAt(detail, snapshot, viewingSubmitted)} />
 				</>
 			) : (
 				<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

@@ -244,6 +244,8 @@ export const addedPaper = pgTable(
 		/** Who sent it: their OpenScholar user, and their name as the queue shows it. */
 		addedBy: varchar("addedBy", { length: 128 }).notNull(),
 		addedByName: varchar("addedByName", { length: 255 }),
+		/** Their address as Openscholar sent it, for a sender who never signed in to the library. */
+		addedByEmail: varchar("addedByEmail", { length: 320 }),
 		/** The OpenScholar request that sent it, so a repeated request adds nothing twice. */
 		requestId: varchar("requestId", { length: 128 }).notNull(),
 		/** The later requests that sent it again after its review was returned or withdrawn. */
