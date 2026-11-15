@@ -116,10 +116,12 @@ export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
     linkPicking = false,
     selectionPinned = false,
+    canReview = true,
 ) {
 	// The view lives in the address: a reload, Back and Forward, and a link all bring it back.
 	const [{ review, filters: columnFilters, search, sort, direction }, setParams] = useQueryStates(adminItemViewParsers, { history: "replace", limitUrlUpdates: debounce(ADDRESS_FOLLOWS_AFTER_MS) });
-	const filters = useMemo(() => viewFromParams({ review, filters: columnFilters, search, sort, direction }), [review, columnFilters, search, sort, direction]);
+	// Only an Editor or Owner has a review queue, so an old link to it opens a Creator on every record.
+	const filters = useMemo(() => viewFromParams({ review: canReview ? review : null, filters: columnFilters, search, sort, direction }), [canReview, review, columnFilters, search, sort, direction]);
 	// The view as last set, which can be ahead of the one drawn: two changes made in one moment each build on the
 	// one before, as with React's own state.
 	const latest = useRef(filters);

@@ -507,7 +507,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(requestedColumns, Boolean(linkPick?.kind), Boolean(linkPick));
+	} = useAdminItemList(requestedColumns, Boolean(linkPick?.kind), Boolean(linkPick), canPublish);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	// The open record no longer exists: removed by someone else while it was open, or opened from an old link.
