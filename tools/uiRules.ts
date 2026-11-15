@@ -491,10 +491,22 @@ function stacks(scan: Scan, element: Child): boolean {
 	return slots(element).filter((slot) => column || slot.some((child) => takesLine(scan, child))).length >= 2;
 }
 
-/** A row of a set height can't grow when its text wraps, so the picture can't float off the title's line. */
+/**
+ * A row of a set height keeps its text centred however it is aligned, so self-start there would lift the picture off
+ * the text instead; it is left alone. `height: auto` sets nothing.
+ */
 const setHeight = (scan: Scan, row: ts.JsxElement) =>
 	classesOf(scan, row).every((list) => /(^|[\s"'`])h-(\d|\[)/.test(list)) ||
-	row.openingElement.attributes.properties.some((property) => ts.isJsxAttribute(property) && property.name.getText(scan.source) === "style" && /\bheight\b/.test(property.initializer?.getText(scan.source) ?? ""));
+	row.openingElement.attributes.properties.some(
+		(property) => ts.isJsxAttribute(property) && property.name.getText(scan.source) === "style" && /\bheight\s*:(?!\s*["'`]?auto\b)/.test(property.initializer?.getText(scan.source) ?? ""),
+	);
+
+/** Whether a class list centres a row at any screen size (`items-center`, `sm:items-center`), unless it is a column there. */
+function centres(list: string): boolean {
+	const tokens = list.split(/[\s"'`{}()]+/);
+	const row = !hasUtility(list, "flex-col") || tokens.some((token) => utility(token) === "flex-row");
+	return row && tokens.some((token) => utility(token) === "items-center");
+}
 
 /** The icons a file imports, which are often named for what they show rather than `…Icon`. */
 const importedIcons = (source: ts.SourceFile) =>
@@ -508,7 +520,7 @@ const importedIcons = (source: ts.SourceFile) =>
 
 /** A centred row that leads with a picture beside text that stacks; a picture after the text, such as a chevron, may stay centred. */
 function checkRow(scan: Scan, icons: ReadonlySet<string>, row: ts.JsxElement) {
-	const centred = classesOf(scan, row).some((list) => hasUtility(list, "items-center") && !hasUtility(list, "flex-col"));
+	const centred = classesOf(scan, row).some(centres);
 	if (!centred || setHeight(scan, row)) return;
 	const children = slots(row);
 	const at = children.findIndex((slot) => slot.some((child) => isPicture(scan, icons, child)));

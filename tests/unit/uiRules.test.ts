@@ -204,6 +204,8 @@ describe("icon-top", () => {
 		// new-el #849: a card row's icon, passed in, floated between its title and subtitle.
 		expect(rules(`export const A = ({ icon, title, subtitle }) => <div className="flex items-center gap-3">{icon}<div className="flex min-w-0 flex-col"><div>{title}</div>{subtitle}</div></div>;`)).toEqual(["icon-top"]);
 		expect(rules(`export const A2 = ({ person, hint }) => <div className="flex items-center gap-3">{person ? <AuthorAvatar /> : (<EmailIcon />)}<span className="min-w-0"><span className="block">Name</span>{hint && <span className="block">{hint}</span>}</span></div>;`)).toEqual(["icon-top"]);
+		expect(rules(`export const A3 = () => <div className="flex items-start gap-3 sm:items-center"><AuthorAvatar /><div><p>a</p><p>b</p></div></div>;`)).toEqual(["icon-top"]);
+		expect(rules(`export const A4 = () => <div className="flex items-center gap-3" style={{ height: "auto" }}><AuthorAvatar /><div><p>a</p><p>b</p></div></div>;`)).toEqual(["icon-top"]);
 		expect(rules(`import { Home01Icon } from "@hugeicons/core-free-icons";\nexport const B = () => <li className="flex items-center gap-3"><span className="grid size-8 place-items-center"><HugeiconsIcon icon={Home01Icon} /></span><span className="min-w-0"><span className="block">Name</span><span className="block">Detail</span></span></li>;`)).toEqual(["icon-top"]);
 	});
 
@@ -213,5 +215,6 @@ describe("icon-top", () => {
 		expect(rules(`export const E = () => <button className="flex items-center gap-2"><AuthorAvatar /><span className="truncate">Name</span></button>;`)).toEqual([]);
 		expect(rules(`export const F = () => <a className="flex items-center gap-3"><div className="flex flex-col"><p>a</p><p>b</p></div><ChevronIcon /></a>;`)).toEqual([]);
 		expect(rules(`export const G = () => <div className="flex h-11 items-center gap-3"><AuthorAvatar /><div className="flex flex-col"><p>a</p><p>b</p></div></div>;`)).toEqual([]);
+		expect(rules(`export const H = () => <div className="flex flex-col items-center gap-3"><AuthorAvatar /><div><p>a</p><p>b</p></div></div>;`)).toEqual([]);
 	});
 });
