@@ -755,7 +755,7 @@ function CountryChooser({
 					>
 						<CountryFlag
 							countryCode={match.countryCode}
-							className={FLAG}
+							className={`${FLAG} mt-1 self-start`}
 						/>
 						<span className="min-w-0 flex-1">
 							<span className="block truncate">{match.name}</span>

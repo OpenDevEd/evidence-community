@@ -140,7 +140,7 @@ function RecordListRow({ flow, onOpen, row }: { flow: ImportFlowState; onOpen: (
 			{/* A record still reading, or that can't be imported, has no tick until it can, and none has while the import is on its way. */}
 			<Tick>{importable(row) && !flow.locked ? <Checkbox aria-label={`Import ${title}`} isSelected={flow.selected.has(row.id)} onValueChange={(checked) => choose(flow, row.id, checked)} size="sm" /> : null}</Tick>
 			<button className="flex min-h-16 min-w-0 flex-1 items-center gap-3 rounded-md py-2 text-start outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => onOpen(row.id)} type="button">
-				<ImportCover className="w-8" {...coverOf(row)} size={12} />
+				<ImportCover className="w-8 self-start" {...coverOf(row)} size={12} />
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 					<span className={`line-clamp-2 text-sm leading-5 ${titleTone(row, "font-medium text-black/85 dark:text-white/85", "text-black/45 dark:text-white/45")}`}>{title}</span>
 					<span className="flex items-center gap-2">

@@ -35,7 +35,7 @@ export function StatCard({
 			>
 				<div className="flex items-center gap-4 w-full justify-center">
 					<div
-						className={`p-3 rounded-2xl ${TONE_BACKGROUND[color] ?? "bg-white/10 dark:bg-white/5"}`}
+						className={`self-start p-3 rounded-2xl ${TONE_BACKGROUND[color] ?? "bg-white/10 dark:bg-white/5"}`}
 					>
 						<HugeiconsIcon
 							icon={icon}

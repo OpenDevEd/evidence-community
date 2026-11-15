@@ -84,7 +84,7 @@ export function PaperNamed({ search }: { search: string }) {
 			{offered ? (
 				<motion.div key="paper" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
 					<div className="flex min-h-[4.75rem] flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-card_light px-4 py-3 dark:bg-card sm:flex-nowrap">
-						<span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+						<span className="flex size-11 shrink-0 items-center self-start justify-center rounded-xl bg-accent/10 text-accent">
 							<HugeiconsIcon icon={File01Icon} className="size-6" aria-hidden />
 						</span>
 						<div className="min-w-0 flex-1 basis-48">

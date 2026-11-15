@@ -312,7 +312,7 @@ function RecordTitleCell({
 					</span>
 				</Tooltip>
 			)}
-			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="shrink-0 text-black/35 dark:text-white/35" size={15} />
+			<HugeiconsIcon icon={FileAttachmentIcon} aria-hidden className="mt-0.5 shrink-0 self-start text-black/35 dark:text-white/35" size={15} />
 			<div className="min-w-0">
 				<p className="truncate text-sm font-medium text-black/85 dark:text-white/90">
 					{record.title}

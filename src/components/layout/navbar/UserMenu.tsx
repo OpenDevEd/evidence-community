@@ -92,7 +92,7 @@ export function readerMenuGroups(input: {
 				className="h-auto py-2 cursor-default data-[hover=true]:bg-transparent dark:data-[hover=true]:bg-transparent"
 			>
 				<span className="flex items-center gap-3">
-					<ReaderAvatar reader={reader} size="sm" />
+					<span className="flex shrink-0 self-start"><ReaderAvatar reader={reader} size="sm" /></span>
 					<span className="min-w-0">
 						<span className="block truncate text-medium font-semibold text-foreground dark:text-white">{name}</span>
 						<span className="mt-0.5 flex items-center gap-1 text-tiny text-foreground/45 dark:text-white/40">

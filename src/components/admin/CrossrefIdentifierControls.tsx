@@ -48,7 +48,7 @@ export function CrossrefIdentifierControls({
 	return (
 		<>
 			<div className="flex items-center gap-3 p-3">
-				<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
+				<span className="grid size-8 shrink-0 place-items-center self-start rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
 					<CrossrefIcon className="h-5 w-3.5" />
 				</span>
 				<div className="min-w-0 flex-1">

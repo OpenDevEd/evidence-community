@@ -152,7 +152,7 @@ export function ReviewReadiness({
 								}}
 							>
 								<span
-									className={`grid size-8 shrink-0 place-items-center rounded-lg ${check.ready ? "bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-400" : "bg-amber-500/[0.09] text-amber-700 dark:text-amber-300"}`}
+									className={`grid size-8 shrink-0 place-items-center self-start rounded-lg ${check.ready ? "bg-emerald-500/[0.07] text-emerald-700 dark:text-emerald-400" : "bg-amber-500/[0.09] text-amber-700 dark:text-amber-300"}`}
 								>
 									<HugeiconsIcon
 										icon={

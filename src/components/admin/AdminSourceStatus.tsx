@@ -542,7 +542,7 @@ function IssueKindButton({
 				aria-hidden
 				icon={KIND_ICON[group.kind]}
 				size={17}
-				className={`shrink-0 ${selected ? "text-accent" : "text-black/45 dark:text-white/50"}`}
+				className={`mt-0.5 shrink-0 self-start ${selected ? "text-accent" : "text-black/45 dark:text-white/50"}`}
 			/>
 			<span className="min-w-0 flex-1">
 				<span className={`block truncate text-[13px] font-medium leading-5 ${selected ? "text-accent" : ""}`}>{group.title}</span>
@@ -1125,7 +1125,7 @@ export function AdminSourceStatusDialog({
 							className={`flex flex-col ${fills ? "h-[min(820px,calc(100dvh-2rem))]" : "max-h-[calc(100dvh-2rem)]"}`}
 						>
 							<ModalHeader className="flex shrink-0 items-center gap-3 px-5 py-4 font-normal sm:px-6">
-								<span className="grid size-11 shrink-0 place-items-center rounded-xl bg-black/[0.04] dark:bg-white/[0.07]">
+								<span className="grid size-11 shrink-0 place-items-center self-start rounded-xl bg-black/[0.04] dark:bg-white/[0.07]">
 									<SourceProviderIcon provider={source.provider} size={22} />
 								</span>
 								<div className="min-w-0 flex-1">

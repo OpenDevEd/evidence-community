@@ -18,11 +18,18 @@ import tailwindConfig from "../tailwind.config";
  * is written; a constant from the same file is read where className uses it;
  * and each stylesheet rule is checked the same way.
  *
+ * icon-top: an icon, avatar or cover beside a title with a line under it
+ * starts at the title's top. A row that centres its items floats the picture
+ * between the lines and moves it when the text wraps. `self-start` on the
+ * picture keeps it on the title's line, and changes nothing while the picture
+ * is the taller of the two. A picture after the text, such as a chevron, may
+ * stay centred, and so may one in a row of a set height.
+ *
  * OpenScholar runs the same rules (scripts/check-ui-rules.mjs in
  * OpenDevEd/openalex-count); keep the two in step.
  */
 
-type Rule = "animation-clash" | "uppercase" | "native-title" | "dot-separator" | "loading-text";
+type Rule = "animation-clash" | "uppercase" | "native-title" | "dot-separator" | "loading-text" | "icon-top";
 
 const FIX: Record<Rule, string> = {
 	"animation-clash": "animates and transitions opacity or transform; put the animation on a wrapper, or transition only colours, borders and shadows.",
@@ -30,6 +37,7 @@ const FIX: Record<Rule, string> = {
 	"native-title": "native title tooltip; use Tooltip from src/components/nextui/Tooltip and keep the name in aria-label.",
 	"dot-separator": "no dot separators; use spacing, a divider or an icon.",
 	"loading-text": 'no "Loading" text; show a spinner, or hold the final size until the data is there.',
+	"icon-top": "an icon or picture is centred beside a title with a line under it; put self-start on it (and mt-0.5 on a size-4 icon, to sit on a text-sm line).",
 };
 
 // The utilities that move opacity or transform. Bare `transition` and
@@ -420,6 +428,107 @@ const empty = (node: ts.JsxOpeningLikeElement) =>
 const unApi = (node: ts.JsxOpeningLikeElement, tag: string, lists: string[]) => tag === "abbr" && lists.every((list) => /(?:^|[\s"'`])unapi-id(?=$|[\s"'`])/.test(list)) && empty(node);
 const nativeTooltip = (node: ts.JsxOpeningLikeElement, tag: string, read: Attributes) => !!read.title && /^[a-z]/.test(tag) && !TITLED_ELEMENTS.has(tag) && !unApi(node, tag, read.classLists);
 
+// A picture beside text: an icon, an avatar, a tile, a cover or an image; and a value passed in to render as one.
+const PICTURE = /^(img|Image|Hugeicon)$|(Icon|Avatar|Flag|Tile|Cover|Face)$/;
+const PICTURE_VALUE = /^(icon|avatar|cover|logo|picture|image)$|(Icon|Avatar|Cover|Logo)$/;
+// Where icons come from: Hugeicons, and the app's own brand icons.
+const ICON_MODULE = /^(@\/components\/icons(\/.*)?|@hugeicons\/.+|simple-icons)$/;
+// The tags that take a line of their own.
+const BLOCK_TAG = /^(p|div|h[1-6]|ul|ol|dl|section|header|footer)$/;
+
+/** Whether a class list holds this utility with no variant: `items-center`, not `sm:items-center`. */
+const hasUtility = (list: string, name: string) => list.split(/[\s"'`{}()]+/).includes(name);
+type Child = ts.JsxElement | ts.JsxSelfClosingElement | ts.Expression;
+const jsx = (node: ts.Node): node is ts.JsxElement | ts.JsxSelfClosingElement => ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node);
+const opening = (element: ts.JsxElement | ts.JsxSelfClosingElement) => (ts.isJsxElement(element) ? element.openingElement : element);
+const tagOf = (scan: Scan, element: Child) => (jsx(element) ? opening(element).tagName.getText(scan.source) : "");
+/** The last name in an expression: `item.icon` is `icon`. */
+const lastName = (node: ts.Expression) => (ts.isIdentifier(node) ? node.text : ts.isPropertyAccessExpression(node) ? node.name.text : "");
+
+function classesOf(scan: Scan, element: Child): string[] {
+	const attribute = jsx(element) ? opening(element).attributes.properties.find((property) => ts.isJsxAttribute(property) && property.name.getText(scan.source) === "className") : undefined;
+	return attribute && ts.isJsxAttribute(attribute) ? classLists(scan, attribute.initializer) : [""];
+}
+
+/** What a wrapper around a child renders: a JSX expression's value, a parenthesized one, both sides of a condition, the right of `&&`. */
+function wrapped(node: ts.Node): ts.Node[] | undefined {
+	if (ts.isJsxExpression(node)) return node.expression ? [node.expression] : [];
+	if (ts.isParenthesizedExpression(node)) return [node.expression];
+	if (ts.isConditionalExpression(node)) return [node.whenTrue, node.whenFalse];
+	return ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ? [node.right] : undefined;
+}
+
+/** What a child can render, through conditions: `a ? <X /> : <Y />` gives both, `a && <X />` gives X, `{icon}` gives itself. */
+function renderable(node: ts.Node): Child[] {
+	if (jsx(node)) return [node];
+	const inner = wrapped(node);
+	if (inner) return inner.flatMap(renderable);
+	return ts.isIdentifier(node) || ts.isPropertyAccessExpression(node) || ts.isCallExpression(node) ? [node] : [];
+}
+
+/** An element's children, each as what it can render; text renders none. */
+const slots = (element: Child) => (ts.isJsxElement(element) ? element.children.map(renderable).filter((slot) => slot.length > 0) : []);
+
+/** A picture, a value named for one (`{icon}`), or a tile around one picture (`<span className="flex size-9 …"><Hugeicon … /></span>`). */
+function isPicture(scan: Scan, icons: ReadonlySet<string>, element: Child): boolean {
+	if (!jsx(element)) return PICTURE_VALUE.test(lastName(element));
+	const tag = tagOf(scan, element);
+	if (PICTURE.test(tag) || icons.has(tag) || /\.icon$/.test(tag)) return true;
+	const inner = slots(element);
+	return /^[a-z]/.test(tag) && inner.length === 1 && inner[0].every((child) => isPicture(scan, icons, child));
+}
+
+const takesLine = (scan: Scan, element: Child) =>
+	BLOCK_TAG.test(tagOf(scan, element)) || classesOf(scan, element).some((list) => ["block", "flex", "grid"].some((name) => hasUtility(list, name)));
+
+/** Text that runs to a second line: a title with a line under it, stacked by a column or by elements that take a line each. */
+function stacks(scan: Scan, element: Child): boolean {
+	if (!ts.isJsxElement(element)) return false;
+	const lists = classesOf(scan, element);
+	if (lists.some((list) => hasUtility(list, "truncate"))) return false;
+	const column = lists.some((list) => hasUtility(list, "flex-col") || /(^|\s)space-y-/.test(list));
+	if (!column && lists.some((list) => hasUtility(list, "flex") || hasUtility(list, "inline-flex"))) return false;
+	return slots(element).filter((slot) => column || slot.some((child) => takesLine(scan, child))).length >= 2;
+}
+
+/**
+ * A row of a set height keeps its text centred however it is aligned, so self-start there would lift the picture off
+ * the text instead; it is left alone. `height: auto` sets nothing.
+ */
+const setHeight = (scan: Scan, row: ts.JsxElement) =>
+	classesOf(scan, row).every((list) => /(^|[\s"'`])h-(\d|\[)/.test(list)) ||
+	row.openingElement.attributes.properties.some(
+		(property) => ts.isJsxAttribute(property) && property.name.getText(scan.source) === "style" && /\bheight\s*:(?!\s*["'`]?auto\b)/.test(property.initializer?.getText(scan.source) ?? ""),
+	);
+
+/** Whether a class list centres a row at any screen size (`items-center`, `sm:items-center`), unless it is a column there. */
+function centres(list: string): boolean {
+	const tokens = list.split(/[\s"'`{}()]+/);
+	const row = !hasUtility(list, "flex-col") || tokens.some((token) => utility(token) === "flex-row");
+	return row && tokens.some((token) => utility(token) === "items-center");
+}
+
+/** The icons a file imports, which are often named for what they show rather than `…Icon`. */
+const importedIcons = (source: ts.SourceFile) =>
+	new Set(
+		source.statements.flatMap((statement) =>
+			ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier) && ICON_MODULE.test(statement.moduleSpecifier.text) && statement.importClause?.namedBindings && ts.isNamedImports(statement.importClause.namedBindings)
+				? statement.importClause.namedBindings.elements.map((element) => element.name.text)
+				: [],
+		),
+	);
+
+/** A centred row that leads with a picture beside text that stacks; a picture after the text, such as a chevron, may stay centred. */
+function checkRow(scan: Scan, icons: ReadonlySet<string>, row: ts.JsxElement) {
+	const centred = classesOf(scan, row).some(centres);
+	if (!centred || setHeight(scan, row)) return;
+	const children = slots(row);
+	const at = children.findIndex((slot) => slot.some((child) => isPicture(scan, icons, child)));
+	const pictures = at < 0 ? [] : children[at].filter((child) => isPicture(scan, icons, child));
+	const anchored = (picture: Child) => classesOf(scan, picture).every((list) => hasUtility(list, "self-start"));
+	if (pictures.length > 0 && !pictures.every(anchored) && children.slice(at + 1).some((slot) => slot.some((child) => stacks(scan, child)))) report(scan, pictures[0], "icon-top");
+}
+
 function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	const tag = node.tagName.getText(scan.source);
 	const read = readAttributes(node, scan);
@@ -427,12 +536,13 @@ function checkElement(scan: Scan, node: ts.JsxOpeningLikeElement) {
 	if (nativeTooltip(node, tag, read)) report(scan, read.title!, "native-title");
 }
 
-function visit(scan: Scan, node: ts.Node) {
+function visit(scan: Scan, icons: ReadonlySet<string>, node: ts.Node) {
 	if (classValue(node) && !insideClassList(node, scan.source) && clashesAlone(scan, node)) report(scan, node, "animation-clash");
 	if (isStringLike(node)) checkString(scan, node);
 	if (ts.isJsxText(node)) checkText(scan, node);
 	if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) checkElement(scan, node);
-	ts.forEachChild(node, (child) => visit(scan, child));
+	if (ts.isJsxElement(node)) checkRow(scan, icons, node);
+	ts.forEachChild(node, (child) => visit(scan, icons, child));
 }
 
 /** The problems in one .ts or .tsx file; `loadingKeys` are the message keys whose text is a Loading label. */
@@ -440,7 +550,7 @@ export function sourceProblems(file: string, text: string, loadingKeys: Readonly
 	const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
 	const scan: Scan = { file, source, lines: text.split("\n"), lists: new Map(), loadingKeys, rendered: { variables: new Set(), properties: new Set() }, found: [] };
 	scan.rendered = renderedValues(scan);
-	visit(scan, source);
+	visit(scan, importedIcons(source), source);
 	return scan.found;
 }
 

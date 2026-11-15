@@ -42,7 +42,7 @@ export function AuthorProfileHover({
 							<AuthorAvatar
 								src={profile.photo ?? undefined}
 								name={profile.name}
-								className="size-14 shrink-0"
+								className="size-14 shrink-0 self-start"
 							/>
 							<div className="min-w-0">
 								<h3 className="text-lg font-semibold leading-tight">

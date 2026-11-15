@@ -17,7 +17,7 @@ import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from 
 import { Pagination } from "@/components/nextui/Pagination";
 import { Card } from "@/components/nextui/Card";
 import { SectionCard } from "./SectionCard";
-import { CountryFlag } from "./CountryFlag";
+import { CountryCell, CountryFlag } from "./CountryFlag";
 import { CollaborationStats } from "./types";
 
 type InternationalCollaborationProps = {
@@ -322,15 +322,7 @@ export function InternationalCollaboration({ collaborationStats }: International
 							{paginatedCollaborationCountries.map((country, index) => (
 								<TableRow key={index}>
 									<TableCell>
-										<div className="flex items-center gap-3">
-											<CountryFlag countryCode={country.countryCode} />
-											<div>
-												<div className="font-medium">{country.countryName || country.countryCode || t("unknownCountry")}</div>
-												{country.countryCode && (
-													<div className="text-xs text-black/60 dark:text-white/60">{country.countryCode}</div>
-												)}
-											</div>
-										</div>
+										<CountryCell country={country} />
 									</TableCell>
 									<TableCell>
 										<span className="font-bold text-accent">{country.totalItems.toLocaleString(locale)}</span>

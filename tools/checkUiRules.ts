@@ -30,4 +30,4 @@ if (problems.length > 0) {
 	console.error(problems.join("\n"));
 	process.exit(1);
 }
-console.log("UI rules hold: no animation clashes, uppercase labels, native title tooltips, dot separators or Loading text.");
+console.log("UI rules hold: no animation clashes, uppercase labels, native title tooltips, dot separators, Loading text or icons centred beside two lines.");

@@ -110,7 +110,7 @@ function WritebackDialogForm({
 					role="group"
 				>
 					<div className={rowClass} data-admin-writeback-here>
-						<span className="grid size-7 shrink-0 place-items-center text-black/70 dark:text-white/70">
+						<span className="grid size-7 shrink-0 place-items-center self-start text-black/70 dark:text-white/70">
 							<HugeiconsIcon icon={Home01Icon} aria-hidden size={16} />
 						</span>
 						<div className="min-w-0 flex-1">
@@ -125,7 +125,7 @@ function WritebackDialogForm({
 					</div>
 					{request.options.map((option) => (
 						<div className={rowClass} key={option.sourceKey}>
-							<span className="grid size-7 shrink-0 place-items-center text-black/75 dark:text-white/75">
+							<span className="grid size-7 shrink-0 place-items-center self-start text-black/75 dark:text-white/75">
 								<SourceProviderIcon provider={option.provider} size={17} />
 							</span>
 							<div className="min-w-0 flex-1">
