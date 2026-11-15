@@ -215,9 +215,10 @@ async function drive(target: string, values: Values, mode: "shift" | "shot") {
 	else process.exitCode = 1;
 }
 
-function skip(reason: string) {
-	if (!reason.trim()) throw new Error('Say why: npm run verify -- skip "<reason>".');
-	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), skipped: reason });
+/** Records why no browser check runs. `off` is the user saying not to verify, which quiets the stop hook for the rest of the session. */
+function skip(reason: string, mark: { off?: true } = {}) {
+	if (!reason.trim()) throw new Error('Say why: npm run verify -- skip "<reason>", or off "<the user\'s words>".');
+	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), skipped: reason, ...mark });
 	console.log(`Recorded: ${reason}`);
 }
 
@@ -235,6 +236,8 @@ const HELP = `Usage: npm run verify -- <command>
                            doesn't have and that shows again on a second run. Writes screenshots.
   shot <path> [options]    Screenshots only (Chromium, no slowdown).
   skip "<reason>"          Record why this change needs no browser check.
+  off "<the user's words>" The user said not to verify: the stop hook stays quiet for the rest of
+                           this session, until a shift passes again.
 
 Options for shift and shot:
   --do "<step>"            Repeat for each action: click <selector>, hover <selector>,
@@ -261,6 +264,7 @@ const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	shift: (values, rest) => drive(rest[0] ?? "", values, "shift"),
 	shot: (values, rest) => drive(rest[0] ?? "", values, "shot"),
 	skip: (_, rest) => skip(rest.join(" ")),
+	off: (_, rest) => skip(rest.join(" "), { off: true }),
 	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, start: "npm run verify -- up" }),
 };
 
