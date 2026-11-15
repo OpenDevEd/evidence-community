@@ -119,6 +119,8 @@ describe("grid-scroll", () => {
 		expect(rules(`export const E = () => <div className="grid gap-4 overflow-y-auto p-4">e</div>;`)).toEqual(["grid-scroll"]);
 		expect(rules(`export const G = () => <div className="grid grid-cols-[minmax(0,1fr)] overflow-y-auto">g</div>;`)).toEqual([]);
 		expect(rules(`export const H = () => <div className="grid gap-4 overflow-hidden">h</div>;`)).toEqual([]);
+		expect(rules(`export const I = () => <div className="grid overflow-y-auto sm:grid-cols-1">i</div>;`)).toEqual(["grid-scroll"]);
+		expect(rules(`export const J = () => <div className="grid overflow-y-auto [&>div]:grid-cols-1">j</div>;`)).toEqual(["grid-scroll"]);
 		expect(rules(`export const hint = "A grid can scroll with overflow-auto";`)).toEqual([]);
 	});
 });
