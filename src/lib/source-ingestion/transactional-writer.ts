@@ -413,6 +413,12 @@ function preserveProtectedFileFields(
 	return preserved as Partial<ItemInsert>;
 }
 
+/**
+ * Whether a record's values changed. The source's own modified date doesn't count on its own: OpenAlex re-dates
+ * hundreds of thousands of works in bulk each night with nothing else changed, and a new revision would tell search
+ * engines (sitemap date, IndexNow) that a page changed when a reader would see nothing new. The date is saved with
+ * the next real change.
+ */
 function itemValuesDiffer(
 	existing: typeof item.$inferSelect | undefined,
 	next: Partial<ItemInsert>,
@@ -422,6 +428,7 @@ function itemValuesDiffer(
 	const nextValues = next as Record<string, unknown>;
 	return sourceWritableItemFields.some(
 		(field) =>
+			field !== "dateModified" &&
 			!databaseValueEqual(existingValues[field], nextValues[field]),
 	);
 }
