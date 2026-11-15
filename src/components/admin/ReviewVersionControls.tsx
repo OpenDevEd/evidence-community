@@ -13,7 +13,10 @@ import {
 	Tick01Icon,
 	Comment01Icon,
 	ArrowRight01Icon,
+	UserAdd01Icon,
 } from "@hugeicons/core-free-icons";
+import { ReaderAvatar } from "@/components/layout/navbar/UserMenu";
+import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -180,53 +183,50 @@ function formatReviewTime(value: string) {
 	});
 }
 
-/** Who sent an added paper, as the review's time says it; one suggested from outside the team says so. */
-function senderOf(snapshot: AdminReviewSnapshot | undefined) {
-	if (!snapshot?.submittedByName) return "";
-	return ` by ${snapshot.submittedByName}${snapshot.suggested ? ", outside the team" : ""}`;
-}
+// MOCK: the review doesn't carry the sender's photo yet; the build reads it from the library's reader account.
+const MOCK_PORTRAIT = "https://randomuser.me/api/portraits/men/32.jpg";
+// MOCK: nor their email; the build reads it from the same account, for editors and owners only.
+const mockEmail = (name: string) => `${name.toLowerCase().replace(/[^a-z]+/g, ".").replace(/^\.|\.$/g, "")}@ui.edu.ng`;
 
-function ReviewVersionTime({
-	snapshot,
-	updatedAt,
-}: {
-	snapshot?: AdminReviewSnapshot;
-	updatedAt: string;
-}) {
-	const displayedAt = snapshot?.submittedAt ?? updatedAt;
-	const by = senderOf(snapshot);
-	const label = snapshot
-		? `Submitted ${formatReviewTime(snapshot.submittedAt)}${by}`
-		: `Edited ${formatReviewTime(updatedAt)}`;
-	// It also shows a sender's name the bar cuts short.
-	const explains = Boolean(snapshot) && (snapshot?.submittedAt !== updatedAt || Boolean(by));
-
+/** Who sent the version, with their photo, whether they're outside the team, and when. */
+function ReviewSender({ snapshot, updatedAt }: { snapshot: AdminReviewSnapshot; updatedAt: string }) {
+	const name = snapshot.submittedByName ?? "Verify creator";
+	const edited = Date.parse(updatedAt) > Date.parse(snapshot.submittedAt) + 60_000;
 	return (
-		<Tooltip
-			isDisabled={!explains}
-			content={
-				<div className="text-xs leading-5">
-					<p>Last edited {formatReviewTime(updatedAt)}</p>
-					{snapshot && (
-						<p>Submitted {formatReviewTime(snapshot.submittedAt)}{by}</p>
+		<div className="mt-3 flex min-w-0 items-start gap-3 rounded-xl bg-white/70 p-2.5 dark:bg-black/20">
+			<ReaderAvatar reader={{ id: snapshot.submittedBy, name, image: MOCK_PORTRAIT }} size="md" className="self-start" />
+			<div className="min-w-0 flex-1">
+				<TruncatedText text={name} className="block text-sm font-semibold leading-5" />
+				<TruncatedText text={mockEmail(name)} className="block text-xs leading-4 opacity-70" />
+				<div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] leading-4">
+					{snapshot.suggested && (
+						<span className="inline-flex h-5 items-center gap-1 rounded-full bg-sky-200/70 px-2 font-medium text-sky-900 dark:bg-sky-400/20 dark:text-sky-100">
+							<HugeiconsIcon icon={UserAdd01Icon} size={12} aria-hidden />
+							Outside the team
+						</span>
+					)}
+					<span className="inline-flex items-center gap-1 opacity-70">
+						<HugeiconsIcon icon={Clock01Icon} size={12} aria-hidden />
+						<time dateTime={snapshot.submittedAt}>Sent {formatReviewTime(snapshot.submittedAt)}</time>
+					</span>
+					{edited && (
+						<span className="inline-flex items-center gap-1 opacity-70">
+							<HugeiconsIcon icon={FileEditIcon} size={12} aria-hidden />
+							<time dateTime={updatedAt}>Draft edited {formatReviewTime(updatedAt)}</time>
+						</span>
 					)}
 				</div>
-			}
-		>
-			<time
-				tabIndex={explains ? 0 : undefined}
-				dateTime={displayedAt}
-				className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap text-[10px] opacity-65 outline-none focus-visible:ring-2 focus-visible:ring-focus"
-			>
-				<HugeiconsIcon
-					icon={Clock01Icon}
-					size={11}
-					className="shrink-0"
-					aria-hidden
-				/>
-				<span className="truncate">{label}</span>
-			</time>
-		</Tooltip>
+			</div>
+		</div>
+	);
+}
+
+function EditedTime({ updatedAt }: { updatedAt: string }) {
+	return (
+		<time dateTime={updatedAt} className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] opacity-65">
+			<HugeiconsIcon icon={Clock01Icon} size={11} className="shrink-0" aria-hidden />
+			Edited {formatReviewTime(updatedAt)}
+		</time>
 	);
 }
 
@@ -298,10 +298,17 @@ export function ReviewVersionNotice({
 				/>
 				{title}
 			</h3>
-			<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-				<p className="text-xs font-medium opacity-80">{stateLabel}</p>
-				<ReviewVersionTime snapshot={snapshot} updatedAt={updatedAt} />
-			</div>
+			{snapshot ? (
+				<>
+					<p className="mt-0.5 text-xs font-medium opacity-80">{stateLabel}</p>
+					<ReviewSender snapshot={snapshot} updatedAt={updatedAt} />
+				</>
+			) : (
+				<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+					<p className="text-xs font-medium opacity-80">{stateLabel}</p>
+					<EditedTime updatedAt={updatedAt} />
+				</div>
+			)}
 		</header>
 	);
 }

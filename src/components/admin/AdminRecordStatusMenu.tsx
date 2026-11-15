@@ -30,7 +30,7 @@ export function AdminRecordStatusMenu({
 }) {
 	return (
 		<div className="flex min-h-0 w-full max-h-[inherit] flex-col">
-			<div className="grid min-h-0 gap-4 overflow-y-auto p-4 [scrollbar-gutter:stable]">
+			<div className="grid min-h-0 grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto p-4 [scrollbar-gutter:stable]">
 				<div>{children}</div>
 				<div className="border-t border-black/[0.07] pt-3 dark:border-white/[0.08]">
 					<AdminSourcesWritebackStatus
