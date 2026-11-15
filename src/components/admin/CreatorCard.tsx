@@ -305,7 +305,7 @@ function LinkedCreatorProfile({
 				<AuthorAvatar
 					src={profile.photo ?? undefined}
 					name={profile.name}
-					className="w-14 h-14 shrink-0 rounded-xl bg-black/[0.045] text-black/35 dark:bg-white/[0.06] dark:text-white/45"
+					className="w-14 h-14 shrink-0 self-start rounded-xl bg-black/[0.045] text-black/35 dark:bg-white/[0.06] dark:text-white/45"
 				/>
 				<div className="min-w-0 flex-1">
 					<p className="text-[15px] font-semibold leading-snug text-black/85 dark:text-white/90">
@@ -553,7 +553,7 @@ function UnselectedCreator({
 			onClick={onPick}
 			className="flex w-full items-center gap-3 rounded-xl border border-black/[0.08] bg-white p-3 text-left transition-colors hover:border-accent/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/[0.08] dark:bg-white/[0.025] dark:hover:border-accent/30"
 		>
-			<span className="grid size-11 shrink-0 place-items-center rounded-xl bg-black/[0.035] dark:bg-white/[0.05]">
+			<span className="grid size-11 shrink-0 place-items-center self-start rounded-xl bg-black/[0.035] dark:bg-white/[0.05]">
 				<HugeiconsIcon
 					icon={Search01Icon}
 					size={20}

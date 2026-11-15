@@ -32,7 +32,7 @@ export function PublicationArchiveFiles({
 				})
 			}
 		>
-			<span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
+			<span className="grid size-8 shrink-0 place-items-center self-start rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
 				<HugeiconsIcon icon={File01Icon} size={16} />
 			</span>
 			<span className="min-w-0 flex-1">

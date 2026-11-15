@@ -782,7 +782,7 @@ function EditorMarquee({ editors }: { editors: NonNullable<HomeContent["editors"
 		<ul aria-hidden={copy || undefined} className={`flex ${moving ? "shrink-0" : "min-w-0"} ${copy ? "motion-reduce:hidden" : ""}`}>
 			{editors.map((editor) => (
 				<li key={editor.name} className={`flex items-center gap-4 pr-16 ${moving ? "shrink-0" : "min-w-0"}`}>
-					<AuthorAvatar src={editor.photo} alt="" size="lg" className="shrink-0" />
+					<AuthorAvatar src={editor.photo} alt="" size="lg" className="shrink-0 self-start" />
 					<span className={moving ? "whitespace-nowrap" : "min-w-0"}>
 						<span className="block font-heading text-lg font-semibold leading-tight">{editor.name}</span>
 						{/* One line under the name, so everyone stands the same height; the place is quieter than the role. */}

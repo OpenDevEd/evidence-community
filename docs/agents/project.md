@@ -100,7 +100,8 @@ The command list in `package.json` is authoritative.
 - `npm run check:ui-rules` runs in CI and enforces the UI rules agents kept
   breaking: no animation that also transitions opacity or transform, no
   uppercase labels, no native `title` tooltips, no dot separators (code and
-  `src/messages`), and no "Loading" text. Each error names the fix. A line that
+  `src/messages`), no "Loading" text, and no icon or picture centred beside a
+  title with a line under it (`icon-top`). Each error names the fix. A line that
   needs an exception says why on the line before it:
   `// ui-rules-allow: <rule> -- <reason>`. The rules live in `tools/uiRules.ts`.
 - A PR creation or update uses those targeted checks, not a full local

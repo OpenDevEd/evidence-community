@@ -46,7 +46,7 @@ export function ListModalBody({ description, onAction, highlightedIndexes, child
                 className="p-6 cursor-pointer data-[selected=true]:dark:bg-accent/10 data-[selected=true]:bg-accent/20 transition-colors group rounded-none"
               >
                 <div className="flex items-center gap-4 hover:brightness-75 active:scale-[95%] transition-all">
-                  {item.icon && <div className="size-10 shrink-0 bg-accent p-2 rounded">
+                  {item.icon && <div className="size-10 shrink-0 self-start bg-accent p-2 rounded">
                     <item.icon className="h-full w-full invert" />
                   </div>}
                   <div className="flex flex-col">

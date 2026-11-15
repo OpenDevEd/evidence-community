@@ -198,3 +198,20 @@ describe("loading-text", () => {
 		expect(rules(`export const V = () => <p>Loading the records takes a minute when the library is large.</p>;`)).toEqual([]);
 	});
 });
+
+describe("icon-top", () => {
+	it("catches a picture centred beside a title with a line under it", () => {
+		// new-el #849: a card row's icon, passed in, floated between its title and subtitle.
+		expect(rules(`export const A = ({ icon, title, subtitle }) => <div className="flex items-center gap-3">{icon}<div className="flex min-w-0 flex-col"><div>{title}</div>{subtitle}</div></div>;`)).toEqual(["icon-top"]);
+		expect(rules(`export const A2 = ({ person, hint }) => <div className="flex items-center gap-3">{person ? <AuthorAvatar /> : (<EmailIcon />)}<span className="min-w-0"><span className="block">Name</span>{hint && <span className="block">{hint}</span>}</span></div>;`)).toEqual(["icon-top"]);
+		expect(rules(`import { Home01Icon } from "@hugeicons/core-free-icons";\nexport const B = () => <li className="flex items-center gap-3"><span className="grid size-8 place-items-center"><HugeiconsIcon icon={Home01Icon} /></span><span className="min-w-0"><span className="block">Name</span><span className="block">Detail</span></span></li>;`)).toEqual(["icon-top"]);
+	});
+
+	it("lets a picture at the top, one line of text, a trailing chevron and a row of a set height stay as they are", () => {
+		expect(rules(`export const C = ({ icon }) => <div className="flex items-center gap-3"><span className="flex self-start">{icon}</span><div className="flex flex-col"><p>a</p><p>b</p></div></div>;`)).toEqual([]);
+		expect(rules(`export const D = ({ icon }) => <div className="flex items-start gap-3">{icon}<div className="flex flex-col self-center"><p>a</p><p>b</p></div></div>;`)).toEqual([]);
+		expect(rules(`export const E = () => <button className="flex items-center gap-2"><AuthorAvatar /><span className="truncate">Name</span></button>;`)).toEqual([]);
+		expect(rules(`export const F = () => <a className="flex items-center gap-3"><div className="flex flex-col"><p>a</p><p>b</p></div><ChevronIcon /></a>;`)).toEqual([]);
+		expect(rules(`export const G = () => <div className="flex h-11 items-center gap-3"><AuthorAvatar /><div className="flex flex-col"><p>a</p><p>b</p></div></div>;`)).toEqual([]);
+	});
+});

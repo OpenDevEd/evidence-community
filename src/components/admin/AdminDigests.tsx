@@ -463,7 +463,7 @@ function Trail({ digest }: { digest: AdminDigest }) {
 		<AnimatePresence initial={false}>
 			{steps.map((step, index) => <motion.li key={index} initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} transition={{ duration: 0.2, ease: "easeOut" }} className="overflow-hidden">
 				<span className="flex items-center gap-3 px-4 py-2 text-[13px]">
-					{step.actor ? <Face person={step.actor} size={28} /> : <span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.07]"><HugeiconsIcon icon={step.icon} aria-hidden size={14} /></span>}
+					<span className="flex shrink-0 self-start">{step.actor ? <Face person={step.actor} size={28} /> : <span className="grid size-7 shrink-0 place-items-center rounded-full bg-black/[0.05] dark:bg-white/[0.07]"><HugeiconsIcon icon={step.icon} aria-hidden size={14} /></span>}</span>
 					<span className="min-w-0 flex-1"><span className="block truncate font-medium">{step.who}</span><span className={`block truncate text-xs ${muted}`}>{step.did}</span></span>
 					<span className={`shrink-0 text-[11px] tabular-nums ${muted}`}>{time(step.at)}</span>
 				</span>
@@ -496,7 +496,7 @@ export function AdminDigestsInspector({ digests, configurationHref }: { digests:
 	const editing = session && snapshot ? { session, snapshot } : null;
 	return <div className="flex h-full min-h-0 flex-col">
 		<div className="min-h-0 flex-1 overflow-y-auto">
-			<div className="flex items-center gap-3 px-4 pb-3 pt-4"><DateTile edition={digest} large /><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{digest.period}</p><p className={`mt-1 text-xs ${muted}`}>{digest.publicationCount.toLocaleString("en-GB")} publications</p></div><span className="ml-auto"><StateChip state={digest.state} /></span></div>
+			<div className="flex items-center gap-3 px-4 pb-3 pt-4"><span className="flex shrink-0 self-start"><DateTile edition={digest} large /></span><div className="min-w-0"><p className="truncate text-[13px] font-semibold">{digest.period}</p><p className={`mt-1 text-xs ${muted}`}>{digest.publicationCount.toLocaleString("en-GB")} publications</p></div><span className="ml-auto"><StateChip state={digest.state} /></span></div>
 			<Trail digest={digest} />
 			{editing && <Fields session={editing.session} words={editing.snapshot.words} locked={digest.writing} attribution={digest.attribution} />}
 		</div>

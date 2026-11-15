@@ -277,7 +277,7 @@ function CollectionLocationButton({
 				ref={buttonRef}
 				type="button"
 			>
-				<HugeiconsIcon icon={Folder01Icon} aria-hidden className="shrink-0 text-accent" size={15} />
+				<HugeiconsIcon icon={Folder01Icon} aria-hidden className="mt-0.5 shrink-0 self-start text-accent" size={15} />
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-sm font-medium text-black/75 dark:text-white/80">
 						{location?.name ?? "Top level"}
