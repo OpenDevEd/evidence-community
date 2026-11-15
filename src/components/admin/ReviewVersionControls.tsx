@@ -14,7 +14,9 @@ import {
 	Comment01Icon,
 	ArrowRight01Icon,
 	UserAdd01Icon,
+	Copy01Icon,
 } from "@hugeicons/core-free-icons";
+import { toast } from "sonner";
 import { ReaderAvatar } from "@/components/layout/navbar/UserMenu";
 import { TruncatedText } from "@/components/nextui/TruncatedText";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
@@ -191,13 +193,33 @@ const mockEmail = (name: string) => `${name.toLowerCase().replace(/[^a-z]+/g, ".
 /** Who sent the version, with their photo, whether they're outside the team, and when. */
 function ReviewSender({ snapshot, updatedAt }: { snapshot: AdminReviewSnapshot; updatedAt: string }) {
 	const name = snapshot.submittedByName ?? "Verify creator";
+	const email = mockEmail(name);
 	const edited = Date.parse(updatedAt) > Date.parse(snapshot.submittedAt) + 60_000;
 	return (
 		<div className="mt-3 flex min-w-0 items-start gap-3 rounded-xl bg-white/70 p-2.5 dark:bg-black/20">
 			<ReaderAvatar reader={{ id: snapshot.submittedBy, name, image: MOCK_PORTRAIT }} size="md" className="self-start" />
 			<div className="min-w-0 flex-1">
 				<TruncatedText text={name} className="block text-sm font-semibold leading-5" />
-				<TruncatedText text={mockEmail(name)} className="block text-xs leading-4 opacity-70" />
+				<div className="flex min-w-0 items-center gap-0.5">
+					<TruncatedText text={email} className="block min-w-0 text-xs leading-4 opacity-70" />
+					<Tooltip content="Copy email">
+						<Button
+							aria-label={`Copy email ${email}`}
+							variant="transparent"
+							size="xs"
+							isIconOnly
+							className="-my-1 size-6 min-w-0 shrink-0 rounded-md text-current opacity-50 hover:opacity-90"
+							onPress={() => {
+								void navigator.clipboard
+									.writeText(email)
+									.then(() => toast.success("Email copied"))
+									.catch(() => toast.error("Could not copy email"));
+							}}
+						>
+							<HugeiconsIcon icon={Copy01Icon} size={12} aria-hidden />
+						</Button>
+					</Tooltip>
+				</div>
 				<div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] leading-4">
 					{snapshot.suggested && (
 						<span className="inline-flex h-5 items-center gap-1 rounded-full bg-sky-200/70 px-2 font-medium text-sky-900 dark:bg-sky-400/20 dark:text-sky-100">
