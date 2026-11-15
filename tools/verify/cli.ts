@@ -14,7 +14,7 @@ import type { BrowserContext, Page } from "@playwright/test";
 
 import { earlyStep, open, parseStep, type RunOptions } from "./browser";
 import { compare, printShots, report, type Comparison } from "./compare";
-import { hookStop } from "./hook";
+import { hookStop, offFile } from "./hook";
 import { COVER_PATH } from "./seed";
 import { buildBranch, buildMain, ensureStack, fingerprint, mainCommit, mainDir, serve, stackRunning, stopStack, type Paths, type Stack } from "./stack";
 import { git, readJson, runsNext, withLock, withTimeout, writeJson } from "./util";
@@ -24,7 +24,7 @@ const COVER_PAGE = readFileSync(path.join(ROOT, "tools/verify/cover.svg"));
 const STATE = path.join(ROOT, ".verify");
 const PATHS: Paths = { root: ROOT, state: STATE, stackFile: path.join(STATE, "stack.json") };
 const LAST_PASS = path.join(STATE, "last-pass.json");
-const OFF = path.join(STATE, "off.json");
+const OFF = path.join(STATE, "off");
 // Files a person sees: components, styles and pages, and the .ts modules
 // beside components and styles. Route handlers and other .ts files under
 // src/app are not.
@@ -205,7 +205,7 @@ function recordPass(comparison: Comparison, built: string, opened: number) {
 	if (fingerprint(ROOT) !== built) return console.log("The code changed during the check, so no pass is recorded. Run `npm run verify -- up`, then check again.");
 	const steps = comparison.options.steps.map((step) => step.label);
 	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), target: comparison.target, steps, browsers: comparison.browsers, opened });
-	rmSync(OFF, { force: true });
+	rmSync(OFF, { recursive: true, force: true });
 }
 
 async function drive(target: string, values: Values, mode: "shift" | "shot") {
@@ -226,7 +226,8 @@ function skip(reason: string) {
 /** The user said not to verify: the stop hook stays quiet in this session (Claude Code names it) until a check passes. */
 function off(words: string) {
 	if (!words.trim()) throw new Error("Give the user's words: npm run verify -- off \"<their words>\".");
-	writeJson(OFF, { at: Date.now(), session: process.env.CLAUDE_CODE_SESSION_ID ?? null, words });
+	const session = process.env.CLAUDE_CODE_SESSION_ID ?? null;
+	writeJson(offFile(OFF, session), { at: Date.now(), session, words });
 	console.log(`Recorded: the stop hook stays quiet for the rest of this session. ${words}`);
 }
 
@@ -273,7 +274,7 @@ const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	shot: (values, rest) => drive(rest[0] ?? "", values, "shot"),
 	skip: (_, rest) => skip(rest.join(" ")),
 	off: (_, rest) => off(rest.join(" ")),
-	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, offFile: OFF, start: "npm run verify -- up" }),
+	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, offDir: OFF, start: "npm run verify -- up" }),
 };
 
 const OPTIONS = {
