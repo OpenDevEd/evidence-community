@@ -9,6 +9,7 @@ import { itemDraft, itemSourceLink, outbox, sourceConnection } from "@opendeved/
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { addedPaper } from "@/db/schema/source";
+import { readerAccount, readerUser } from "@/db/schema/tables/reader";
 import { itemReview } from "@/db/schema/review";
 import { item } from "@/db/schema/tables/item";
 import { institutionCountry } from "@/db/schema/tables/institutionCountry";
@@ -447,6 +448,12 @@ it("takes suggestions from someone outside the team into the review queue only, 
 		expect(results[0]).toMatchObject({ outcome: "queued" });
 		const [review] = await db.select().from(itemReview).where(eq(itemReview.itemKey, results[0]!.itemKey!));
 		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config })).toMatchObject({ submittedBy: "user_reader", submittedByName: "Grace Otieno", suggested: true });
+		// Once they have signed in to the library, the review shows their photo, and their email only to whoever decides it.
+		await db.insert(readerUser).values({ id: "reader-grace", name: "Grace O.", email: "grace@example.org", image: "https://example.org/grace.jpg" });
+		await db.insert(readerAccount).values({ id: "account-grace", accountId: "user_reader", providerId: "openscholar", userId: "reader-grace" });
+		const sender = { submittedByName: "Grace Otieno", submittedByImage: "https://example.org/grace.jpg" };
+		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config, senderEmail: true })).toMatchObject({ ...sender, submittedByEmail: "grace@example.org" });
+		expect(await getAdminReviewSnapshot(db, review!.id, { topicsEnabled: false, config })).toMatchObject({ ...sender, submittedByEmail: null });
 		// They withdraw their own suggestion, as a Creator does.
 		expect(await removeAddedPaper(db, results[0]!.itemKey!, { userId: "user_reader", role: "creator" })).toBe("withdrawn");
 

@@ -21,6 +21,8 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { readOpenAccessFromSourcesFor } from "@/lib/search-index/open-access";
 import { readStudyReading } from "@/lib/readings/reading";
 import { addedPaper, itemFilePublication } from "@/db/schema/source";
+import { readerAccount, readerUser } from "@/db/schema/tables/reader";
+import { OPENSCHOLAR_PROVIDER_ID } from "@/lib/readers/openscholar";
 import { projectSourcePdf } from "./source-file-choice";
 
 function snapshotFileDraft(
@@ -93,7 +95,12 @@ function heldSourcePdf(
 export async function getAdminReviewSnapshot(
 	db: Database,
 	reviewId: string,
-	options: { topicsEnabled?: boolean; config?: Pick<LibraryServerConfig, "sources"> } = {},
+	options: {
+		topicsEnabled?: boolean;
+		config?: Pick<LibraryServerConfig, "sources">;
+		/** Only an Editor or Owner, who decides the review, is given the sender's email. */
+		senderEmail?: boolean;
+	} = {},
 ) {
 	const topicsEnabled =
 		options.topicsEnabled ?? (await getLibraryConfig()).topics.enabled;
@@ -229,11 +236,19 @@ export async function getAdminReviewSnapshot(
 	);
 	const root = details.find((detail) => detail.key === review.itemKey);
 	if (!root) throw new ItemNotFoundError(review.itemKey);
-	// An added paper keeps the name of the person who sent it, who may be outside the team (#777).
-	const [sender] = await db
-		.select({ name: addedPaper.addedByName, suggested: addedPaper.suggested })
-		.from(addedPaper)
-		.where(and(eq(addedPaper.itemKey, review.itemKey), eq(addedPaper.addedBy, review.submittedBy)));
+	// An added paper keeps the name of the person who sent it, who may be outside the team (#777). Their reader
+	// account, when they have signed in to the library, gives their photo and email, and a name the paper lacks.
+	const [[sender], [account]] = await Promise.all([
+		db
+			.select({ name: addedPaper.addedByName, suggested: addedPaper.suggested })
+			.from(addedPaper)
+			.where(and(eq(addedPaper.itemKey, review.itemKey), eq(addedPaper.addedBy, review.submittedBy))),
+		db
+			.select({ name: readerUser.name, email: readerUser.email, image: readerUser.image })
+			.from(readerAccount)
+			.innerJoin(readerUser, eq(readerUser.id, readerAccount.userId))
+			.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, review.submittedBy))),
+	]);
 	const frozenAttachments = details.filter(
 		(detail) => detail.parentItem === root.key,
 	);
@@ -253,7 +268,9 @@ export async function getAdminReviewSnapshot(
 		submittedAt: review.submittedAt.toISOString(),
 		submittedBy: review.submittedBy,
 		/** Who sent it, when the queue knows their name, and whether they're outside the team. */
-		submittedByName: sender?.name ?? null,
+		submittedByName: sender?.name || account?.name || null,
+		submittedByImage: account?.image ?? null,
+		submittedByEmail: options.senderEmail ? (account?.email ?? null) : null,
 		suggested: sender?.suggested ?? false,
 		remainingConflicts: review.remainingConflicts,
 		note: review.note,
