@@ -1970,6 +1970,7 @@ export function AdminInspector({
 				}
 				menu={
 					<AdminRecordStatusMenu
+						header={versionNotice ? <section aria-label="Review status">{versionNotice}</section> : null}
  restriction={writebackRestriction || undefined}
 						canLoadRemote={!detail.parentItem}
 						itemKey={detail.key}
@@ -2055,11 +2056,11 @@ export function AdminInspector({
 							</div>
 						}
 					>
-						<section aria-label="Review status">
-							{versionNotice ?? (
+						{!versionNotice && (
+							<section aria-label="Review status">
 								<RecordStateChip state={detail.state} />
-							)}
-						</section>
+							</section>
+						)}
 						{!detail.parentItem && (
 							<AdminItemDisplay
 								publishedDetail={liveRecord}

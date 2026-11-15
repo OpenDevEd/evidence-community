@@ -287,7 +287,7 @@ export function ReviewVersionNotice({
 	return (
 		<header
 			data-admin-review-state={dataState}
-			className={`-mx-4 -mt-4 mb-3 px-4 py-3 ${state.headerClassName}`}
+			className={`shrink-0 px-4 py-3 ${state.headerClassName}`}
 		>
 			<h3 className="flex items-center gap-2 text-base font-semibold leading-6 tracking-tight">
 				<HugeiconsIcon

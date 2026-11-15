@@ -29,7 +29,7 @@ import tailwindConfig from "../tailwind.config";
  * OpenDevEd/openalex-count); keep the two in step.
  */
 
-type Rule = "animation-clash" | "uppercase" | "native-title" | "dot-separator" | "loading-text" | "icon-top";
+type Rule = "animation-clash" | "uppercase" | "native-title" | "dot-separator" | "loading-text" | "icon-top" | "grid-scroll";
 
 const FIX: Record<Rule, string> = {
 	"animation-clash": "animates and transitions opacity or transform; put the animation on a wrapper, or transition only colours, borders and shadows.",
@@ -38,6 +38,7 @@ const FIX: Record<Rule, string> = {
 	"dot-separator": "no dot separators; use spacing, a divider or an icon.",
 	"loading-text": 'no "Loading" text; show a spinner, or hold the final size until the data is there.',
 	"icon-top": "an icon or picture is centred beside a title with a line under it; put self-start on it (and mt-0.5 on a size-4 icon, to sit on a text-sm line).",
+	"grid-scroll": "a scrolling grid with no columns sizes its column to its widest unwrapped line and scrolls sideways; add grid-cols-[minmax(0,1fr)] (or its real columns).",
 };
 
 // The utilities that move opacity or transform. Bare `transition` and
@@ -52,6 +53,12 @@ const FRAMER_PROPS = new Set(["initial", "animate", "exit", "layout", "layoutId"
 // "uppercase" passes; and the CSS declaration anywhere.
 const UPPERCASE_CLASS = /(?:^|[\s:!])!?uppercase!?(?=$|[\s"'`])/;
 const UPPERCASE_CSS = /text-transform\s*:\s*uppercase/i;
+// grid-scroll: a grid that scrolls, with no columns of its own. Its one automatic column grows to the widest line
+// that won't wrap, so `truncate` inside never applies and the box scrolls sideways (the record status menu, #880).
+const GRID_CLASS = /(?:^|[\s:!])!?grid!?(?=$|[\s"'`])/;
+const SCROLL_CLASS = /(?:^|[\s:!])!?overflow(?:-[xy])?-(?:auto|scroll)!?(?=$|[\s"'`])/;
+const COLUMNS_CLASS = /(?:^|[\s:!])!?grid-cols-/;
+// shortcut: one class string at a time, so a grid and its overflow split across cn() arguments pass; read the joined list if that happens.
 const CLASS_HELPERS = new Set(["cn", "cva", "clsx", "cx", "twMerge", "tv", "classNames"]);
 const CLASS_NAMES = /(class(name)?(es|s)?|styles?|variants?|texttransform)$/i;
 // The characters, and the entities JSX text keeps undecoded.
@@ -390,6 +397,7 @@ function showsLoading(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLitera
 function checkString(scan: Scan, node: ts.StringLiteralLike | ts.TemplateLiteralLikeNode) {
 	const uppercaseClass = UPPERCASE_CLASS.test(node.text) && classContext(node, scan.source);
 	if (UPPERCASE_CSS.test(node.text) || uppercaseClass) report(scan, node, "uppercase");
+	if (GRID_CLASS.test(node.text) && SCROLL_CLASS.test(node.text) && !COLUMNS_CLASS.test(node.text) && classContext(node, scan.source)) report(scan, node, "grid-scroll");
 	if (DOT.test(node.text)) report(scan, node, "dot-separator");
 	if (showsLoading(scan, node) && !screenReaderOnly(scan, node)) report(scan, node, "loading-text");
 }

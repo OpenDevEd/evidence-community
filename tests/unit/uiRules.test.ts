@@ -114,6 +114,15 @@ describe("uppercase", () => {
 	});
 });
 
+describe("grid-scroll", () => {
+	it("catches a scrolling grid with no columns, and lets one with columns or that doesn't scroll pass", () => {
+		expect(rules(`export const E = () => <div className="grid gap-4 overflow-y-auto p-4">e</div>;`)).toEqual(["grid-scroll"]);
+		expect(rules(`export const G = () => <div className="grid grid-cols-[minmax(0,1fr)] overflow-y-auto">g</div>;`)).toEqual([]);
+		expect(rules(`export const H = () => <div className="grid gap-4 overflow-hidden">h</div>;`)).toEqual([]);
+		expect(rules(`export const hint = "A grid can scroll with overflow-auto";`)).toEqual([]);
+	});
+});
+
 describe("native-title", () => {
 	it("catches a native tooltip on a built-in element", () => {
 		expect(rules(`export const G = () => <button title="Save">g</button>;`)).toEqual(["native-title"]);
