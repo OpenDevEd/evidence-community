@@ -209,13 +209,15 @@ function CopyEmail({ email }: { email: string }) {
 }
 
 /** Who sent the version, with their photo, their email for an Editor or Owner, whether they're outside the team, and when. */
-function ReviewSender({ snapshot, name, editedAt }: { snapshot: AdminReviewSnapshot; name: string; editedAt: string | null }) {
+function ReviewSender({ snapshot, editedAt }: { snapshot: AdminReviewSnapshot; editedAt: string | null }) {
 	const email = snapshot.submittedByEmail;
+	// An Openscholar account may have no name: the avatar then shows a person, and the row says Reader as the library does.
+	const name = snapshot.submittedByName ?? "";
 	return (
 		<div className="mt-3 flex min-w-0 items-start gap-3 rounded-xl bg-white/70 p-2.5 dark:bg-black/20">
 			<ReaderAvatar reader={{ id: snapshot.submittedBy, name, image: snapshot.submittedByImage }} size="md" className="self-start" />
 			<div className="min-w-0 flex-1">
-				<TruncatedText text={name} className="block text-sm font-semibold leading-5" />
+				<TruncatedText text={name || "Reader"} className="block text-sm font-semibold leading-5" />
 				{email && (
 					<div className="flex min-w-0 items-center gap-0.5">
 						<TruncatedText text={email} className="block min-w-0 text-xs leading-4 opacity-70" />
@@ -323,6 +325,9 @@ export function ReviewStatusLabel({
 	);
 }
 
+/** Whether the library knows anything of the sender to show: a name, a photo or, for an Editor or Owner, an email. */
+const knowsSender = (snapshot: AdminReviewSnapshot) => Boolean(snapshot.submittedByName || snapshot.submittedByImage || snapshot.submittedByEmail);
+
 /** When the working draft was saved after the version waiting for review was sent; sending saves the draft first. */
 function draftEditedAt(detail: AdminItemDetail, snapshot: AdminReviewSnapshot, viewingSubmitted: boolean) {
 	if (viewingSubmitted || snapshot.reviewState !== "pending" || !detail.draft) return null;
@@ -361,10 +366,10 @@ export function ReviewVersionNotice({
 				/>
 				{title}
 			</h3>
-			{snapshot?.submittedByName ? (
+			{snapshot && knowsSender(snapshot) ? (
 				<>
 					<p className="mt-0.5 text-xs font-medium opacity-80">{stateLabel}</p>
-					<ReviewSender snapshot={snapshot} name={snapshot.submittedByName} editedAt={draftEditedAt(detail, snapshot, viewingSubmitted)} />
+					<ReviewSender snapshot={snapshot} editedAt={draftEditedAt(detail, snapshot, viewingSubmitted)} />
 				</>
 			) : (
 				<div className="mt-0.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
