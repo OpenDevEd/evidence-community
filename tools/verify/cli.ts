@@ -7,7 +7,7 @@
 // OpenScholar's scripts/verify; this file and stack.ts are the library's own.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import type { BrowserContext, Page } from "@playwright/test";
@@ -24,6 +24,7 @@ const COVER_PAGE = readFileSync(path.join(ROOT, "tools/verify/cover.svg"));
 const STATE = path.join(ROOT, ".verify");
 const PATHS: Paths = { root: ROOT, state: STATE, stackFile: path.join(STATE, "stack.json") };
 const LAST_PASS = path.join(STATE, "last-pass.json");
+const OFF = path.join(STATE, "off.json");
 // Files a person sees: components, styles and pages, and the .ts modules
 // beside components and styles. Route handlers and other .ts files under
 // src/app are not.
@@ -204,6 +205,7 @@ function recordPass(comparison: Comparison, built: string, opened: number) {
 	if (fingerprint(ROOT) !== built) return console.log("The code changed during the check, so no pass is recorded. Run `npm run verify -- up`, then check again.");
 	const steps = comparison.options.steps.map((step) => step.label);
 	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), target: comparison.target, steps, browsers: comparison.browsers, opened });
+	rmSync(OFF, { force: true });
 }
 
 async function drive(target: string, values: Values, mode: "shift" | "shot") {
@@ -215,11 +217,17 @@ async function drive(target: string, values: Values, mode: "shift" | "shot") {
 	else process.exitCode = 1;
 }
 
-/** Records why no browser check runs. `off` is the user saying not to verify, which quiets the stop hook for the rest of the session. */
-function skip(reason: string, mark: { off?: true } = {}) {
-	if (!reason.trim()) throw new Error('Say why: npm run verify -- skip "<reason>", or off "<the user\'s words>".');
-	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), skipped: reason, ...mark });
+function skip(reason: string) {
+	if (!reason.trim()) throw new Error('Say why: npm run verify -- skip "<reason>".');
+	writeJson(LAST_PASS, { at: Date.now(), head: git(["rev-parse", "HEAD"], ROOT), skipped: reason });
 	console.log(`Recorded: ${reason}`);
+}
+
+/** The user said not to verify: the stop hook stays quiet in this session (Claude Code names it) until a check passes. */
+function off(words: string) {
+	if (!words.trim()) throw new Error("Give the user's words: npm run verify -- off \"<their words>\".");
+	writeJson(OFF, { at: Date.now(), session: process.env.CLAUDE_CODE_SESSION_ID ?? null, words });
+	console.log(`Recorded: the stop hook stays quiet for the rest of this session. ${words}`);
 }
 
 const HELP = `Usage: npm run verify -- <command>
@@ -264,8 +272,8 @@ const COMMANDS: Record<string, (values: Values, rest: string[]) => unknown> = {
 	shift: (values, rest) => drive(rest[0] ?? "", values, "shift"),
 	shot: (values, rest) => drive(rest[0] ?? "", values, "shot"),
 	skip: (_, rest) => skip(rest.join(" ")),
-	off: (_, rest) => skip(rest.join(" "), { off: true }),
-	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, start: "npm run verify -- up" }),
+	off: (_, rest) => off(rest.join(" ")),
+	hook: (_, rest) => rest[0] === "stop" && hookStop({ root: ROOT, baseBranch: "origin/main", userFacing: USER_FACING, overlay: OVERLAY_CODE, lastPassFile: LAST_PASS, offFile: OFF, start: "npm run verify -- up" }),
 };
 
 const OPTIONS = {
