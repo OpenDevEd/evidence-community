@@ -338,3 +338,27 @@ it("leaves a source the sweep refreshed tonight until the next night, but runs i
 		expect(requests).toBe(3);
 	});
 }, 120_000);
+
+it("leaves a record alone when a refresh brings only OpenAlex's new update date, and takes a real change", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await addSource(db, "oa-dates");
+		await run(db, "oa-dates", async () => page([work(1)]));
+		const before = (await itemsByRecord(db)).get("W1")!;
+		const queued = async () => (await db.select().from(outbox).where(eq(outbox.entityKey, before.key))).length;
+		const queuedBefore = await queued();
+
+		// OpenAlex re-dates many works in bulk each night with nothing else changed.
+		await run(db, "oa-dates", async () => page([{ ...work(1), updated_date: "2026-11-14T11:04:58Z" }]));
+		const redated = (await itemsByRecord(db)).get("W1")!;
+		expect(redated.revision).toBe(before.revision);
+		expect(redated.updatedAt).toEqual(before.updatedAt);
+		expect(await queued()).toBe(queuedBefore);
+
+		await run(db, "oa-dates", async () => page([{ ...work(1), title: "Work 1, corrected", updated_date: "2026-11-15T11:04:58Z" }]));
+		const changed = (await itemsByRecord(db)).get("W1")!;
+		expect(changed.revision).toBe(before.revision + 1);
+		expect(changed.title).toBe("Work 1, corrected");
+		expect(changed.dateModified).toEqual(new Date("2026-11-15T11:04:58Z"));
+		expect(await queued()).toBe(queuedBefore + 1);
+	});
+}, 120_000);
