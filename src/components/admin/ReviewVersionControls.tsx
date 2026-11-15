@@ -323,10 +323,10 @@ export function ReviewStatusLabel({
 	);
 }
 
-/** When the working draft last changed, if it now differs from the version waiting for review. */
+/** When the working draft was saved after the version waiting for review was sent; sending saves the draft first. */
 function draftEditedAt(detail: AdminItemDetail, snapshot: AdminReviewSnapshot, viewingSubmitted: boolean) {
 	if (viewingSubmitted || snapshot.reviewState !== "pending" || !detail.draft) return null;
-	return JSON.stringify(detail.draft.payload) === JSON.stringify(snapshot.draft?.payload) ? null : detail.draft.updatedAt;
+	return Date.parse(detail.draft.updatedAt) > Date.parse(snapshot.submittedAt) ? detail.draft.updatedAt : null;
 }
 
 export function ReviewVersionNotice({
