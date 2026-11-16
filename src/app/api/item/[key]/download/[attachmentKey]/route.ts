@@ -26,7 +26,7 @@ async function modifyPDFMetadata(
 }
 
 export async function GET(
-	request: NextRequest,
+	_request: NextRequest,
 	props: { params: Promise<{ key: string; attachmentKey: string }> }
 ) {
 	const { key: itemKey, attachmentKey } = await props.params;
@@ -53,7 +53,8 @@ export async function GET(
 	);
 
 	if (!attachment || !attachment.url) {
-		const itemPageUrl = new URL(`/lib/${itemKey}`, request.url);
+		// The community's own address: behind the proxy, `request.url` names the container (https://localhost:3000).
+		const itemPageUrl = new URL(buildSiteUrl(`/lib/${itemKey}`, config.identity.baseUrl));
 		itemPageUrl.searchParams.set("error", "PDFNotFound");
 		return NextResponse.redirect(itemPageUrl);
 	}
