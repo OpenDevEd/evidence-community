@@ -4,7 +4,7 @@ import { itemIdentity, type itemDraft } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
-import { itemReview, itemReviewFile } from "@/db/schema/review";
+import { itemReview, itemReviewFile, itemReviewSender } from "@/db/schema/review";
 import {
 	adminItemLinks,
 	isAddedPaper,
@@ -101,8 +101,9 @@ const NO_ACCOUNT = { name: "", email: null, image: null };
  * paper lacks; one who never signed in has the email Openscholar sent with the paper. The email goes only to an
  * Editor or Owner, who decides the review.
  */
-async function readReviewSender(db: Database, review: { itemKey: string; submittedBy: string }, withEmail: boolean) {
-	const [[paper = NO_PAPER], [account = NO_ACCOUNT]] = await Promise.all([
+async function readReviewSender(db: Database, review: { id: string; itemKey: string; submittedBy: string }, withEmail: boolean) {
+	const [[own], [paper = NO_PAPER], [account = NO_ACCOUNT]] = await Promise.all([
+		db.select({ name: itemReviewSender.name, email: itemReviewSender.email, suggested: itemReviewSender.suggested }).from(itemReviewSender).where(eq(itemReviewSender.reviewId, review.id)),
 		db
 			.select({ name: addedPaper.addedByName, email: addedPaper.addedByEmail, suggested: addedPaper.suggested })
 			.from(addedPaper)
@@ -113,12 +114,14 @@ async function readReviewSender(db: Database, review: { itemKey: string; submitt
 			.innerJoin(readerUser, eq(readerUser.id, readerAccount.userId))
 			.where(and(eq(readerAccount.providerId, OPENSCHOLAR_PROVIDER_ID), eq(readerAccount.accountId, review.submittedBy))),
 	]);
+	// A review keeps who sent its paper; one from before it did, or a record sent from the admin, has the paper's row.
+	const sent = own ?? paper;
 	return {
-		submittedByName: paper.name || account.name || null,
+		submittedByName: sent.name || account.name || null,
 		submittedByImage: account.image,
-		submittedByEmail: withEmail ? (account.email ?? paper.email) : null,
+		submittedByEmail: withEmail ? (account.email ?? sent.email) : null,
 		/** Whether they're outside the team. */
-		suggested: paper.suggested,
+		suggested: sent.suggested,
 	};
 }
 

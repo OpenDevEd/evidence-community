@@ -327,6 +327,23 @@ it("submits a returned paper again when a new request sends it", async () => {
 	});
 });
 
+it("names whoever sent a returned paper again as its sender, outside the team or not", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const { lookup } = services([work(15)]);
+		const key = (await addPapers(db, storage, config, { requestId: "r16", publish: false, actor: creator, papers: [{ openalexId: "W15" }] }, lookup)).results[0]!.itemKey!;
+		const [first] = await db.select().from(itemReview).where(eq(itemReview.itemKey, key));
+		await resolveItemReview(db, { reviewId: first!.id, expectedRevision: first!.revision, action: "returned", note: "Not for us" }, editor);
+		const reader = { userId: "user_reader", name: "Grace Otieno", email: "grace@openscholar.example", role: "reader" } as const;
+		expect((await addPapers(db, storage, config, { requestId: "r17", publish: false, actor: reader, papers: [{ openalexId: "W15" }] }, lookup)).results).toMatchObject([{ outcome: "queued", itemKey: key }]);
+		const [again] = await db.select().from(itemReview).where(and(eq(itemReview.itemKey, key), eq(itemReview.state, "pending")));
+		expect(await getAdminReviewSnapshot(db, again!.id, { topicsEnabled: false, config, senderEmail: true })).toMatchObject({ submittedBy: "user_reader", submittedByName: "Grace Otieno", submittedByEmail: "grace@openscholar.example", suggested: true });
+		// The first review still names its own sender, and the paper still counts against the first sender's day.
+		expect(await getAdminReviewSnapshot(db, first!.id, { topicsEnabled: false, config })).toMatchObject({ submittedBy: "user_creator", submittedByName: "Daniel Mensah", suggested: false });
+		expect(await db.select({ addedBy: addedPaper.addedBy, suggested: addedPaper.suggested }).from(addedPaper)).toEqual([{ addedBy: "user_creator", suggested: false }]);
+	});
+});
+
 it("leaves a paper returned when any request that sent it is replayed, the one that sent it again included", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();

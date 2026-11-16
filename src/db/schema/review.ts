@@ -29,6 +29,18 @@ export const itemReview = pgTable("itemReview", {
 	check("itemReview_resolution_valid", sql`(${table.state} = 'pending' AND ${table.resolvedAt} IS NULL AND ${table.resolvedBy} IS NULL) OR (${table.state} <> 'pending' AND ${table.resolvedAt} IS NOT NULL AND ${table.resolvedBy} IS NOT NULL)`),
 ]);
 
+/**
+ * Who sent an added paper for a review, as Openscholar named them: kept per review, since anyone may send a paper again
+ * after a return. A table of its own, because review rows reach every Creator and the email is only for the Editors and
+ * Owners who decide the review.
+ */
+export const itemReviewSender = pgTable("itemReviewSender", {
+	reviewId: uuid("reviewId").primaryKey().references(() => itemReview.id, { onDelete: "cascade" }),
+	name: varchar("name", { length: 255 }),
+	email: varchar("email", { length: 320 }),
+	suggested: boolean("suggested").notNull(),
+});
+
 export const itemReviewFile = pgTable("itemReviewFile", {
 	reviewId: uuid("reviewId").notNull().references(() => itemReview.id, { onDelete: "cascade" }),
 	itemKey: varchar("itemKey", { length: 8 }).notNull().references(() => itemIdentity.key),
