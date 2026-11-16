@@ -1229,3 +1229,25 @@ test("per-message export includes only the final answer text", async () => {
 	assert.match(html, /<strong>Final answer<\/strong>/);
 	assert.doesNotMatch(html, /Secret reasoning|<h2>/);
 });
+
+test("exports a page citation whose PAGE marker the model put after a label", async () => {
+	// From a Girls' Education in Africa answer on Haiku 5.5. Nearby brackets and links stay as they are.
+	const markdown = await chatMessageContent(
+		"markdown",
+		{
+			id: "labelled",
+			role: "assistant",
+			parts: [
+				{
+					type: "text",
+					text: "Not yet peer-reviewed. [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 22 PAGE/] [see table 2] [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 2 PAGE/](https://example.org/original)",
+				},
+			],
+		} as UIMessage,
+		"https://example.org",
+	);
+	assert.match(
+		markdown,
+		/Not yet peer-reviewed\. \[Source, p\. 22\]\(https:\/\/example\.org\/lib\/DGL9WHAA\/download\/9RMDJSN3#page=22\) \[see table 2\] \[Girl Power — PAGE \/lib\/DGL9WHAA\/download\/9RMDJSN3 — 2 PAGE\/\]\(https:\/\/example\.org\/original\)/,
+	);
+});

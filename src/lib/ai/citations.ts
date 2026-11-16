@@ -44,6 +44,15 @@ export function publicationPdfCitationSources(
 	);
 }
 
+/**
+ * Stands in for a PAGE token's opening `PAGE` marker when a model puts a label
+ * before it: `[Girl Power — PAGE /lib/KEY/download/ATTACHMENT — 22 PAGE/]`.
+ * The label is dropped. It holds no bracket, line break or `PAGE/`, and the rest must
+ * be a library PDF and a page closed by `PAGE/]` with no link after it, so an
+ * ordinary bracket or link never turns into a citation.
+ */
+export const LABELLED_PAGE_MARKER = String.raw`(?:(?!PAGE\/)[^\[\]\r\n])*?[^\S\r\n]PAGE[^\S\r\n]+(?=\/lib\/[^/?#\s\[\]]+\/download\/[^/?#\s\[\]]+ — [^\[\]]*? PAGE\/\](?![(\[]))`;
+
 export function parsePageCitation(
 	value: string,
 	knownSources: Record<string, string> = {},

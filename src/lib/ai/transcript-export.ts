@@ -4,7 +4,7 @@ import {
 	isToolUIPart,
 	type UIMessage,
 } from "ai";
-import { parsePageCitation } from "./citations";
+import { LABELLED_PAGE_MARKER, parsePageCitation } from "./citations";
 import {
 	isScreeningResultsData,
 	screeningExportContent,
@@ -41,7 +41,7 @@ function normalizeEvidenceMarkdown(content: string, origin?: string) {
 		"\n> $1\n",
 	);
 	normalized = normalized.replace(
-		/\[PAGE\s*(.*?)\s*PAGE\/\]/g,
+		new RegExp(String.raw`\[(?:PAGE\s*|${LABELLED_PAGE_MARKER})(.*?)\s*PAGE\/\]`, "g"),
 		(_match, citationTarget: string) => {
 			const citation = parsePageCitation(citationTarget);
 			return citation.href

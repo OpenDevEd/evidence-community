@@ -3,7 +3,7 @@ import { Button } from "@/components/nextui/Button";
 import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
 import { BiChevronDown, BiCopy, BiSolidBookContent } from "react-icons/bi";
 import { ReactNode } from "react";
-import { parsePageCitation } from "@/lib/ai/citations";
+import { LABELLED_PAGE_MARKER, parsePageCitation } from "@/lib/ai/citations";
 import {
 	BsBodyText,
 	BsCodeSlash,
@@ -235,7 +235,7 @@ export function AIContentControls({
 				"\n> $1\n",
 			);
 			transformed = transformed.replace(
-				/\[PAGE\s*(.*?)\s*PAGE\/\]/g,
+				new RegExp(String.raw`\[(?:PAGE\s*|${LABELLED_PAGE_MARKER})(.*?)\s*PAGE\/\]`, "g"),
 				(_match, citation: string) => {
 					const parsed = parsePageCitation(citation);
 					return parsed.href

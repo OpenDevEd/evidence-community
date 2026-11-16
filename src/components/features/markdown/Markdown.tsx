@@ -14,7 +14,7 @@ import { defaultRehypePlugins, Streamdown, type Components } from "streamdown";
 import Link from "next/link";
 import Resource from "../items/Resource";
 import { Card } from "@/components/nextui/Card";
-import { parsePageCitation } from "@/lib/ai/citations";
+import { LABELLED_PAGE_MARKER, parsePageCitation } from "@/lib/ai/citations";
 import {
 	PageCitation,
 	PublicationLink,
@@ -84,8 +84,11 @@ export const rehypeQuoteWrapper = createRehypeWrapperForTag(
 	"QUOTE",
 	"QuoteHighlight",
 );
-export const rehypePageWrapper = createRehypeWrapperForTag(
-	"PAGE",
+export const rehypePageWrapper = createRehypeWrapper(
+	new RegExp(
+		String.raw`\(?\[(?:PAGE |${LABELLED_PAGE_MARKER})(.*?) PAGE\/\.?\]\)?\.?`,
+		"g",
+	),
 	"PageHighlight",
 );
 export const rehypeSectionWrapper = createRehypeWrapperForTag(
