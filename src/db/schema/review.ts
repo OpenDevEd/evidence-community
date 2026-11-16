@@ -4,8 +4,6 @@ import { bigint, boolean, check, integer, jsonb, pgTable, primaryKey, text, time
 import { item } from "./tables/item";
 import type { PublishingChoice, ReviewFile, ReviewRecord, ReviewSnapshot } from "@/lib/admin/review-contract";
 
-type ReviewSender = { name: string | null; email: string | null; suggested: boolean };
-
 export const itemPublishingChoice = pgTable("itemPublishingChoice", {
 	itemKey: varchar("itemKey", { length: 8 }).primaryKey().references(() => itemIdentity.key),
 	choice: jsonb("choice").$type<PublishingChoice>().notNull(),
@@ -25,13 +23,23 @@ export const itemReview = pgTable("itemReview", {
 	resolvedBy: text("resolvedBy"),
 	resolvedAt: timestamp("resolvedAt", { withTimezone: true }),
 	note: text("note"),
-	/** Who sent an added paper for this review, as Openscholar named them: kept per review, since anyone may send it again after a return. */
-	sender: jsonb("sender").$type<ReviewSender>(),
 }, (table) => [
 	uniqueIndex("itemReview_one_pending").on(table.itemKey).where(sql`${table.state} = 'pending'`),
 	check("itemReview_state_valid", sql`${table.state} IN ('pending', 'published', 'returned', 'withdrawn')`),
 	check("itemReview_resolution_valid", sql`(${table.state} = 'pending' AND ${table.resolvedAt} IS NULL AND ${table.resolvedBy} IS NULL) OR (${table.state} <> 'pending' AND ${table.resolvedAt} IS NOT NULL AND ${table.resolvedBy} IS NOT NULL)`),
 ]);
+
+/**
+ * Who sent an added paper for a review, as Openscholar named them: kept per review, since anyone may send a paper again
+ * after a return. A table of its own, because review rows reach every Creator and the email is only for the Editors and
+ * Owners who decide the review.
+ */
+export const itemReviewSender = pgTable("itemReviewSender", {
+	reviewId: uuid("reviewId").primaryKey().references(() => itemReview.id, { onDelete: "cascade" }),
+	name: varchar("name", { length: 255 }),
+	email: varchar("email", { length: 320 }),
+	suggested: boolean("suggested").notNull(),
+});
 
 export const itemReviewFile = pgTable("itemReviewFile", {
 	reviewId: uuid("reviewId").notNull().references(() => itemReview.id, { onDelete: "cascade" }),

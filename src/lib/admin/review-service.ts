@@ -16,7 +16,7 @@ import {
 } from "./native-file-service";
 import type { EvidenceFileStorage } from "./file-storage";
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
-import { and, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
 import {
@@ -332,13 +332,9 @@ export async function resolveItemReview(
 	});
 }
 
-// A record's review history goes to anyone on the team, so it leaves out who sent each paper: their email is for
-// the Editors and Owners who decide it, through the review snapshot.
-const { sender: _sender, ...historyColumns } = getTableColumns(itemReview);
-
 export async function getItemReviews(db: Database, itemKey: string) {
 	return db
-		.select(historyColumns)
+		.select()
 		.from(itemReview)
 		.where(eq(itemReview.itemKey, itemKey))
 		.orderBy(desc(itemReview.submittedAt))

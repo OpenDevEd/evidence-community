@@ -7,7 +7,7 @@ import { summaryOf, type PaperSummary } from "./paper-summary";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { addedPaper } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
-import { itemReview } from "@/db/schema/review";
+import { itemReview, itemReviewSender } from "@/db/schema/review";
 import { itemSourceValue } from "@/db/schema/topics";
 import { normalizeDoi } from "@/lib/doi";
 import { paperLinkOf, type PaperIds } from "@/lib/paper-links";
@@ -374,8 +374,7 @@ const noteResend = (db: Database | DatabaseTransaction, itemKey: string, request
  */
 const submitAgain = (db: Database, config: LibraryServerConfig, itemKey: string, reviewedBefore: boolean, input: AddPapersInput) =>
 	submitItemReview(db, itemKey, reviewerOf(input.actor), config, async (transaction, review) => {
-		const sender = { name: input.actor.name, email: input.actor.email ?? null, suggested: input.actor.role === "reader" };
-		await transaction.update(itemReview).set({ sender }).where(eq(itemReview.id, review.id));
+		await transaction.insert(itemReviewSender).values({ reviewId: review.id, name: input.actor.name, email: input.actor.email ?? null, suggested: input.actor.role === "reader" });
 		if (reviewedBefore) await noteResend(transaction, itemKey, input.requestId);
 	});
 
