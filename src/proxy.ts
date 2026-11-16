@@ -278,6 +278,9 @@ async function getNoteRedirectDestination(
 		`/api/redirects/${lookupPath.split("/").map(encodeURIComponent).join("/")}`,
 		request.nextUrl.origin,
 	);
+	// The lookup goes to this server, which answers plain HTTP. Behind the community's proxy the request reads as
+	// https://localhost:3000, and a TLS request to it fails, which sent every configured redirect to the 404 page.
+	apiUrl.protocol = "http:";
 
 	try {
 		const response = await Promise.race([
