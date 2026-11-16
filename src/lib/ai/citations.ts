@@ -110,6 +110,15 @@ function pageCitation(
  */
 export const MISSING_PAGE_MARKER = String.raw`(?=\/lib\/[^/?#\s\[\]]+\/download\/[^/?#\s\[\]]+ — [^\[\]]*? PAGE\/\](?![(\[]))`;
 
+/**
+ * Stands in for a PAGE token's opening `PAGE` marker when a model puts a label
+ * before it: `[Girl Power — PAGE /lib/KEY/download/ATTACHMENT — 22 PAGE/]`.
+ * The label is dropped. It holds no bracket or line break, and the rest must
+ * be a library PDF and a page closed by `PAGE/]` with no link after it, so an
+ * ordinary bracket or link never turns into a citation.
+ */
+export const LABELLED_PAGE_MARKER = String.raw`[^\[\]\n]*?\sPAGE\s+(?=\/lib\/[^/?#\s\[\]]+\/download\/[^/?#\s\[\]]+ — [^\[\]]*? PAGE\/\](?![(\[]))`;
+
 // Where one packed entry ends and the next begins: "PAGE/, PAGE " or "PAGE/, ".
 const PACKED_ENTRY_SEPARATOR = /\s+PAGE\/\s*,?\s*(?:PAGE\s+)?/;
 

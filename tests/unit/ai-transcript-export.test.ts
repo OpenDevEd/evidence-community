@@ -123,6 +123,31 @@ describe("keeping a copy of the conversation", () => {
 		);
 	});
 
+	it("links a page citation whose PAGE marker the model put after a label", async () => {
+		const markdown = await chatTranscriptContent(
+			"markdown",
+			[
+				{
+					id: "message-6",
+					role: "assistant",
+					parts: [
+						{
+							type: "text",
+							text: "Not yet peer-reviewed. [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 22 PAGE/] [see table 2] [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 2 PAGE/](https://example.org/original)",
+						},
+					],
+				},
+			] as never,
+			labels,
+			"https://library.example.org",
+			{ "girl-power.pdf": "/lib/DGL9WHAA/download/9RMDJSN3" },
+		);
+
+		expect(markdown).toContain(
+			"Not yet peer-reviewed. [Source, p. 22](https://library.example.org/lib/DGL9WHAA/download/9RMDJSN3#page=22) [see table 2] [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 2 PAGE/](https://example.org/original)",
+		);
+	});
+
 	it("reads as plain sentences without markup", async () => {
 		const plaintext = await chatTranscriptContent(
 			"plaintext",

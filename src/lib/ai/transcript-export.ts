@@ -5,7 +5,7 @@ import {
 	isToolUIPart,
 	type UIMessage,
 } from "ai";
-import { MISSING_PAGE_MARKER, parsePageCitations } from "./citations";
+import { LABELLED_PAGE_MARKER, MISSING_PAGE_MARKER, parsePageCitations } from "./citations";
 import { escapeHtml } from "@/lib/escape-html";
 import { markdownToPlainText } from "@/lib/markdown-text";
 import {
@@ -54,7 +54,7 @@ function normalizeEvidenceMarkdown(
 		"\n> $1\n",
 	);
 	normalized = normalized.replace(
-		new RegExp(String.raw`\[(?:PAGE\s*|${MISSING_PAGE_MARKER})(.*?)\s*PAGE\/\]`, "g"),
+		new RegExp(String.raw`\[(?:PAGE\s*|${LABELLED_PAGE_MARKER}|${MISSING_PAGE_MARKER})(.*?)\s*PAGE\/\]`, "g"),
 		(_match, citationTarget: string) =>
 			parsePageCitations(citationTarget, pdfSources)
 				.map((citation) =>
