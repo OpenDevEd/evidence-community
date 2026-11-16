@@ -2,6 +2,7 @@ import { MetadataRoute } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
+import { cacheLife, cacheTag } from "next/cache";
 import { getDatabaseForConfig } from "@/db";
 import { buildSitemapKeysQuery } from "@/lib/library-export-records";
 import { searchKeys } from "@/lib/search";
@@ -37,20 +38,28 @@ export async function generateSitemaps() {
 }
 
 /**
- * One sitemap's records with what their entries show. PostgreSQL decides which records each sitemap holds (public ones
- * with an abstract, in key order); the search copy adds their cover images. A failed search is tried again, waiting longer each time.
+ * One sitemap's record entries. PostgreSQL decides which records each sitemap holds (public ones with an abstract, in key
+ * order); the search copy adds their cover images. A failed search is tried again, waiting longer each time. Kept for an
+ * hour per configuration revision, or until the public cache is cleared: crawlers fetch every sitemap often, and each
+ * build holds a database connection.
  */
-async function readSitemapRecords(libraryConfig: LibraryServerConfig, identifier: number) {
+async function readSitemapRecordEntries(configRevision: string, libraryConfig: LibraryServerConfig, identifier: number): Promise<MetadataRoute.Sitemap> {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('sitemap-records-' + configRevision, 'library')
 	const keys = (await buildSitemapKeysQuery(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE)).map((row) => row.key);
 	if (keys.length === 0) return [];
-	const maxRetries = 10;
+	// Requests for a file share one fill, so a few short retries (2, 4, 8 s): a long wait would hold every crawler.
+	const maxRetries = 4;
+	let records;
 	for (let attempt = 1; ; attempt++) {
 		try {
 			const response = await searchKeys(libraryConfig, keys, { number: 1, size: keys.length }, {
 				exactTotal: false,
 				returned: { only: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"] },
 			});
-			return response.hits;
+			records = response.hits;
+			break;
 		} catch (error) {
 			if (attempt === maxRetries) {
 				console.error(`Failed to fetch documents after ${maxRetries} attempts:`, error);
@@ -59,6 +68,24 @@ async function readSitemapRecords(libraryConfig: LibraryServerConfig, identifier
 			await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
 		}
 	}
+	const { localization, identity: { baseUrl } } = libraryConfig;
+	return records.map((item: any) => ({
+		url: buildLocalizedSiteUrl(
+				`/lib/${item.key}`,
+				localization.defaultLocale,
+				localization,
+				baseUrl,
+		),
+		lastModified: item.updatedAt,
+		// No language alternates: every language version of a record names this address as canonical.
+		images: item.attachmentsData
+			?.filter((attachment: any) => attachment.PDFCoverPageImage)
+				.map((attachment: any) =>
+					convertToImageURL(
+						attachment.PDFCoverPageImage,
+					)
+				),
+	}));
 }
 
 export default async function sitemap(props: {
@@ -75,7 +102,7 @@ export default async function sitemap(props: {
 
 	const { localization } = libraryConfig;
 	const baseUrl = libraryConfig.identity.baseUrl;
-	const records = await readSitemapRecords(libraryConfig, identifier);
+	const itemEntries = await readSitemapRecordEntries(libraryConfig.revision, libraryConfig, identifier);
 
 	let pageEntries: MetadataRoute.Sitemap = [];
 	if (identifier === 0) {
@@ -99,24 +126,6 @@ export default async function sitemap(props: {
 			...editions.map(({ slug, publishedAt }) => ({ url: buildSiteUrl(`/digests/${slug}`, baseUrl), lastModified: publishedAt })),
 		];
 	}
-
-	const itemEntries = records.map((item: any) => ({
-		url: buildLocalizedSiteUrl(
-				`/lib/${item.key}`,
-				localization.defaultLocale,
-				localization,
-				baseUrl,
-		),
-		lastModified: item.updatedAt,
-		// No language alternates: every language version of a record names this address as canonical.
-		images: item.attachmentsData
-			?.filter((attachment: any) => attachment.PDFCoverPageImage)
-				.map((attachment: any) =>
-					convertToImageURL(
-						attachment.PDFCoverPageImage,
-					)
-				),
-	}));
 
 	return [...pageEntries, ...itemEntries];
 }

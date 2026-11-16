@@ -3,6 +3,7 @@ import { getItemRaw } from "../../route";
 import { PDFDocument } from "pdf-lib";
 import { fetchPublicFile } from "@/lib/public-fetch";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { buildSiteUrl } from "@/lib/site-url";
 
 async function modifyPDFMetadata(
 	pdfUrl: string,
@@ -72,6 +73,8 @@ export async function GET(
 				headers: {
 					"Content-Type": "application/pdf",
 					"Content-Disposition": "inline;",
+					// The record's page is the one search engines list; the file would otherwise count as a duplicate of it.
+					Link: `<${buildSiteUrl(`/lib/${result.item.key}`, config.identity.baseUrl)}>; rel="canonical"`,
 					"Item-Key": itemKey,
 					"Attachment-Key": attachmentKey,
 				},

@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm";
 
 import { getDatabaseForConfig, type Database } from "@/db";
-import { item } from "@/db/schema/tables/item";
+import { abstractHasText, item } from "@/db/schema/tables/item";
 import { readItemTags } from "@/lib/item-tags";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Item } from "@/app/api/item/types";
@@ -70,13 +70,13 @@ export function buildPublicLibraryKeysQuery(
 /**
  * Records worth a search result: public ones with an abstract. A record without one is only a title and a few names,
  * the thin page search engines skip, so the sitemap leaves it out; its page stays open to visitors and crawlers.
+ * `item_sitemap_key_idx` holds exactly these records in key order, so a sitemap reads only its own rows.
  */
 function sitemapRecordCondition(database: Database, config: LibraryServerConfig) {
-	// Empty once markup, entities for spaces and white space are taken out, as `abstractPlainText` reads it.
-	return and(publicRecordCondition(database, config), sql`regexp_replace(coalesce(${item.abstractNote}, ''), '<[^>]*>|&nbsp;|&#160;|[[:space:]]|\u00a0', '', 'g') <> ''`);
+	return and(publicRecordCondition(database, config), abstractHasText(item.abstractNote));
 }
 
-// ponytail: OFFSET makes the last of AIED's 29 shards walk ~280k rows; fine at this size. Page by key ranges if shards get slow.
+// shortcut: OFFSET walks the index up to the file (about 0.2 s for the last of 27 locally); page by key ranges if files get slow.
 /** One sitemap's records, in key order, from `offset` on. */
 export function buildSitemapKeysQuery(database: Database, config: LibraryServerConfig, limit: number, offset: number) {
 	return database.select({ key: item.key }).from(item).where(sitemapRecordCondition(database, config))

@@ -32,6 +32,13 @@ it("counts exported publications and their latest update, excluding hidden and u
 		await client.query('UPDATE "item" SET "abstractNote" = \'<p>&nbsp;</p>\n\t\' WHERE "key" = \'PUBBBBBB\'');
 		expect((await buildSitemapKeysQuery(database, config, 250, 0)).map(record => record.key)).toEqual(["PUBAAAAA"]);
 		expect(await countSitemapRecords(database, config)).toBe(1);
+		// Every sitemap request runs this query, so it must be able to read only its own rows from the sitemap index: a
+		// condition that drifts from the index's predicate puts the whole-table scan back (16 s on a 270,000-record library).
+		const query = buildSitemapKeysQuery(database, config, 250, 0).toSQL();
+		await client.query("SET enable_seqscan = off");
+		const plan = (await client.query(`EXPLAIN ${query.sql}`, query.params)).rows.map(row => row["QUERY PLAN"]).join("\n");
+		await client.query("RESET enable_seqscan");
+		expect(plan).toContain("item_sitemap_key_idx");
 		await client.query('UPDATE "item" SET "deleted" = 1 WHERE "key" = \'PUBBBBBB\'');
 		expect(await readPublicLibraryStatus(database, config)).toEqual({ totalItems: 1, latestPublicationUpdatedAt: new Date("2026-09-09T09:00:00Z") });
 	});
