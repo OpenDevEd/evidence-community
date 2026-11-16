@@ -40,3 +40,15 @@ it("shows the record under the key asked for when the lookup finds nothing or fa
 	mocks.readItemRedirect.mockRejectedValueOnce(new Error("Redirect lookup timeout"));
 	expect((await proxy(new NextRequest("http://localhost/lib/OLDKEY01"))).status).not.toBe(301);
 });
+
+it("looks a configured redirect up over plain HTTP from this server, which reads as https://localhost:3000 behind the community's proxy", async () => {
+	const fetchMock = vi.fn(async () => Response.json({ destination: "/lib/NEWKEY01" }));
+	vi.stubGlobal("fetch", fetchMock);
+	try {
+		const response = await proxy(new NextRequest("https://localhost:3000/old-report"));
+		expect(String((fetchMock.mock.calls[0] as unknown[])[0])).toBe("http://localhost:3000/api/redirects/old-report");
+		expect(new URL(response.headers.get("location")!, "https://localhost:3000").pathname).toBe("/lib/NEWKEY01");
+	} finally {
+		vi.unstubAllGlobals();
+	}
+});
