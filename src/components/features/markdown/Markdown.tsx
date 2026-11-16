@@ -87,7 +87,7 @@ export const rehypeQuoteWrapper = createRehypeWrapperForTag(
 );
 export const rehypePageWrapper = createRehypeWrapper(
 	new RegExp(
-		String.raw`\(?\[(?:PAGE |${LABELLED_PAGE_MARKER}|${MISSING_PAGE_MARKER})(.*?) PAGE\/\.?\]\)?\.?`,
+		String.raw`\(?\[(?:PAGE |${MISSING_PAGE_MARKER}|${LABELLED_PAGE_MARKER})(.*?) PAGE\/\.?\]\)?\.?`,
 		"g",
 	),
 	"PageHighlight",
