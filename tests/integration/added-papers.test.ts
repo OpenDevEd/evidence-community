@@ -26,7 +26,7 @@ import { ADDED_PAPERS_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { REPORTS_PATH, type OpenscholarReport } from "@/lib/openscholar-service";
 import { AdminValidationError } from "@/lib/admin/errors";
 import { createNativeItemDraft, publishItemDraft, unpublishNativeItem } from "@/lib/admin/native-item-service";
-import { approveItemReview, correctItemReview, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
+import { approveItemReview, correctItemReview, getItemReviews, resolveItemReview, submitItemReview } from "@/lib/admin/review-service";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
 import { syncAddedPapers } from "@/lib/source-ingestion/added/sync";
 import { readItemSources } from "@/lib/search-index/item-sources";
@@ -341,6 +341,8 @@ it("names whoever sent a returned paper again as its sender, outside the team or
 		// The first review still names its own sender, and the paper still counts against the first sender's day.
 		expect(await getAdminReviewSnapshot(db, first!.id, { topicsEnabled: false, config })).toMatchObject({ submittedBy: "user_creator", submittedByName: "Daniel Mensah", suggested: false });
 		expect(await db.select({ addedBy: addedPaper.addedBy, suggested: addedPaper.suggested }).from(addedPaper)).toEqual([{ addedBy: "user_creator", suggested: false }]);
+		// The record's review history, which any Creator reads, never carries the sender's email.
+		expect((await getItemReviews(db, key)).every((review) => !("sender" in review))).toBe(true);
 	});
 });
 
