@@ -367,9 +367,17 @@ export async function latestReview(db: Database, itemKey: string) {
 const noteResend = (db: Database | DatabaseTransaction, itemKey: string, requestId: string) =>
 	db.update(addedPaper).set({ resendRequestIds: sql`array_append(${addedPaper.resendRequestIds}, ${requestId})` }).where(and(eq(addedPaper.itemKey, itemKey), sql`NOT (${requestId} = ANY(${addedPaper.resendRequestIds}))`));
 
-/** Submits the record for review, noting the request with it when it sends a paper reviewed before. */
+/**
+ * Submits the record for review with who sent it, noting the request when it sends a paper reviewed before. The review
+ * keeps its own sender: someone else may send the paper again after a return, and the paper's row stays its first
+ * sender's, which the daily suggestion count reads.
+ */
 const submitAgain = (db: Database, config: LibraryServerConfig, itemKey: string, reviewedBefore: boolean, input: AddPapersInput) =>
-	submitItemReview(db, itemKey, reviewerOf(input.actor), config, reviewedBefore ? (transaction) => noteResend(transaction, itemKey, input.requestId) : undefined);
+	submitItemReview(db, itemKey, reviewerOf(input.actor), config, async (transaction, review) => {
+		const sender = { name: input.actor.name, email: input.actor.email ?? null, suggested: input.actor.role === "reader" };
+		await transaction.update(itemReview).set({ sender }).where(eq(itemReview.id, review.id));
+		if (reviewedBefore) await noteResend(transaction, itemKey, input.requestId);
+	});
 
 /**
  * Sends one record on, and answers where it got to. A review returned or withdrawn stays so when its own request is

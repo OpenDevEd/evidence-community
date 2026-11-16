@@ -4,6 +4,8 @@ import { bigint, boolean, check, integer, jsonb, pgTable, primaryKey, text, time
 import { item } from "./tables/item";
 import type { PublishingChoice, ReviewFile, ReviewRecord, ReviewSnapshot } from "@/lib/admin/review-contract";
 
+type ReviewSender = { name: string | null; email: string | null; suggested: boolean };
+
 export const itemPublishingChoice = pgTable("itemPublishingChoice", {
 	itemKey: varchar("itemKey", { length: 8 }).primaryKey().references(() => itemIdentity.key),
 	choice: jsonb("choice").$type<PublishingChoice>().notNull(),
@@ -23,6 +25,8 @@ export const itemReview = pgTable("itemReview", {
 	resolvedBy: text("resolvedBy"),
 	resolvedAt: timestamp("resolvedAt", { withTimezone: true }),
 	note: text("note"),
+	/** Who sent an added paper for this review, as Openscholar named them: kept per review, since anyone may send it again after a return. */
+	sender: jsonb("sender").$type<ReviewSender>(),
 }, (table) => [
 	uniqueIndex("itemReview_one_pending").on(table.itemKey).where(sql`${table.state} = 'pending'`),
 	check("itemReview_state_valid", sql`${table.state} IN ('pending', 'published', 'returned', 'withdrawn')`),
