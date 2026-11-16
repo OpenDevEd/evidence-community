@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { cacheLife, cacheTag } from "next/cache";
 import { getDatabaseForConfig } from "@/db";
-import { buildSitemapKeysQuery } from "@/lib/library-export-records";
+import { readSitemapKeys } from "@/lib/library-export-records";
 import { searchKeys } from "@/lib/search";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -47,7 +47,7 @@ async function readSitemapRecordEntries(configRevision: string, libraryConfig: L
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('sitemap-records-' + configRevision, 'library')
-	const keys = (await buildSitemapKeysQuery(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE)).map((row) => row.key);
+	const keys = await readSitemapKeys(await getDatabaseForConfig(libraryConfig), libraryConfig, SITEMAP_SIZE, identifier * SITEMAP_SIZE);
 	if (keys.length === 0) return [];
 	// Requests for a file share one fill, so a few short retries (2, 4, 8 s): a long wait would hold every crawler.
 	const maxRetries = 4;

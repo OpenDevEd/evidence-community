@@ -2,7 +2,7 @@ import { expect, it, vi } from "vitest";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
-import { buildPublicLibraryKeysQuery, buildSitemapKeysQuery, countSitemapRecords, readPublicLibraryStatus } from "@/lib/library-export-records";
+import { buildPublicLibraryKeysQuery, buildSitemapKeysQuery, countSitemapRecords, readPublicLibraryStatus, readSitemapKeys } from "@/lib/library-export-records";
 
 vi.mock("server-only", () => ({}));
 
@@ -30,7 +30,7 @@ it("counts exported publications and their latest update, excluding hidden and u
 		// The sitemaps list only public records with an abstract: one that is blank once its markup is taken out counts as none.
 		await client.query('UPDATE "item" SET "abstractNote" = \'What the study found.\' WHERE "key" IN (\'PUBAAAAA\', \'HIDDENNN\')');
 		await client.query('UPDATE "item" SET "abstractNote" = \'<p>&nbsp;</p>\n\t\' WHERE "key" = \'PUBBBBBB\'');
-		expect((await buildSitemapKeysQuery(database, config, 250, 0)).map(record => record.key)).toEqual(["PUBAAAAA"]);
+		expect(await readSitemapKeys(database, config, 250, 0)).toEqual(["PUBAAAAA"]);
 		expect(await countSitemapRecords(database, config)).toBe(1);
 		// Every sitemap request runs this query, so it must be able to read only its own rows from the sitemap index: a
 		// condition that drifts from the index's predicate puts the whole-table scan back (16 s on a 270,000-record library).
