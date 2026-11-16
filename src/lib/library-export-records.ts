@@ -45,7 +45,7 @@ function selectionFor(columns: readonly string[]) {
  * ignores letter case, the same as `hasAnyTag` in the rest of the runtime.
  */
 export function publicRecordCondition(
-	database: Database,
+	database: Pick<Database, "select">,
 	config: LibraryServerConfig,
 ) {
 	return publicParentVisibility(database, config.content.tags.hidden);
@@ -70,22 +70,42 @@ export function buildPublicLibraryKeysQuery(
 /**
  * Records worth a search result: public ones with an abstract. A record without one is only a title and a few names,
  * the thin page search engines skip, so the sitemap leaves it out; its page stays open to visitors and crawlers.
- * `item_sitemap_key_idx` holds exactly these records in key order, so a sitemap reads only its own rows.
+ * `item_sitemap_key_idx` holds exactly these records in key order.
  */
-function sitemapRecordCondition(database: Database, config: LibraryServerConfig) {
+function sitemapRecordCondition(database: Pick<Database, "select">, config: LibraryServerConfig) {
 	return and(publicRecordCondition(database, config), abstractHasText(item.abstractNote));
 }
 
-// shortcut: OFFSET walks the index up to the file (about 0.2 s for the last of 27 locally); page by key ranges if files get slow.
-/** One sitemap's records, in key order, from `offset` on. */
-export function buildSitemapKeysQuery(database: Database, config: LibraryServerConfig, limit: number, offset: number) {
+/** One sitemap's records, in key order, from `offset` on. Read it through `readSitemapKeys`. */
+export function buildSitemapKeysQuery(database: Pick<Database, "select">, config: LibraryServerConfig, limit: number, offset: number) {
 	return database.select({ key: item.key }).from(item).where(sitemapRecordCondition(database, config))
 		.orderBy(asc(item.key)).limit(limit).offset(offset);
 }
 
+/**
+ * Runs a sitemap read so that it walks `item_sitemap_key_idx` in key order. PostgreSQL estimates a partial index's
+ * condition at about 1% of rows when nearly all of them match, so it picks a bitmap scan instead, which runs the abstract's
+ * regular expression again on every row (12.7 s on AIED's 270,000 records, against 1.2 s walking the index). Parallel
+ * workers are off as well: under a crawler's burst they ran out of the shared server's 64 MB of shared memory.
+ */
+async function readWithSitemapIndex<T>(database: Database, read: (transaction: Pick<Database, "select">) => Promise<T>) {
+	return database.transaction(async (transaction) => {
+		await transaction.execute(sql`SET LOCAL enable_bitmapscan = off`);
+		await transaction.execute(sql`SET LOCAL max_parallel_workers_per_gather = 0`);
+		return read(transaction);
+	});
+}
+
+/** One sitemap's record keys, in key order, from `offset` on. */
+export async function readSitemapKeys(database: Database, config: LibraryServerConfig, limit: number, offset: number) {
+	const rows = await readWithSitemapIndex(database, (transaction) => buildSitemapKeysQuery(transaction, config, limit, offset));
+	return rows.map((row) => row.key);
+}
+
 /** How many records the sitemaps list. */
 export async function countSitemapRecords(database: Database, config: LibraryServerConfig) {
-	const [row] = await database.select({ total: count() }).from(item).where(sitemapRecordCondition(database, config));
+	const [row] = await readWithSitemapIndex(database, (transaction) =>
+		transaction.select({ total: count() }).from(item).where(sitemapRecordCondition(transaction, config)));
 	return row?.total ?? 0;
 }
 
