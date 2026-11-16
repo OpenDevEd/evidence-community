@@ -76,6 +76,8 @@ export const ADMIN_LIVE_UNWATCHED: readonly string[] = [
 	"itemReading",
 	"itemReadingQueue",
 	"itemRedirect",
+	// Written with its review, whose own row tells the admin.
+	"itemReviewSender",
 	"language",
 	"notificationItem",
 	"notificationState",
