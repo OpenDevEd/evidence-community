@@ -757,6 +757,13 @@
       "when": 1793500000000,
       "tag": "0107_sender-contact-email",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1793600000000,
+      "tag": "0108_sitemap-records-index",
+      "breakpoints": true
     }
   ]
 }

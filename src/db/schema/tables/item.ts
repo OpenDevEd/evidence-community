@@ -15,7 +15,9 @@ import {
 	timestamp,
 	unique,
 	varchar,
+	type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { itemType } from "../enums/itemType";
 import { creatorType } from "../enums/creatorType";
 
@@ -32,6 +34,14 @@ type Creator = {
 		display_name?: string;
 	}>;
 };
+
+/**
+ * An abstract with words in it: empty once markup, entities for spaces and white space are taken out, as
+ * `abstractPlainText` reads it. The sitemap query and the index that serves it (migration 0108) share this text.
+ */
+export function abstractHasText(abstractNote: AnyPgColumn) {
+	return sql`regexp_replace(coalesce(${abstractNote}, ''), '<[^>]*>|&nbsp;|&#160;|[[:space:]]|\u00a0', '', 'g') <> ''`;
+}
 
 export const item = pgTable(
 	"item",
@@ -182,5 +192,7 @@ export const item = pgTable(
 		}),
 		index("item_source_connection_idx").on(table.sourceConnectionKey),
 		index("item_parent_idx").on(table.parentItem),
+		// The records the sitemaps list, in key order: public top-level records with an abstract.
+		index("item_sitemap_key_idx").on(table.key).where(sql`coalesce(${table.deleted}, 0) <> 1 AND coalesce(${table.parentItem}, '') = '' AND ${abstractHasText(table.abstractNote)}`),
 	],
 );
