@@ -123,6 +123,28 @@ describe("what an AI answer shows the reader", () => {
 		expect(container.textContent).not.toContain("PAGE/");
 	});
 
+	it("opens the cited page when the model puts a label before the PAGE marker", async () => {
+		// From a Girls' Education in Africa answer on Haiku 5.5. Nearby brackets and links must stay as they are.
+		await render(
+			"Not yet peer-reviewed. [Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 22 PAGE/] " +
+				"[Girl Power — PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 1 PAGE/] " +
+				"[Baird et al. 2013, PAGE /lib/DGL9WHAA/download/9RMDJSN3 — 5 PAGE/]. " +
+				"[see table 2] [Girl Power](/lib/DGL9WHAA) [Girl Power — PAGE notes.pdf — 3 PAGE/]",
+			{ "girl-power.pdf": "/lib/DGL9WHAA/download/9RMDJSN3" },
+		);
+
+		expect(
+			[...container.querySelectorAll("a")].map((link) => link.getAttribute("href")),
+		).toEqual([
+			"/lib/DGL9WHAA/download/9RMDJSN3#page=22",
+			"/lib/DGL9WHAA/download/9RMDJSN3#page=1",
+			"/lib/DGL9WHAA/download/9RMDJSN3#page=5",
+			"/lib/DGL9WHAA",
+		]);
+		expect(container.textContent).toContain("[see table 2]");
+		expect(container.textContent).toContain("[Girl Power — PAGE notes.pdf — 3 PAGE/]");
+	});
+
 	it("shows the page but no citation link when the source is unknown", async () => {
 		await render("A claim from an unknown file. [PAGE notes.pdf — 3 PAGE/]");
 

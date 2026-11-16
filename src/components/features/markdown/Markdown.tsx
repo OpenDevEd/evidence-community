@@ -15,7 +15,7 @@ import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/nextui/Card";
-import { MISSING_PAGE_MARKER, parsePageCitations } from "@/lib/ai/citations";
+import { LABELLED_PAGE_MARKER, MISSING_PAGE_MARKER, parsePageCitations } from "@/lib/ai/citations";
 import {
 	PageCitation,
 	PublicationLink,
@@ -87,7 +87,7 @@ export const rehypeQuoteWrapper = createRehypeWrapperForTag(
 );
 export const rehypePageWrapper = createRehypeWrapper(
 	new RegExp(
-		String.raw`\(?\[(?:PAGE |${MISSING_PAGE_MARKER})(.*?) PAGE\/\.?\]\)?\.?`,
+		String.raw`\(?\[(?:PAGE |${MISSING_PAGE_MARKER}|${LABELLED_PAGE_MARKER})(.*?) PAGE\/\.?\]\)?\.?`,
 		"g",
 	),
 	"PageHighlight",
