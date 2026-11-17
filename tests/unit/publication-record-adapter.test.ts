@@ -20,6 +20,7 @@ function record(
 		languageName: "eng",
 		publisher: "Publisher",
 		rights: "Copyright holder",
+		licence: { kind: "zenodo", id: "cc-by-4.0" },
 		creators: [
 			{
 				creatorType: "author",
@@ -45,7 +46,6 @@ describe("publication record adapter", () => {
 				record: record(),
 				tags: [" Evidence ", "_r:doi", "internal", "Evidence"],
 				baseUrl: "https://library.example.org",
-				libraryLicense: "cc-by-4.0",
 			}),
 		).toEqual({
 			recordKey: "ABCDEFGH",
@@ -77,32 +77,31 @@ describe("publication record adapter", () => {
 		});
 	});
 
-	it("deposits the record's own licence, and refuses a new DOI for a record with none", () => {
-		const sent = (licence: EvidenceLibraryPublicationRecord["licence"], libraryLicense: string | null) => {
-			const snapshot = buildPublicationRecordSnapshot({ record: record({ licence }), tags: [], baseUrl: "https://library.example.org", libraryLicense });
+	it("deposits the record's own licence, and refuses a DOI for a record with none", () => {
+		const sent = (licence: EvidenceLibraryPublicationRecord["licence"]) => {
+			const snapshot = buildPublicationRecordSnapshot({ record: record({ licence }), tags: [], baseUrl: "https://library.example.org" });
 			return { license: snapshot.license, customLicense: snapshot.customLicense };
 		};
-		// The record's licence wins over the library's, which only covers a record registered before records had one.
-		expect(sent({ kind: "zenodo", id: "cc-by-nc-4.0" }, "cc-by-4.0")).toEqual({ license: "cc-by-nc-4.0", customLicense: undefined });
-		expect(sent({ kind: "custom", title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" }, null)).toEqual({
+		expect(sent({ kind: "zenodo", id: "cc-by-nc-4.0" })).toEqual({ license: "cc-by-nc-4.0", customLicense: undefined });
+		expect(sent({ kind: "custom", title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" })).toEqual({
 			license: undefined,
 			customLicense: { title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" },
 		});
-		expect(() => sent(null, null)).toThrow(/licence/u);
-		expect(() => sent({ kind: "custom", title: "Our terms", url: "" }, "cc-by-4.0")).toThrow(/licence/u);
+		expect(() => sent(null)).toThrow(/licence/u);
+		expect(() => sent({ kind: "custom", title: "Our terms", url: "" })).toThrow(/licence/u);
 	});
 
     it.each([null, "not-a-date"])("never invents a publication date from record creation for %s", date => {
         if (date === null) {
-            expect(() => buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org", libraryLicense: "cc-by-4.0"})).toThrow();
+            expect(() => buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org"})).toThrow();
         } else {
-            expect(buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org", libraryLicense: "cc-by-4.0"}).publicationDate).toBe(date);
+            expect(buildPublicationRecordSnapshot({record: record({date}), tags: [], baseUrl: "https://library.example.org"}).publicationDate).toBe(date);
         }
     });
 
 	it("sends a language written out as its code, and a code or other text as stored", () => {
 		const sent = (languageName: string) =>
-			buildPublicationRecordSnapshot({ record: record({ languageName }), tags: [], baseUrl: "https://library.example.org", libraryLicense: "cc-by-4.0" }).language;
+			buildPublicationRecordSnapshot({ record: record({ languageName }), tags: [], baseUrl: "https://library.example.org" }).language;
 		// The registrars take codes. A code is left alone so a registered record reads as it did; text that names no language is theirs to refuse.
 		expect(["English", "eng", "en-GB", "English; French"].map(sent)).toEqual(["en", "eng", "en-GB", "English; French"]);
 	});
@@ -112,7 +111,6 @@ describe("publication record adapter", () => {
 			record: record(),
 			tags: [],
 			baseUrl: "https://library.example.org",
-			libraryLicense: "cc-by-4.0",
 		});
 		expect(snapshot.fields).not.toHaveProperty("sourceConnectionKey");
 		expect(snapshot.fields).not.toHaveProperty("updatedAt");
@@ -124,7 +122,6 @@ describe("publication record adapter", () => {
 				record: record({ itemType, publisher: "Record Institute" }),
 				tags: [],
 				baseUrl: "https://library.example.org",
-				libraryLicense: "cc-by-4.0",
 			});
 
 		expect(snapshot("Report").institution).toBe("Record Institute");
@@ -147,7 +144,6 @@ describe("publication record adapter", () => {
 			}),
 			tags: [],
 			baseUrl: "https://library.example.org",
-			libraryLicense: "cc-by-4.0",
 			extras: {
 				links: [
 					{ kind: "cites", key: "CITED001", doi: "10.1000/cited.1" },
@@ -188,7 +184,6 @@ describe("publication record adapter", () => {
 				}),
 				tags: [],
 				baseUrl: "https://library.example.org",
-				libraryLicense: "cc-by-4.0",
 			}),
 		).toThrow("Creator 1 needs a family name");
 	});

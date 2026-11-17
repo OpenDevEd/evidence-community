@@ -9,12 +9,14 @@ describe("the licence a rights statement names", () => {
 		["https://creativecommons.org/licenses/by-nc-nd/4.0/", "cc-by-nc-nd-4.0"],
 		["CC0", "cc0-1.0"],
 		["Creative Commons Attribution 4.0 International", "cc-by-4.0"],
+		["https://creativecommons.org/licenses/by-nc-nd/3.0/igo/", "cc-by-nc-nd-3.0-igo"],
+		["Mozilla Public License 2.0 (no copyleft exception)", "mpl-2.0-no-copyleft-exception"],
 	])("reads %s as %s", (rights, id) => {
 		expect(licenceFromRights(rights)).toBe(id);
 	});
 
 	// A licence without its version, or a statement that names none, is left for a person to pick, never guessed.
-	it.each(["CC BY", "© World Bank. All rights reserved.", ""])("finds none in %j", (rights) => {
+	it.each(["CC BY", "https://creativecommons.org/licenses/by/3.0/de/", "© World Bank. All rights reserved.", ""])("finds none in %j", (rights) => {
 		expect(licenceFromRights(rights)).toBeNull();
 	});
 });

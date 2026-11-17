@@ -462,14 +462,17 @@ export const isZenodoLicence = (id: string) => IDS.has(id);
 /** A licence's title by its id, or the id itself for one Zenodo doesn't have. */
 export const zenodoLicenceTitle = (id: string) => ZENODO_LICENCES.find(([known]) => known === id)?.[1] ?? id;
 
-const CC_URL = /creativecommons\.org\/licenses\/(by(?:-(?:nc|nd|sa))*)\/(\d\.\d)/u;
-const CC_NAME = /\bcc[\s-]?(by(?:[\s-](?:nc|nd|sa))*)[\s-]+(\d\.\d)\b/u;
+// A Creative Commons link or short name, with its version and, for a ported licence, its jurisdiction ("igo", "at").
+const CC_URL = /creativecommons\.org\/licenses\/(by(?:-(?:nc|nd|sa))*)\/(\d\.\d)(?:\/([a-z]{2,3})(?=\/|$|\s))?/u;
+const CC_NAME = /\bcc[\s-]?(by(?:[\s-](?:nc|nd|sa))*)[\s-]+(\d\.\d)(?:[\s-](igo))?\b/u;
 const CC_ZERO = /\bcc0\b|creativecommons\.org\/publicdomain\/zero\/1\.0/u;
+// Longest first, so a title holding another ("… 2.0 (no copyleft exception)" holds "… 2.0") finds the one it names.
+const BY_TITLE = [...ZENODO_LICENCES].sort(([, a], [, b]) => b.length - a.length);
 
 /**
  * The licence a record's rights statement names, when it names one Zenodo takes: a Creative Commons licence by its
  * link or short name with its version ("CC BY-NC 4.0"), or any licence by its full title. Null when it names none, or
- * one without its version, which is left for a person to pick rather than guessed.
+ * one without its version or in a jurisdiction Zenodo doesn't list, which is left for a person to pick, not guessed.
  */
 export function licenceFromRights(rights: string | null | undefined): string | null {
 	const text = rights?.toLowerCase().replace(/\s+/gu, " ") ?? "";
@@ -477,12 +480,11 @@ export function licenceFromRights(rights: string | null | undefined): string | n
 	if (CC_ZERO.test(text)) return "cc0-1.0";
 	const cc = CC_URL.exec(text) ?? CC_NAME.exec(text);
 	if (cc) {
-		const id = `cc-${cc[1]!.replace(/\s/gu, "-")}-${cc[2]}`;
-		if (isZenodoLicence(id)) return id;
+		const id = [`cc-${cc[1]!.replace(/\s/gu, "-")}-${cc[2]}`, cc[3]].filter(Boolean).join("-");
+		return isZenodoLicence(id) ? id : null;
 	}
-	return ZENODO_LICENCES.find(([, title]) => text.includes(title.toLowerCase()))?.[0] ?? null;
+	return BY_TITLE.find(([, title]) => text.includes(title.toLowerCase()))?.[0] ?? null;
 }
-
 
 /** A Creative Commons licence's short name, as people write it ("CC BY-NC 4.0"); null for other licences. */
 export function licenceShortName(id: string) {

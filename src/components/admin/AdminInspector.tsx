@@ -1824,7 +1824,8 @@ export function AdminInspector({
 		detail.kind === "created" && !detail.parentItem
 			? { value: recordLicence(payload.licence), change: diff.licence, defaultLicence, needed: doiChosen, onChange: (licence) => patchPayload({ licence }) }
 			: null;
-	const licenceMissing = Boolean(licenceField?.needed && !licenceComplete(licenceField.value));
+	// It holds sending the draft on, never opening one: a record needs its draft to get its licence.
+	const licenceMissing = Boolean(detail.draft && licenceField?.needed && !licenceComplete(licenceField.value));
 	// OpenAlex records take library files because OpenAlex gets no writeback; Zotero attachments sync back to Zotero.
 	const holdsLibraryFiles =
 		native ||

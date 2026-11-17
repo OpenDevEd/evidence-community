@@ -577,8 +577,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			record,
 			tags: snapshot.tags,
 			baseUrl: input.config.identity.baseUrl,
-			// A record whose DOI went out before records had their own licence keeps the library's until one is picked.
-			libraryLicense: zenodoConceptDoi ? publicationConfig.zenodo.license : null,
 			extras: input.extras,
 		});
 		validationRecord = inspected.record;

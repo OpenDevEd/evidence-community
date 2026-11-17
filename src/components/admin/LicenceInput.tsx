@@ -115,6 +115,8 @@ export function LicenceInput({
 							classNames={inspectorInputClassNames}
 							isDisabled={disabled}
 							placeholder="Name"
+							// A new value from outside (a revert, another tab) starts the box again from it.
+							key={`title:${custom.title}`}
 							defaultValue={custom.title}
 							onBlur={(event) => {
 								const title = event.currentTarget.value.trim();
@@ -128,6 +130,7 @@ export function LicenceInput({
 							isDisabled={disabled}
 							placeholder="https://"
 							type="url"
+							key={`url:${custom.url}`}
 							defaultValue={custom.url}
 							onBlur={(event) => {
 								const url = event.currentTarget.value.trim();

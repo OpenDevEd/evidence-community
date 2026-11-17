@@ -1,3 +1,3 @@
--- Rollback for 0110_item-licence. Records' own licences are lost; their DOIs go out under the library's Zenodo licence
--- again.
-ALTER TABLE "item" DROP COLUMN "licence";
+-- Rollback for 0110_item-licence: nothing to run. The previous runtime never reads the "licence" column, so it stays,
+-- and the records' licences are there again when the library rolls forward. Dropping it would lose every licence
+-- people picked.
