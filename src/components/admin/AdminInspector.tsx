@@ -22,6 +22,8 @@ import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
+import { LicenceInput } from "./LicenceInput";
+import { licenceComplete, setRecordLicence, startingLicence, useRecordLicence, type LicenceState } from "@/lib/mock/record-licence";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import OpenScholar from "@/components/icons/OpenScholar";
@@ -623,6 +625,36 @@ const StudyTypeEditor = memo(function StudyTypeEditor({
 	);
 });
 
+/** Says why sending a record on is held while it is to get a DOI without a licence. The span keeps the held button hoverable. */
+function LicenceHold({ missing, children }: { missing: boolean; children: ReactNode }) {
+	return (
+		<Tooltip content="Pick a licence first. A DOI needs one." isDisabled={!missing}>
+			<span className="flex min-w-0 flex-1">{children}</span>
+		</Tooltip>
+	);
+}
+
+/** A record's licence, with what it needs to show and change it. Only records made here, which can get a DOI, have one. */
+type RecordLicenceField = { state: LicenceState; defaultLicence: string; needed: boolean; onChange: (licence: NonNullable<LicenceState["licence"]>) => void };
+
+/** Under the Rights field, on a record that has a licence. */
+const LicenceEditor = memo(function LicenceEditor({ field, licence, rights, readOnly }: { field: string; licence: RecordLicenceField | null; rights: string; readOnly: boolean }) {
+	if (field !== "rights" || !licence) return null;
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel htmlFor="admin-record-licence">Licence</FieldLabel>
+			<LicenceInput
+				state={licence.state}
+				rights={rights}
+				defaultLicence={licence.defaultLicence}
+				needed={licence.needed}
+				disabled={readOnly}
+				onChange={licence.onChange}
+			/>
+		</div>
+	);
+});
+
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
 	const titleField =
@@ -659,6 +691,7 @@ function MetadataEditor({
 	readOnly,
 	lockedDoi,
 	registersDoi,
+	licence,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail;
@@ -671,6 +704,8 @@ function MetadataEditor({
 	lockedDoi: string | null;
 	/** The community registers this record's DOI itself, so nothing outside lists it. */
 	registersDoi: boolean;
+	/** Its licence, shown under its rights; null for a record that came from elsewhere. */
+	licence: RecordLicenceField | null;
 }) {
 	const definition = definitionFor(
 		definitions,
@@ -843,6 +878,7 @@ function MetadataEditor({
 										/>
 									</>
 								)}
+							<LicenceEditor field={field} licence={licence} rights={value} readOnly={readOnly} />
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">
 									Deactivate Zenodo before changing this DOI.
@@ -1646,7 +1682,7 @@ export function AdminInspector({
 }) {
 	const libraryConfig = useLibraryConfig();
 	const { identity, topics: topicsConfig } = libraryConfig;
-	const { canPublish } = useAdminSession();
+	const { canPublish, defaultLicence = "cc-by-4.0" } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
 		() =>
@@ -1733,6 +1769,9 @@ export function AdminInspector({
 		? payload.sourceResolutions as Record<string, SourceResolution>
 		: {};
 
+	// MOCK: the record's licence lives in this browser. A PDF import starts with what its rights name, or none.
+	const licenceState = useRecordLicence(detailKey ?? "", startingLicence(payload.rights, Boolean(detail?.importChecks), defaultLicence));
+
 	const [menuOpen, setMenuOpen] = useState(false);
 	const closeMenu = () => setMenuOpen(false);
 
@@ -1763,6 +1802,13 @@ export function AdminInspector({
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
+	// Only a record made here can get a DOI, and a DOI needs a licence: Zenodo and Crossref both take it.
+	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);
+	const licenceField: RecordLicenceField | null =
+		detail.kind === "created" && !detail.parentItem
+			? { state: licenceState, defaultLicence, needed: doiChosen, onChange: (licence) => setRecordLicence(detail.key, licence) }
+			: null;
+	const licenceMissing = Boolean(licenceField?.needed && !licenceComplete(licenceState.licence));
 	// OpenAlex records take library files because OpenAlex gets no writeback; Zotero attachments sync back to Zotero.
 	const holdsLibraryFiles =
 		native ||
@@ -1818,7 +1864,8 @@ export function AdminInspector({
 				saveState === "conflict" ||
 				saveState === "error" ||
 				reviewPending ||
-				submissionBlocked));
+				submissionBlocked)) ||
+		licenceMissing;
   const hasPublishedVersion = Boolean(liveRecord.published) && liveRecord.state !== "deleted";
   const showPublicLinkActions = hasPublishedVersion && Boolean(itemUrl);
   const openPublicationSettings = () => {
@@ -2154,6 +2201,7 @@ export function AdminInspector({
 					<div className="flex min-w-0 flex-1 animate-fade-in items-center gap-2">
 						{versionActions ??
 							(showPrimaryAction && (
+								<LicenceHold missing={licenceMissing}>
 								<Button
 									size="xs"
 									// Beside Publish, sending to the queue is the quieter choice.
@@ -2175,8 +2223,10 @@ export function AdminInspector({
 								>
 									{primaryAction.label}
 								</Button>
+								</LicenceHold>
 							))}
 						{!versionActions && showPrimaryAction && choosesPublish && (
+							<LicenceHold missing={licenceMissing}>
 							<Button
 								size="xs"
 								color={primaryDisabled ? "secondary" : "accent"}
@@ -2188,6 +2238,7 @@ export function AdminInspector({
 							>
 								Publish
 							</Button>
+							</LicenceHold>
 						)}
 						{versionWithdraw}
 					</div>
@@ -2251,6 +2302,7 @@ export function AdminInspector({
 										: undefined
 								}
 								model={publishing}
+								licenceMissing={licenceMissing}
 							/>
 						)}
 					</Section>
@@ -2272,6 +2324,7 @@ export function AdminInspector({
 						readOnly={readOnly}
 						// Until a record made here is known to have no DOI choice, it counts as registering its own.
 						registersDoi={readOnlyVersion ? Boolean(publishingChoice) : detail.kind === "created" && publishing?.saved.data?.choice !== null}
+						licence={licenceField}
 						lockedDoi={
 							publication.publication?.providers.zenodo.exact
 								.targetActive &&

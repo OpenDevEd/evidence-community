@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, Folder01Icon, HashtagIcon, PencilEdit02Icon, QuoteDownIcon, Route01Icon, SentIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserCheck01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons";
+import { ArrowLeft01Icon, ArrowRight01Icon, ArrowRight02Icon, CheckListIcon, FileEditIcon, FileExportIcon, Folder01Icon, HashtagIcon, LicenseIcon, PencilEdit02Icon, QuoteDownIcon, Route01Icon, SentIcon, SquareArrowUpRight02Icon, Tag01Icon, TextIcon, UserCheck01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 
@@ -21,6 +21,8 @@ import { InspectorChoices } from "./InspectorChoices";
 import { checkCountOf, countSummary, ListHeader, Setting, SettingsGroup, sheetTransition, SheetTabs, Tick } from "./import-parts";
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import type { ImportFlowState } from "./import-flow";
+import { LicenceInput, licenceLabel, licenceShortName } from "./LicenceInput";
+import { licenceComplete, setRecordLicence, startingLicence, useLicences, useRecordLicence, type RecordLicence } from "@/lib/mock/record-licence";
 
 const ROWS_PER_PAGE = 8;
 
@@ -314,6 +316,7 @@ function RecordParts(props: PartProps) {
 				<TagsPart {...props} />
 				<CitesPart {...props} />
 				<SuggestionsPart {...props} />
+				<LicencePart {...props} />
 				<ChoicePart {...props} icon={Tag01Icon} kind="topics" title="Topics" />
 				<ChoicePart {...props} icon={Folder01Icon} kind="collections" title="Collections" />
 				<PropertiesPart {...props} />
@@ -393,6 +396,66 @@ function ChoicePart({ flow, icon, kind, row, title }: PartProps & { icon: typeof
 		<Setting icon={icon} summary={`${chosen.size} of ${choices.length} chosen`} title={title}>
 			<ChoiceList chosen={chosen} choices={choices} locked={flow.locked} onToggle={(id) => flow.toggleChoice(row.id, kind, id)} />
 		</Setting>
+	);
+}
+
+/** MOCK: a PDF without a DOI becomes a record made here, which can get a DOI and so has a licence. */
+const makesRecord = (row: ImportRow, edited: Record<string, unknown>) => Boolean(row.source) && !(typeof edited.DOI === "string" && edited.DOI.trim());
+const rightsOf = (edited: Record<string, unknown>) => (typeof edited.rights === "string" ? edited.rights : "");
+/** Whether the chosen records are sent on with a DOI as soon as they're in, which needs each one's licence now. */
+const sendsWithDoi = (flow: ImportFlowState) => flow.batch?.outcome === "send" && Boolean(flow.batch.publishRoute);
+
+/** The licence row's summary: the licence, or what it still needs, in red when a DOI waits for it. */
+function licenceSummary(licence: RecordLicence | null, needed: boolean) {
+	if (licenceComplete(licence)) return licenceLabel(licence);
+	return <span className={needed ? "text-danger" : undefined}>{licence ? "Needs its name and link" : "None found"}</span>;
+}
+
+/** The chosen records that would go out with a DOI and no licence. */
+function withoutLicence(flow: ImportFlowState, licenceOf: ReturnType<typeof useLicences>, defaultLicence: string) {
+	if (!sendsWithDoi(flow)) return [];
+	return flow.rows.filter((row) => {
+		if (!flow.selected.has(row.id) || row.state !== "read") return false;
+		const edited = recordPayload(row, flow.appliedFor(row));
+		return makesRecord(row, edited) && !licenceComplete(licenceOf(row.id, startingLicence(rightsOf(edited), true, defaultLicence)).licence);
+	});
+}
+
+function missingWords(count: number, defaultLicence: string) {
+	const name = licenceShortName(defaultLicence) ?? "the default licence";
+	return count === 1
+		? { note: "1 record has no licence in its PDF. It needs one for its DOI.", action: `Use ${name} for it` }
+		: { note: `${count} records have no licence in their PDFs. Each needs one for its DOI.`, action: `Use ${name} for them` };
+}
+
+/** The licence the PDF's rights name, or none: an import never takes the default by itself. */
+function LicencePart({ edited, flow, row }: PartProps) {
+	const { defaultLicence = "cc-by-4.0" } = useAdminSession();
+	const rights = rightsOf(edited);
+	const state = useRecordLicence(row.id, startingLicence(rights, true, defaultLicence));
+	if (!makesRecord(row, edited)) return null;
+	const needed = sendsWithDoi(flow);
+	return (
+		<Setting defaultOpen={needed && !licenceComplete(state.licence)} icon={LicenseIcon} summary={licenceSummary(state.licence, needed)} title="Licence">
+			<LicenceInput state={state} rights={rights} defaultLicence={defaultLicence} needed={needed} disabled={flow.locked} onChange={(licence) => setRecordLicence(row.id, licence)} />
+		</Setting>
+	);
+}
+
+/** The chosen records a DOI would go out without a licence for, with the default offered for all of them at once. */
+function MissingLicences({ flow }: { flow: ImportFlowState }) {
+	const { defaultLicence = "cc-by-4.0" } = useAdminSession();
+	const licenceOf = useLicences();
+	const missing = withoutLicence(flow, licenceOf, defaultLicence);
+	if (!missing.length) return null;
+	const words = missingWords(missing.length, defaultLicence);
+	return (
+		<div role="alert" className="flex items-center gap-3 rounded-xl bg-danger/5 px-3 py-2.5 text-xs text-danger">
+			<p className="min-w-0 flex-1 leading-5">{words.note}</p>
+			<Button className="shrink-0" isDisabled={flow.locked} onPress={() => missing.forEach((row) => setRecordLicence(row.id, { kind: "zenodo", id: defaultLicence }))} size="xs" variant="muted">
+				{words.action}
+			</Button>
+		</div>
 	);
 }
 
@@ -481,6 +544,7 @@ function OutcomeSetting({ flow }: { flow: ImportFlowState }) {
 				/>
 				<p className="text-xs leading-5 text-black/50 dark:text-white/50">{outcome === "send" ? send.note : "Edit them in the record editor first, then publish or submit them from the finish step or the editor."}</p>
 				{outcome === "send" ? <DoiChoice flow={flow} route={flow.batch!.publishRoute} started={flow.locked} /> : null}
+				<MissingLicences flow={flow} />
 			</div>
 		</Setting>
 	);
