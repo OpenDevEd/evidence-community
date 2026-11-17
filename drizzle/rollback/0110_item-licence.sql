@@ -1,0 +1,3 @@
+-- Rollback for 0110_item-licence: nothing to run. The previous runtime never reads the "licence" column, so it stays,
+-- and the records' licences are there again when the library rolls forward. Dropping it would lose every licence
+-- people picked.

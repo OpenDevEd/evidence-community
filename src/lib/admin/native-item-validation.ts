@@ -1,3 +1,4 @@
+import { recordLicenceSchema } from "@/lib/licences";
 import { STUDY_TYPE_KEYS } from "@/lib/readings/study-types";
 import {
 	describeZoteroItemTypeFields,
@@ -317,6 +318,14 @@ function openAccessFields(value: unknown, source: boolean | undefined) {
 	return { openAccess: result.data };
 }
 
+/** A record's licence, or none with null. A licence outside Zenodo's list may be saved half written; its DOI waits for it. */
+function licenceFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	const result = recordLicenceSchema.nullable().safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose a licence.", { licence: "Choose one of Zenodo's licences, or give another licence's name and link." });
+	return { licence: result.data };
+}
+
 function topicFields(value: unknown) {
 	if (value === undefined) return {};
 	return { topics: [...new Set(z.array(topicIdSchema).max(100).parse(value))].sort() };
@@ -351,6 +360,7 @@ function parseNativeItemDraft(
 		...countryFocusFields(payload.countryFocus, options.source),
 		...openAccessFields(payload.openAccess, options.source),
 		...studyTypeFields(payload.studyType, options.source),
+		...licenceFields(payload.licence, options.source),
 		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,

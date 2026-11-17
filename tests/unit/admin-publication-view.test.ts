@@ -54,6 +54,7 @@ function record(changes: Record<string, unknown> = {}) {
 		languageName: "eng",
 		publisher: "Publisher",
 		rights: "Copyright holder",
+		licence: { kind: "zenodo", id: "cc-by-4.0" },
 		creators: [
 			{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" },
 		],

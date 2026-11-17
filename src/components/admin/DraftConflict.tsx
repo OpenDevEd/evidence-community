@@ -1,5 +1,6 @@
 "use client";
 
+import { licenceLabel, type RecordLicence } from "@/lib/licences";
 import { describeCountryFocus } from "@/lib/country-focus";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import { describeStudyTypeChoice } from "@/lib/readings/study-types";
@@ -46,6 +47,7 @@ export function ConflictValue({
 	if (field === "countryFocus") return describeCountryFocus(value);
 	if (field === "openAccess") return describeOpenAccessChoice(value);
 	if (field === "studyType") return describeStudyTypeChoice(value);
+	if (field === "licence") return value ? licenceLabel(value as RecordLicence) : <span className="text-black/45 dark:text-white/45">None</span>;
 	if (
 		value == null ||
 		value === "" ||

@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Link01Icon } from "@hugeicons/core-free-icons";
 import { InspectorChoices } from "./InspectorChoices";
 import { Switch } from "@/components/nextui/Switch";
+import { Button } from "@/components/nextui/Button";
 import { CrossrefIcon } from "@/components/icons/CrossrefIcon";
 import { ZenodoIcon } from "@/components/icons/ZenodoIcon";
 import type { AdminItemDetail } from "@/lib/admin/types";
@@ -79,6 +80,8 @@ type PanelProps = {
 	filesReadOnly: boolean;
 	choice?: PublishingChoice | null;
 	model: ReturnType<typeof usePublishingChoice>;
+	/** The record is to get a DOI and has no licence yet. */
+	licenceMissing?: boolean;
 };
 
 /** A record's DOI: kept as it came, chosen here, or not on offer in a community that hasn't set up Zenodo. */
@@ -98,6 +101,7 @@ export function RecordDoiPanel(props: PanelProps) {
 			disabled={props.readOnly || saving || saved.isLoading || Boolean(saved.error)}
 			model={props.model}
 			crossref={offer.crossref}
+			licenceMissing={props.licenceMissing ?? false}
 		/>
 	);
 }
@@ -124,7 +128,9 @@ function PublishingChoicePanel({
 	disabled,
 	model,
 	crossref,
+	licenceMissing,
 }: Pick<PanelProps, "detail" | "filesReadOnly" | "model"> & {
+	licenceMissing: boolean;
 	readOnly: boolean;
 	/** The route chosen: the saved one, or a submitted version's. */
 	value: PublishingChoice | null;
@@ -161,6 +167,7 @@ function PublishingChoicePanel({
 					</span>
 				</Tooltip>
 			</div>
+			{value && licenceMissing ? <NoLicence fieldId={`admin-${detail.key}-licence`} /> : null}
 			{value ? (
 				<ChosenRoute value={value} detail={detail} readOnly={readOnly} filesReadOnly={filesReadOnly} disabled={disabled} model={model} crossref={crossref} />
 			) : (
@@ -234,6 +241,23 @@ function ChosenRoute({
 				/>
 			</div>
 		</>
+	);
+}
+
+/** A DOI needs the record's licence, which Zenodo and Crossref both take: until it has one, it goes to the field. */
+function NoLicence({ fieldId }: { fieldId: string }) {
+	const pick = () => {
+		const field = document.getElementById(fieldId);
+		field?.scrollIntoView({ behavior: "smooth", block: "center" });
+		field?.focus({ preventScroll: true });
+	};
+	return (
+		<div role="alert" className="flex items-center gap-3 px-3 pb-3 text-xs text-danger">
+			<p className="min-w-0 flex-1 leading-relaxed">No licence yet. A DOI needs one.</p>
+			<Button size="xs" variant="muted" className="shrink-0" onPress={pick}>
+				Pick a licence
+			</Button>
+		</div>
 	);
 }
 

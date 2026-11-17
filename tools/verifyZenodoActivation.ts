@@ -45,8 +45,8 @@ async function seedParent(
 		[input.key],
 	);
 	await client.query(
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted")
-		 VALUES ($1, 'native', $1, 'Report', 1, 'Zenodo activation record', 'A complete description.', '2026-08-13', $2::jsonb, 'OpenDevEd', $3, 0)`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted", "licence")
+		 VALUES ($1, 'native', $1, 'Report', 1, 'Zenodo activation record', 'A complete description.', '2026-08-13', $2::jsonb, 'OpenDevEd', $3, 0, '{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb)`,
 		[
 			input.key,
 			JSON.stringify([

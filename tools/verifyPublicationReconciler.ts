@@ -36,8 +36,8 @@ async function seedRecord(
 	await client.query(
 		`INSERT INTO "item" (
 			"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
-			"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted", "deletedAt"
-		) VALUES ($1, 'reconciler-source', $1, 'Report', 1, $2, 'A complete description.', '2026-08-13', $3::jsonb, 'OpenDevEd', $4, $5, $6)`,
+			"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted", "deletedAt", "licence"
+		) VALUES ($1, 'reconciler-source', $1, 'Report', 1, $2, 'A complete description.', '2026-08-13', $3::jsonb, 'OpenDevEd', $4, $5, $6, '{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb)`,
 		[
 			input.key,
 			`Reconciliation record ${input.sequence}`,

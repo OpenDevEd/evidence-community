@@ -11,6 +11,7 @@ import {
 	type EvidenceLibraryPublicationMetadata,
 } from "./record-metadata";
 import type { PublicationRecordExtras } from "./record-extras";
+import { licenceComplete } from "@/lib/licences";
 
 export type EvidenceLibraryPublicationRecord =
 	EvidenceLibraryPublicationMetadata & {
@@ -32,7 +33,6 @@ export function buildPublicationRecordSnapshot(input: {
 	record: EvidenceLibraryPublicationRecord;
 	tags: readonly string[];
 	baseUrl: string;
-	license: string;
 	extras?: PublicationRecordExtras;
 }): PublicationRecordSnapshot {
 	const inspected = inspectPublicationRecordSnapshot(input);
@@ -44,7 +44,6 @@ export function inspectPublicationRecordSnapshot(input: {
 	record: EvidenceLibraryPublicationRecord;
 	tags: readonly string[];
 	baseUrl: string;
-	license: string;
 	extras?: PublicationRecordExtras;
 }): {
 	issues: readonly string[];
@@ -55,13 +54,15 @@ export function inspectPublicationRecordSnapshot(input: {
 		issues.push("Add a title before activating publication");
 	if (!input.record.date?.trim())
 		issues.push("Add a publication date before activating publication");
+	const licence = licenceComplete(input.record.licence) ? input.record.licence : null;
+	if (!licence) issues.push("Pick this record's licence before activating publication");
 	return {
 		issues,
 		record: {
 			...publicationRecordMetadata(
 				input.record,
 				input.tags,
-				input.license,
+				licence,
 				input.extras,
 			),
 			recordKey: input.record.key,

@@ -83,7 +83,7 @@ VALUES
 
 INSERT INTO "item" (
 	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
-	"title", "abstractNote", "date", "creators", "publisher", "deleted"
+	"title", "abstractNote", "date", "creators", "publisher", "deleted", "licence"
 ) VALUES (
 	'PUBACC23', 'native', 'PUBACC23', 'Report', 1,
 	'Amber DOI acceptance report',
@@ -91,7 +91,8 @@ INSERT INTO "item" (
 	'2026-08-13',
 	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace","institutions":[{"display_name":"Amber Institute","country_code":"GB"},{"display_name":"Indigo College","country_code":"KE"}]}]'::jsonb,
 	'Amber Evidence Library',
-	0
+	0,
+	'{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb
 );
 
 INSERT INTO "item" (
@@ -127,7 +128,7 @@ VALUES
 
 INSERT INTO "item" (
 	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
-	"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted"
+	"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted", "licence"
 ) VALUES (
 	'PUBEXT23', 'native', 'PUBEXT23', 'Report', 1,
 	'Amber external DOI archive report',
@@ -136,7 +137,8 @@ INSERT INTO "item" (
 	'[{"creatorType":"author","firstName":"Katherine","lastName":"Johnson"}]'::jsonb,
 	'Amber Evidence Library',
 	'10.1038/nature12373',
-	0
+	0,
+	'{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb
 );
 
 INSERT INTO "item" (
@@ -182,7 +184,7 @@ VALUES
 
 INSERT INTO "item" (
 	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
-	"title", "abstractNote", "date", "creators", "publisher", "deleted"
+	"title", "abstractNote", "date", "creators", "publisher", "deleted", "licence"
 ) VALUES (
 	'PUBUIA23', 'native', 'PUBUIA23', 'Report', 1,
 	'Amber DOI admin interface report',
@@ -190,7 +192,8 @@ INSERT INTO "item" (
 	'2026-08-13',
 	'[{"creatorType":"author","firstName":"Grace","lastName":"Hopper"}]'::jsonb,
 	'Amber Evidence Library',
-	0
+	0,
+	'{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb
 );
 
 INSERT INTO "item" (

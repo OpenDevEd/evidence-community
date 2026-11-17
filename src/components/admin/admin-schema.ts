@@ -92,7 +92,7 @@ function sharedPayloadFromDetail(
 		collections: detail.collectionKeys,
 		links: detail.links.publishedKeys,
 		...Object.fromEntries(
-			(["countryFocus", "openAccess", "studyType", "topics"] as const).map((field) => [field, published[field] ?? null]),
+			(["countryFocus", "openAccess", "studyType", "licence", "topics"] as const).map((field) => [field, published[field] ?? null]),
 		),
 		creators: published.creators ?? detail.creators,
 		...(detail.parentItem ? { parentItem: detail.parentItem } : {}),

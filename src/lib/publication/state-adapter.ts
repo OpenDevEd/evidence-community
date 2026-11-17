@@ -266,7 +266,6 @@ export function publicationPlanData(
 			record,
 			tags: snapshot.tags,
 			baseUrl: config.identity.baseUrl,
-			license: config.services.publication.zenodo.license,
 			...(extras ? { extras } : {}),
 		}),
 		files: buildPublicationFileManifest(snapshot.files),

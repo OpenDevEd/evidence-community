@@ -577,7 +577,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			record,
 			tags: snapshot.tags,
 			baseUrl: input.config.identity.baseUrl,
-			license: publicationConfig.zenodo.license,
 			extras: input.extras,
 		});
 		validationRecord = inspected.record;
