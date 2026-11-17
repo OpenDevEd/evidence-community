@@ -1,6 +1,6 @@
 ---
 name: verify
-description: Prove an Evidence Library change in real browsers with `npm run verify`. Use whenever a change touches anything a person sees (src/app, src/components, styles), when reproducing a visual, loading or layout bug, and before saying UI work is done. Starts the acceptance fixture services with seeded records, serves production builds of this branch and of the main commit it starts from on them, checks that pages hold still in Chromium and Firefox with slow data, and stops what it started.
+description: Prove an Evidence Library change in real browsers with `npm run verify`. Use when a change touches a loading state, a dialog, sheet, popover or menu, or motion, and when reproducing a visual, loading or layout bug. Starts the acceptance fixture services with seeded records, serves production builds of this branch and of the main commit it starts from on them, checks that pages hold still in Chromium and Firefox with slow data, and stops what it started.
 ---
 
 # Verify
@@ -17,7 +17,6 @@ npm run verify -- shift /admin --as editor   # signed in to the admin
 npm run verify -- shot /digests       # screenshots only
 npm run verify -- status              # what runs, and whether the environment is ready
 npm run verify -- down                # stop both servers and remove the fixture services
-npm run verify -- skip "<reason>"     # record why a change needs no browser check
 ```
 
 `npm run verify` with no command prints every option.
@@ -49,13 +48,9 @@ If a step can't run on main (it clicks something your branch adds), everything a
 
 Each check answers the analytics consent dialog first, as a returning visitor has. `--as editor`, `--as creator` or `--as owner` signs in to the admin as the fake OpenScholar's user for that role, with a session the library's own Better Auth makes (`tests/e2e/admin-login.ts` does the same).
 
-## The stop hook
-
-A stop hook runs `npm run verify -- hook stop` when an agent tries to finish. It lives on the user's machine, not in this repository: `~/.agents/hooks/verify-stop.sh`, registered for Stop in `~/.claude/settings.json`, `~/.claudeekitabu/settings.json` and `~/.codex/hooks.json`. If files under `src/app`, `src/components` or `src/styles` changed (`.tsx` and `.css`, and `.ts` beside components and styles) in this session and no `shift` has passed since, it sends the agent back with the files to check. It also sends the agent back when a changed file holds a dialog, sheet, popover or menu and the passing `shift` opened none. If nothing a person sees changed, or the user said not to test, run `skip "<reason>"` and give the same reason in your reply.
-
 ## Files
 
 - `tools/verify/cli.ts` and `tools/verify/stack.ts`: the commands, and the fixture services and servers `up` starts. These are the library's own.
-- `tools/verify/analysis.ts`, `recorder.ts`, `browser.ts`, `compare.ts`, `hook.ts` and `util.ts`: the same files as OpenScholar's `scripts/verify` (OpenDevEd/openalex-count); keep the two in step. `analysis.ts` decides what counts as a problem (tested in `tests/unit/verify.test.ts`); `recorder.ts` runs in the page.
+- `tools/verify/analysis.ts`, `recorder.ts`, `browser.ts`, `compare.ts` and `util.ts`: the same files as OpenScholar's `scripts/verify` (OpenDevEd/openalex-count); keep the two in step. `analysis.ts` decides what counts as a problem (tested in `tests/unit/verify.test.ts`); `recorder.ts` runs in the page.
 - `tools/verify/seed.ts`: the records `up` adds. `tools/verify/compose.yaml` gives Redis a port.
-- `.verify/` (ignored): the stack's ports and config, server logs, run reports and screenshots, and the last pass.
+- `.verify/` (ignored): the stack's ports and config, server logs, run reports and screenshots.
