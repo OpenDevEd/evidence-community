@@ -128,7 +128,7 @@ VALUES
 
 INSERT INTO "item" (
 	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
-	"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted"
+	"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted", "licence"
 ) VALUES (
 	'PUBEXT23', 'native', 'PUBEXT23', 'Report', 1,
 	'Amber external DOI archive report',
@@ -137,7 +137,8 @@ INSERT INTO "item" (
 	'[{"creatorType":"author","firstName":"Katherine","lastName":"Johnson"}]'::jsonb,
 	'Amber Evidence Library',
 	'10.1038/nature12373',
-	0
+	0,
+	'{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb
 );
 
 INSERT INTO "item" (
