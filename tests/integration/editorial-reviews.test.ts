@@ -29,14 +29,14 @@ const noFileActor = {userId: "no-file-creator", role: "creator"} as const;
 it("refuses a DOI choice in a community that hasn't set up Zenodo", async () => {
 	const withoutDois = libraryConfigSchema.parse({...maximalLibraryConfig, sources: [], services: {...maximalLibraryConfig.services, publication: {}}});
 	await withIsolatedPublicationDatabase(async db => {
-		const draft = await createNativeItemDraft(db, {itemType: "Report", title: "No DOI to register", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
+		const draft = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "No DOI to register", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
 		await assert.rejects(setItemPublishingChoice(db, draft.itemKey, {route: "zenodo", identifierPolicy: "mint-zenodo"}, withoutDois), AdminValidationError);
 		assert.equal((await getItemPublishingChoice(db, draft.itemKey, withoutDois)).choice, null);
 	});
 });
 it.each(["reuse-crossref", "mint-zenodo"] as const)("rejects incompatible %s choices before save and submission, while preserving valid routes", async (policy) => {
 	await withIsolatedPublicationDatabase(async db => {
-		const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Locked identifier", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
+		const draft = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Locked identifier", date: "2026-10-08", publisher: "OpenDevEd", creators: [{creatorType: "author", firstName: "QA", lastName: "Author"}]});
 		const compatible = {route: "crossref-zenodo", identifierPolicy: policy};
 		const incompatible = policy === "reuse-crossref" ? {route: "zenodo", identifierPolicy: "mint-zenodo"} : {route: "crossref-zenodo", identifierPolicy: "reuse-crossref"};
 		await db.insert(publicationTarget).values({itemKey: draft.itemKey, provider: "zenodo", environment: "sandbox", identifierPolicy: policy, requestedBy: "editor"});
@@ -65,6 +65,7 @@ it("hides topic source conflicts from reviews while Topics are off", async () =>
 	await withIsolatedPublicationDatabase(async (db) => {
 		const draft = await createNativeItemDraft(db, {
 			itemType: "Report",
+			licence: { kind: "zenodo", id: "cc-by-4.0" },
 			title: "Review source fields",
 		});
 		await db.insert(sourceConnection).values({key: "oa", provider: "openalex", scopeKind: "query", config: {}});
@@ -101,7 +102,7 @@ it('allows no identifiers by default and after clearing a choice, and publishes 
  await withIsolatedPublicationDatabase(async db => {
   const storage = new MemoryFileStorage();
   for (const route of [null, "zenodo", "crossref-zenodo"] as const) {
-   const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Publication without identifiers"});
+   const draft = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Publication without identifiers"});
    assert.deepEqual(await getItemPublishingChoice(db, draft.itemKey, reviewConfig), {choice: null, canClear: true, lockedIdentifierPolicy: null});
    if (route) {
     await setItemPublishingChoice(db, draft.itemKey, route === "zenodo" ? {route, identifierPolicy: "mint-zenodo"} : {route, identifierPolicy: "reuse-crossref"}, reviewConfig);
@@ -124,7 +125,7 @@ it("says in the list where a record's submitted version stands: waiting for an e
  await withIsolatedPublicationDatabase(async db => {
   const editor = {userId: "editor", role: "editor"} as const;
   const standing = async (key: string) => (await getAdminItemListPage(db, parseAdminItemListRequest({}))).items.find(row => row.key === key)?.review;
-  const draft = await createNativeItemDraft(db, {itemType: "Report", title: "Where a submitted version stands"});
+  const draft = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Where a submitted version stands"});
   assert.equal(await standing(draft.itemKey), null);
   const first = await submitItemReview(db, draft.itemKey, noFileActor, reviewConfig);
   assert.equal(await standing(draft.itemKey), "pending");
@@ -140,10 +141,10 @@ it("says in the list where a record's submitted version stands: waiting for an e
 it('publishes the frozen identifier choice without a PDF and resolves later draft conflicts', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();
-		const citationTarget = await createNativeItemDraft(db, {itemType: "Report", title: "Referenced publication"});
+		const citationTarget = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Referenced publication"});
 
         await publishNativeItemDraft(db, citationTarget.itemKey);
-        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", title: "Publish without a file", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{creatorType: "author", name: "Learning Lab"}], links: {cites: [citationTarget.itemKey], related: []} });
+        const noFileDraft = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Publish without a file", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{creatorType: "author", name: "Learning Lab"}], links: {cites: [citationTarget.itemKey], related: []} });
 
 		await setItemPublishingChoice(db, noFileDraft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, reviewConfig);
 		const noFileReview = await submitItemReview(db, noFileDraft.itemKey, noFileActor, reviewConfig);
@@ -194,7 +195,7 @@ it('clears conflicts when their working draft is discarded or attachment removed
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();
         for (const removeChild of [false, true]) {
-            const root = await createNativeItemDraft(db, {itemType: "Report", title: "Conflict recovery"});
+            const root = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Conflict recovery"});
 
             await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, root.itemKey));
             await publishNativeItemDraft(db, root.itemKey);
@@ -226,7 +227,7 @@ it('clears conflicts when their working draft is discarded or attachment removed
 
 it('submits the materialized draft after source updates without changing the public record', async () => {
  await withIsolatedPublicationDatabase(async db => {
-  const created = await createNativeItemDraft(db, {itemType: "Report", title: "Original source title", abstractNote: "Original source abstract"});
+  const created = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Original source title", abstractNote: "Original source abstract"});
   await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, created.itemKey));
   const published = await publishNativeItemDraft(db, created.itemKey);
   const opened = await openNativeItemDraft(db, created.itemKey);
@@ -252,14 +253,14 @@ it('submits the materialized draft after source updates without changing the pub
 it('rejects approval when public data changes after submission', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();
-        const staleRoot = await createNativeItemDraft(db, {itemType: "Report", title: "Stale review recovery"});
+        const staleRoot = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Stale review recovery"});
 
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, staleRoot.itemKey));
         await publishNativeItemDraft(db, staleRoot.itemKey);
         // A submitted change: a record the review only shows is never published again, so it can't go stale.
         await openNativeItemDraft(db, staleRoot.itemKey);
         const staleSubmission = await submitItemReview(db, staleRoot.itemKey, noFileActor, reviewConfig);
-        const citing = await createNativeItemDraft(db, {itemType: "Report", title: "New citation", links: {cites: [staleRoot.itemKey], related: []}});
+        const citing = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "New citation", links: {cites: [staleRoot.itemKey], related: []}});
 
         await publishNativeItemDraft(db, citing.itemKey);
         let staleReviewRejected = false;
@@ -277,7 +278,7 @@ it('rejects approval when public data changes after submission', async () => {
 it('keeps an imported restoration private until approved', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();
-        const imported = await createNativeItemDraft(db, { itemType: "Report", title: "Imported restoration" });
+        const imported = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Imported restoration" });
 
         await db.update(itemIdentity).set({ kind: "imported" }).where(eq(itemIdentity.key, imported.itemKey));
         const importedSubmission = await submitItemReview(db, imported.itemKey, noFileActor, reviewConfig);
@@ -298,7 +299,7 @@ it('keeps an imported restoration private until approved', async () => {
 it('preserves submitted PDF bytes across replacements and staged removal', async () => {
  await withIsolatedPublicationDatabase(async db => {
  const reviewStorage = new MemoryFileStorage();
-		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", title: "Review file parent", date: "2026-09-10", creators: [{creatorType: "author", name: "Learning Lab"}] });
+		const reviewParent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Review file parent", date: "2026-09-10", creators: [{creatorType: "author", name: "Learning Lab"}] });
 
 		const reviewAttachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: reviewParent.itemKey, title: "Submitted PDF" });
 
@@ -317,7 +318,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
         const submittedCover = await getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision, captured.id);
         assert.deepEqual(submittedCover, originalCover);
         await assert.rejects(getAdminPdfCover(db, reviewStorage, reviewAttachment.itemKey, reviewStage.fileDraft.uploadRevision + 1, captured.id), /not found/i);
-        const resolvedRoot = await createNativeItemDraft(db, {itemType: "Report", title: "Already reviewed"});
+        const resolvedRoot = await createNativeItemDraft(db, {itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Already reviewed"});
         await db.update(itemIdentity).set({kind: "imported"}).where(eq(itemIdentity.key, resolvedRoot.itemKey));
         const resolvedSubmission = await submitItemReview(db, resolvedRoot.itemKey, actor, reviewConfig);
         await approveItemReview(db, reviewStorage, {reviewId: resolvedSubmission.id, expectedRevision: resolvedSubmission.revision}, {userId: "editor", role: "editor"}, reviewConfig);
@@ -377,7 +378,7 @@ it('preserves submitted PDF bytes across replacements and staged removal', async
 
 it('opens a reviewable parent draft when an attachment is added to a published record', async () => {
   await withIsolatedPublicationDatabase(async db => {
-    const parent = await createNativeItemDraft(db, {itemType: 'Report', title: 'Published report', date: '2026-09-10', creators: [{creatorType: 'author', name: 'Learning Lab'}]});
+    const parent = await createNativeItemDraft(db, {itemType: 'Report', licence: { kind: 'zenodo', id: 'cc-by-4.0' }, title: 'Published report', date: '2026-09-10', creators: [{creatorType: 'author', name: 'Learning Lab'}]});
     await publishNativeItemDraft(db, parent.itemKey);
     const attachment = await createNativeItemDraft(db, {itemType: 'Attachment', title: 'New PDF', parentItem: parent.itemKey});
     const draft = await getNativeItemDraft(db, parent.itemKey);
@@ -419,7 +420,7 @@ it("migrates queued language fields without losing other pending fields or job s
 it("publishes a PDF that carries the record's authors and the Crossref DOI publishing activates", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Girls' learning in Sierra Leone", date: "2026-09-10", institution: "Learning Lab", language: "en", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }, { creatorType: "translator", firstName: "Charles", lastName: "Babbage" }] });
+		const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Girls' learning in Sierra Leone", date: "2026-09-10", institution: "Learning Lab", language: "en", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }, { creatorType: "translator", firstName: "Charles", lastName: "Babbage" }] });
 		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Report PDF" });
 		const pdf = await createPdf("Girls' learning in Sierra Leone");
 		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "report.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
@@ -443,7 +444,7 @@ it("publishes a PDF that carries the record's authors and the Crossref DOI publi
 it("leaves a Crossref DOI reserved before the record moved to Zenodo out of its PDF", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "A Zenodo report", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
+		const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "A Zenodo report", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
 		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Report PDF" });
 		const pdf = await createPdf("A Zenodo report");
 		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "report.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });

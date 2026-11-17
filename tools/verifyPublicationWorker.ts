@@ -55,8 +55,8 @@ async function seedRecord(client: Client) {
 		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('PUBWRKAA', 'native', 'PUBWRKAA')`,
 	);
 	await client.query(
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publisher", "deleted")
-		 VALUES ('PUBWRKAA', 'native', 'PUBWRKAA', 'Report', 1, 'Publication worker record', 'A complete description.', '2026-08-13', $1::jsonb, 'OpenDevEd', 0)`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publisher", "deleted", "licence")
+		 VALUES ('PUBWRKAA', 'native', 'PUBWRKAA', 'Report', 1, 'Publication worker record', 'A complete description.', '2026-08-13', $1::jsonb, 'OpenDevEd', 0, '{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb)`,
 		[
 			JSON.stringify([
 				{

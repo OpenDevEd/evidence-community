@@ -264,9 +264,9 @@ test("won't close an import while its records are being imported, and waits for 
 const fullConfig = libraryConfigSchema.parse(maximalLibraryConfig);
 const SEND = { actor: { role: "editor" as const, userId: EDITOR }, route: "zenodo" as const };
 
-/** Reads the PDFs (dated.pdf has a date, any other none) and imports them all, to be sent on with Zenodo DOIs. */
+/** Reads the PDFs (dated.pdf has a date, any other none; each names CC BY 4.0 as its licence) and imports them all, to be sent on with Zenodo DOIs. */
 async function importToSend(db: Database, storage: MemoryFileStorage, names: string[], send: { actor: typeof SEND.actor; route: typeof SEND.route; publish?: boolean } = SEND) {
-	const reading = (title: string, date?: string) => ({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { abstractNote: "What the report found.", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "report", title, ...(date ? { date } : {}) } });
+	const reading = (title: string, date?: string) => ({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { abstractNote: "What the report found.", rights: "© 2026 The authors. Licensed under CC BY 4.0.", creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "report", title, ...(date ? { date } : {}) } });
 	readImportPdf.mockReset().mockImplementation(async (_: unknown, { filename }: { filename: string }) => (filename === "dated.pdf" ? reading("A dated report", "2024-06-12") : reading("An undated report")));
 	const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: names.map(pdfFile), instructions: "" });
 	for (const file of started.files) {

@@ -42,8 +42,8 @@ async function seedItem(
 		[input.key],
 	);
 	await client.query(
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "date", "creators", "publisher", "DOI", "deleted")
-		 VALUES ($1, 'zotero-activation', $1, $2, 1, 'Crossref activation record', '2026-08-12', $3::jsonb, 'OpenDevEd', $4, 0)`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "date", "creators", "publisher", "DOI", "deleted", "licence")
+		 VALUES ($1, 'zotero-activation', $1, $2, 1, 'Crossref activation record', '2026-08-12', $3::jsonb, 'OpenDevEd', $4, 0, '{"kind":"zenodo","id":"cc-by-4.0"}'::jsonb)`,
 		[
 			input.key,
 			input.itemType ?? "Report",
@@ -1126,6 +1126,7 @@ async function verify(database: Database, client: Client) {
 async function verifyDraftReservation(database: Database, client: Client) {
 	const draft = await createNativeItemDraft(database, {
 		itemType: "Report",
+		licence: { kind: "zenodo", id: "cc-by-4.0" },
 		title: "Draft DOI reservation",
 		date: "2026-09-08",
 		institution: "OpenDevEd",
@@ -1218,6 +1219,7 @@ it("keeps production reservations and settlement separate from Test", async () =
 	await withIsolatedPublicationDatabase(async (database, client) => {
 		const testDraft = await createNativeItemDraft(database, {
 			itemType: "Report",
+			licence: { kind: "zenodo", id: "cc-by-4.0" },
 			title: "Test environment reservation",
 		});
 		await setItemPublishingChoice(database, testDraft.itemKey, {
@@ -1235,6 +1237,7 @@ it("keeps production reservations and settlement separate from Test", async () =
 		production.services.publication.crossref.environment = "production";
 		const draft = await createNativeItemDraft(database, {
 			itemType: "Report",
+			licence: { kind: "zenodo", id: "cc-by-4.0" },
 			title: "Production reservation",
 			date: "2026-09-08",
 			institution: "OpenDevEd",

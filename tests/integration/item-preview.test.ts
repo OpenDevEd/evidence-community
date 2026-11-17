@@ -33,7 +33,7 @@ async function savedState(db: Database) {
 it("previews a never-published record and its private PDF without saving anything", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const storage = new MemoryFileStorage();
-		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Unpublished report" });
+		const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Unpublished report" });
 		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Full report" });
 		const pdf = await createPdf("Private until publishing");
 		const staged = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "report.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
@@ -56,7 +56,7 @@ it("previews a never-published record and its private PDF without saving anythin
 
 it("previews a submitted review as submitted, and the working draft as edited since", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
-		const created = await createNativeItemDraft(db, { itemType: "Report", title: "Published title" });
+		const created = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Published title" });
 		await publishItemDraft(db, created.itemKey);
 		const opened = await openItemDraft(db, created.itemKey);
 		await saveItemDraft(db, { itemKey: created.itemKey, expectedDraftRevision: opened.draftRevision, expectedPayload: opened.payload, payload: { ...opened.payload, title: "Submitted title" } });
@@ -77,17 +77,17 @@ it("names what stops publishing instead of previewing", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const blocked = (message: RegExp | null, field?: string) => (error: unknown) =>
 			error instanceof AdminValidationError && (field ? Boolean(error.fields[field]) : message!.test(error.message));
-		const zenodo = await createNativeItemDraft(db, { itemType: "Report", title: "Report for Zenodo" });
+		const zenodo = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Report for Zenodo" });
 		await setItemPublishingChoice(db, zenodo.itemKey, { route: "zenodo", identifierPolicy: "mint-zenodo" }, config);
 		await expect(previewItem(db, zenodo.itemKey, config)).rejects.toSatisfy(blocked(null, "creators"));
 
-		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Report with a PDF on its way" });
+		const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Report with a PDF on its way" });
 		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "Uploading" });
 		const pdf = await createPdf("Still uploading");
 		await stageNativePdfUpload(db, new MemoryFileStorage(), { itemKey: attachment.itemKey, filename: "uploading.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
 		await expect(previewItem(db, parent.itemKey, config)).rejects.toSatisfy(blocked(/Wait for the PDF upload/));
 
-		const reviewed = await createNativeItemDraft(db, { itemType: "Report", title: "Reviewed report" });
+		const reviewed = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Reviewed report" });
 		const review = await submitItemReview(db, reviewed.itemKey, { userId: "creator", role: "creator" }, config);
 		await publishItemDraft(db, reviewed.itemKey);
 		await expect(previewItem(db, reviewed.itemKey, config, review.id)).rejects.toSatisfy(blocked(/changed after submission/));
@@ -96,7 +96,7 @@ it("names what stops publishing instead of previewing", async () => {
 
 it("shows the Crossref DOI a review reserves, before approval and after", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
-		const draft = await createNativeItemDraft(db, { itemType: "Report", title: "Report with a DOI", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
+		const draft = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Report with a DOI", language: "en", date: "2026-09-10", institution: "Learning Lab", creators: [{ creatorType: "author", name: "Learning Lab" }] });
 		await setItemPublishingChoice(db, draft.itemKey, { route: "crossref-zenodo", identifierPolicy: "reuse-crossref" }, config);
 		const review = await submitItemReview(db, draft.itemKey, { userId: "creator", role: "creator" }, config);
 
