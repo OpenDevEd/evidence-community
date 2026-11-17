@@ -46,6 +46,7 @@ describe("the finish step", () => {
 		committing: false,
 		excluded: new Set(),
 		importId: "import-1",
+		licences: new Map(),
 		kind: "pdfs",
 		needs: {},
 		outcome: "drafts",
@@ -142,7 +143,7 @@ describe("the finish step", () => {
 });
 
 describe("what publishing needs from a reading", () => {
-	const reading = (payload: Record<string, unknown>, overrides: Partial<ImportRow> = {}) => row("1", { record: { ...record, payload: { creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "Report", title: "A report", ...payload } }, ...overrides });
+	const reading = (payload: Record<string, unknown>, overrides: Partial<ImportRow> = {}) => row("1", { record: { ...record, payload: { creators: [{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" }], itemType: "Report", title: "A report", licence: { kind: "zenodo", id: "cc-by-4.0" }, ...payload } }, ...overrides });
 
 	// A 2023 report read without a date was called Ready, imported, then failed to publish.
 	it("flags a ready reading without a date, and still imports it", () => {

@@ -4,6 +4,7 @@ import {
 } from "@opendeved/doi-sync-core/metadata";
 import { publicationRecordMetadata } from "@/lib/publication/record-metadata";
 import { describeProviderIssue } from "@/lib/publication/provider-issue";
+import { licenceComplete } from "@/lib/licences";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 import { inspectNativeItemDraft } from "./native-item-validation";
 import type { PublishingChoice } from "./review-contract";
@@ -34,6 +35,8 @@ export function validateReviewPayload(
 				)
 			: []),
 	];
+	// A DOI goes out under the record's own licence, which Zenodo and Crossref both take.
+	if (!licenceComplete(item.licence)) fields.licence ??= item.licence ? "Give this licence its name and a link to its terms." : "Pick a licence. A DOI needs one.";
 	for (const [provider, issue] of issues) {
 		const { field, text } = describeProviderIssue(
 			provider,
@@ -76,7 +79,7 @@ function reviewMetadata(
 		return publicationRecordMetadata(
 			metadataInput(item),
 			validated.tags,
-			"",
+			licenceComplete(item.licence) ? item.licence : null,
 		);
 	} catch (error) {
 		throw new AdminValidationError("Check the creator details.", {

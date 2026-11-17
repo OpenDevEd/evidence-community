@@ -22,6 +22,9 @@ import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
+import { LicenceInput } from "./LicenceInput";
+import { licenceLabel } from "@/lib/licences";
+import { licenceComplete, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import OpenScholar from "@/components/icons/OpenScholar";
@@ -623,6 +626,53 @@ const StudyTypeEditor = memo(function StudyTypeEditor({
 	);
 });
 
+/** The draft's licence, or none when it holds none or one that can't be read. */
+const recordLicence = (value: unknown) => recordLicenceSchema.safeParse(value).data ?? null;
+
+/** Says why sending a record on is held while it is to get a DOI without a licence. The span keeps the held button hoverable. */
+function LicenceHold({ missing, children }: { missing: boolean; children: ReactNode }) {
+	return (
+		<Tooltip content="Pick a licence first. A DOI needs one." isDisabled={!missing}>
+			<span className="flex min-w-0 flex-1">{children}</span>
+		</Tooltip>
+	);
+}
+
+/** A record's licence, with what it needs to show and change it. Only records made here, which can get a DOI, have one. */
+type RecordLicenceField = { value: RecordLicence | null; change: AdminDraftDiff["licence"]; defaultLicence: string; needed: boolean; onChange: (licence: RecordLicence | null) => void };
+
+/** Under the Rights field, on a record that has a licence. */
+const LicenceEditor = memo(function LicenceEditor({ id, field, licence, rights, readOnly }: { id: string; field: string; licence: RecordLicenceField | null; rights: string; readOnly: boolean }) {
+	if (field !== "rights" || !licence) return null;
+	return (
+		<div className="space-y-1.5 pt-1.5">
+			<FieldLabel
+				htmlFor={id}
+				action={
+					licence.change && !readOnly ? (
+						<ChangedMarker
+							label="licence"
+							publishedValue={licence.change.previous ? licenceLabel(licence.change.previous) : <span className="text-black/40 dark:text-white/40">None</span>}
+							onRevert={() => licence.onChange(licence.change!.previous)}
+						/>
+					) : null
+				}
+			>
+				Licence
+			</FieldLabel>
+			<LicenceInput
+				id={id}
+				value={licence.value}
+				rights={rights}
+				defaultLicence={licence.defaultLicence}
+				needed={licence.needed}
+				disabled={readOnly}
+				onChange={licence.onChange}
+			/>
+		</div>
+	);
+});
+
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
 	const titleField =
@@ -657,8 +707,7 @@ function MetadataEditor({
 	onFieldChange,
 	payload,
 	readOnly,
-	lockedDoi,
-	registersDoi,
+	doi: { locked: lockedDoi, registers: registersDoi, licence },
 }: {
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail;
@@ -668,9 +717,14 @@ function MetadataEditor({
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
-	lockedDoi: string | null;
-	/** The community registers this record's DOI itself, so nothing outside lists it. */
-	registersDoi: boolean;
+	doi: {
+		/** A DOI from elsewhere that Zenodo reuses, which can't change while it is active. */
+		locked: string | null;
+		/** The community registers this record's DOI itself, so nothing outside lists it. */
+		registers: boolean;
+		/** Its licence, shown under its rights; null for a record that came from elsewhere. */
+		licence: RecordLicenceField | null;
+	};
 }) {
 	const definition = definitionFor(
 		definitions,
@@ -843,6 +897,7 @@ function MetadataEditor({
 										/>
 									</>
 								)}
+							<LicenceEditor id={`admin-${detail.key}-licence`} field={field} licence={licence} rights={value} readOnly={readOnly} />
 							{field === "DOI" && lockedDoi ? (
 								<p className="text-xs text-black/45 dark:text-white/45">
 									Deactivate Zenodo before changing this DOI.
@@ -1646,7 +1701,7 @@ export function AdminInspector({
 }) {
 	const libraryConfig = useLibraryConfig();
 	const { identity, topics: topicsConfig } = libraryConfig;
-	const { canPublish } = useAdminSession();
+	const { canPublish, defaultLicence } = useAdminSession();
 	const detailKey = detail?.key;
 	const definition = useMemo(
 		() =>
@@ -1763,6 +1818,13 @@ export function AdminInspector({
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const unrestored = isUnrestoredRecord(detail);
+	// Only a record made here can get a DOI, and a DOI needs a licence: Zenodo and Crossref both take it.
+	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);
+	const licenceField: RecordLicenceField | null =
+		detail.kind === "created" && !detail.parentItem
+			? { value: recordLicence(payload.licence), change: diff.licence, defaultLicence, needed: doiChosen, onChange: (licence) => patchPayload({ licence }) }
+			: null;
+	const licenceMissing = Boolean(licenceField?.needed && !licenceComplete(licenceField.value));
 	// OpenAlex records take library files because OpenAlex gets no writeback; Zotero attachments sync back to Zotero.
 	const holdsLibraryFiles =
 		native ||
@@ -1818,7 +1880,8 @@ export function AdminInspector({
 				saveState === "conflict" ||
 				saveState === "error" ||
 				reviewPending ||
-				submissionBlocked));
+				submissionBlocked)) ||
+		licenceMissing;
   const hasPublishedVersion = Boolean(liveRecord.published) && liveRecord.state !== "deleted";
   const showPublicLinkActions = hasPublishedVersion && Boolean(itemUrl);
   const openPublicationSettings = () => {
@@ -2154,6 +2217,7 @@ export function AdminInspector({
 					<div className="flex min-w-0 flex-1 animate-fade-in items-center gap-2">
 						{versionActions ??
 							(showPrimaryAction && (
+								<LicenceHold missing={licenceMissing}>
 								<Button
 									size="xs"
 									// Beside Publish, sending to the queue is the quieter choice.
@@ -2175,8 +2239,10 @@ export function AdminInspector({
 								>
 									{primaryAction.label}
 								</Button>
+								</LicenceHold>
 							))}
 						{!versionActions && showPrimaryAction && choosesPublish && (
+							<LicenceHold missing={licenceMissing}>
 							<Button
 								size="xs"
 								color={primaryDisabled ? "secondary" : "accent"}
@@ -2188,6 +2254,7 @@ export function AdminInspector({
 							>
 								Publish
 							</Button>
+							</LicenceHold>
 						)}
 						{versionWithdraw}
 					</div>
@@ -2251,6 +2318,7 @@ export function AdminInspector({
 										: undefined
 								}
 								model={publishing}
+								licenceMissing={licenceMissing}
 							/>
 						)}
 					</Section>
@@ -2270,17 +2338,19 @@ export function AdminInspector({
 						onChange={patchPayload}
 						payload={payload}
 						readOnly={readOnly}
-						// Until a record made here is known to have no DOI choice, it counts as registering its own.
-						registersDoi={readOnlyVersion ? Boolean(publishingChoice) : detail.kind === "created" && publishing?.saved.data?.choice !== null}
-						lockedDoi={
-							publication.publication?.providers.zenodo.exact
-								.targetActive &&
-							publication.publication.providers.zenodo.exact
-								.identifierPolicy === "reuse-external"
-								? (publication.publication.identifiers.doi
-										?.value ?? null)
-								: null
-						}
+						doi={{
+							// Until a record made here is known to have no DOI choice, it counts as registering its own.
+							registers: readOnlyVersion ? Boolean(publishingChoice) : detail.kind === "created" && publishing?.saved.data?.choice !== null,
+							licence: licenceField,
+							locked:
+								publication.publication?.providers.zenodo.exact
+									.targetActive &&
+								publication.publication.providers.zenodo.exact
+									.identifierPolicy === "reuse-external"
+									? (publication.publication.identifiers.doi
+											?.value ?? null)
+									: null,
+						}}
 					/>
 				</Section>
 				{definition?.creatorTypes.length ? (

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import type { RecordLicence } from "@/lib/licences";
 import useSWR, { mutate } from "swr";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 
@@ -223,6 +224,8 @@ export type ImportBatch = {
 	committing: boolean;
 	/** Ready records the editor unticked. */
 	excluded: ReadonlySet<string>;
+	/** The licence the editor picked for a record, in place of the one its PDF named. */
+	licences: ReadonlyMap<string, RecordLicence>;
 	importId: string;
 	kind: ImportKind;
 	/** What each imported draft not yet sent still needs to publish, as the server last said. */
@@ -266,7 +269,7 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sendApproves: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), licences: new Map<string, RecordLicence>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sendApproves: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
@@ -304,6 +307,7 @@ type SavedChoices = {
 	collections: string[];
 	excluded: string[];
 	importId: string;
+	licences?: [string, RecordLicence][];
 	outcome?: ImportOutcome;
 	publishRoute: PublishingChoice["route"] | null;
 	toPublish: string[] | null;
@@ -320,6 +324,7 @@ function saveChoices(batch: ImportBatch) {
 		collections: batch.collections,
 		excluded: [...batch.excluded],
 		importId: batch.importId,
+		licences: [...batch.licences],
 		outcome: batch.outcome,
 		publishRoute: batch.publishRoute,
 		toPublish: batch.toPublish && [...batch.toPublish],
@@ -336,7 +341,7 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	try {
 		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
 		if (saved?.importId !== importId) return {};
-		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), outcome: saved.outcome ?? "drafts", publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), licences: new Map(saved.licences ?? []), outcome: saved.outcome ?? "drafts", publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
 	} catch {
 		// No browser storage while the page is served, or an entry this version can't read.
 		return {};
@@ -612,20 +617,23 @@ export function chosenOf(current: ImportBatch, row: ImportRow, kind: ChoiceKind)
 	return current.chosen[kind].get(row.id) ?? new Set(row[kind].map(({ id }) => id));
 }
 
-/** The record as the editor leaves it: what the PDF states, with the applied suggestions. */
-export function recordPayload(row: ImportRow, applied: ReadonlySet<number>): Record<string, unknown> {
+/** The record as the editor leaves it: what the PDF states, with the applied suggestions and the licence picked. */
+export function recordPayload(row: ImportRow, applied: ReadonlySet<number>, licence?: RecordLicence): Record<string, unknown> {
 	const changes = row.suggestions.filter((_, index) => applied.has(index)).map(({ field, value }) => [field, value]);
-	return { ...row.record?.payload, ...Object.fromEntries(changes) };
+	return { ...row.record?.payload, ...Object.fromEntries(changes), ...(licence ? { licence } : {}) };
 }
+
+/** The licence the editor picked for a record, if they changed what its PDF named. */
+export const licenceOf = (current: ImportBatch | null, row: ImportRow) => current?.licences.get(row.id);
 
 /**
  * What a ready record still needs to publish, in the record editor's words. The DOI route is chosen after importing, so
  * a PDF without a DOI, which takes the library's, is held to what Zenodo needs: both routes register through it. One
  * with its own DOI keeps it. The record still imports as a draft, to be completed in the editor.
  */
-export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>, route: ImportBatch["publishRoute"] | "later" = "later"): AdminFieldErrors {
+export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>, route: ImportBatch["publishRoute"] | "later" = "later", licence?: RecordLicence): AdminFieldErrors {
 	if (row.record?.state !== "ready") return {};
-	const payload = recordPayload(row, applied);
+	const payload = recordPayload(row, applied, licence);
 	if (!row.source || keepsDoi(payload)) return publishingNeeds(payload, null);
 	// Sent on as it is imported, it is held to the route chosen in the review; chosen later, to Zenodo's.
 	return publishingNeeds(payload, routeChoice(route === "later" ? "zenodo" : route));
@@ -782,7 +790,7 @@ export function recordsToCommit(batch: ImportBatch, topicsEnabled: boolean) {
 	return selectedImportRecords(batch.rows.flatMap(({ record }) => (record ? [record] : [])), selectedIds(batch)).map((record) => {
 		const row = rowById.get(record.id)!;
 		const topics = [...chosenOf(batch, row, "topics")];
-		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
+		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row), licenceOf(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
 	});
 }
 

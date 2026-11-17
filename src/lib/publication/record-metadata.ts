@@ -6,6 +6,7 @@ import {
 } from "@opendeved/doi-sync-core/metadata";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { languageTag } from "@/lib/languages";
+import { publicationLicence, type RecordLicence } from "@/lib/licences";
 import { studyType } from "@/lib/readings/study-types";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import type { PublicationRecordExtras } from "./record-extras";
@@ -36,6 +37,8 @@ export type EvidenceLibraryPublicationMetadata = Readonly<
 	numPages?: string | null;
 	countryFocus?: string[] | null;
 	studyType?: string | null;
+	/** The licence the record's DOI goes out under; null when none was chosen. */
+	licence?: RecordLicence | null;
 };
 
 const PRIVATE_TAGS = new Set([
@@ -158,7 +161,7 @@ function recordInstitution(record: EvidenceLibraryPublicationMetadata) {
 export function publicationRecordMetadata(
 	record: EvidenceLibraryPublicationMetadata,
 	tags: readonly string[],
-	license: string,
+	licence: RecordLicence | null,
 	extras?: PublicationRecordExtras,
 ): PublicationMetadata & { fields: JsonObject } {
 	const optional = {
@@ -169,7 +172,6 @@ export function publicationRecordMetadata(
 		publisher: normalizeText(record.publisher),
 		institution: recordInstitution(record),
 		rights: normalizeText(record.rights),
-		license: normalizeText(license),
 	};
 	return {
 		itemType: record.itemType,
@@ -179,6 +181,7 @@ export function publicationRecordMetadata(
 		tags: publicTags(tags),
 		fields: providerFields(record),
 		...extraMetadata(record, extras),
+		...(licence ? publicationLicence(licence) : {}),
 		...Object.fromEntries(
 			Object.entries(optional).filter(
 				(entry): entry is [string, string] => Boolean(entry[1]),

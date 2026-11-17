@@ -1,3 +1,4 @@
+import type { RecordLicence } from "@/lib/licences";
 import type {
 	AdminCreator,
 	AdminItemDetail,
@@ -15,6 +16,8 @@ export type AdminDraftDiff = {
 	openAccess: { previous: boolean | null } | null;
 	/** The published study type when the draft changed it, or null for the reading's. */
 	studyType: { previous: string | null } | null;
+	/** The published licence when the draft changed it, or null for none. */
+	licence: { previous: RecordLicence | null } | null;
 	collections: string[] | null;
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
@@ -28,6 +31,7 @@ export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
 	countryFocus: null,
 	openAccess: null,
 	studyType: null,
+	licence: null,
 	collections: null,
 	creators: null,
 	fields: {},
@@ -110,6 +114,11 @@ function studyTypeDiff(current: unknown, previous: unknown) {
 	return { previous: typeof previous === "string" ? previous : null };
 }
 
+function licenceDiff(current: unknown, previous: unknown) {
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: (previous as RecordLicence | null | undefined) ?? null };
+}
+
 function openAccessDiff(current: unknown, previous: unknown) {
 	if (sameValue(current ?? null, previous ?? null)) return null;
 	return { previous: typeof previous === "boolean" ? previous : null };
@@ -163,6 +172,7 @@ export function computeAdminDraftDiff(
 		countryFocus: countryFocusDiff(payload.countryFocus, published.countryFocus),
 		openAccess: openAccessDiff(payload.openAccess, published.openAccess),
 		studyType: studyTypeDiff(payload.studyType, published.studyType),
+		licence: licenceDiff(payload.licence, published.licence),
 		collections: collectionsChanged ? originalCollections : null,
 		creators: creatorsChanged ? originalCreators : null,
 		fields,

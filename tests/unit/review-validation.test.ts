@@ -10,7 +10,7 @@ const crossref: PublishingChoice = {
 	route: "crossref-zenodo",
 	identifierPolicy: "reuse-crossref",
 };
-const report = { itemType: "Report", title: "Learning together" };
+const report = { itemType: "Report", title: "Learning together", licence: { kind: "zenodo", id: "cc-by-4.0" } };
 function blockers(payload: unknown, choice: PublishingChoice | null) {
 	try {
 		validateReviewPayload(payload, choice);
@@ -33,6 +33,15 @@ describe("review publishing requirements", () => {
 				null,
 			),
 		).toEqual({});
+	});
+	it("needs the record's own licence for a DOI, whole when it is one outside Zenodo's list", () => {
+		const complete = { ...report, date: "2026-09-10", creators: [{ creatorType: "author", name: "Learning Lab" }] };
+		const { licence: _none, ...unlicensed } = complete;
+		expect(Object.keys(blockers(unlicensed, zenodo))).toEqual(["licence"]);
+		expect(Object.keys(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "" } }, zenodo))).toEqual(["licence"]);
+		expect(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "https://example.org/terms" } }, zenodo)).toEqual({});
+		// Without a DOI, a record needs no licence.
+		expect(blockers(unlicensed, null)).toEqual({});
 	});
 	it("permits a title-only item when identifiers are disabled", () => {
 		expect(blockers(report, null)).toEqual({});

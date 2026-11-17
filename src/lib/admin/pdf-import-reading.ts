@@ -1,5 +1,6 @@
 import "server-only";
 
+import { licenceFromRights } from "@/lib/licences";
 import { createHash, randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -148,6 +149,15 @@ function sameFileReading(file: FileRow, pdf: PdfReading["pdf"], sha256: string, 
 	return { checks: [], cites: [], collections: [], pdf, record: existing ? { ...record, existingKey: existing.key, state: "existing" } : { ...record, state: "repeated" }, sha256, suggestions: [], topics: [] };
 }
 
+/**
+ * The record with the licence its PDF's rights statement names. One that names none leaves it for a person to pick: an
+ * import never takes the library's default licence by itself.
+ */
+function withFoundLicence(payload: Record<string, unknown> | null) {
+	const licence = licenceFromRights(typeof payload?.rights === "string" ? payload.rights : null);
+	return payload && licence ? { ...payload, licence: { kind: "zenodo", id: licence } } : payload;
+}
+
 async function readOne(db: Database, storage: EvidenceFileStorage, config: LibraryServerConfig, file: FileRow, signal: AbortSignal | undefined): Promise<PdfReading> {
 	const [owner] = await db.select().from(pdfImport).where(eq(pdfImport.id, file.importId));
 	const bytes = await storage.downloadPrivate(file.objectPath!);
@@ -162,7 +172,7 @@ async function readOne(db: Database, storage: EvidenceFileStorage, config: Libra
 	const readSignal = AbortSignal.any([AbortSignal.timeout(READ_TIMEOUT_MS), ...(signal ? [signal] : [])]);
 	const ai = await readImportPdf({ clerkUserId: owner!.createdBy, config, database: db, signal: readSignal }, { bytes, checks: owner!.checks, filename: file.filename, instructions: owner!.instructions, pdf });
 	const read = await previewReading(db, file.filename, inLibraryForms(ai.zoteroItem));
-	const record = { ...read, id: String(file.position) };
+	const record = { ...read, id: String(file.position), payload: withFoundLicence(read.payload) };
 	// Suggestions use the record's field names and forms, so applying one replaces the field the review shows; one that
 	// changes nothing is dropped.
 	const suggestions = ai.suggestions.map((suggestion) => inRecordForm(ai.zoteroItem.itemType, suggestion)).filter(({ field, value }) => value && record.payload?.[field] !== value);

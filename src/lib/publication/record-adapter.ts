@@ -11,6 +11,7 @@ import {
 	type EvidenceLibraryPublicationMetadata,
 } from "./record-metadata";
 import type { PublicationRecordExtras } from "./record-extras";
+import { licenceComplete, type RecordLicence } from "@/lib/licences";
 
 export type EvidenceLibraryPublicationRecord =
 	EvidenceLibraryPublicationMetadata & {
@@ -32,7 +33,7 @@ export function buildPublicationRecordSnapshot(input: {
 	record: EvidenceLibraryPublicationRecord;
 	tags: readonly string[];
 	baseUrl: string;
-	license: string;
+	libraryLicense: string | null;
 	extras?: PublicationRecordExtras;
 }): PublicationRecordSnapshot {
 	const inspected = inspectPublicationRecordSnapshot(input);
@@ -44,7 +45,11 @@ export function inspectPublicationRecordSnapshot(input: {
 	record: EvidenceLibraryPublicationRecord;
 	tags: readonly string[];
 	baseUrl: string;
-	license: string;
+	/**
+	 * The library's Zenodo licence, given only for a record whose DOI went out before records had licences of their
+	 * own: those keep the licence their deposits already carry until someone picks one.
+	 */
+	libraryLicense: string | null;
 	extras?: PublicationRecordExtras;
 }): {
 	issues: readonly string[];
@@ -55,13 +60,15 @@ export function inspectPublicationRecordSnapshot(input: {
 		issues.push("Add a title before activating publication");
 	if (!input.record.date?.trim())
 		issues.push("Add a publication date before activating publication");
+	const licence = depositLicence(input.record.licence, input.libraryLicense);
+	if (!licence) issues.push("Pick this record's licence before activating publication");
 	return {
 		issues,
 		record: {
 			...publicationRecordMetadata(
 				input.record,
 				input.tags,
-				input.license,
+				licence,
 				input.extras,
 			),
 			recordKey: input.record.key,
@@ -72,6 +79,12 @@ export function inspectPublicationRecordSnapshot(input: {
 			).toString(),
 		},
 	};
+}
+
+/** The record's own licence once it is whole, else the library's for a record registered before records had one. */
+function depositLicence(licence: RecordLicence | null | undefined, libraryLicense: string | null): RecordLicence | null {
+	if (licence) return licenceComplete(licence) ? licence : null;
+	return libraryLicense ? { kind: "zenodo", id: libraryLicense } : null;
 }
 
 export function buildPublicationFileManifest(

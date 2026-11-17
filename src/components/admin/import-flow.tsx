@@ -7,6 +7,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type { AdminPdfImport } from "@/lib/admin/item-import-contract";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
+import type { RecordLicence } from "@/lib/licences";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import {
@@ -43,6 +44,7 @@ import {
 	primaryLabel,
 	publishedProperties,
 	readingNeeds,
+	licenceOf,
 	readyIds,
 	recordsToCommit,
 	reviewChecks,
@@ -311,6 +313,8 @@ function batchChanges(batch: ImportBatch | null) {
 		setOutcome: (outcome: ImportOutcome) => change((current) => ({ ...current, outcome })),
 		toggleSuggestion: (rowId: string, index: number) => change((current) => withSuggestionToggled(current, rowId, index)),
 		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) => change((current) => withChoiceToggled(current, rowId, kind, id)),
+		/** Picks the licence for each of these records, in place of what their PDFs named. */
+		setLicence: (rowIds: readonly string[], licence: RecordLicence) => change((current) => ({ ...current, licences: new Map([...current.licences, ...rowIds.map((id): [string, RecordLicence] => [id, licence])]) })),
 	};
 }
 
@@ -393,7 +397,8 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		checksOf: (row: ImportRow) => reviewChecks(row, appliedFor(row)),
 		choicesOf,
 		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
-		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), batch?.outcome === "send" ? batch.publishRoute : "later"),
+		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), batch?.outcome === "send" ? batch.publishRoute : "later", licenceOf(batch, row)),
+		licenceOf: (row: ImportRow) => licenceOf(batch, row),
 		/** `publish`: an Editor or Owner sends the drafts on published, not to the review queue. */
 		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish) : undefined)),
 		error,

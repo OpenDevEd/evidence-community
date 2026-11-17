@@ -266,7 +266,8 @@ export function publicationPlanData(
 			record,
 			tags: snapshot.tags,
 			baseUrl: config.identity.baseUrl,
-			license: config.services.publication.zenodo.license,
+			// A record whose DOI went out before records had their own licence keeps the library's until one is picked.
+			libraryLicense: currentManagedDoi(snapshot, "zenodo", config.services.publication.zenodo.environment, "concept") ? config.services.publication.zenodo.license : null,
 			...(extras ? { extras } : {}),
 		}),
 		files: buildPublicationFileManifest(snapshot.files),

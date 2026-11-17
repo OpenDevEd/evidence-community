@@ -98,7 +98,7 @@ export default async function AdminPage({
 	}));
 
 	return (
-		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image, doiProviders: { crossref: config.services.publication.crossref.enabled, zenodo: config.services.publication.zenodo.enabled } }}>
+		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image, doiProviders: { crossref: config.services.publication.crossref.enabled, zenodo: config.services.publication.zenodo.enabled }, defaultLicence: config.services.publication.zenodo.license }}>
 		<SWRConfig value={{ fallback }}>
 			<AdminWorkbench
 				configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}

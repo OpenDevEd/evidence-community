@@ -59,6 +59,7 @@ const fieldLabels: Record<string, string> = {
 	countryFocus: "Country focus",
 	openAccess: "Open access",
 	studyType: "Study type",
+	licence: "Licence",
 	beforeCollection: "Collection position",
 	expectedDraftRevision: "Draft revision",
 	expectedRevision: "Revision",

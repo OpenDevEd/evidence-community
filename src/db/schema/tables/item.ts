@@ -1,3 +1,4 @@
+import type { RecordLicence } from "@/lib/licences";
 import type { StudyTypeKey } from "@/lib/readings/study-types";
 import {
 	canonicalRecordKeyCheck,
@@ -121,6 +122,9 @@ export const item = pgTable(
 		openAccess: boolean(),
 		// Library-owned. Null leaves the study type to the record's reading; a type is an editor's correction and wins.
 		studyType: varchar().$type<StudyTypeKey>(),
+		// Library-owned. The licence the record's DOI goes out under, on records made in the library. Null until a person
+		// picks one or the record's import found one; a record with none can't get a DOI.
+		licence: jsonb().$type<RecordLicence>(),
 		assignee: varchar(),
 		filingDate: varchar(),
 		applicationNumber: varchar(),
