@@ -1,9 +1,11 @@
-# Evidence Library
+# Evidence Community
 
-A single Evidence Library image can run any validated library configuration.
+The public site of an [Openscholar](https://openscholar.ai) Evidence Community: a research library a team curates, with search, filters, maps, answers linked to their sources, record pages with DOIs, and an admin for its editors.
+
+Teams set a community up from [Openscholar](https://github.com/Openscholar-ai/openscholar), which publishes it as this runtime. A single runtime image can run any validated community configuration.
 Identity, theme, navigation, localization, search, features, integrations, and
 service connections are loaded from one server-side JSON document at runtime.
-Changing a library does not require rebuilding the application.
+Changing a community does not require rebuilding the application.
 
 ## Local development
 
@@ -51,8 +53,7 @@ keeps the large admin suite at one worker for stability; GitHub uses four on an
 isolated self-hosted runner. `EVIDENCE_LIBRARY_ACCEPTANCE_SCOPE=smoke` runs what a
 pull request runs: Amber alone, its API checks and the browser tests tagged
 `@smoke`. Read the aggregate `CI` result for the exact head before merging, and
-the full run on `main` after it. The current GitHub plan cannot require that
-result for this private repository.
+the full run on `main` after it.
 
 ## Documentation
 
@@ -64,3 +65,11 @@ result for this private repository.
 - [Machine-readable JSON Schema](public/library-config.schema.json)
 - [Machine-readable option catalogs](public/library-config.catalogs.json)
 - [Current deployed architecture snapshot](docs/evidence-library-architecture.md)
+
+## Contributing
+
+See the [contributing guide](https://github.com/Openscholar-ai/.github/blob/main/CONTRIBUTING.md). To report a security problem, see the [security policy](https://github.com/Openscholar-ai/.github/blob/main/SECURITY.md).
+
+## Licence
+
+Evidence Community is free software under the [GNU Affero General Public License v3.0](LICENSE). If you run a changed version for other people, for example as a website, you must offer them its source code under the same licence.
