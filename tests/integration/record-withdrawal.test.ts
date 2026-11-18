@@ -14,6 +14,13 @@ import {
 	unpublishNativeItemWithOutcome,
 } from "../../src/lib/admin/native-item-service";
 import { publicationRecordMetadata } from "../../src/lib/publication/record-metadata";
+import { libraryConfigSchema } from "../../src/config/library-config/schema";
+import { maximalLibraryConfig } from "../fixtures/library-config";
+import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
+import { itemFilePublication } from "../../src/db/schema/source";
+import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
+import { approveItemReview, submitItemReview } from "../../src/lib/admin/review-service";
+import { hideRemovedFiles } from "../../src/lib/admin/withdrawn-files";
 
 type Database = Parameters<Parameters<typeof withIsolatedPublicationDatabase>[0]>[0];
 
@@ -75,3 +82,36 @@ it("registers a withdrawn record saying so: its title starts WITHDRAWN and it ca
 	assert.equal(metadata.title, "WITHDRAWN: Peer tutoring pilot");
 	assert.equal(metadata.withdrawnOn, "2026-11-20");
 });
+
+const config = libraryConfigSchema.parse({ ...maximalLibraryConfig, sources: [] });
+const editor = { userId: "editor", role: "editor" } as const;
+
+// A removed record's PDF stayed at its public address, which anyone who had kept it could still open.
+it("takes a removed record's PDF out of public view, and puts the very same file back when it is restored", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Peer tutoring pilot", date: "2026-11-18", creators: [{ creatorType: "author", firstName: "Grace", lastName: "Wanjiru" }] });
+		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "The pilot's PDF" });
+		const pdf = await createPdf("Peer tutoring pilot");
+		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "pilot.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
+		storage.privateFiles.set(stage.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: stage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		const submitted = await submitItemReview(db, parent.itemKey, editor, config);
+		await approveItemReview(db, storage, { reviewId: submitted.id, expectedRevision: submitted.revision }, editor, config);
+		const [file] = await db.select().from(itemFilePublication).where(eq(itemFilePublication.itemKey, attachment.itemKey));
+		const published = storage.publicFiles.get(file!.objectPath);
+		assert.ok(published, "The fixture's PDF wasn't published");
+
+		await db.insert(publicationTarget).values({ itemKey: parent.itemKey, provider: "zenodo", environment: "sandbox", identifierPolicy: "mint-zenodo", requestedBy: "editor" });
+		const removed = await unpublishNativeItemWithOutcome(db, parent.itemKey);
+		assert.ok("tookAttachments" in removed && removed.tookAttachments);
+		await hideRemovedFiles(db, storage, parent.itemKey);
+		assert.equal(storage.publicFiles.has(file!.objectPath), false, "A removed record's PDF is still public");
+
+		await openItemDraft(db, parent.itemKey);
+		const restoring = await submitItemReview(db, parent.itemKey, editor, config);
+		await approveItemReview(db, storage, { reviewId: restoring.id, expectedRevision: restoring.revision }, editor, config);
+		assert.equal((await row(db, attachment.itemKey)).deleted, 0, "Restoring left the PDF's attachment removed");
+		assert.deepEqual(storage.publicFiles.get(file!.objectPath), published, "Restoring didn't put the same PDF back");
+	});
+}, 120_000);

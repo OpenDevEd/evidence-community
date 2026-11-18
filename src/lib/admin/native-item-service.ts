@@ -1145,7 +1145,7 @@ export async function publishItemDraftWithContext(
 		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload, { firstPublish: !current });
 		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
 		if (current?.deleted === 1) await restoreSourceChildren(transaction, itemKey);
-		const reinstated = current?.withdrawnAt ? await reinstateOwnChildren(transaction, itemKey, current.withdrawnAt) : [];
+		const reinstated = current?.deleted === 1 && current.deletedAt ? await reinstateOwnChildren(transaction, itemKey, current.deletedAt) : [];
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
@@ -1426,6 +1426,8 @@ export async function publishItemDraftWithContext(
 			indexingRecords,
 			item: published!,
 			previousParentItem: candidate?.parentItem ?? null,
+			/** Attachments removed with the record and back with it, whose files go public again (withdrawn-files). */
+			reinstatedAttachments: reinstated.map(({ key }) => key),
 		};
 	});
 }
@@ -1494,12 +1496,15 @@ async function removeOwnChildren(transaction: Transaction, children: readonly { 
 	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
 }
 
-/** Restoring a withdrawn record brings back the attachments withdrawn with it, the ones that carry its moment. */
-async function reinstateOwnChildren(transaction: Transaction, itemKey: string, withdrawnAt: Date) {
+/**
+ * Restoring a record brings back its own attachments removed with it, the ones removed at its moment: a record with a
+ * DOI takes them when it is withdrawn or removed (removeOwnChildren). A source's attachments come back with their source.
+ */
+async function reinstateOwnChildren(transaction: Transaction, itemKey: string, deletedAt: Date) {
 	const children = await transaction
 		.select({ key: item.key, revision: item.revision })
 		.from(item)
-		.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 1), eq(item.withdrawnAt, withdrawnAt)))
+		.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 1), eq(item.deletedAt, deletedAt), eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY)))
 		.for("update");
 	const now = new Date();
 	for (const child of children) {
@@ -1773,6 +1778,8 @@ async function unpublishNativeItemAttempt(
 			indexingRecords,
 			item: unpublished!,
 			stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
+			/** Whether its own attachments left with it, whose public files then leave public view (withdrawn-files). */
+			tookAttachments: ownChildRecords.length > 0,
 		};
 	});
 }
@@ -1934,6 +1941,7 @@ export async function removeNativeItem(db: Database, itemKey: string) {
 				indexingRecords: removed.indexingRecords,
 				item: removed.item,
 				stagedPrivatePaths: removed.stagedPrivatePaths,
+				tookAttachments: "tookAttachments" in removed && Boolean(removed.tookAttachments),
 			};
 		} catch (error) {
 			if (error instanceof NativeItemLockSetChangedError) continue;

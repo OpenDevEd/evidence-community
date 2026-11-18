@@ -27,6 +27,8 @@ import {
 type BatchDependencies = {
 	db: Database;
 	removePrivateFiles: (paths: string[]) => Promise<void>;
+	/** Takes a removed record's attachments' public files out of public view (withdrawn-files). */
+	hideRemovedFiles?: (parentKey: string) => Promise<void>;
 	writebackPolicyOptions?: ItemWritebackPolicyOptions;
 };
 
@@ -129,23 +131,32 @@ export function orderBatchKeysByDependency(
 		.map(({ key }) => key);
 }
 
+/** What a removal leaves for after its transaction: its attachments' public files to hide, and discarded uploads. */
+async function cleanUpRemoval(
+	key: string,
+	removed: { tookAttachments: boolean; stagedPrivatePaths: string[] },
+	{ removePrivateFiles, hideRemovedFiles }: Pick<BatchDependencies, "removePrivateFiles" | "hideRemovedFiles">,
+) {
+	if (removed.tookAttachments) await hideRemovedFiles?.(key);
+	if (!removed.stagedPrivatePaths.length) return;
+	try {
+		await removePrivateFiles(removed.stagedPrivatePaths);
+	} catch (error) {
+		console.error("Failed to remove discarded private file objects", error);
+	}
+}
+
 async function removeBatchItem(
 	key: string,
 	sourceConnectionKey: string,
-	{ db, removePrivateFiles }: BatchDependencies,
+	{ db, removePrivateFiles, hideRemovedFiles }: BatchDependencies,
 ): Promise<AdminItemBatchResult> {
 	if (sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY) {
 		return skipped(key, "Remote record removal is not available yet.");
 	}
 	try {
 		const removed = await removeNativeItem(db, key);
-		if (removed.stagedPrivatePaths.length > 0) {
-			try {
-				await removePrivateFiles(removed.stagedPrivatePaths);
-			} catch (error) {
-				console.error("Failed to remove discarded private file objects", error);
-			}
-		}
+		await cleanUpRemoval(key, removed, { removePrivateFiles, hideRemovedFiles });
 		return {
 			indexingReceipts: removed.changed && removed.item
 				? removed.indexingRecords.map((record) => adminSearchIndexReceipt("item", record))

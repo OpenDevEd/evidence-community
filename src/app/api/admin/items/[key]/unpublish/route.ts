@@ -2,6 +2,8 @@ import { ADMIN_PUBLISH_PERMISSION } from "@/lib/admin/access";
 import { type NextRequest } from "next/server";
 
 import { getDatabase } from "@/db";
+import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
+import { hideRemovedFiles } from "@/lib/admin/withdrawn-files";
 import {
 	handleAdminJson,
 	readOptionalAdminJson,
@@ -24,6 +26,11 @@ export async function POST(
 			key,
 			{ removeFromSourceKeys, withdrawal },
 		);
+		// Its attachments left with it: their public files leave public view too.
+		if ("tookAttachments" in result && result.tookAttachments) {
+			const runtime = await getNativeFileRuntime();
+			await hideRemovedFiles(runtime.db, runtime.storage, key);
+		}
 		const { item } = result;
 		return {
 			indexingReceipts: result.changed
