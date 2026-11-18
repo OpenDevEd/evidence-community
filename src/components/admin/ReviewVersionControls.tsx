@@ -114,7 +114,7 @@ function reviewVersionTitle(
 	viewingSubmitted: boolean,
 ) {
 	if (viewingSubmitted) return "Submitted version";
-	if (detail.state === "deleted") return "Deleted record";
+	if (detail.state === "deleted") return detail.withdrawn ? "Withdrawn record" : "Deleted record";
 	if (detail.draft) return "Working draft";
 	return "Published version";
 }
