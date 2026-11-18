@@ -26,12 +26,24 @@ const SECTIONS = [
 // What each title can be found by: itself, its id, and its short name, so "cc by-nc" finds the licence.
 const SEARCHED = new Map(SECTIONS.flatMap(({ items }) => items.map(({ key, title, short, shown }) => [shown, `${title} ${key} ${short ?? ""}`.toLowerCase()])));
 
-/** Where the licence came from, said under the field: its rights, the community's default, or a person. */
+/** A licence by the name the field shows: its short name where it has one. */
+const nameOf = (id: string) => licenceShortName(id) ?? zenodoLicenceTitle(id);
+
+/** What the field's button fills in: the licence the record's rights name, edited in after it was made or imported, before the default. */
+function offerOf(rights: string, defaultLicence: string) {
+	const found = licenceFromRights(rights);
+	return found ? { id: found, name: nameOf(found) } : { id: defaultLicence, name: licenceShortName(defaultLicence) ?? "the default" };
+}
+
+/**
+ * Where the licence came from, said under the field: its rights, the community's default, or a person. "Its rights"
+ * never says "above": the import review has no Rights field to point at.
+ */
 function originNote(licence: RecordLicence | null, rights: string, defaultLicence: string) {
 	const found = licenceFromRights(rights);
-	if (!licence) return rights ? "Its rights above name no licence." : "No licence yet.";
+	if (!licence) return found ? `Its rights name ${nameOf(found)}.` : rights ? "Its rights name no licence." : "No licence yet.";
 	if (licence.kind === "custom") return licenceComplete(licence) ? "Chosen for this record." : "Give its name and a link to its terms.";
-	if (licence.id === found) return "Read from its rights above.";
+	if (licence.id === found) return "Read from its rights.";
 	if (licence.id === defaultLicence) return `The community's default licence, ${licenceShortName(defaultLicence) ?? zenodoLicenceTitle(defaultLicence)}. Records made here start with it.`;
 	return "Chosen for this record.";
 }
@@ -65,6 +77,7 @@ export function LicenceInput({
 	const custom = licence?.kind === "custom" ? licence : { kind: "custom" as const, title: "", url: "" };
 	const selectedKey = licence ? (licence.kind === "custom" ? OTHER : licence.id) : null;
 	const missing = needed && !licenceComplete(licence);
+	const offer = offerOf(rights, defaultLicence);
 	return (
 		<section
 			aria-label="Licence"
@@ -146,8 +159,8 @@ export function LicenceInput({
 					{missing ? " A DOI needs one." : null}
 				</p>
 				{!licenceComplete(licence) && !disabled ? (
-					<Button size="xs" variant="muted" className="shrink-0" onPress={() => onChange({ kind: "zenodo", id: defaultLicence })}>
-						Use {licenceShortName(defaultLicence) ?? "the default"}
+					<Button size="xs" variant="muted" className="shrink-0" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
+						Use {offer.name}
 					</Button>
 				) : null}
 			</div>
