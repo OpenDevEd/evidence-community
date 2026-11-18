@@ -14,7 +14,7 @@ const common = new Set<string>(COMMON_ZENODO_LICENCES);
 // A licence is shown by its short name where it has one, with its full title under it in the list: the full titles
 // don't fit the editor's width.
 type LicenceOption = { key: string; title: string; short: string | null; shown: string; note?: string };
-const option = ([id, title]: readonly [string, string]): LicenceOption => {
+const option = ([id, title]: readonly [string, string, ...string[]]): LicenceOption => {
 	const short = licenceShortName(id);
 	return { key: id, title, short, shown: short ?? title, note: short ? title : undefined };
 };

@@ -1,6 +1,7 @@
 "use client";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Link01Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight01Icon, LicenseIcon, Link01Icon, LinkSquare02Icon, Tick01Icon } from "@hugeicons/core-free-icons";
+import { licenceComplete, licenceLabel, zenodoLicenceTitle, type RecordLicence } from "@/lib/licences";
 import { InspectorChoices } from "./InspectorChoices";
 import { Switch } from "@/components/nextui/Switch";
 import { Button } from "@/components/nextui/Button";
@@ -82,6 +83,10 @@ type PanelProps = {
 	model: ReturnType<typeof usePublishingChoice>;
 	/** The record is to get a DOI and has no licence yet. */
 	licenceMissing?: boolean;
+	/** The licence its DOI goes out under; null for a record that came from elsewhere. */
+	licence?: RecordLicence | null;
+	/** The DOI Zenodo gave the record, once it has one. */
+	zenodoDoi?: { value: string; url: string } | null;
 };
 
 /** A record's DOI: kept as it came, chosen here, or not on offer in a community that hasn't set up Zenodo. */
@@ -102,6 +107,8 @@ export function RecordDoiPanel(props: PanelProps) {
 			model={props.model}
 			crossref={offer.crossref}
 			licenceMissing={props.licenceMissing ?? false}
+			licence={props.licence ?? null}
+			zenodoDoi={props.zenodoDoi ?? null}
 		/>
 	);
 }
@@ -129,8 +136,12 @@ function PublishingChoicePanel({
 	model,
 	crossref,
 	licenceMissing,
+	licence,
+	zenodoDoi,
 }: Pick<PanelProps, "detail" | "filesReadOnly" | "model"> & {
 	licenceMissing: boolean;
+	licence: RecordLicence | null;
+	zenodoDoi: { value: string; url: string } | null;
 	readOnly: boolean;
 	/** The route chosen: the saved one, or a submitted version's. */
 	value: PublishingChoice | null;
@@ -144,32 +155,34 @@ function PublishingChoicePanel({
 	return (
 		<div className="overflow-hidden rounded-xl bg-black/[0.025] ring-1 ring-inset ring-black/[0.05] dark:bg-white/[0.035] dark:ring-white/[0.06]">
 			<IdentifierError model={model} />
-			<div className="flex items-center justify-between gap-3 px-3 py-3">
-				<span className="text-xs font-medium text-black/80 dark:text-white/85">
-					Register a DOI
-				</span>
-				<Tooltip
-					content="Identifiers have already been activated for this item."
-					isDisabled={!held}
-				>
-					<span className="inline-flex">
-						<Switch
-							aria-label="Register a DOI"
-							color="accent"
-							isSelected={Boolean(value)}
-							isDisabled={disabled || held}
-							onValueChange={(selected) => {
-								void save(
-									selected ? defaultPublishingChoice(lockedPolicy) : null,
-								);
-							}}
-						/>
-					</span>
-				</Tooltip>
-			</div>
+			{/* The words are the switch's own label, so pressing them turns it, as the admin's display switches do. */}
+			<Tooltip
+				content="Identifiers have already been activated for this item."
+				isDisabled={!held}
+			>
+				<div className="px-3 py-3">
+					<Switch
+						color="accent"
+						isSelected={Boolean(value)}
+						isDisabled={disabled || held}
+						onValueChange={(selected) => {
+							void save(
+								selected ? defaultPublishingChoice(lockedPolicy) : null,
+							);
+						}}
+						classNames={{
+							base: "flex w-full max-w-none justify-between",
+							label: "ms-0 text-xs font-medium text-black/80 dark:text-white/85",
+							wrapper: "shrink-0",
+						}}
+					>
+						Register a DOI
+					</Switch>
+				</div>
+			</Tooltip>
 			{value && licenceMissing ? <NoLicence fieldId={`admin-${detail.key}-licence`} /> : null}
 			{value ? (
-				<ChosenRoute value={value} detail={detail} readOnly={readOnly} filesReadOnly={filesReadOnly} disabled={disabled} model={model} crossref={crossref} />
+				<ChosenRoute value={value} detail={detail} readOnly={readOnly} filesReadOnly={filesReadOnly} disabled={disabled} model={model} crossref={crossref} licence={licence} zenodoDoi={zenodoDoi} />
 			) : (
 				<p className="px-3 pb-3 text-[11px] leading-relaxed text-black/50 dark:text-white/50">
 					Publish without a DOI or Zenodo archive.
@@ -188,7 +201,11 @@ function ChosenRoute({
 	disabled,
 	model,
 	crossref,
+	licence,
+	zenodoDoi,
 }: {
+	licence: RecordLicence | null;
+	zenodoDoi: { value: string; url: string } | null;
 	value: PublishingChoice;
 	detail: AdminItemDetail;
 	readOnly: boolean;
@@ -235,22 +252,78 @@ function ChosenRoute({
 						setPolicy={setPolicy}
 					/>
 				)}
+				{value.route === "zenodo" && <ZenodoDoi doi={zenodoDoi} />}
 				<PublicationArchiveFiles
 					attachments={detail.attachments}
 					readOnly={filesReadOnly}
 				/>
+				{licenceComplete(licence) ? <LicenceRow licence={licence} fieldId={`admin-${detail.key}-licence`} /> : null}
 			</div>
 		</>
 	);
 }
 
+/** The DOI Zenodo gave the record, shown as the Crossref DOI is on its route; until then, when it comes. */
+function ZenodoDoi({ doi }: { doi: { value: string; url: string } | null }) {
+	return (
+		<div className="flex items-center gap-3 border-t border-black/[0.05] p-3 dark:border-white/[0.06]">
+			<span className="grid size-8 shrink-0 place-items-center self-start rounded-lg bg-card_light dark:bg-white/5">
+				<ZenodoIcon className="h-3 w-7" aria-hidden />
+			</span>
+			<div className="min-w-0 flex-1">
+				<p className="text-xs font-medium">Zenodo DOI</p>
+				{doi ? (
+					<a href={doi.url} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 break-all font-mono text-[10px] leading-relaxed text-black/55 underline-offset-2 hover:underline dark:text-white/55">
+						{doi.value}
+						<HugeiconsIcon icon={LinkSquare02Icon} size={11} className="shrink-0" />
+					</a>
+				) : (
+					<p className="mt-1 text-[10px] leading-relaxed text-black/45 dark:text-white/45">Given when the record publishes.</p>
+				)}
+			</div>
+			{doi ? (
+				<span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+					<HugeiconsIcon icon={Tick01Icon} size={12} />
+					Active
+				</span>
+			) : null}
+		</div>
+	);
+}
+
+/** The licence the DOI goes out under, beside its files; pressing it goes to the Licence field to change it. */
+function LicenceRow({ licence, fieldId }: { licence: RecordLicence; fieldId: string }) {
+	return (
+		<button
+			type="button"
+			className="group flex w-full items-center gap-3 border-t border-black/[0.05] p-3 text-left transition-background-fill hover:bg-black/[0.03] dark:border-white/[0.06] dark:hover:bg-white/[0.04]"
+			onClick={() => focusField(fieldId)}
+		>
+			<span className="grid size-8 shrink-0 place-items-center self-start rounded-lg bg-card_light text-black/50 dark:bg-white/5 dark:text-white/55">
+				<HugeiconsIcon icon={LicenseIcon} size={16} />
+			</span>
+			<span className="min-w-0 flex-1">
+				<span className="block text-xs font-medium">{licenceLabel(licence)}</span>
+				<span className="mt-1 block truncate text-[10px] text-black/45 dark:text-white/45">
+					{licence.kind === "custom" ? licence.url : zenodoLicenceTitle(licence.id)}
+				</span>
+			</span>
+			<span className="shrink-0 text-[11px] font-medium text-black/50 dark:text-white/55">Change</span>
+			<HugeiconsIcon icon={ArrowRight01Icon} size={13} className="shrink-0 text-black/30 transition-transform group-hover:translate-x-0.5 dark:text-white/35" />
+		</button>
+	);
+}
+
+/** Brings the record's Licence field into view and puts the cursor in it. */
+function focusField(fieldId: string) {
+	const field = document.getElementById(fieldId);
+	field?.scrollIntoView({ behavior: "smooth", block: "center" });
+	field?.focus({ preventScroll: true });
+}
+
 /** A DOI needs the record's licence, which Zenodo and Crossref both take: until it has one, it goes to the field. */
 function NoLicence({ fieldId }: { fieldId: string }) {
-	const pick = () => {
-		const field = document.getElementById(fieldId);
-		field?.scrollIntoView({ behavior: "smooth", block: "center" });
-		field?.focus({ preventScroll: true });
-	};
+	const pick = () => focusField(fieldId);
 	return (
 		<div role="alert" className="flex items-center gap-3 px-3 pb-3 text-xs text-danger">
 			<p className="min-w-0 flex-1 leading-relaxed">No licence yet. A DOI needs one.</p>

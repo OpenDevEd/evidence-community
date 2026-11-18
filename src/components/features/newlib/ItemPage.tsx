@@ -9,7 +9,9 @@ import {
 	Folder01Icon,
 	Mortarboard01Icon,
 	ArrowUpRight01Icon,
+	LicenseIcon,
 } from "@hugeicons/core-free-icons";
+import { licenceComplete, licenceLabel, licenceTermsUrl, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { escapeHtml } from "@/lib/escape-html";
@@ -929,17 +931,51 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 		return [...doiLinks, canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
 	}, [faviconUrl, identity.baseUrl, item, openScholar]);
 
-	if (!links.length) return null;
+	const licence = item ? recordLicence(item.licence) : null;
+	if (!links.length && !licence) return null;
 
 	return (
-		<SidebarCard title={t("itemIdentifiersTitle")} count={links.length}>
+		<SidebarCard title={t("itemIdentifiersTitle")} count={links.length + (licence ? 1 : 0)}>
 			{links.map((link) => (
 				<ItemIdentifierRow
 					key={`${link.provider}-${link.kind}-${link.value}`}
 					link={link}
 				/>
 			))}
+			{licence ? <ItemLicenceRow licence={licence} /> : null}
 		</SidebarCard>
+	);
+}
+
+/** A record's licence as its DOI carries it: only a whole one, so a half-written custom licence never shows. */
+const recordLicence = (value: unknown) => {
+	const licence = recordLicenceSchema.safeParse(value).data;
+	return licence && licenceComplete(licence) ? licence : null;
+};
+
+/** The licence the record is shared under, beside its DOI, linked to its terms where they have a link. */
+function ItemLicenceRow({ licence }: { licence: RecordLicence }) {
+	const t = useTranslations("ui");
+	const terms = licenceTermsUrl(licence);
+	const name = licenceLabel(licence);
+	return (
+		<div className="px-4">
+			<div className="flex items-center gap-3">
+				<div className="flex size-9 shrink-0 self-start items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 shadow-sm dark:border-white/10 dark:bg-white">
+					<HugeiconsIcon icon={LicenseIcon} size={18} aria-hidden />
+				</div>
+				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">{t("itemIdentifierLicence")}</div>
+					{terms ? (
+						<a href={terms} target="_blank" rel="noopener noreferrer license" className="block truncate text-xs leading-tight text-link transition-colors hover:underline">
+							{name}
+						</a>
+					) : (
+						<span className="block truncate text-xs leading-tight text-black/60 dark:text-white/60">{name}</span>
+					)}
+				</div>
+			</div>
+		</div>
 	);
 }
 

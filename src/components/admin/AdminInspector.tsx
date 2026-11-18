@@ -21,6 +21,7 @@ import { StudyTypeInput } from "./StudyTypeInput";
 import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
 import { LicenceInput } from "./LicenceInput";
 import { licenceLabel } from "@/lib/licences";
@@ -625,6 +626,15 @@ const StudyTypeEditor = memo(function StudyTypeEditor({
 		</div>
 	);
 });
+
+/**
+ * The DOI Zenodo gave the record's current version, read from Zenodo's own identifiers: the preferred DOI the header
+ * shows is a Crossref one wherever one was reserved, even on a record since moved to Zenodo alone.
+ */
+function zenodoVersionDoi(view: AdminPublicationView | null | undefined) {
+	const doi = view?.providers.zenodo.exact.identifiers.find((identifier) => identifier.role === "version" && identifier.lifecycle === "verified")?.doi;
+	return doi ? { value: doi, url: `https://doi.org/${doi}` } : null;
+}
 
 /** The draft's licence, or none when it holds none or one that can't be read. */
 const recordLicence = (value: unknown) => recordLicenceSchema.safeParse(value).data ?? null;
@@ -2320,6 +2330,8 @@ export function AdminInspector({
 								}
 								model={publishing}
 								licenceMissing={licenceMissing}
+								licence={licenceField?.value ?? null}
+								zenodoDoi={zenodoVersionDoi(publication.publication)}
 							/>
 						)}
 					</Section>
