@@ -91,6 +91,7 @@ import {
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { removalDoiOf } from "./removal-doi";
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -1145,6 +1146,7 @@ export async function publishItemDraftWithContext(
 		await publishSourceFieldOverrides(transaction, itemKey, basePayload, validated.payload, { firstPublish: !current });
 		await transaction.delete(itemFieldOverride).where(and(eq(itemFieldOverride.itemKey, itemKey), eq(itemFieldOverride.field, "deleted")));
 		if (current?.deleted === 1) await restoreSourceChildren(transaction, itemKey);
+		const reinstated = current?.deleted === 1 && current.deletedAt ? await reinstateOwnChildren(transaction, itemKey, current.deletedAt) : [];
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
@@ -1159,6 +1161,8 @@ export async function publishItemDraftWithContext(
 			dateModified: now,
 			deleted: 0,
 			deletedAt: null,
+			withdrawnAt: null,
+			withdrawalReason: null,
 			updatedAt: now,
 		} as ItemInsert;
 		let publishedTags = validated.tags;
@@ -1260,7 +1264,7 @@ export async function publishItemDraftWithContext(
 			operation: "upsert",
 			revision: nextRevision,
 		});
-		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
+		const indexingRecords = [{ key: itemKey, revision: nextRevision }, ...reinstated];
 		for (const linkTargetKey of changedLinkTargets) {
 			if (relatedParentKeys.includes(linkTargetKey)) continue;
 			const target = lockedItems.find(
@@ -1423,6 +1427,8 @@ export async function publishItemDraftWithContext(
 			indexingRecords,
 			item: published!,
 			previousParentItem: candidate?.parentItem ?? null,
+			/** Attachments removed with the record and back with it, whose files go public again (withdrawn-files). */
+			reinstatedAttachments: reinstated.map(({ key }) => key),
 		};
 	});
 }
@@ -1444,6 +1450,11 @@ export type ItemUnpublishOptions = {
 	 * their copy and stay selected.
 	 */
 	removeFromSourceKeys?: readonly string[];
+	/**
+	 * Withdraws a record with a real DOI, which can't be deleted: it leaves like an unpublished record, its page becomes
+	 * a tombstone giving this reason, and Crossref and Zenodo are told. Ignored for a record without one.
+	 */
+	withdrawal?: { reason: string };
 };
 
 /** Keeps a withdrawn OpenAlex record withdrawn when the next import brings it again. */
@@ -1468,6 +1479,40 @@ async function withdrawSourceChildren(transaction: Transaction, children: readon
 			target: [sourceFileCleanup.sourceConnectionKey, sourceFileCleanup.objectPath],
 			set: { attempts: 0, deadLetteredAt: null, lastError: null, updatedAt: now },
 		});
+	}
+	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
+}
+
+/**
+ * A record with a DOI takes its own attachments with it. Their published files stay where they are: Zenodo's archive
+ * lists them, and restoring the record brings back the ones withdrawn with it, which carry its moment.
+ */
+async function removeOwnChildren(transaction: Transaction, children: readonly { key: string; revision: number }[], now: Date, withdrawn: boolean) {
+	for (const child of children) {
+		const revision = child.revision + 1;
+		await transaction.update(item).set({ deleted: 1, deletedAt: now, revision, updatedAt: now, withdrawnAt: withdrawn ? now : null }).where(eq(item.key, child.key));
+		await advanceOpenItemDraftBaseRevision(transaction, child.key, child.revision, revision);
+		await transaction.insert(outbox).values({ entityType: "item", entityKey: child.key, operation: "delete", revision });
+	}
+	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
+}
+
+/**
+ * Restoring a record brings back its own attachments removed with it, the ones removed at its moment: a record with a
+ * DOI takes them when it is withdrawn or removed (removeOwnChildren). A source's attachments come back with their source.
+ */
+async function reinstateOwnChildren(transaction: Transaction, itemKey: string, deletedAt: Date) {
+	const children = await transaction
+		.select({ key: item.key, revision: item.revision })
+		.from(item)
+		.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 1), eq(item.deletedAt, deletedAt), eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY)))
+		.for("update");
+	const now = new Date();
+	for (const child of children) {
+		const revision = child.revision + 1;
+		await transaction.update(item).set({ deleted: 0, deletedAt: null, withdrawnAt: null, revision, updatedAt: now }).where(eq(item.key, child.key));
+		await advanceOpenItemDraftBaseRevision(transaction, child.key, child.revision, revision);
+		await transaction.insert(outbox).values({ entityType: "item", entityKey: child.key, operation: "upsert", revision });
 	}
 	return children.map((child) => ({ key: child.key, revision: child.revision + 1 }));
 }
@@ -1565,8 +1610,11 @@ async function unpublishNativeItemAttempt(
 				stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
 			};
 		}
-		const [activePublication] = await transaction
-			.select({ provider: publicationTarget.provider })
+		// A record with a DOI leaves with its own attachments. One whose DOIs are all test ones (Zenodo sandbox, Crossref
+		// test), as on a demo community, is removed for good and its DOI targets switched off: nothing public points at a
+		// test DOI. One with a real DOI can only be withdrawn, with a reason its tombstone gives.
+		const activeTargets = await transaction
+			.select({ provider: publicationTarget.provider, environment: publicationTarget.environment })
 			.from(publicationTarget)
 			.where(
 				and(
@@ -1575,11 +1623,13 @@ async function unpublishNativeItemAttempt(
                     isNotNull(publicationTarget.activatedAt),
 				),
 			)
-			.limit(1)
 			.for("update");
-		if (activePublication) {
+		const realDoi = removalDoiOf(activeTargets) === "real";
+		if (realDoi && !options.withdrawal) {
 			throw new ItemHasActivePublicationError(itemKey);
 		}
+		const withdrawal = realDoi ? options.withdrawal : undefined;
+		const leavesWithChildren = activeTargets.length > 0;
 		const liveChildren = await transaction
 			.select({ key: item.key, revision: item.revision, sourceConnectionKey: item.sourceConnectionKey })
 			.from(item)
@@ -1591,7 +1641,8 @@ async function unpublishNativeItemAttempt(
 		const sourceChildren = current.sourceConnectionKey === NATIVE_CONNECTION_KEY
 			? []
 			: liveChildren.filter((child) => child.sourceConnectionKey !== NATIVE_CONNECTION_KEY);
-		if (liveChildren.length > sourceChildren.length) {
+		const ownChildren = liveChildren.filter((child) => !sourceChildren.includes(child));
+		if (ownChildren.length && !leavesWithChildren) {
 			throw new ItemHasChildrenError(itemKey);
 		}
 		const draftKeysToLock = [
@@ -1621,6 +1672,12 @@ async function unpublishNativeItemAttempt(
 		const nextRevision = current.revision + 1;
 		const now = new Date();
 		if (current.sourceConnectionKey !== NATIVE_CONNECTION_KEY) await keepSourceRecordDeleted(transaction, itemKey, now);
+		if (leavesWithChildren && !realDoi) {
+			await transaction
+				.update(publicationTarget)
+				.set({ deactivatedAt: now, updatedAt: now })
+				.where(and(eq(publicationTarget.itemKey, itemKey), isNull(publicationTarget.deactivatedAt)));
+		}
 		const [unpublished] = await transaction
 			.update(item)
 			.set({
@@ -1628,9 +1685,16 @@ async function unpublishNativeItemAttempt(
 				deletedAt: now,
 				revision: nextRevision,
 				updatedAt: now,
+				withdrawnAt: withdrawal ? now : null,
+				withdrawalReason: withdrawal?.reason ?? null,
 			})
 			.where(eq(item.key, itemKey))
 			.returning();
+		const ownChildRecords = leavesWithChildren ? await removeOwnChildren(transaction, ownChildren, now, Boolean(withdrawal)) : [];
+		// Crossref and Zenodo get the record again, now withdrawn: "WITHDRAWN: " before its title, its full text gone.
+		if (withdrawal) {
+			await enqueuePublicationJobsForItem(transaction, { itemKey, canonicalRevision: nextRevision, reason: "record_changed", now });
+		}
 		await advanceOpenItemDraftBaseRevision(
 			transaction,
 			itemKey,
@@ -1672,6 +1736,7 @@ async function unpublishNativeItemAttempt(
 		const indexingRecords = [
 			{ key: itemKey, revision: nextRevision },
 			...(await withdrawSourceChildren(transaction, sourceChildren, now)),
+			...ownChildRecords,
 		];
 		const parent =
 			typeof current.parentItem === "string"

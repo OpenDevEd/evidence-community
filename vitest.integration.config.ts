@@ -32,7 +32,7 @@ export default defineConfig({
 			"tests/integration/publication-record-extras.test.ts",
 			"tools/verifyPublicationReconciler.ts",
 			"tools/verifyNativeFileLifecycle.ts",
-            "tests/integration/editorial-reviews.test.ts",
+            "tests/integration/editorial-reviews.test.ts", "tests/integration/record-withdrawal.test.ts",
             "tests/integration/item-cache-version.test.ts",
             "tests/integration/country-focus.test.ts",
             "tests/integration/author-countries.test.ts",

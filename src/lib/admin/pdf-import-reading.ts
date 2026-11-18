@@ -93,33 +93,39 @@ function inRecordForm<Suggestion extends { field: string; value: string }>(itemT
 const recordField = (itemType: unknown, field: string) => canonicalItemFieldToDatabaseField(canonicalZoteroFieldName(String(itemType), field) ?? field);
 
 /**
- * The library's record whose PDF is this very file: a draft's upload, a
- * published copy, or a PDF an earlier import attached. Publishing writes the
- * record into its copy, which changes its hash, so the import's own note of
- * the file is what finds a published import again.
+ * The records whose PDF is this very file: as a draft's, as an earlier import attached it, or as published, in that
+ * order. Publishing writes the record into its copy, which changes its hash, so the import's own note of the file is
+ * what finds a published import again. A removed record keeps its rows, so every holder is listed and the caller skips
+ * removed ones.
  */
-async function fileOwner(db: Database, sha256: string) {
-	const [draft] = await db.select({ key: itemFileDraft.parentItemKey }).from(itemFileDraft).where(eq(itemFileDraft.actualSha256, sha256)).limit(1);
-	if (draft) return draft.key;
-	const [imported] = await db.select({ key: pdfImportFile.attachTo }).from(pdfImportFile).where(and(eq(pdfImportFile.sha256, sha256), eq(pdfImportFile.attachState, "attached"))).limit(1);
-	if (imported?.key) return imported.key;
-	const [published] = await db.select({ key: itemFilePublication.parentItemKey }).from(itemFilePublication).where(eq(itemFilePublication.sha256, sha256)).limit(1);
-	return published?.key;
+async function fileOwners(db: Database, sha256: string) {
+	// ponytail: twenty of each; the same file held by more records than that is a library problem of its own.
+	const [drafts, imported, published] = await Promise.all([
+		db.select({ key: itemFileDraft.parentItemKey }).from(itemFileDraft).where(eq(itemFileDraft.actualSha256, sha256)).limit(20),
+		db.select({ key: pdfImportFile.attachTo }).from(pdfImportFile).where(and(eq(pdfImportFile.sha256, sha256), eq(pdfImportFile.attachState, "attached"))).limit(20),
+		db.select({ key: itemFilePublication.parentItemKey }).from(itemFilePublication).where(eq(itemFilePublication.sha256, sha256)).limit(20),
+	]);
+	return [...new Set([...drafts, ...imported, ...published].flatMap(({ key }) => (key ? [key] : [])))];
 }
 
-/** A record's title as published, or as its draft has it when it isn't published; null when the record is gone. */
+/**
+ * A record's title as published, or as its draft has it when it isn't published; null when the record is gone. A
+ * removed record is gone: its PDF imports again as a new record, as a demo community shows its import to each client.
+ */
 async function recordTitle(db: Database, key: string) {
-	const [record] = await db.select({ title: item.title }).from(item).where(eq(item.key, key));
-	if (record) return { title: record.title };
+	const [record] = await db.select({ title: item.title, deleted: item.deleted }).from(item).where(eq(item.key, key));
+	if (record) return record.deleted === 1 ? null : { title: record.title };
 	const [draft] = await db.select({ patch: itemDraft.patch }).from(itemDraft).where(eq(itemDraft.itemKey, key));
 	return draft ? { title: (draft.patch as { title?: string }).title || null } : null;
 }
 
-/** The library's record whose PDF is this very file, with its title, while that record still exists. */
+/** The library's live record whose PDF is this very file, with its title: a removed holder is passed over for a live one. */
 async function recordWithFile(db: Database, sha256: string) {
-	const key = await fileOwner(db, sha256);
-	const record = key ? await recordTitle(db, key) : null;
-	return key && record ? { key, title: record.title } : null;
+	for (const key of await fileOwners(db, sha256)) {
+		const record = await recordTitle(db, key);
+		if (record) return { key, title: record.title };
+	}
+	return null;
 }
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string; cause?: { code?: string } }).code === "23505" || (error as { cause?: { code?: string } }).cause?.code === "23505";

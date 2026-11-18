@@ -21,6 +21,7 @@ import { StudyTypeInput } from "./StudyTypeInput";
 import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import type { RemovalDoi } from "@/lib/admin/removal-doi";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
 import { LicenceInput } from "./LicenceInput";
@@ -626,6 +627,26 @@ const StudyTypeEditor = memo(function StudyTypeEditor({
 		</div>
 	);
 });
+
+
+/** Where a withdrawn record's editor says when it was withdrawn and the reason its tombstone gives readers. */
+function WithdrawnNotice({ published }: { published: Record<string, unknown> | null }) {
+	const at = typeof published?.withdrawnAt === "string" ? new Date(published.withdrawnAt) : null;
+	if (!at) return null;
+	const reason = typeof published?.withdrawalReason === "string" ? published.withdrawalReason : "";
+	return (
+		<section aria-label="Withdrawn" className="mb-4 flex items-start gap-2.5 rounded-xl bg-danger/5 px-3 py-2.5 text-xs text-black/70 dark:text-white/70">
+			<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} className="mt-0.5 shrink-0 text-danger" />
+			<div className="min-w-0 space-y-1 leading-5">
+				<p className="font-medium text-black/85 dark:text-white/85">
+					Withdrawn on {at.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+				</p>
+				{reason ? <p className="break-words">{reason}</p> : null}
+				<p className="text-black/50 dark:text-white/50">Its page says so and its DOI still leads there. Restore sends it for review; once its version is published, it is back with its PDF.</p>
+			</div>
+		</section>
+	);
+}
 
 /**
  * The DOI Zenodo gave the record's current version, read from Zenodo's own identifiers: the preferred DOI the header
@@ -1694,7 +1715,8 @@ export function AdminInspector({
 	/** Reads the record again after a failure. Absent when the record no longer exists. */
 	onRetry?: () => void;
 	onRestore: () => void;
-	onUnpublish: () => void;
+	/** `doi` says what removing it does: switch off its test DOI, or withdraw it (a real DOI can't be deleted). */
+	onUnpublish: (doi: RemovalDoi) => void;
 	onSelectAttachment: (key: string) => void;
 	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
 	onStopLinkPick?: () => void;
@@ -1827,6 +1849,7 @@ export function AdminInspector({
 		(target) => target.isOrigin && isOpenAlexWorkProvider(target.provider),
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
+	const removalDoi = detail.removalDoi ?? "none";
 	const unrestored = isUnrestoredRecord(detail);
 	// Only a record made here can get a DOI, and a DOI needs a licence: Zenodo and Crossref both take it.
 	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);
@@ -2126,9 +2149,9 @@ export function AdminInspector({
 										)}
                                 {!readOnlyVersion && canPublish && (native || importedOpenAlex) && detail.editable && detail.published && detail.state !== "deleted" && (
                                     <Button size="xs" variant="muted" color="danger" isDisabled={busy}
-                                        onPress={() => { closeMenu(); onUnpublish(); }}
+                                        onPress={() => { closeMenu(); onUnpublish(removalDoi); }}
                                         startContent={<HugeiconsIcon icon={ArchiveIcon} aria-hidden size={14} />}>
-                                        Unpublish
+                                        {removalDoi === "real" ? "Withdraw record" : "Unpublish"}
                                     </Button>
                                 )}
 							</div>
@@ -2139,6 +2162,7 @@ export function AdminInspector({
 								<RecordStateChip state={detail.state} />
 							</section>
 						)}
+
 						{versionNotice}
 						{!detail.parentItem && (
 							<AdminItemDisplay
@@ -2277,6 +2301,7 @@ export function AdminInspector({
 				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4 [@media(max-height:600px)]:flex-none [@media(max-height:600px)]:overflow-visible"
 				data-admin-region="inspector-scroll"
 			>
+				{detail.state === "deleted" ? <WithdrawnNotice published={detail.published} /> : null}
 				{error && (
 					<div
 						role="alert"

@@ -35,6 +35,7 @@ import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
+import { Textarea } from "@/components/nextui/Textarea";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -66,6 +67,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
 import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
+import type { RemovalDoi } from "@/lib/admin/removal-doi";
 import { publishingChoiceKey } from "./usePublishingChoice";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
@@ -183,12 +185,41 @@ type CollectionLocation = {
 
 type ConfirmDialog = {
 	error?: string;
-	action: () => Promise<void>;
+	/** Gets the reason typed, where the dialog asks for one. */
+	action: (reason: string) => Promise<void>;
+	/** A reason to type before confirming, such as the one a withdrawn record's page gives readers. */
+	reason?: { label: string; description: string };
+	/** What has been typed for the reason; it stays when an error replaces the dialog's state. */
+	reasonText?: string;
 	confirmLabel?: string;
 	danger?: boolean;
 	message: string;
 	onError?: (error: unknown) => void;
 	title: string;
+};
+
+/** What removing a record says, by what it does to its DOI: a real one is withdrawn, with a reason readers see. */
+const REMOVAL_DIALOGS: Record<RemovalDoi, Omit<ConfirmDialog, "action"> & { done: string }> = {
+	none: {
+		title: "Unpublish record?",
+		confirmLabel: "Unpublish record",
+		message: "It will leave the public community and remain recoverable here.",
+		done: "Record unpublished",
+	},
+	test: {
+		title: "Unpublish record?",
+		confirmLabel: "Unpublish record",
+		message: "It will leave the public community with its PDFs, and its test DOI is switched off. It remains recoverable here.",
+		done: "Record unpublished",
+	},
+	real: {
+		title: "Withdraw record?",
+		confirmLabel: "Withdraw record",
+		message:
+			"Its DOI is real, so it can't be deleted. It leaves the public community, and its page says it was withdrawn, when and why; its DOI keeps leading there. Crossref and Zenodo are told. Its PDF stays on Zenodo: only Zenodo support can remove it. Restore later sends it for review, and publishing it brings it back.",
+		reason: { label: "Reason", description: "Readers see it on the record's page." },
+		done: "Record withdrawn",
+	},
 };
 
 type RecordAssignment = {
@@ -614,10 +645,13 @@ export default function AdminWorkbench({
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
 		null,
 	);
+	const reasonText = confirmDialog?.reasonText ?? "";
 	const [writebackDialog, setWritebackDialog] = useState<
 		| (WritebackDialogRequest & {
 				action: "manage" | "restore" | "unpublish";
 				recordKey: string;
+				/** A withdrawal asked for before its sources were chosen, with its reason. */
+				withdrawal?: { reason: string };
 		  })
 		| null
 	>(null);
@@ -1486,13 +1520,14 @@ export default function AdminWorkbench({
 	// note (they follow their parent), the action runs at once.
 	const askWritebackSources = (
 		action: "manage" | "restore" | "unpublish",
+		withdrawal?: { reason: string },
 	) => {
 		if (!detail) return false;
 		const options = detail.parentItem
 			? null
 			: resolveWritebackDialogOptions(detail.writeback, action);
 		if (!options) return false;
-		setWritebackDialog({ action, mode: action, options, recordKey: detail.key });
+		setWritebackDialog({ action, mode: action, options, recordKey: detail.key, withdrawal });
 		return true;
 	};
 
@@ -1546,7 +1581,7 @@ export default function AdminWorkbench({
 		setWritebackDialog(null);
 		const recordKey = request.recordKey;
 		if (request.action === "restore") runRestore(recordKey, sourceKeys);
-		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
+		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys, request.withdrawal);
 		else {
 			void runBusy(async () => {
 				await setAdminItemWritebackSources(recordKey, sourceKeys);
@@ -1629,29 +1664,30 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[]) =>
+	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[], withdrawal?: { reason: string }) =>
 		void runBusy(async () => {
-			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys);
+			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys, withdrawal);
 			await waitForIndexing(result);
 			await Promise.all([loadDetail(recordKey), loadItems()]);
-			toast.success("Record unpublished");
+			toast.success(withdrawal ? "Record withdrawn" : "Record unpublished");
 		});
 
-	const unpublishCurrent = () => {
+	const unpublishCurrent = (doi: RemovalDoi = "none") => {
 		if (!detail) return;
-		if (askWritebackSources("unpublish")) return;
+		// A record with a DOI says what removing it does (and a withdrawal asks why) before asking which sources keep a copy.
+		if (doi === "none" && askWritebackSources("unpublish")) return;
 		const recordKey = detail.key;
+		const words = REMOVAL_DIALOGS[doi];
 		setConfirmDialog({
-			title: "Unpublish record?",
-			confirmLabel: "Unpublish record",
-			message:
-				"It will leave the public community and remain recoverable here.",
+			...words,
 			danger: true,
-			action: async () => {
-				const result = await unpublishAdminItem(recordKey);
+			action: async (reason) => {
+				const withdrawal = words.reason ? { reason } : undefined;
+				if (doi !== "none" && askWritebackSources("unpublish", withdrawal)) return;
+				const result = await unpublishAdminItem(recordKey, undefined, withdrawal);
 				await waitForIndexing(result);
 				await Promise.all([loadDetail(recordKey), loadItems()]);
-				toast.success("Record unpublished");
+				toast.success(words.done);
 			},
 		});
 	};
@@ -3604,6 +3640,17 @@ export default function AdminWorkbench({
 								<p className="text-sm text-black/60 dark:text-white/60">
 									{confirmDialog?.message}
 								</p>
+								{confirmDialog?.reason ? (
+									<Textarea
+										autoFocus
+										label={confirmDialog.reason.label}
+										description={confirmDialog.reason.description}
+										minRows={3}
+										maxLength={1000}
+										value={reasonText}
+										onValueChange={(text) => setConfirmDialog((current) => (current ? { ...current, reasonText: text } : current))}
+									/>
+								) : null}
 							</ModalBody>
 							<ModalFooter>
 								<Button
@@ -3620,12 +3667,14 @@ export default function AdminWorkbench({
 											: "accent"
 									}
 									isLoading={busy}
+									isDisabled={Boolean(confirmDialog?.reason) && !reasonText.trim()}
 									onPress={() => {
 										const request = confirmDialog;
 										const action = request?.action;
 										if (!action) return;
+										const reason = reasonText.trim();
 										void runBusy(async () => {
-											await action();
+											await action(reason);
 											setConfirmDialog(null);
 										}, (error) => {
 											request?.onError?.(error);

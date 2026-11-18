@@ -8,6 +8,8 @@ import { getRecordCitationLinks } from "@/config/library-config/exports";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
+import { getDatabaseForConfig } from "@/db";
+import { readWithdrawnRecord } from "@/lib/withdrawn-record";
 import ItemRoute from "./ItemRoute";
 import type { ItemGetResponse } from "@/app/api/item/types";
 import { PageBoundary } from "@/components/layout/PageBoundary";
@@ -38,6 +40,9 @@ export async function generateMetadata(props: {
 	const baseUrl = libraryConfig.identity.baseUrl;
 
 	if (!data || !data.item) {
+		// A withdrawn record's page is its tombstone, named after it and kept out of search engines.
+		const withdrawn = await readWithdrawnRecord(await getDatabaseForConfig(libraryConfig), params.key, libraryConfig);
+		if (withdrawn) return { title: (await getTranslations("ui"))("recordWithdrawnTitle", { title: withdrawn.title }), generator: "new-el", robots: { index: false, follow: false } };
 		return {
 			title: (await getTranslations("ui"))("notFoundTitle"),
 			description: (await getTranslations("ui"))("notFoundTitle"),
@@ -147,14 +152,15 @@ export async function generateMetadata(props: {
 export default function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
-	const record = props.params.then(({ key }) => getCachedItemPage(key)) as Promise<ItemGetResponse | null>;
+	const recordKey = props.params.then(({ key }) => key);
+	const record = recordKey.then((key) => getCachedItemPage(key)) as Promise<ItemGetResponse | null>;
 	return (
 		<>
 			<PageBoundary fallback={<LoadingComponent />}>
 				<ItemRoute record={record} />
 			</PageBoundary>
 			<PageBoundary fallback={null}>
-				<ServerComponent record={record} />
+				<ServerComponent record={record} recordKey={recordKey} />
 			</PageBoundary>
 		</>
 	);

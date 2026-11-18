@@ -14,6 +14,7 @@ import { item } from "../../src/db/schema/tables/item";
 import { importChecksOf } from "../../src/lib/admin/import-checks";
 import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
 import { runPdfImportCycle } from "../../src/lib/admin/pdf-import-reading";
+import { removeNativeItem } from "../../src/lib/admin/native-item-service";
 import { closePdfImport, commitPdfImport, confirmPdfImportUpload, failPdfImportUpload, pdfImportStatus, readPdfImportFile, startPdfImport } from "../../src/lib/admin/pdf-import-service";
 import { createPdf, MemoryFileStorage } from "../helpers/file-storage";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
@@ -225,6 +226,43 @@ test("finds a PDF that is the same file as one already in the library or earlier
 		const read = readImportPdf.mock.calls.map(([, { filename }]) => filename);
 		expect(read).not.toContain("again.pdf");
 		expect(read.filter((filename) => filename.startsWith("other"))).toHaveLength(1);
+	});
+}, 60_000);
+
+// A demo community removes its records to show the import again, and the same PDFs came back "already in the community".
+test("reads again a PDF whose record was removed, and finds the record it then makes rather than the removed one", async () => {
+	readImportPdf.mockReset().mockResolvedValue({ checks: [], cites: [], collections: [], suggestions: [], topics: [], zoteroItem: { creators: [], itemType: "report", title: "A report without a DOI" } });
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const bytes = await createPdf("A report without a DOI");
+		const importOnce = async (name: string) => {
+			const started = await startPdfImport(db, storage, MAX_PDF_BYTES, { checks: [], collections: [], createdBy: EDITOR, files: [pdfFile(name)], instructions: "" });
+			await storage.uploadPrivate(started.files[0]!.upload.path, bytes, "application/pdf");
+			await confirmPdfImportUpload(db, storage, started.files[0]!.id);
+			await runPdfImportCycle(db, storage, config);
+			const [file] = (await pdfImportStatus(db)).import!.files;
+			return { started, file: file! };
+		};
+		const first = await importOnce("report.pdf");
+		const made = await commitPdfImport(db, { collections: [], importId: first.started.id, records: [{ id: first.file.rowId, method: "pdf", payload: first.file.reading!.record.payload! }] });
+		await runPdfImportCycle(db, storage, config);
+		await closePdfImport(db, storage, first.started.id);
+		// Removed as an editor removes an unpublished draft: its PDF's attachment draft first.
+		const madeKey = made.results[0]!.itemKey!;
+		const attachments = (await db.select({ key: itemDraft.itemKey, patch: itemDraft.patch }).from(itemDraft)).filter(({ patch }) => (patch as { parentItem?: string }).parentItem === madeKey);
+		for (const { key } of attachments) await removeNativeItem(db, key);
+		await removeNativeItem(db, madeKey);
+
+		const second = await importOnce("again.pdf");
+		expect(second.file.reading!.record.state).toBe("ready");
+		const remade = await commitPdfImport(db, { collections: [], importId: second.started.id, records: [{ id: second.file.rowId, method: "pdf", payload: second.file.reading!.record.payload! }] });
+		await runPdfImportCycle(db, storage, config);
+		await closePdfImport(db, storage, second.started.id);
+		// Publishing moves the upload out of the drafts, so only the imports' own notes of the file find either record.
+		await db.delete(itemFileDraft);
+
+		const third = await importOnce("once more.pdf");
+		expect(third.file.reading!.record).toMatchObject({ state: "existing", existingKey: remade.results[0]!.itemKey });
 	});
 }, 60_000);
 

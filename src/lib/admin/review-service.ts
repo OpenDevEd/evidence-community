@@ -14,6 +14,7 @@ import {
 	unpublishNativePdfInTransaction,
 	cleanupNativePdfRemoval,
 } from "./native-file-service";
+import { revealRestoredFiles } from "./withdrawn-files";
 import type { EvidenceFileStorage } from "./file-storage";
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -434,6 +435,7 @@ export async function publishReviewRecords(
 	config: LibraryServerConfig,
 ) {
 	const remainingConflicts: Record<string, string[]> = {};
+	const reinstatedAttachments: string[] = [];
 	const indexingKeys = new Set(
 		locked.snapshot.records.map((record) => record.itemKey),
 	);
@@ -466,10 +468,11 @@ export async function publishReviewRecords(
 		);
 		for (const record of result.indexingRecords)
 			indexingKeys.add(record.key);
+		reinstatedAttachments.push(...result.reinstatedAttachments);
 		if (result.draftConflicts.length)
 			remainingConflicts[submitted.itemKey] = [...result.draftConflicts];
 	}
-	return { remainingConflicts, indexingKeys };
+	return { remainingConflicts, indexingKeys, reinstatedAttachments };
 }
 
 /** Activates the identifiers a publishing choice asks for, inside the publishing transaction. No provider calls. */
@@ -650,6 +653,7 @@ export async function approveItemReview(
 		removals: Awaited<ReturnType<typeof unpublishNativePdfInTransaction>>[];
 		review: typeof itemReview.$inferSelect;
 		indexingRecords: { key: string; revision: number }[];
+		reinstatedAttachments: string[];
 	};
 	try {
 		for (const file of files) {
@@ -668,7 +672,7 @@ export async function approveItemReview(
 				review.revision,
 			);
 			await assertReviewCurrent(transaction, locked);
-			const { remainingConflicts, indexingKeys } =
+			const { remainingConflicts, indexingKeys, reinstatedAttachments } =
 				await publishReviewRecords(transaction, locked, config);
 			const fileResults = [];
 			for (const file of prepared)
@@ -704,6 +708,7 @@ export async function approveItemReview(
 				removals,
 				review: published!,
 				indexingRecords,
+				reinstatedAttachments,
 			};
 		});
 	} catch (error) {
@@ -717,6 +722,8 @@ export async function approveItemReview(
 		...committed.removals.map((removal) =>
 			cleanupNativePdfRemoval(db, storage, removal),
 		),
+		// A restored record's attachments removed with it show their files again; any published here finish a move that failed.
+		revealRestoredFiles(db, storage, [...new Set([...committed.reinstatedAttachments, ...committed.indexingRecords.map(({ key }) => key)])]),
 	]);
 	return {
 		review: committed.review,

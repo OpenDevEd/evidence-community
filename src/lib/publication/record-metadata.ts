@@ -39,6 +39,8 @@ export type EvidenceLibraryPublicationMetadata = Readonly<
 	studyType?: string | null;
 	/** The licence the record's DOI goes out under; null when none was chosen. */
 	licence?: RecordLicence | null;
+	/** When the record was withdrawn, for a record with a real DOI that left the community. */
+	withdrawnAt?: Date | null;
 };
 
 const PRIVATE_TAGS = new Set([
@@ -173,9 +175,15 @@ export function publicationRecordMetadata(
 		institution: recordInstitution(record),
 		rights: normalizeText(record.rights),
 	};
+	// A withdrawn record keeps its DOI and is registered again saying so, as Crossref asks of withdrawn work: its title
+	// starts "WITHDRAWN: " and it carries the day, which takes Crossref's full-text links away and gives Zenodo a
+	// withdrawn date (doi-sync-core). Openscholar Reports do the same (openalex-count lib/reports/registration-record.ts).
+	const title = normalizeText(record.title) ?? "";
+	const withdrawnOn = record.withdrawnAt ? record.withdrawnAt.toISOString().slice(0, 10) : null;
 	return {
 		itemType: record.itemType,
-		title: normalizeText(record.title) ?? "",
+		title: withdrawnOn ? `WITHDRAWN: ${title}` : title,
+		...(withdrawnOn ? { withdrawnOn } : {}),
 		publicationDate: normalizePublicationDate(record.date),
 		creators: normalizeCreators(record.creators ?? [], extras?.institutions ?? {}),
 		tags: publicTags(tags),

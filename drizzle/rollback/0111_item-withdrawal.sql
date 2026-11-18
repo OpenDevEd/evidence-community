@@ -1,0 +1,3 @@
+-- Rollback for 0111_item-withdrawal: nothing to run. The previous runtime never reads "withdrawnAt" or
+-- "withdrawalReason"; a withdrawn record is to it an unpublished one, which is what it is. Dropping them would lose why
+-- each record was withdrawn, which its tombstone shows again when the library rolls forward.

@@ -12,6 +12,8 @@ export const adminUnpublishRequestSchema = z
 	.object({
 		/** Selected sources that should also delete their copy. Omit to remove from every selected source. */
 		removeFromSourceKeys: sourceKeyList.optional(),
+		/** Withdraws a record with a real DOI, with the reason its tombstone gives readers. */
+		withdrawal: z.object({ reason: z.string().trim().min(1).max(1000) }).strict().optional(),
 	})
 	.strict();
 

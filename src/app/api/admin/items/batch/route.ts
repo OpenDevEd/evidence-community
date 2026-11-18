@@ -12,6 +12,7 @@ import {
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
+import { hideRemovedFiles } from "@/lib/admin/withdrawn-files";
 
 export async function POST(request: NextRequest) {
  const unauthorized = await requireAdminSession(request);
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
 		const execution = await runAdminItemBatch(input, {
 			db: runtime.db,
 			removePrivateFiles: (paths) => removeUnreferencedPrivateFiles(runtime.db, runtime.storage, paths),
+			hideRemovedFiles: (parentKey) => hideRemovedFiles(runtime.db, runtime.storage, parentKey),
 			writebackPolicyOptions: { writebackConfig },
 		});
 		return NextResponse.json(

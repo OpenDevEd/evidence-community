@@ -13,6 +13,7 @@ import {
 	integer,
 	jsonb,
 	pgTable,
+	text,
 	timestamp,
 	unique,
 	varchar,
@@ -157,6 +158,10 @@ export const item = pgTable(
 
 		deleted: integer("deleted").default(0),
 		deletedAt: timestamp("deletedAt", { withTimezone: true }),
+		// Library-owned. Set on a removed record that had a real DOI: it was withdrawn, and its page is a tombstone that
+		// gives this moment and the reason. Its attachments withdrawn with it carry the same moment.
+		withdrawnAt: timestamp("withdrawnAt", { withTimezone: true }),
+		withdrawalReason: text("withdrawalReason"),
 
 		languageName: varchar("languageName"),
 		parentItem: varchar("parentItem", { length: 8 }),

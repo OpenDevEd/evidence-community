@@ -298,7 +298,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		return {
 			code: "conflict",
 			message:
-				"This record is still published through Crossref or Zenodo. Keep it published until withdrawal support is available.",
+				"This record has a DOI, so it can't be deleted. Withdraw it from its editor, with a reason readers will see.",
 			status: 409,
 		};
 	}

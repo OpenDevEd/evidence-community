@@ -1,3 +1,4 @@
+import type { RemovalDoi } from "./removal-doi";
 import type { StudyReading } from "@/lib/readings/study-types";
 import type { SourceStatus } from "@/lib/source-ingestion/source-status";
 
@@ -180,6 +181,8 @@ export type AdminItemDetail = AdminItemSummary & {
 	published: Record<string, unknown> | null;
 	publishedCollectionKeys: string[];
 	publishedTags: string[];
+	/** What removing it does to its DOI, from its active DOI targets in every environment; absent reads as none. */
+	removalDoi?: RemovalDoi;
 	sourceFileUrl: string | null;
 	sourcePdf: AdminSourcePdf | null;
 	/** The record or one of its attachments holds a Zotero PDF change no review has yet. */

@@ -31,6 +31,9 @@ const systemManagedItemFields = new Set([
 	"sourceConnectionKey",
 	"sourceRecordKey",
 	"updatedAt",
+	// A withdrawal is the community's act on the record, never a field of it: restoring clears it.
+	"withdrawalReason",
+	"withdrawnAt",
 ]);
 
 export const editableItemDatabaseFields = Object.keys(

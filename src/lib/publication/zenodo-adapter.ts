@@ -111,7 +111,8 @@ function requireZenodoPlanningRecord(
 ) {
 	const record = snapshot.record;
 	if (!record) throw new Error("The publication record no longer exists");
-	if (record.deleted === 1) {
+	// A withdrawn record is registered again, saying so; any other removed record is restored first.
+	if (record.deleted === 1 && !record.withdrawnAt) {
 		throw new Error("Restore this record before publishing it to Zenodo");
 	}
 	if (record.parentItem) {
