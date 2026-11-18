@@ -16,6 +16,7 @@ function item(key: string, sourceConnectionKey = "native"): AdminItemSummary {
 		state: "published",
 		title: `Title ${key}`,
 		updatedAt: "2026-01-01T00:00:00.000Z",
+		withdrawn: false,
 	};
 }
 

@@ -29,6 +29,8 @@ export type AdminItemSummary = {
 	state: AdminRecordState;
 	title: string;
 	updatedAt: string;
+	/** Deleted with a reason readers see, because its DOI is real. */
+	withdrawn: boolean;
 };
 
 /**

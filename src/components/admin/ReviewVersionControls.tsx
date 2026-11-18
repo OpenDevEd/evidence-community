@@ -161,7 +161,7 @@ function selectedReviewState(
 }
 
 function recordReviewState(detail: AdminItemDetail) {
-	if (detail.state === "deleted") return deletedReviewState;
+	if (detail.state === "deleted") return detail.withdrawn ? { ...deletedReviewState, label: "Withdrawn" } : deletedReviewState;
 	if (!detail.draft && detail.published) return reviewStates.published;
 	return notSubmittedReviewState;
 }
@@ -321,7 +321,7 @@ export function ReviewStatusLabel({
 			{state === reviewStates.returned ? returnWordsFor(detail).state : state.label}
 		</span>
 	) : (
-		<RecordStateChip state={detail.state} />
+		<RecordStateChip state={detail.state} withdrawn={detail.withdrawn} />
 	);
 }
 

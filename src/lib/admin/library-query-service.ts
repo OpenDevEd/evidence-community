@@ -117,6 +117,8 @@ function itemState(
 	return draft ? "edited" : "published";
 }
 
+const isWithdrawn = (published: typeof item.$inferSelect | null) => published?.deleted === 1 && published.withdrawnAt !== null;
+
 function itemFileState(
 	fileDraft: typeof itemFileDraft.$inferSelect | null,
 	filePublication: typeof itemFilePublication.$inferSelect | null,
@@ -180,6 +182,7 @@ export function itemSummary(
 		state: itemState(published, draft),
 		title: summaryText(payload, published, "title")?.trim() || "Untitled",
 		updatedAt: dateString(draft?.updatedAt ?? published?.updatedAt),
+		withdrawn: isWithdrawn(published),
 	};
 }
 

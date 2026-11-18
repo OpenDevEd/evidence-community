@@ -1484,8 +1484,8 @@ async function withdrawSourceChildren(transaction: Transaction, children: readon
 }
 
 /**
- * A record with a DOI takes its own attachments with it. Their published files stay where they are: Zenodo's archive
- * lists them, and restoring the record brings back the ones withdrawn with it, which carry its moment.
+ * A removed record takes its own attachments with it, at its moment, so restoring it brings back exactly those
+ * (reinstateOwnChildren). Their public files leave public view after the removal commits (hideRemovedFiles).
  */
 async function removeOwnChildren(transaction: Transaction, children: readonly { key: string; revision: number }[], now: Date, withdrawn: boolean) {
 	for (const child of children) {
@@ -1499,7 +1499,7 @@ async function removeOwnChildren(transaction: Transaction, children: readonly { 
 
 /**
  * Restoring a record brings back its own attachments removed with it, the ones removed at its moment: a record with a
- * DOI takes them when it is withdrawn or removed (removeOwnChildren). A source's attachments come back with their source.
+ * record takes them when it is withdrawn or removed (removeOwnChildren). A source's attachments come back with their source.
  */
 async function reinstateOwnChildren(transaction: Transaction, itemKey: string, deletedAt: Date) {
 	const children = await transaction
@@ -1610,9 +1610,9 @@ async function unpublishNativeItemAttempt(
 				stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
 			};
 		}
-		// A record with a DOI leaves with its own attachments. One whose DOIs are all test ones (Zenodo sandbox, Crossref
-		// test), as on a demo community, is removed for good and its DOI targets switched off: nothing public points at a
-		// test DOI. One with a real DOI can only be withdrawn, with a reason its tombstone gives.
+		// A record leaves with its own attachments. One whose DOIs are all test ones (Zenodo sandbox, Crossref test), as on
+		// a demo community, is removed for good and its DOI targets switched off: nothing public points at a test DOI. One
+		// with a real DOI can only be withdrawn, with a reason its tombstone gives.
 		const activeTargets = await transaction
 			.select({ provider: publicationTarget.provider, environment: publicationTarget.environment })
 			.from(publicationTarget)
@@ -1629,7 +1629,6 @@ async function unpublishNativeItemAttempt(
 			throw new ItemHasActivePublicationError(itemKey);
 		}
 		const withdrawal = realDoi ? options.withdrawal : undefined;
-		const leavesWithChildren = activeTargets.length > 0;
 		const liveChildren = await transaction
 			.select({ key: item.key, revision: item.revision, sourceConnectionKey: item.sourceConnectionKey })
 			.from(item)
@@ -1642,9 +1641,6 @@ async function unpublishNativeItemAttempt(
 			? []
 			: liveChildren.filter((child) => child.sourceConnectionKey !== NATIVE_CONNECTION_KEY);
 		const ownChildren = liveChildren.filter((child) => !sourceChildren.includes(child));
-		if (ownChildren.length && !leavesWithChildren) {
-			throw new ItemHasChildrenError(itemKey);
-		}
 		const draftKeysToLock = [
 			...new Set(
 				[itemKey, current.parentItem].filter(
@@ -1672,7 +1668,7 @@ async function unpublishNativeItemAttempt(
 		const nextRevision = current.revision + 1;
 		const now = new Date();
 		if (current.sourceConnectionKey !== NATIVE_CONNECTION_KEY) await keepSourceRecordDeleted(transaction, itemKey, now);
-		if (leavesWithChildren && !realDoi) {
+		if (activeTargets.length && !realDoi) {
 			await transaction
 				.update(publicationTarget)
 				.set({ deactivatedAt: now, updatedAt: now })
@@ -1690,7 +1686,7 @@ async function unpublishNativeItemAttempt(
 			})
 			.where(eq(item.key, itemKey))
 			.returning();
-		const ownChildRecords = leavesWithChildren ? await removeOwnChildren(transaction, ownChildren, now, Boolean(withdrawal)) : [];
+		const ownChildRecords = await removeOwnChildren(transaction, ownChildren, now, Boolean(withdrawal));
 		// Crossref and Zenodo get the record again, now withdrawn: "WITHDRAWN: " before its title, its full text gone.
 		if (withdrawal) {
 			await enqueuePublicationJobsForItem(transaction, { itemKey, canonicalRevision: nextRevision, reason: "record_changed", now });
