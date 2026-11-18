@@ -578,6 +578,9 @@ async function buildSearchProjectionPlanForKeys(
 					).values(),
 				],
 				links,
+				// The licence its DOI goes out under, which its page shows beside the DOI. The record page reads this
+				// projection from the database, so no search rebuild is needed for it.
+				licence: parent.licence,
 				metadataSearch: metadataSearchValues(parent),
 				openAccess: openAccessOf(parent.key, doi),
 				openalexId: workOf(parent.key),

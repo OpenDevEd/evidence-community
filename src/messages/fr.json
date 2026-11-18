@@ -237,6 +237,7 @@
     "itemIdentifiersTitle": "Identifiants",
     "itemIdentifierEvidenceLibrary": "Communauté de données probantes",
     "itemIdentifierArchiveRecord": "Notice d'archive",
+    "itemIdentifierLicence": "Licence",
     "itemIdentifierConceptRecord": "Notice de concept",
     "itemIdentifierConceptDoi": "DOI du concept",
     "itemIdentifierVersionDoi": "DOI de la version",

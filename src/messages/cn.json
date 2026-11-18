@@ -237,6 +237,7 @@
     "itemIdentifiersTitle": "标识符",
     "itemIdentifierEvidenceLibrary": "证据库",
     "itemIdentifierArchiveRecord": "存档记录",
+    "itemIdentifierLicence": "许可协议",
     "itemIdentifierConceptRecord": "概念记录",
     "itemIdentifierConceptDoi": "概念 DOI",
     "itemIdentifierVersionDoi": "版本 DOI",
