@@ -11,8 +11,12 @@ import {
 import { isCoolifyApplicationUuid } from "./coolify-application";
 import { LIBRARY_RELEASED_PAGE_PATH } from "./library-maintenance-http";
 
-const runtimeImagePattern =
-	/^ghcr\.io\/opendeved\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u;
+/**
+ * The runtime image at an exact digest. Releases moved from OpenDevEd's registry to Openscholar-ai's with the
+ * repository, and communities set up before then keep their OpenDevEd image.
+ */
+export const runtimeImagePattern =
+	/^ghcr\.io\/(?:opendeved|openscholar-ai)\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
 const revisionPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const guardStateDirectoryMode = 0o700;

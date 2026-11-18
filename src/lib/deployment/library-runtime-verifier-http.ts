@@ -26,6 +26,7 @@ import {
 	LibraryRuntimeGuardError,
 	type LibraryRuntimeGuardManager,
 	type LibraryRuntimeRouteInput,
+	runtimeImagePattern,
 } from "./library-runtime-guard";
 
 const readinessPath = "/v1/library-runtime/readiness";
@@ -110,9 +111,7 @@ function requireRuntimeImage(value: unknown) {
 		"runtimeImage must be the fixed Evidence Library image with a sha256 digest.";
 	if (
 		typeof value !== "string" ||
-		!/^ghcr\.io\/opendeved\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u.test(
-			value,
-		)
+		!runtimeImagePattern.test(value)
 	) {
 		return invalidRequest(message);
 	}
