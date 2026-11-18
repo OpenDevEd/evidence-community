@@ -17,7 +17,7 @@ depend on live deployment state.
 ## Executive Summary
 
 The platform consists of 17 tenant-specific Next.js frontends. Every frontend
-uses the same `OpenDevEd/new-el` image and connects to:
+uses the same `Openscholar-ai/evidence-community` image and connects to:
 
 - One shared PostgreSQL/pgvector cluster, with a separate database per tenant.
 - One shared Meilisearch service, with a separate index per tenant.
@@ -57,7 +57,7 @@ flowchart LR
 | Server | `localhost` — `q6fxt8zzt8g9ghlh8zol4r9u` |
 | Destination | `h9x58n4acrwofryv1wyd6mjk` |
 | Shared Docker network | `coolify` |
-| Frontend repository | `OpenDevEd/new-el` |
+| Frontend repository | `Openscholar-ai/evidence-community` |
 | Frontend branch | `coolify` |
 | Deployed frontend revision | GitHub `coolify` branch HEAD |
 | Frontend deployment trigger | GitHub webhook fan-out |
