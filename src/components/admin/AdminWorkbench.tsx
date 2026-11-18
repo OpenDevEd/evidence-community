@@ -67,7 +67,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
 import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
-import type { RemovalDoi } from "./AdminInspector";
+import type { RemovalDoi } from "@/lib/admin/removal-doi";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
 import { approveAdminReview, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";

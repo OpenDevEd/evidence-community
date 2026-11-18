@@ -1,3 +1,5 @@
+import { removalDoiOf } from "./removal-doi";
+import { publicationTarget } from "@/db/schema/publication";
 import { readStudyReading } from "@/lib/readings/reading";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasUnsubmittedSourceFileChoice, projectSourcePdf, readSourceFileChoices } from "./source-file-choice";
@@ -13,7 +15,7 @@ import {
 	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { addedPaper, itemFilePublication } from "@/db/schema/source";
@@ -548,6 +550,10 @@ export async function getAdminItemDetail(
 				: null,
 		published: publishedItemJson(published),
 		publishedCollectionKeys: membershipRows.map(({ key }) => key),
+		removalDoi: removalDoiOf(await db
+			.select({ environment: publicationTarget.environment })
+			.from(publicationTarget)
+			.where(and(eq(publicationTarget.itemKey, itemKey), isNotNull(publicationTarget.activatedAt), isNull(publicationTarget.deactivatedAt)))),
 		publishedTags: tagRows.map(({ name }) => name),
 		sourceFileUrl: publishedSourceFileUrl(published, filePublication, sourcePdf),
 		sourcePdf: sourcePdf?.sourcePdf ?? null,

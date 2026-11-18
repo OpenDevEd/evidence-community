@@ -21,7 +21,7 @@ import { StudyTypeInput } from "./StudyTypeInput";
 import { describeStudyTypeChoice, type StudyReading, type StudyTypeKey } from "@/lib/readings/study-types";
 import { describeOpenAccessChoice } from "@/lib/open-access";
 import type { AdminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
-import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
+import type { RemovalDoi } from "@/lib/admin/removal-doi";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
 import { LicenceInput } from "./LicenceInput";
 import { licenceLabel } from "@/lib/licences";
@@ -627,12 +627,6 @@ const StudyTypeEditor = memo(function StudyTypeEditor({
 	);
 });
 
-/** What removing a record does to its DOI: nothing (none), switch off a test one, or withdraw a real one. */
-export type RemovalDoi = "none" | "test" | "real";
-function removalDoiOf(view: AdminPublicationView | null | undefined): RemovalDoi {
-	const active = view ? [view.providers.crossref, view.providers.zenodo].filter((provider) => provider.exact.targetActive) : [];
-	return active.some((provider) => provider.environment === "production") ? "real" : active.length ? "test" : "none";
-}
 
 /** Where a withdrawn record's editor says when it was withdrawn and the reason its tombstone gives readers. */
 function WithdrawnNotice({ published }: { published: Record<string, unknown> | null }) {
@@ -1845,7 +1839,7 @@ export function AdminInspector({
 		(target) => target.isOrigin && isOpenAlexWorkProvider(target.provider),
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
-	const removalDoi = removalDoiOf(publication.publication);
+	const removalDoi = detail.removalDoi ?? "none";
 	const unrestored = isUnrestoredRecord(detail);
 	// Only a record made here can get a DOI, and a DOI needs a licence: Zenodo and Crossref both take it.
 	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);

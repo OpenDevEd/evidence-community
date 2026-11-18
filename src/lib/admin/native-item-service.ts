@@ -91,6 +91,7 @@ import {
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { removalDoiOf } from "./removal-doi";
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -1623,7 +1624,7 @@ async function unpublishNativeItemAttempt(
 				),
 			)
 			.for("update");
-		const realDoi = activeTargets.some((target) => target.environment === "production");
+		const realDoi = removalDoiOf(activeTargets) === "real";
 		if (realDoi && !options.withdrawal) {
 			throw new ItemHasActivePublicationError(itemKey);
 		}
@@ -1778,8 +1779,6 @@ async function unpublishNativeItemAttempt(
 			indexingRecords,
 			item: unpublished!,
 			stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
-			/** Whether its own attachments left with it, whose public files then leave public view (withdrawn-files). */
-			tookAttachments: ownChildRecords.length > 0,
 		};
 	});
 }
@@ -1941,7 +1940,6 @@ export async function removeNativeItem(db: Database, itemKey: string) {
 				indexingRecords: removed.indexingRecords,
 				item: removed.item,
 				stagedPrivatePaths: removed.stagedPrivatePaths,
-				tookAttachments: "tookAttachments" in removed && Boolean(removed.tookAttachments),
 			};
 		} catch (error) {
 			if (error instanceof NativeItemLockSetChangedError) continue;

@@ -26,8 +26,8 @@ export async function POST(
 			key,
 			{ removeFromSourceKeys, withdrawal },
 		);
-		// Its attachments left with it: their public files leave public view too.
-		if ("tookAttachments" in result && result.tookAttachments) {
+		// A removed record's attachments that left with it take their public files out of view, here and on any retry.
+		if (result.item.deleted === 1) {
 			const runtime = await getNativeFileRuntime();
 			await hideRemovedFiles(runtime.db, runtime.storage, key);
 		}

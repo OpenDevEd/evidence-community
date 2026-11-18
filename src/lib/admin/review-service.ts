@@ -722,8 +722,8 @@ export async function approveItemReview(
 		...committed.removals.map((removal) =>
 			cleanupNativePdfRemoval(db, storage, removal),
 		),
-		// A restored record's attachments removed with it show their files again.
-		revealRestoredFiles(db, storage, committed.reinstatedAttachments),
+		// A restored record's attachments removed with it show their files again; any published here finish a move that failed.
+		revealRestoredFiles(db, storage, [...new Set([...committed.reinstatedAttachments, ...committed.indexingRecords.map(({ key }) => key)])]),
 	]);
 	return {
 		review: committed.review,

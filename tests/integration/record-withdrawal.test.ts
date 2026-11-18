@@ -21,6 +21,7 @@ import { itemFilePublication } from "../../src/db/schema/source";
 import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
 import { approveItemReview, submitItemReview } from "../../src/lib/admin/review-service";
 import { hideRemovedFiles } from "../../src/lib/admin/withdrawn-files";
+import { readPublicationRepositorySnapshot } from "../../src/lib/publication/repository";
 
 type Database = Parameters<Parameters<typeof withIsolatedPublicationDatabase>[0]>[0];
 
@@ -66,6 +67,8 @@ it("withdraws a record with a real DOI only with a reason, tells the registrars,
 		assert.equal(target!.deactivatedAt, null, "A withdrawn record's DOI stays registered");
 		const jobs = await db.select().from(publicationSyncJob).where(eq(publicationSyncJob.itemKey, parent));
 		assert.ok(jobs.some((job) => job.canonicalRevision === withdrawn.revision), "Zenodo isn't told of the withdrawal");
+		// An attachment may hold the DOI the withdrawal goes out under, so the deposit still reads it.
+		assert.deepEqual((await readPublicationRepositorySnapshot(db, parent, "production")).attachments.map(({ key }) => key), [child]);
 
 		await openItemDraft(db, parent);
 		await publishItemDraft(db, parent);
@@ -103,10 +106,11 @@ it("takes a removed record's PDF out of public view, and puts the very same file
 		assert.ok(published, "The fixture's PDF wasn't published");
 
 		await db.insert(publicationTarget).values({ itemKey: parent.itemKey, provider: "zenodo", environment: "sandbox", identifierPolicy: "mint-zenodo", requestedBy: "editor" });
-		const removed = await unpublishNativeItemWithOutcome(db, parent.itemKey);
-		assert.ok("tookAttachments" in removed && removed.tookAttachments);
+		await unpublishNativeItemWithOutcome(db, parent.itemKey);
 		await hideRemovedFiles(db, storage, parent.itemKey);
 		assert.equal(storage.publicFiles.has(file!.objectPath), false, "A removed record's PDF is still public");
+		// Pressing Unpublish again runs the move again, which finds nothing left to do.
+		await hideRemovedFiles(db, storage, parent.itemKey);
 
 		await openItemDraft(db, parent.itemKey);
 		const restoring = await submitItemReview(db, parent.itemKey, editor, config);

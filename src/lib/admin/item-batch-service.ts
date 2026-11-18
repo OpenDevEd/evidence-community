@@ -134,10 +134,10 @@ export function orderBatchKeysByDependency(
 /** What a removal leaves for after its transaction: its attachments' public files to hide, and discarded uploads. */
 async function cleanUpRemoval(
 	key: string,
-	removed: { tookAttachments: boolean; stagedPrivatePaths: string[] },
+	removed: { item: { deleted: number | null } | null; stagedPrivatePaths: string[] },
 	{ removePrivateFiles, hideRemovedFiles }: Pick<BatchDependencies, "removePrivateFiles" | "hideRemovedFiles">,
 ) {
-	if (removed.tookAttachments) await hideRemovedFiles?.(key);
+	if (removed.item?.deleted === 1) await hideRemovedFiles?.(key);
 	if (!removed.stagedPrivatePaths.length) return;
 	try {
 		await removePrivateFiles(removed.stagedPrivatePaths);

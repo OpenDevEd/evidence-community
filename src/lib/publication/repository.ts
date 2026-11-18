@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, or, isNotNull } from "drizzle-orm";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
@@ -66,7 +66,8 @@ export async function readPublicationRepositorySnapshot(
 		database
 			.select({ key: item.key, url: item.url })
 			.from(item)
-			.where(and(eq(item.parentItem, itemKey), eq(item.deleted, 0))),
+			// A withdrawn record's attachments are withdrawn with it, and one may hold the DOI its withdrawal is sent under.
+			.where(and(eq(item.parentItem, itemKey), or(eq(item.deleted, 0), isNotNull(item.withdrawnAt)))),
 		database
 			.select()
 			.from(itemFilePublication)

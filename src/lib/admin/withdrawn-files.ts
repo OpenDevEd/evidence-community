@@ -25,26 +25,35 @@ async function publicPathsOf(db: Database, where: ReturnType<typeof and>) {
 	return rows.flatMap((row) => [row.objectPath, row.coverObjectPath].filter((path): path is string => Boolean(path)));
 }
 
-/** Moves the public files of a removed record's attachments, the ones removed with it, out of public view. */
+/**
+ * Moves the public files of a removed record's attachments, the ones removed with it, out of public view. Safe to run
+ * again: a file already moved is skipped, so pressing Unpublish again on the removed record finishes a move that failed.
+ */
 export async function hideRemovedFiles(db: Database, storage: EvidenceFileStorage, parentKey: string) {
-	const paths = await publicPathsOf(db, and(eq(itemFilePublication.parentItemKey, parentKey), eq(item.deleted, 1)));
-	if (!paths.length) return;
-	try {
-		for (const path of paths) await storage.uploadPrivate(hiddenPath(path), await storage.downloadPublic(path), contentType(path));
-		await storage.removePublic(paths);
-	} catch (error) {
-		// The record has left either way; its files stay where they were, and the log says which.
-		console.error(JSON.stringify({ event: "removed-record-files-not-hidden", parentKey, paths, error: error instanceof Error ? error.message : String(error) }));
+	for (const path of await publicPathsOf(db, and(eq(itemFilePublication.parentItemKey, parentKey), eq(item.deleted, 1)))) {
+		const bytes = await storage.downloadPublic(path).catch(() => null);
+		if (!bytes) continue;
+		try {
+			await storage.uploadPrivate(hiddenPath(path), bytes, contentType(path));
+			await storage.removePublic([path]);
+		} catch (error) {
+			// The record has left either way; this file stays public until the move runs again, and the log says which.
+			console.error(JSON.stringify({ event: "removed-record-file-not-hidden", parentKey, path, error: error instanceof Error ? error.message : String(error) }));
+		}
 	}
 }
 
-/** Puts the files of attachments restored with their record back where they were published. */
+/**
+ * Puts the files of published attachments that were removed with their record back where they were published. Run on
+ * every publish of them, so a move that failed is finished by the next one; a file never moved has nothing to bring.
+ */
 export async function revealRestoredFiles(db: Database, storage: EvidenceFileStorage, attachmentKeys: readonly string[]) {
 	if (!attachmentKeys.length) return;
-	const paths = await publicPathsOf(db, and(inArray(itemFilePublication.itemKey, [...attachmentKeys]), eq(item.deleted, 0)));
-	for (const path of paths) {
+	for (const path of await publicPathsOf(db, and(inArray(itemFilePublication.itemKey, [...attachmentKeys]), eq(item.deleted, 0)))) {
+		const bytes = await storage.downloadPrivate(hiddenPath(path)).catch(() => null);
+		if (!bytes) continue;
 		try {
-			await storage.uploadPublic(path, await storage.downloadPrivate(hiddenPath(path)), contentType(path));
+			await storage.uploadPublic(path, bytes, contentType(path));
 			await storage.removePrivate([hiddenPath(path)]);
 		} catch (error) {
 			console.error(JSON.stringify({ event: "restored-record-file-not-shown", path, error: error instanceof Error ? error.message : String(error) }));
