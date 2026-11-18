@@ -2320,6 +2320,8 @@ export function AdminInspector({
 								}
 								model={publishing}
 								licenceMissing={licenceMissing}
+								licence={licenceField?.value ?? null}
+								zenodoDoi={publication.publication?.identifiers.doi?.origin === "zenodo" ? publication.publication.identifiers.doi : null}
 							/>
 						)}
 					</Section>
