@@ -1674,8 +1674,8 @@ export default function AdminWorkbench({
 
 	const unpublishCurrent = (doi: RemovalDoi = "none") => {
 		if (!detail) return;
-		// A withdrawal asks for its reason first, then which sources keep their copy, and sends both.
-		if (doi !== "real" && askWritebackSources("unpublish")) return;
+		// A record with a DOI says what removing it does (and a withdrawal asks why) before asking which sources keep a copy.
+		if (doi === "none" && askWritebackSources("unpublish")) return;
 		const recordKey = detail.key;
 		const words = REMOVAL_DIALOGS[doi];
 		setConfirmDialog({
@@ -1683,7 +1683,7 @@ export default function AdminWorkbench({
 			danger: true,
 			action: async (reason) => {
 				const withdrawal = words.reason ? { reason } : undefined;
-				if (withdrawal && askWritebackSources("unpublish", withdrawal)) return;
+				if (doi !== "none" && askWritebackSources("unpublish", withdrawal)) return;
 				const result = await unpublishAdminItem(recordKey, undefined, withdrawal);
 				await waitForIndexing(result);
 				await Promise.all([loadDetail(recordKey), loadItems()]);
