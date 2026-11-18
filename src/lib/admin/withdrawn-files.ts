@@ -5,13 +5,14 @@ import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemFilePublication } from "@/db/schema/source";
 import type { EvidenceFileStorage } from "./file-storage";
+import { hiddenPath } from "./withdrawn-path";
 
 /**
  * A removed record's published PDFs and covers leave the public bucket, where an address someone kept would still open
  * them, for a private place of their own; restoring the record puts the very same bytes back at the same address, so a
  * DOI deposit that lists them still matches (OpenDevEd/new-el#893). The rows stay as they are.
  */
-const hiddenPath = (publicPath: string) => `withdrawn/${publicPath}`;
+
 
 const contentType = (path: string) =>
 	/\.pdf$/iu.test(path) ? "application/pdf" : /\.png$/iu.test(path) ? "image/png" : /\.webp$/iu.test(path) ? "image/webp" : "image/jpeg";
