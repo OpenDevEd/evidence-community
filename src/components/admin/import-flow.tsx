@@ -10,6 +10,7 @@ import type { AdminSource } from "@/lib/admin/types";
 import type { RecordLicence } from "@/lib/licences";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
+import { useAdminSession } from "./AdminSessionProvider";
 import {
 	AdminApiError,
 	approveAdminReview,
@@ -44,6 +45,7 @@ import {
 	primaryLabel,
 	publishedProperties,
 	readingNeeds,
+	reviewRoute,
 	licenceOf,
 	readyIds,
 	recordsToCommit,
@@ -325,6 +327,7 @@ function batchChanges(batch: ImportBatch | null) {
  */
 export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
+	const { doiProviders } = useAdminSession();
 	// An editor can step out of the PDF import's review to import DOIs or files; it carries on meanwhile, and only one is open.
 	const [besidePdfs, setBesidePdfs] = useState(false);
 	const { batch, openPdfs } = shownImport(useImportBatches(), besidePdfs);
@@ -397,7 +400,7 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		checksOf: (row: ImportRow) => reviewChecks(row, appliedFor(row)),
 		choicesOf,
 		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
-		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), batch?.outcome === "send" ? batch.publishRoute : "later", licenceOf(batch, row)),
+		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), reviewRoute(batch, doiProviders.zenodo), licenceOf(batch, row)),
 		licenceOf: (row: ImportRow) => licenceOf(batch, row),
 		/** `publish`: an Editor or Owner sends the drafts on published, not to the review queue. */
 		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish) : undefined)),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { importable, readingNeeds, type ImportBatch, type ImportRow } from "@/components/admin/admin-import";
+import { importable, readingNeeds, reviewRoute, type ImportBatch, type ImportRow } from "@/components/admin/admin-import";
 import { publishView } from "@/components/admin/ImportDone";
 import { propertiesAside, rowStatus } from "@/components/admin/ImportReview";
 import type { AdminImportCommitResult, AdminImportPreviewRecord } from "@/lib/admin/item-import-contract";
@@ -160,6 +160,13 @@ describe("what publishing needs from a reading", () => {
 		expect(readingNeeds(reading({ DOI: "10.5072/report" }), new Set())).toEqual({});
 		// Text that isn't a DOI gives the record no DOI of its own, so it takes the library's, as importing decides.
 		expect(Object.keys(readingNeeds(reading({ DOI: "See the cover" }), new Set()))).toEqual(["date"]);
+	});
+
+	// Sources QA has no Zenodo, and its review asked each PDF that named no licence to pick one for a DOI it can't get.
+	it("holds drafts to a DOI's needs only where the library has Zenodo", () => {
+		const bare = reading({ licence: undefined });
+		expect(Object.keys(readingNeeds(bare, new Set(), reviewRoute(null, true))).sort()).toEqual(["date", "licence"]);
+		expect(readingNeeds(bare, new Set(), reviewRoute(null, false))).toEqual({});
 	});
 });
 
