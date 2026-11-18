@@ -2384,8 +2384,10 @@ export default function AdminWorkbench({
 								/>), [filters.reviewQueue, filters.filters, selectNavigationFilter, collectionFilter, busy, openCreateCollection, removeCollection, openRenameCollection, openMoveCollection, restoreCollection, sourceFilter, library.sources, stateFilter]);
 
 	return (
-		<main data-full-window className="@container/admin fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
+		<main data-full-window className="[container:admin_/_size] fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Community administration</h1>
+			{/* The header and the panels, which scroll as one on a phone at large text (globals.css, admin-frame). */}
+			<div className="admin-frame flex min-h-0 flex-1 flex-col">
 			<header
 				className="admin-toolbar-grid grid shrink-0 items-center gap-2 px-3 py-3 xl:relative xl:flex xl:min-h-16"
 				data-admin-region="toolbar"
@@ -2998,6 +3000,7 @@ export default function AdminWorkbench({
 					</aside>
 				</div>
 			</AdminDragDropRoot>
+			</div>
 
 			<AdminImportDialog
 				isOpen={importOpen}
