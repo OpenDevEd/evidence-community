@@ -107,10 +107,13 @@ async function fileOwner(db: Database, sha256: string) {
 	return published?.key;
 }
 
-/** A record's title as published, or as its draft has it when it isn't published; null when the record is gone. */
+/**
+ * A record's title as published, or as its draft has it when it isn't published; null when the record is gone. A
+ * removed record is gone: its PDF imports again as a new record, as a demo community shows its import to each client.
+ */
 async function recordTitle(db: Database, key: string) {
-	const [record] = await db.select({ title: item.title }).from(item).where(eq(item.key, key));
-	if (record) return { title: record.title };
+	const [record] = await db.select({ title: item.title, deleted: item.deleted }).from(item).where(eq(item.key, key));
+	if (record) return record.deleted === 1 ? null : { title: record.title };
 	const [draft] = await db.select({ patch: itemDraft.patch }).from(itemDraft).where(eq(itemDraft.itemKey, key));
 	return draft ? { title: (draft.patch as { title?: string }).title || null } : null;
 }
