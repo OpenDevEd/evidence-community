@@ -327,12 +327,17 @@ function mainsInUse(paths: Paths): Set<string> {
 	return new Set(servers.filter((server): server is Server => !!server && runsNext(server.pid, server.port)).map((server) => server.cwd));
 }
 
-/** Removes all but the three newest main builds, keeping any a live server runs from. */
+/**
+ * Removes all but the three newest main builds, keeping any a live server runs from. The cache is shared by every
+ * checkout of the repository, so only this checkout's own worktrees are removed: another clone's build (one made from
+ * new-el-optimize) isn't a worktree here, and removing it failed and stopped `up`.
+ */
 function pruneMains(paths: Paths, keep: string) {
 	const used = mainsInUse(paths).add(keep);
+	const own = new Set(git(["worktree", "list", "--porcelain"], paths.root).split("\n").filter((line) => line.startsWith("worktree ")).map((line) => line.slice(9)));
 	const builds = readdirSync(MAIN_CACHE).filter((name) => name.startsWith("main-")).map((name) => path.join(MAIN_CACHE, name));
 	const newest = builds.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs);
-	for (const old of newest.slice(3).filter((dir) => !used.has(dir))) run("git", ["worktree", "remove", "--force", old], { cwd: paths.root });
+	for (const old of newest.slice(3).filter((dir) => !used.has(dir) && own.has(dir))) run("git", ["worktree", "remove", "--force", old], { cwd: paths.root });
 }
 
 /** A production build of origin/main at `sha` in the shared cache, made once under a lock and never changed after. Returns its folder. */
