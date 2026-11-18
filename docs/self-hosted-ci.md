@@ -45,7 +45,7 @@ Check them with `systemctl show user-$(id -u <user>).slice -p AllowedCPUs -p CPU
 - Runner users cannot use `sudo`.
 - The guest firewall permits public internet access but denies the Hetzner host,
   private address ranges, Docker networks and cloud metadata addresses.
-- Only `OpenDevEd/new-el` can use the `Evidence Library CI` runner group.
+- Only `Openscholar-ai/evidence-community` can use the `Evidence Library CI` runner group.
 - Only `.github/workflows/runtime-image.yml` from the default branch can use
   the separate `Evidence Library Release` runner group.
 - Pull requests from another repository do not receive a self-hosted job.

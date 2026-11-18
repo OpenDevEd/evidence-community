@@ -5,7 +5,7 @@
 // added or removed.
 //
 // OpenScholar and the Evidence Library run the same file (scripts/verify in
-// OpenDevEd/openalex-count, tools/verify in OpenDevEd/new-el); keep them in step.
+// Openscholar-ai/openscholar, tools/verify in Openscholar-ai/evidence-community); keep them in step.
 
 export type Delta = { dx: number; dy: number; dw: number; dh: number };
 // `inside` is the dialog, sheet, popover or menu an element is, or is in.
