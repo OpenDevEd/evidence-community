@@ -648,6 +648,8 @@ export default function AdminWorkbench({
 		| (WritebackDialogRequest & {
 				action: "manage" | "restore" | "unpublish";
 				recordKey: string;
+				/** A withdrawal asked for before its sources were chosen, with its reason. */
+				withdrawal?: { reason: string };
 		  })
 		| null
 	>(null);
@@ -1511,13 +1513,14 @@ export default function AdminWorkbench({
 	// note (they follow their parent), the action runs at once.
 	const askWritebackSources = (
 		action: "manage" | "restore" | "unpublish",
+		withdrawal?: { reason: string },
 	) => {
 		if (!detail) return false;
 		const options = detail.parentItem
 			? null
 			: resolveWritebackDialogOptions(detail.writeback, action);
 		if (!options) return false;
-		setWritebackDialog({ action, mode: action, options, recordKey: detail.key });
+		setWritebackDialog({ action, mode: action, options, recordKey: detail.key, withdrawal });
 		return true;
 	};
 
@@ -1571,7 +1574,7 @@ export default function AdminWorkbench({
 		setWritebackDialog(null);
 		const recordKey = request.recordKey;
 		if (request.action === "restore") runRestore(recordKey, sourceKeys);
-		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
+		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys, request.withdrawal);
 		else {
 			void runBusy(async () => {
 				await setAdminItemWritebackSources(recordKey, sourceKeys);
@@ -1654,24 +1657,27 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[]) =>
+	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[], withdrawal?: { reason: string }) =>
 		void runBusy(async () => {
-			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys);
+			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys, withdrawal);
 			await waitForIndexing(result);
 			await Promise.all([loadDetail(recordKey), loadItems()]);
-			toast.success("Record unpublished");
+			toast.success(withdrawal ? "Record withdrawn" : "Record unpublished");
 		});
 
 	const unpublishCurrent = (doi: RemovalDoi = "none") => {
 		if (!detail) return;
-		if (askWritebackSources("unpublish")) return;
+		// A withdrawal asks for its reason first, then which sources keep their copy, and sends both.
+		if (doi !== "real" && askWritebackSources("unpublish")) return;
 		const recordKey = detail.key;
 		const words = REMOVAL_DIALOGS[doi];
 		setConfirmDialog({
 			...words,
 			danger: true,
 			action: async (reason) => {
-				const result = await unpublishAdminItem(recordKey, undefined, words.reason ? { reason } : undefined);
+				const withdrawal = words.reason ? { reason } : undefined;
+				if (withdrawal && askWritebackSources("unpublish", withdrawal)) return;
+				const result = await unpublishAdminItem(recordKey, undefined, withdrawal);
 				await waitForIndexing(result);
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 				toast.success(words.done);
