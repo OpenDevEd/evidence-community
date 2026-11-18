@@ -23,6 +23,7 @@ const token = "test-runtime-verifier-token-with-at-least-32-bytes";
 const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
 const commit = "a1b2c3d4e5f678901234567890abcdef12345678";
 const runtimeImage = `ghcr.io/opendeved/evidence-library-runtime@sha256:${"b".repeat(64)}`;
+const movedRuntimeImage = `ghcr.io/openscholar-ai/evidence-library-runtime@sha256:${"b".repeat(64)}`;
 const runtimeImageId = `sha256:${"c".repeat(64)}`;
 
 function publishedPort(hostPort: number, containerPort: number) {
@@ -34,7 +35,7 @@ function publishedPort(hostPort: number, containerPort: number) {
 	};
 }
 
-function readyContainers(): LibraryRuntimeContainerFact[] {
+function readyContainers(image = runtimeImage): LibraryRuntimeContainerFact[] {
 	return LIBRARY_COMPOSE_SERVICES.map((service) => ({
 		health:
 			service === "source-sync" || service === "source-writeback"
@@ -44,12 +45,12 @@ function readyContainers(): LibraryRuntimeContainerFact[] {
 		imageId:
 			service === "meilisearch" ? `sha256:${"d".repeat(64)}` : runtimeImageId,
 		imageReference:
-			service === "meilisearch" ? "getmeili/meilisearch:v1.31" : runtimeImage,
+			service === "meilisearch" ? "getmeili/meilisearch:v1.31" : image,
 		publishedPorts: service === "web" ? [publishedPort(443, 3000)] : [],
 		repoDigests:
 			service === "meilisearch"
 				? [`getmeili/meilisearch@sha256:${"e".repeat(64)}`]
-				: [runtimeImage],
+				: [image],
 		service,
 		state: "running",
 	}));
@@ -118,8 +119,8 @@ function authorizedJson(body: unknown) {
 	};
 }
 
-function readinessBody() {
-	return { applicationUuid, commit, runtimeImage };
+function readinessBody(image = runtimeImage) {
+	return { applicationUuid, commit, runtimeImage: image };
 }
 
 function routeBody() {
@@ -304,17 +305,18 @@ describe("library runtime verifier HTTP contract", () => {
 		);
 	});
 
-	it("returns validated container facts for the requested application", async () => {
+	// Images from before and after the repositories moved from OpenDevEd to Openscholar-ai.
+	it.each([runtimeImage, movedRuntimeImage])("returns validated container facts for the requested application on %s", async (image) => {
 		let receivedApplicationUuid: string | undefined;
 		await withServer(
 			async (candidateApplicationUuid) => {
 				receivedApplicationUuid = candidateApplicationUuid;
-				return readyContainers();
+				return readyContainers(image);
 			},
 			async (baseUrl) => {
 				const response = await fetch(
 					readinessUrl(baseUrl),
-					authorizedJson(readinessBody()),
+					authorizedJson(readinessBody(image)),
 				);
 
 				expect(response.status).toBe(200);
@@ -323,8 +325,8 @@ describe("library runtime verifier HTTP contract", () => {
 					applicationUuid,
 					commit,
 					ready: true,
-					runtimeImage,
-					services: readyContainers().map((container) => ({
+					runtimeImage: image,
+					services: readyContainers(image).map((container) => ({
 						health: container.health,
 						imageId: container.imageId,
 						imageReference: container.imageReference,
