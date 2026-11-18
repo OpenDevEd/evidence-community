@@ -159,8 +159,10 @@ export function LicenceInput({
 					{missing ? " A DOI needs one." : null}
 				</p>
 				{!licenceComplete(licence) && !disabled ? (
-					<Button size="xs" variant="muted" className="shrink-0" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
-						Use {offer.name}
+					// A licence without a short name, such as CC BY-NC-ND 3.0 IGO, goes by its full title, which the note above names
+					// whole: the button keeps to half the row and cuts it.
+					<Button size="xs" variant="muted" className="min-w-0 max-w-[50%]" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
+						<span className="min-w-0 truncate">Use {offer.name}</span>
 					</Button>
 				) : null}
 			</div>
