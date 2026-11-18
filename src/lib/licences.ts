@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-// Every licence Zenodo takes for a record, by its id, English title and the link to its terms (empty where Zenodo has none): Zenodo's licence vocabulary,
+// Every licence Zenodo takes for a record, by its id, English title and the link to its terms (empty where Zenodo has none;
+// ncgl-uk-2.0's is corrected, Zenodo links it to Apache 2.0's): Zenodo's licence vocabulary,
 // https://zenodo.org/api/vocabularies/licenses?size=1000, read on 17 November 2026 (444 licences). Openscholar's
 // publishing settings use the same list (openalex-count lib/zenodo-licences.ts).
 
@@ -295,7 +296,7 @@ export const ZENODO_LICENCES: ReadonlyArray<readonly [id: string, title: string,
 	["geo-no-fee-unrestricted", "No Fee Unrestricted Use License Agreement For Government Geographic Data (Canada)", "http://www4.agr.gc.ca/AAFC-AAC/display-afficher.do?id=1226945498401&lang=eng"],
 	["nlpl", "No Limit Public License", "https://fedoraproject.org/wiki/Licensing/NLPL"],
 	["nokia", "Nokia Open Source License", "https://opensource.org/licenses/nokia"],
-	["ncgl-uk-2.0", "Non-Commercial Government Licence", "https://github.com/spdx/license-list-XML/blob/master/src/Apache-2.0.xml"],
+	["ncgl-uk-2.0", "Non-Commercial Government Licence", "https://www.nationalarchives.gov.uk/doc/non-commercial-government-licence/version/2/"],
 	["nposl-3.0", "Non-Profit Open Software License 3.0", "https://opensource.org/licenses/NOSL3.0"],
 	["nlod-1.0", "Norwegian Licence for Open Government Data", "http://data.norge.no/nlod/en/1.0"],
 	["noweb", "Noweb License", "https://fedoraproject.org/wiki/Licensing/Noweb"],
