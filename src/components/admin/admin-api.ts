@@ -438,16 +438,14 @@ export function discardAdminDraft(key: string) {
 }
 
 /** Unpublish a record. `removeFromSourceKeys` lists the sources that also delete their copy. */
-export function unpublishAdminItem(key: string, removeFromSourceKeys?: string[]) {
+/** Unpublishes a record, or withdraws one with a real DOI, giving the reason its tombstone shows. */
+export function unpublishAdminItem(key: string, removeFromSourceKeys?: string[], withdrawal?: { reason: string }) {
+	const body = removeFromSourceKeys || withdrawal ? { ...(removeFromSourceKeys ? { removeFromSourceKeys } : {}), ...(withdrawal ? { withdrawal } : {}) } : null;
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/unpublish`,
 		{
-			body: removeFromSourceKeys
-				? JSON.stringify({ removeFromSourceKeys })
-				: undefined,
-			headers: removeFromSourceKeys
-				? { "content-type": "application/json" }
-				: undefined,
+			body: body ? JSON.stringify(body) : undefined,
+			headers: body ? { "content-type": "application/json" } : undefined,
 			method: "POST",
 		},
 	);
