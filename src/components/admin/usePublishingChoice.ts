@@ -10,6 +10,9 @@ import {
 	saveAdminPublishingChoice,
 } from "./admin-api";
 
+/** The cache key of a record's saved DOI choice, shared with the editor, which reads it beside the record. */
+export const publishingChoiceKey = (itemKey: string) => ["admin-publishing-choice", itemKey] as const;
+
 export function usePublishingChoice(
 	detail: Pick<AdminItemDetail, "key" | "kind">,
 	readOnly: boolean,
@@ -18,7 +21,7 @@ export function usePublishingChoice(
 ) {
 	const saved = useSWR(
 		!readOnly && detail.kind === "created"
-			? ["admin-publishing-choice", detail.key]
+			? publishingChoiceKey(detail.key)
 			: null,
 		([, key]) => getAdminPublishingChoice(key),
 	);

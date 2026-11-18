@@ -66,6 +66,7 @@ import { useAdminSession } from "./AdminSessionProvider";
 import { AdminImportDialog } from "./AdminImportDialog";
 import { IMPORT_DRAFTS_CHANGED_EVENT, importButtonLabel, useImportBatch, usePdfImportStatus } from "./admin-import";
 import { EditorialInspector } from "./EditorialInspector";
+import { publishingChoiceKey } from "./usePublishingChoice";
 import type { ReviewLinkPicker } from "./useReviewLinkPicker";
 import { mutate } from "swr";
 import { approveAdminReview, setAdminPdfRemoval, stageAdminSourcePdf, submitAdminReview } from "./admin-api";
@@ -99,6 +100,7 @@ import {
 	discardAdminDraft,
 	discardAdminPdfDraft,
 	getAdminItem,
+	getAdminPublishingChoice,
 	getAdminLibrary,
 	moveAdminCollection,
 	mutateAdminItems,
@@ -928,7 +930,12 @@ export default function AdminWorkbench({
 				await saveQueue.current;
 			}
 			try {
+				// A record made here shows its DOI choice in its editor: read beside the record and in place before the
+				// editor draws, so its panel opens at its final size instead of growing when the choice arrives.
+				const choice = getAdminPublishingChoice(key).catch(() => undefined);
 				const next = await getAdminItem(key);
+				const saved = next.kind === "created" ? await choice : undefined;
+				if (saved) await mutate(publishingChoiceKey(key), saved, { revalidate: false });
 				if (requestId === detailRequest.current) {
 					applyDetail(next, discardLocal);
 				}
