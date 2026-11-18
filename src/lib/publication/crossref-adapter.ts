@@ -77,7 +77,8 @@ export async function buildCrossrefPlan(
 	);
 	if (!snapshot.record)
 		throw new Error("The publication record no longer exists");
-	if (snapshot.record.deleted === 1) {
+	// A withdrawn record is registered again, saying so; any other removed record is restored first.
+	if (snapshot.record.deleted === 1 && !snapshot.record.withdrawnAt) {
 		throw new Error("Restore this record before publishing it to Crossref");
 	}
 	if (snapshot.record.parentItem) {

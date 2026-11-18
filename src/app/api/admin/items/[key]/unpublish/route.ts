@@ -16,13 +16,13 @@ export async function POST(
 ) {
 	return handleAdminJson(request, ADMIN_PUBLISH_PERMISSION, async () => {
 		const { key } = await params;
-		const { removeFromSourceKeys } = adminUnpublishRequestSchema.parse(
+		const { removeFromSourceKeys, withdrawal } = adminUnpublishRequestSchema.parse(
 			await readOptionalAdminJson(request),
 		);
 		const result = await unpublishNativeItemWithOutcome(
 			await getDatabase(),
 			key,
-			{ removeFromSourceKeys },
+			{ removeFromSourceKeys, withdrawal },
 		);
 		const { item } = result;
 		return {

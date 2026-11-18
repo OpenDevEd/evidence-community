@@ -8,7 +8,7 @@ import {
 	canonicalItemFieldToDatabaseField,
 } from "@/lib/item-field-codec";
 
-export const LIBRARY_OWNED_PAYLOAD_FIELDS = new Set(["links", "countryFocus", "openAccess", "studyType", "licence", "topics", "sourceResolutions"]);
+export const LIBRARY_OWNED_PAYLOAD_FIELDS = new Set(["links", "countryFocus", "openAccess", "studyType", "licence", "topics", "sourceResolutions", "withdrawnAt", "withdrawalReason"]);
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",

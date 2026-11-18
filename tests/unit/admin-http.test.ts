@@ -314,7 +314,7 @@ describe("admin API error mapping", () => {
 		const cases = [
 			[
 				new NativeItemHasActivePublicationError("ABCD2345"),
-				"This record is still published through Crossref or Zenodo. Keep it published until withdrawal support is available.",
+				"This record has a DOI, so it can't be deleted. Withdraw it from its editor, with a reason readers will see.",
 			],
 			[
 				new NativeItemHasPublishedFileError("ABCD2345"),
