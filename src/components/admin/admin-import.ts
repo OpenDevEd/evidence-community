@@ -639,6 +639,12 @@ export function readingNeeds(row: ImportRow, applied: ReadonlySet<number>, route
 	return publishingNeeds(payload, routeChoice(route === "later" ? "zenodo" : route));
 }
 
+/**
+ * The DOI route a review holds its records to: the one chosen to send them on now, or, imported as drafts, Zenodo's, as
+ * a DOI may come later. A library without Zenodo registers no DOI, so it holds them to none: no date or licence for one.
+ */
+export const reviewRoute = (batch: ImportBatch | null, zenodo: boolean): ImportBatch["publishRoute"] | "later" => (batch?.outcome === "send" ? batch.publishRoute : zenodo ? "later" : null);
+
 /** Whether a record keeps a DOI of its own, decided as importing decides it: only a DOI that reads as one counts. */
 const keepsDoi = (payload: Record<string, unknown>) => typeof payload.DOI === "string" && Boolean(normalizeDoi(payload.DOI));
 
