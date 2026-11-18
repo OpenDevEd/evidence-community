@@ -214,7 +214,7 @@ const REMOVAL_DIALOGS: Record<RemovalDoi, Omit<ConfirmDialog, "action"> & { done
 		title: "Withdraw record?",
 		confirmLabel: "Withdraw record",
 		message:
-			"Its DOI is real, so it can't be deleted. It leaves the public community, and its page says it was withdrawn, when and why; its DOI keeps leading there. Crossref and Zenodo are told. Its PDF stays on Zenodo: only Zenodo support can remove it. Restore brings it back.",
+			"Its DOI is real, so it can't be deleted. It leaves the public community, and its page says it was withdrawn, when and why; its DOI keeps leading there. Crossref and Zenodo are told. Its PDF stays on Zenodo: only Zenodo support can remove it. Restore later sends it for review, and publishing it brings it back.",
 		reason: { label: "Reason", description: "Readers see it on the record's page." },
 		done: "Record withdrawn",
 	},

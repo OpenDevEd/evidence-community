@@ -641,7 +641,7 @@ function WithdrawnNotice({ published }: { published: Record<string, unknown> | n
 					Withdrawn on {at.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
 				</p>
 				{reason ? <p className="break-words">{reason}</p> : null}
-				<p className="text-black/50 dark:text-white/50">Its page says so and its DOI still leads there. Restore brings it back.</p>
+				<p className="text-black/50 dark:text-white/50">Its page says so and its DOI still leads there. Restore sends it for review; once its version is published, it is back with its PDF.</p>
 			</div>
 		</section>
 	);
