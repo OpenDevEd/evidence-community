@@ -241,6 +241,7 @@
     "itemIdentifiersTitle": "Kennungen",
     "itemIdentifierEvidenceLibrary": "Evidenzcommunity",
     "itemIdentifierArchiveRecord": "Archivdatensatz",
+    "itemIdentifierLicence": "Lizenz",
     "itemIdentifierConceptRecord": "Konzeptdatensatz",
     "itemIdentifierConceptDoi": "Konzept-DOI",
     "itemIdentifierVersionDoi": "Versions-DOI",

@@ -157,6 +157,43 @@ h6 {
 		}
 	}
 
+	/*
+	 * At large text the header takes most of a phone's height (504px of 740 at 200%), leaving the records and the editor a
+	 * strip to scroll in. Once the admin is under 34rem tall the header and the panels scroll as one, and the panels keep
+	 * the screen's height: the header goes up out of the way. Only at enlarged text: at normal text 34rem is 544px, so
+	 * the two bounds never meet, and a phone held sideways (320px tall) keeps its layout; every phone upright is taller
+	 * than 34rem at normal text anyway (35.5rem on a 320 by 568 one).
+	 */
+	@container admin (height < 34rem) and (height >= 544px) {
+		.admin-frame {
+			overflow-y: auto;
+			overscroll-behavior: contain;
+		}
+
+		/* The frame is the editor's only scroller: an editor scrolling on its own takes the wheel first, so the header
+		   never moved. It grows to its fields, which the frame scrolls through after the header. The other panes keep
+		   their own scroll at the screen's height: the records list draws only the rows in view. */
+		.admin-frame > .admin-workbench-grid {
+			flex: none;
+			min-height: 100cqh;
+		}
+
+		#admin-navigation-pane,
+		#admin-list-pane,
+		#admin-preview-pane {
+			height: 100cqh;
+		}
+
+		[data-admin-region="inspector"] {
+			height: auto;
+		}
+
+		[data-admin-region="inspector-scroll"] {
+			flex: none;
+			overflow: visible;
+		}
+	}
+
 	/* The year filter's heading and its Year Range switch need about 15.5rem on one line. */
 	@container year-header (width < 16rem) {
 		.year-filter-header {
