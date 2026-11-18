@@ -1240,7 +1240,7 @@ function AttachmentList({
 							onOpen={() => onSelectAttachment(attachment.key)}
 							status={
 								<>
-									{!readOnlyVersion && <RecordStateChip state={attachment.state} />}
+									{!readOnlyVersion && <RecordStateChip state={attachment.state} withdrawn={attachment.withdrawn} />}
 									{attachment.fileState !== "none" && <FileStateChip state={attachment.fileState} snapshot={readOnlyVersion} />}
 								</>
 							}
@@ -2040,7 +2040,7 @@ export function AdminInspector({
 					</div>
 				}
 				status={
-					versionStatus ?? <RecordStateChip state={detail.state} />
+					versionStatus ?? <RecordStateChip state={detail.state} withdrawn={detail.withdrawn} />
 				}
 				saveIndicator={
 					<SaveIndicator
@@ -2159,7 +2159,7 @@ export function AdminInspector({
 					>
 						{!versionBand && (
 							<section aria-label="Review status">
-								<RecordStateChip state={detail.state} />
+								<RecordStateChip state={detail.state} withdrawn={detail.withdrawn} />
 							</section>
 						)}
 

@@ -700,7 +700,7 @@ export function AdminItemTable({
 			},
 			{
 				cell: ({ row }) => (
-					<RecordStateChip state={row.original.state} review={row.original.review} />
+					<RecordStateChip state={row.original.state} review={row.original.review} withdrawn={row.original.withdrawn} />
 				),
 				id: "state",
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.state,

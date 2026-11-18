@@ -25,14 +25,20 @@ import { readPublicationRepositorySnapshot } from "../../src/lib/publication/rep
 
 type Database = Parameters<Parameters<typeof withIsolatedPublicationDatabase>[0]>[0];
 
-/** A published record with an attachment of its own (a note stands in for its PDF) and a DOI on Zenodo. */
-async function recordWithDoi(db: Database, environment: "sandbox" | "production") {
+/** A published record with an attachment of its own (a note stands in for its PDF). */
+async function recordWithAttachment(db: Database) {
 	const parent = await createNativeItemDraft(db, { itemType: "Report", licence: { kind: "zenodo", id: "cc-by-4.0" }, title: "Peer tutoring pilot", date: "2026-11-18", creators: [{ creatorType: "author", firstName: "Grace", lastName: "Wanjiru" }] });
 	await publishItemDraft(db, parent.itemKey);
 	const child = await createNativeItemDraft(db, { itemType: "Note", note: "Its own attachment", parentItem: parent.itemKey });
 	await publishItemDraft(db, child.itemKey);
-	await db.insert(publicationTarget).values({ itemKey: parent.itemKey, provider: "zenodo", environment, identifierPolicy: "mint-zenodo", requestedBy: "editor" });
 	return { parent: parent.itemKey, child: child.itemKey };
+}
+
+/** The same, with a DOI on Zenodo. */
+async function recordWithDoi(db: Database, environment: "sandbox" | "production") {
+	const record = await recordWithAttachment(db);
+	await db.insert(publicationTarget).values({ itemKey: record.parent, provider: "zenodo", environment, identifierPolicy: "mint-zenodo", requestedBy: "editor" });
+	return record;
 }
 
 const row = async (db: Database, key: string) => (await db.select().from(item).where(eq(item.key, key)))[0]!;
@@ -49,6 +55,21 @@ it("removes a record whose DOIs are test ones for good, its attachments with it"
 		assert.notEqual(target!.deactivatedAt, null, "A removed test DOI's target stays switched on");
 	});
 });
+
+// A record imported from a PDF without a DOI needed its PDF handled first, one step at a time, before it could go.
+it("removes a record without a DOI with its attachments, and restoring it brings them back", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const { parent, child } = await recordWithAttachment(db);
+		await removeNativeItem(db, parent);
+		assert.equal((await row(db, parent)).deleted, 1);
+		assert.equal((await row(db, child)).deleted, 1);
+
+		await openItemDraft(db, parent);
+		await publishItemDraft(db, parent);
+		assert.equal((await row(db, parent)).deleted, 0);
+		assert.equal((await row(db, child)).deleted, 0, "Restoring left its attachment removed");
+	});
+}, 60_000);
 
 it("withdraws a record with a real DOI only with a reason, tells the registrars, and restores it with its attachments", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {

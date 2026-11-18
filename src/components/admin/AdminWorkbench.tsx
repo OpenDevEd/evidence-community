@@ -203,7 +203,7 @@ const REMOVAL_DIALOGS: Record<RemovalDoi, Omit<ConfirmDialog, "action"> & { done
 	none: {
 		title: "Unpublish record?",
 		confirmLabel: "Unpublish record",
-		message: "It will leave the public community and remain recoverable here.",
+		message: "It will leave the public community with its PDFs and remain recoverable here.",
 		done: "Record unpublished",
 	},
 	test: {

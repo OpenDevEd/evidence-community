@@ -106,10 +106,13 @@ export const reviewChip = {
 	},
 } as const;
 
-/** A record's state. One waiting for an editor, or sent back, says that: it is what the person looking for it needs to know. */
-export function RecordStateChip({ state, review = null }: { state: AdminRecordState; review?: AdminRowReview | null }) {
+/**
+ * A record's state. One waiting for an editor, or sent back, says that: it is what the person looking for it needs to
+ * know. A deleted record that was withdrawn, because its DOI is real, says so.
+ */
+export function RecordStateChip({ state, review = null, withdrawn = false }: { state: AdminRecordState; review?: AdminRowReview | null; withdrawn?: boolean }) {
 	if (review && state !== "deleted") return <Status {...reviewChip[review]} />;
-	return <Status {...stateConfig[state]} />;
+	return <Status {...stateConfig[state]} {...(state === "deleted" && withdrawn ? { label: "Withdrawn" } : {})} />;
 }
 
 export function FileStateChip({ state, snapshot = false }: { state: AdminFileState; snapshot?: boolean }) {

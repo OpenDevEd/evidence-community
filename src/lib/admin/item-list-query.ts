@@ -17,6 +17,7 @@ import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
 import { adminItemListProjection } from "@/db/schema/tables/adminItemListProjection";
+import { item } from "@/db/schema/tables/item";
 
 import {
 	parseAdminItemListRequest,
@@ -463,10 +464,12 @@ export function buildAdminItemListQuery(
 			title: adminItemListProjection.title,
 			titleSort: adminItemListProjection.titleSort,
 			updatedAt: adminItemListProjection.updatedAt,
+			withdrawn: sql<boolean>`${item.withdrawnAt} is not null`,
 			year: adminItemListProjection.year,
 		})
 		.from(adminItemListProjection)
 		.innerJoin(itemIdentity, eq(itemIdentity.key, adminItemListProjection.key))
+		.leftJoin(item, eq(item.key, adminItemListProjection.key))
 		.where(conditions.length > 0 ? and(...conditions) : undefined)
 		.orderBy(
 			sorting.direction === "asc"
