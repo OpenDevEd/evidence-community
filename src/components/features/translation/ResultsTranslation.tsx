@@ -75,6 +75,8 @@ type ResultsTranslation = {
 	/** Translation ran for the listed records and finished. */
 	done: boolean;
 	listedCount: number;
+	/** The list loaded with nothing in it: nothing to translate, so no control. */
+	empty: boolean;
 	active: boolean;
 	/** The reader chose to read this record translated, here or on another page. */
 	showing: (key: string) => boolean;
@@ -201,6 +203,7 @@ function EnabledProvider({ items, scope = "results", children }: ProviderProps) 
 		failed,
 		done: active && !isTranslating && !failed,
 		listedCount: listed.length,
+		empty: items !== undefined && listed.length === 0,
 		active,
 		showing: (key) => auto || shown.has(shownKey(target, key)),
 		run: () => {
@@ -285,7 +288,7 @@ export function ResultsTranslationControl() {
 			),
 		[locale],
 	);
-	if (!context) return null;
+	if (!context || context.empty) return null;
 
 	const { target, choice, auto, isTranslating, done, failed, listedCount, scope } = context;
 	const record = scope === "record";
@@ -320,7 +323,7 @@ export function ResultsTranslationControl() {
 					aria-label={t(record ? "buttonLabelRecord" : "buttonLabel", { language: targetLanguage.inPage })}
 					size={record ? "sm" : undefined}
 					className={twMerge(
-						record ? "shrink-0" : "h-full shrink-0 gap-2 px-4 xl:px-4",
+						record ? "shrink-0" : "h-full min-w-0 shrink-0 gap-1.5 px-3 xl:gap-2 xl:px-4",
 						done && "border-accent text-accent dark:text-accent",
 						isOpen && "outline outline-2 outline-focus",
 					)}
@@ -339,7 +342,13 @@ export function ResultsTranslationControl() {
 						<span className={twMerge("col-start-1 row-start-1", done && "invisible")}>{t("translate")}</span>
 						<span className={twMerge("col-start-1 row-start-1", !done && "invisible")}>{t("translated")}</span>
 					</span>
-					<span className="rounded-md bg-black/[6%] px-1.5 py-0.5 text-xs font-semibold tabular-nums dark:bg-white/10">
+					{/* Narrow phones keep the icon alone; the button's name still says the language. */}
+					<span
+						className={twMerge(
+							"rounded-md bg-black/[6%] px-1.5 py-0.5 text-xs font-semibold tabular-nums dark:bg-white/10",
+							!record && "[@media(max-width:389px)]:hidden",
+						)}
+					>
 						{target.toUpperCase()}
 					</span>
 				</Button>

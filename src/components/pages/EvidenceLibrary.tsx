@@ -447,7 +447,7 @@ function SearchTabContent({
 				</Skeleton>
 				<section
 					className={twMerge(
-						"flex gap-4",
+						"flex gap-3 lg:gap-4",
 						itemsContext.config.interactionsStyle === "multi-line"
 							? "lg:min-w-72"
 							: "flex-1",
