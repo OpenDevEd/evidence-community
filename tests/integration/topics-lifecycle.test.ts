@@ -256,7 +256,7 @@ it("rebuilds existing search documents when topic visibility changes and retains
     expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(true);
     // A Meilisearch library keeps the signature it stored before engines were configurable, so upgrading doesn't
     // rebuild it; Elasticsearch adds its index definition.
-    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 12, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 13, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
     await setSearchIndexRebuildPending(db, false);
     expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"])).toBe(false);
     expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"])).toBe(true);
@@ -268,7 +268,7 @@ it("rebuilds existing search documents when topic visibility changes and retains
     expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], "model-b")).toBe(true);
     await setSearchIndexRebuildPending(db, false);
     expect(await prepareSearchProjection(db, "elasticsearch", false, false, ["hidden"], null)).toBe(true);
-    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 12, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
+    await db.update(status).set({searchProjectionSignature: JSON.stringify({version: 13, topics: false, fullText: false, hiddenTags: ["hidden"]})}).where(eq(status.id, 1));
     await setSearchIndexRebuildPending(db, false);
     expect(await prepareSearchProjection(db, "meilisearch", false, false, ["hidden"], "model-a")).toBe(false);
   });
