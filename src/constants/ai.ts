@@ -1,18 +1,15 @@
 import type { ComponentType, SVGProps } from "react";
 import ChatGPT from "@/components/icons/ChatGPT";
 import Gemini from "@/components/icons/Gemini";
-import Grok from "@/components/icons/Grok";
 import Claude from "@/components/icons/Claude";
 import { AI_MODELS, type AIModelId } from "@/lib/ai/models";
 
 type ModelIcon = ComponentType<SVGProps<SVGSVGElement>>;
 
 const icons: Record<AIModelId, ModelIcon> = {
+	"anthropic/claude-haiku-5.5": Claude,
 	"openai/gpt-6-luna": ChatGPT,
-	"google/gemini-3.7-flash": Gemini,
-	"x-ai/grok-4.6": Grok,
-	"anthropic/claude-sonnet-5": Claude,
-	"anthropic/claude-opus-5": Claude,
+	"google/gemini-4-hydrogen": Gemini,
 };
 
 const allModels = AI_MODELS.map((model) => ({

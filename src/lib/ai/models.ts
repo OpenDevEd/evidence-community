@@ -1,10 +1,26 @@
 export const AI_MODELS = [
 	{
+		id: "anthropic/claude-haiku-5.5",
+		name: "Claude Haiku 5.5",
+		company: "Anthropic",
+		hidden: false,
+		reasoningEffort: "medium",
+		openRouter: {
+			providerOrder: [],
+			allowFallbacks: true,
+			promptCache: {
+				mode: "anthropic-explicit",
+				topLevel: { type: "ephemeral", ttl: "1h" },
+				explicit: { type: "ephemeral", ttl: "1h" },
+			},
+		},
+	},
+	{
 		id: "openai/gpt-6-luna",
 		name: "GPT-6 Luna",
 		company: "OpenAI",
 		hidden: false,
-		maximumReasoningEffort: "max",
+		reasoningEffort: "medium",
 		openRouter: {
 			// OpenRouter endpoint tags to try first (same model, different
 			// host); other providers remain as fallbacks. Luna needs the
@@ -20,11 +36,11 @@ export const AI_MODELS = [
 		},
 	},
 	{
-		id: "google/gemini-3.7-flash",
-		name: "Gemini 3.7 Flash",
+		id: "google/gemini-4-hydrogen",
+		name: "Gemini 4 Hydrogen",
 		company: "Google",
 		hidden: false,
-		maximumReasoningEffort: "high",
+		reasoningEffort: "low",
 		openRouter: {
 			providerOrder: ["google-ai-studio"],
 			// Gemini's thought signatures are accepted only by the Google host that
@@ -35,54 +51,6 @@ export const AI_MODELS = [
 				mode: "automatic",
 				topLevel: null,
 				explicit: null,
-			},
-		},
-	},
-	{
-		id: "x-ai/grok-4.6",
-		name: "Grok 4.6",
-		company: "xAI",
-		hidden: false,
-		maximumReasoningEffort: "xhigh",
-		openRouter: {
-			providerOrder: [],
-			allowFallbacks: true,
-			promptCache: {
-				mode: "automatic",
-				topLevel: null,
-				explicit: null,
-			},
-		},
-	},
-	{
-		id: "anthropic/claude-sonnet-5",
-		name: "Claude Sonnet 5",
-		company: "Anthropic",
-		hidden: true,
-		maximumReasoningEffort: "max",
-		openRouter: {
-			providerOrder: [],
-			allowFallbacks: true,
-			promptCache: {
-				mode: "anthropic-explicit",
-				topLevel: { type: "ephemeral", ttl: "1h" },
-				explicit: { type: "ephemeral", ttl: "1h" },
-			},
-		},
-	},
-	{
-		id: "anthropic/claude-opus-5",
-		name: "Claude Opus 5",
-		company: "Anthropic",
-		hidden: true,
-		maximumReasoningEffort: "max",
-		openRouter: {
-			providerOrder: [],
-			allowFallbacks: true,
-			promptCache: {
-				mode: "anthropic-explicit",
-				topLevel: { type: "ephemeral", ttl: "1h" },
-				explicit: { type: "ephemeral", ttl: "1h" },
 			},
 		},
 	},
@@ -110,6 +78,7 @@ export function getAIModel(modelId: AIModelId) {
 	return AI_MODELS.find(({ id }) => id === modelId)!;
 }
 
-export function maximumReasoningEffort(modelId: AIModelId) {
-	return getAIModel(modelId).maximumReasoningEffort;
+/** The reasoning effort every request to this model uses. */
+export function reasoningEffort(modelId: AIModelId) {
+	return getAIModel(modelId).reasoningEffort;
 }
