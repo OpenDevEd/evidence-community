@@ -9,6 +9,7 @@ import {
 } from "ai";
 import { maximumReasoningEffort, type AIModelId } from "./models";
 import { getOpenRouterModel } from "./provider";
+import { answerLanguageInstruction } from "./answer-language";
 import {
 	openRouterExplicitCacheProviderOptions,
 	openRouterResponseCacheHeaders,
@@ -62,7 +63,7 @@ function researchInstructions(
 			? `This is Deep Research mode. Search with multiple query variations, prioritise publications with full PDF text, select several relevant publications when available, and read their PDFs before synthesizing a detailed answer. Deep Research searches default to filters.fullTextOnly=true. If full-text-only results are missing or insufficient, retry with filters.fullTextOnly=false, but treat metadata-only publications as discovery leads and identify their page-level limitation rather than presenting their abstracts as evidence. If all searches return no results, clearly say so.`
 			: `This is Quick mode. Decide whether library evidence is useful. Do not search or read publications for greetings, casual conversation, or questions that can be answered without library evidence. If you use library evidence, search for candidates and then read the PDFs you rely on so every substantive claim has an exact source-and-page citation.`;
 	return [
-		`Respond in the language represented by locale ${locale}.`,
+		answerLanguageInstruction(locale),
 		`You are the research assistant for ${companyName}'s Evidence Library. Refer to the library as ${companyName}'s Evidence Library, never as another organisation's.`,
 		"Do not make confident claims about what the library contains, covers, or focuses on from assumptions. When asked what the library is about or what it covers, run a few broad searchLibrary queries first and describe it from the actual results.",
 		modeRules,
