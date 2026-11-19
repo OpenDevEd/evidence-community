@@ -17,7 +17,7 @@ async function createPublishedBook(page: Page, title: string) {
 	await expect(titleInput).toHaveValue("");
 	await titleInput.fill(title);
 	await publishWorkingDraft(page);
-	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
+	await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeVisible({
 		timeout: 60_000,
 	});
 	const key = new URL(page.url()).searchParams.get("item") ?? "";
@@ -61,7 +61,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 
 	// Add: citing → cited, by picking the cited record straight from the record table
 	let inspector = await openRecord(page, citingKey);
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	const links = inspector.getByRole("group", { name: "Links", includeHidden: true });
 	await links.getByRole("button", { name: "Add to References" }).click();
 	const banner = page.locator('[data-admin-link-pick-banner="cites"]');
@@ -123,7 +123,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	).toBeVisible();
 
 	await publishWorkingDraft(page);
-	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
+	await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeVisible({
 		timeout: 60_000,
 	});
 	await expect(addedRow).toHaveAttribute("data-admin-link-change", "unchanged");
@@ -155,11 +155,11 @@ test("links two records, shows both sides, and removes the link again", async ({
 		`[data-admin-link-list="related"] [data-admin-link-key="${citingKey}"]`,
 	);
 	await expect(otherSideRelated).toHaveAttribute("data-admin-link-change", "unchanged");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await inspector.getByRole("button", { name: `Remove ${citingTitle} from Related` }).click();
 	await expect(otherSideRelated).toHaveAttribute("data-admin-link-change", "removed");
 	await publishWorkingDraft(page);
-	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
+	await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeVisible({
 		timeout: 60_000,
 	});
 	await expect(otherSideRelated).toHaveCount(0);
@@ -175,7 +175,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await expect(
 		inspector.locator(`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`),
 	).toHaveCount(0);
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await inspector.getByRole("button", { name: "References", exact: true }).click();
 	const removeButton = inspector.getByRole("button", {
 		name: `Remove ${citedTitle} from References`,
@@ -194,7 +194,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await removeButton.click();
 	await expect(removedRow).toHaveAttribute("data-admin-link-change", "removed");
 	await publishWorkingDraft(page);
-	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
+	await expect(inspector.getByRole("button", { name: "Edit", exact: true })).toBeVisible({
 		timeout: 60_000,
 	});
 	await expect(removedRow).toHaveCount(0);
