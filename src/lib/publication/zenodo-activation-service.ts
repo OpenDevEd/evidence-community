@@ -1,4 +1,5 @@
 import { assertZenodoPolicyMayChange } from "./zenodo-policy";
+import { zenodoToken } from "./zenodo-token";
 import { stateFor } from "./state-adapter";
 import { lockLatestPublicationJob } from "./queue";
 import { and, eq, isNull, ne } from "drizzle-orm";
@@ -40,7 +41,7 @@ export {
 	ZenodoIdentifierPolicyLockedError,
 } from "./errors";
 
-type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
+type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services"> & Partial<Pick<LibraryServerConfig, "authentication">>;
 
 export type ZenodoActivationPolicyInput = {
 	configuredDefault: ZenodoIdentifierPolicy;
@@ -160,19 +161,19 @@ export async function assertDoiResolves(
 	}
 }
 
-function requireZenodoConfig(config: PublicationConfig) {
+async function requireZenodoConfig(config: PublicationConfig) {
 	const zenodo = config.services.publication.zenodo;
 	if (!zenodo.enabled) {
 		throw new ZenodoActivationConfigurationError(
 			"Zenodo publishing is not configured for this community.",
 		);
 	}
-	if (!zenodo.token) {
+	if (zenodo.account === "token" && !zenodo.token) {
 		throw new ZenodoActivationConfigurationError(
 			"Zenodo publishing is missing its account token.",
 		);
 	}
-	return { ...zenodo, token: zenodo.token };
+	return { ...zenodo, token: await zenodoToken(config) };
 }
 
 function activeZenodoJobs(
@@ -264,7 +265,7 @@ function resolveZenodoActivationDoi(
 function prepareZenodoActivation(input: {
 	snapshot: PublicationRepositorySnapshot;
 	config: PublicationConfig;
-	zenodo: ReturnType<typeof requireZenodoConfig>;
+	zenodo: Awaited<ReturnType<typeof requireZenodoConfig>>;
 	now: Date;
 	requestedPolicy?: ZenodoIdentifierPolicy;
 }) {
@@ -421,7 +422,7 @@ export async function activateZenodoPublication(
 	requestedBy = "admin-bypass",
 	options: { resolveDoi?: DoiResolver } = {},
 ): Promise<ZenodoActivationReceipt> {
-	const zenodo = requireZenodoConfig(config);
+	const zenodo = await requireZenodoConfig(config);
 	const preflightSnapshot = await readPublicationRepositorySnapshot(
 		database,
 		itemKey,
@@ -458,7 +459,7 @@ export async function activateZenodoPublicationInTransaction(
 	requestedBy: string,
 	checkedExternalDoi: string | null,
 ): Promise<ZenodoActivationReceipt> {
-	const zenodo = requireZenodoConfig(config);
+	const zenodo = await requireZenodoConfig(config);
 	await lockItemMutation(transaction, itemKey);
 	const snapshot = await readPublicationRepositorySnapshot(
 		transaction,
@@ -537,7 +538,7 @@ export async function retryZenodoPublication(
 	itemKey: string,
 	config: PublicationConfig,
 ): Promise<ZenodoActivationReceipt> {
-	const zenodo = requireZenodoConfig(config);
+	const zenodo = await requireZenodoConfig(config);
 	return database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
 		const snapshot = await readPublicationRepositorySnapshot(
