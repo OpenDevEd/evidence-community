@@ -481,7 +481,9 @@
 		"percentOfTotal": "{percentage}% do total",
 		"viewDetails": "Ver detalhes",
 		"openGapMap": "Abrir mapa de lacunas",
-		"openGapMapAriaLabel": "Abrir mapa de lacunas {label}"
+		"openGapMapAriaLabel": "Abrir mapa de lacunas {label}",
+		"meaning": "Meaning",
+		"closestMatches": "<number>{count}</number> closest matches"
 	},
 	"auth": {
 		"invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -853,5 +855,20 @@
 		"title": "Mapas de lacunas de evidências",
 		"subtitle": "Explore visualizações interativas que mapeiam evidências de pesquisa por temas, identificando onde existem evidências e onde permanecem lacunas.",
 		"empty": "Nenhum mapa de lacunas disponível."
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "Results translate as soon as the page opens",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation"
 	}
 }

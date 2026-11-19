@@ -107,6 +107,11 @@ export function useFilters() {
 		[setParams]
 	);
 
+	const handleMeaningChange = useCallback(
+		(meaning: boolean) => setParams({ meaning, page: 1 }),
+		[setParams]
+	);
+
 	const handleRangeChange = useCallback(
 		(start: string | null, end: string | null) => {
 			setParams({ range: [start, end].join(end !== null ? "-" : "") });
@@ -273,6 +278,7 @@ export function useFilters() {
 		handleSortChange,
 		handleScopeChange,
 		handleSearchChange,
+		handleMeaningChange,
 		handleRangeChange,
 		handleCollectionSelect,
 		handleAuthorSelect,

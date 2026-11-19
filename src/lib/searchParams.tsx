@@ -1,6 +1,6 @@
 import { SCOPE_OPTIONS } from '@/constants/items';
 import { SORT_OPTIONS } from '@/constants/items';
-import { createLoader, parseAsArrayOf, parseAsString, parseAsInteger, createSerializer } from 'nuqs/server';
+import { createLoader, parseAsArrayOf, parseAsBoolean, parseAsString, parseAsInteger, createSerializer } from 'nuqs/server';
 
 export const searchParamsLoader = {
     collections: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
@@ -15,6 +15,8 @@ export const searchParamsLoader = {
 	sort: parseAsString.withDefault(SORT_OPTIONS[0].key),
 	search: parseAsString.withDefault(""),
 	scope: parseAsString.withDefault(SCOPE_OPTIONS[0].key),
+	// Rank by meaning (the index's embedder) instead of matching words.
+	meaning: parseAsBoolean.withDefault(false),
 	range: parseAsString.withDefault(""),
 	collectionId: parseAsString.withDefault("").withOptions({
 		scroll: true,
@@ -34,6 +36,9 @@ export const searchParamsLoader = {
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 }
+
+/** Every record has some meaning score, so a search by meaning lists only this many of the closest. */
+export const MEANING_RESULT_LIMIT = 50;
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
 

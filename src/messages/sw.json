@@ -482,7 +482,9 @@
 		"percentOfTotal": "{percentage}% ya jumla",
 		"viewDetails": "Tazama maelezo",
 		"openGapMap": "Fungua ramani ya mapengo",
-		"openGapMapAriaLabel": "Fungua ramani ya mapengo {label}"
+		"openGapMapAriaLabel": "Fungua ramani ya mapengo {label}",
+		"meaning": "Maana",
+		"closestMatches": "<number>{count}</number> yanayokaribiana zaidi"
 	},
 	"auth": {
 		"invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -854,5 +856,20 @@
 		"title": "Ramani za mapengo ya ushahidi",
 		"subtitle": "Chunguza taswira shirikishi zinazopanga ushahidi wa utafiti kwa mada, zikitambua mahali ushahidi upo na mahali mapengo yalipo.",
 		"empty": "Hakuna ramani za mapengo bado."
+	},
+	"translation": {
+		"translate": "Tafsiri",
+		"translated": "Imetafsiriwa",
+		"buttonLabel": "Tafsiri matokeo kwa {language}",
+		"title": "Tafsiri matokeo",
+		"auto": "Tafsiri moja kwa moja",
+		"autoHint": "Matokeo yanatafsiriwa ukurasa unapofunguka",
+		"into": "Tafsiri kwa",
+		"currentLocale": "Lugha ya sasa",
+		"run": "Tafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"translating": "Inatafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"showOriginals": "Onyesha asili",
+		"translatedFrom": "Imetafsiriwa kutoka {language}",
+		"showTranslation": "Onyesha tafsiri"
 	}
 }

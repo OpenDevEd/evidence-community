@@ -481,7 +481,9 @@
 		"percentOfTotal": "{percentage}% des Gesamten",
 		"viewDetails": "Details anzeigen",
 		"openGapMap": "Gap-Map öffnen",
-		"openGapMapAriaLabel": "Gap-Map {label} öffnen"
+		"openGapMapAriaLabel": "Gap-Map {label} öffnen",
+		"meaning": "Meaning",
+		"closestMatches": "<number>{count}</number> closest matches"
 	},
 	"auth": {
 		"invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -853,5 +855,20 @@
 		"title": "Evidenz-Gap-Maps",
 		"subtitle": "Erkunden Sie interaktive Visualisierungen, die Forschungsevidenz thematisch abbilden und zeigen, wo Evidenz vorhanden ist und wo Lücken bestehen.",
 		"empty": "Noch keine Gap-Maps verfügbar."
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "Results translate as soon as the page opens",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation"
 	}
 }

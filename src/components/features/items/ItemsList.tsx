@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useItemsList } from "@/hooks/useItemsList";
 import { ResourcesView } from "../resources/ResourcesView";
+import { ResultsTranslationProvider } from "../translation/ResultsTranslation";
 
 function NumberWrapper({ children }: { children: ReactNode }) {
 	return (
@@ -38,6 +39,7 @@ export default function ItemsList({
 
 	return (
 		<ItemsContext.Provider value={props}>
+			<ResultsTranslationProvider items={props.itemsData?.items}>
 			<ResourcesView
 				extraFilters={extraFilters}
 				{...(!userData
@@ -87,6 +89,7 @@ export default function ItemsList({
 							),
 					  })}
 			/>
+			</ResultsTranslationProvider>
 		</ItemsContext.Provider>
 	);
 }

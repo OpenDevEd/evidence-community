@@ -35,6 +35,8 @@ import { LuEye } from "react-icons/lu";
 import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
+import { TbWorldSearch } from "react-icons/tb";
+import { ResultsTranslationControl } from "@/components/features/translation/ResultsTranslation";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
@@ -209,6 +211,28 @@ export function ScopeComponent({
 	);
 }
 
+/** Ranks the search by meaning, in any language, instead of matching its words. */
+function MeaningToggle({ isOn, onChange }: { isOn: boolean; onChange: (on: boolean) => void }) {
+	const t = useTranslations("ui");
+	return (
+		<button
+			type="button"
+			aria-pressed={isOn}
+			onMouseDown={(e) => e.preventDefault()}
+			onClick={() => onChange(!isOn)}
+			className={twMerge(
+				"flex h-7 shrink-0 items-center gap-1 rounded-lg border px-2.5 text-xs font-medium transition-colors lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:px-3 lg:text-sm",
+				isOn
+					? "border-accent bg-accent/10 text-accent dark:bg-accent/20"
+					: "border-transparent bg-black/[5%] text-black/60 hover:text-black/80 dark:bg-white/10 dark:text-white/60 dark:hover:text-white/80",
+			)}
+		>
+			<TbWorldSearch className="size-3.5 shrink-0 lg:size-4" />
+			{t("meaning")}
+		</button>
+	);
+}
+
 function SearchTabContent({
 	header,
 	itemsContext,
@@ -357,9 +381,13 @@ function SearchTabContent({
 								askAI(text);
 							})
 						}
-						endContent={
-							askAI &&
-							((liveText: string, clear: () => void) =>
+						endContent={(liveText: string, clear: () => void) => (
+							<div className="flex items-center gap-1.5 self-center">
+								<MeaningToggle
+									isOn={itemsContext.queryParams.meaning}
+									onChange={itemsContext.handleMeaningChange}
+								/>
+								{askAI &&
 								// Client-only: nothing renders until the OS
 								// shortcut is known, then the whole button
 								// enters with a CSS keyframe animation — CSS
@@ -393,8 +421,9 @@ function SearchTabContent({
 											{shortcutHint}
 										</kbd>
 									</button>
-								))
-						}
+								)}
+							</div>
+						)}
 					/>
 					{<ScopeComponent itemsContext={itemsContext} />}
 					{itemsContext.userData && (
@@ -416,6 +445,18 @@ function SearchTabContent({
 					>
 						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
 							{countLabel ||
+								(itemsContext.queryParams.meaning && itemsContext.queryParams.search.trim()
+									? t.rich("closestMatches", {
+											count: formatter.number(
+												actuallyNoData ? 0 : itemsContext.itemsData?.totalItems || 0,
+											),
+											number: (chunks) => (
+												<span suppressHydrationWarning className="text-2xl leading-6">
+													{chunks}{" "}
+												</span>
+											),
+										})
+									: null) ||
 								t.rich("resourcesCount", {
 									count: formatter.number(
 										actuallyNoData
@@ -451,6 +492,7 @@ function SearchTabContent({
 							: "flex-1",
 					)}
 				>
+					{!itemsContext.userData && <ResultsTranslationControl />}
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch

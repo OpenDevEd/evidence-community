@@ -481,7 +481,9 @@
 		"percentOfTotal": "{percentage}% 总计",
 		"viewDetails": "查看详情",
 		"openGapMap": "打开证据缺口图谱",
-		"openGapMapAriaLabel": "打开{label}证据缺口图谱"
+		"openGapMapAriaLabel": "打开{label}证据缺口图谱",
+		"meaning": "Meaning",
+		"closestMatches": "<number>{count}</number> closest matches"
 	},
 	"auth": {
 		"invalidEmail": "请输入有效的电子邮件地址",
@@ -853,5 +855,20 @@
 		"title": "证据缺口图谱",
 		"subtitle": "探索交互式可视化图谱，按主题映射研究证据，识别证据存在和缺失的领域。",
 		"empty": "暂无证据缺口图谱。"
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "Results translate as soon as the page opens",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation"
 	}
 }

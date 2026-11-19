@@ -15,7 +15,8 @@ import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
-import { searchParamsLoader } from "./searchParams";
+import { MEANING_RESULT_LIMIT, searchParamsLoader } from "./searchParams";
+import { hybridSearchOptions } from "./search-embedder";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
@@ -245,6 +246,7 @@ export async function getPublicItems(
 		process.env.MEILI_INDEX || config.index,
 	);
 
+	const byMeaning = searchParams.meaning === true && search.trim().length > 0;
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
 			offset: (pageNum - 1) * limitNum,
@@ -253,6 +255,9 @@ export async function getPublicItems(
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
 			filter: finalFilters,
+			...(byMeaning
+				? await hybridSearchOptions(process.env.MEILI_INDEX || config.index, search, 0.8)
+				: {}),
 		}),
 		getCachedCollections(),
 	]);
@@ -263,8 +268,10 @@ export async function getPublicItems(
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount =
-		searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalCount = Math.min(
+		searchResults.estimatedTotalHits || searchResults.hits.length,
+		byMeaning ? MEANING_RESULT_LIMIT : Number.MAX_SAFE_INTEGER,
+	);
 
 	return {
 		items,
@@ -298,7 +305,8 @@ export async function getPublicFacets(
 		process.env.MEILI_INDEX || config.index,
 	);
 
-	const searchResults = await index.search(search, {
+	// shortcut: mock — words decide facet counts, so a search by meaning counts the whole library; the real version facets the closest matches.
+	const searchResults = await index.search(searchParams.meaning ? "" : search, {
 		offset: 0,
 		limit: 0,
 		attributesToSearchOn,

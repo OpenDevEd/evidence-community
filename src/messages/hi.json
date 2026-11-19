@@ -481,7 +481,9 @@
 		"percentOfTotal": "{percentage}% कुल का",
 		"viewDetails": "विवरण देखें",
 		"openGapMap": "गैप मैप खोलें",
-		"openGapMapAriaLabel": "गैप मैप {label} खोलें"
+		"openGapMapAriaLabel": "गैप मैप {label} खोलें",
+		"meaning": "Meaning",
+		"closestMatches": "<number>{count}</number> closest matches"
 	},
 	"auth": {
 		"invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
@@ -853,5 +855,20 @@
 		"title": "साक्ष्य अंतराल मानचित्र",
 		"subtitle": "इंटरैक्टिव विज़ुअलाइज़ेशन का अन्वेषण करें जो विषयों में अनुसंधान साक्ष्य को मैप करते हैं, यह पहचानते हुए कि साक्ष्य कहाँ मौजूद है और कहाँ अंतराल हैं।",
 		"empty": "अभी कोई गैप मैप उपलब्ध नहीं है।"
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "Results translate as soon as the page opens",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation"
 	}
 }

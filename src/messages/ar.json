@@ -481,7 +481,9 @@
 		"percentOfTotal": "{percentage}% من الإجمالي",
 		"viewDetails": "عرض التفاصيل",
 		"openGapMap": "فتح خريطة الفجوات",
-		"openGapMapAriaLabel": "فتح خريطة الفجوات {label}"
+		"openGapMapAriaLabel": "فتح خريطة الفجوات {label}",
+		"meaning": "Meaning",
+		"closestMatches": "<number>{count}</number> closest matches"
 	},
 	"auth": {
 		"invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
@@ -853,5 +855,20 @@
 		"title": "خرائط فجوات الأدلة",
 		"subtitle": "استكشف التصورات التفاعلية التي ترسم خريطة أدلة البحث عبر المواضيع، وتحدد أين توجد الأدلة وأين تبقى الفجوات.",
 		"empty": "لا توجد خرائط فجوات متاحة بعد."
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "Results translate as soon as the page opens",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation"
 	}
 }
