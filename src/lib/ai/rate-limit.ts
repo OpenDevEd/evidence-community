@@ -132,6 +132,8 @@ export type AIRateLimitPolicy = {
 	clientWindows: readonly AIRateLimitWindow[];
 	networkWindow: AIRateLimitWindow;
 	keyPrefix: string;
+	/** Where the per-network counter lives, when it is shared with another policy's. */
+	networkKeyPrefix?: string;
 };
 
 export type AIRateLimitResult = {
@@ -189,10 +191,16 @@ function defaultPolicy(): AIRateLimitPolicy {
 	};
 }
 
-/** Translation's own limits, counted apart from the other AI features. */
+/** Translation's own per-browser limits, counted apart from the other AI features; the network cap stays shared. */
 export function translationRateLimitPolicy(): AIRateLimitPolicy {
 	const policy = defaultPolicy();
-	return { ...policy, clientWindows: TRANSLATION_RATE_LIMIT_CLIENT_WINDOWS, keyPrefix: `${policy.keyPrefix}:translation` };
+	return {
+		...policy,
+		clientWindows: TRANSLATION_RATE_LIMIT_CLIENT_WINDOWS,
+		keyPrefix: `${policy.keyPrefix}:translation`,
+		// One network cap across every AI feature.
+		networkKeyPrefix: policy.keyPrefix,
+	};
 }
 
 function isValidClientId(value: string | undefined): value is string {
@@ -262,7 +270,7 @@ export function createRedisAIRateLimitStore(
 						),
 					),
 					rateLimitKey(
-						policy.keyPrefix,
+						policy.networkKeyPrefix ?? policy.keyPrefix,
 						"network",
 						policy.networkWindow.name,
 						identity.clientIp,
