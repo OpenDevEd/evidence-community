@@ -605,6 +605,9 @@ export function fileAccessOf(licence: RecordLicence | null | undefined, chosen: 
 	return licenceOpen(licence) ? { mode: "open" } : { mode: "private" };
 }
 
+/** The community's default for who gets a new record's files, as a record keeps it: none for anyone, which its licence decides. */
+export const defaultFileAccessOf = (mode: "open" | "private" | "readers"): FileAccess | null => (mode === "open" ? null : { mode });
+
 /** Whether readers here can't get the files on `today` (YYYY-MM-DD): kept private, or an embargo not yet over. */
 export const filesHiddenOn = (access: FileAccess, today: string) => access.mode === "private" || (access.mode === "embargo" && access.until > today);
 

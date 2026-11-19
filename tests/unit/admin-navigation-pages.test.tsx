@@ -27,7 +27,7 @@ async function show(page: { digests: boolean; show?: DigestShow; reviewQueue?: b
 	const nothing = () => {};
 	await act(async () => root.render(
 		<SWRConfig value={{ provider: () => new Map() }}>
-			<AdminSessionProvider session={{ role: "editor", userId: "user_editor", name: "Gugulethu Dube", image: null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0" }}>
+			<AdminSessionProvider session={{ role: "editor", userId: "user_editor", name: "Gugulethu Dube", image: null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0", defaultFileAccess: null }}>
 				<DigestsPage value={{ selected: page.digests, waiting: 2, show: page.show ?? "all", onOpen: chose.open, onShow: chose.show }}>
 					<AdminNavigation
 						kind={page.reviewQueue ? null : "all"} onSelectKind={chose.kind} reviewQueue={page.reviewQueue ?? false} onSelectReviewQueue={chose.review}

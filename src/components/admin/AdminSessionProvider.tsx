@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import type { FileAccess } from "@/lib/licences";
 import { ADMIN_PUBLISH_PERMISSION, adminRoleHasPermission, type AdminRole } from "@/lib/admin/permissions";
 
 /**
@@ -10,6 +11,8 @@ import { ADMIN_PUBLISH_PERMISSION, adminRoleHasPermission, type AdminRole } from
 type LibraryAdminSession = { role: AdminRole; userId: string; name: string; image: string | null; doiProviders: { crossref: boolean; zenodo: boolean };
 	/** The licence records made here start with: the community's default licence, by its Zenodo id. */
 	defaultLicence: string;
+	/** The community's default for who gets a new record's files; null when its licence decides. */
+	defaultFileAccess: FileAccess | null;
 };
 const SessionContext = createContext<LibraryAdminSession | null>(null);
 export function AdminSessionProvider({ session, children }: { session: LibraryAdminSession; children: ReactNode }) {

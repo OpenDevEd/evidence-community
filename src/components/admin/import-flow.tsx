@@ -136,8 +136,8 @@ async function startLookupImport(inputs: { collections: string[]; doiText: strin
 /** Sent on, the server publishes or submits each draft of a PDF import as its PDF is attached, so closing the tab doesn't stop it. */
 const sendOf = (batch: ImportBatch, publish: boolean) => (batch.kind === "pdfs" && batch.outcome === "send" ? { route: batch.publishRoute, publish } : null);
 
-async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"], publish: boolean) {
-	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled), send: sendOf(batch, publish) };
+async function commitBatch(batch: ImportBatch, topicsEnabled: boolean, onImported: ImportFlowProps["onImported"], publish: boolean, defaultFileAccess: FileAccess | null) {
+	const input = { collections: batch.collections, importId: batch.importId, records: recordsToCommit(batch, topicsEnabled, defaultFileAccess), send: sendOf(batch, publish) };
 	changeImportBatch(batch, (current) => ({ ...current, committing: true }));
 	try {
 		const { results } = batch.kind === "pdfs" ? await commitAdminPdfImport(input) : await commitAdminImport(input);
@@ -330,7 +330,7 @@ function batchChanges(batch: ImportBatch | null) {
  */
 export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord, sources }: ImportFlowProps) {
 	const topicsEnabled = useLibraryConfig().topics.enabled;
-	const { doiProviders } = useAdminSession();
+	const { doiProviders, defaultFileAccess } = useAdminSession();
 	// An editor can step out of the PDF import's review to import DOIs or files; it carries on meanwhile, and only one is open.
 	const [besidePdfs, setBesidePdfs] = useState(false);
 	const { batch, openPdfs } = shownImport(useImportBatches(), besidePdfs);
@@ -407,7 +407,7 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		licenceOf: (row: ImportRow) => licenceOf(batch, row),
 		fileAccessOf: (row: ImportRow) => fileAccessOfRow(batch, row),
 		/** `publish`: an Editor or Owner sends the drafts on published, not to the review queue. */
-		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish) : undefined)),
+		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish, defaultFileAccess) : undefined)),
 		error,
 		filter,
 		finish: () => void finish(),

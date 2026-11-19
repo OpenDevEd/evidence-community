@@ -695,6 +695,18 @@ it("adds an Openscholar Report from Openscholar alone, and its sync follows a co
 		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
 		expect(pdfs.publicFiles.size).toBe(2);
 
+		// Kept from this community on Openscholar (private, under an embargo, or under a licence its author didn't agree
+		// to share here), its PDF is taken down and the record stays; offered again, the PDF comes back.
+		reports.set(doi, { ...live("Shade trees and maize yields, corrected", "2026-11-13T10:00:00.000Z"), pdfUrl: null } as OpenscholarReport);
+		await sync(db, world.fetch, pdfs);
+		expect(await record(db, key)).toMatchObject({ deleted: 0 });
+		expect(await hosted()).toMatchObject([{ deleted: 1 }]);
+		expect(pdfs.publicFiles.size).toBe(0);
+		reports.set(doi, live("Shade trees and maize yields, corrected", "2026-11-13T11:00:00.000Z"));
+		await sync(db, world.fetch, pdfs);
+		expect(await hosted()).toEqual([{ url: expect.stringMatching(/^http:\/\/storage\.local\/public\//u), deleted: 0 }]);
+		expect(pdfs.publicFiles.size).toBe(2);
+
 		// Taken off Added papers it leaves, PDF and all; added again by its DOI, it comes back as a new record with a PDF
 		// of its own.
 		expect(await removeAddedPaper(db, key, { userId: owner.userId, role: "owner" })).toBe("removed");

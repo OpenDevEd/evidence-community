@@ -187,7 +187,7 @@ function Inspector({ role, overrides, initial = draftPayload }: { role: "editor"
 		<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
 			<NextUIProvider disableAnimation>
 				<LibraryConfigProvider config={config}>
-					<AdminSessionProvider session={{ role, userId: "creator", name: "Creator", image: null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0" }}>
+					<AdminSessionProvider session={{ role, userId: "creator", name: "Creator", image: null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0", defaultFileAccess: null }}>
 						<EditorialInspector {...props} {...overrides} />
 					</AdminSessionProvider>
 				</LibraryConfigProvider>

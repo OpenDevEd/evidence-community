@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 afterEach(async () => {await act(async () => root.unmount());container.remove();vi.unstubAllGlobals();});
 async function render(role: "creator" | "editor", onUpdated: ComponentProps<typeof ReviewActions>["onUpdated"]) {
- await act(async () => root.render(<NextUIProvider disableAnimation><AdminSessionProvider session={{role,userId:"reviewer",name:"Reviewer",image:null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0" }}><ReviewActions snapshot={snapshot} onUpdated={onUpdated}/></AdminSessionProvider></NextUIProvider>));
+ await act(async () => root.render(<NextUIProvider disableAnimation><AdminSessionProvider session={{role,userId:"reviewer",name:"Reviewer",image:null, doiProviders: { crossref: true, zenodo: true }, defaultLicence: "cc-by-4.0", defaultFileAccess: null }}><ReviewActions snapshot={snapshot} onUpdated={onUpdated}/></AdminSessionProvider></NextUIProvider>));
 }
 
 describe("review approval dialog", () => {

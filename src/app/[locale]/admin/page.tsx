@@ -1,4 +1,5 @@
 import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
+import { defaultFileAccessOf } from "@/lib/licences";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
@@ -98,7 +99,7 @@ export default async function AdminPage({
 	}));
 
 	return (
-		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image, doiProviders: { crossref: config.services.publication.crossref.enabled, zenodo: config.services.publication.zenodo.enabled }, defaultLicence: config.services.publication.zenodo.license }}>
+		<AdminSessionProvider session={{ role: authorization.session.role, userId: authorization.session.clerkUserId, name: authorization.session.name, image: authorization.session.image, doiProviders: { crossref: config.services.publication.crossref.enabled, zenodo: config.services.publication.zenodo.enabled }, defaultLicence: config.services.publication.zenodo.license, defaultFileAccess: defaultFileAccessOf(config.services.publication.zenodo.defaultFileAccess) }}>
 		<SWRConfig value={{ fallback }}>
 			<AdminWorkbench
 				configurationHref={openScholarConfigurationHref(config.authentication.openScholar.libraryUrl)}
