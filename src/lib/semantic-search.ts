@@ -3,7 +3,7 @@ import "server-only";
 import type { Hits, RecordAny } from "meilisearch";
 import meilisearchClient from "./meilisearch";
 import { getSearchEmbedder, hybridSearchOptions } from "./search-embedder";
-import { MEANING_RESULT_LIMIT, RESCUE_BELOW, type SemanticInfo } from "./semantic-concepts";
+import { MEANING_RESULT_LIMIT, RESCUE_BELOW, WORDS_ONLY_SCOPES, type SemanticInfo } from "./semantic-concepts";
 
 // shortcut: mock — model answers are cached in this process only; the real version stores them.
 const modelCache = new Map<string, unknown>();
@@ -47,6 +47,7 @@ export async function understandQuery(search: string): Promise<string | null> {
 type Request = {
 	indexName: string;
 	concept: number;
+	scope: string;
 	search: string;
 	like: string;
 	theme: number;
@@ -69,6 +70,7 @@ export async function semanticSearch(request: Request): Promise<Result | null> {
 	const hasQuery = search.trim().length > 0;
 	if (concept === 4 && like) return moreLikeThis(request);
 	if (!hasQuery) return null;
+	if (WORDS_ONLY_SCOPES.includes(request.scope) && [1, 3, 5].includes(concept)) return null;
 	if (concept === 1) return blended(request);
 	if (concept === 2) return understoodQuery(request);
 	if (concept === 3) return rescue(request);

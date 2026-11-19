@@ -8,6 +8,12 @@ export const SEMANTIC_CONCEPTS = [
 	{ id: 5, name: "Themes", detail: "The closest records, grouped into themes" },
 ] as const;
 
+/**
+ * Scopes searched by words alone: names carry no meaning to match, and record vectors are built from title,
+ * metadata and abstract, never PDF text.
+ */
+export const WORDS_ONLY_SCOPES: readonly string[] = ["authors", "documents"];
+
 /** Every record has some meaning score, so a search by meaning lists only this many of the closest. */
 export const MEANING_RESULT_LIMIT = 50;
 

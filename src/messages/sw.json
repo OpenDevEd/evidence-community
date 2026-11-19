@@ -890,6 +890,8 @@
 		"showingWordMatches": "{count, plural, one {Inaonyesha rekodi pekee yenye maneno haya} other {Inaonyesha rekodi # pekee zenye maneno haya}}",
 		"meaningHidden": "Matokeo yanayokaribiana kimaana yamefichwa",
 		"showMeaningResults": "Onyesha matokeo yenye maana inayofanana",
-		"someByMeaning": "Baadhi ya matokeo yanakaribiana kimaana badala ya kutumia maneno haya"
+		"someByMeaning": "Baadhi ya matokeo yanakaribiana kimaana badala ya kutumia maneno haya",
+		"whyMeaningTitle": "Matokeo kwa maana",
+		"whyMeaningBody": "Rekodi hizi zinahusu kile ulichotafuta, ingawa zinatumia maneno mengine au lugha nyingine. Utafutaji kwa Kiswahili unaweza kupata utafiti wa Kiingereza kuhusu mada hiyo hiyo."
 	}
 }

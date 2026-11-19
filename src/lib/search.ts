@@ -17,7 +17,7 @@ import meilisearchClient from "./meilisearch";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { searchParamsLoader } from "./searchParams";
 import { semanticSearch, understandQuery } from "./semantic-search";
-import type { SemanticInfo } from "./semantic-concepts";
+import { WORDS_ONLY_SCOPES, type SemanticInfo } from "./semantic-concepts";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
@@ -254,6 +254,7 @@ export async function getPublicItems(
 		semanticSearch({
 			indexName,
 			concept: searchParams.concept ?? 1,
+			scope: searchParams.scope || SCOPE_OPTIONS[0].key,
 			search,
 			like: searchParams.like ?? "",
 			theme: searchParams.theme ?? -1,
@@ -327,7 +328,9 @@ export async function getPublicFacets(
 	const facetSearch =
 		concept === 2 && !searchParams.literal && search.trim()
 			? ((await understandQuery(search)) ?? search)
-			: (concept === 1 && !searchParams.wordsOnly) || [3, 5].includes(concept) || (concept === 4 && searchParams.like)
+			: WORDS_ONLY_SCOPES.includes(searchParams.scope ?? "") && [1, 3, 5].includes(concept)
+				? search
+				: (concept === 1 && !searchParams.wordsOnly) || [3, 5].includes(concept) || (concept === 4 && searchParams.like)
 				? ""
 				: search;
 	const searchResults = await index.search(facetSearch, {

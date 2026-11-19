@@ -6,6 +6,7 @@ import { twMerge } from "tailwind-merge";
 import { MdTranslate } from "react-icons/md";
 import { TbAffiliate, TbWorldSearch } from "react-icons/tb";
 import { IoClose } from "react-icons/io5";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { FEW_WORD_MATCHES, SEMANTIC_CONCEPTS, type SemanticInfo } from "@/lib/semantic-concepts";
 
 type SemanticChange = { concept?: number; like?: string; theme?: number; literal?: boolean; wordsOnly?: boolean };
@@ -157,6 +158,26 @@ export function SemanticResultNotes() {
 	return null;
 }
 
+/** Why a result can match by meaning: other words, another language. */
+function MeaningTooltip({ children }: { children: ReactNode }) {
+	const t = useTranslations("semantic");
+	return (
+		<Tooltip
+			delay={0}
+			closeDelay={0}
+			placement="bottom-start"
+			content={
+				<span className="flex max-w-72 flex-col gap-1 px-1 py-1.5">
+					<span className="text-sm font-semibold text-black/80 dark:text-white/90">{t("whyMeaningTitle")}</span>
+					<span className="text-sm text-black/60 dark:text-white/60">{t("whyMeaningBody")}</span>
+				</span>
+			}
+		>
+			{children}
+		</Tooltip>
+	);
+}
+
 /** Above the results: the list is mostly or wholly by meaning, not by the search's words. */
 function MeaningNote({
 	title,
@@ -169,16 +190,21 @@ function MeaningNote({
 	action?: ReactNode;
 	compact?: boolean;
 }) {
+	const t = useTranslations("semantic");
 	return (
 		<div className={twMerge("flex items-center gap-4 rounded-xl bg-white dark:bg-white/[4%]", compact ? "px-3 py-2" : "px-4 py-3")}>
-			<span
-				className={twMerge(
-					"flex shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent",
-					compact ? "size-8" : "size-10",
-				)}
-			>
-				<TbWorldSearch className={compact ? "size-4" : "size-5"} />
-			</span>
+			<MeaningTooltip>
+				<button
+					type="button"
+					aria-label={t("whyMeaningTitle")}
+					className={twMerge(
+						"flex shrink-0 cursor-help items-center justify-center rounded-full bg-accent/10 text-accent outline-none focus-visible:ring-2 focus-visible:ring-focus",
+						compact ? "size-8" : "size-10",
+					)}
+				>
+					<TbWorldSearch className={compact ? "size-4" : "size-5"} />
+				</button>
+			</MeaningTooltip>
 			<span className="flex min-w-0 flex-1 flex-col">
 				<span className={twMerge("text-black/80 dark:text-white/80", compact ? "text-sm" : "font-medium")}>{title}</span>
 				{body && <span className="text-sm text-black/50 dark:text-white/50">{body}</span>}
@@ -197,7 +223,7 @@ function NoteAction({ onPress, accent = false, children }: { onPress: () => void
 				"inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium transition-colors",
 				accent
 					? "bg-accent text-white hover:brightness-110 dark:bg-accent-500"
-					: "border-small border-black/10 bg-white text-black/80 hover:bg-black/[4%] dark:border-white/10 dark:bg-secondary dark:text-white/80",
+					: "border border-black/10 bg-white text-black/80 hover:bg-black/[4%] dark:border-white/10 dark:bg-secondary dark:text-white/80",
 			)}
 		>
 			{accent && <TbWorldSearch className="size-4 shrink-0" />}
@@ -214,10 +240,15 @@ export function SemanticCardAction({ itemKey }: { itemKey: string | undefined })
 
 	if (state.concept === 1 && state.semantic?.meaningOnlyKeys?.includes(itemKey)) {
 		return (
-			<span className="ms-2 inline-flex h-8 items-center gap-1.5 rounded-xl bg-black/5 px-3 text-xs font-medium text-black/60 dark:bg-white/10 dark:text-white/70">
-				<TbWorldSearch className="size-3.5 shrink-0" />
-				{t("similarMeaning")}
-			</span>
+			<MeaningTooltip>
+				<span
+					tabIndex={0}
+					className="ms-2 inline-flex h-8 cursor-help items-center gap-1.5 rounded-xl bg-black/5 px-3 text-xs font-medium text-black/60 outline-none focus-visible:ring-2 focus-visible:ring-focus dark:bg-white/10 dark:text-white/70"
+				>
+					<TbWorldSearch className="size-3.5 shrink-0" />
+					{t("similarMeaning")}
+				</span>
+			</MeaningTooltip>
 		);
 	}
 
