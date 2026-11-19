@@ -3,6 +3,7 @@ import "server-only";
 import { tool, type ModelMessage } from "ai";
 import config from "@/constants/config.json";
 import meilisearchClient from "@/lib/meilisearch";
+import { hybridSearchOptions } from "@/lib/search-embedder";
 import {
 	compileLibrarySearchRequest,
 	type LibrarySearchParams,
@@ -196,10 +197,7 @@ async function searchOne(
 
 	const indexName = process.env.MEILI_INDEX || config.index;
 	const searchOptions = {
-		hybrid: {
-			embedder: "openai",
-			semanticRatio: 0.5,
-		},
+		...(await hybridSearchOptions(indexName, query, 0.5)),
 		filter: finalFilters,
 		limit,
 		attributesToSearchOn: compiled.attributesToSearchOn,
