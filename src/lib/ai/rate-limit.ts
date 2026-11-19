@@ -21,6 +21,14 @@ const AI_RATE_LIMIT_NETWORK_WINDOW = {
 	windowMs: 60 * 1_000,
 } as const;
 
+/** Translation sends a page in five requests, and pages turn quickly; stored translations cost nothing to send again. */
+const TRANSLATION_RATE_LIMIT_CLIENT_WINDOWS = [
+	{ name: "minute", limit: 60, windowMs: 60 * 1_000 },
+	{ name: "day", limit: 1_500, windowMs: 24 * 60 * 60 * 1_000 },
+	{ name: "week", limit: 5_000, windowMs: 7 * 24 * 60 * 60 * 1_000 },
+	{ name: "month", limit: 15_000, windowMs: 30 * 24 * 60 * 60 * 1_000 },
+] as const;
+
 const RATE_LIMIT_SCRIPT = `
 local client_window_count = tonumber(ARGV[1])
 
@@ -179,6 +187,12 @@ function defaultPolicy(): AIRateLimitPolicy {
 			process.env.MEILI_INDEX ?? "",
 		),
 	};
+}
+
+/** Translation's own limits, counted apart from the other AI features. */
+export function translationRateLimitPolicy(): AIRateLimitPolicy {
+	const policy = defaultPolicy();
+	return { ...policy, clientWindows: TRANSLATION_RATE_LIMIT_CLIENT_WINDOWS, keyPrefix: `${policy.keyPrefix}:translation` };
 }
 
 function isValidClientId(value: string | undefined): value is string {
@@ -361,10 +375,13 @@ async function connectedRedisClient() {
 	return connection;
 }
 
-export async function consumeAIRateLimit(identity: AIRateLimitIdentity) {
+export async function consumeAIRateLimit(
+	identity: AIRateLimitIdentity,
+	policy?: AIRateLimitPolicy,
+) {
 	try {
 		const redis = await connectedRedisClient();
-		return await createRedisAIRateLimitStore(redis).consume(identity);
+		return await createRedisAIRateLimitStore(redis, policy).consume(identity);
 	} catch (error) {
 		if (error instanceof AIRateLimitUnavailableError) throw error;
 		throw new AIRateLimitUnavailableError(

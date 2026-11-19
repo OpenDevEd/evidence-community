@@ -867,5 +867,29 @@
 		"showMeaningResults": "Show similar meaning results",
 		"whyMeaningTitle": "Results by meaning",
 		"whyMeaningBody": "These records are about what you searched for, even though they use other words or another language. A search in Swahili can find English research on the same topic."
+	},
+	"translation": {
+		"translate": "Translate",
+		"translated": "Translated",
+		"buttonLabel": "Translate results into {language}",
+		"buttonLabelRecord": "Translate this record into {language}",
+		"title": "Translate results",
+		"auto": "Translate automatically",
+		"autoHint": "When results load",
+		"into": "Translate into",
+		"currentLocale": "Current locale",
+		"run": "Translate {count, plural, one {# result} other {# results}}",
+		"translating": "Translating {count, plural, one {# result} other {# results}}",
+		"showOriginals": "Show originals",
+		"translatedFrom": "Translated from {language}",
+		"showTranslation": "Show translation",
+		"searchLanguages": "Search languages",
+		"back": "Back",
+		"noLanguages": "No language matches",
+		"titleRecord": "Translate this record",
+		"runRecord": "Translate this record",
+		"translatingRecord": "Translating",
+		"showOriginal": "Show original",
+		"failed": "Translation didn't work. Try again."
 	}
 }

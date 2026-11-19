@@ -867,5 +867,29 @@
 		"showMeaningResults": "عرض النتائج ذات المعنى المشابه",
 		"whyMeaningTitle": "نتائج حسب المعنى",
 		"whyMeaningBody": "تتناول هذه السجلات ما تبحث عنه، حتى لو استخدمت كلمات أخرى أو لغة أخرى. يمكن لبحث باللغة السواحيلية أن يجد أبحاثًا إنجليزية حول الموضوع نفسه."
+	},
+	"translation": {
+		"translate": "ترجمة",
+		"translated": "مترجَم",
+		"buttonLabel": "ترجمة النتائج إلى {language}",
+		"buttonLabelRecord": "ترجمة هذا السجل إلى {language}",
+		"title": "ترجمة النتائج",
+		"auto": "الترجمة تلقائيًا",
+		"autoHint": "عند تحميل النتائج",
+		"into": "الترجمة إلى",
+		"currentLocale": "اللغة الحالية",
+		"run": "ترجمة {count, plural, one {نتيجة واحدة} two {نتيجتين} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
+		"translating": "جارٍ ترجمة {count, plural, one {نتيجة واحدة} two {نتيجتين} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
+		"showOriginals": "عرض النصوص الأصلية",
+		"translatedFrom": "مترجَم من {language}",
+		"showTranslation": "عرض الترجمة",
+		"searchLanguages": "البحث عن لغة",
+		"back": "رجوع",
+		"noLanguages": "لا توجد لغة مطابقة",
+		"titleRecord": "ترجمة هذا السجل",
+		"runRecord": "ترجمة هذا السجل",
+		"translatingRecord": "جارٍ الترجمة",
+		"showOriginal": "عرض الأصل",
+		"failed": "تعذّرت الترجمة. حاول مرة أخرى."
 	}
 }

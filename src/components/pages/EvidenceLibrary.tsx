@@ -36,6 +36,7 @@ import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
 import { MeaningResultNote } from "@/components/features/search/MeaningSearch";
+import { ResultsTranslationControl } from "@/components/features/translation/ResultsTranslation";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
@@ -452,6 +453,7 @@ function SearchTabContent({
 							: "flex-1",
 					)}
 				>
+					{!itemsContext.userData && <ResultsTranslationControl />}
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
