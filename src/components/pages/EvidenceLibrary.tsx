@@ -35,6 +35,7 @@ import { LuEye } from "react-icons/lu";
 import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
+import { MeaningResultNote } from "@/components/features/search/MeaningSearch";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
@@ -499,6 +500,7 @@ function SearchTabContent({
 					)}
 				</section>
 			</section>
+			{!itemsContext.userData && <MeaningResultNote />}
 		</div>
 	);
 }

@@ -5,8 +5,8 @@ import type { Embedder } from "meilisearch";
 import meilisearchClient from "@/lib/meilisearch";
 
 /**
- * Searches on models whose search text needs a prefix Meilisearch can't add: its request template only takes
- * `{{text}}` as a whole value. The app embeds those searches itself and passes the vector.
+ * Search text some models need in front of it. Meilisearch's request template can't add a prefix (it only takes
+ * `{{text}}` as a whole value), so the app embeds every search itself and passes the vector.
  */
 const SEARCH_PREFIX: Record<string, string> = {
 	"google/gemini-embedding-2": "task: search result | query: ",
@@ -14,19 +14,28 @@ const SEARCH_PREFIX: Record<string, string> = {
 
 const OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
 
+/** Recent searches' vectors: the results and their facet counts ask for the same one. */
+const VECTOR_CACHE_SIZE = 500;
+const vectors = new Map<string, Promise<number[]>>();
+
 type SearchEmbedder = {
 	name: string;
-	/** Set when the app must embed search text itself before Meilisearch can rank by meaning. */
+	/** The OpenRouter model that makes vectors comparable to the index's, when the app can embed for it. */
 	model?: string;
-	prefix?: string;
+	prefix: string;
 	dimensions?: number;
 };
 
 function describe(name: string, embedder: NonNullable<Embedder>): SearchEmbedder {
-	if (embedder.source !== "rest" || typeof embedder.request?.model !== "string") return { name };
-	const model = embedder.request.model;
-	const prefix = SEARCH_PREFIX[model];
-	return prefix ? { name, model, prefix, dimensions: embedder.dimensions } : { name };
+	// Meilisearch's openAi source: OpenRouter serves the same OpenAI model, so its vectors match the stored ones.
+	if (embedder.source === "openAi") {
+		return { name, model: `openai/${embedder.model ?? "text-embedding-3-small"}`, prefix: "", dimensions: embedder.dimensions };
+	}
+	if (embedder.source === "rest" && typeof embedder.request?.model === "string") {
+		const model = embedder.request.model;
+		return { name, model, prefix: SEARCH_PREFIX[model] ?? "", dimensions: embedder.dimensions };
+	}
+	return { name, prefix: "" };
 }
 
 /**
@@ -63,10 +72,22 @@ async function embedSearchText(model: string, input: string, dimensions: number 
 	return vector as number[];
 }
 
-/** The `hybrid` options, and the search's own vector when the index's model needs the app to embed it. */
+function cachedVector(model: string, input: string, dimensions: number | undefined) {
+	const key = `${model}:${dimensions ?? ""}:${input}`;
+	const cached = vectors.get(key);
+	if (cached) return cached;
+	const vector = embedSearchText(model, input, dimensions);
+	vectors.set(key, vector);
+	// A failed embedding must not stay cached.
+	vector.catch(() => vectors.delete(key));
+	if (vectors.size > VECTOR_CACHE_SIZE) vectors.delete(vectors.keys().next().value!);
+	return vector;
+}
+
+/** The `hybrid` options and the search's own vector, made by the app for the index's model when it can. */
 export async function hybridSearchOptions(indexName: string, text: string, semanticRatio: number) {
 	const { name, model, prefix, dimensions } = await getSearchEmbedder(indexName);
 	const hybrid = { embedder: name, semanticRatio };
-	if (!model || !prefix) return { hybrid };
-	return { hybrid, vector: await embedSearchText(model, prefix + text, dimensions) };
+	if (!model) return { hybrid };
+	return { hybrid, vector: await cachedVector(model, prefix + text, dimensions) };
 }

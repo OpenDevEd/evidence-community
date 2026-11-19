@@ -853,5 +853,19 @@
 		"title": "证据缺口图谱",
 		"subtitle": "探索交互式可视化图谱，按主题映射研究证据，识别证据存在和缺失的领域。",
 		"empty": "暂无证据缺口图谱。"
+	},
+	"meaningSearch": {
+		"similarMeaning": "含义相近",
+		"noWordMatches": "没有记录包含这些词",
+		"allByMeaning": "这里的所有结果都与您的搜索含义相近",
+		"fewWordMatches": "{count, plural, other {只有 # 条记录包含这些词}}",
+		"restByMeaning": "其余结果与您的搜索含义相近",
+		"someByMeaning": "部分结果虽未包含这些词，但含义相近",
+		"showOnlyWordMatches": "{count, plural, other {只显示这 # 条}}",
+		"showingWordMatches": "{count, plural, other {只显示包含这些词的 # 条记录}}",
+		"meaningHidden": "含义相近的结果已隐藏",
+		"showMeaningResults": "显示含义相近的结果",
+		"whyMeaningTitle": "按含义找到的结果",
+		"whyMeaningBody": "这些记录与您搜索的内容相关，尽管它们使用了其他词语或其他语言。用斯瓦希里语搜索也能找到同一主题的英文研究。"
 	}
 }

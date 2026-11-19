@@ -40,6 +40,7 @@ import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import ZoteroRichText from "./ZoteroRichText";
+import { MeaningResultChip } from "@/components/features/search/MeaningSearch";
 
 export function AddButton({
 	itemData,
@@ -236,6 +237,7 @@ function ResourceInteractions({
 						itemData={itemData}
 						openLinksInNewTab={openLinksInNewTab}
 					/>
+					<MeaningResultChip itemKey={itemData?.key} />
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						{itemHref && (
 							<Button
