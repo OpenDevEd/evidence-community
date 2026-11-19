@@ -71,6 +71,7 @@ import CitationDoiLink from "@/components/features/items/CitationDoiLink";
 import { resolveCitationDisplayMode } from "@/lib/citationMode.mts";
 import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
+import { ResultsTranslationProvider, useItemTranslation } from "@/components/features/translation/ResultsTranslation";
 import {
 	buildDoiDisplayLinks,
 	type DoiDisplayAttachment,
@@ -690,16 +691,25 @@ function ItemPropertyRowWrapper({
 
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
+	const translation = useItemTranslation(item?.key);
+	const translated = translation && !translation.showingOriginal ? translation : null;
 	const abstract = item?.abstractNote || "";
 	return (
 		<ItemPropertyRowWrapper
 			title={t("itemAbstractTitle")}
 			copyText={zoteroMarkupToPlainText(abstract) || undefined}
 		>
-			<ZoteroRichText
-				markup={abstract}
-				className="text-base text-black/60 dark:text-white/60"
-			/>
+			{translated?.abstract ? (
+				<p className="text-base text-black/60 dark:text-white/60 whitespace-pre-line">{translated.abstract}</p>
+			) : (
+				<ZoteroRichText
+					markup={abstract}
+					className={twMerge(
+						"text-base text-black/60 dark:text-white/60 transition-opacity",
+						(translation?.pending || translated?.abstractPending) && "opacity-40 animate-pulse",
+					)}
+				/>
+			)}
 		</ItemPropertyRowWrapper>
 	);
 }
@@ -1467,6 +1477,7 @@ export default function ItemPage({
 	return (
 		<PageContainer>
 			{item && <abbr className="unapi-id" title={item.key}></abbr>}
+			<ResultsTranslationProvider items={item ? [item] : []} scope="record">
 			<LoadingContext.Provider value={{ loading }}>
 				<div className="flex flex-col gap-8">
 					<div className="flex flex-col gap-4">
@@ -1528,6 +1539,7 @@ export default function ItemPage({
 					</div>
 				</div>
 			</LoadingContext.Provider>
+			</ResultsTranslationProvider>
 		</PageContainer>
 	);
 }

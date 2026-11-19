@@ -867,5 +867,29 @@
 		"showMeaningResults": "मिलते-जुलते अर्थ वाले परिणाम दिखाएँ",
 		"whyMeaningTitle": "अर्थ के आधार पर परिणाम",
 		"whyMeaningBody": "ये रिकॉर्ड उसी विषय के बारे में हैं जो आपने खोजा, भले ही उनमें दूसरे शब्द या दूसरी भाषा हो। स्वाहिली में की गई खोज उसी विषय पर अंग्रेज़ी शोध ढूँढ सकती है।"
+	},
+	"translation": {
+		"translate": "अनुवाद करें",
+		"translated": "अनूदित",
+		"buttonLabel": "परिणामों का {language} में अनुवाद करें",
+		"buttonLabelRecord": "इस रिकॉर्ड का {language} में अनुवाद करें",
+		"title": "परिणामों का अनुवाद करें",
+		"auto": "अपने आप अनुवाद करें",
+		"autoHint": "जब परिणाम लोड हों",
+		"into": "अनुवाद की भाषा",
+		"currentLocale": "वर्तमान भाषा",
+		"run": "{count, plural, one {# परिणाम} other {# परिणामों}} का अनुवाद करें",
+		"translating": "{count, plural, one {# परिणाम} other {# परिणामों}} का अनुवाद हो रहा है",
+		"showOriginals": "मूल दिखाएँ",
+		"translatedFrom": "{language} से अनूदित",
+		"showTranslation": "अनुवाद दिखाएँ",
+		"searchLanguages": "भाषाएँ खोजें",
+		"back": "वापस",
+		"noLanguages": "कोई भाषा मेल नहीं खाती",
+		"titleRecord": "इस रिकॉर्ड का अनुवाद करें",
+		"runRecord": "इस रिकॉर्ड का अनुवाद करें",
+		"translatingRecord": "अनुवाद हो रहा है",
+		"showOriginal": "मूल दिखाएँ",
+		"failed": "अनुवाद नहीं हो सका। फिर से कोशिश करें।"
 	}
 }

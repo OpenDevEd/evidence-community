@@ -15,6 +15,7 @@ import {
 	aiRateLimitHeaders,
 	consumeAIRateLimit,
 	resolveAIRateLimitClientIdentity,
+	translationRateLimitPolicy,
 } from "./lib/ai/rate-limit";
 
 function withAIRateLimitClientCookie(
@@ -405,10 +406,12 @@ export default async function proxy(request: NextRequest) {
 			);
 			let rateLimit;
 			try {
-				rateLimit = await consumeAIRateLimit({
-					clientId: clientIdentity.clientId,
-					clientIp,
-				});
+				rateLimit = await consumeAIRateLimit(
+					{ clientId: clientIdentity.clientId, clientIp },
+					request.nextUrl.pathname === "/api/ai/translate"
+						? translationRateLimitPolicy()
+						: undefined,
+				);
 			} catch (error) {
 				if (!(error instanceof AIRateLimitUnavailableError))
 					throw error;

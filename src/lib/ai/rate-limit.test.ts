@@ -165,3 +165,33 @@ test(
 		assert.equal((await firstInstance.consume(firstBrowser)).allowed, true);
 	},
 );
+
+test(
+	"translation keeps its own browser budget but shares the network cap with the other AI features",
+	{ skip: redisUrl ? false : "AI_RATE_LIMIT_TEST_REDIS_URL is not set" },
+	async (context) => {
+		const client = createClient({ url: redisUrl });
+		await client.connect();
+		context.after(() => client.quit());
+
+		const ai = {
+			clientWindows: [{ name: "minute" as const, limit: 1, windowMs: 2_000 }],
+			networkWindow: { name: "minute" as const, limit: 2, windowMs: 2_000 },
+			keyPrefix: `test:ai-rate-limit:${crypto.randomUUID()}`,
+		};
+		const aiStore = createRedisAIRateLimitStore(client, ai);
+		const translationStore = createRedisAIRateLimitStore(client, {
+			...ai,
+			keyPrefix: `${ai.keyPrefix}:translation`,
+			networkKeyPrefix: ai.keyPrefix,
+		});
+		const browser = { clientId: crypto.randomUUID(), clientIp: "203.0.113.20" };
+
+		assert.equal((await aiStore.consume(browser)).allowed, true);
+		// The browser's AI budget is spent, but translation counts its own.
+		assert.equal((await translationStore.consume(browser)).allowed, true);
+		const third = await translationStore.consume({ ...browser, clientId: crypto.randomUUID() });
+		assert.equal(third.allowed, false);
+		assert.equal(third.blockedBy, "network");
+	},
+);

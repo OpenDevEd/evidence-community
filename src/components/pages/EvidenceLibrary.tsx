@@ -36,6 +36,7 @@ import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
 import { MeaningResultNote } from "@/components/features/search/MeaningSearch";
+import { ResultsTranslationControl } from "@/components/features/translation/ResultsTranslation";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
@@ -446,12 +447,13 @@ function SearchTabContent({
 				</Skeleton>
 				<section
 					className={twMerge(
-						"flex gap-4",
+						"flex gap-3 lg:gap-4",
 						itemsContext.config.interactionsStyle === "multi-line"
 							? "lg:min-w-72"
 							: "flex-1",
 					)}
 				>
+					{!itemsContext.userData && <ResultsTranslationControl />}
 					<Card color="card" className="h-full flex items-center justify-center flex-1 min-w-0 px-0 border-small border-black/10 dark:border-white/10 dark:bg-secondary shadow-none">
 						<div className="px-3">
 							<Switch

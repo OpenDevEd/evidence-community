@@ -867,5 +867,29 @@
 		"showMeaningResults": "Mostrar resultados de sentido semelhante",
 		"whyMeaningTitle": "Resultados pelo sentido",
 		"whyMeaningBody": "Estes registos tratam do que pesquisou, mesmo usando outras palavras ou outra língua. Uma pesquisa em suaíli pode encontrar investigação em inglês sobre o mesmo tema."
+	},
+	"translation": {
+		"translate": "Traduzir",
+		"translated": "Traduzido",
+		"buttonLabel": "Traduzir os resultados para {language}",
+		"buttonLabelRecord": "Traduzir este registo para {language}",
+		"title": "Traduzir resultados",
+		"auto": "Traduzir automaticamente",
+		"autoHint": "Quando os resultados carregam",
+		"into": "Traduzir para",
+		"currentLocale": "Idioma atual",
+		"run": "Traduzir {count, plural, one {# resultado} other {# resultados}}",
+		"translating": "A traduzir {count, plural, one {# resultado} other {# resultados}}",
+		"showOriginals": "Mostrar originais",
+		"translatedFrom": "Original em {language}",
+		"showTranslation": "Mostrar tradução",
+		"searchLanguages": "Pesquisar idiomas",
+		"back": "Voltar",
+		"noLanguages": "Nenhum idioma corresponde",
+		"titleRecord": "Traduzir este registo",
+		"runRecord": "Traduzir este registo",
+		"translatingRecord": "A traduzir",
+		"showOriginal": "Mostrar original",
+		"failed": "A tradução não funcionou. Tente novamente."
 	}
 }

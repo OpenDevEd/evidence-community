@@ -868,5 +868,29 @@
 		"showMeaningResults": "Onyesha matokeo yenye maana inayofanana",
 		"whyMeaningTitle": "Matokeo kwa maana",
 		"whyMeaningBody": "Rekodi hizi zinahusu kile ulichotafuta, ingawa zinatumia maneno mengine au lugha nyingine. Utafutaji kwa Kiswahili unaweza kupata utafiti wa Kiingereza kuhusu mada hiyo hiyo."
+	},
+	"translation": {
+		"translate": "Tafsiri",
+		"translated": "Imetafsiriwa",
+		"buttonLabel": "Tafsiri matokeo kwa {language}",
+		"buttonLabelRecord": "Tafsiri rekodi hii kwa {language}",
+		"title": "Tafsiri matokeo",
+		"auto": "Tafsiri moja kwa moja",
+		"autoHint": "Matokeo yanapofunguka",
+		"into": "Tafsiri kwa",
+		"currentLocale": "Lugha ya sasa",
+		"run": "Tafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"translating": "Inatafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"showOriginals": "Onyesha asili",
+		"translatedFrom": "Imetafsiriwa kutoka {language}",
+		"showTranslation": "Onyesha tafsiri",
+		"searchLanguages": "Tafuta lugha",
+		"back": "Rudi",
+		"noLanguages": "Hakuna lugha inayolingana",
+		"titleRecord": "Tafsiri rekodi hii",
+		"runRecord": "Tafsiri rekodi hii",
+		"translatingRecord": "Inatafsiri",
+		"showOriginal": "Onyesha asili",
+		"failed": "Tafsiri haikufanikiwa. Jaribu tena."
 	}
 }
