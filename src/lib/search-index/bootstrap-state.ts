@@ -81,7 +81,7 @@ export async function setSearchIndexRebuildPending(
  * Elasticsearch index definition (`SEARCH_INDEX_VERSION`) rebuilds a library on
  * Elasticsearch the same way; a library on Meilisearch keeps main's signature.
  */
-const SEARCH_PROJECTION_VERSION = 12;
+const SEARCH_PROJECTION_VERSION = 13;
 
 /**
  * Persist the configuration used by the projection; a failed rebuild stays pending. In Elasticsearch, another embedder

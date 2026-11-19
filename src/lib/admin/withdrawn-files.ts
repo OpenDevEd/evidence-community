@@ -51,19 +51,23 @@ export async function hideRemovedFiles(db: Database, storage: EvidenceFileStorag
  */
 export async function placeRecordFiles(db: Database, storage: EvidenceFileStorage, keys: readonly string[], today = utcDay()) {
 	if (!keys.length) return;
+	// The record a file's attachment belongs to now decides, not the one it was published under: an attachment moved to
+	// a record that keeps its files takes that record's access.
 	const parents = await db
-		.selectDistinct({ key: itemFilePublication.parentItemKey })
+		.selectDistinct({ key: item.parentItem })
 		.from(itemFilePublication)
-		.where(or(inArray(itemFilePublication.parentItemKey, [...keys]), inArray(itemFilePublication.itemKey, [...keys])));
+		.innerJoin(item, eq(item.key, itemFilePublication.itemKey))
+		.where(or(inArray(item.parentItem, [...keys]), inArray(itemFilePublication.itemKey, [...keys])));
 	for (const { key: parentKey } of parents) {
+		if (!parentKey) continue;
 		await withRecordFiles(db, parentKey, async (transaction) => {
 			const parent = alias(item, "parent");
 			const rows = await transaction
 				.select({ objectPath: itemFilePublication.objectPath, coverObjectPath: itemFilePublication.coverObjectPath, licence: parent.licence, fileAccess: parent.fileAccess })
 				.from(itemFilePublication)
 				.innerJoin(item, eq(item.key, itemFilePublication.itemKey))
-				.innerJoin(parent, eq(parent.key, itemFilePublication.parentItemKey))
-				.where(and(eq(itemFilePublication.parentItemKey, parentKey), eq(item.deleted, 0), eq(parent.deleted, 0)));
+				.innerJoin(parent, eq(parent.key, item.parentItem))
+				.where(and(eq(item.parentItem, parentKey), eq(item.deleted, 0), eq(parent.deleted, 0)));
 			for (const row of rows) {
 				const hide = filesHiddenFor(row, today);
 				for (const path of [row.objectPath, row.coverObjectPath].filter((value): value is string => Boolean(value))) {
