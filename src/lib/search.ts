@@ -16,14 +16,8 @@ import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { searchParamsLoader } from "./searchParams";
-import {
-	keysUsingWords,
-	meaningResultTotal,
-	meaningSearchApplies,
-	meaningSearchOptions,
-	wordMatchCount,
-} from "./meaning-search";
-import { MEANING_RESULT_LIMIT, type MeaningInfo } from "./meaning-search-rules";
+import { meaningList, meaningPage, meaningSearchApplies, meaningSearchOptions } from "./meaning-search";
+import type { MeaningInfo } from "./meaning-search-rules";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
@@ -265,32 +259,37 @@ export async function getPublicItems(
 	const applies = await meaningSearchApplies(search, scope);
 	const hybrid = applies && !searchParams.wordsOnly ? await meaningSearchOptions(indexName, search) : null;
 
-	const [searchResults, collections, wordsTotal] = await Promise.all([
-		index.search(search, { ...wordsOptions, ...hybrid }),
+	const [page, collections] = await Promise.all([
+		hybrid
+			? meaningList(index, search, hybrid, attributesToSearchOn, finalFilters).then(async (list) => ({
+					list,
+					hits: await meaningPage(index, list, { ...wordsOptions, sort: sortOption }),
+					total: list.keys.length,
+				}))
+			: index.search(search, wordsOptions).then((result) => ({
+					list: null,
+					hits: result.hits,
+					total: result.estimatedTotalHits || result.hits.length,
+				})),
 		getCachedCollections(),
-		hybrid ? wordMatchCount(index, search, attributesToSearchOn, finalFilters) : null,
 	]);
 
-	const items = (searchResults.hits as ListItem[]).map((item) =>
+	const items = (page.hits as ListItem[]).map((item) =>
 		includeHeavyFields ? item : toLightweightItem(item),
 	);
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const resultTotal = searchResults.estimatedTotalHits || searchResults.hits.length;
-	let meaning: MeaningInfo | undefined;
-	if (hybrid && wordsTotal !== null) {
-		const pageKeys = items.map(({ key }) => key);
-		const usingWords = await keysUsingWords(index, search, pageKeys, attributesToSearchOn, finalFilters);
-		meaning = {
-			wordsTotal,
-			meaningOnlyKeys: pageKeys.filter((key) => !usingWords.has(key)),
-			wordsOnly: false,
-		};
-	} else if (applies && searchParams.wordsOnly) {
-		meaning = { wordsTotal: resultTotal, meaningOnlyKeys: [], wordsOnly: true };
-	}
-	const totalCount = meaning && !meaning.wordsOnly ? meaningResultTotal(resultTotal, meaning.wordsTotal) : resultTotal;
+	const totalCount = page.total;
+	const meaning: MeaningInfo | undefined = page.list
+		? {
+				wordsTotal: page.list.usingWords.size,
+				meaningOnlyKeys: items.flatMap(({ key }) => (page.list.usingWords.has(key) ? [] : [key])),
+				wordsOnly: false,
+			}
+		: applies && searchParams.wordsOnly
+			? { wordsTotal: totalCount, meaningOnlyKeys: [], wordsOnly: true }
+			: undefined;
 
 	return {
 		items,
@@ -325,30 +324,19 @@ export async function getPublicFacets(
 	const index = meilisearchClient.index(indexName);
 	const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
 
-	// When most results come by meaning, count what is listed: the closest records, not the few word matches.
+	// A meaning search counts exactly the records it lists, word matches and meaning matches alike.
 	const hybrid =
 		!searchParams.wordsOnly && (await meaningSearchApplies(search, scope))
 			? await meaningSearchOptions(indexName, search)
 			: null;
-	const closestKeys =
-		hybrid && (await wordMatchCount(index, search, attributesToSearchOn, finalFilters)) < MEANING_RESULT_LIMIT
-			? (
-					await index.search(search, {
-						...hybrid,
-						limit: MEANING_RESULT_LIMIT,
-						attributesToSearchOn,
-						attributesToRetrieve: ["key"],
-						filter: finalFilters,
-					})
-				).hits.map(({ key }) => String(key))
-			: null;
+	const listedKeys = hybrid ? (await meaningList(index, search, hybrid, attributesToSearchOn, finalFilters)).keys : null;
 
-	const searchResults = await index.search(closestKeys ? "" : search, {
+	const searchResults = await index.search(listedKeys ? "" : search, {
 		offset: 0,
 		limit: 0,
 		attributesToSearchOn,
 		facets,
-		filter: closestKeys ? [...finalFilters, `key IN ${JSON.stringify(closestKeys)}`] : finalFilters,
+		filter: listedKeys ? [...finalFilters, `key IN ${JSON.stringify(listedKeys)}`] : finalFilters,
 	});
 
 	return {

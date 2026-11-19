@@ -25,6 +25,8 @@ export const librarySearchContextSchema = z
 		author_country: filterValuesSchema,
 		author: z.string().trim().max(300),
 		collections: filterValuesSchema,
+		/** The reader hid the results found by meaning. */
+		wordsOnly: z.boolean().default(false),
 	})
 	.strict();
 
@@ -59,6 +61,7 @@ export function normalizeLibrarySearchContext(
 		author_country: value.author_country ?? [],
 		author: value.author ?? "",
 		collections: value.collections ?? [],
+		wordsOnly: value.wordsOnly ?? false,
 	});
 }
 

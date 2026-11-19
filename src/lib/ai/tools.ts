@@ -4,6 +4,7 @@ import { tool, type ModelMessage } from "ai";
 import config from "@/constants/config.json";
 import meilisearchClient from "@/lib/meilisearch";
 import { hybridSearchOptions } from "@/lib/search-embedder";
+import { meaningList, meaningPage, meaningSearchApplies, meaningSearchOptions } from "@/lib/meaning-search";
 import {
 	compileLibrarySearchRequest,
 	type LibrarySearchParams,
@@ -270,24 +271,47 @@ async function loadCurrentResultsWindow(
 		filter: compiled.finalFilters,
 		...(compiled.sortOption ? { sort: [compiled.sortOption] } : {}),
 	};
+	// The reader's list adds results by meaning when they do: the AI reads that same list.
+	const hybrid =
+		!searchContext.wordsOnly && (await meaningSearchApplies(compiled.search, searchContext.scope))
+			? await meaningSearchOptions(index.uid, compiled.search)
+			: null;
+	const list = hybrid
+		? await meaningList(index, compiled.search, hybrid, compiled.attributesToSearchOn, compiled.finalFilters)
+		: null;
 	let offset = currentResultsOffset(searchContext, cursor);
 	if (!cursor && window === "last") {
 		// Exact total (page-based requests return totalHits, not an
 		// estimate) so the final window starts at total - 200.
-		const count = await index.search(compiled.search, {
-			...baseOptions,
-			hitsPerPage: 1,
-			page: 1,
-			attributesToRetrieve: ["key"],
-		});
-		offset = Math.max(0, count.totalHits - CURRENT_RESULTS_WINDOW_SIZE);
+		const total =
+			list?.keys.length ??
+			(
+				await index.search(compiled.search, {
+					...baseOptions,
+					hitsPerPage: 1,
+					page: 1,
+					attributesToRetrieve: ["key"],
+				})
+			).totalHits;
+		offset = Math.max(0, total - CURRENT_RESULTS_WINDOW_SIZE);
 	}
-	const result = await index.search(compiled.search, {
-		...baseOptions,
-		offset,
-		limit: CURRENT_RESULTS_WINDOW_SIZE,
-		attributesToRetrieve: [...SEARCH_ATTRIBUTES],
-	});
+	const result = list
+		? {
+				hits: await meaningPage(index, list, {
+					offset,
+					limit: CURRENT_RESULTS_WINDOW_SIZE,
+					sort: compiled.sortOption,
+					attributesToRetrieve: [...SEARCH_ATTRIBUTES],
+					filter: compiled.finalFilters,
+				}),
+				estimatedTotalHits: list.keys.length,
+			}
+		: await index.search(compiled.search, {
+				...baseOptions,
+				offset,
+				limit: CURRENT_RESULTS_WINDOW_SIZE,
+				attributesToRetrieve: [...SEARCH_ATTRIBUTES],
+			});
 	const hits = result.hits.filter(
 		(hit) =>
 			(typeof hit.key === "string" && hit.key) ||
