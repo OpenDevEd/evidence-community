@@ -205,6 +205,38 @@ h6 {
 		}
 	}
 
+	/* A record's identifiers and licence wrap where their row holds less than 15rem, rather than being cut: the titles,
+	   the licence's name, and an identifier breaking anywhere, without the fade that hid its end. At normal text a phone's
+	   row is wider than that: 15.9rem at 320px, the narrowest. */
+	@container identifier-row (width < 15rem) {
+		.identifier-text {
+			white-space: normal;
+			overflow-wrap: anywhere;
+		}
+
+		.identifier-fade {
+			display: none;
+		}
+	}
+
+	/* Narrower still, from 150% text on a small phone, the logo and the copy button leave the text a few characters a
+	   line: they keep the first line, and the text takes the row's width under them. At 150% on a 360px phone the row
+	   is 10.9rem and keeps its single line. */
+	@container identifier-row (width < 10rem) {
+		.identifier-line {
+			flex-wrap: wrap;
+		}
+
+		.identifier-body {
+			order: 1;
+			flex-basis: 100%;
+		}
+
+		.identifier-copy {
+			margin-inline-start: auto;
+		}
+	}
+
 	/* A dialog's title takes two lines where its header holds less than 14rem of text, a long word breaking with a hyphen
 	   where the browser can (GenericHeader). At normal text a phone's header is wider than that: 238px in a centred
 	   dialog at 320px, the narrowest. */
