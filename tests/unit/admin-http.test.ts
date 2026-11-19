@@ -50,6 +50,7 @@ import {
 	ZenodoActivationValidationError,
 	ZenodoIdentifierPolicyLockedError,
 } from "@/lib/publication/errors";
+import { ZenodoReconnectError } from "@/lib/publication/zenodo-token";
 
 function wrappedDatabaseError(code: string) {
 	const cause = Object.assign(new Error("database rejected write"), {
@@ -181,6 +182,7 @@ describe("admin API error mapping", () => {
 		for (const error of [
 			new ZenodoActivationConfigurationError("Zenodo is not configured."),
 			new ZenodoIdentifierPolicyLockedError(),
+			new ZenodoReconnectError(),
 		]) {
 			const response = adminErrorResponse(error);
 			expect(response.status).toBe(409);

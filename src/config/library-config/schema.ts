@@ -1316,11 +1316,14 @@ const zenodoPublicationSchema = z
 		// Who gets the files of a record made here, unless its editor chooses otherwise: as its licence allows
 		// (`fileAccessOf`), so readers-only under an open licence is anyone, and anyone under a closed one is private.
 		defaultFileAccess: z.enum(["open", "private", "readers"]).default("open"),
+		// Whose Zenodo account it deposits in: the token here, or the community owner's own account, connected on
+		// Openscholar, whose current token Openscholar gives before each deposit (zenodo-token.ts).
+		account: z.enum(["token", "openscholar"]).default("token"),
 	})
 	.strict()
 	.prefault({})
 	.superRefine((zenodo, context) => {
-		if (zenodo.enabled && !zenodo.token) {
+		if (zenodo.enabled && zenodo.account === "token" && !zenodo.token) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
 				message: "Enabled Zenodo publication requires a token",

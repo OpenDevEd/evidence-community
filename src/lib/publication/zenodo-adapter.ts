@@ -1,4 +1,5 @@
 import type { PublicationSettlement } from "./queue";
+import { zenodoToken } from "./zenodo-token";
 import { loadPublicationRecordExtras, type PublicationExtrasConfig } from "./record-extras";
 import type {
 	ZenodoIdentifierPolicy,
@@ -98,12 +99,9 @@ export type ZenodoPublicationProvider = ZenodoWriter &
 	Pick<ZenodoApiClient, "prepareEmptyDraft"> &
 	Partial<Pick<ZenodoApiClient, "verifyPublishedState">>;
 
-function requireConfig(config: PublicationConfig) {
-	const zenodo = config.services.publication.zenodo;
-	if (!zenodo.enabled || !zenodo.token) {
-		throw new Error("Zenodo publishing is not fully configured");
-	}
-	return { ...zenodo, token: zenodo.token };
+/** Zenodo's settings with the token to use now: the configuration's, or the owner's own account's (zenodo-token.ts). */
+async function requireConfig(config: PublicationConfig) {
+	return { ...config.services.publication.zenodo, token: await zenodoToken(config) };
 }
 
 function requireZenodoPlanningRecord(
@@ -926,7 +924,7 @@ async function auditZenodoPublishedState(
 				);
 			}
 			return provider.verifyPublishedState({
-				token: requireConfig(config).token,
+				token: (await requireConfig(config)).token,
 				recordId: identifiers.latestRecordId,
 				expectedPayload: parseZenodoRecordPayload(
 					lastSuccess.payloadSnapshot,
@@ -1125,7 +1123,7 @@ async function prepareWaitingZenodoDraft(
 			}
 		}
 		await input.provider.prepareEmptyDraft({
-			token: requireConfig(config).token,
+			token: (await requireConfig(config)).token,
 			onPreparedDraft: async (draft) => {
 				await database.transaction(async (transaction) => {
 					await lockItemMutation(transaction, input.job.itemKey);
@@ -1176,7 +1174,7 @@ export async function runZenodoPublicationJobsOnce(
 		now?: () => Date;
 	} = {},
 ) {
-	const zenodo = requireConfig(config);
+	const zenodo = await requireConfig(config);
 	const workerId = options.workerId ?? `zenodo-once-${process.pid}`;
 	const now = options.now ?? (() => new Date());
 	const workerConfig = config.services.publication.worker;
@@ -1305,10 +1303,11 @@ export async function runZenodoPublicationJobsOnce(
 						now,
 						signal: options.signal,
 					},
-					(signal) =>
+					// The token is read for each deposit: an owner's own account's (zenodo-token.ts) may end during a long batch.
+					async (signal) =>
 						executeLivePublicationSyncPlan({
 							plan: runnablePlan,
-							credentials: { zenodoToken: zenodo.token },
+							credentials: { zenodoToken: await zenodoToken(config) },
 							providers: {
 								zenodo:
 									options.provider ??
