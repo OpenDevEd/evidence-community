@@ -50,8 +50,6 @@ async function keysUsingWords(
 
 type HybridOptions = NonNullable<Awaited<ReturnType<typeof meaningSearchOptions>>>;
 
-/** Meilisearch lists at most this many results for one search (its default `maxTotalHits`), words alone included. */
-const LISTABLE_RESULTS = 1000;
 
 export type MeaningList = {
 	/** Every listed record, closest first. */
@@ -67,9 +65,11 @@ export async function meaningList(
 	attributesToSearchOn: string[],
 	filter: string[],
 ): Promise<MeaningList> {
+	// The index's own cap on listed results: a word search can page no further, so neither can this list.
+	const { maxTotalHits } = await index.getPagination();
 	const ranked = await index.search(search, {
 		...hybrid,
-		limit: LISTABLE_RESULTS,
+		limit: maxTotalHits ?? 1000,
 		attributesToSearchOn,
 		attributesToRetrieve: ["key"],
 		filter,
