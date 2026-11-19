@@ -189,7 +189,16 @@ async function withdrawReports(context: SourceAdapterContext, withdrawn: readonl
  * Openscholar offers it again.
  */
 async function withholdReportPdfs(context: SourceAdapterContext, live: readonly HeldReport[]) {
-	const parents = live.flatMap(({ report, itemKey }) => (report.state === "live" && !report.pdfUrl && itemKey ? [itemKey] : []));
+	const withheld = live.filter(({ report }) => report.state === "live" && !report.pdfUrl);
+	// A report this source took up in this sync has its record only now, maybe one another source made first.
+	const fresh = withheld.filter(({ itemKey }) => !itemKey).map(({ recordKey }) => recordKey);
+	const found = fresh.length
+		? await context.database
+				.select({ itemKey: itemSourceLink.itemKey })
+				.from(itemSourceLink)
+				.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), inArray(itemSourceLink.sourceRecordKey, fresh)))
+		: [];
+	const parents = [...withheld.flatMap(({ itemKey }) => (itemKey ? [itemKey] : [])), ...found.map((row) => row.itemKey)];
 	// Whichever source hosted them: a PDF one source brought stays this record's when another follows it now.
 	const pdfs = (await reportPdfChildren(context.database, parents)).filter((child) => child.deleted === 0).map((child) => child.key);
 	if (pdfs.length) await takeDown(context, pdfs, pdfs, WITHHELD_NOTE);
