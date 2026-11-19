@@ -5,9 +5,9 @@ import { z } from "zod";
 import type { Database } from "@/db/database-schema";
 import { itemReviewFile } from "@/db/schema/review";
 import { itemFilePublication } from "@/db/schema/source";
-import { hiddenPath } from "./withdrawn-path";
+import { downloadPublished } from "./withdrawn-path";
 import { ADMIN_CONTENT_PERMISSION } from "./access";
-import { EvidenceFileStorageError, type EvidenceFileStorage } from "./file-storage";
+import type { EvidenceFileStorage } from "./file-storage";
 import { getNativeFileRuntime } from "./file-runtime";
 import { ADMIN_RESPONSE_HEADERS, handleAdminResponse } from "./http";
 import { ItemNotFoundError } from "./native-item-service";
@@ -65,12 +65,7 @@ async function getPublishedPdfObject(db: Database, storage: EvidenceFileStorage,
 		.from(itemFilePublication)
 		.where(and(eq(itemFilePublication.itemKey, itemKey), eq(itemFilePublication.uploadRevision, revision)));
 	if (!row?.path) throw new ItemNotFoundError(itemKey);
-	const path = row.path;
-	const bytes = await storage.downloadPrivate(hiddenPath(path)).catch((error: unknown) => {
-		if (error instanceof EvidenceFileStorageError && error.missing) return storage.downloadPublic(path);
-		throw error;
-	});
-	return { bytes, filename: row.filename, path };
+	return { bytes: await downloadPublished(storage, row.path), filename: row.filename, path: row.path };
 }
 
 export async function getAdminPdfObject(

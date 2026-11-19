@@ -4,7 +4,7 @@ import type {
 } from "@opendeved/doi-sync-core";
 
 import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
-import { hiddenPath } from "@/lib/admin/withdrawn-path";
+import { downloadPublished } from "@/lib/admin/withdrawn-path";
 import type { PublicationRepositorySnapshot } from "./repository";
 
 type PublishedFile = PublicationRepositorySnapshot["files"][number];
@@ -46,8 +46,8 @@ export function createPublicationFileReader(
 				);
 			}
 			assertCurrentFile(row, file);
-			// A withdrawn record's file left public view (withdrawn-files) while its Zenodo upload may still be due.
-			return storage.downloadPublic(row.objectPath).catch((error: unknown) => storage.downloadPrivate(hiddenPath(row.objectPath)).catch(() => Promise.reject(error)));
+			// A private or withdrawn record's file is out of public view (withdrawn-files) while its Zenodo upload may be due.
+			return downloadPublished(storage, row.objectPath);
 		},
 	};
 }

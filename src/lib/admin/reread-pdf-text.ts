@@ -9,6 +9,7 @@ import { MAX_SOURCE_FULL_TEXT_BYTES, truncateUtf8 } from "@/lib/source-ingestion
 
 import type { EvidenceFileStorage } from "./file-storage";
 import { processPdfInWorkers } from "./pdf-pool";
+import { downloadPublished } from "./withdrawn-path";
 
 // Saved text with fewer letters than this, page markers aside, is read again.
 const NEARLY_EMPTY_LETTERS = 100;
@@ -39,7 +40,7 @@ export async function rereadNearlyEmptyPdfText(database: Database, storage: Evid
 	let failed = 0;
 	for (const row of rows) {
 		try {
-			const processed = await processPdfInWorkers(await storage.downloadPublic(row.objectPath));
+			const processed = await processPdfInWorkers(await downloadPublished(storage, row.objectPath));
 			const text = truncateUtf8(processed.text, MAX_SOURCE_FULL_TEXT_BYTES);
 			if (letters(text) < letters(row.text) + MIN_GAIN_LETTERS) continue;
 			if (await saveText(database, row, text)) updated++;
