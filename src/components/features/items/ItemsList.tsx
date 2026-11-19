@@ -5,6 +5,8 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useItemsList } from "@/hooks/useItemsList";
 import { ResourcesView } from "../resources/ResourcesView";
+import { MeaningSearchProvider } from "../search/MeaningSearch";
+import { ResultsTranslationProvider } from "../translation/ResultsTranslation";
 
 function NumberWrapper({ children }: { children: ReactNode }) {
 	return (
@@ -38,6 +40,11 @@ export default function ItemsList({
 
 	return (
 		<ItemsContext.Provider value={props}>
+			<MeaningSearchProvider
+				value={{ meaning: props.itemsData?.meaning, setWordsOnly: props.handleWordsOnlyChange }}
+			>
+			{/* A profile's saved records have no translate control, so nothing there translates itself. */}
+			<ResultsTranslationProvider items={userData ? undefined : props.itemsData?.items}>
 			<ResourcesView
 				extraFilters={extraFilters}
 				{...(!userData
@@ -87,6 +94,8 @@ export default function ItemsList({
 							),
 					  })}
 			/>
+			</ResultsTranslationProvider>
+			</MeaningSearchProvider>
 		</ItemsContext.Provider>
 	);
 }

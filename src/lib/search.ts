@@ -16,6 +16,8 @@ import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { searchParamsLoader } from "./searchParams";
+import { meaningList, meaningPage, meaningSearchApplies, meaningSearchOptions } from "./meaning-search";
+import type { MeaningInfo } from "./meaning-search-rules";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
@@ -62,6 +64,7 @@ type SearchCountOnlyResult = {
 
 type SearchItemsResult = SearchCountOnlyResult & {
 	items: ListItem[];
+	meaning?: MeaningInfo;
 };
 
 type SearchFacetsResult = {
@@ -241,30 +244,52 @@ export async function getPublicItems(
 		? await getMainAttributes()
 		: [...LIST_ITEM_FIELDS];
 
-	const index = meilisearchClient.index(
-		process.env.MEILI_INDEX || config.index,
-	);
+	const indexName = process.env.MEILI_INDEX || config.index;
+	const index = meilisearchClient.index(indexName);
+	const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
+	const wordsOptions = {
+		offset: (pageNum - 1) * limitNum,
+		limit: limitNum,
+		attributesToSearchOn,
+		attributesToRetrieve,
+		...(sortOption ? { sort: [sortOption] } : {}),
+		filter: finalFilters,
+	};
 
-	const [searchResults, collections] = await Promise.all([
-		index.search(search, {
-			offset: (pageNum - 1) * limitNum,
-			limit: limitNum,
-			attributesToSearchOn,
-			attributesToRetrieve,
-			...(sortOption ? { sort: [sortOption] } : {}),
-			filter: finalFilters,
-		}),
+	const applies = await meaningSearchApplies(search, scope);
+	const hybrid = applies && !searchParams.wordsOnly ? await meaningSearchOptions(indexName, search) : null;
+
+	const [page, collections] = await Promise.all([
+		hybrid
+			? meaningList(index, search, hybrid, attributesToSearchOn, finalFilters).then(async (list) => ({
+					list,
+					hits: await meaningPage(index, list, { ...wordsOptions, sort: sortOption }),
+					total: list.keys.length,
+				}))
+			: index.search(search, wordsOptions).then((result) => ({
+					list: null,
+					hits: result.hits,
+					total: result.estimatedTotalHits || result.hits.length,
+				})),
 		getCachedCollections(),
 	]);
 
-	const items = (searchResults.hits as ListItem[]).map((item) =>
+	const items = (page.hits as ListItem[]).map((item) =>
 		includeHeavyFields ? item : toLightweightItem(item),
 	);
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount =
-		searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalCount = page.total;
+	const meaning: MeaningInfo | undefined = page.list
+		? {
+				wordsTotal: page.list.usingWords.size,
+				meaningOnlyKeys: items.flatMap(({ key }) => (page.list.usingWords.has(key) ? [] : [key])),
+				wordsOnly: false,
+			}
+		: applies && searchParams.wordsOnly
+			? { wordsTotal: totalCount, meaningOnlyKeys: [], wordsOnly: true }
+			: undefined;
 
 	return {
 		items,
@@ -272,6 +297,7 @@ export async function getPublicItems(
 		totalItems: totalCount,
 		perPage: limitNum,
 		totalPages: Math.ceil(totalCount / limitNum),
+		...(meaning ? { meaning } : {}),
 	};
 }
 
@@ -294,16 +320,23 @@ export async function getPublicFacets(
 		facets.push("creators.institutions.country_code");
 	}
 
-	const index = meilisearchClient.index(
-		process.env.MEILI_INDEX || config.index,
-	);
+	const indexName = process.env.MEILI_INDEX || config.index;
+	const index = meilisearchClient.index(indexName);
+	const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
 
-	const searchResults = await index.search(search, {
+	// A meaning search counts exactly the records it lists, word matches and meaning matches alike.
+	const hybrid =
+		!searchParams.wordsOnly && (await meaningSearchApplies(search, scope))
+			? await meaningSearchOptions(indexName, search)
+			: null;
+	const listedKeys = hybrid ? (await meaningList(index, search, hybrid, attributesToSearchOn, finalFilters)).keys : null;
+
+	const searchResults = await index.search(listedKeys ? "" : search, {
 		offset: 0,
 		limit: 0,
 		attributesToSearchOn,
 		facets,
-		filter: finalFilters,
+		filter: listedKeys ? [...finalFilters, `key IN ${JSON.stringify(listedKeys)}`] : finalFilters,
 	});
 
 	return {

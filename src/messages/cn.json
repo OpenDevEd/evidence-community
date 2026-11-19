@@ -853,5 +853,43 @@
 		"title": "证据缺口图谱",
 		"subtitle": "探索交互式可视化图谱，按主题映射研究证据，识别证据存在和缺失的领域。",
 		"empty": "暂无证据缺口图谱。"
+	},
+	"meaningSearch": {
+		"similarMeaning": "含义相近",
+		"noWordMatches": "没有记录包含这些词",
+		"allByMeaning": "这里的所有结果都与您的搜索含义相近",
+		"fewWordMatches": "{count, plural, other {只有 # 条记录包含这些词}}",
+		"restByMeaning": "其余结果与您的搜索含义相近",
+		"someByMeaning": "部分结果虽未包含这些词，但含义相近",
+		"showOnlyWordMatches": "{count, plural, other {只显示这 # 条}}",
+		"showingWordMatches": "{count, plural, other {只显示包含这些词的 # 条记录}}",
+		"meaningHidden": "含义相近的结果已隐藏",
+		"showMeaningResults": "显示含义相近的结果",
+		"whyMeaningTitle": "按含义找到的结果",
+		"whyMeaningBody": "这些记录与您搜索的内容相关，尽管它们使用了其他词语或其他语言。用斯瓦希里语搜索也能找到同一主题的英文研究。"
+	},
+	"translation": {
+		"translate": "翻译",
+		"translated": "已翻译",
+		"buttonLabel": "将结果翻译成{language}",
+		"buttonLabelRecord": "将这条记录翻译成{language}",
+		"title": "翻译结果",
+		"auto": "自动翻译",
+		"autoHint": "结果加载时",
+		"into": "翻译成",
+		"currentLocale": "当前语言",
+		"run": "翻译 {count, plural, other {# 条结果}}",
+		"translating": "正在翻译 {count, plural, other {# 条结果}}",
+		"showOriginals": "显示原文",
+		"translatedFrom": "译自{language}",
+		"showTranslation": "显示译文",
+		"searchLanguages": "搜索语言",
+		"back": "返回",
+		"noLanguages": "没有匹配的语言",
+		"titleRecord": "翻译这条记录",
+		"runRecord": "翻译这条记录",
+		"translatingRecord": "正在翻译",
+		"showOriginal": "显示原文",
+		"failed": "翻译失败，请重试。"
 	}
 }

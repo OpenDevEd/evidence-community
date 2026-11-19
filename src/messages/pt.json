@@ -853,5 +853,43 @@
 		"title": "Mapas de lacunas de evidências",
 		"subtitle": "Explore visualizações interativas que mapeiam evidências de pesquisa por temas, identificando onde existem evidências e onde permanecem lacunas.",
 		"empty": "Nenhum mapa de lacunas disponível."
+	},
+	"meaningSearch": {
+		"similarMeaning": "Sentido semelhante",
+		"noWordMatches": "Nenhum registo usa estas palavras",
+		"allByMeaning": "Todos estes resultados têm um sentido próximo da sua pesquisa",
+		"fewWordMatches": "{count, plural, one {Apenas # registo usa} other {Apenas # registos usam}} estas palavras",
+		"restByMeaning": "Os outros resultados têm um sentido próximo da sua pesquisa",
+		"someByMeaning": "Alguns resultados têm um sentido próximo sem usar estas palavras",
+		"showOnlyWordMatches": "{count, plural, one {Mostrar só este registo} other {Mostrar só estes #}}",
+		"showingWordMatches": "{count, plural, one {A mostrar só o registo que usa estas palavras} other {A mostrar só os # registos que usam estas palavras}}",
+		"meaningHidden": "Os resultados de sentido próximo estão ocultos",
+		"showMeaningResults": "Mostrar resultados de sentido semelhante",
+		"whyMeaningTitle": "Resultados pelo sentido",
+		"whyMeaningBody": "Estes registos tratam do que pesquisou, mesmo usando outras palavras ou outra língua. Uma pesquisa em suaíli pode encontrar investigação em inglês sobre o mesmo tema."
+	},
+	"translation": {
+		"translate": "Traduzir",
+		"translated": "Traduzido",
+		"buttonLabel": "Traduzir os resultados para {language}",
+		"buttonLabelRecord": "Traduzir este registo para {language}",
+		"title": "Traduzir resultados",
+		"auto": "Traduzir automaticamente",
+		"autoHint": "Quando os resultados carregam",
+		"into": "Traduzir para",
+		"currentLocale": "Idioma atual",
+		"run": "Traduzir {count, plural, one {# resultado} other {# resultados}}",
+		"translating": "A traduzir {count, plural, one {# resultado} other {# resultados}}",
+		"showOriginals": "Mostrar originais",
+		"translatedFrom": "Original em {language}",
+		"showTranslation": "Mostrar tradução",
+		"searchLanguages": "Pesquisar idiomas",
+		"back": "Voltar",
+		"noLanguages": "Nenhum idioma corresponde",
+		"titleRecord": "Traduzir este registo",
+		"runRecord": "Traduzir este registo",
+		"translatingRecord": "A traduzir",
+		"showOriginal": "Mostrar original",
+		"failed": "A tradução não funcionou. Tente novamente."
 	}
 }

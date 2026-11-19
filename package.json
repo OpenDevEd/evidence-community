@@ -15,6 +15,7 @@
 		"test:ai-rate-limit": "tsx --test src/lib/ai/rate-limit.test.ts",
 		"test:analytics": "NODE_OPTIONS='--conditions=react-server' tsx --test src/lib/analytics-consent.test.ts src/lib/analytics-event-schema.test.ts src/lib/analytics-shared.test.ts src/lib/analytics-boundary.test.ts src/lib/server-analytics.test.ts",
 		"test:citation-mode": "tsx --test src/lib/citationMode.test.mts src/lib/citationAnchor.test.tsx",
+		"test:meaning-search": "tsx --test src/lib/meaning-search-rules.test.ts",
 		"test:zotero-markup": "tsx --test src/lib/zoteroMarkup.test.tsx"
 	},
 	"dependencies": {

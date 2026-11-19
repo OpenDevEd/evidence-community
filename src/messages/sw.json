@@ -854,5 +854,43 @@
 		"title": "Ramani za mapengo ya ushahidi",
 		"subtitle": "Chunguza taswira shirikishi zinazopanga ushahidi wa utafiti kwa mada, zikitambua mahali ushahidi upo na mahali mapengo yalipo.",
 		"empty": "Hakuna ramani za mapengo bado."
+	},
+	"meaningSearch": {
+		"similarMeaning": "Maana inayofanana",
+		"noWordMatches": "Hakuna rekodi yenye maneno haya",
+		"allByMeaning": "Kila tokeo hapa linakaribiana kimaana na utafutaji wako",
+		"fewWordMatches": "{count, plural, one {Rekodi # pekee ina} other {Rekodi # pekee zina}} maneno haya",
+		"restByMeaning": "Matokeo mengine yanakaribiana kimaana na utafutaji wako",
+		"someByMeaning": "Baadhi ya matokeo yanakaribiana kimaana badala ya kutumia maneno haya",
+		"showOnlyWordMatches": "{count, plural, one {Onyesha rekodi hii pekee} other {Onyesha hizi # pekee}}",
+		"showingWordMatches": "{count, plural, one {Inaonyesha rekodi pekee yenye maneno haya} other {Inaonyesha rekodi # pekee zenye maneno haya}}",
+		"meaningHidden": "Matokeo yanayokaribiana kimaana yamefichwa",
+		"showMeaningResults": "Onyesha matokeo yenye maana inayofanana",
+		"whyMeaningTitle": "Matokeo kwa maana",
+		"whyMeaningBody": "Rekodi hizi zinahusu kile ulichotafuta, ingawa zinatumia maneno mengine au lugha nyingine. Utafutaji kwa Kiswahili unaweza kupata utafiti wa Kiingereza kuhusu mada hiyo hiyo."
+	},
+	"translation": {
+		"translate": "Tafsiri",
+		"translated": "Imetafsiriwa",
+		"buttonLabel": "Tafsiri matokeo kwa {language}",
+		"buttonLabelRecord": "Tafsiri rekodi hii kwa {language}",
+		"title": "Tafsiri matokeo",
+		"auto": "Tafsiri moja kwa moja",
+		"autoHint": "Matokeo yanapofunguka",
+		"into": "Tafsiri kwa",
+		"currentLocale": "Lugha ya sasa",
+		"run": "Tafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"translating": "Inatafsiri {count, plural, one {tokeo #} other {matokeo #}}",
+		"showOriginals": "Onyesha asili",
+		"translatedFrom": "Imetafsiriwa kutoka {language}",
+		"showTranslation": "Onyesha tafsiri",
+		"searchLanguages": "Tafuta lugha",
+		"back": "Rudi",
+		"noLanguages": "Hakuna lugha inayolingana",
+		"titleRecord": "Tafsiri rekodi hii",
+		"runRecord": "Tafsiri rekodi hii",
+		"translatingRecord": "Inatafsiri",
+		"showOriginal": "Onyesha asili",
+		"failed": "Tafsiri haikufanikiwa. Jaribu tena."
 	}
 }

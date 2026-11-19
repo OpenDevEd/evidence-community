@@ -853,5 +853,43 @@
 		"title": "Cartes des lacunes",
 		"subtitle": "Explorez des visualisations interactives qui cartographient les preuves de recherche par thème, identifiant où les preuves existent et où subsistent des lacunes.",
 		"empty": "Aucune carte des lacunes disponible."
+	},
+	"meaningSearch": {
+		"similarMeaning": "Sens proche",
+		"noWordMatches": "Aucune notice ne contient ces mots",
+		"allByMeaning": "Tous ces résultats sont proches de votre recherche par le sens",
+		"fewWordMatches": "{count, plural, one {Seule # notice contient} other {Seules # notices contiennent}} ces mots",
+		"restByMeaning": "Les autres résultats sont proches de votre recherche par le sens",
+		"someByMeaning": "Certains résultats sont proches par le sens sans contenir ces mots",
+		"showOnlyWordMatches": "{count, plural, one {Afficher seulement cette notice} other {Afficher seulement ces #}}",
+		"showingWordMatches": "{count, plural, one {Seule la notice qui contient ces mots est affichée} other {Seules les # notices qui contiennent ces mots sont affichées}}",
+		"meaningHidden": "Les résultats proches par le sens sont masqués",
+		"showMeaningResults": "Afficher les résultats de sens proche",
+		"whyMeaningTitle": "Résultats par le sens",
+		"whyMeaningBody": "Ces notices portent sur ce que vous cherchez, même si elles emploient d'autres mots ou une autre langue. Une recherche en swahili peut trouver des travaux en anglais sur le même sujet."
+	},
+	"translation": {
+		"translate": "Traduire",
+		"translated": "Traduit",
+		"buttonLabel": "Traduire les résultats en {language}",
+		"buttonLabelRecord": "Traduire cette notice en {language}",
+		"title": "Traduire les résultats",
+		"auto": "Traduire automatiquement",
+		"autoHint": "Au chargement des résultats",
+		"into": "Traduire en",
+		"currentLocale": "Langue actuelle",
+		"run": "Traduire {count, plural, one {# résultat} other {# résultats}}",
+		"translating": "Traduction de {count, plural, one {# résultat} other {# résultats}}",
+		"showOriginals": "Afficher les originaux",
+		"translatedFrom": "Original en {language}",
+		"showTranslation": "Afficher la traduction",
+		"searchLanguages": "Rechercher une langue",
+		"back": "Retour",
+		"noLanguages": "Aucune langue ne correspond",
+		"titleRecord": "Traduire cette notice",
+		"runRecord": "Traduire cette notice",
+		"translatingRecord": "Traduction en cours",
+		"showOriginal": "Afficher l’original",
+		"failed": "La traduction n’a pas abouti. Réessayez."
 	}
 }

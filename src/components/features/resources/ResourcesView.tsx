@@ -1137,7 +1137,7 @@ function EngagedLibraryPanel({
 			</div>
 			{view === "results" && (
 				<div className="flex min-w-0 shrink-0 items-stretch gap-3 animate-in fade-in duration-200 max-lg:[&>*]:flex-1">
-					<Card className="flex h-11 min-w-0 items-center justify-center px-3">
+					<Card color="card" className="flex h-11 min-w-0 items-center justify-center px-3 border-small border-black/10 dark:border-white/10 dark:bg-secondary shadow-none">
 						<Switch
 							size="sm"
 							isSelected={abstract}

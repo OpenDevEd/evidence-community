@@ -853,5 +853,43 @@
 		"title": "Evidenz-Gap-Maps",
 		"subtitle": "Erkunden Sie interaktive Visualisierungen, die Forschungsevidenz thematisch abbilden und zeigen, wo Evidenz vorhanden ist und wo Lücken bestehen.",
 		"empty": "Noch keine Gap-Maps verfügbar."
+	},
+	"meaningSearch": {
+		"similarMeaning": "Ähnliche Bedeutung",
+		"noWordMatches": "Kein Eintrag enthält diese Wörter",
+		"allByMeaning": "Alle Ergebnisse hier sind Ihrer Suche inhaltlich nah",
+		"fewWordMatches": "{count, plural, one {Nur # Eintrag enthält} other {Nur # Einträge enthalten}} diese Wörter",
+		"restByMeaning": "Die übrigen Ergebnisse sind Ihrer Suche inhaltlich nah",
+		"someByMeaning": "Einige Ergebnisse sind inhaltlich nah, ohne diese Wörter zu enthalten",
+		"showOnlyWordMatches": "{count, plural, one {Nur diesen Eintrag zeigen} other {Nur diese # zeigen}}",
+		"showingWordMatches": "{count, plural, one {Nur der Eintrag mit diesen Wörtern wird gezeigt} other {Nur die # Einträge mit diesen Wörtern werden gezeigt}}",
+		"meaningHidden": "Inhaltlich nahe Ergebnisse sind ausgeblendet",
+		"showMeaningResults": "Ergebnisse mit ähnlicher Bedeutung zeigen",
+		"whyMeaningTitle": "Ergebnisse nach Bedeutung",
+		"whyMeaningBody": "Diese Einträge behandeln, wonach Sie suchen, auch wenn sie andere Wörter oder eine andere Sprache verwenden. Eine Suche auf Suaheli kann englische Forschung zum selben Thema finden."
+	},
+	"translation": {
+		"translate": "Übersetzen",
+		"translated": "Übersetzt",
+		"buttonLabel": "Ergebnisse auf {language} übersetzen",
+		"buttonLabelRecord": "Diesen Eintrag auf {language} übersetzen",
+		"title": "Ergebnisse übersetzen",
+		"auto": "Automatisch übersetzen",
+		"autoHint": "Wenn Ergebnisse geladen werden",
+		"into": "Übersetzen auf",
+		"currentLocale": "Aktuelle Sprache",
+		"run": "{count, plural, one {# Ergebnis} other {# Ergebnisse}} übersetzen",
+		"translating": "{count, plural, one {# Ergebnis wird} other {# Ergebnisse werden}} übersetzt",
+		"showOriginals": "Originale zeigen",
+		"translatedFrom": "Original auf {language}",
+		"showTranslation": "Übersetzung zeigen",
+		"searchLanguages": "Sprachen suchen",
+		"back": "Zurück",
+		"noLanguages": "Keine passende Sprache",
+		"titleRecord": "Diesen Eintrag übersetzen",
+		"runRecord": "Diesen Eintrag übersetzen",
+		"translatingRecord": "Wird übersetzt",
+		"showOriginal": "Original zeigen",
+		"failed": "Die Übersetzung hat nicht geklappt. Versuchen Sie es erneut."
 	}
 }

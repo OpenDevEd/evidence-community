@@ -40,6 +40,8 @@ import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import ZoteroRichText from "./ZoteroRichText";
+import { MeaningResultChip } from "@/components/features/search/MeaningSearch";
+import { ItemTranslationToggle, useItemTranslation } from "@/components/features/translation/ResultsTranslation";
 
 export function AddButton({
 	itemData,
@@ -236,6 +238,8 @@ function ResourceInteractions({
 						itemData={itemData}
 						openLinksInNewTab={openLinksInNewTab}
 					/>
+					<MeaningResultChip itemKey={itemData?.key} />
+					<ItemTranslationToggle itemKey={itemData?.key} />
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						{itemHref && (
 							<Button
@@ -302,18 +306,27 @@ function ResourceArticle({
 	tNav: ReturnType<typeof useTranslations<"nav">>;
 	format: ReturnType<typeof useFormatter>;
 }) {
+	const translation = useItemTranslation(finalItemData?.key);
+	const translated = translation && !translation.showingOriginal ? translation : null;
 	return (
 		<article className="flex flex-col gap-4">
 			<Skeleton
 				isLoaded={!finalIsLoading}
 				className="w-full min-h-8 rounded-2xl"
 			>
-				<h3
-					dangerouslySetInnerHTML={{
-						__html: finalItemData?.title ?? "",
-					}}
-					className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
-				></h3>
+				{translated?.title ? (
+					<h3 className="text-2xl text-black/80 dark:text-white/80 line-clamp-2">{translated.title}</h3>
+				) : (
+					<h3
+						dangerouslySetInnerHTML={{
+							__html: finalItemData?.title ?? "",
+						}}
+						className={twMerge(
+							"text-2xl text-black/80 dark:text-white/80 line-clamp-2 transition-opacity",
+							translation?.pending && "opacity-40 animate-pulse",
+						)}
+					></h3>
+				)}
 			</Skeleton>
 			<Skeleton
 				isLoaded={!finalIsLoading}
@@ -373,10 +386,19 @@ function ResourceArticle({
 						!finalItemData ? "min-h-20" : "min-h-0",
 					)}
 				>
-					<ZoteroRichText
-						markup={abstractText || ""}
-						className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full"
-					/>
+					{translated?.abstract ? (
+						<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full whitespace-pre-line">
+							{translated.abstract}
+						</p>
+					) : (
+						<ZoteroRichText
+							markup={abstractText || ""}
+							className={twMerge(
+								"text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full transition-opacity",
+								(translation?.pending || translated?.abstractPending) && "opacity-40 animate-pulse",
+							)}
+						/>
+					)}
 				</Skeleton>
 			)}
 		</article>

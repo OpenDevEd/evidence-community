@@ -853,5 +853,43 @@
 		"title": "خرائط فجوات الأدلة",
 		"subtitle": "استكشف التصورات التفاعلية التي ترسم خريطة أدلة البحث عبر المواضيع، وتحدد أين توجد الأدلة وأين تبقى الفجوات.",
 		"empty": "لا توجد خرائط فجوات متاحة بعد."
+	},
+	"meaningSearch": {
+		"similarMeaning": "معنى مشابه",
+		"noWordMatches": "لا يحتوي أي سجل على هذه الكلمات",
+		"allByMeaning": "كل النتائج هنا قريبة في معناها من بحثك",
+		"fewWordMatches": "{count, plural, one {سجل واحد فقط يحتوي} other {# سجلات فقط تحتوي}} على هذه الكلمات",
+		"restByMeaning": "بقية النتائج قريبة في معناها من بحثك",
+		"someByMeaning": "بعض النتائج قريبة في المعنى دون أن تحتوي على هذه الكلمات",
+		"showOnlyWordMatches": "{count, plural, one {عرض هذا السجل فقط} other {عرض هذه الـ# فقط}}",
+		"showingWordMatches": "{count, plural, one {يُعرض فقط السجل الذي يحتوي على هذه الكلمات} other {تُعرض فقط السجلات الـ# التي تحتوي على هذه الكلمات}}",
+		"meaningHidden": "النتائج القريبة في المعنى مخفية",
+		"showMeaningResults": "عرض النتائج ذات المعنى المشابه",
+		"whyMeaningTitle": "نتائج حسب المعنى",
+		"whyMeaningBody": "تتناول هذه السجلات ما تبحث عنه، حتى لو استخدمت كلمات أخرى أو لغة أخرى. يمكن لبحث باللغة السواحيلية أن يجد أبحاثًا إنجليزية حول الموضوع نفسه."
+	},
+	"translation": {
+		"translate": "ترجمة",
+		"translated": "مترجَم",
+		"buttonLabel": "ترجمة النتائج إلى {language}",
+		"buttonLabelRecord": "ترجمة هذا السجل إلى {language}",
+		"title": "ترجمة النتائج",
+		"auto": "الترجمة تلقائيًا",
+		"autoHint": "عند تحميل النتائج",
+		"into": "الترجمة إلى",
+		"currentLocale": "اللغة الحالية",
+		"run": "ترجمة {count, plural, one {نتيجة واحدة} two {نتيجتين} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
+		"translating": "جارٍ ترجمة {count, plural, one {نتيجة واحدة} two {نتيجتين} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
+		"showOriginals": "عرض النصوص الأصلية",
+		"translatedFrom": "مترجَم من {language}",
+		"showTranslation": "عرض الترجمة",
+		"searchLanguages": "البحث عن لغة",
+		"back": "رجوع",
+		"noLanguages": "لا توجد لغة مطابقة",
+		"titleRecord": "ترجمة هذا السجل",
+		"runRecord": "ترجمة هذا السجل",
+		"translatingRecord": "جارٍ الترجمة",
+		"showOriginal": "عرض الأصل",
+		"failed": "تعذّرت الترجمة. حاول مرة أخرى."
 	}
 }

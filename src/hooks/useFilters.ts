@@ -102,8 +102,14 @@ export function useFilters() {
 		[setParams]
 	);
 
+	// A new search shows its results by meaning again, so it never comes back empty because of an earlier choice.
 	const handleSearchChange = useCallback(
-		(text: string) => setParams({ search: text, page: 1 }),
+		(text: string) => setParams({ search: text, page: 1, wordsOnly: false }),
+		[setParams]
+	);
+
+	const handleWordsOnlyChange = useCallback(
+		(wordsOnly: boolean) => setParams({ wordsOnly, page: 1 }),
 		[setParams]
 	);
 
@@ -273,6 +279,7 @@ export function useFilters() {
 		handleSortChange,
 		handleScopeChange,
 		handleSearchChange,
+		handleWordsOnlyChange,
 		handleRangeChange,
 		handleCollectionSelect,
 		handleAuthorSelect,
