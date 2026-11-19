@@ -450,8 +450,10 @@ function LicencePart({ edited, flow, row }: PartProps) {
 
 /** Who gets the record's file, once it has a licence to choose under. */
 function RowFileAccess({ edited, flow, licence, row }: { edited: Record<string, unknown>; flow: ImportFlowState; licence: RecordLicence | null; row: ImportRow }) {
+	const { defaultFileAccess } = useAdminSession();
 	if (!licence) return null;
-	return <FileAccessInput licence={licence} value={fileAccessSchema.safeParse(edited.fileAccess).data ?? null} disabled={flow.locked} onChange={(access) => flow.setFileAccess(row.id, access)} />;
+	// Nobody chose for this row: it gets the community's default, as it will once imported.
+	return <FileAccessInput licence={licence} value={fileAccessSchema.safeParse(edited.fileAccess).data ?? defaultFileAccess} disabled={flow.locked} onChange={(access) => flow.setFileAccess(row.id, access)} />;
 }
 
 /** The chosen records a DOI would go out without a licence for, with the default offered for all of them at once. */

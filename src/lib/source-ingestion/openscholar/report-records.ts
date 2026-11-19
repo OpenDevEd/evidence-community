@@ -67,6 +67,7 @@ export async function keepReports(context: SourceAdapterContext, held: readonly 
 		}
 		const withdrawn = held.filter(({ report, itemKey }) => report.state === "withdrawn" && itemKey);
 		if (withdrawn.length) await withdrawReports(context, withdrawn);
+		await withholdReportPdfs(context, live);
 		await removeLeftReportFiles(context);
 		if (placed) await placeInstitutions(context, options);
 	} finally {
@@ -123,16 +124,14 @@ async function takeDownWithdrawnOrphans(context: SourceAdapterContext, service: 
 	if (!orphans.rows.length) return;
 	const reports = await reportsByDoi(service, [...new Set(orphans.rows.map((row) => row.doi))], { fetch });
 	const withdrawn = orphans.rows.filter((row) => reports.get(row.doi)?.state === "withdrawn").map((row) => row.itemKey);
-	if (!withdrawn.length) return;
+	// Live, but with a PDF Openscholar no longer gives this community: the record stays, its PDF goes.
+	const withheld = orphans.rows.filter((row) => { const report = reports.get(row.doi); return report?.state === "live" && !report.pdfUrl; }).map((row) => row.itemKey);
+	if (!withdrawn.length && !withheld.length) return;
 	// Only the reports' own PDFs: an attachment the team uploaded is the team's, and goes with its record's unpublish.
-	const children = await context.database
-		.selectDistinct({ key: item.key, parent: item.parentItem, deleted: item.deleted })
-		.from(item)
-		.innerJoin(itemSourceLink, and(eq(itemSourceLink.itemKey, item.key), like(itemSourceLink.sourceRecordKey, `${PDF_RECORD}%`)))
-		.where(inArray(item.parentItem, withdrawn));
+	const children = await reportPdfChildren(context.database, [...withdrawn, ...withheld]);
 	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, children.map((child) => child.key)));
 	const takenDown: string[] = [];
-	for (const itemKey of withdrawn) {
+	for (const itemKey of [...withdrawn, ...children.filter((child) => child.deleted === 0 && withheld.includes(child.parent!)).map((child) => child.key)]) {
 		await unpublishReport(context.database, itemKey).then(
 			() => takenDown.push(itemKey),
 			(error: unknown) => console.error("[reports] couldn't take down a withdrawn report no source follows", { itemKey, error: String(error) }),
@@ -180,11 +179,49 @@ async function writeReports(context: SourceAdapterContext, items: readonly unkno
 
 async function withdrawReports(context: SourceAdapterContext, withdrawn: readonly HeldReport[]) {
 	const pdfs = await reportPdfItems(context, withdrawn.map(({ report }) => report.doi));
-	const keys = [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs];
+	await takeDown(context, [...withdrawn.map(({ itemKey }) => itemKey!), ...pdfs], pdfs, "This edited record's report was withdrawn on Openscholar.");
+}
+
+/**
+ * Takes down the PDFs of live reports Openscholar no longer gives this community: one kept private or under an
+ * embargo, or one whose licence lets only Openscholar's readers have it without its author agreeing for this
+ * community. Its hosted copy is deleted and its record withdrawn as a withdrawn report's is, so it comes back when
+ * Openscholar offers it again.
+ */
+async function withholdReportPdfs(context: SourceAdapterContext, live: readonly HeldReport[]) {
+	const withheld = live.filter(({ report }) => report.state === "live" && !report.pdfUrl);
+	// A report this source took up in this sync has its record only now, maybe one another source made first.
+	const fresh = withheld.filter(({ itemKey }) => !itemKey).map(({ recordKey }) => recordKey);
+	const found = fresh.length
+		? await context.database
+				.select({ itemKey: itemSourceLink.itemKey })
+				.from(itemSourceLink)
+				.where(and(eq(itemSourceLink.sourceConnectionKey, context.sourceConnection.key), inArray(itemSourceLink.sourceRecordKey, fresh)))
+		: [];
+	const parents = [...withheld.flatMap(({ itemKey }) => (itemKey ? [itemKey] : [])), ...found.map((row) => row.itemKey)];
+	// Whichever source hosted them: a PDF one source brought stays this record's when another follows it now.
+	const pdfs = (await reportPdfChildren(context.database, parents)).filter((child) => child.deleted === 0).map((child) => child.key);
+	if (pdfs.length) await takeDown(context, pdfs, pdfs, WITHHELD_NOTE);
+}
+
+const WITHHELD_NOTE = "This edited PDF's report no longer lets this community have its file on Openscholar.";
+
+/** A report record's own PDFs, the ones Openscholar gave under any source: an attachment the team uploaded is the team's. */
+function reportPdfChildren(database: SourceAdapterContext["database"], parents: readonly string[]) {
+	if (!parents.length) return Promise.resolve([]);
+	return database
+		.selectDistinct({ key: item.key, parent: item.parentItem, deleted: item.deleted })
+		.from(item)
+		.innerJoin(itemSourceLink, and(eq(itemSourceLink.itemKey, item.key), like(itemSourceLink.sourceRecordKey, `${PDF_RECORD}%`)))
+		.where(inArray(item.parentItem, [...parents]));
+}
+
+/** Takes these records down with the hosted files of the PDFs among them: public nowhere, until Openscholar gives them again. */
+async function takeDown(context: SourceAdapterContext, keys: readonly string[], pdfs: readonly string[], note: string) {
 	// The files go first, refused like the withdrawal if the source changed meanwhile. Should the withdrawal then fail,
 	// its records still hold the source's links, so the next sync withdraws them again.
 	await inUnchangedSource(context.database, asRead(context), (transaction) => removeHostedPdfs(transaction, context.sourceConnection.key, pdfs));
-	await withdrawSourceRecords(context.database, asRead(context), keys, "This edited record's report was withdrawn on Openscholar.");
+	await withdrawSourceRecords(context.database, asRead(context), [...keys], note);
 	// A scan's withdrawal leaves an edited record public, and one another source still holds. A report withdrawn on
 	// Openscholar is public nowhere: what is still live is unpublished, which keeps the team's edits out of sight
 	// with the record, for an editor to restore if the report is reinstated.

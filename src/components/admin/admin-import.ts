@@ -800,12 +800,12 @@ export function primaryLabel(kind: ImportKind, { doiText, files, pdfs }: AddInpu
 }
 
 /** The chosen records as they're imported: with the editor's changes and choices, and topics only where the library uses them. */
-export function recordsToCommit(batch: ImportBatch, topicsEnabled: boolean) {
+export function recordsToCommit(batch: ImportBatch, topicsEnabled: boolean, /** The community's default for who gets the files, for a row nobody chose for. */ defaultFileAccess: FileAccess | null = null) {
 	const rowById = new Map(batch.rows.map((row) => [row.id, row]));
 	return selectedImportRecords(batch.rows.flatMap(({ record }) => (record ? [record] : [])), selectedIds(batch)).map((record) => {
 		const row = rowById.get(record.id)!;
 		const topics = [...chosenOf(batch, row, "topics")];
-		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row), licenceOf(batch, row), fileAccessOfRow(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
+		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row), licenceOf(batch, row), fileAccessOfRow(batch, row) ?? defaultFileAccess ?? undefined), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
 	});
 }
 

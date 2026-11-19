@@ -10,13 +10,23 @@ import {
 } from "@/lib/admin/http";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 import { adminCanonicalDraftToItemFields, isTopLevelAdminItemType } from "@/lib/admin/item-fields";
+import { defaultFileAccessOf, type FileAccess, type RecordLicence } from "@/lib/licences";
 
-/** A record made here by hand starts with the library's default licence, the Zenodo licence its settings name. */
-function withDefaultLicence(payload: unknown, defaultLicence: string) {
+/** The community's default for who gets the files, as a field a record starts with: none when its licence decides. */
+const defaultFileAccessField = (mode: Parameters<typeof defaultFileAccessOf>[0]) => {
+	const fileAccess = defaultFileAccessOf(mode);
+	return fileAccess ? { fileAccess } : {};
+};
+
+/**
+ * A record made here by hand starts with the library's default licence, the Zenodo licence its settings name, and its
+ * default for who gets the files.
+ */
+function withDefaults(payload: unknown, defaults: { licence: RecordLicence; fileAccess?: FileAccess }) {
 	// Whatever isn't an object goes on as it came, for the draft's validation to refuse.
 	const body = Object(payload) as Record<string, unknown>;
-	const record = isTopLevelAdminItemType(String(body.itemType)) && !Object.hasOwn(body, "licence");
-	return record ? { ...body, licence: { kind: "zenodo", id: defaultLicence } } : payload;
+	// Each only where the record doesn't say its own.
+	return isTopLevelAdminItemType(String(body.itemType)) ? { ...defaults, ...body } : payload;
 }
 
 export async function POST(request: NextRequest) {
@@ -27,7 +37,7 @@ export async function POST(request: NextRequest) {
 		const config = await getLibraryConfig();
 		const draft = await createNativeItemDraft(
 			await getDatabase(),
-			withDefaultLicence(await readAdminJson(request), config.services.publication.zenodo.license),
+			withDefaults(await readAdminJson(request), { licence: { kind: "zenodo", id: config.services.publication.zenodo.license }, ...defaultFileAccessField(config.services.publication.zenodo.defaultFileAccess) }),
 			{writebackConfig: config},
 		);
 		return NextResponse.json(

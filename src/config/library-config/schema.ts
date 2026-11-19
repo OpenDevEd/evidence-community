@@ -1313,6 +1313,9 @@ const zenodoPublicationSchema = z
 				"Zenodo license must be a supported license ID",
 			)
 			.default("cc-by-4.0"),
+		// Who gets the files of a record made here, unless its editor chooses otherwise: as its licence allows
+		// (`fileAccessOf`), so readers-only under an open licence is anyone, and anyone under a closed one is private.
+		defaultFileAccess: z.enum(["open", "private", "readers"]).default("open"),
 	})
 	.strict()
 	.prefault({})
