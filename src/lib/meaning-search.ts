@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Index, RecordAny } from "meilisearch";
+import type { Index, RecordAny, SearchParams } from "meilisearch";
 import { getCachedStatus } from "@/app/api/cache";
 import { isFeatureFlagEnabled } from "@/lib/feature-flags";
 import { getServerFeatureFlags } from "@/lib/server-feature-flags";
@@ -30,24 +30,6 @@ export async function meaningSearchOptions(indexName: string, search: string) {
 	}
 }
 
-/** Of these keys, the ones whose records use the search's words. */
-async function keysUsingWords(
-	index: Index<RecordAny>,
-	search: string,
-	keys: string[],
-	attributesToSearchOn: string[],
-	filter: string[],
-) {
-	if (keys.length === 0) return new Set<string>();
-	const result = await index.search(search, {
-		limit: keys.length,
-		attributesToSearchOn,
-		attributesToRetrieve: ["key"],
-		filter: [...filter, `key IN ${JSON.stringify(keys)}`],
-	});
-	return new Set(result.hits.map(({ key }) => String(key)));
-}
-
 type HybridOptions = NonNullable<Awaited<ReturnType<typeof meaningSearchOptions>>>;
 
 
@@ -66,17 +48,16 @@ export async function meaningList(
 	filter: string[],
 ): Promise<MeaningList> {
 	// The index's own cap on listed results: a word search can page no further, so neither can this list.
-	const { maxTotalHits } = await index.getPagination();
-	const ranked = await index.search(search, {
-		...hybrid,
-		limit: maxTotalHits ?? 1000,
-		attributesToSearchOn,
-		attributesToRetrieve: ["key"],
-		filter,
-	});
-	const rankedKeys = ranked.hits.map(({ key }) => String(key));
-	const usingWords = await keysUsingWords(index, search, rankedKeys, attributesToSearchOn, filter);
-	return { keys: listedMeaningKeys(rankedKeys, usingWords), usingWords };
+	const cap = (await index.getPagination()).maxTotalHits ?? 1000;
+	const keysOf = (options: SearchParams) =>
+		index
+			.search(search, { ...options, limit: cap, attributesToSearchOn, attributesToRetrieve: ["key"], filter })
+			.then(({ hits }) => hits.map(({ key }) => String(key)));
+	// The word matches on their own, so none is lost when the meaning ranking fills the cap before reaching it.
+	const [rankedKeys, wordKeys] = await Promise.all([keysOf(hybrid), keysOf({})]);
+	const usingWords = new Set(wordKeys);
+	// Sorted pages fetch the list through one search, which reaches no further than the cap either.
+	return { keys: listedMeaningKeys(rankedKeys, usingWords).slice(0, cap), usingWords };
 }
 
 /** One page of a meaning list: in its own order, or in the reader's sort when they chose one. */
