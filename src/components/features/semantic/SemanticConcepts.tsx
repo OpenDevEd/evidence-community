@@ -91,7 +91,11 @@ export function SemanticResultNotes() {
 				<MeaningNote
 					title={t("showingWordMatches", { count: wordsTotal })}
 					body={t("meaningHidden")}
-					action={<NoteAction onPress={() => change({ wordsOnly: false })}>{t("showMeaningResults")}</NoteAction>}
+					action={
+						<NoteAction accent onPress={() => change({ wordsOnly: false })}>
+							{t("showMeaningResults")}
+						</NoteAction>
+					}
 				/>
 			);
 		}
@@ -184,13 +188,19 @@ function MeaningNote({
 	);
 }
 
-function NoteAction({ onPress, children }: { onPress: () => void; children: ReactNode }) {
+function NoteAction({ onPress, accent = false, children }: { onPress: () => void; accent?: boolean; children: ReactNode }) {
 	return (
 		<button
 			type="button"
 			onClick={onPress}
-			className="h-9 shrink-0 rounded-xl border-small border-black/10 bg-white px-3 text-sm font-medium text-black/80 transition-colors hover:bg-black/[4%] dark:border-white/10 dark:bg-secondary dark:text-white/80"
+			className={twMerge(
+				"inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-medium transition-colors",
+				accent
+					? "bg-accent text-white hover:brightness-110 dark:bg-accent-500"
+					: "border-small border-black/10 bg-white text-black/80 hover:bg-black/[4%] dark:border-white/10 dark:bg-secondary dark:text-white/80",
+			)}
 		>
+			{accent && <TbWorldSearch className="size-4 shrink-0" />}
 			{children}
 		</button>
 	);
