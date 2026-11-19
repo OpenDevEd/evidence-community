@@ -12,13 +12,15 @@ export const MEANING_RESULT_LIMIT = 50;
 /**
  * What a meaning search lists, closest first: every record that uses the search's words, however low it ranks, and
  * the records close in meaning alone that rank among the closest max(word matches, 50). Word matches the ranking
- * left out come last, in the order the word search gives (`usingWords` keeps it).
+ * left out come last, in the order the word search gives (`usingWords` keeps it). The list never passes `cap`.
  */
-export function listedMeaningKeys(ranked: string[], usingWords: ReadonlySet<string>) {
+export function listedMeaningKeys(ranked: string[], usingWords: ReadonlySet<string>, cap = Infinity) {
 	const closest = Math.max(usingWords.size, MEANING_RESULT_LIMIT);
+	// Under the index's cap every word match keeps its place; meaning-only records get the room left.
+	let meaningRoom = Math.max(0, cap - usingWords.size);
 	const inRanking = new Set(ranked);
 	return [
-		...ranked.filter((key, rank) => rank < closest || usingWords.has(key)),
+		...ranked.filter((key, rank) => usingWords.has(key) || (rank < closest && meaningRoom-- > 0)),
 		...[...usingWords].filter((key) => !inRanking.has(key)),
 	];
 }
