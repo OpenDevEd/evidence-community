@@ -13,16 +13,7 @@ const bodySchema = z.object({
 		.max(30),
 });
 
-const LANGUAGE_NAMES: Record<string, string> = {
-	en: "English",
-	de: "German",
-	ar: "Arabic",
-	hi: "Hindi",
-	fr: "French",
-	zh: "Simplified Chinese",
-	sw: "Swahili",
-	pt: "Portuguese",
-};
+const languageName = (code: string) => new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
 
 export async function POST(request: NextRequest) {
 	const { target, items } = bodySchema.parse(await request.json());
@@ -41,7 +32,7 @@ export async function POST(request: NextRequest) {
 				messages: [
 					{
 						role: "system",
-						content: `Translate each research record's title and abstract into ${LANGUAGE_NAMES[target] ?? target}. Keep names, acronyms and numbers. Reply with JSON {"items":[{"key","title","abstract","source","same"}]}: source is the ISO 639-1 code of the original language, same is true when the record is already in the target language (then copy title and abstract unchanged).`,
+						content: `Translate each research record's title and abstract into ${languageName(target)}. Keep names, acronyms and numbers. Reply with JSON {"items":[{"key","title","abstract","source","same"}]}: source is the ISO 639-1 code of the original language, same is true when the record is already in the target language (then copy title and abstract unchanged).`,
 					},
 					{
 						role: "user",

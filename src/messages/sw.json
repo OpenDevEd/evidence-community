@@ -861,14 +861,17 @@
 		"buttonLabel": "Tafsiri matokeo kwa {language}",
 		"title": "Tafsiri matokeo",
 		"auto": "Tafsiri moja kwa moja",
-		"autoHint": "Matokeo yanatafsiriwa ukurasa unapofunguka",
+		"autoHint": "Matokeo yanapofunguka",
 		"into": "Tafsiri kwa",
 		"currentLocale": "Lugha ya sasa",
 		"run": "Tafsiri {count, plural, one {tokeo #} other {matokeo #}}",
 		"translating": "Inatafsiri {count, plural, one {tokeo #} other {matokeo #}}",
 		"showOriginals": "Onyesha asili",
 		"translatedFrom": "Imetafsiriwa kutoka {language}",
-		"showTranslation": "Onyesha tafsiri"
+		"showTranslation": "Onyesha tafsiri",
+		"searchLanguages": "Tafuta lugha",
+		"back": "Rudi",
+		"noLanguages": "Hakuna lugha inayolingana"
 	},
 	"semantic": {
 		"similarMeaning": "Maana inayofanana",

@@ -1,33 +1,38 @@
 "use client";
 
-import { createContext, ReactNode, use, useMemo, useState } from "react";
+import { createContext, ReactNode, use, useEffect, useMemo, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { useLocalStorage } from "usehooks-ts";
 import { Popover, PopoverContent, PopoverTrigger, Spinner } from "@nextui-org/react";
 import { MdTranslate } from "react-icons/md";
-import { IoCheckmarkCircle, IoArrowUndo } from "react-icons/io5";
+import { IoArrowUndo, IoCheckmark, IoCheckmarkCircle, IoChevronBack, IoChevronForward, IoSearch } from "react-icons/io5";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
 import { Switch } from "@/components/nextui/Switch";
 import type { ListItem } from "@/app/api/item/types";
 
-/** Languages results can be translated into, each named in itself. */
-export const TRANSLATION_LANGUAGES = [
-	{ code: "en", name: "English" },
-	{ code: "fr", name: "Français" },
-	{ code: "sw", name: "Kiswahili" },
-	{ code: "pt", name: "Português" },
-	{ code: "ar", name: "العربية" },
-	{ code: "de", name: "Deutsch" },
-	{ code: "hi", name: "हिन्दी" },
-	{ code: "zh", name: "中文" },
+/** Languages results can be translated into: the world's most spoken, and the languages of the regions the libraries cover. */
+const TRANSLATION_LANGUAGE_CODES = [
+	"af", "ak", "am", "ar", "bn", "cs", "da", "de", "el", "en", "es", "fa", "ff", "fi", "fil", "fr", "gu", "ha", "he",
+	"hi", "hu", "id", "ig", "it", "ja", "km", "kn", "ko", "lg", "ln", "mg", "ml", "mr", "ms", "my", "ne", "nl", "no",
+	"ny", "om", "pa", "pl", "ps", "pt", "rn", "ro", "ru", "rw", "si", "sn", "so", "st", "sv", "sw", "ta", "te", "th",
+	"ti", "tn", "tr", "uk", "ur", "vi", "wo", "xh", "yo", "zh", "zu",
 ] as const;
 
 const LOCALE_LANGUAGE: Record<string, string> = { "en-GB": "en", "en-US": "en", cn: "zh" };
 const CURRENT_LOCALE = "locale";
+
+const capitalise = (name: string, code: string) => name.charAt(0).toLocaleUpperCase(code) + name.slice(1);
+
+/** The language in itself (Kiswahili) and in the page's language (Swahili). */
+function languageNames(code: string, pageLocale: string) {
+	const own = new Intl.DisplayNames([code], { type: "language" }).of(code) ?? code;
+	const inPage = new Intl.DisplayNames([pageLocale === "cn" ? "zh" : pageLocale], { type: "language" }).of(code) ?? code;
+	return { code, own: capitalise(own, code), inPage: capitalise(inPage, pageLocale) };
+}
+
+const fold = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
 type Translation = { title: string; abstract: string; source: string; same: boolean };
 
@@ -146,23 +151,72 @@ export function useItemTranslation(key: string | undefined) {
 	};
 }
 
+/** Follows its content's height, so the frame animates when the popover switches views. */
+function AnimatedHeight({ children }: { children: ReactNode }) {
+	const inner = useRef<HTMLDivElement>(null);
+	const [height, setHeight] = useState<number>();
+	// ResizeObserver: the content's own size, which the frame animates to.
+	useEffect(() => {
+		const element = inner.current;
+		if (!element) return;
+		const observer = new ResizeObserver(([entry]) => setHeight(entry.borderBoxSize[0].blockSize));
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
+	return (
+		<div className="overflow-hidden transition-[height] duration-200 ease-out motion-reduce:transition-none" style={{ height }}>
+			<div ref={inner}>{children}</div>
+		</div>
+	);
+}
+
 export function ResultsTranslationControl() {
 	const context = use(ResultsTranslationContext);
 	const t = useTranslations("translation");
 	const locale = useLocale();
 	const [isOpen, setIsOpen] = useState(false);
+	const [view, setView] = useState<"main" | "languages">("main");
+	const [query, setQuery] = useState("");
+	const languages = useMemo(
+		() =>
+			TRANSLATION_LANGUAGE_CODES.map((code) => languageNames(code, locale)).sort((a, b) =>
+				a.inPage.localeCompare(b.inPage, locale === "cn" ? "zh" : locale),
+			),
+		[locale],
+	);
 	if (!context) return null;
 
 	const { target, choice, auto, isTranslating, active, translations, listedCount } = context;
-	const localeLanguage = TRANSLATION_LANGUAGES.find(({ code }) => code === (LOCALE_LANGUAGE[locale] ?? locale));
-	const targetName = TRANSLATION_LANGUAGES.find(({ code }) => code === target)?.name ?? target;
+	const pageLanguage = languageNames(LOCALE_LANGUAGE[locale] ?? locale, locale);
+	const targetLanguage = languageNames(target, locale);
 	const done = active && !isTranslating && !!translations;
+	const matches = languages.filter(({ code, own, inPage }) =>
+		[code, own, inPage].some((name) => fold(name).includes(fold(query.trim()))),
+	);
+	const choose = (next: string) => {
+		context.setChoice(next);
+		setView("main");
+		setQuery("");
+	};
+
+	const row = "flex w-full items-center gap-3 px-4 text-start";
 
 	return (
-		<Popover placement="bottom-end" isOpen={isOpen} onOpenChange={setIsOpen} offset={8}>
+		<Popover
+			placement="bottom-end"
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				setIsOpen(open);
+				if (!open) {
+					setView("main");
+					setQuery("");
+				}
+			}}
+			offset={8}
+		>
 			<PopoverTrigger>
 				<Button
-					aria-label={t("buttonLabel", { language: targetName })}
+					aria-label={t("buttonLabel", { language: targetLanguage.inPage })}
 					className={twMerge(
 						"h-full shrink-0 gap-2 px-4 xl:px-4",
 						done && "border-accent text-accent dark:text-accent",
@@ -188,81 +242,145 @@ export function ResultsTranslationControl() {
 					</span>
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="w-80 rounded-2xl border-small border-black/10 bg-white p-0 dark:border-white/10 dark:bg-secondary">
-				<div className="flex w-full flex-col gap-4 p-4">
-					<p className="text-base font-medium text-black/80 dark:text-white/80">{t("title")}</p>
+			<PopoverContent className="w-[22rem] rounded-2xl border-small border-black/10 bg-white p-0 dark:border-white/10 dark:bg-secondary">
+				<div className="w-full">
+					<AnimatedHeight>
+						{view === "main" ? (
+							<div className="flex flex-col gap-5 p-5">
+								<p className="text-lg font-semibold text-black/80 dark:text-white/90">{t("title")}</p>
 
-					<label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl bg-black/[4%] p-3 dark:bg-white/[4%]">
-						<span className="flex min-w-0 flex-col gap-0.5">
-							<span className="text-sm font-medium text-black/80 dark:text-white/80">{t("auto")}</span>
-							<span className="text-xs text-black/50 dark:text-white/50">{t("autoHint")}</span>
-						</span>
-						<Switch size="sm" isSelected={auto} onValueChange={context.setAuto} classNames={{ base: "m-0 shrink-0" }} />
-					</label>
+								<div className="divide-y divide-black/[8%] overflow-hidden rounded-xl border-small border-black/[8%] dark:divide-white/10 dark:border-white/10">
+									<button
+										type="button"
+										onClick={() => setView("languages")}
+										className={twMerge(row, "h-16 transition-colors hover:bg-black/[3%] dark:hover:bg-white/[4%]")}
+									>
+										<span className="flex-1 text-sm font-medium text-black/80 dark:text-white/80">{t("into")}</span>
+										<span className="flex min-w-0 flex-col items-end">
+											<span className="truncate text-sm font-semibold text-black/80 dark:text-white/90">
+												{targetLanguage.own}
+											</span>
+											<span className="truncate text-xs text-black/50 dark:text-white/50">
+												{choice === CURRENT_LOCALE ? t("currentLocale") : targetLanguage.inPage}
+											</span>
+										</span>
+										<IoChevronForward className="size-4 shrink-0 text-black/30 rtl:-scale-x-100 dark:text-white/30" />
+									</button>
+									<label className={twMerge(row, "h-16 cursor-pointer")}>
+										<span className="flex min-w-0 flex-1 flex-col">
+											<span className="text-sm font-medium text-black/80 dark:text-white/80">{t("auto")}</span>
+											<span className="truncate text-xs text-black/50 dark:text-white/50">{t("autoHint")}</span>
+										</span>
+										<Switch size="sm" isSelected={auto} onValueChange={context.setAuto} classNames={{ base: "m-0 shrink-0" }} />
+									</label>
+								</div>
 
-					<Select
-						label={t("into")}
-						labelPlacement="outside"
-						placement="left"
-						selectedKeys={[choice]}
-						disallowEmptySelection
-						onSelectionChange={(keys) => {
-							const next = Array.from(keys)[0];
-							if (typeof next === "string") context.setChoice(next);
-						}}
-						classNames={{
-							base: "max-w-none",
-							trigger: "h-12",
-							label: "text-sm text-black/60 dark:text-white/60 !text-left",
-							popoverContent: "rounded-2xl",
-						}}
-						renderValue={() =>
-							choice === "locale" ? (
-								<span className="flex items-baseline gap-2">
-									{t("currentLocale")}
-									<span className="text-sm font-normal text-black/50 dark:text-white/50">{localeLanguage?.name}</span>
-								</span>
-							) : (
-								targetName
-							)
-						}
-					>
-						{[
-							<SelectItem key="locale" description={localeLanguage?.name} textValue={t("currentLocale")}>
-								{t("currentLocale")}
-							</SelectItem>,
-							...TRANSLATION_LANGUAGES.filter(({ code }) => code !== localeLanguage?.code).map(({ code, name }) => (
-								<SelectItem key={code} textValue={name}>
-									{name}
-								</SelectItem>
-							)),
-						]}
-					</Select>
-
-					<Button
-						color={done ? "secondary" : "accent"}
-						className="h-11 w-full"
-						isDisabled={isTranslating || listedCount === 0}
-						startContent={
-							isTranslating ? (
-								<Spinner size="sm" color="current" classNames={{ wrapper: "size-4" }} />
-							) : done ? (
-								<IoArrowUndo className="size-4 shrink-0" />
-							) : (
-								<MdTranslate className="size-4 shrink-0" />
-							)
-						}
-						onPress={done ? context.undo : context.run}
-					>
-						{isTranslating
-							? t("translating", { count: listedCount })
-							: done
-								? t("showOriginals")
-								: t("run", { count: listedCount })}
-					</Button>
+								<Button
+									color={done ? "secondary" : "accent"}
+									className="h-11 w-full rounded-xl font-medium"
+									isDisabled={isTranslating || listedCount === 0}
+									startContent={
+										isTranslating ? (
+											<Spinner size="sm" color="current" classNames={{ wrapper: "size-4" }} />
+										) : done ? (
+											<IoArrowUndo className="size-4 shrink-0" />
+										) : (
+											<MdTranslate className="size-4 shrink-0" />
+										)
+									}
+									onPress={done ? context.undo : context.run}
+								>
+									{isTranslating
+										? t("translating", { count: listedCount })
+										: done
+											? t("showOriginals")
+											: t("run", { count: listedCount })}
+								</Button>
+							</div>
+						) : (
+							<div className="flex flex-col">
+								<div className="flex items-center gap-2 px-3 pb-2 pt-3">
+									<button
+										type="button"
+										aria-label={t("back")}
+										onClick={() => setView("main")}
+										className="flex size-9 shrink-0 items-center justify-center rounded-lg text-black/60 hover:bg-black/5 dark:text-white/60 dark:hover:bg-white/10"
+									>
+										<IoChevronBack className="size-5 rtl:-scale-x-100" />
+									</button>
+									<p className="text-base font-semibold text-black/80 dark:text-white/90">{t("into")}</p>
+								</div>
+								<div className="px-4 pb-2">
+									<label className="flex h-10 items-center gap-2 rounded-xl bg-black/[4%] px-3 dark:bg-white/[6%]">
+										<IoSearch className="size-4 shrink-0 text-black/40 dark:text-white/40" />
+										<input
+											autoFocus
+											value={query}
+											onChange={(event) => setQuery(event.target.value)}
+											placeholder={t("searchLanguages")}
+											className="min-w-0 flex-1 bg-transparent text-sm text-black/80 outline-none placeholder:text-black/40 dark:text-white/80 dark:placeholder:text-white/40"
+										/>
+									</label>
+								</div>
+								<ul className="max-h-80 overflow-y-auto px-2 pb-2">
+									{!query.trim() && (
+										<li>
+											<LanguageOption
+												selected={choice === CURRENT_LOCALE}
+												primary={t("currentLocale")}
+												secondary={pageLanguage.own}
+												onSelect={() => choose(CURRENT_LOCALE)}
+											/>
+										</li>
+									)}
+									{matches.map(({ code, own, inPage }) => (
+										<li key={code}>
+											<LanguageOption
+												selected={choice === code}
+												primary={own}
+												secondary={own === inPage ? undefined : inPage}
+												onSelect={() => choose(code)}
+											/>
+										</li>
+									))}
+									{matches.length === 0 && (
+										<li className="flex h-11 items-center px-3 text-sm text-black/50 dark:text-white/50">{t("noLanguages")}</li>
+									)}
+								</ul>
+							</div>
+						)}
+					</AnimatedHeight>
 				</div>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+function LanguageOption({
+	selected,
+	primary,
+	secondary,
+	onSelect,
+}: {
+	selected: boolean;
+	primary: string;
+	secondary?: string;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			aria-pressed={selected}
+			onClick={onSelect}
+			className={twMerge(
+				"flex h-11 w-full items-center gap-3 rounded-lg px-3 text-start transition-colors hover:bg-black/[4%] dark:hover:bg-white/[6%]",
+				selected && "bg-black/[4%] dark:bg-white/[6%]",
+			)}
+		>
+			<span className="truncate text-sm font-medium text-black/80 dark:text-white/90">{primary}</span>
+			{secondary && <span className="truncate text-sm text-black/45 dark:text-white/45">{secondary}</span>}
+			{selected && <IoCheckmark className="ms-auto size-4 shrink-0 text-accent" />}
+		</button>
 	);
 }
 
