@@ -21,7 +21,8 @@ import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage"
 import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { itemFilePublication } from "../../src/db/schema/source";
 import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
-import { approveItemReview, submitItemReview } from "../../src/lib/admin/review-service";
+import { approveItemReview, getItemPublishingChoice, submitItemReview } from "../../src/lib/admin/review-service";
+import { itemPublishingChoice } from "../../src/db/schema/review";
 import { hideRemovedFiles } from "../../src/lib/admin/withdrawn-files";
 import { readPublicationRepositorySnapshot } from "../../src/lib/publication/repository";
 
@@ -49,12 +50,18 @@ const row = async (db: Database, key: string) => (await db.select().from(item).w
 it("removes a record whose DOIs are test ones for good, its attachments with it", async () => {
 	await withIsolatedPublicationDatabase(async (db) => {
 		const { parent, child } = await recordWithDoi(db, "sandbox");
+		await db.update(publicationTarget).set({ activatedAt: new Date() }).where(eq(publicationTarget.itemKey, parent));
+		await db.insert(itemPublishingChoice).values({ itemKey: parent, choice: { route: "zenodo", identifierPolicy: "mint-zenodo" } });
 		await removeNativeItem(db, parent);
 		assert.equal((await row(db, parent)).deleted, 1);
 		assert.equal((await row(db, parent)).withdrawnAt, null);
 		assert.equal((await row(db, child)).deleted, 1);
 		const [target] = await db.select().from(publicationTarget).where(eq(publicationTarget.itemKey, parent));
 		assert.notEqual(target!.deactivatedAt, null, "A removed test DOI's target stays switched on");
+		// The admin said its DOI was still chosen, and "Active", after its target was switched off.
+		const { choice, canClear } = await getItemPublishingChoice(db, parent, config);
+		assert.equal(choice, null, "A removed record's DOI still reads as chosen");
+		assert.equal(canClear, true, "A switched-off target still holds the record's DOI switch");
 	});
 });
 
