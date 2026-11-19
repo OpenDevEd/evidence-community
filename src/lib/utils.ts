@@ -61,6 +61,17 @@ export function getCountryInfo(country: string) {
 	}
 }
 
+/** Lowercase without accents, so "Sénégal" matches "Senegal". */
+export const fold = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+
+/** The previous page when it is on this site, otherwise the library: never back out to another site. */
+export function backWithinSite(router: { back(): void; push(href: string): void }) {
+	// TypeScript 5.7's DOM types predate the Navigation API, which counts only this site's entries.
+	const navigation = (window as Window & { navigation?: { canGoBack: boolean } }).navigation;
+	if (navigation?.canGoBack) router.back();
+	else router.push("/lib");
+}
+
 export function localizeOrUseIfCapitalized(label: string, t: any) {
 	return label.charAt(0).toUpperCase() === label.charAt(0) ? label : t(label);
 }

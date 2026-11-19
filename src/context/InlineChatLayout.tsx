@@ -43,6 +43,8 @@ type InlineChatLayoutValue = {
 	/** The pending input came from an explicit submit and should auto-send. */
 	pendingSend: boolean;
 	setPendingSend: (send: boolean) => void;
+	/** The search text Ask AI took as its question; closing the chat puts it back. */
+	askedSearchRef: MutableRefObject<string>;
 	/**
 	 * Timestamp of the last request to focus the main library search field.
 	 * A request rather than a direct focus() call because the field remounts
@@ -79,6 +81,7 @@ const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	setPendingInput: () => {},
 	pendingSend: false,
 	setPendingSend: () => {},
+	askedSearchRef: { current: "" },
 	searchFocusRequest: 0,
 	requestSearchFocus: () => {},
 	getChat: (_modelId, create) => create(),
@@ -113,6 +116,7 @@ export function InlineChatLayoutProvider({ children }: { children: ReactNode }) 
 	const [bucketEntries, setBucketEntriesState] = useState<BucketEntry[]>([]);
 	const [pendingInput, setPendingInput] = useState("");
 	const [pendingSend, setPendingSend] = useState(false);
+	const askedSearchRef = useRef("");
 	const [searchFocusRequest, setSearchFocusRequest] = useState(0);
 	const requestSearchFocus = useCallback(
 		() => setSearchFocusRequest(Date.now()),
@@ -185,6 +189,7 @@ export function InlineChatLayoutProvider({ children }: { children: ReactNode }) 
 			setPendingInput,
 			pendingSend,
 			setPendingSend,
+			askedSearchRef,
 			searchFocusRequest,
 			requestSearchFocus,
 			getChat,

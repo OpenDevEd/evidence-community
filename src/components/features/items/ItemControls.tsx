@@ -41,6 +41,7 @@ import { AddButton } from "./Resource";
 import DialogModal from "@/components/nextui/DialogModal";
 import { getZoteroGroupItemLinks } from "@/lib/zoteroLinks";
 import { trackContentAction } from "@/lib/analytics";
+import { backWithinSite } from "@/lib/utils";
 
 type Interaction =
 	| "readDocument"
@@ -449,13 +450,7 @@ export default function ItemControls({
 					<LuChevronLeft className="size-5 rtl:rotate-180" />
 				}
 				className="ltr:pl-1.5 rtl:pr-1.5"
-				onPressStart={() => {
-					if (window.history.length > 1) {
-						router.back();
-					} else {
-						router.push("/lib");
-					}
-				}}
+				onPressStart={() => backWithinSite(router)}
 			>
 				{t("return")}
 			</Button>

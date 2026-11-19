@@ -19,6 +19,7 @@ import {
 	type TranslationPart,
 } from "@/lib/translation-languages";
 import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
+import { fold } from "@/lib/utils";
 import {
 	saveTranslations,
 	setShown,
@@ -51,8 +52,6 @@ function languageName(code: string, pageLocale: string) {
 		return code;
 	}
 }
-
-const fold = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
 type ResultsTranslation = {
 	/** "results" for a list, "record" for one record's own page. */
