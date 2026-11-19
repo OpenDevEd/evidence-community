@@ -5,6 +5,8 @@ export const AI_MODELS = [
 		company: "Anthropic",
 		hidden: false,
 		reasoningEffort: "medium",
+		// Deep Research steps that pick and read publications; verified on OpenRouter 2026-11-19.
+		maximumReasoningEffort: "max",
 		openRouter: {
 			providerOrder: [],
 			allowFallbacks: true,
@@ -21,6 +23,8 @@ export const AI_MODELS = [
 		company: "OpenAI",
 		hidden: false,
 		reasoningEffort: "medium",
+		// Deep Research steps that pick and read publications; verified on OpenRouter 2026-11-19.
+		maximumReasoningEffort: "max",
 		openRouter: {
 			// OpenRouter endpoint tags to try first (same model, different
 			// host); other providers remain as fallbacks. Luna needs the
@@ -41,6 +45,8 @@ export const AI_MODELS = [
 		company: "Google",
 		hidden: false,
 		reasoningEffort: "low",
+		// Deep Research steps that pick and read publications; verified on OpenRouter 2026-11-19.
+		maximumReasoningEffort: "max",
 		openRouter: {
 			providerOrder: ["google-ai-studio"],
 			// Gemini's thought signatures are accepted only by the Google host that
@@ -81,4 +87,9 @@ export function getAIModel(modelId: AIModelId) {
 /** The reasoning effort every request to this model uses. */
 export function reasoningEffort(modelId: AIModelId) {
 	return getAIModel(modelId).reasoningEffort;
+}
+
+/** The effort Deep Research uses when it picks publications to read and writes after reading them. */
+export function maximumReasoningEffort(modelId: AIModelId) {
+	return getAIModel(modelId).maximumReasoningEffort;
 }

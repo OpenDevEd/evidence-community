@@ -5,6 +5,7 @@ import {
 	AI_MODELS,
 	isAIModelId,
 	isSelectableAIModelId,
+	maximumReasoningEffort,
 	reasoningEffort,
 	STARTER_QUESTIONS_MODEL_ID,
 } from "./models";
@@ -88,6 +89,7 @@ test("the AI offers Haiku, Luna and Hydrogen, each at its own reasoning effort, 
 	assert.equal(reasoningEffort(CLAUDE_HAIKU_MODEL_ID), "medium");
 	assert.equal(reasoningEffort("openai/gpt-6-luna"), "medium");
 	assert.equal(reasoningEffort("google/gemini-4-hydrogen"), "low");
+	for (const modelId of SELECTABLE_MODEL_IDS) assert.equal(maximumReasoningEffort(modelId), "max");
 	assert.equal(
 		publicationGenerationSchema.safeParse({
 			prompt: "ITEM123",
