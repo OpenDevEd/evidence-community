@@ -19,8 +19,10 @@ async function askModel<T>(cacheKey: string, system: string, user: string): Prom
 		method: "POST",
 		headers: { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`, "Content-Type": "application/json" },
 		body: JSON.stringify({
-			model: "google/gemini-3.7-flash",
-			response_format: { type: "json_object" },
+			model: "anthropic/claude-haiku-5.5",
+			// Translation needs no reasoning.
+				reasoning: { effort: "none" },
+				response_format: { type: "json_object" },
 			messages: [{ role: "system", content: system }, { role: "user", content: user }],
 		}),
 	});

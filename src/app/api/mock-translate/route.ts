@@ -27,7 +27,9 @@ export async function POST(request: NextRequest) {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				model: "google/gemini-3.7-flash",
+				model: "anthropic/claude-haiku-5.5",
+				// Translation needs no reasoning.
+				reasoning: { effort: "none" },
 				response_format: { type: "json_object" },
 				messages: [
 					{
