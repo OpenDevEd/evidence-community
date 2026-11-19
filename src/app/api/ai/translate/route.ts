@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getCachedStatus } from "@/app/api/cache";
 import { AIError, aiErrorResponse, normalizeAIError } from "@/lib/ai/errors";
 import { trackAIUsage } from "@/lib/ai/telemetry";
-import { isFeatureFlagEnabled } from "@/lib/feature-flags";
 import { TRANSLATION_MODEL_ID, translateRecords } from "@/lib/record-translation";
 import { getServerAnalyticsContext, type ServerAnalyticsContext } from "@/lib/server-analytics";
-import { getServerFeatureFlags } from "@/lib/server-feature-flags";
 import {
 	ABSTRACTS_PER_REQUEST,
 	TITLES_PER_REQUEST,
@@ -32,11 +29,6 @@ export async function POST(request: Request) {
 		const body = bodySchema.safeParse(await request.json().catch(() => null));
 		if (!body.success) throw new AIError("INVALID_REQUEST", "Invalid translation request.", 400);
 		analyticsContext = getServerAnalyticsContext(request, body.data.distinctId);
-		const flags = getServerFeatureFlags((await getCachedStatus()).companyFooter);
-		if (!isFeatureFlagEnabled(flags, "ai-translation")) {
-			throw new AIError("AI_DISABLED", "Translation is not enabled for this library.", 403);
-		}
-
 		const { part, language, keys } = body.data;
 		const { translations, model } = await translateRecords(part, language, [...new Set(keys)]);
 		if (model) {
