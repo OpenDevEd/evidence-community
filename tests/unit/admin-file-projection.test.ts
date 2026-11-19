@@ -46,7 +46,7 @@ describe("admin file projections", () => {
 			sourceCoverObjectPath: "private/cover.png",
 			sourceObjectPath: "private/file.pdf",
 			uploadRevision: 2,
-		} as Parameters<typeof filePublicationJson>[0]);
+		} as Parameters<typeof filePublicationJson>[0], false);
 
 		expect(projection).not.toHaveProperty("objectPath");
 		expect(projection).not.toHaveProperty("coverObjectPath");

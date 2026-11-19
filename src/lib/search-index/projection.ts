@@ -33,7 +33,7 @@ import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
 import { readItemSources } from "./item-sources";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { filterPublicAttachments } from "@/lib/attachment-visibility";
+import { filterPublicAttachments, filesHiddenFor, ownOpenAccess, shownFile } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
@@ -228,6 +228,19 @@ async function authorCountriesByItem(
 	}
 	return (itemKey: string) => [...(countries.get(itemKey) ?? [])].sort();
 }
+
+/**
+ * Whether readers can read a PDF of the record: one not removed or hidden by tag. Files its record keeps from readers
+ * count as none, though a link to a PDF elsewhere still does; the record is indexed again when an embargo ends
+ * (`settleRecordFiles`).
+ */
+function readablePdf(parent: ItemRow, children: readonly ItemRow[], shownByTag: (child: ItemRow) => boolean) {
+	const hidden = filesHiddenFor(parent);
+	return children.some((child) => child.deleted !== 1 && shownByTag(child) && shownFile(child, hidden) && isVisiblePdfAttachment(child));
+}
+
+/** A record made here is open access by its licence and who may get its files; any other is looked up. */
+const openAccessFor = (parent: ItemRow, lookedUp: () => boolean | null | undefined) => ownOpenAccess(parent) ?? lookedUp();
 
 export function cleanRow(row: ItemRow) {
 	return Object.fromEntries(
@@ -507,9 +520,10 @@ async function buildSearchProjectionPlanForKeys(
 				tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 			}));
 			// Without full-text search nothing can reach the page text, so only
-			// page numbers are indexed: they still mark records with a PDF.
+			// page numbers are indexed: they still mark records with a PDF. Files a record
+			// keeps from readers index none of their text either.
 			const fullTextPDFs = parentChildren
-				.filter((child) => child.deleted !== 1)
+				.filter((child) => child.deleted !== 1 && shownFile(child, filesHiddenFor(parent)))
 				.map((child) => ({
 					key: child.key,
 					fullTextPDF: config.search.fullText
@@ -542,12 +556,7 @@ async function buildSearchProjectionPlanForKeys(
 				// A stored PDF or a linked one: the AI can read either, even
 				// when no text was extracted. The library's hidden tags always
 				// apply, because the search filter cannot see attachment tags.
-				[PDF_PRESENCE_ATTRIBUTE]: parentChildren.some(
-					(child) =>
-						child.deleted !== 1 &&
-						!hasAnyTag(tagsByItem.get(child.key), hiddenTags) &&
-						isVisiblePdfAttachment(child),
-				),
+				[PDF_PRESENCE_ATTRIBUTE]: readablePdf(parent, parentChildren, (child) => !hasAnyTag(tagsByItem.get(child.key), hiddenTags)),
 				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				citationMetrics,
@@ -581,8 +590,11 @@ async function buildSearchProjectionPlanForKeys(
 				// The licence its DOI goes out under, which its page shows beside the DOI. The record page reads this
 				// projection from the database, so no search rebuild is needed for it.
 				licence: parent.licence,
+				// Who may get its files, which decides whether readers see them (`filesHiddenFor`) when it is read.
+				fileAccess: parent.fileAccess,
 				metadataSearch: metadataSearchValues(parent),
-				openAccess: openAccessOf(parent.key, doi),
+				// A record made here is open access by its own licence and who may get its files; any other is looked up.
+				openAccess: openAccessFor(parent, () => openAccessOf(parent.key, doi)),
 				openalexId: workOf(parent.key),
 				topicAncestors: topicAncestry(parent.topics),
 				topics: config.topics.enabled ? uniqueSorted(parent.topics) : [],
@@ -779,11 +791,7 @@ export async function projectPublicItems(
 export function publicItemFrom(document: Pick<ItemSearchDocument, "tags">, config: LibraryServerConfig): Item | null {
 	if (hasAnyTag(document.tags, config.content.tags.hidden)) return null;
 	const result = document as unknown as Item;
-	result.attachmentsData = filterPublicAttachments(
-		result.attachmentsData,
-		publicTagRules(config),
-		result.sourceConnectionKey,
-	);
+	result.attachmentsData = filterPublicAttachments(result, publicTagRules(config));
 	const attachmentKeys = new Set(
 		result.attachmentsData?.map((attachment) => attachment.key),
 	);

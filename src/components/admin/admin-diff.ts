@@ -1,4 +1,4 @@
-import type { RecordLicence } from "@/lib/licences";
+import type { FileAccess, RecordLicence } from "@/lib/licences";
 import type {
 	AdminCreator,
 	AdminItemDetail,
@@ -18,6 +18,8 @@ export type AdminDraftDiff = {
 	studyType: { previous: string | null } | null;
 	/** The published licence when the draft changed it, or null for none. */
 	licence: { previous: RecordLicence | null } | null;
+	/** Who could get the files as published, when the draft changed it, or null for the licence's own. */
+	fileAccess: { previous: FileAccess | null } | null;
 	collections: string[] | null;
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
@@ -32,6 +34,7 @@ export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
 	openAccess: null,
 	studyType: null,
 	licence: null,
+	fileAccess: null,
 	collections: null,
 	creators: null,
 	fields: {},
@@ -119,6 +122,11 @@ function licenceDiff(current: unknown, previous: unknown) {
 	return { previous: (previous as RecordLicence | null | undefined) ?? null };
 }
 
+function fileAccessDiff(current: unknown, previous: unknown) {
+	if (sameValue(current ?? null, previous ?? null)) return null;
+	return { previous: (previous as FileAccess | null | undefined) ?? null };
+}
+
 function openAccessDiff(current: unknown, previous: unknown) {
 	if (sameValue(current ?? null, previous ?? null)) return null;
 	return { previous: typeof previous === "boolean" ? previous : null };
@@ -173,6 +181,7 @@ export function computeAdminDraftDiff(
 		openAccess: openAccessDiff(payload.openAccess, published.openAccess),
 		studyType: studyTypeDiff(payload.studyType, published.studyType),
 		licence: licenceDiff(payload.licence, published.licence),
+		fileAccess: fileAccessDiff(payload.fileAccess, published.fileAccess),
 		collections: collectionsChanged ? originalCollections : null,
 		creators: creatorsChanged ? originalCreators : null,
 		fields,

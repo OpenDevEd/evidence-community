@@ -38,8 +38,8 @@ describe("review publishing requirements", () => {
 		const complete = { ...report, date: "2026-09-10", creators: [{ creatorType: "author", name: "Learning Lab" }] };
 		const { licence: _none, ...unlicensed } = complete;
 		expect(Object.keys(blockers(unlicensed, zenodo))).toEqual(["licence"]);
-		expect(Object.keys(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "" } }, zenodo))).toEqual(["licence"]);
-		expect(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "https://example.org/terms" } }, zenodo)).toEqual({});
+		expect(Object.keys(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "", open: true } }, zenodo))).toEqual(["licence"]);
+		expect(blockers({ ...complete, licence: { kind: "custom", title: "Our terms", url: "https://example.org/terms", open: true } }, zenodo)).toEqual({});
 		// Without a DOI, a record needs no licence.
 		expect(blockers(unlicensed, null)).toEqual({});
 	});

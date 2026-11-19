@@ -299,7 +299,7 @@ export async function readRecords(config: LibraryServerConfig, database: Databas
 			unread.push(key);
 			continue;
 		}
-		const record = toOpenScholarRecord({ ...hit, attachmentsData: filterPublicAttachments(hit.attachmentsData as never, rules, hit.sourceConnectionKey as string | undefined) } as never);
+		const record = toOpenScholarRecord({ ...hit, attachmentsData: filterPublicAttachments(hit, rules) } as never);
 		const size = Buffer.byteLength(JSON.stringify(record));
 		if (records.length && bytes + size > BATCH_MAX_BYTES) {
 			unread.push(key);

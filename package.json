@@ -110,7 +110,7 @@
 		"@nextui-org/framer-utils": "^2.1.6",
 		"@nextui-org/react": "^2.6.11",
 		"@nextui-org/shared-icons": "^2.1.1",
-		"@opendeved/doi-sync-core": "github:Openscholar-ai/doi-sync-core#df6f013294973922cbfa3e51168b328426093ceb",
+		"@opendeved/doi-sync-core": "github:Openscholar-ai/doi-sync-core#da496674602e556d726d55ed640e57997ebfa061",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
 		"@openrouter/ai-sdk-provider": "^3.1.0",
 		"@radix-ui/react-collapsible": "^1.1.20",

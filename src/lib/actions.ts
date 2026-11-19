@@ -168,7 +168,7 @@ async function searchIndex(
 					) as Collection[];
 			}
 
-			item.attachmentsData = filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey);
+			item.attachmentsData = filterPublicAttachments(item, publicTagRules(libraryConfig));
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,

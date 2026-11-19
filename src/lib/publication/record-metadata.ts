@@ -6,7 +6,7 @@ import {
 } from "@opendeved/doi-sync-core/metadata";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import { languageTag } from "@/lib/languages";
-import { publicationLicence, type RecordLicence } from "@/lib/licences";
+import { fileAccessOf, licenceOpen, publicationFileAccess, publicationLicence, type FileAccess, type RecordLicence } from "@/lib/licences";
 import { studyType } from "@/lib/readings/study-types";
 import { institutionNameKey } from "@/config/library-config/institutions";
 import type { PublicationRecordExtras } from "./record-extras";
@@ -39,6 +39,8 @@ export type EvidenceLibraryPublicationMetadata = Readonly<
 	studyType?: string | null;
 	/** The licence the record's DOI goes out under; null when none was chosen. */
 	licence?: RecordLicence | null;
+	/** Who may get its files; null leaves it to the licence. */
+	fileAccess?: FileAccess | null;
 	/** When the record was withdrawn, for a record with a real DOI that left the community. */
 	withdrawnAt?: Date | null;
 };
@@ -160,6 +162,19 @@ function recordInstitution(record: EvidenceLibraryPublicationMetadata) {
 		: null;
 }
 
+/**
+ * The licence and who may get the files, as a deposit sends them. A licence of the record's own says whether anyone may
+ * read the work; one of Zenodo's leaves that to the deposit package, which says so for Creative Commons.
+ */
+function depositAccess(licence: RecordLicence, chosen: FileAccess | null | undefined) {
+	const fileAccess = publicationFileAccess(fileAccessOf(licence, chosen));
+	return {
+		...publicationLicence(licence),
+		...(licence.kind === "custom" ? { freeToRead: licenceOpen(licence) } : {}),
+		...(fileAccess ? { fileAccess } : {}),
+	};
+}
+
 export function publicationRecordMetadata(
 	record: EvidenceLibraryPublicationMetadata,
 	tags: readonly string[],
@@ -189,7 +204,7 @@ export function publicationRecordMetadata(
 		tags: publicTags(tags),
 		fields: providerFields(record),
 		...extraMetadata(record, extras),
-		...(licence ? publicationLicence(licence) : {}),
+		...(licence ? depositAccess(licence, record.fileAccess) : {}),
 		...Object.fromEntries(
 			Object.entries(optional).filter(
 				(entry): entry is [string, string] => Boolean(entry[1]),

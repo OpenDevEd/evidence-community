@@ -516,6 +516,9 @@ export const recordLicenceSchema = z.discriminatedUnion("kind", [
 			kind: z.literal("custom"),
 			title: z.string().trim().max(200),
 			url: z.string().trim().max(2048),
+			/** Whether it lets anyone read and share the work: a licence of its own says so itself. One saved before it said
+			 * (in a record, a draft or a review) had its files public, so it is open. */
+			open: z.boolean().default(true),
 		})
 		.strict(),
 ]);
@@ -533,6 +536,87 @@ export function licenceLabel(licence: RecordLicence) {
 }
 
 /** What a deposit sends for a licence: Zenodo's id, or the custom licence's title and link. */
+/** What each Creative Commons licence lets people do, whatever its version. */
+const CREATIVE_COMMONS: Readonly<Record<string, string>> = {
+	by: "Anyone may share and adapt it, crediting its authors.",
+	"by-sa": "Anyone may share and adapt it, crediting its authors, under this same licence.",
+	"by-nc": "Anyone may share and adapt it, crediting its authors, but not commercially.",
+	"by-nd": "Anyone may share it unchanged, crediting its authors.",
+	"by-nc-sa": "Anyone may share and adapt it, crediting its authors, not commercially and under this same licence.",
+	"by-nc-nd": "Anyone may share it unchanged, crediting its authors, but not commercially.",
+};
+
+/**
+ * What a licence lets people do, in a line: from its parts for a Creative Commons licence (the words Openscholar's
+ * report licences use), a line of its own for Zenodo's general licences, and for any other licence whether it is open.
+ */
+export function licenceDescription(licence: RecordLicence): string {
+	if (licence.kind === "custom") return licence.open ? "Its own terms let anyone read and share it." : "Its own terms keep it from being shared freely.";
+	const { id } = licence;
+	if (id === "cc0-1.0" || id === "other-pd") return "No rights reserved: anyone may use it for anything.";
+	const cc = /^cc-(by(?:-(?:nc|nd|sa))*)-\d\.\d/u.exec(id);
+	if (cc) return CREATIVE_COMMONS[cc[1]!] ?? CREATIVE_COMMONS.by!;
+	if (id === "other-closed") return "Not open: nobody may share it without asking its rights holder.";
+	if (id === "zenodo-freetoread-1.0") return "Free to read for one's own use; sharing it needs its rights holder.";
+	if (id === "other-nc") return "Anyone may share it, but not for a commercial purpose.";
+	if (id === "other-at") return "Anyone may share it, crediting its authors.";
+	return "An open licence: anyone may read and share it under its terms.";
+}
+
+/** Zenodo's licences that don't let anyone share the work. Every other licence on its list does. */
+const CLOSED = new Set(["other-closed", "zenodo-freetoread-1.0"]);
+
+/** Whether a licence lets anyone read and share the work: what decides who may get its files. */
+export const licenceOpen = (licence: RecordLicence) =>
+	// A licence of its own saved before it said whether it is open is open, also where it is read as stored, unparsed.
+	licence.kind === "custom" ? licence.open !== false : !CLOSED.has(licence.id);
+
+/** A day that exists, written YYYY-MM-DD: 2027-02-30 is refused. */
+const calendarDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, "Expected YYYY-MM-DD").refine((day) => {
+	const date = new Date(`${day}T00:00:00Z`);
+	return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === day;
+}, "Expected a day that exists");
+
+/**
+ * Who may get a record's files. `open`: anyone, here and on Zenodo. `private`: nobody but the community's editors.
+ * `embargo`: nobody until `until`, then anyone. `readers`: the community's readers here, never Zenodo's, for a licence
+ * that doesn't let anyone share the work. The record and its DOI stay public in every case.
+ */
+export const fileAccessSchema = z.discriminatedUnion("mode", [
+	// `asDeposited`: a record deposited under a licence that isn't open before its files could be kept, whose files stay
+	// public as deposited until an editor chooses otherwise (drizzle/0113_item-file-access.sql).
+	z.object({ mode: z.literal("open"), asDeposited: z.literal(true).optional() }).strict(),
+	z.object({ mode: z.literal("private") }).strict(),
+	z.object({ mode: z.literal("readers") }).strict(),
+	z.object({ mode: z.literal("embargo"), until: calendarDay }).strict(),
+]);
+export type FileAccess = z.infer<typeof fileAccessSchema>;
+
+/** What a licence lets its files be: an open one anything but readers-only, one that isn't open private or readers-only. */
+export const fileAccessModes = (licence: RecordLicence): readonly FileAccess["mode"][] => (licenceOpen(licence) ? ["open", "private", "embargo"] : ["readers", "private"]);
+
+/**
+ * The access a record's files have: the one chosen, when its licence allows it, else the licence's own (open or
+ * private). Files public as deposited stay so whatever the licence.
+ */
+export function fileAccessOf(licence: RecordLicence | null | undefined, chosen: FileAccess | null | undefined): FileAccess {
+	if (!licence) return chosen ?? { mode: "open" };
+	if (chosen && (fileAccessModes(licence).includes(chosen.mode) || (chosen.mode === "open" && chosen.asDeposited))) return chosen;
+	return licenceOpen(licence) ? { mode: "open" } : { mode: "private" };
+}
+
+/** Whether readers here can't get the files on `today` (YYYY-MM-DD): kept private, or an embargo not yet over. */
+export const filesHiddenOn = (access: FileAccess, today: string) => access.mode === "private" || (access.mode === "embargo" && access.until > today);
+
+/** What a deposit sends for the files' access: nothing when anyone may get them, else restricted, until a day under an embargo. */
+export function publicationFileAccess(access: FileAccess): { restricted: true; until?: string } | undefined {
+	if (access.mode === "open") return undefined;
+	return access.mode === "embargo" ? { restricted: true, until: access.until } : { restricted: true };
+}
+
+/** Today in UTC, the day embargoes are counted in. */
+export const utcDay = (now: Date = new Date()) => now.toISOString().slice(0, 10);
+
 export function publicationLicence(licence: RecordLicence): { license: string } | { customLicense: { title: string; url: string } } {
 	return licence.kind === "zenodo" ? { license: licence.id } : { customLicense: { title: licence.title, url: licence.url } };
 }

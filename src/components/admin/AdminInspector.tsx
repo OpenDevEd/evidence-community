@@ -25,8 +25,8 @@ import type { RemovalDoi } from "@/lib/admin/removal-doi";
 import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { RecordDoiPanel } from "./PublishingChoicePanel";
 import { LicenceInput } from "./LicenceInput";
-import { licenceLabel } from "@/lib/licences";
-import { licenceComplete, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
+import { FileAccessInput } from "./FileAccessInput";
+import { fileAccessOf, fileAccessSchema, licenceComplete, licenceLabel, recordLicenceSchema, type FileAccess, type RecordLicence } from "@/lib/licences";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import OpenScholar from "@/components/icons/OpenScholar";
@@ -670,7 +670,15 @@ function LicenceHold({ missing, children }: { missing: boolean; children: ReactN
 }
 
 /** A record's licence, with what it needs to show and change it. Only records made here, which can get a DOI, have one. */
-type RecordLicenceField = { value: RecordLicence | null; change: AdminDraftDiff["licence"]; defaultLicence: string; needed: boolean; onChange: (licence: RecordLicence | null) => void };
+type RecordLicenceField = {
+	value: RecordLicence | null;
+	change: AdminDraftDiff["licence"];
+	defaultLicence: string;
+	needed: boolean;
+	onChange: (licence: RecordLicence | null) => void;
+	/** Who may get the record's files, which the licence decides the choices of: saved, changed, and changing it. */
+	fileAccess: { value: FileAccess | null; change: AdminDraftDiff["fileAccess"]; onChange: (access: FileAccess | null) => void };
+};
 
 /** Under the Rights field, on a record that has a licence. */
 const LicenceEditor = memo(function LicenceEditor({ id, field, licence, rights, readOnly }: { id: string; field: string; licence: RecordLicenceField | null; rights: string; readOnly: boolean }) {
@@ -700,9 +708,27 @@ const LicenceEditor = memo(function LicenceEditor({ id, field, licence, rights, 
 				disabled={readOnly}
 				onChange={licence.onChange}
 			/>
+			<FieldLabel
+				action={
+					licence.fileAccess.change && !readOnly ? (
+						<ChangedMarker
+							label="who gets the file"
+							publishedValue={describeFileAccess(fileAccessOf(licence.change ? licence.change.previous : licence.value, licence.fileAccess.change.previous))}
+							onRevert={() => licence.fileAccess.onChange(licence.fileAccess.change!.previous)}
+						/>
+					) : null
+				}
+			>
+				Who gets the file
+			</FieldLabel>
+			<FileAccessInput licence={licence.value} value={licence.fileAccess.value} disabled={readOnly} onChange={licence.fileAccess.onChange} />
 		</div>
 	);
 });
+
+/** Who may get the files, in the words the field's choices use. */
+const describeFileAccess = (access: FileAccess) =>
+	access.mode === "open" ? "Anyone" : access.mode === "readers" ? "Readers here" : access.mode === "embargo" ? `From ${access.until}` : "Editors only";
 
 function countryFocusPlacement(definition: AdminSchemaDefinition | undefined) {
 	const metadataFields = adminFieldDescriptors(definition);
@@ -909,15 +935,18 @@ function MetadataEditor({
 											readOnly={readOnly}
 											error={errors.countryFocus}
 										/>
-										<OpenAccessEditor
-											value={payload.openAccess}
-											fromDoi={!registersDoi && showsDoi(payload)}
-											fromSources={detail.openAccessFromSources}
-											change={diff.openAccess}
-											onChange={onChange}
-											readOnly={readOnly}
-											error={errors.openAccess}
-										/>
+										{/* A record made here is open access by its licence and who gets its file, set under its rights. */}
+										{licence ? null : (
+											<OpenAccessEditor
+												value={payload.openAccess}
+												fromDoi={!registersDoi && showsDoi(payload)}
+												fromSources={detail.openAccessFromSources}
+												change={diff.openAccess}
+												onChange={onChange}
+												readOnly={readOnly}
+												error={errors.openAccess}
+											/>
+										)}
 										<StudyTypeEditor
 											value={payload.studyType}
 											reading={detail.readingStudyType}
@@ -1855,7 +1884,14 @@ export function AdminInspector({
 	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);
 	const licenceField: RecordLicenceField | null =
 		detail.kind === "created" && !detail.parentItem
-			? { value: recordLicence(payload.licence), change: diff.licence, defaultLicence, needed: doiChosen, onChange: (licence) => patchPayload({ licence }) }
+			? {
+					value: recordLicence(payload.licence),
+					change: diff.licence,
+					defaultLicence,
+					needed: doiChosen,
+					onChange: (licence) => patchPayload({ licence }),
+					fileAccess: { value: fileAccessSchema.safeParse(payload.fileAccess).data ?? null, change: diff.fileAccess, onChange: (fileAccess) => patchPayload({ fileAccess }) },
+				}
 			: null;
 	// It holds sending the draft on, never opening one: a record needs its draft to get its licence.
 	const licenceMissing = Boolean(detail.draft && licenceField?.needed && !licenceComplete(licenceField.value));

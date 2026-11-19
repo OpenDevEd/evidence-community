@@ -1,4 +1,4 @@
-import type { RecordLicence } from "@/lib/licences";
+import type { FileAccess, RecordLicence } from "@/lib/licences";
 import type { StudyTypeKey } from "@/lib/readings/study-types";
 import {
 	canonicalRecordKeyCheck,
@@ -126,6 +126,9 @@ export const item = pgTable(
 		// Library-owned. The licence the record's DOI goes out under, on records made in the library. Null until a person
 		// picks one or the record's import found one; a record with none can't get a DOI.
 		licence: jsonb().$type<RecordLicence>(),
+		// Library-owned. Who may get the record's files, here and on Zenodo. Null leaves it to the licence: anyone under an
+		// open licence, nobody but the community's editors under one that isn't.
+		fileAccess: jsonb().$type<FileAccess>(),
 		assignee: varchar(),
 		filingDate: varchar(),
 		applicationNumber: varchar(),

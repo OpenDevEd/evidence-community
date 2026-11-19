@@ -1,4 +1,5 @@
 import { nightlyScheduleForDate } from "@/lib/nightly-schedule";
+import { settleRecordFiles } from "@/lib/admin/record-files-nightly";
 import type { CrossrefDepositor } from "@opendeved/doi-sync-core";
 import { and, desc, eq, gte } from "drizzle-orm";
 
@@ -20,6 +21,7 @@ type PublicationWorkerOperations = {
 	reconcile?: typeof runNightlyPublicationReconciliation;
 	runCrossref?: typeof runCrossrefPublicationJobsOnce;
 	runZenodo?: typeof runZenodoPublicationJobsOnce;
+	settleRecordFiles?: typeof settleRecordFiles;
 };
 
 export type PublicationWorkerCycleResult = {
@@ -78,6 +80,20 @@ export async function publicationNightlyRunIsDue(
 	);
 }
 
+/** Each night, records' files go where who may get them says (`settleRecordFiles`); a failure waits for the next night. */
+async function settleRecordFilesTonight(
+	database: Database,
+	storage: EvidenceFileStorage,
+	now: Date,
+	options: { signal?: AbortSignal; operations?: PublicationWorkerOperations },
+	errors: PublicationWorkerCycleResult["errors"][number][],
+) {
+	await (options.operations?.settleRecordFiles ?? settleRecordFiles)(database, storage, now).catch((error: unknown) => {
+		throwIfAborted(options.signal, error);
+		errors.push({ stage: "reconciling", message: `Record files: ${errorMessage(error)}` });
+	});
+}
+
 export async function runPublicationWorkerCycle(
 	database: Database,
 	config: PublicationConfig,
@@ -122,6 +138,7 @@ export async function runPublicationWorkerCycle(
 			nightly = "failed";
 			errors.push({ stage: "reconciling", message: errorMessage(error) });
 		}
+		await settleRecordFilesTonight(database, storage, now(), options, errors);
 	}
 
 	const outcomes: PublicationWorkerCycleResult["outcomes"][number][] = [];

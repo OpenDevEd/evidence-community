@@ -29,11 +29,20 @@ export interface EvidenceFileStorage {
 }
 
 export class EvidenceFileStorageError extends Error {
-	constructor(operation: string, message: string) {
+	constructor(
+		operation: string,
+		message: string,
+		/** The object isn't there, as opposed to storage failing to answer. */
+		readonly missing = false,
+	) {
 		super(`Storage ${operation} failed: ${message}`);
 		this.name = "EvidenceFileStorageError";
 	}
 }
+
+/** Supabase answers a missing object with 404, or 400 carrying `statusCode: "404"` on older servers. */
+const missingObject = (error: { message: string; status?: unknown; statusCode?: unknown }) =>
+	error.status === 404 || error.statusCode === "404" || /not.?found/iu.test(error.message);
 
 type StorageFailure = { message: string; status?: number; code?: string; originalError?: unknown };
 
@@ -109,6 +118,7 @@ export function createSupabaseFileStorage(
 				throw new EvidenceFileStorageError(
 					"private download",
 					error.message,
+					missingObject(error),
 				);
 			}
 			return new Uint8Array(await data.arrayBuffer());
@@ -122,6 +132,7 @@ export function createSupabaseFileStorage(
 				throw new EvidenceFileStorageError(
 					"public download",
 					error.message,
+					missingObject(error),
 				);
 			}
 			return new Uint8Array(await data.arrayBuffer());
