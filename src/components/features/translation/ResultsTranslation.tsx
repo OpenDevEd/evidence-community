@@ -407,7 +407,13 @@ export function ResultsTranslationControl() {
 											<MdTranslate className="size-4 shrink-0" />
 										)
 									}
-									onPress={done ? context.undo : context.run}
+									onPress={() => {
+										// The reader came to read: the trigger shows progress, and the popover stops covering the list.
+										setIsOpen(false);
+										setView("main");
+										if (done) context.undo();
+										else context.run();
+									}}
 								>
 									{isTranslating
 										? record

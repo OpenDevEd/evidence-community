@@ -113,7 +113,8 @@ export function MeaningResultNote() {
 		);
 	}
 	const hide = <NoteAction onPress={() => setWordsOnly(true)}>{t("showOnlyWordMatches", { count: wordsTotal })}</NoteAction>;
-	if (wordsTotal === 0) return <MeaningNote title={t("noWordMatches")} body={t("allByMeaning")} />;
+	// Leads with what the list is, so a search with no word matches doesn't read as a failed one.
+	if (wordsTotal === 0) return <MeaningNote title={t("allByMeaning")} body={t("noWordMatches")} />;
 	if (wordsTotal < FEW_WORD_MATCHES) {
 		return <MeaningNote title={t("fewWordMatches", { count: wordsTotal })} body={t("restByMeaning")} action={hide} />;
 	}
