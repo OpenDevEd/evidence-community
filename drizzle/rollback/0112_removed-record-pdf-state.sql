@@ -1,0 +1,2 @@
+-- Rollback for 0112_removed-record-pdf-state: nothing to run. Its function only stops calling a removed record's PDF
+-- live, and the previous runtime reads the table it fills as it is.
