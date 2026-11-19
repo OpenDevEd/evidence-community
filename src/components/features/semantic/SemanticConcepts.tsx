@@ -6,7 +6,7 @@ import { twMerge } from "tailwind-merge";
 import { MdTranslate } from "react-icons/md";
 import { TbAffiliate, TbWorldSearch } from "react-icons/tb";
 import { IoClose } from "react-icons/io5";
-import { SEMANTIC_CONCEPTS, type SemanticInfo } from "@/lib/semantic-concepts";
+import { FEW_WORD_MATCHES, SEMANTIC_CONCEPTS, type SemanticInfo } from "@/lib/semantic-concepts";
 
 type SemanticChange = { concept?: number; like?: string; theme?: number; literal?: boolean };
 
@@ -81,17 +81,13 @@ export function SemanticResultNotes() {
 		);
 	}
 
-	if (semantic.rescued) {
-		return (
-			<div className="flex items-center gap-4 rounded-xl bg-white px-4 py-3 dark:bg-white/[4%]">
-				<span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-					<TbWorldSearch className="size-5" />
-				</span>
-				<span className="flex min-w-0 flex-col">
-					<span className="font-medium text-black/80 dark:text-white/80">{t("rescueTitle")}</span>
-					<span className="text-sm text-black/50 dark:text-white/50">{t("rescueBody", { count: total })}</span>
-				</span>
-			</div>
+	if (semantic.rescued) return <MeaningNote title={t("rescueTitle")} body={t("rescueBody", { count: total })} />;
+
+	if (semantic.wordsTotal !== undefined && semantic.wordsTotal < FEW_WORD_MATCHES) {
+		return semantic.wordsTotal === 0 ? (
+			<MeaningNote title={t("rescueTitle")} body={t("allByMeaning")} />
+		) : (
+			<MeaningNote title={t("fewWordMatches", { count: semantic.wordsTotal })} body={t("restByMeaning")} />
 		);
 	}
 
@@ -141,6 +137,21 @@ export function SemanticResultNotes() {
 	}
 
 	return null;
+}
+
+/** Above the results: the list is mostly or wholly by meaning, not by the search's words. */
+function MeaningNote({ title, body }: { title: string; body: string }) {
+	return (
+		<div className="flex items-center gap-4 rounded-xl bg-white px-4 py-3 dark:bg-white/[4%]">
+			<span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
+				<TbWorldSearch className="size-5" />
+			</span>
+			<span className="flex min-w-0 flex-col">
+				<span className="font-medium text-black/80 dark:text-white/80">{title}</span>
+				<span className="text-sm text-black/50 dark:text-white/50">{body}</span>
+			</span>
+		</div>
+	);
 }
 
 /** In a result's footer: why Blended listed it, or the way into More like this. */

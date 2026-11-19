@@ -882,6 +882,9 @@
 		"similarTo": "Zinazofanana na",
 		"clear": "Futa",
 		"findSimilar": "Tafuta zinazofanana",
-		"allThemes": "Zote"
+		"allThemes": "Zote",
+		"allByMeaning": "Kila tokeo hapa linakaribiana kimaana na utafutaji wako",
+		"fewWordMatches": "{count, plural, one {Rekodi # pekee ina} other {Rekodi # pekee zina}} maneno haya",
+		"restByMeaning": "Matokeo mengine yanakaribiana kimaana na utafutaji wako"
 	}
 }

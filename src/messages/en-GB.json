@@ -881,6 +881,9 @@
 		"similarTo": "Similar to",
 		"clear": "Clear",
 		"findSimilar": "Find similar",
-		"allThemes": "All"
+		"allThemes": "All",
+		"allByMeaning": "Every result here is close in meaning to your search",
+		"fewWordMatches": "{count, plural, one {Only # record uses} other {Only # records use}} these words",
+		"restByMeaning": "The other results are close in meaning to your search"
 	}
 }

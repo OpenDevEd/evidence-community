@@ -108,6 +108,7 @@ async function blended(r: Request): Promise<Result> {
 		total: Math.max(wordsTotal, MEANING_RESULT_LIMIT),
 		semantic: {
 			concept: 1,
+			wordsTotal,
 			meaningOnlyKeys: mixed.hits.map(({ key }) => String(key)).filter((key) => !wordKeys.has(key)),
 		},
 	};

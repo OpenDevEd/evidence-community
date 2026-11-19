@@ -11,6 +11,9 @@ export const SEMANTIC_CONCEPTS = [
 /** Every record has some meaning score, so a search by meaning lists only this many of the closest. */
 export const MEANING_RESULT_LIMIT = 50;
 
+/** Blended says most results are by meaning when words find fewer records than this. */
+export const FEW_WORD_MATCHES = 10;
+
 /** Rescue takes over when words find fewer records than this. */
 export const RESCUE_BELOW = 3;
 
@@ -18,6 +21,8 @@ export type SemanticInfo = {
 	concept: number;
 	/** Blended: records on this page found by meaning alone. */
 	meaningOnlyKeys?: string[];
+	/** Blended: how many records contain the search's words. */
+	wordsTotal?: number;
 	/** Understood query: what the search was taken to mean, in the library's language. */
 	understood?: { query: string; original: string; literal: boolean };
 	/** Rescue: words found this few, so the list is the closest by meaning. */

@@ -389,10 +389,10 @@ function ResourceArticle({
 					)}
 				>
 					<ZoteroRichText
-						markup={translated ? translated.abstract : abstractText || ""}
+						markup={translated?.abstract ?? (abstractText || "")}
 						className={twMerge(
 							"text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full transition-opacity",
-							translation?.pending && "opacity-40 animate-pulse",
+							(translation?.pending || translated?.abstractPending) && "opacity-40 animate-pulse",
 						)}
 					/>
 				</Skeleton>

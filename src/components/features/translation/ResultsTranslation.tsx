@@ -34,7 +34,7 @@ function languageNames(code: string, pageLocale: string) {
 
 const fold = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
-type Translation = { title: string; abstract: string; source: string; same: boolean };
+type TitleTranslation = { title: string; source: string; same: boolean };
 
 type ResultsTranslation = {
 	target: string;
@@ -42,7 +42,11 @@ type ResultsTranslation = {
 	setChoice: (choice: string) => void;
 	auto: boolean;
 	setAuto: (auto: boolean) => void;
-	translations: Record<string, Translation> | undefined;
+	titles: Record<string, TitleTranslation> | undefined;
+	abstracts: Record<string, string>;
+	/** Records whose abstract batch is still being translated. */
+	abstractsPending: Set<string>;
+	titlesPending: boolean;
 	isTranslating: boolean;
 	listedCount: number;
 	active: boolean;
@@ -54,14 +58,31 @@ type ResultsTranslation = {
 
 const ResultsTranslationContext = createContext<ResultsTranslation | null>(null);
 
-async function translate([, target, items]: [string, string, Array<{ key: string; title: string; abstract: string }>]) {
+/** Abstracts go in batches this size, side by side, so a page takes about as long as its slowest five. */
+const ABSTRACT_BATCH = 5;
+
+type Listed = { key: string; title: string; abstract: string };
+
+async function translatePart([, part, target, items]: [string, "titles" | "abstracts", string, unknown[]]) {
 	const response = await fetch("/api/mock-translate", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ target, items }),
+		body: JSON.stringify({ part, target, items }),
 	});
 	if (!response.ok) throw new Error(await response.text());
-	return ((await response.json()) as { translations: Record<string, Translation> }).translations;
+	return (await response.json())[part];
+}
+
+const swrOptions = { revalidateOnFocus: false, revalidateOnReconnect: false, keepPreviousData: false };
+
+function useAbstractBatch(active: boolean, target: string, batch: Listed[]) {
+	return useSWR<Record<string, string>>(
+		active && batch.length > 0
+			? ["mock-translate", "abstracts", target, batch.map(({ key, abstract }) => ({ key, abstract }))]
+			: null,
+		translatePart,
+		swrOptions,
+	);
 }
 
 const plain = (markup: string | undefined) => (markup ?? "").replace(/<[^>]+>/g, "");
@@ -87,11 +108,25 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 	const signature = `${target}:${listed.map(({ key }) => key).join(",")}`;
 	const active = listed.length > 0 && (auto || ranFor === signature);
 
-	const { data: translations, isLoading } = useSWR(
-		active ? ["mock-translate", target, listed] : null,
-		translate,
-		{ revalidateOnFocus: false, keepPreviousData: false },
+	const titlesQuery = useSWR<Record<string, TitleTranslation>>(
+		active ? ["mock-translate", "titles", target, listed.map(({ key, title }) => ({ key, title }))] : null,
+		translatePart,
+		swrOptions,
 	);
+	// A results page holds 20 records: four batches of five, one hook each.
+	const withAbstracts = listed.filter(({ abstract }) => abstract);
+	const batches = [0, 1, 2, 3].map((i) => withAbstracts.slice(i * ABSTRACT_BATCH, (i + 1) * ABSTRACT_BATCH));
+	const batchQueries = [
+		useAbstractBatch(active, target, batches[0]),
+		useAbstractBatch(active, target, batches[1]),
+		useAbstractBatch(active, target, batches[2]),
+		useAbstractBatch(active, target, batches[3]),
+	];
+	const abstracts = Object.assign({}, ...batchQueries.map(({ data }) => data ?? {})) as Record<string, string>;
+	const abstractsPending = new Set(
+		batchQueries.flatMap(({ isLoading }, i) => (active && isLoading ? batches[i].map(({ key }) => key) : [])),
+	);
+	const titlesPending = active && titlesQuery.isLoading;
 
 	const value: ResultsTranslation = {
 		target,
@@ -106,8 +141,11 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 			if (!next) setRanFor(null);
 			setOriginals(new Set());
 		},
-		translations: active ? translations : undefined,
-		isTranslating: active && isLoading,
+		titles: active ? titlesQuery.data : undefined,
+		abstracts: active ? abstracts : {},
+		abstractsPending,
+		titlesPending,
+		isTranslating: titlesPending || abstractsPending.size > 0,
 		listedCount: listed.length,
 		active,
 		run: () => {
@@ -132,21 +170,21 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 	return <ResultsTranslationContext.Provider value={value}>{children}</ResultsTranslationContext.Provider>;
 }
 
-/** The record's text in the chosen language while translation is on, else null. */
+/** The record's text in the chosen language while translation is on, part by part as each arrives; null when it needs none. */
 export function useItemTranslation(key: string | undefined) {
 	const context = use(ResultsTranslationContext);
 	const locale = useLocale();
 	if (!context || !key) return null;
-	const translation = context.translations?.[key];
-	const pending = context.isTranslating;
-	if (!translation || translation.same) return pending ? { pending: true as const } : null;
-	const showingOriginal = context.originals.has(key);
+	const title = context.titles?.[key];
+	if (!title) return context.titlesPending ? { pending: true as const } : null;
+	if (title.same) return null;
 	return {
 		pending: false as const,
-		title: translation.title,
-		abstract: translation.abstract,
-		sourceName: new Intl.DisplayNames([locale], { type: "language" }).of(translation.source) ?? translation.source,
-		showingOriginal,
+		title: title.title,
+		abstract: context.abstracts[key] as string | undefined,
+		abstractPending: context.abstractsPending.has(key),
+		sourceName: new Intl.DisplayNames([locale], { type: "language" }).of(title.source) ?? title.source,
+		showingOriginal: context.originals.has(key),
 		toggle: () => context.toggleOriginal(key),
 	};
 }
@@ -186,10 +224,10 @@ export function ResultsTranslationControl() {
 	);
 	if (!context) return null;
 
-	const { target, choice, auto, isTranslating, active, translations, listedCount } = context;
+	const { target, choice, auto, isTranslating, active, titles, listedCount } = context;
 	const pageLanguage = languageNames(LOCALE_LANGUAGE[locale] ?? locale, locale);
 	const targetLanguage = languageNames(target, locale);
-	const done = active && !isTranslating && !!translations;
+	const done = active && !isTranslating && !!titles;
 	const matches = languages.filter(({ code, own, inPage }) =>
 		[code, own, inPage].some((name) => fold(name).includes(fold(query.trim()))),
 	);
