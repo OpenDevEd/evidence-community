@@ -5,7 +5,7 @@ import {
 	AI_MODELS,
 	isAIModelId,
 	isSelectableAIModelId,
-	maximumReasoningEffort,
+	reasoningEffort,
 	STARTER_QUESTIONS_MODEL_ID,
 } from "./models";
 import {
@@ -65,17 +65,16 @@ import { toolActivitySummary, type ResearchToolPart } from "./tool-activity";
 import { screeningSelection } from "./screening-selection";
 
 const SELECTABLE_MODEL_IDS = [
+	"anthropic/claude-haiku-5.5",
 	"openai/gpt-6-luna",
-	"google/gemini-3.7-flash",
-	"x-ai/grok-4.6",
+	"google/gemini-4-hydrogen",
 ] as const;
-const CLAUDE_SONNET_MODEL_ID = "anthropic/claude-sonnet-5" as const;
-const CLAUDE_OPUS_MODEL_ID = "anthropic/claude-opus-5" as const;
+const CLAUDE_HAIKU_MODEL_ID = "anthropic/claude-haiku-5.5" as const;
 
-test("Claude models are configured but hidden, and Luna remains the default", () => {
+test("the AI offers Haiku, Luna and Hydrogen, each at its own reasoning effort, with Luna the default", () => {
 	assert.deepEqual(
 		AI_MODELS.map(({ id }) => id),
-		[...SELECTABLE_MODEL_IDS, CLAUDE_SONNET_MODEL_ID, CLAUDE_OPUS_MODEL_ID],
+		SELECTABLE_MODEL_IDS,
 	);
 	assert.deepEqual(
 		AI_MODELS.filter(({ hidden }) => !hidden).map(({ id }) => id),
@@ -83,22 +82,17 @@ test("Claude models are configured but hidden, and Luna remains the default", ()
 	);
 	assert.equal(DEFAULT_AI_MODEL_ID, "openai/gpt-6-luna");
 	assert.equal(STARTER_QUESTIONS_MODEL_ID, "openai/gpt-6-luna");
-	assert.equal(isAIModelId("openai/gpt-5.6-sol"), false);
-	assert.equal(isAIModelId(CLAUDE_SONNET_MODEL_ID), true);
-	assert.equal(isAIModelId(CLAUDE_OPUS_MODEL_ID), true);
-	assert.equal(isSelectableAIModelId(CLAUDE_SONNET_MODEL_ID), false);
-	assert.equal(isSelectableAIModelId(CLAUDE_OPUS_MODEL_ID), false);
-	assert.equal(isAIModelId("openai/gpt-5.6-terra"), false);
-	assert.equal(maximumReasoningEffort("openai/gpt-6-luna"), "max");
-	assert.equal(maximumReasoningEffort("google/gemini-3.7-flash"), "high");
-	assert.equal(maximumReasoningEffort("x-ai/grok-4.6"), "xhigh");
-	assert.equal(maximumReasoningEffort(CLAUDE_SONNET_MODEL_ID), "max");
-	assert.equal(maximumReasoningEffort(CLAUDE_OPUS_MODEL_ID), "max");
+	assert.equal(isAIModelId("google/gemini-3.7-flash"), false);
+	assert.equal(isAIModelId("anthropic/claude-sonnet-5"), false);
+	assert.equal(isSelectableAIModelId(CLAUDE_HAIKU_MODEL_ID), true);
+	assert.equal(reasoningEffort(CLAUDE_HAIKU_MODEL_ID), "medium");
+	assert.equal(reasoningEffort("openai/gpt-6-luna"), "medium");
+	assert.equal(reasoningEffort("google/gemini-4-hydrogen"), "low");
 	assert.equal(
 		publicationGenerationSchema.safeParse({
 			prompt: "ITEM123",
 			feature: "summarize",
-			modelId: CLAUDE_SONNET_MODEL_ID,
+			modelId: "anthropic/claude-sonnet-5",
 		}).success,
 		false,
 	);
@@ -135,7 +129,7 @@ test("OpenRouter cache settings are stable and regeneration can refresh response
 		undefined,
 	);
 	assert.deepEqual(
-		openRouterExplicitCacheProviderOptions(CLAUDE_SONNET_MODEL_ID),
+		openRouterExplicitCacheProviderOptions(CLAUDE_HAIKU_MODEL_ID),
 		{
 			openrouter: {
 				cacheControl: { type: "ephemeral", ttl: "1h" },
@@ -151,13 +145,14 @@ test("OpenRouter cache settings are stable and regeneration can refresh response
 	);
 	// Gemini's thought signatures only work on the host that produced them.
 	assert.deepEqual(
-		createOpenRouterModelSettings("google/gemini-3.7-flash").provider,
+		createOpenRouterModelSettings("google/gemini-4-hydrogen").provider,
 		{ order: ["google-ai-studio"], allow_fallbacks: false },
 	);
 	assert.deepEqual(
 		createOpenRouterModelSettings(DEFAULT_AI_MODEL_ID, { sessionId }),
 		{
 			usage: { include: true },
+			reasoning: { effort: "medium" },
 			provider: {
 				order: ["amazon-bedrock/us-east-1"],
 				allow_fallbacks: true,
@@ -232,7 +227,7 @@ test("the OpenRouter adapter emits Claude automatic caching, PDF breakpoints, se
 		return new Response(
 			JSON.stringify({
 				id: "generation-test",
-				model: CLAUDE_SONNET_MODEL_ID,
+				model: CLAUDE_HAIKU_MODEL_ID,
 				provider: "test",
 				choices: [
 					{
@@ -268,8 +263,8 @@ test("the OpenRouter adapter emits Claude automatic caching, PDF breakpoints, se
 	const sessionId = "publication:test-session";
 	const result = await generateText({
 		model: openrouter(
-			CLAUDE_SONNET_MODEL_ID,
-			createOpenRouterModelSettings(CLAUDE_SONNET_MODEL_ID, {
+			CLAUDE_HAIKU_MODEL_ID,
+			createOpenRouterModelSettings(CLAUDE_HAIKU_MODEL_ID, {
 				sessionId,
 			}),
 		),
@@ -283,7 +278,7 @@ test("the OpenRouter adapter emits Claude automatic caching, PDF breakpoints, se
 						filename: "test.pdf",
 						data: new Uint8Array([37, 80, 68, 70, 45]),
 						providerOptions: openRouterExplicitCacheProviderOptions(
-							CLAUDE_SONNET_MODEL_ID,
+							CLAUDE_HAIKU_MODEL_ID,
 						),
 					},
 					{ type: "text", text: "Summarize this PDF." },
@@ -295,6 +290,8 @@ test("the OpenRouter adapter emits Claude automatic caching, PDF breakpoints, se
 
 	assert.ok(requestBody && typeof requestBody === "object");
 	assert.equal(Reflect.get(requestBody, "session_id"), sessionId);
+	// Every request carries the model's own reasoning effort.
+	assert.deepEqual(Reflect.get(requestBody, "reasoning"), { effort: "medium" });
 	assert.equal(Reflect.has(requestBody, "prompt_cache_key"), false);
 	assert.deepEqual(Reflect.get(requestBody, "cache_control"), {
 		type: "ephemeral",
@@ -674,14 +671,14 @@ test("preferred OpenRouter providers are requested per model with fallbacks", ()
 		order: ["amazon-bedrock/us-east-1"],
 		allow_fallbacks: true,
 	});
-	const gemini = createOpenRouterModelSettings("google/gemini-3.7-flash") as {
+	const gemini = createOpenRouterModelSettings("google/gemini-4-hydrogen") as {
 		provider?: { order: string[] };
 	};
 	assert.deepEqual(gemini.provider?.order, ["google-ai-studio"]);
-	const grok = createOpenRouterModelSettings("x-ai/grok-4.6") as {
+	const haiku = createOpenRouterModelSettings(CLAUDE_HAIKU_MODEL_ID) as {
 		provider?: unknown;
 	};
-	assert.equal(grok.provider, undefined);
+	assert.equal(haiku.provider, undefined);
 });
 
 test("current-results cursors may start at an unaligned offset (last window)", () => {

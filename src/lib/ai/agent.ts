@@ -7,7 +7,7 @@ import {
 	type ModelMessage,
 	type ToolModelMessage,
 } from "ai";
-import { maximumReasoningEffort, type AIModelId } from "./models";
+import type { AIModelId } from "./models";
 import { getOpenRouterModel } from "./provider";
 import {
 	openRouterExplicitCacheProviderOptions,
@@ -42,14 +42,6 @@ function logDevelopmentAgent(
 ) {
 	if (process.env.NODE_ENV !== "development") return;
 	console.info("[ai:agent]", JSON.stringify({ event, ...details }));
-}
-
-function maximumReasoning(modelId: AIModelId) {
-	return {
-		openrouter: {
-			reasoning: { effort: maximumReasoningEffort(modelId) },
-		},
-	};
 }
 
 function researchInstructions(
@@ -317,19 +309,10 @@ export function createResearchAgent({
 					logDecision("force-read");
 					return {
 						...cacheSettings,
-						providerOptions: maximumReasoning(modelId),
 						toolChoice: {
 							type: "tool" as const,
 							toolName: "readPublications" as const,
 						},
-					};
-				}
-
-				if (read) {
-					logDecision("maximum-reasoning");
-					return {
-						...cacheSettings,
-						providerOptions: maximumReasoning(modelId),
 					};
 				}
 
