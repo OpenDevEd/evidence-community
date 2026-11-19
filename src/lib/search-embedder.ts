@@ -13,7 +13,6 @@ const SEARCH_PREFIX: Record<string, string> = {
 };
 
 const OPENROUTER_EMBEDDINGS_URL = "https://openrouter.ai/api/v1/embeddings";
-const EMBEDDER_LOOKUP_TTL_MS = 5 * 60_000;
 
 type SearchEmbedder = {
 	name: string;
@@ -23,8 +22,6 @@ type SearchEmbedder = {
 	dimensions?: number;
 };
 
-const lookups = new Map<string, { embedder: SearchEmbedder; until: number }>();
-
 function describe(name: string, embedder: NonNullable<Embedder>): SearchEmbedder {
 	if (embedder.source !== "rest" || typeof embedder.request?.model !== "string") return { name };
 	const model = embedder.request.model;
@@ -32,20 +29,18 @@ function describe(name: string, embedder: NonNullable<Embedder>): SearchEmbedder
 	return prefix ? { name, model, prefix, dimensions: embedder.dimensions } : { name };
 }
 
-/** The index's one embedder, which the sync service sets per library. */
+/**
+ * The index's one embedder, which the sync service sets per library. Read on each use, about a millisecond: a cached
+ * name would break searches for as long as it outlived a switch.
+ */
 export async function getSearchEmbedder(indexName: string): Promise<SearchEmbedder> {
-	const cached = lookups.get(indexName);
-	if (cached && cached.until > Date.now()) return cached.embedder;
-
 	const embedders = Object.entries((await meilisearchClient.index(indexName).getEmbedders()) ?? {}).filter(
 		(entry): entry is [string, NonNullable<Embedder>] => entry[1] !== null,
 	);
 	if (embedders.length !== 1) {
 		throw new Error(`Index ${indexName} has ${embedders.length} embedders; search by meaning needs exactly one.`);
 	}
-	const embedder = describe(...embedders[0]);
-	lookups.set(indexName, { embedder, until: Date.now() + EMBEDDER_LOOKUP_TTL_MS });
-	return embedder;
+	return describe(...embedders[0]);
 }
 
 async function embedSearchText(model: string, input: string, dimensions: number | undefined) {
