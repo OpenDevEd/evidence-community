@@ -212,7 +212,11 @@ export function FilterChips() {
 						] as string[];
 						if (!values) return null;
 
-						return values.map((value) => {
+						// A parent with a region or country picked under it
+						// doesn't narrow the results, so it gets no chip.
+						return values
+							.filter((value) => !values.some((other) => other.startsWith(`${value} > `)))
+							.map((value) => {
 							const {
 								countryName,
 								label,

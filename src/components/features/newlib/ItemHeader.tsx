@@ -3,10 +3,10 @@
 import { Item } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { Link, usePathname } from "@/i18n/routing";
+import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useResourceHref } from "@/hooks/useResourceHref";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { backWithinSite } from "@/lib/utils";
 import { useCallback } from "react";
 import { BsQuote } from "react-icons/bs";
 import { FaCalendar } from "react-icons/fa";
@@ -88,14 +88,6 @@ export default function ItemHeader({
 		return finalURL.toString();
 	}, [item?.key, url]);
 
-	const handleBack = () => {
-		if (window.history.length <= 1) {
-			router.push("/");
-		} else {
-			router.back();
-		}
-	};
-
 	const pathname = usePathname();
 	const isCitationPage = pathname.includes(`/citation/${item?.key}`);
 	const resourceHref = useResourceHref();
@@ -108,7 +100,7 @@ export default function ItemHeader({
 						variant="transparent"
 						size="sm"
 						className="rounded-2xl"
-						onPress={handleBack}
+						onPress={() => backWithinSite(router)}
 						startContent={
 							<IoChevronBack className="rtl:rotate-180" />
 						}

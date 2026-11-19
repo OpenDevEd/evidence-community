@@ -554,7 +554,7 @@ export function ContentInteractions({
 	const searchContext = itemsContext.userData
 		? undefined
 		: normalizeLibrarySearchContext(itemsContext.queryParams);
-	const { setEngaged, setPendingInput, setPendingSend } =
+	const { setEngaged, setPendingInput, setPendingSend, askedSearchRef } =
 		useInlineChatLayout();
 	const canUseInlineChat = !itemsContext.userData;
 
@@ -563,13 +563,25 @@ export function ContentInteractions({
 	const askAI = (text: string) => {
 		const trimmed = text.trim();
 		if (canUseInlineChat) {
+			askedSearchRef.current = trimmed;
 			setPendingInput(trimmed);
 			setPendingSend(trimmed.length > 0);
 			setEngaged(true);
 			return;
 		}
+		askedSearchRef.current = trimmed;
 		setExternalInput(trimmed);
 		onChatOpen();
+	};
+	// Closing the chat puts back the search Ask AI took, unless a new one
+	// was typed meanwhile.
+	const onChatModalOpenChange = (open: boolean) => {
+		onChatOpenChange();
+		if (open) return;
+		if (askedSearchRef.current && !itemsContext.queryParams.search) {
+			itemsContext.handleSearchChange(askedSearchRef.current);
+		}
+		askedSearchRef.current = "";
 	};
 
 	return (
@@ -577,7 +589,7 @@ export function ContentInteractions({
 			<ChatModal
 				key={selectedModel}
 				isOpen={isChatOpen}
-				onOpenChange={onChatOpenChange}
+				onOpenChange={onChatModalOpenChange}
 				modelId={selectedModel}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}

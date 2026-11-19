@@ -51,6 +51,7 @@ import {
 	type BucketEntry,
 } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
+import { useFiltersContext } from "@/context/FiltersProvider";
 import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
 import type { AIModelId } from "@/lib/ai/models";
@@ -141,12 +142,14 @@ export default function InlineLibraryChat({
 		pendingSend,
 		setPendingSend,
 		requestSearchFocus,
+		askedSearchRef,
 		getChat,
 		chatRequestRef,
 		composerDraft,
 		setComposerDraft,
 		pdfSources,
 	} = useInlineChatLayout();
+	const filters = useFiltersContext();
 	const {
 		modelObject: { icon: ModelIcon },
 		selectedModel,
@@ -256,11 +259,17 @@ export default function InlineLibraryChat({
 	}, []);
 
 	// Close hands focus back to the library search field so Esc → type →
-	// ⌘↵ round-trips without the mouse.
+	// ⌘↵ round-trips without the mouse. The search Ask AI took comes back,
+	// unless a new one was typed while the chat was open.
+	const { queryParams, handleSearchChange } = filters;
 	const closeChat = useCallback(() => {
 		setEngaged(false);
+		if (askedSearchRef.current && !queryParams.search) {
+			handleSearchChange(askedSearchRef.current);
+		}
+		askedSearchRef.current = "";
 		requestSearchFocus();
-	}, [setEngaged, requestSearchFocus]);
+	}, [setEngaged, askedSearchRef, queryParams.search, handleSearchChange, requestSearchFocus]);
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
 			if (event.key !== "Escape" || event.defaultPrevented) return;

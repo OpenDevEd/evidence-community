@@ -26,7 +26,7 @@ import { INSTITUTION_LOGOS } from "@/constants/items";
 import { FacetDistribution } from "meilisearch";
 import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
 import { IoFilter } from "react-icons/io5";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
@@ -38,7 +38,7 @@ import {
 	useMultipleFacetLists,
 } from "@/hooks/useFacetList";
 import Image from "next/image";
-import { fetcher, getCountryAncestry, getCountryInfo } from "@/lib/utils";
+import { fetcher, fold, getCountryAncestry, getCountryInfo } from "@/lib/utils";
 import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
@@ -121,12 +121,16 @@ function FacetPicker({
 }) {
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
+	const locale = useLocale();
+	const countryNames = new Intl.DisplayNames([locale === "cn" ? "zh" : locale], { type: "region" });
+	// Labels are English: a country also matches by its name in the page's language.
+	const matchesSearch = (item: FacetListItem) => {
+		const code = item.key.split(" > ").pop() ?? "";
+		const localName = item.section === "Countries" && code.length === 2 ? countryNames.of(code) ?? "" : "";
+		return [item.label, localName].some((name) => fold(name).includes(fold(search.trim())));
+	};
 	const displayedList =
-		search.length > 0 && searchList
-			? searchList.filter((item) =>
-					item.label.toLowerCase().includes(search.toLowerCase())
-			  )
-			: list;
+		search.length > 0 && searchList ? searchList.filter(matchesSearch) : list;
 
 	const groupedBySection = displayedList.reduce((acc, item) => {
 		if (!acc[item.section || UNCATEGORIZED_SECTION]) {

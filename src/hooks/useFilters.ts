@@ -3,7 +3,7 @@ import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
 import { useQueryStates } from "nuqs";
-import { fetcher, buildFacetsQuery } from "@/lib/utils";
+import { fetcher, buildFacetsQuery, getCountryAncestry } from "@/lib/utils";
 import { searchParamsLoader } from "@/lib/searchParams";
 import {
 	Collection,
@@ -19,6 +19,7 @@ import {
 import { FeatureFlagsContext } from "@/context/Providers";
 import { isFeatureFlagEnabled } from "@/lib/feature-flags";
 import { normalizePathname } from "@/lib/path";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 
 const SWR_OPTIONS = {
 	keepPreviousData: true,
@@ -103,9 +104,14 @@ export function useFilters() {
 	);
 
 	// A new search shows its results by meaning again, so it never comes back empty because of an earlier choice.
+	// Any search change also means closing the chat must not bring back the search Ask AI took.
+	const { askedSearchRef } = useInlineChatLayout();
 	const handleSearchChange = useCallback(
-		(text: string) => setParams({ search: text, page: 1, wordsOnly: false }),
-		[setParams]
+		(text: string) => {
+			askedSearchRef.current = "";
+			setParams({ search: text, page: 1, wordsOnly: false });
+		},
+		[askedSearchRef, setParams]
 	);
 
 	const handleWordsOnlyChange = useCallback(
@@ -184,19 +190,27 @@ export function useFilters() {
 					});
 				}
 			} else if (currentValues.includes(country)) {
-				setParams({
-					[key]: currentValues.filter((c) => {
-						const sameCountry = c === country;
-						const isDescendant =
-							!sameCountry && c.startsWith(country);
-						return !sameCountry && !isDescendant;
-					}),
+				const remaining = currentValues.filter((c) => {
+					const sameCountry = c === country;
+					const isDescendant =
+						!sameCountry && c.startsWith(country);
+					return !sameCountry && !isDescendant;
 				});
+				// A parent kept only to reach this entry would widen the
+				// filter to the whole parent, so it goes too.
+				// Deepest first, so a region dropped here frees its continent.
+				let next = remaining;
+				for (const ancestor of getCountryAncestry(country).slice(0, -1).reverse()) {
+					if (!next.some((other) => other.startsWith(`${ancestor} > `))) {
+						next = next.filter((c) => c !== ancestor);
+					}
+				}
+				setParams({ [key]: next });
 			} else {
 				setParams({ [key]: [...currentValues, country] });
 			}
 		},
-		[params.country, params.author_country, setParams]
+		[params, setParams]
 	);
 
 	const handleCountrySelect = useCallback(
