@@ -102,7 +102,8 @@ export function MeaningResultNote() {
 	if (meaning.wordsOnly) {
 		return (
 			<MeaningNote
-				title={t("showingWordMatches", { count: wordsTotal })}
+				// Zero has its own line: some languages (French) put 0 in the singular.
+				title={wordsTotal === 0 ? t("noWordMatches") : t("showingWordMatches", { count: wordsTotal })}
 				body={t("meaningHidden")}
 				action={
 					<NoteAction accent onPress={() => setWordsOnly(false)}>
