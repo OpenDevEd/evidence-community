@@ -258,6 +258,7 @@ export async function getPublicItems(
 			like: searchParams.like ?? "",
 			theme: searchParams.theme ?? -1,
 			literal: searchParams.literal ?? false,
+			wordsOnly: searchParams.wordsOnly ?? false,
 			locale: options.locale ?? "en-GB",
 			offset: (pageNum - 1) * limitNum,
 			limit: limitNum,
@@ -326,7 +327,7 @@ export async function getPublicFacets(
 	const facetSearch =
 		concept === 2 && !searchParams.literal && search.trim()
 			? ((await understandQuery(search)) ?? search)
-			: [1, 3, 5].includes(concept) || (concept === 4 && searchParams.like)
+			: (concept === 1 && !searchParams.wordsOnly) || [3, 5].includes(concept) || (concept === 4 && searchParams.like)
 				? ""
 				: search;
 	const searchResults = await index.search(facetSearch, {

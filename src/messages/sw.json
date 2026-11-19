@@ -885,6 +885,11 @@
 		"allThemes": "Zote",
 		"allByMeaning": "Kila tokeo hapa linakaribiana kimaana na utafutaji wako",
 		"fewWordMatches": "{count, plural, one {Rekodi # pekee ina} other {Rekodi # pekee zina}} maneno haya",
-		"restByMeaning": "Matokeo mengine yanakaribiana kimaana na utafutaji wako"
+		"restByMeaning": "Matokeo mengine yanakaribiana kimaana na utafutaji wako",
+		"showOnlyWordMatches": "{count, plural, one {Onyesha rekodi hii pekee} other {Onyesha hizi # pekee}}",
+		"showingWordMatches": "{count, plural, one {Inaonyesha rekodi pekee yenye maneno haya} other {Inaonyesha rekodi # pekee zenye maneno haya}}",
+		"meaningHidden": "Matokeo yanayokaribiana kimaana yamefichwa",
+		"showMeaningResults": "Onyesha matokeo yenye maana inayofanana",
+		"someByMeaning": "Baadhi ya matokeo yanakaribiana kimaana badala ya kutumia maneno haya"
 	}
 }

@@ -103,15 +103,15 @@ export function useFilters() {
 	);
 
 	const handleSearchChange = useCallback(
-		(text: string) => setParams({ search: text, page: 1, like: "", theme: -1, literal: false }),
+		(text: string) => setParams({ search: text, page: 1, like: "", theme: -1, literal: false, wordsOnly: false }),
 		[setParams]
 	);
 
 	const handleSemanticChange = useCallback(
-		(change: { concept?: number; like?: string; theme?: number; literal?: boolean }) =>
+		(change: { concept?: number; like?: string; theme?: number; literal?: boolean; wordsOnly?: boolean }) =>
 			setParams({
 				page: 1,
-				...(change.concept !== undefined ? { like: "", theme: -1, literal: false } : {}),
+				...(change.concept !== undefined ? { like: "", theme: -1, literal: false, wordsOnly: false } : {}),
 				...change,
 			}),
 		[setParams]

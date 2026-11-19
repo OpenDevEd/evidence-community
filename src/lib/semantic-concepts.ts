@@ -23,6 +23,8 @@ export type SemanticInfo = {
 	meaningOnlyKeys?: string[];
 	/** Blended: how many records contain the search's words. */
 	wordsTotal?: number;
+	/** Blended: the results found by meaning alone are hidden. */
+	wordsOnly?: boolean;
 	/** Understood query: what the search was taken to mean, in the library's language. */
 	understood?: { query: string; original: string; literal: boolean };
 	/** Rescue: words found this few, so the list is the closest by meaning. */

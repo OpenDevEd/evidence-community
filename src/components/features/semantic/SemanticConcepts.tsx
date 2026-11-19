@@ -8,7 +8,7 @@ import { TbAffiliate, TbWorldSearch } from "react-icons/tb";
 import { IoClose } from "react-icons/io5";
 import { FEW_WORD_MATCHES, SEMANTIC_CONCEPTS, type SemanticInfo } from "@/lib/semantic-concepts";
 
-type SemanticChange = { concept?: number; like?: string; theme?: number; literal?: boolean };
+type SemanticChange = { concept?: number; like?: string; theme?: number; literal?: boolean; wordsOnly?: boolean };
 
 type SemanticState = {
 	concept: number;
@@ -83,12 +83,26 @@ export function SemanticResultNotes() {
 
 	if (semantic.rescued) return <MeaningNote title={t("rescueTitle")} body={t("rescueBody", { count: total })} />;
 
-	if (semantic.wordsTotal !== undefined && semantic.wordsTotal < FEW_WORD_MATCHES) {
-		return semantic.wordsTotal === 0 ? (
-			<MeaningNote title={t("rescueTitle")} body={t("allByMeaning")} />
-		) : (
-			<MeaningNote title={t("fewWordMatches", { count: semantic.wordsTotal })} body={t("restByMeaning")} />
-		);
+	if (semantic.wordsTotal !== undefined) {
+		const { wordsTotal } = semantic;
+		const hide = <NoteAction onPress={() => change({ wordsOnly: true })}>{t("showOnlyWordMatches", { count: wordsTotal })}</NoteAction>;
+		if (semantic.wordsOnly) {
+			return (
+				<MeaningNote
+					title={t("showingWordMatches", { count: wordsTotal })}
+					body={t("meaningHidden")}
+					action={<NoteAction onPress={() => change({ wordsOnly: false })}>{t("showMeaningResults")}</NoteAction>}
+				/>
+			);
+		}
+		if (wordsTotal === 0) return <MeaningNote title={t("rescueTitle")} body={t("allByMeaning")} />;
+		if (wordsTotal < FEW_WORD_MATCHES) {
+			return <MeaningNote title={t("fewWordMatches", { count: wordsTotal })} body={t("restByMeaning")} action={hide} />;
+		}
+		if (semantic.meaningOnlyKeys?.length) {
+			return <MeaningNote compact title={t("someByMeaning")} action={hide} />;
+		}
+		return null;
 	}
 
 	if (semantic.similarTo) {
@@ -140,17 +154,45 @@ export function SemanticResultNotes() {
 }
 
 /** Above the results: the list is mostly or wholly by meaning, not by the search's words. */
-function MeaningNote({ title, body }: { title: string; body: string }) {
+function MeaningNote({
+	title,
+	body,
+	action,
+	compact = false,
+}: {
+	title: string;
+	body?: string;
+	action?: ReactNode;
+	compact?: boolean;
+}) {
 	return (
-		<div className="flex items-center gap-4 rounded-xl bg-white px-4 py-3 dark:bg-white/[4%]">
-			<span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent">
-				<TbWorldSearch className="size-5" />
+		<div className={twMerge("flex items-center gap-4 rounded-xl bg-white dark:bg-white/[4%]", compact ? "px-3 py-2" : "px-4 py-3")}>
+			<span
+				className={twMerge(
+					"flex shrink-0 items-center justify-center rounded-full bg-accent/10 text-accent",
+					compact ? "size-8" : "size-10",
+				)}
+			>
+				<TbWorldSearch className={compact ? "size-4" : "size-5"} />
 			</span>
-			<span className="flex min-w-0 flex-col">
-				<span className="font-medium text-black/80 dark:text-white/80">{title}</span>
-				<span className="text-sm text-black/50 dark:text-white/50">{body}</span>
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className={twMerge("text-black/80 dark:text-white/80", compact ? "text-sm" : "font-medium")}>{title}</span>
+				{body && <span className="text-sm text-black/50 dark:text-white/50">{body}</span>}
 			</span>
+			{action}
 		</div>
+	);
+}
+
+function NoteAction({ onPress, children }: { onPress: () => void; children: ReactNode }) {
+	return (
+		<button
+			type="button"
+			onClick={onPress}
+			className="h-9 shrink-0 rounded-xl border-small border-black/10 bg-white px-3 text-sm font-medium text-black/80 transition-colors hover:bg-black/[4%] dark:border-white/10 dark:bg-secondary dark:text-white/80"
+		>
+			{children}
+		</button>
 	);
 }
 

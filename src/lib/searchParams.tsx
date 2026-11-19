@@ -23,6 +23,8 @@ export const searchParamsLoader = {
 	theme: parseAsInteger.withDefault(-1),
 	// Understood query: search the words as typed.
 	literal: parseAsBoolean.withDefault(false),
+	// Blended: hide the results found by meaning alone.
+	wordsOnly: parseAsBoolean.withDefault(false),
 	range: parseAsString.withDefault(""),
 	collectionId: parseAsString.withDefault("").withOptions({
 		scroll: true,

@@ -51,6 +51,7 @@ type Request = {
 	like: string;
 	theme: number;
 	literal: boolean;
+	wordsOnly: boolean;
 	locale: string;
 	offset: number;
 	limit: number;
@@ -89,6 +90,11 @@ function wordsOptions(r: Request) {
 }
 
 async function blended(r: Request): Promise<Result> {
+	if (r.wordsOnly) {
+		const words = await index(r.indexName).search(r.search, wordsOptions(r));
+		const wordsTotal = words.estimatedTotalHits ?? words.hits.length;
+		return { hits: words.hits, total: wordsTotal, semantic: { concept: 1, wordsTotal, wordsOnly: true } };
+	}
 	const [words, mixed] = await Promise.all([
 		index(r.indexName).search(r.search, {
 			limit: 1000,

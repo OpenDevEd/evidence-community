@@ -884,6 +884,11 @@
 		"allThemes": "All",
 		"allByMeaning": "Every result here is close in meaning to your search",
 		"fewWordMatches": "{count, plural, one {Only # record uses} other {Only # records use}} these words",
-		"restByMeaning": "The other results are close in meaning to your search"
+		"restByMeaning": "The other results are close in meaning to your search",
+		"showOnlyWordMatches": "{count, plural, one {Show only this record} other {Show only these #}}",
+		"showingWordMatches": "{count, plural, one {Showing only the record that uses these words} other {Showing only the # records that use these words}}",
+		"meaningHidden": "Results close in meaning are hidden",
+		"showMeaningResults": "Show similar meaning results",
+		"someByMeaning": "Some results are close in meaning rather than using these words"
 	}
 }
