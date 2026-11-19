@@ -454,7 +454,7 @@ function SearchTabContent({
 					)}
 				>
 					{!itemsContext.userData && <ResultsTranslationControl />}
-					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
+					<Card color="card" className="h-full flex items-center justify-center flex-1 min-w-0 px-0 border-small border-black/10 dark:border-white/10 dark:bg-secondary shadow-none">
 						<div className="px-3">
 							<Switch
 								size="sm"
