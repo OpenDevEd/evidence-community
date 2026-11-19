@@ -6,17 +6,16 @@ import { z } from "zod";
 import config from "@/constants/config.json";
 import { db } from "@/db";
 import { recordTranslation } from "@/db/schema/tables/recordTranslation";
+import { AIError } from "@/lib/ai/errors";
 import { getOpenRouterModel } from "@/lib/ai/provider";
 import meilisearchClient from "@/lib/meilisearch";
+import { compileLibrarySearchRequest } from "@/lib/search";
 import { textFingerprint } from "@/lib/text-fingerprint";
 import type { RecordTranslation, TranslationLanguage, TranslationPart } from "@/lib/translation-languages";
 import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 
 /** Translation needs a fast model and no reasoning. */
 export const TRANSLATION_MODEL_ID = "anthropic/claude-haiku-5.5";
-
-/** Longer abstracts are cut for the model; the fingerprint still covers the whole original. */
-const ABSTRACT_CHARACTERS = 6000;
 
 const FIELD = { title: "title", abstract: "abstractNote" } as const;
 
@@ -45,10 +44,14 @@ function ensureTable() {
 	return tableReady;
 }
 
-/** The records' current text, read from the library: a request names records, never the text to translate. */
+/**
+ * The records' current text, read from the library: a request names records, never the text to translate. Only
+ * records the public list can show, so a hidden or deleted record's text never comes back translated.
+ */
 async function currentText(part: TranslationPart, keys: string[]) {
+	const { finalFilters } = compileLibrarySearchRequest({});
 	const { hits } = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).search("", {
-		filter: [`key IN ${JSON.stringify(keys)}`, "deleted != 1"],
+		filter: [...finalFilters, `key IN ${JSON.stringify(keys)}`],
 		attributesToRetrieve: ["key", FIELD[part]],
 		limit: keys.length,
 	});
@@ -121,9 +124,7 @@ export async function translateRecords(part: TranslationPart, language: Translat
 		model: getOpenRouterModel(TRANSLATION_MODEL_ID),
 		output: outputs[part],
 		system: instructions(part, languageName(language)),
-		prompt: JSON.stringify(
-			missing.map(([key, text]) => ({ key, text: part === "abstract" ? text.slice(0, ABSTRACT_CHARACTERS) : text })),
-		),
+		prompt: JSON.stringify(missing.map(([key, text]) => ({ key, text }))),
 		providerOptions: { openrouter: { reasoning: { effort: "none" } } },
 	});
 
@@ -155,6 +156,11 @@ export async function translateRecords(part: TranslationPart, language: Translat
 					updatedAt: sql`now()`,
 				},
 			});
+	}
+	// What the model made is kept; a record it skipped fails the request, so the reader's retry asks for that one alone.
+	const skipped = missing.filter(([key]) => !translations[key]).length;
+	if (skipped > 0) {
+		throw new AIError("PROVIDER_ERROR", `The model returned no translation for ${skipped} of ${missing.length} records.`, 502);
 	}
 	return { translations, model };
 }

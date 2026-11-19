@@ -307,7 +307,7 @@ function ResourceArticle({
 	format: ReturnType<typeof useFormatter>;
 }) {
 	const translation = useItemTranslation(finalItemData?.key);
-	const translated = translation && !translation.pending && !translation.showingOriginal ? translation : null;
+	const translated = translation && !translation.showingOriginal ? translation : null;
 	return (
 		<article className="flex flex-col gap-4">
 			<Skeleton

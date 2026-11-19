@@ -239,17 +239,20 @@ export function useItemTranslation(key: string | undefined) {
 	const { store, target } = context;
 	const title = source.title ? translationIn(store, "title", target, key, source.title) : undefined;
 	const abstract = source.abstract ? translationIn(store, "abstract", target, key, source.abstract) : undefined;
-	// The title says which language the record is in; a record without one goes by its abstract.
-	const lead = source.title ? title : abstract;
+	// Each part on its own: an English title can sit over a French abstract.
+	const titleText = title && !title.same ? title.text : undefined;
+	const abstractText = abstract && !abstract.same ? abstract.text : undefined;
+	const pending = Boolean(source.title) && !title && context.titlesPending;
 	const abstractPending = context.abstractsPending.has(key);
-	if (!lead) return (source.title ? context.titlesPending : abstractPending) ? { pending: true as const } : null;
-	if (lead.same) return null;
+	if (!titleText && !abstractText && !pending && !abstractPending) return null;
 	return {
-		pending: false as const,
-		title: title && !title.same ? title.text : undefined,
-		abstract: abstract && !abstract.same ? abstract.text : undefined,
+		pending,
+		title: titleText,
+		abstract: abstractText,
+		/** Something on the record shows translated, so it offers the way back. */
+		translated: Boolean(titleText || abstractText),
 		abstractPending,
-		sourceName: title?.source ? languageName(title.source, locale) : null,
+		sourceName: titleText && title?.source ? languageName(title.source, locale) : null,
 		showingOriginal: context.originals.has(key),
 		toggle: () => context.toggleOriginal(key),
 	};
@@ -510,7 +513,7 @@ function LanguageOption({
 export function ItemTranslationToggle({ itemKey }: { itemKey: string | undefined }) {
 	const translation = useItemTranslation(itemKey);
 	const t = useTranslations("translation");
-	if (!translation || translation.pending) return null;
+	if (!translation?.translated) return null;
 	return (
 		<button
 			type="button"

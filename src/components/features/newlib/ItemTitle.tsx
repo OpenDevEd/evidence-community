@@ -27,7 +27,7 @@ export default function ItemTitle({ item, loadingProp }: { item: Item | undefine
 	const loading = loadingProp ?? context.loading;
 
 	const translation = useItemTranslation(item?.key);
-	const translated = translation && !translation.pending && !translation.showingOriginal ? translation : null;
+	const translated = translation && !translation.showingOriginal ? translation : null;
 	const escapedTitle = translated?.title ?? decodeHTMLEntities(item?.title || "");
 
 	return (

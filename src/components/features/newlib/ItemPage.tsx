@@ -692,7 +692,7 @@ function ItemPropertyRowWrapper({
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const translation = useItemTranslation(item?.key);
-	const translated = translation && !translation.pending && !translation.showingOriginal ? translation : null;
+	const translated = translation && !translation.showingOriginal ? translation : null;
 	const abstract = item?.abstractNote || "";
 	return (
 		<ItemPropertyRowWrapper
