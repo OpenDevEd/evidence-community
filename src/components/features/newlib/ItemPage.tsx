@@ -873,11 +873,11 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 	const t = useTranslations("ui");
 
 	return (
-		<div className="px-4">
-			<div className="flex items-center gap-3">
+		<div className="@container/identifier-row px-4">
+			<div className="identifier-line flex items-center gap-3">
 				<IdentifierLogo link={link} />
-				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-					<div className="truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">
+				<div className="identifier-body flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="identifier-text truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">
 						{getIdentifierDisplayTitle(link, t)}
 					</div>
 					<div className="relative min-w-0 overflow-hidden">
@@ -887,14 +887,14 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 							rel="noopener noreferrer"
 							// An identifier reads left to right on a right-to-left page too: "10.51878/…", not "…/10.51878".
 							dir="ltr"
-							className="block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link transition-colors hover:underline"
+							className="identifier-text block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link transition-colors hover:underline"
 						>
 							{link.value}
 						</a>
-						<div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-card_light via-card_light/80 to-transparent dark:from-card dark:via-card/80" />
+						<div className="identifier-fade pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-card_light via-card_light/80 to-transparent dark:from-card dark:via-card/80" />
 					</div>
 				</div>
-				<div className="flex shrink-0 items-center">
+				<div className="identifier-copy flex shrink-0 items-center">
 					<Tooltip color="default" content={t("copy")} placement="top">
 						<CopyButton
 							textToCopy={link.value}
@@ -959,19 +959,19 @@ function ItemLicenceRow({ licence }: { licence: RecordLicence }) {
 	const terms = licenceTermsUrl(licence);
 	const name = licenceLabel(licence);
 	return (
-		<div className="px-4">
-			<div className="flex items-center gap-3">
+		<div className="@container/identifier-row px-4">
+			<div className="identifier-line flex items-center gap-3">
 				<div className="flex size-9 shrink-0 self-start items-center justify-center rounded-xl border border-black/10 bg-white text-black/60 shadow-sm dark:border-white/10 dark:bg-white">
 					<HugeiconsIcon icon={LicenseIcon} size={18} aria-hidden />
 				</div>
-				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-					<div className="truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">{t("itemIdentifierLicence")}</div>
+				<div className="identifier-body flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="identifier-text truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">{t("itemIdentifierLicence")}</div>
 					{terms ? (
-						<a href={terms} target="_blank" rel="noopener noreferrer license" className="block truncate text-xs leading-tight text-link transition-colors hover:underline">
+						<a href={terms} target="_blank" rel="noopener noreferrer license" className="identifier-text block truncate text-xs leading-tight text-link transition-colors hover:underline">
 							{name}
 						</a>
 					) : (
-						<span className="block truncate text-xs leading-tight text-black/60 dark:text-white/60">{name}</span>
+						<span className="identifier-text block truncate text-xs leading-tight text-black/60 dark:text-white/60">{name}</span>
 					)}
 				</div>
 			</div>
