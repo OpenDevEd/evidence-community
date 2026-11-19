@@ -3027,7 +3027,7 @@ test("disables every metadata field until editing starts", async ({ page }) => {
 	}
 	await expect(creatorRole).toHaveAttribute("data-disabled", "true");
 
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await expect(title).toBeEnabled();
 	const editableFieldCount = await fields.count();
 	expect(editableFieldCount).toBeGreaterThanOrEqual(fieldCount);
@@ -3048,7 +3048,7 @@ test("keeps the form and the draft when Tab leaves an unchanged item type", asyn
 	});
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
 	await itemType.click();
@@ -3076,7 +3076,7 @@ test("uses controls that preserve every supported metadata value", async ({
 	});
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 
 	const url = inspector.getByLabel("URL", { exact: true });
 	const doi = inspector.getByLabel("DOI", { exact: true });
@@ -3151,7 +3151,7 @@ test("keeps an empty annotation colour empty", async ({ page }) => {
 	});
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 
 	const annotationColor = inspector.getByLabel("Annotation Color", {
 		exact: true,
@@ -3173,7 +3173,7 @@ test("shows draft differences with the published value and a revert action", asy
 	await page.goto("/admin");
 
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	const title = inspector.getByRole("textbox", {
 		name: "Title",
 		exact: true,
@@ -3292,7 +3292,7 @@ test("autosaves against the exact draft payload the editor saw", async ({
 	await page.goto("/admin");
 
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await inspector
 		.getByRole("textbox", { name: "Title", exact: true })
 		.fill("Locally edited title");
@@ -3333,7 +3333,7 @@ test("rebases an autosave queued behind an in-flight save", async ({
 	await page.goto("/admin");
 
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await inspector
 		.getByRole("textbox", { name: "Title", exact: true })
 		.fill("First local edit");
@@ -3367,7 +3367,7 @@ test("removes native memberships while imported and deleted memberships stay loc
 	});
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	const collectionsGroup = inspector.getByRole("group", {
 		name: "Collections",
 	});
@@ -5125,7 +5125,7 @@ test("continues a bulk action when one local draft cannot be saved", async ({
 	await page.goto("/admin");
 
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await inspector
 		.getByRole("textbox", { name: "Title", exact: true })
 		.fill("Invalid local draft");
@@ -5172,7 +5172,7 @@ test("shows server batch validation on the selected metadata field", async ({
 	});
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
-	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Edit", exact: true }).click();
 	await page
 		.getByRole("checkbox", {
 			name: "Select Published book",
