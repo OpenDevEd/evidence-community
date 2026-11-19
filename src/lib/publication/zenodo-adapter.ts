@@ -1303,10 +1303,11 @@ export async function runZenodoPublicationJobsOnce(
 						now,
 						signal: options.signal,
 					},
-					(signal) =>
+					// The token is read for each deposit: an owner's own account's (zenodo-token.ts) may end during a long batch.
+					async (signal) =>
 						executeLivePublicationSyncPlan({
 							plan: runnablePlan,
-							credentials: { zenodoToken: zenodo.token },
+							credentials: { zenodoToken: await zenodoToken(config) },
 							providers: {
 								zenodo:
 									options.provider ??

@@ -57,6 +57,7 @@ import {
 	ZenodoActivationValidationError,
 	ZenodoIdentifierPolicyLockedError,
 } from "@/lib/publication/errors";
+import { ZenodoReconnectError } from "@/lib/publication/zenodo-token";
 
 export const ADMIN_RESPONSE_HEADERS = {
 	"Cache-Control": "private, no-store",
@@ -211,7 +212,8 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	}
 	if (
 		error instanceof CrossrefActivationConfigurationError ||
-		error instanceof ZenodoActivationConfigurationError
+		error instanceof ZenodoActivationConfigurationError ||
+		error instanceof ZenodoReconnectError
 	) {
 		return {
 			code: "conflict",
