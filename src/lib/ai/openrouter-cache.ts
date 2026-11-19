@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { getAIModel, type AIModelId } from "./models";
+import { getAIModel, reasoningEffort, type AIModelId } from "./models";
 
 export const OPENROUTER_RESPONSE_CACHE_TTL = {
 	chat: 300,
@@ -36,6 +36,7 @@ export function createOpenRouterModelSettings(
 
 	return {
 		usage: { include: true as const },
+		reasoning: { effort: reasoningEffort(modelId) },
 		// Preferred OpenRouter providers for this model (e.g. Bedrock for
 		// Luna, AI Studio for Gemini). Fallbacks let a provider outage degrade
 		// to another host of the same model, never to a different model, except

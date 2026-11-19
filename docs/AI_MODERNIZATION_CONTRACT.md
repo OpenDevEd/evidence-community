@@ -49,26 +49,17 @@ OpenScholar already has a credits-billed OpenAI-compatible gateway (`/api/wallet
 
 Selectable models:
 
-| UI name          | Target model     |
-| ---------------- | ---------------- |
-| Gemini 3.7 Flash | Gemini 3.7 Flash |
-| GPT-6 Luna       | GPT-6 Luna       |
-| Grok 4.6         | Grok 4.6         |
+| UI name           | OpenRouter ID                | Reasoning effort | Deep Research maximum |
+| ----------------- | ---------------------------- | ---------------- | --------------------- |
+| Claude Haiku 5.5  | `anthropic/claude-haiku-5.5` | `medium`         | `max`                 |
+| GPT-6 Luna        | `openai/gpt-6-luna`          | `medium`         | `max`                 |
+| Gemini 4 Hydrogen | `google/gemini-4-hydrogen`   | `low`            | `max`                 |
 
-Hidden configured models, confirmed by the user on 2026-08-18:
-
-| Code name       | Current OpenRouter ID       | User selectable |
-| --------------- | --------------------------- | --------------- |
-| Claude Sonnet 5 | `anthropic/claude-sonnet-5` | No              |
-| Claude Opus 5   | `anthropic/claude-opus-5`   | No              |
-
-- Keep these Claude models in the central typed model registry with display metadata and provider configuration, but mark them hidden so they never appear in model lists or selection controls.
-- Hidden models may be used only by trusted programmatic code. Public AI request schemas must reject them even when a client sends their exact model IDs.
-- While OpenRouter is the active development gateway, both hidden Claude models use Anthropic automatic prompt caching and explicit large-context breakpoints with a one-hour TTL.
+The user chose this list on 2026-11-19. Every request to a model carries its reasoning effort; Deep Research raises it to the maximum for the steps below.
 
 Resolve each target to its current provider or OpenRouter model ID from the stored OpenScholar model list during implementation, and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale IDs.
 
-`openai/gpt-6-luna` is the default and the fixed cheap model for generated starter questions. GPT-5.6 Sol, Terra, Pro/batch variants, and Claude models other than the two hidden entries above are excluded.
+`openai/gpt-6-luna` is the default and the fixed cheap model for generated starter questions. Models not in the table are excluded.
 
 The user's selected model handles Summary, Explain, chat, Quick Answer, Deep Research, and Smart Screening. Starter-question generation is the only fixed-model exception.
 
@@ -100,7 +91,7 @@ Keep all of these user-facing features, including generated starter questions, t
 - Preserve conversations and history locally in the browser/session. Do not add server-side conversation persistence.
 - Preserve current PostHog feature flags as UI-only controls. Do not duplicate them as server authorization.
 - Use one modern AI SDK UI-message streaming protocol end to end. Do not mix text streams with UI-message clients or read obsolete `.content` fields from part-based messages.
-- In both global and publication chat, forward and visibly render every reasoning trace or reasoning summary returned by the selected model. Keep the model's default reasoning level. If a provider withholds reasoning, do not fabricate a trace.
+- In both global and publication chat, forward and visibly render every reasoning trace or reasoning summary returned by the selected model. Use the model's reasoning effort from the table. If a provider withholds reasoning, do not fabricate a trace.
 
 ## Direct-PDF contract
 
@@ -208,8 +199,7 @@ Conceptual input:
 - Deep Research searches default to full-text-only. If those results are missing or insufficient, the model may retry without the filter, but metadata-only results remain discovery leads and must not be presented as page-verified evidence.
 - If search produces no results, the agent may return a clear no-results answer without a PDF read.
 - Let the model choose search queries and publications. Do not recreate a bespoke planner/relevance/synthesis pipeline or separate orchestration service.
-- Keep provider-default reasoning for the initial search-query step. Use each model's verified maximum reasoning effort when selecting publications to read and for subsequent synthesis after a PDF read: `max` for GPT-6 Luna, `xhigh` for Grok 4.6, and `high` for Gemini 3.7 Flash. Reverify these values when the gateway or model IDs change.
-- If invoked programmatically, hidden Claude Sonnet 5 and Claude Opus 5 use verified `max` reasoning effort for those same Deep Research steps.
+- Keep the model's own reasoning effort for the initial search-query step. Use its verified maximum, from the table, when selecting publications to read and for synthesis after a PDF read. Reverify these values when the gateway or model IDs change.
 - In publication context, begin with the current publication and keep the research focused on it unless wider evidence is required.
 
 ### Smart Screening
