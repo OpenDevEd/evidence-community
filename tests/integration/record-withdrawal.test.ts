@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
+import { adminItemListProjection } from "../../src/db/schema/tables/adminItemListProjection";
 import { withIsolatedPublicationDatabase } from "../helpers/isolated-publication-database";
 import { item } from "../../src/db/schema/tables/item";
 import { publicationSyncJob, publicationTarget } from "../../src/db/schema/publication";
@@ -17,6 +18,7 @@ import { publicationRecordMetadata } from "../../src/lib/publication/record-meta
 import { libraryConfigSchema } from "../../src/config/library-config/schema";
 import { maximalLibraryConfig } from "../fixtures/library-config";
 import { MemoryFileStorage, createPdf, fileHash } from "../helpers/file-storage";
+import { itemDraft, itemFileDraft } from "@opendeved/evidence-library-core";
 import { itemFilePublication } from "../../src/db/schema/source";
 import { completeNativePdfUpload, stageNativePdfUpload } from "../../src/lib/admin/native-file-service";
 import { approveItemReview, submitItemReview } from "../../src/lib/admin/review-service";
@@ -130,6 +132,7 @@ it("takes a removed record's PDF out of public view, and puts the very same file
 		await unpublishNativeItemWithOutcome(db, parent.itemKey);
 		await hideRemovedFiles(db, storage, parent.itemKey);
 		assert.equal(storage.publicFiles.has(file!.objectPath), false, "A removed record's PDF is still public");
+		assert.notEqual(await listedFileState(db, parent.itemKey), "published", "The records table calls a removed record's PDF live");
 		// Pressing Unpublish again runs the move again, which finds nothing left to do.
 		await hideRemovedFiles(db, storage, parent.itemKey);
 
@@ -138,5 +141,28 @@ it("takes a removed record's PDF out of public view, and puts the very same file
 		await approveItemReview(db, storage, { reviewId: restoring.id, expectedRevision: restoring.revision }, editor, config);
 		assert.equal((await row(db, attachment.itemKey)).deleted, 0, "Restoring left the PDF's attachment removed");
 		assert.deepEqual(storage.publicFiles.get(file!.objectPath), published, "Restoring didn't put the same PDF back");
+		assert.equal(await listedFileState(db, parent.itemKey), "published");
 	});
 }, 120_000);
+
+// Clearing a demo community: a PDF imported as a draft couldn't be removed until its PDF's own draft was deleted first.
+it("deletes a draft never published with its own PDF", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		const storage = new MemoryFileStorage();
+		const parent = await createNativeItemDraft(db, { itemType: "Report", title: "Peer tutoring pilot" });
+		const attachment = await createNativeItemDraft(db, { itemType: "Attachment", parentItem: parent.itemKey, title: "The pilot's PDF" });
+		const pdf = await createPdf("Peer tutoring pilot");
+		const stage = await stageNativePdfUpload(db, storage, { itemKey: attachment.itemKey, filename: "pilot.pdf", expectedSizeBytes: pdf.byteLength, expectedSha256: fileHash(pdf), maxPdfBytes: 10_000_000 });
+		storage.privateFiles.set(stage.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, { itemKey: attachment.itemKey, expectedUploadRevision: stage.fileDraft.uploadRevision, maxPdfBytes: 10_000_000 });
+		const [staged] = await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, attachment.itemKey));
+
+		const removed = await removeNativeItem(db, parent.itemKey);
+		assert.deepEqual(await db.select().from(itemDraft).where(inArray(itemDraft.itemKey, [parent.itemKey, attachment.itemKey])), []);
+		assert.deepEqual(await db.select().from(itemFileDraft).where(eq(itemFileDraft.itemKey, attachment.itemKey)), []);
+		assert.ok(removed.stagedPrivatePaths.includes(staged!.objectPath), "The PDF's file isn't handed back to be deleted");
+	});
+}, 60_000);
+
+const listedFileState = async (db: Database, key: string) =>
+	(await db.select({ fileState: adminItemListProjection.fileState }).from(adminItemListProjection).where(eq(adminItemListProjection.key, key)))[0]?.fileState;

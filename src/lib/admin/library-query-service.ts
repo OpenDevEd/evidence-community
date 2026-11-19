@@ -124,7 +124,8 @@ function itemFileState(
 	filePublication: typeof itemFilePublication.$inferSelect | null,
 	published: typeof item.$inferSelect | null = null,
 ): AdminFileState {
-	if (filePublication) return "published";
+	// A removed attachment keeps its file row for a restore (withdrawn-files.ts), but its PDF has left public view.
+	if (filePublication && published?.deleted !== 1) return "published";
 	if (
 		published?.itemType === "Attachment" &&
 		published.deleted !== 1 &&

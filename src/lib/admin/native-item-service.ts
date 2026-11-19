@@ -1542,7 +1542,7 @@ async function unpublishNativeItemAttempt(
 	options: ItemUnpublishOptions = {},
 ) {
 	return db.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
+		await lockItemWithDraftChildren(transaction, itemKey);
 		const [candidate] = await transaction
 			.select()
 			.from(item)
@@ -1805,23 +1805,50 @@ export async function unpublishNativeItem(db: Database, itemKey: string) {
 	return (await unpublishNativeItemWithOutcome(db, itemKey)).item;
 }
 
-async function validateUnpublishedDraftRemoval(transaction: Transaction, itemKey: string) {
+/**
+ * A record's mutation lock, with its attachment drafts', in one call in key order as submitting a review takes them
+ * (submitItemReview): taking the record's first and its children's later could deadlock against it. An upload to an
+ * attachment takes that attachment's lock (stageNativePdfUpload), so deleting it waits for the upload.
+ */
+async function lockItemWithDraftChildren(transaction: Transaction, itemKey: string) {
+	const children = await transaction
+		.select({ key: itemDraft.itemKey })
+		.from(itemDraft)
+		.where(sql`${itemDraft.patch} ->> 'parentItem' = ${itemKey}`);
+	await lockItemMutations(transaction, [itemKey, ...children.map(({ key }) => key)]);
+}
+
+/**
+ * A draft never published is deleted with its own attachment drafts, never published either, and their PDFs: removing
+ * any record takes its own files with it. Returns those PDFs' private paths, to delete once the transaction commits.
+ */
+async function removeUnpublishedDraftChildren(transaction: Transaction, itemKey: string): Promise<string[]> {
 	const [pendingReview] = await transaction.select({ id: itemReview.id }).from(itemReview)
 		.where(and(eq(itemReview.state, "pending"), sql`${itemReview.snapshot}->'records' @> ${JSON.stringify([{ itemKey }])}::jsonb`)).limit(1);
 	if (pendingReview) throw new AdminValidationError("Withdraw or return the pending review before deleting this draft.");
-	const [childDraft] = await transaction
-		.select({ itemKey: itemDraft.itemKey })
+	const childDrafts = await transaction
+		.select({ itemKey: itemDraft.itemKey, published: item.key })
 		.from(itemDraft)
+		.leftJoin(item, eq(item.key, itemDraft.itemKey))
 		.where(sql`${itemDraft.patch} ->> 'parentItem' = ${itemKey}`)
-		.limit(1);
+		.orderBy(itemDraft.itemKey);
+	// Taken with the record's own by lockItemWithDraftChildren; a child made since then is locked now.
+	await lockItemMutations(transaction, childDrafts.map((child) => child.itemKey));
 	const [publishedChild] = await transaction
 		.select({ key: item.key })
 		.from(item)
 		.where(eq(item.parentItem, itemKey))
 		.limit(1);
-	if (childDraft || publishedChild) {
+	// A published attachment being moved under this draft isn't its own: it stays, and so does the draft.
+	if (publishedChild || childDrafts.some((child) => child.published)) {
 		throw new ItemHasChildrenError(itemKey);
 	}
+	const paths: string[] = [];
+	for (const child of childDrafts) {
+		const discarded = await discardItemDraftInTransaction(transaction, child.itemKey, { removeFileDraft: true });
+		paths.push(...(discarded?.stagedPrivatePaths ?? []));
+	}
+	return paths;
 }
 
 async function discardMetadataDraft(transaction: Transaction, itemKey: string) {
@@ -1898,10 +1925,10 @@ async function discardItemDraftInTransaction(
 		.from(item)
 		.where(eq(item.key, itemKey))
 		.limit(1);
-	if (!published) await validateUnpublishedDraftRemoval(transaction, itemKey);
+	const childPaths = published ? [] : await removeUnpublishedDraftChildren(transaction, itemKey);
 	if (draft) await discardMetadataDraft(transaction, itemKey);
  const stagedPrivatePaths = await discardStagedFileReferences(transaction, itemKey, staged, Boolean(published), removeFileDraft);
-	return {stagedPrivatePaths};
+	return {stagedPrivatePaths: [...stagedPrivatePaths, ...childPaths]};
 }
 
 async function discardNativeItemDraftIfPresentInTransaction(
@@ -1917,7 +1944,7 @@ async function discardNativeItemDraftIfPresentInTransaction(
 
 export async function discardItemDraft(db: Database, itemKey: string) {
 	return db.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
+		await lockItemWithDraftChildren(transaction, itemKey);
 		const discarded = await discardItemDraftInTransaction(
 			transaction,
 			itemKey,
