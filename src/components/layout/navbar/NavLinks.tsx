@@ -26,6 +26,9 @@ interface LinkItemProps {
 }
 
 
+/** Labels this short never truncate. */
+const SHORT_LABEL = 12;
+
 function getActiveHrefPath(href: string) {
 	if (href.startsWith("http://") || href.startsWith("https://")) {
 		try {
@@ -66,6 +69,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 	}, [timeoutRef, onOpen]);
 
 	const isActive = isActiveHref(pathname, link.href);
+	const label = localizeOrUseIfCapitalized(link.label, t);
 	const IconComponent = link.icon
 		? NAVBAR_ICONS[link.icon as keyof typeof NAVBAR_ICONS]
 		: null;
@@ -75,7 +79,9 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 			onMouseEnter={clearTimeoutOpen}
 			onMouseLeave={debouncedOnClose}
 			className={twMerge(
-				"flex items-center gap-2 text-black/60 dark:text-white/60",
+				"flex min-w-0 items-center gap-2 text-black/60 dark:text-white/60",
+				// Short labels keep their width; the long ones give way when the row is tight.
+				label.length <= SHORT_LABEL && "shrink-0",
 				isActive && "text-accent dark:text-accent"
 			)}
 		>
@@ -83,7 +89,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 				href={link.href}
 				data-is-mobile={isMobile}
 				className={twMerge(
-					"flex gap-2 text-lg items-center justify-center font-medium",
+					"flex min-w-0 gap-2 text-lg items-center justify-center font-medium",
 					styleVariant === "wide" && "uppercase font-base"
 				)}
 			>
@@ -99,9 +105,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 						)}
 					/>
 				)}
-				<span className="line-clamp-1">
-					{localizeOrUseIfCapitalized(link.label, t)}
-				</span>
+				<span className="min-w-0 truncate">{label}</span>
 			</Link>
 
 			{link.dropdown && link.dropdown.length > 0 && (

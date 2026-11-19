@@ -142,7 +142,7 @@ export default function Navbar() {
 				<Logo />
 
 				{/* Desktop navigation links (xl+) */}
-				<nav aria-label={t("mainNavAriaLabel")} className="flex-1">
+				<nav aria-label={t("mainNavAriaLabel")} className="min-w-0 flex-1">
 					<NavLinks pathname={pathname} styleVariant={styleVariant} />
 				</nav>
 

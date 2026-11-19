@@ -78,7 +78,7 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	return (
 		<Skeleton
 			isLoaded={true}
-			className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center"
+			className="w-[10.6875rem] h-[2.5rem] shrink-0 rounded-lg flex justify-center items-center"
 		>
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
 		</Skeleton>
