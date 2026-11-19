@@ -53,6 +53,8 @@ type ResultsTranslation = {
 	setAuto: (auto: boolean) => void;
 	/** This browser's stored translations; null through hydration. */
 	store: TranslationStore | null;
+	/** The listed records' current text, which a stored translation must have been made from. */
+	sources: ReadonlyMap<string, Listed>;
 	/** Records whose title or abstract is being translated right now. */
 	titlesPending: boolean;
 	abstractsPending: Set<string>;
@@ -82,8 +84,11 @@ async function translatePart([, part, target, items]: [string, "titles" | "abstr
 	});
 	if (!response.ok) throw new Error(await response.text());
 	const translated = (await response.json())[part];
-	if (part === "titles") saveTitles(target, translated);
-	else saveAbstracts(target, translated);
+	const sources = Object.fromEntries(
+		(items as Array<{ key: string; title?: string; abstract?: string }>).map(({ key, title, abstract }) => [key, title ?? abstract ?? ""]),
+	);
+	if (part === "titles") saveTitles(target, translated, sources);
+	else saveAbstracts(target, translated, sources);
 	return translated;
 }
 
@@ -91,7 +96,7 @@ const swrOptions = { revalidateOnFocus: false, revalidateOnReconnect: false, kee
 
 /** One batch of abstracts, asking only for those this browser hasn't stored yet. */
 function useAbstractBatch(active: boolean, store: TranslationStore | null, target: string, batch: Listed[]) {
-	const missing = store ? batch.filter(({ key }) => abstractIn(store, target, key) === undefined) : [];
+	const missing = store ? batch.filter(({ key, abstract }) => abstractIn(store, target, key, abstract) === undefined) : [];
 	const query = useSWR(
 		active && missing.length > 0
 			? ["mock-translate", "abstracts", target, missing.map(({ key, abstract }) => ({ key, abstract }))]
@@ -137,7 +142,7 @@ export function ResultsTranslationProvider({
 	const signature = `${target}:${listed.map(({ key }) => key).join(",")}`;
 	const active = store !== null && listed.length > 0 && (auto || ranFor === signature);
 
-	const missingTitles = store ? listed.filter(({ key }) => titleIn(store, target, key) === undefined) : [];
+	const missingTitles = store ? listed.filter(({ key, title }) => titleIn(store, target, key, title) === undefined) : [];
 	const titlesQuery = useSWR(
 		active && missingTitles.length > 0
 			? ["mock-translate", "titles", target, missingTitles.map(({ key, title }) => ({ key, title }))]
@@ -173,6 +178,7 @@ export function ResultsTranslationProvider({
 			setOriginals(new Set());
 		},
 		store,
+		sources: new Map(listed.map((record) => [record.key, record])),
 		titlesPending,
 		abstractsPending,
 		isTranslating,
@@ -206,13 +212,15 @@ export function useItemTranslation(key: string | undefined) {
 	const context = use(ResultsTranslationContext);
 	const locale = useLocale();
 	if (!context || !key || !context.active) return null;
-	const title = titleIn(context.store, context.target, key);
+	const source = context.sources.get(key);
+	if (!source) return null;
+	const title = titleIn(context.store, context.target, key, source.title);
 	if (!title) return context.titlesPending ? { pending: true as const } : null;
 	if (title.same) return null;
 	return {
 		pending: false as const,
 		title: title.title,
-		abstract: abstractIn(context.store, context.target, key),
+		abstract: abstractIn(context.store, context.target, key, source.abstract),
 		abstractPending: context.abstractsPending.has(key),
 		sourceName: languageName(title.source, locale),
 		showingOriginal: context.originals.has(key),

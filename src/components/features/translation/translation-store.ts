@@ -1,12 +1,13 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { textFingerprint } from "@/lib/text-fingerprint";
 
 /**
  * Translations this browser has made, by language and record, kept in localStorage so a record is translated once:
  * on the results, on its item page and on the next visit.
  */
-const STORAGE_KEY = "record-translations-v1";
+const STORAGE_KEY = "record-translations-v2";
 
 /**
  * About 800 records with full abstracts. Past it the oldest saves go first: the server keeps every translation, so a
@@ -62,22 +63,24 @@ function save(next: TranslationStore) {
 	listeners.forEach((listener) => listener());
 }
 
-const id = (target: string, key: string) => `${target}:${key}`;
+/** Language, record and the fingerprint of the text translated: a changed original no longer matches. */
+const id = (target: string, key: string, source: string) => `${target}:${key}:${textFingerprint(source)}`;
 
-export const titleIn = (store: TranslationStore | null, target: string, key: string) =>
-	store?.titles[id(target, key)];
-export const abstractIn = (store: TranslationStore | null, target: string, key: string) =>
-	store?.abstracts[id(target, key)];
+export const titleIn = (store: TranslationStore | null, target: string, key: string, source: string) =>
+	store?.titles[id(target, key, source)];
+export const abstractIn = (store: TranslationStore | null, target: string, key: string, source: string) =>
+	store?.abstracts[id(target, key, source)];
 
-export function saveTitles(target: string, titles: Record<string, TitleTranslation>) {
+/** Each record's translation saved against the text it was made from. */
+export function saveTitles(target: string, titles: Record<string, TitleTranslation>, sources: Record<string, string>) {
 	const current = load();
-	const added = Object.entries(titles).map(([key, title]) => [id(target, key), title] as const);
+	const added = Object.entries(titles).map(([key, title]) => [id(target, key, sources[key] ?? ""), title] as const);
 	save({ ...current, titles: { ...without(current.titles, added.map(([key]) => key)), ...Object.fromEntries(added) } });
 }
 
-export function saveAbstracts(target: string, abstracts: Record<string, string>) {
+export function saveAbstracts(target: string, abstracts: Record<string, string>, sources: Record<string, string>) {
 	const current = load();
-	const added = Object.entries(abstracts).map(([key, abstract]) => [id(target, key), abstract] as const);
+	const added = Object.entries(abstracts).map(([key, abstract]) => [id(target, key, sources[key] ?? ""), abstract] as const);
 	save({ ...current, abstracts: { ...without(current.abstracts, added.map(([key]) => key)), ...Object.fromEntries(added) } });
 }
 

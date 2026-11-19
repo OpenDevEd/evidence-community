@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { textFingerprint } from "@/lib/text-fingerprint";
 
 // shortcut: mock only — translations are kept in this process; the real version stores each one per record, part and language.
 const titles = new Map<string, { title: string; source: string; same: boolean }>();
@@ -17,6 +18,9 @@ const bodySchema = z.discriminatedUnion("part", [
 		items: z.array(z.object({ key: z.string(), abstract: z.string() })).max(10),
 	}),
 ]);
+
+/** Language, record and the fingerprint of the text translated, so an edited original is translated again. */
+const id = (target: string, key: string, source: string) => `${target}:${key}:${textFingerprint(source)}`;
 
 const languageName = (code: string) => new Intl.DisplayNames(["en"], { type: "language" }).of(code) ?? code;
 
@@ -47,36 +51,42 @@ export async function POST(request: NextRequest) {
 	const language = languageName(body.target);
 
 	if (body.part === "titles") {
-		const missing = body.items.filter(({ key }) => !titles.has(`${body.target}:${key}`));
+		const sourceOf = new Map(body.items.map(({ key, title }) => [key, title]));
+		const missing = body.items.filter(({ key, title }) => !titles.has(id(body.target, key, title)));
 		if (missing.length > 0) {
 			const { items = [] } = await translate<{ items?: Array<{ key: string; title: string; source: string; same: boolean }> }>(
 				`Translate each research record's title into ${language}. Keep names, acronyms and numbers. Reply with JSON {"items":[{"key","title","source","same"}]}: source is the ISO 639-1 code of the title's language, same is true when it is already in ${language} (then copy the title unchanged).`,
 				missing,
 			);
-			for (const { key, title, source, same } of items) titles.set(`${body.target}:${key}`, { title, source, same });
+			for (const { key, title, source, same } of items) {
+				if (sourceOf.has(key)) titles.set(id(body.target, key, sourceOf.get(key)!), { title, source, same });
+			}
 		}
 		return NextResponse.json({
 			titles: Object.fromEntries(
-				body.items.flatMap(({ key }) => {
-					const found = titles.get(`${body.target}:${key}`);
+				body.items.flatMap(({ key, title }) => {
+					const found = titles.get(id(body.target, key, title));
 					return found ? [[key, found]] : [];
 				}),
 			),
 		});
 	}
 
-	const missing = body.items.filter(({ key, abstract }) => abstract && !abstracts.has(`${body.target}:${key}`));
+	const sourceOf = new Map(body.items.map(({ key, abstract }) => [key, abstract]));
+	const missing = body.items.filter(({ key, abstract }) => abstract && !abstracts.has(id(body.target, key, abstract)));
 	if (missing.length > 0) {
 		const { items = [] } = await translate<{ items?: Array<{ key: string; abstract: string }> }>(
 			`Translate each research abstract into ${language}. Keep names, acronyms and numbers. If an abstract is already in ${language}, copy it unchanged. Reply with JSON {"items":[{"key","abstract"}]}.`,
 			missing.map(({ key, abstract }) => ({ key, abstract: abstract.slice(0, 6000) })),
 		);
-		for (const { key, abstract } of items) abstracts.set(`${body.target}:${key}`, abstract);
+		for (const { key, abstract } of items) {
+			if (sourceOf.has(key)) abstracts.set(id(body.target, key, sourceOf.get(key)!), abstract);
+		}
 	}
 	return NextResponse.json({
 		abstracts: Object.fromEntries(
-			body.items.flatMap(({ key }) => {
-				const found = abstracts.get(`${body.target}:${key}`);
+			body.items.flatMap(({ key, abstract }) => {
+				const found = abstracts.get(id(body.target, key, abstract));
 				return found ? [[key, found]] : [];
 			}),
 		),
