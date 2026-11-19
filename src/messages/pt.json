@@ -481,9 +481,7 @@
 		"percentOfTotal": "{percentage}% do total",
 		"viewDetails": "Ver detalhes",
 		"openGapMap": "Abrir mapa de lacunas",
-		"openGapMapAriaLabel": "Abrir mapa de lacunas {label}",
-		"meaning": "Meaning",
-		"closestMatches": "<number>{count}</number> closest matches"
+		"openGapMapAriaLabel": "Abrir mapa de lacunas {label}"
 	},
 	"auth": {
 		"invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -870,5 +868,16 @@
 		"showOriginals": "Show originals",
 		"translatedFrom": "Translated from {language}",
 		"showTranslation": "Show translation"
+	},
+	"semantic": {
+		"similarMeaning": "Similar meaning",
+		"showingResultsFor": "Showing results for <q>{query}</q>",
+		"searchInstead": "Search for <q>{query}</q> instead",
+		"rescueTitle": "No record uses these words",
+		"rescueBody": "Showing the {count} records closest in meaning",
+		"similarTo": "Similar to",
+		"clear": "Clear",
+		"findSimilar": "Find similar",
+		"allThemes": "All"
 	}
 }

@@ -482,9 +482,7 @@
 		"percentOfTotal": "{percentage}% ya jumla",
 		"viewDetails": "Tazama maelezo",
 		"openGapMap": "Fungua ramani ya mapengo",
-		"openGapMapAriaLabel": "Fungua ramani ya mapengo {label}",
-		"meaning": "Maana",
-		"closestMatches": "<number>{count}</number> yanayokaribiana zaidi"
+		"openGapMapAriaLabel": "Fungua ramani ya mapengo {label}"
 	},
 	"auth": {
 		"invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -871,5 +869,16 @@
 		"showOriginals": "Onyesha asili",
 		"translatedFrom": "Imetafsiriwa kutoka {language}",
 		"showTranslation": "Onyesha tafsiri"
+	},
+	"semantic": {
+		"similarMeaning": "Maana inayofanana",
+		"showingResultsFor": "Inaonyesha matokeo ya <q>{query}</q>",
+		"searchInstead": "Tafuta <q>{query}</q> badala yake",
+		"rescueTitle": "Hakuna rekodi yenye maneno haya",
+		"rescueBody": "Inaonyesha rekodi {count} zinazokaribiana zaidi kimaana",
+		"similarTo": "Zinazofanana na",
+		"clear": "Futa",
+		"findSimilar": "Tafuta zinazofanana",
+		"allThemes": "Zote"
 	}
 }

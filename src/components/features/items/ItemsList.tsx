@@ -6,6 +6,7 @@ import { useFormatter } from "next-intl";
 import { useItemsList } from "@/hooks/useItemsList";
 import { ResourcesView } from "../resources/ResourcesView";
 import { ResultsTranslationProvider } from "../translation/ResultsTranslation";
+import { SemanticProvider } from "../semantic/SemanticConcepts";
 
 function NumberWrapper({ children }: { children: ReactNode }) {
 	return (
@@ -39,6 +40,15 @@ export default function ItemsList({
 
 	return (
 		<ItemsContext.Provider value={props}>
+			<SemanticProvider
+				value={{
+					concept: props.queryParams.concept,
+					theme: props.queryParams.theme,
+					total: props.itemsData?.totalItems ?? 0,
+					semantic: props.itemsData?.semantic,
+					change: props.handleSemanticChange,
+				}}
+			>
 			<ResultsTranslationProvider items={props.itemsData?.items}>
 			<ResourcesView
 				extraFilters={extraFilters}
@@ -90,6 +100,7 @@ export default function ItemsList({
 					  })}
 			/>
 			</ResultsTranslationProvider>
+			</SemanticProvider>
 		</ItemsContext.Provider>
 	);
 }

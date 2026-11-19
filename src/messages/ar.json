@@ -481,9 +481,7 @@
 		"percentOfTotal": "{percentage}% من الإجمالي",
 		"viewDetails": "عرض التفاصيل",
 		"openGapMap": "فتح خريطة الفجوات",
-		"openGapMapAriaLabel": "فتح خريطة الفجوات {label}",
-		"meaning": "Meaning",
-		"closestMatches": "<number>{count}</number> closest matches"
+		"openGapMapAriaLabel": "فتح خريطة الفجوات {label}"
 	},
 	"auth": {
 		"invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
@@ -870,5 +868,16 @@
 		"showOriginals": "Show originals",
 		"translatedFrom": "Translated from {language}",
 		"showTranslation": "Show translation"
+	},
+	"semantic": {
+		"similarMeaning": "Similar meaning",
+		"showingResultsFor": "Showing results for <q>{query}</q>",
+		"searchInstead": "Search for <q>{query}</q> instead",
+		"rescueTitle": "No record uses these words",
+		"rescueBody": "Showing the {count} records closest in meaning",
+		"similarTo": "Similar to",
+		"clear": "Clear",
+		"findSimilar": "Find similar",
+		"allThemes": "All"
 	}
 }

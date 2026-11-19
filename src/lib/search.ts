@@ -15,8 +15,9 @@ import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
 import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
-import { MEANING_RESULT_LIMIT, searchParamsLoader } from "./searchParams";
-import { hybridSearchOptions } from "./search-embedder";
+import { searchParamsLoader } from "./searchParams";
+import { semanticSearch, understandQuery } from "./semantic-search";
+import type { SemanticInfo } from "./semantic-concepts";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
@@ -63,6 +64,7 @@ type SearchCountOnlyResult = {
 
 type SearchItemsResult = SearchCountOnlyResult & {
 	items: ListItem[];
+	semantic?: SemanticInfo;
 };
 
 type SearchFacetsResult = {
@@ -226,6 +228,7 @@ export async function getPublicItems(
 	searchParams: LibrarySearchParams,
 	options: {
 		includeHeavyFields?: boolean;
+		locale?: string;
 	} = {},
 ): Promise<SearchItemsResult> {
 	const {
@@ -246,21 +249,35 @@ export async function getPublicItems(
 		process.env.MEILI_INDEX || config.index,
 	);
 
-	const byMeaning = searchParams.meaning === true && search.trim().length > 0;
-	const [searchResults, collections] = await Promise.all([
-		index.search(search, {
+	const indexName = process.env.MEILI_INDEX || config.index;
+	const [semantic, collections] = await Promise.all([
+		semanticSearch({
+			indexName,
+			concept: searchParams.concept ?? 1,
+			search,
+			like: searchParams.like ?? "",
+			theme: searchParams.theme ?? -1,
+			literal: searchParams.literal ?? false,
+			locale: options.locale ?? "en-GB",
 			offset: (pageNum - 1) * limitNum,
 			limit: limitNum,
 			attributesToSearchOn,
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
 			filter: finalFilters,
-			...(byMeaning
-				? await hybridSearchOptions(process.env.MEILI_INDEX || config.index, search, 0.8)
-				: {}),
 		}),
 		getCachedCollections(),
 	]);
+	const searchResults = semantic
+		? { hits: semantic.hits, estimatedTotalHits: semantic.total }
+		: await index.search(search, {
+				offset: (pageNum - 1) * limitNum,
+				limit: limitNum,
+				attributesToSearchOn,
+				attributesToRetrieve,
+				...(sortOption ? { sort: [sortOption] } : {}),
+				filter: finalFilters,
+			});
 
 	const items = (searchResults.hits as ListItem[]).map((item) =>
 		includeHeavyFields ? item : toLightweightItem(item),
@@ -268,10 +285,8 @@ export async function getPublicItems(
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount = Math.min(
-		searchResults.estimatedTotalHits || searchResults.hits.length,
-		byMeaning ? MEANING_RESULT_LIMIT : Number.MAX_SAFE_INTEGER,
-	);
+	const totalCount =
+		searchResults.estimatedTotalHits || searchResults.hits.length;
 
 	return {
 		items,
@@ -279,6 +294,7 @@ export async function getPublicItems(
 		totalItems: totalCount,
 		perPage: limitNum,
 		totalPages: Math.ceil(totalCount / limitNum),
+		...(semantic ? { semantic: semantic.semantic } : {}),
 	};
 }
 
@@ -305,8 +321,15 @@ export async function getPublicFacets(
 		process.env.MEILI_INDEX || config.index,
 	);
 
-	// shortcut: mock — words decide facet counts, so a search by meaning counts the whole library; the real version facets the closest matches.
-	const searchResults = await index.search(searchParams.meaning ? "" : search, {
+	// shortcut: mock — words decide facet counts, so a concept that searches by meaning counts the whole library; the real version facets its own results.
+	const concept = searchParams.concept ?? 1;
+	const facetSearch =
+		concept === 2 && !searchParams.literal && search.trim()
+			? ((await understandQuery(search)) ?? search)
+			: [1, 3, 5].includes(concept) || (concept === 4 && searchParams.like)
+				? ""
+				: search;
+	const searchResults = await index.search(facetSearch, {
 		offset: 0,
 		limit: 0,
 		attributesToSearchOn,

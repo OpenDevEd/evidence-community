@@ -15,8 +15,14 @@ export const searchParamsLoader = {
 	sort: parseAsString.withDefault(SORT_OPTIONS[0].key),
 	search: parseAsString.withDefault(""),
 	scope: parseAsString.withDefault(SCOPE_OPTIONS[0].key),
-	// Rank by meaning (the index's embedder) instead of matching words.
-	meaning: parseAsBoolean.withDefault(false),
+	// Mock: which of the five meaning concepts runs (src/lib/semantic-concepts.ts).
+	concept: parseAsInteger.withDefault(1),
+	// More like this: the record the list is built around.
+	like: parseAsString.withDefault(""),
+	// Themes: the chosen theme, -1 for all.
+	theme: parseAsInteger.withDefault(-1),
+	// Understood query: search the words as typed.
+	literal: parseAsBoolean.withDefault(false),
 	range: parseAsString.withDefault(""),
 	collectionId: parseAsString.withDefault("").withOptions({
 		scroll: true,
@@ -36,9 +42,6 @@ export const searchParamsLoader = {
 	error: parseAsString.withDefault(""),
 	message: parseAsString.withDefault(""),
 }
-
-/** Every record has some meaning score, so a search by meaning lists only this many of the closest. */
-export const MEANING_RESULT_LIMIT = 50;
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
 

@@ -41,6 +41,7 @@ import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
 import ZoteroRichText from "./ZoteroRichText";
 import { ItemTranslationToggle, useItemTranslation } from "@/components/features/translation/ResultsTranslation";
+import { SemanticCardAction } from "@/components/features/semantic/SemanticConcepts";
 
 export function AddButton({
 	itemData,
@@ -238,6 +239,7 @@ function ResourceInteractions({
 						openLinksInNewTab={openLinksInNewTab}
 					/>
 					<ItemTranslationToggle itemKey={itemData?.key} />
+					<SemanticCardAction itemKey={itemData?.key} />
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						{itemHref && (
 							<Button

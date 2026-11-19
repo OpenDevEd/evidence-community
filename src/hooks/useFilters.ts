@@ -103,12 +103,17 @@ export function useFilters() {
 	);
 
 	const handleSearchChange = useCallback(
-		(text: string) => setParams({ search: text, page: 1 }),
+		(text: string) => setParams({ search: text, page: 1, like: "", theme: -1, literal: false }),
 		[setParams]
 	);
 
-	const handleMeaningChange = useCallback(
-		(meaning: boolean) => setParams({ meaning, page: 1 }),
+	const handleSemanticChange = useCallback(
+		(change: { concept?: number; like?: string; theme?: number; literal?: boolean }) =>
+			setParams({
+				page: 1,
+				...(change.concept !== undefined ? { like: "", theme: -1, literal: false } : {}),
+				...change,
+			}),
 		[setParams]
 	);
 
@@ -278,7 +283,7 @@ export function useFilters() {
 		handleSortChange,
 		handleScopeChange,
 		handleSearchChange,
-		handleMeaningChange,
+		handleSemanticChange,
 		handleRangeChange,
 		handleCollectionSelect,
 		handleAuthorSelect,
