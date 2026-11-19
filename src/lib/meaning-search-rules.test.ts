@@ -19,3 +19,9 @@ test("a search with few word matches lists the closest 50", () => {
 	const listed = listedMeaningKeys(keys, new Set(["K120"]));
 	assert.deepEqual(listed, [...keys.slice(0, 50), "K120"]);
 });
+
+test("a word match the hybrid ranking cut off is still listed, after the ranking", () => {
+	const keys = ranked(100);
+	const listed = listedMeaningKeys(keys, new Set(["K3", "W1", "W2"]));
+	assert.deepEqual(listed, [...keys.slice(0, 50), "W1", "W2"]);
+});
