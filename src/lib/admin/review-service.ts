@@ -80,7 +80,7 @@ export async function getItemPublishingChoice(
 	const [record] = await db
 		.select({
 			choice: itemPublishingChoice.choice,
-			canClear: sql<boolean>`not exists (select 1 from ${publicationTarget} where ${publicationTarget.itemKey} = ${itemIdentity.key} and ${publicationTarget.activatedAt} is not null)`,
+			canClear: sql<boolean>`not exists (select 1 from ${publicationTarget} where ${publicationTarget.itemKey} = ${itemIdentity.key} and ${publicationTarget.activatedAt} is not null and ${publicationTarget.deactivatedAt} is null)`,
 		})
 		.from(itemIdentity)
 		.leftJoin(

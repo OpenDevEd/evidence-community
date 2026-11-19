@@ -35,7 +35,7 @@ import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemFilePublication, sourceFileCleanup } from "@/db/schema/source";
-import { itemReview } from "@/db/schema/review";
+import { itemPublishingChoice, itemReview } from "@/db/schema/review";
 import { AdminValidationError } from "./errors";
 import { publicationTarget } from "@/db/schema/publication";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
@@ -1673,6 +1673,9 @@ async function unpublishNativeItemAttempt(
 				.update(publicationTarget)
 				.set({ deactivatedAt: now, updatedAt: now })
 				.where(and(eq(publicationTarget.itemKey, itemKey), isNull(publicationTarget.deactivatedAt)));
+			// Its DOI is switched off, so the record says so: "Register a DOI" reads off, and a restore publishes without one
+			// unless an editor switches it on again.
+			await transaction.delete(itemPublishingChoice).where(eq(itemPublishingChoice.itemKey, itemKey));
 		}
 		const [unpublished] = await transaction
 			.update(item)
