@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import type { EvidenceFileStorage, SignedFileUpload } from "../../src/lib/admin/file-storage";
+import { EvidenceFileStorageError, type EvidenceFileStorage, type SignedFileUpload } from "../../src/lib/admin/file-storage";
 export class MemoryFileStorage implements EvidenceFileStorage {
 	readonly privateFiles = new Map<string, Uint8Array>();
 	readonly publicFiles = new Map<string, Uint8Array>();
@@ -18,13 +18,13 @@ export class MemoryFileStorage implements EvidenceFileStorage {
 
 	async downloadPrivate(path: string) {
 		const data = this.privateFiles.get(path);
-		if (!data) throw new Error(`Missing private object: ${path}`);
+		if (!data) throw new EvidenceFileStorageError("private download", `Missing private object: ${path}`, true);
 		return data.slice();
 	}
 
 	async downloadPublic(path: string) {
 		const bytes = this.publicFiles.get(path);
-		if (!bytes) throw new Error(`Missing public object ${path}`);
+		if (!bytes) throw new EvidenceFileStorageError("public download", `Missing public object ${path}`, true);
 		return bytes.slice();
 	}
 

@@ -47,6 +47,7 @@ describe("the finish step", () => {
 		excluded: new Set(),
 		importId: "import-1",
 		licences: new Map(),
+		fileAccesses: new Map(),
 		kind: "pdfs",
 		needs: {},
 		outcome: "drafts",

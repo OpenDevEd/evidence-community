@@ -32,16 +32,22 @@ export function fileDraftJson(
 	};
 }
 
+/**
+ * A published file as the admin shows it. One its record keeps out of public view (`hidden`, `filesHiddenFor`) opens
+ * through the admin, as its public address answers nobody.
+ */
 export function filePublicationJson(
 	row: typeof itemFilePublication.$inferSelect | null | undefined,
+	hidden: boolean,
 ): AdminFilePublication | null {
 	if (!row) return null;
+	const viaAdmin = (object: "cover" | "pdf") => `/api/admin/items/${row.itemKey}/file/${object}?${new URLSearchParams({ revision: String(row.uploadRevision), published: "1" })}`;
 	return {
-		coverPublicUrl: row.coverPublicUrl,
+		coverPublicUrl: hidden && row.coverPublicUrl ? viaAdmin("cover") : row.coverPublicUrl,
 		filename: row.filename,
 		itemKey: row.itemKey,
 		pageCount: row.pageCount,
-		publicUrl: row.publicUrl,
+		publicUrl: hidden ? viaAdmin("pdf") : row.publicUrl,
 		publishedAt: dateString(row.publishedAt),
 		sha256: row.sha256,
 		sizeBytes: row.sizeBytes,

@@ -1,4 +1,4 @@
-import { recordLicenceSchema } from "@/lib/licences";
+import { fileAccessSchema, recordLicenceSchema } from "@/lib/licences";
 import { STUDY_TYPE_KEYS } from "@/lib/readings/study-types";
 import {
 	describeZoteroItemTypeFields,
@@ -326,6 +326,14 @@ function licenceFields(value: unknown, source: boolean | undefined) {
 	return { licence: result.data };
 }
 
+/** Who may get the record's files, or the licence's own with null. Whether the licence allows it is said at publishing. */
+function fileAccessFields(value: unknown, source: boolean | undefined) {
+	if (source || value === undefined) return {};
+	const result = fileAccessSchema.nullable().safeParse(value);
+	if (!result.success) throw new NativeItemValidationError("Choose who gets the file.", { fileAccess: "Choose who gets the file, and a day that exists for an embargo." });
+	return { fileAccess: result.data };
+}
+
 function topicFields(value: unknown) {
 	if (value === undefined) return {};
 	return { topics: [...new Set(z.array(topicIdSchema).max(100).parse(value))].sort() };
@@ -361,6 +369,7 @@ function parseNativeItemDraft(
 		...openAccessFields(payload.openAccess, options.source),
 		...studyTypeFields(payload.studyType, options.source),
 		...licenceFields(payload.licence, options.source),
+		...fileAccessFields(payload.fileAccess, options.source),
 		...topicFields(payload.topics),
 		...normalizeDraftFields(
 			payload,

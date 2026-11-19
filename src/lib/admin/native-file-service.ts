@@ -1,4 +1,5 @@
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { hiddenPath } from "./withdrawn-path";
 import { isNotNull } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
@@ -841,9 +842,15 @@ export async function prepareNativePdfPublication(
 		publicationTags,
 		zenodoFileChange,
 		reviewFile,
+		hidden = false,
 	}: {
 		expectedUploadRevision: number;
 		itemKey: string;
+		/**
+		 * Its record keeps its files from readers (`filesHiddenFor`): the copy goes to the private place a hidden file
+		 * keeps (`hiddenPath`), never the public bucket, and `placeRecordFiles` brings it out once readers may have it.
+		 */
+		hidden?: boolean;
 		/** The record as it is published, written into the published copy's metadata. */
 		properties?: PdfProperties;
 		publicationTags: readonly string[];
@@ -927,13 +934,14 @@ export async function prepareNativePdfPublication(
 	}
 
 	const publicPaths = publishedPaths(itemKey, publishedSha256, draft.coverObjectPath);
+	const put = (path: string, bytes: Uint8Array, type: string) => (hidden ? storage.uploadPrivate(hiddenPath(path), bytes, type) : storage.uploadPublic(path, bytes, type));
 	const uploads = await Promise.allSettled([
-		storage.uploadPublic(publicPaths.pdf, pdfBytes, PDF_CONTENT_TYPE),
-		storage.uploadPublic(publicPaths.cover, coverBytes, coverContentType(draft.coverObjectPath)),
+		put(publicPaths.pdf, pdfBytes, PDF_CONTENT_TYPE),
+		put(publicPaths.cover, coverBytes, coverContentType(draft.coverObjectPath)),
 	]);
 	const failedUpload = uploads.find((result) => result.status === "rejected");
 	if (failedUpload?.status === "rejected") {
-		try { await storage.removePublic([publicPaths.pdf, publicPaths.cover]); }
+		try { await (hidden ? storage.removePrivate([hiddenPath(publicPaths.pdf), hiddenPath(publicPaths.cover)]) : storage.removePublic([publicPaths.pdf, publicPaths.cover])); }
 		catch (error) { console.error("Failed to clean prepared public files", error); }
 		throw failedUpload.reason;
 	}

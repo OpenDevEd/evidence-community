@@ -83,12 +83,26 @@ describe("publication record adapter", () => {
 			return { license: snapshot.license, customLicense: snapshot.customLicense };
 		};
 		expect(sent({ kind: "zenodo", id: "cc-by-nc-4.0" })).toEqual({ license: "cc-by-nc-4.0", customLicense: undefined });
-		expect(sent({ kind: "custom", title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" })).toEqual({
+		expect(sent({ kind: "custom", title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/", open: true })).toEqual({
 			license: undefined,
 			customLicense: { title: "Open Government Licence v3.0", url: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/" },
 		});
 		expect(() => sent(null)).toThrow(/licence/u);
-		expect(() => sent({ kind: "custom", title: "Our terms", url: "" })).toThrow(/licence/u);
+		expect(() => sent({ kind: "custom", title: "Our terms", url: "", open: true })).toThrow(/licence/u);
+	});
+
+	it("keeps the files private on Zenodo when the record says so, and always under a licence that isn't open", () => {
+		const sent = (licence: EvidenceLibraryPublicationRecord["licence"], fileAccess: EvidenceLibraryPublicationRecord["fileAccess"] = null) => {
+			const snapshot = buildPublicationRecordSnapshot({ record: record({ licence, fileAccess }), tags: [], baseUrl: "https://library.example.org" });
+			return { fileAccess: snapshot.fileAccess, freeToRead: snapshot.freeToRead };
+		};
+		const ccBy = { kind: "zenodo", id: "cc-by-4.0" } as const;
+		expect(sent(ccBy)).toEqual({ fileAccess: undefined, freeToRead: undefined });
+		expect(sent(ccBy, { mode: "private" })).toEqual({ fileAccess: { restricted: true }, freeToRead: undefined });
+		expect(sent(ccBy, { mode: "embargo", until: "2027-06-01" })).toEqual({ fileAccess: { restricted: true, until: "2027-06-01" }, freeToRead: undefined });
+		// A licence that isn't open never lets the files out on Zenodo, whatever was chosen.
+		expect(sent({ kind: "zenodo", id: "other-closed" }, { mode: "open" })).toEqual({ fileAccess: { restricted: true }, freeToRead: undefined });
+		expect(sent({ kind: "custom", title: "Our terms", url: "https://example.org/terms", open: false }, { mode: "readers" })).toEqual({ fileAccess: { restricted: true }, freeToRead: false });
 	});
 
     it.each([null, "not-a-date"])("never invents a publication date from record creation for %s", date => {

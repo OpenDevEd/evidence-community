@@ -8,7 +8,7 @@ import {
 	canonicalItemFieldToDatabaseField,
 } from "@/lib/item-field-codec";
 
-export const LIBRARY_OWNED_PAYLOAD_FIELDS = new Set(["links", "countryFocus", "openAccess", "studyType", "licence", "topics", "sourceResolutions", "withdrawnAt", "withdrawalReason"]);
+export const LIBRARY_OWNED_PAYLOAD_FIELDS = new Set(["links", "countryFocus", "openAccess", "studyType", "licence", "fileAccess", "topics", "sourceResolutions", "withdrawnAt", "withdrawalReason"]);
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
@@ -18,6 +18,7 @@ export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"openAccess",
 	"studyType",
 	"licence",
+	"fileAccess",
 	"creators",
 	"itemType",
 	"links",
@@ -40,7 +41,7 @@ export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	itemType: string;
 }) {
 	const fields = new Set(ADMIN_SHARED_PAYLOAD_FIELDS);
-	if (!isTopLevelAdminItemType(definition.itemType)) { fields.delete("countryFocus"); fields.delete("openAccess"); fields.delete("studyType"); fields.delete("licence"); fields.delete("topics"); }
+	if (!isTopLevelAdminItemType(definition.itemType)) { fields.delete("countryFocus"); fields.delete("openAccess"); fields.delete("studyType"); fields.delete("licence"); fields.delete("fileAccess"); fields.delete("topics"); }
 	if (definition.creatorTypes.length === 0) fields.delete("creators");
 	if (!PARENT_CAPABLE_ITEM_TYPES.has(definition.itemType.toLowerCase())) {
 		fields.delete("parentItem");

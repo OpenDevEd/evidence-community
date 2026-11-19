@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { attachmentFilesHidden } from "@/lib/admin/withdrawn-files";
 import { z } from "zod";
 
 import {
@@ -39,12 +40,12 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 			params,
 			getNativeFileRuntime(),
 		]);
-		const file = await getNativeFileState(db, key);
+		const [file, hidden] = await Promise.all([getNativeFileState(db, key), attachmentFilesHidden(db, key)]);
 		return NextResponse.json(
 			{
 				file: {
 					draft: fileDraftJson(file.draft),
-					publication: filePublicationJson(file.publication),
+					publication: filePublicationJson(file.publication, hidden),
 				},
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },

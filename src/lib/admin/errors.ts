@@ -60,6 +60,7 @@ const fieldLabels: Record<string, string> = {
 	openAccess: "Open access",
 	studyType: "Study type",
 	licence: "Licence",
+	fileAccess: "Who gets the file",
 	beforeCollection: "Collection position",
 	expectedDraftRevision: "Draft revision",
 	expectedRevision: "Revision",

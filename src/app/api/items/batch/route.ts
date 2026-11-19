@@ -26,7 +26,7 @@ async function getPaginatedItems(
 		return {
 			items: items.map((item) =>
 				includeHeavyFields
-					? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }
+					? { ...item, attachmentsData: filterPublicAttachments(item, publicTagRules(libraryConfig)) }
 					: toLightweightItem(item, publicTagRules(libraryConfig)),
 			),
 			total: result.total,

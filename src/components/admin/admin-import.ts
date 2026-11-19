@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { RecordLicence } from "@/lib/licences";
+import type { FileAccess, RecordLicence } from "@/lib/licences";
 import useSWR, { mutate } from "swr";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 
@@ -226,6 +226,8 @@ export type ImportBatch = {
 	excluded: ReadonlySet<string>;
 	/** The licence the editor picked for a record, in place of the one its PDF named. */
 	licences: ReadonlyMap<string, RecordLicence>;
+	/** Who the editor chose may get a record's files, in place of what its licence gives. */
+	fileAccesses: ReadonlyMap<string, FileAccess>;
 	importId: string;
 	kind: ImportKind;
 	/** What each imported draft not yet sent still needs to publish, as the server last said. */
@@ -269,7 +271,7 @@ export function startImportBatch(start: Pick<ImportBatch, "checks" | "collection
 	setSlot(start.kind === "pdfs" ? "pdfs" : "other", { ...start, ...blankChoices, results: null });
 }
 
-const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), licences: new Map<string, RecordLicence>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sendApproves: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
+const blankChoices = { applied: new Map(), attach: new Map(), committing: false, excluded: new Set<string>(), licences: new Map<string, RecordLicence>(), fileAccesses: new Map<string, FileAccess>(), needs: {}, outcome: "drafts" as ImportOutcome, publish: new Map(), publishRoute: null, reviews: {}, send: null, sendApproves: null, sending: {}, toPublish: null, chosen: { collections: new Map(), topics: new Map() } };
 
 // The server's answer last taken in, so a poll that brings nothing new re-renders nothing.
 let synced = "";
@@ -308,11 +310,14 @@ type SavedChoices = {
 	excluded: string[];
 	importId: string;
 	licences?: [string, RecordLicence][];
+	fileAccesses?: [string, FileAccess][];
 	outcome?: ImportOutcome;
 	publishRoute: PublishingChoice["route"] | null;
 	toPublish: string[] | null;
 };
 
+/** A saved list of pairs as a map; one a browser saved before it was kept, empty. */
+const mapOf = <Value,>(pairs: [string, Value][] | undefined) => new Map(pairs);
 const listsOf = <Value,>(sets: ReadonlyMap<string, ReadonlySet<Value>>) => [...sets].map(([id, values]): [string, Value[]] => [id, [...values]]);
 const setsOf = <Value,>(lists: [string, Value[]][]) => new Map(lists.map(([id, values]) => [id, new Set(values)]));
 
@@ -325,6 +330,7 @@ function saveChoices(batch: ImportBatch) {
 		excluded: [...batch.excluded],
 		importId: batch.importId,
 		licences: [...batch.licences],
+		fileAccesses: [...batch.fileAccesses],
 		outcome: batch.outcome,
 		publishRoute: batch.publishRoute,
 		toPublish: batch.toPublish && [...batch.toPublish],
@@ -341,7 +347,7 @@ function savedChoices(importId: string): Partial<ImportBatch> {
 	try {
 		const saved = JSON.parse(window.localStorage.getItem(CHOICES_KEY) ?? "null") as SavedChoices | null;
 		if (saved?.importId !== importId) return {};
-		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), licences: new Map(saved.licences ?? []), outcome: saved.outcome ?? "drafts", publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
+		return { applied: setsOf(saved.applied), publish: new Map(saved.publish ?? []), chosen: { collections: setsOf(saved.chosen.collections), topics: setsOf(saved.chosen.topics) }, collections: saved.collections, excluded: new Set(saved.excluded), licences: mapOf(saved.licences), fileAccesses: mapOf(saved.fileAccesses), outcome: saved.outcome ?? "drafts", publishRoute: saved.publishRoute, toPublish: saved.toPublish && new Set(saved.toPublish) };
 	} catch {
 		// No browser storage while the page is served, or an entry this version can't read.
 		return {};
@@ -618,10 +624,13 @@ export function chosenOf(current: ImportBatch, row: ImportRow, kind: ChoiceKind)
 }
 
 /** The record as the editor leaves it: what the PDF states, with the applied suggestions and the licence picked. */
-export function recordPayload(row: ImportRow, applied: ReadonlySet<number>, licence?: RecordLicence): Record<string, unknown> {
+export function recordPayload(row: ImportRow, applied: ReadonlySet<number>, licence?: RecordLicence, fileAccess?: FileAccess): Record<string, unknown> {
 	const changes = row.suggestions.filter((_, index) => applied.has(index)).map(({ field, value }) => [field, value]);
-	return { ...row.record?.payload, ...Object.fromEntries(changes), ...(licence ? { licence } : {}) };
+	return { ...row.record?.payload, ...Object.fromEntries(changes), ...(licence ? { licence } : {}), ...(fileAccess ? { fileAccess } : {}) };
 }
+
+/** Who the editor chose may get a record's files, if they changed what its licence gives. */
+export const fileAccessOfRow = (current: ImportBatch | null, row: ImportRow) => current?.fileAccesses.get(row.id);
 
 /** The licence the editor picked for a record, if they changed what its PDF named. */
 export const licenceOf = (current: ImportBatch | null, row: ImportRow) => current?.licences.get(row.id);
@@ -796,7 +805,7 @@ export function recordsToCommit(batch: ImportBatch, topicsEnabled: boolean) {
 	return selectedImportRecords(batch.rows.flatMap(({ record }) => (record ? [record] : [])), selectedIds(batch)).map((record) => {
 		const row = rowById.get(record.id)!;
 		const topics = [...chosenOf(batch, row, "topics")];
-		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row), licenceOf(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
+		return { ...record, payload: { ...recordPayload(row, appliedOf(batch, row), licenceOf(batch, row), fileAccessOfRow(batch, row)), collections: [...chosenOf(batch, row, "collections")], ...(topicsEnabled && topics.length ? { topics } : {}) } };
 	});
 }
 

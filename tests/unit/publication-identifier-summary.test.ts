@@ -243,10 +243,10 @@ it("uses tagged bibliographic attachments without treating ordinary URLs as DOIs
 
 
 it("excludes hidden attachment DOIs from search result exports", () => {
-	const attachments = filterPublicAttachments([
+	const attachments = filterPublicAttachments({ sourceConnectionKey: "zotero-1", attachmentsData: [
 		{ deleted: 0, url: "https://doi.org/10.5555/hidden", tags: ["_r:doi", "Hidden"] },
 		{ deleted: 1, url: "https://doi.org/10.5555/deleted", tags: ["_r:doi"] },
-	], { hidden: ["hidden"], publishBySource: {} }, "zotero-1");
+	] }, { hidden: ["hidden"], publishBySource: {} });
 	expect(attachments).toEqual([]);
 	expect(resolvePublicDoi({ attachments })).toBeNull();
 });

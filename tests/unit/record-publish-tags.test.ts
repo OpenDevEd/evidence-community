@@ -17,7 +17,7 @@ const notes = [
 	{ key: "HIDDEN01", deleted: 0, itemType: "Note", note: "<p>Hidden</p>", tags: ["approved", "hide"] },
 ];
 const shown = (sourceConnectionKey: string) =>
-	filterPublicAttachments(notes, rules, sourceConnectionKey)?.map((attachment) => attachment.key);
+	filterPublicAttachments({ attachmentsData: notes, sourceConnectionKey }, rules)?.map((attachment) => attachment.key);
 
 describe("which notes a record shows", () => {
 	it("shows a Zotero record's notes that carry one of its source's publish tags, whatever its PDF rule", () => {
@@ -45,6 +45,6 @@ describe("which links a record shows", () => {
 	];
 
 	it("keeps a Zotero record's tagged links, identifier links and PDF links, and drops its private ones", () => {
-		expect(filterPublicAttachments(links, rules, "zotero-1")?.map((link) => link.key)).toEqual(["TAGGEDLK", "DOILINKA", "PDFLINKA"]);
+		expect(filterPublicAttachments({ attachmentsData: links, sourceConnectionKey: "zotero-1" }, rules)?.map((link) => link.key)).toEqual(["TAGGEDLK", "DOILINKA", "PDFLINKA"]);
 	});
 });

@@ -1,4 +1,5 @@
 import { removalDoiOf } from "./removal-doi";
+import { filesHiddenFor } from "@/lib/attachment-visibility";
 import { publicationTarget } from "@/db/schema/publication";
 import { readStudyReading } from "@/lib/readings/reading";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -192,11 +193,11 @@ async function getAdminAttachments(
 	parentItemKey: string,
 	config: Pick<LibraryServerConfig, "sources">,
 ): Promise<AdminAttachment[]> {
-	const publishedRows = await db
-		.select()
-		.from(item)
-		.where(eq(item.parentItem, parentItemKey))
-		.orderBy(asc(item.dateAdded), asc(item.key));
+	const [publishedRows, [parent]] = await Promise.all([
+		db.select().from(item).where(eq(item.parentItem, parentItemKey)).orderBy(asc(item.dateAdded), asc(item.key)),
+		db.select({ licence: item.licence, fileAccess: item.fileAccess }).from(item).where(eq(item.key, parentItemKey)),
+	]);
+	const filesHidden = filesHiddenFor(parent);
 	const publishedKeys = publishedRows.map(({ key }) => key);
 	const draftParentCondition = sql`${itemDraft.patch} ->> 'parentItem' = ${parentItemKey}`;
 	const draftRows = await db
@@ -287,7 +288,7 @@ async function getAdminAttachments(
 				fileState: sourcePdf?.fileState ?? summary.fileState,
 				draft: draftJson(draft, effectivePayload),
 				fileDraft: sourcePdf?.fileDraft ?? fileDraftJson(fileDraft),
-				filePublication: filePublicationJson(filePublication),
+				filePublication: filePublicationJson(filePublication, filesHidden),
 				fileRemovalPending: removalRows.some((row) => row.itemKey === key) || Boolean(sourcePdf?.fileRemovalPending),
 				parentItem: effectiveParentItem,
 				sourceFileUrl: publishedSourceFileUrl(published, filePublication, sourcePdf),
@@ -540,7 +541,7 @@ export async function getAdminItemDetail(
 			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
 			importedItemEditBlockReason(writeback) === null,
 		fileDraft: sourcePdf?.fileDraft ?? fileDraftJson(fileDraft),
-		filePublication: filePublicationJson(filePublication),
+		filePublication: filePublicationJson(filePublication, filesHiddenFor(parentPublished)),
 		fileRemovalPending: Boolean(removal) || Boolean(sourcePdf?.fileRemovalPending),
 		links,
 		openalexId,

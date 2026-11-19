@@ -43,7 +43,7 @@ async function getSourceItem(
 			return null;
 		}
 
-		return { ...result, attachmentsData: filterPublicAttachments(result.attachmentsData, publicTagRules(libraryConfig), result.sourceConnectionKey) } as Item;
+		return { ...result, attachmentsData: filterPublicAttachments(result, publicTagRules(libraryConfig)) } as Item;
 	} catch (error: any) {
 		console.warn("Error fetching source item from search:", error);
 		return null;
@@ -92,7 +92,7 @@ async function getCitingItems(
 		const { tags } = libraryConfig.content;
 		const filteredItems = (result.hits as unknown as Item[])
 			.filter((item) => !item.deleted && !hasAnyTag(item.tags, tags.hidden))
-			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, publicTagRules(libraryConfig), item.sourceConnectionKey) }));
+			.map((item) => ({ ...item, attachmentsData: filterPublicAttachments(item, publicTagRules(libraryConfig)) }));
 
 		return {
 			items: filteredItems,

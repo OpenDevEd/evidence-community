@@ -7,7 +7,7 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type { AdminPdfImport } from "@/lib/admin/item-import-contract";
 import { routeChoice, type PublishingChoice } from "@/lib/admin/review-contract";
 import type { AdminSource } from "@/lib/admin/types";
-import type { RecordLicence } from "@/lib/licences";
+import type { FileAccess, RecordLicence } from "@/lib/licences";
 
 import type { ImportKind, ImportStage } from "./ImportSteps";
 import { useAdminSession } from "./AdminSessionProvider";
@@ -47,6 +47,7 @@ import {
 	readingNeeds,
 	reviewRoute,
 	licenceOf,
+	fileAccessOfRow,
 	readyIds,
 	recordsToCommit,
 	reviewChecks,
@@ -317,6 +318,8 @@ function batchChanges(batch: ImportBatch | null) {
 		toggleChoice: (rowId: string, kind: ChoiceKind, id: string) => change((current) => withChoiceToggled(current, rowId, kind, id)),
 		/** Picks the licence for each of these records, in place of what their PDFs named. */
 		setLicence: (rowIds: readonly string[], licence: RecordLicence) => change((current) => ({ ...current, licences: new Map([...current.licences, ...rowIds.map((id): [string, RecordLicence] => [id, licence])]) })),
+		/** Chooses who may get a record's files, in place of what its licence gives. */
+		setFileAccess: (rowId: string, access: FileAccess) => change((current) => ({ ...current, fileAccesses: new Map(current.fileAccesses).set(rowId, access) })),
 	};
 }
 
@@ -402,6 +405,7 @@ export function useImportFlow({ onBeforeSend, onClose, onImported, onOpenRecord,
 		/** What a ready record still needs to publish, from its reading with the applied suggestions. */
 		needsOf: (row: ImportRow) => readingNeeds(row, appliedFor(row), reviewRoute(batch, doiProviders.zenodo), licenceOf(batch, row)),
 		licenceOf: (row: ImportRow) => licenceOf(batch, row),
+		fileAccessOf: (row: ImportRow) => fileAccessOfRow(batch, row),
 		/** `publish`: an Editor or Owner sends the drafts on published, not to the review queue. */
 		commit: (publish = false) => void run(async () => (batch ? commitBatch(batch, topicsEnabled, onImported, publish) : undefined)),
 		error,

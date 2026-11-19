@@ -6,7 +6,10 @@ import { Autocomplete } from "@/components/nextui/Autocomplete";
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
 import { inspectorInputClassNames } from "@/components/nextui/field-styles";
-import { COMMON_ZENODO_LICENCES, isZenodoLicence, licenceComplete, licenceFromRights, licenceShortName, ZENODO_LICENCES, zenodoLicenceTitle, type RecordLicence } from "@/lib/licences";
+import { HugeiconsIcon } from "@/components/icons/Hugeicon";
+import { LinkSquare02Icon } from "@hugeicons/core-free-icons";
+import { COMMON_ZENODO_LICENCES, isZenodoLicence, licenceComplete, licenceDescription, licenceFromRights, licenceShortName, licenceTermsUrl, ZENODO_LICENCES, zenodoLicenceTitle, type RecordLicence } from "@/lib/licences";
+import { InspectorChoices } from "./InspectorChoices";
 
 const OTHER = "other";
 
@@ -19,7 +22,8 @@ const option = ([id, title]: readonly [string, string, ...string[]]): LicenceOpt
 	return { key: id, title, short, shown: short ?? title, note: short ? title : undefined };
 };
 const SECTIONS = [
-	{ key: "common", title: "Most used", items: COMMON_ZENODO_LICENCES.map((id) => option([id, zenodoLicenceTitle(id)])) },
+	// The licences most records use say what they let people do; the rest go by their full titles.
+	{ key: "common", title: "Most used", items: COMMON_ZENODO_LICENCES.map((id) => ({ ...option([id, zenodoLicenceTitle(id)]), note: licenceDescription({ kind: "zenodo", id }) })) },
 	{ key: "all", title: "Every licence Zenodo takes", items: ZENODO_LICENCES.filter(([id]) => !common.has(id)).map(option) },
 	{ key: "another", title: "Not on Zenodo's list", items: [{ key: OTHER, title: "Another licence", short: null, shown: "Another licence", note: "By its name and link" }] },
 ];
@@ -74,7 +78,8 @@ export function LicenceInput({
 	disabled?: boolean;
 	onChange: (licence: RecordLicence) => void;
 }) {
-	const custom = licence?.kind === "custom" ? licence : { kind: "custom" as const, title: "", url: "" };
+	// A licence of its own starts as not open: until someone says it lets anyone share the work, its file stays private.
+	const custom = licence?.kind === "custom" ? licence : { kind: "custom" as const, title: "", url: "", open: false };
 	const selectedKey = licence ? (licence.kind === "custom" ? OTHER : licence.id) : null;
 	const missing = needed && !licenceComplete(licence);
 	const offer = offerOf(rights, defaultLicence);
@@ -120,38 +125,8 @@ export function LicenceInput({
 						</AutocompleteSection>
 					))}
 				</Autocomplete>
-				{selectedKey === OTHER ? (
-					<div className="grid gap-2 animate-fade-in [animation-duration:200ms]">
-						<Input
-							color="filled"
-							aria-label="Licence name"
-							classNames={inspectorInputClassNames}
-							isDisabled={disabled}
-							placeholder="Name"
-							// A new value from outside (a revert, another tab) starts the box again from it.
-							key={`title:${custom.title}`}
-							defaultValue={custom.title}
-							onBlur={(event) => {
-								const title = event.currentTarget.value.trim();
-								if (title !== custom.title) onChange({ ...custom, title });
-							}}
-						/>
-						<Input
-							color="filled"
-							aria-label="Licence link"
-							classNames={inspectorInputClassNames}
-							isDisabled={disabled}
-							placeholder="https://"
-							type="url"
-							key={`url:${custom.url}`}
-							defaultValue={custom.url}
-							onBlur={(event) => {
-								const url = event.currentTarget.value.trim();
-								if (url !== custom.url) onChange({ ...custom, url });
-							}}
-						/>
-					</div>
-				) : null}
+				{selectedKey === OTHER ? <CustomLicenceFields custom={custom} disabled={disabled} onChange={onChange} /> : null}
+				<LicenceSummary licence={licence} />
 			</div>
 			<div className="flex items-start gap-3 px-3.5 pb-3.5 pt-1" aria-live="polite">
 				<p className={`min-w-0 flex-1 text-xs leading-relaxed ${missing ? "text-danger" : "text-black/50 dark:text-white/50"}`}>
@@ -167,5 +142,71 @@ export function LicenceInput({
 				) : null}
 			</div>
 		</section>
+	);
+}
+
+type CustomLicence = Extract<RecordLicence, { kind: "custom" }>;
+
+/** A licence of the record's own: its name, the link to its terms, and whether it lets anyone share the work. */
+function CustomLicenceFields({ custom, disabled, onChange }: { custom: CustomLicence; disabled: boolean; onChange: (licence: RecordLicence) => void }) {
+	return (
+		<div className="grid gap-2 animate-fade-in [animation-duration:200ms]">
+			<Input
+				color="filled"
+				aria-label="Licence name"
+				classNames={inspectorInputClassNames}
+				isDisabled={disabled}
+				placeholder="Name"
+				// A new value from outside (a revert, another tab) starts the box again from it.
+				key={`title:${custom.title}`}
+				defaultValue={custom.title}
+				onBlur={(event) => {
+					const title = event.currentTarget.value.trim();
+					if (title !== custom.title) onChange({ ...custom, title });
+				}}
+			/>
+			<Input
+				color="filled"
+				aria-label="Licence link"
+				classNames={inspectorInputClassNames}
+				isDisabled={disabled}
+				placeholder="https://"
+				type="url"
+				key={`url:${custom.url}`}
+				defaultValue={custom.url}
+				onBlur={(event) => {
+					const url = event.currentTarget.value.trim();
+					if (url !== custom.url) onChange({ ...custom, url });
+				}}
+			/>
+			<InspectorChoices
+				label="Is this licence open?"
+				value={custom.open ? "open" : "closed"}
+				disabled={disabled}
+				onChange={(choice) => onChange({ ...custom, open: choice === "open" })}
+				options={[
+					{ key: "open", label: "Open", content: "Open" },
+					{ key: "closed", label: "Not open", content: "Not open" },
+				]}
+				variant="inset"
+			/>
+		</div>
+	);
+}
+
+/** What the licence lets people do, with a link to its terms, once it is chosen whole. */
+function LicenceSummary({ licence }: { licence: RecordLicence | null }) {
+	if (!licence || !licenceComplete(licence)) return null;
+	const terms = licenceTermsUrl(licence);
+	return (
+		<p className="flex items-start gap-2 px-1.5 pt-0.5 text-xs leading-relaxed text-black/70 dark:text-white/70">
+			<span className="min-w-0 flex-1">{licenceDescription(licence)}</span>
+			{terms ? (
+				<a href={terms} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center gap-1 font-medium text-accent hover:underline">
+					Terms
+					<HugeiconsIcon aria-hidden icon={LinkSquare02Icon} size={12} />
+				</a>
+			) : null}
+		</p>
 	);
 }

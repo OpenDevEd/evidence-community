@@ -122,6 +122,7 @@ describe("publication worker", () => {
 					reconcile: async () => {
 						throw new Error("broken nightly record");
 					},
+					settleRecordFiles: async () => 0,
 					runCrossref: async () => [
 						{ jobId: 1, status: "succeeded" },
 					],

@@ -14,7 +14,8 @@ import {
 	unpublishNativePdfInTransaction,
 	cleanupNativePdfRemoval,
 } from "./native-file-service";
-import { revealRestoredFiles } from "./withdrawn-files";
+import { placeRecordFiles } from "./withdrawn-files";
+import { filesHiddenFor } from "@/lib/attachment-visibility";
 import type { EvidenceFileStorage } from "./file-storage";
 import { itemDraft, itemIdentity } from "@opendeved/evidence-library-core";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -606,6 +607,7 @@ async function prepareReviewFile(
 	const crossref = await reserveCrossrefDoiForFile(db, config, review, parentKey, payload, actor.userId);
 	return prepareNativePdfPublication(db, storage, config.services.publication, {
 		itemKey: file.itemKey,
+		hidden: filesHiddenFor(payload),
 		expectedUploadRevision: file.file.uploadRevision,
 		properties: await recordPdfProperties(db, config, parentKey, payload, { crossref }),
 		publicationTags: input.publicationTags,
@@ -722,8 +724,9 @@ export async function approveItemReview(
 		...committed.removals.map((removal) =>
 			cleanupNativePdfRemoval(db, storage, removal),
 		),
-		// A restored record's attachments removed with it show their files again; any published here finish a move that failed.
-		revealRestoredFiles(db, storage, [...new Set([...committed.reinstatedAttachments, ...committed.indexingRecords.map(({ key }) => key)])]),
+		// Each record's files go where who may get them says, in one move: a restored record's come back unless it keeps
+		// them private, and one made private leaves public view.
+		placeRecordFiles(db, storage, [...new Set([...committed.reinstatedAttachments, ...committed.indexingRecords.map(({ key }) => key)])]),
 	]);
 	return {
 		review: committed.review,

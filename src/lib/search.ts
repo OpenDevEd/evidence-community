@@ -60,6 +60,9 @@ import { collectionNodes, collectionsMatch, deepestTicked } from "./collections-
  */
 export const LIST_ITEM_FIELDS = [...new Set([
 	...CITATION_RECORD_COLUMNS,
+	// What decides whether readers get a record's files (`filterPublicAttachments`).
+	"licence",
+	"fileAccess",
 	"citationCount",
 	"itemType",
 	"reading",
@@ -172,7 +175,7 @@ export function toLightweightItem(item: ListItem, rules: PublicTagRules): ListIt
 	return {
 		...item,
 		attachmentsData: itemPageAttachments(
-			filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey),
+			filterPublicAttachments(item, rules),
 			recordPublishTags(rules.publishBySource, item.sourceConnectionKey),
 		),
 	};
@@ -439,7 +442,7 @@ export async function getPublicItems(
 	const rules = publicTagRules(libraryConfig);
 	const items = response.hits.map((item) => {
 		return includeHeavyFields
-			? { ...item, attachmentsData: filterPublicAttachments(item.attachmentsData, rules, item.sourceConnectionKey) }
+			? { ...item, attachmentsData: filterPublicAttachments(item, rules) }
 			: toLightweightItem(item, rules);
 	});
 

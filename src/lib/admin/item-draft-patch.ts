@@ -59,7 +59,7 @@ export function publishedAdminItemPayload(
 	const payload: Record<string, unknown> = {};
 	for (const field of editableItemDatabaseFields) {
 		if (field === "url" && hasPublishedFile) continue;
-		if ((field === "topics" || field === "countryFocus" || field === "openAccess" || field === "studyType" || field === "licence") && !isTopLevelAdminItemType(published.itemType)) continue;
+		if ((field === "topics" || field === "countryFocus" || field === "openAccess" || field === "studyType" || field === "licence" || field === "fileAccess") && !isTopLevelAdminItemType(published.itemType)) continue;
 		const value = published[field as keyof typeof published];
 		if (value !== null && value !== undefined) {
 			payload[field] = value;

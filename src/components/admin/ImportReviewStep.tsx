@@ -22,7 +22,8 @@ import { checkCountOf, countSummary, ListHeader, Setting, SettingsGroup, sheetTr
 import type { PdfProperties } from "@/lib/admin/pdf-record-mapping";
 import type { ImportFlowState } from "./import-flow";
 import { LicenceInput } from "./LicenceInput";
-import { licenceComplete, licenceLabel, licenceShortName, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
+import { FileAccessInput } from "./FileAccessInput";
+import { licenceComplete, licenceLabel, licenceShortName, recordLicenceSchema, type RecordLicence, fileAccessSchema } from "@/lib/licences";
 
 const ROWS_PER_PAGE = 8;
 
@@ -176,7 +177,7 @@ function attentionReason(record: NonNullable<ImportRow["record"]>) {
 /** One record as its own page: who wrote it, then its parts in rows like the Add step's settings. */
 function RecordPage({ flow, onBack, onOpen, row }: { flow: ImportFlowState; onBack: () => void; onOpen: (id: string) => void; row: ImportRow }) {
 	const applied = flow.appliedFor(row);
-	const edited = recordPayload(row, applied, flow.licenceOf(row));
+	const edited = recordPayload(row, applied, flow.licenceOf(row), flow.fileAccessOf(row));
 	const properties = flow.propertiesOf(row);
 	const settled = row.state === "read" || row.state === "failed";
 	return (
@@ -439,9 +440,18 @@ function LicencePart({ edited, flow, row }: PartProps) {
 	const needed = sendsWithDoi(flow);
 	return (
 		<Setting defaultOpen={needed && !licenceComplete(licence)} icon={LicenseIcon} summary={licenceSummary(licence, needed)} title="Licence">
-			<LicenceInput value={licence} rights={rightsOf(edited)} defaultLicence={defaultLicence} needed={needed} disabled={flow.locked} onChange={(picked) => picked && flow.setLicence([row.id], picked)} />
+			<div className="space-y-2">
+				<LicenceInput value={licence} rights={rightsOf(edited)} defaultLicence={defaultLicence} needed={needed} disabled={flow.locked} onChange={(picked) => picked && flow.setLicence([row.id], picked)} />
+				<RowFileAccess edited={edited} flow={flow} licence={licence} row={row} />
+			</div>
 		</Setting>
 	);
+}
+
+/** Who gets the record's file, once it has a licence to choose under. */
+function RowFileAccess({ edited, flow, licence, row }: { edited: Record<string, unknown>; flow: ImportFlowState; licence: RecordLicence | null; row: ImportRow }) {
+	if (!licence) return null;
+	return <FileAccessInput licence={licence} value={fileAccessSchema.safeParse(edited.fileAccess).data ?? null} disabled={flow.locked} onChange={(access) => flow.setFileAccess(row.id, access)} />;
 }
 
 /** The chosen records a DOI would go out without a licence for, with the default offered for all of them at once. */
