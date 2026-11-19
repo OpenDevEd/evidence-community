@@ -127,7 +127,8 @@ export default function NavbarSearch() {
 		[params.search],
 	);
 	const [debounceSearch] = useDebounce(
-		(value: string) => setParams({ search: value, page: 1 }),
+		// A new search shows its results by meaning again, as the library's own search box does.
+		(value: string) => setParams({ search: value, page: 1, wordsOnly: false }),
 		250,
 	);
 
@@ -216,6 +217,7 @@ export default function NavbarSearch() {
 			...params,
 			search: trimmed,
 			page: searchChanged ? 1 : params.page,
+			wordsOnly: searchChanged ? false : params.wordsOnly,
 		};
 	}, [params, searchInput]);
 
@@ -299,7 +301,7 @@ export default function NavbarSearch() {
 					onKeyDown={handleKeyDown}
 					onClear={() => {
 						setSearchInput("");
-						setParams({ search: "", page: 1 });
+						setParams({ search: "", page: 1, wordsOnly: false });
 						// Clearing the text isn't the same as having nothing to
 						// show — keep the dropdown open on the now-unfiltered list.
 						setIsOpen(true);
