@@ -25,3 +25,10 @@ test("a word match the hybrid ranking cut off is still listed, after the ranking
 	const listed = listedMeaningKeys(keys, new Set(["K3", "W1", "W2"]));
 	assert.deepEqual(listed, [...keys.slice(0, 50), "W1", "W2"]);
 });
+
+test("at the index's cap, word matches keep their place and meaning-only records fill what is left", () => {
+	// Cap 6: four word matches, two of them past a ranking full of meaning-only records.
+	const keys = ["M1", "W1", "M2", "M3", "W2", "M4"];
+	const listed = listedMeaningKeys(keys, new Set(["W1", "W2", "W3", "W4"]), 6);
+	assert.deepEqual(listed, ["M1", "W1", "M2", "W2", "W3", "W4"]);
+});

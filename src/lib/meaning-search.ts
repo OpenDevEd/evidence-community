@@ -57,7 +57,7 @@ export async function meaningList(
 	const [rankedKeys, wordKeys] = await Promise.all([keysOf(hybrid), keysOf({})]);
 	const usingWords = new Set(wordKeys);
 	// Sorted pages fetch the list through one search, which reaches no further than the cap either.
-	return { keys: listedMeaningKeys(rankedKeys, usingWords).slice(0, cap), usingWords };
+	return { keys: listedMeaningKeys(rankedKeys, usingWords, cap), usingWords };
 }
 
 /** One page of a meaning list: in its own order, or in the reader's sort when they chose one. */
