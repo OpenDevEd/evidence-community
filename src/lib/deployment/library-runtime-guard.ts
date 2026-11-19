@@ -326,7 +326,7 @@ export function renderLibraryRuntimeRoute(input: {
 				`${serviceName}-route-marker`,
 				"ode-shield-cf-origin@file",
 				"ode-shield-rate-cf@file",
-				"ode-shield-inflight@file",
+				"ode-shield-inflight-cf@file",
 				"ode-library-shield@file",
 			],
 		),

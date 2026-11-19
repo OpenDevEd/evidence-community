@@ -2,7 +2,7 @@
 # Deployed to /data/coolify/proxy/dynamic/ode-library-shield-forwardauth.yaml.
 # Attached per-app via Coolify custom_labels on each https router:
 #   Cloudflare-proxied hostname:
-#     middlewares=gzip,ode-shield-cf-origin@file,ode-shield-rate-cf@file,ode-shield-inflight@file,ode-library-shield@file
+#     middlewares=gzip,ode-shield-cf-origin@file,ode-shield-rate-cf@file,ode-shield-inflight-cf@file,ode-library-shield@file
 #   Direct hostname:
 #     middlewares=gzip,ode-shield-rate-direct@file,ode-shield-inflight@file,ode-library-shield@file
 http:
@@ -49,6 +49,13 @@ http:
         average: 20
         period: 1s
         burst: 80
+    # Behind Cloudflare the connecting address is a Cloudflare edge shared by
+    # many visitors, so count each visitor by CF-Connecting-IP instead.
+    ode-shield-inflight-cf:
+      inFlightReq:
+        amount: 40
+        sourceCriterion:
+          requestHeaderName: CF-Connecting-IP
     ode-shield-inflight:
       inFlightReq:
         amount: 40

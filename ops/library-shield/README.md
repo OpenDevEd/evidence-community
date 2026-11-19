@@ -36,7 +36,7 @@ the app's hostnames, current and future, are covered automatically.
   Cloudflare-proxied hostname router:
 
   ```text
-  traefik.http.routers.https-N-<uuid>.middlewares=gzip,ode-shield-cf-origin@file,ode-shield-rate-cf@file,ode-shield-inflight@file,ode-library-shield@file
+  traefik.http.routers.https-N-<uuid>.middlewares=gzip,ode-shield-cf-origin@file,ode-shield-rate-cf@file,ode-shield-inflight-cf@file,ode-library-shield@file
   ```
 
   Direct (non-Cloudflare) hostname router:
