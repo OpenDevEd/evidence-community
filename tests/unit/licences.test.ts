@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { fileAccessModes, fileAccessOf, filesHiddenOn, licenceFromRights, licenceOpen, recordLicenceSchema } from "@/lib/licences";
+import { fileAccessModes, fileAccessOf, filesHiddenOn, licenceFromRights, licenceOpen, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
 
 describe("the licence a rights statement names", () => {
 	it.each([
@@ -49,6 +49,8 @@ describe("who may get a record's files", () => {
 	it("counts a licence of a record's own saved before it said whether it is open as open", () => {
 		const saved = recordLicenceSchema.parse({ kind: "custom", title: "Ours", url: "https://example.org" });
 		expect(licenceOpen(saved)).toBe(true);
+		// Read as stored, unparsed, as the publication repository reads it.
+		expect(licenceOpen({ kind: "custom", title: "Ours", url: "https://example.org" } as unknown as RecordLicence)).toBe(true);
 	});
 
 	it("keeps files from readers while private, and under an embargo until its day", () => {

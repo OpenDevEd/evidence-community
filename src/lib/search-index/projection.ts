@@ -33,7 +33,7 @@ import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
 import { readItemSources } from "./item-sources";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { filterPublicAttachments, filesHiddenFor, ownOpenAccess } from "@/lib/attachment-visibility";
+import { filterPublicAttachments, filesHiddenFor, ownOpenAccess, shownFile } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
@@ -231,10 +231,12 @@ async function authorCountriesByItem(
 
 /**
  * Whether readers can read a PDF of the record: one not removed or hidden by tag. Files its record keeps from readers
- * count as none; the record is indexed again when an embargo ends (`settleRecordFiles`).
+ * count as none, though a link to a PDF elsewhere still does; the record is indexed again when an embargo ends
+ * (`settleRecordFiles`).
  */
 function readablePdf(parent: ItemRow, children: readonly ItemRow[], shownByTag: (child: ItemRow) => boolean) {
-	return !filesHiddenFor(parent) && children.some((child) => child.deleted !== 1 && shownByTag(child) && isVisiblePdfAttachment(child));
+	const hidden = filesHiddenFor(parent);
+	return children.some((child) => child.deleted !== 1 && shownByTag(child) && shownFile(child, hidden) && isVisiblePdfAttachment(child));
 }
 
 /** A record made here is open access by its licence and who may get its files; any other is looked up. */
@@ -518,10 +520,10 @@ async function buildSearchProjectionPlanForKeys(
 				tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 			}));
 			// Without full-text search nothing can reach the page text, so only
-			// page numbers are indexed: they still mark records with a PDF. A record
-			// that keeps its files from readers indexes none of their text either.
+			// page numbers are indexed: they still mark records with a PDF. Files a record
+			// keeps from readers index none of their text either.
 			const fullTextPDFs = parentChildren
-				.filter((child) => child.deleted !== 1 && !filesHiddenFor(parent))
+				.filter((child) => child.deleted !== 1 && shownFile(child, filesHiddenFor(parent)))
 				.map((child) => ({
 					key: child.key,
 					fullTextPDF: config.search.fullText

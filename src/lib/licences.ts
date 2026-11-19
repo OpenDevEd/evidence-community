@@ -567,7 +567,9 @@ export function licenceDescription(licence: RecordLicence): string {
 const CLOSED = new Set(["other-closed", "zenodo-freetoread-1.0"]);
 
 /** Whether a licence lets anyone read and share the work: what decides who may get its files. */
-export const licenceOpen = (licence: RecordLicence) => (licence.kind === "custom" ? licence.open : !CLOSED.has(licence.id));
+export const licenceOpen = (licence: RecordLicence) =>
+	// A licence of its own saved before it said whether it is open is open, also where it is read as stored, unparsed.
+	licence.kind === "custom" ? licence.open !== false : !CLOSED.has(licence.id);
 
 /** A day that exists, written YYYY-MM-DD: 2027-02-30 is refused. */
 const calendarDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, "Expected YYYY-MM-DD").refine((day) => {

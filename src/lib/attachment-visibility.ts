@@ -117,7 +117,7 @@ export function ownOpenAccess(record: { licence?: unknown; fileAccess?: unknown 
 const storedFile = (attachment: { itemType?: string | null; linkMode?: string | null }) => attachment.itemType?.toLowerCase() === "attachment" && attachment.linkMode !== "linked_url";
 
 /** Whether readers may see this attachment as far as its record's file access goes: all but its stored files when hidden. */
-const shownFile = (attachment: { itemType?: string | null; linkMode?: string | null }, filesHidden: boolean) => !filesHidden || !storedFile(attachment);
+export const shownFile = (attachment: { itemType?: string | null; linkMode?: string | null }, filesHidden: boolean) => !filesHidden || !storedFile(attachment);
 
 /**
  * Remove non-public attachments before a record reaches readers or exports. A note or an ordinary link is public only
