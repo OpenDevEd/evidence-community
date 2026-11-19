@@ -2,6 +2,10 @@
 -- record's choice, for when the community rolls forward. That runtime refuses keys it doesn't know in a licence and a
 -- record's fields, so a licence's "open" goes from records, drafts and reviews, and a draft's or review's "fileAccess"
 -- goes too: those choices, not yet published, are lost.
+-- A licence of its own that isn't open kept its record's files private by itself; without "open" it would read as open
+-- when rolling forward, so its files are kept private by their own choice first.
+UPDATE "item" SET "fileAccess" = '{"mode": "private"}'::jsonb
+WHERE "licence"->>'kind' = 'custom' AND "licence"->>'open' = 'false' AND "fileAccess" IS NULL;
 UPDATE "item" SET "licence" = "licence" - 'open' WHERE "licence"->>'kind' = 'custom';
 UPDATE "itemDraft" SET "patch" = ("patch" - 'fileAccess') #- '{licence,open}' WHERE "patch" ? 'fileAccess' OR "patch"->'licence' ? 'open';
 UPDATE "itemReview" SET
