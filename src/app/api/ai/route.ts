@@ -23,6 +23,7 @@ import {
 	currentDateContext,
 	publicationSystemContext,
 } from "@/lib/ai/prompt-context";
+import { answerLanguageInstruction } from "@/lib/ai/answer-language";
 import { streamText } from "ai";
 
 export const maxDuration = 240;
@@ -82,6 +83,8 @@ export async function POST(request: Request) {
 								: "Explain this publication in detail.",
 							EVIDENCE_CITATION_INSTRUCTIONS,
 							"If no full PDF is available, clearly state that the full text was unavailable.",
+							// Last, after the publication: a long PDF in another language otherwise wins.
+							answerLanguageInstruction(locale),
 						].join("\n"),
 						modelId,
 					),
