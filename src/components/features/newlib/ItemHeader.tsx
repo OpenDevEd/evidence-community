@@ -21,6 +21,7 @@ import LikeButton from "@/components/features/items/LikeButton";
 import { AddButton } from "@/components/features/items/Resource";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
+import { ResultsTranslationControl } from "@/components/features/translation/ResultsTranslation";
 import { hasTag } from "@/lib/tags";
 import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 
@@ -161,6 +162,7 @@ export default function ItemHeader({
 						{!isLoading && (
 							<AiWrapper data={{ item: item }} variant="inline" />
 						)}
+						{!isLoading && <ResultsTranslationControl />}
 						{getCitationCount(item) > 0 && (
 							item?.groupExternalId === 1 ? (
 								<Button

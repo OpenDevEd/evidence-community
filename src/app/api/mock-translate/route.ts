@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 	if (missing.length > 0) {
 		const { items = [] } = await translate<{ items?: Array<{ key: string; abstract: string }> }>(
 			`Translate each research abstract into ${language}. Keep names, acronyms and numbers. If an abstract is already in ${language}, copy it unchanged. Reply with JSON {"items":[{"key","abstract"}]}.`,
-			missing.map(({ key, abstract }) => ({ key, abstract: abstract.slice(0, 1200) })),
+			missing.map(({ key, abstract }) => ({ key, abstract: abstract.slice(0, 6000) })),
 		);
 		for (const { key, abstract } of items) abstracts.set(`${body.target}:${key}`, abstract);
 	}

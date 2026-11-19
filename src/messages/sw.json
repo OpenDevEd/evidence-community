@@ -871,7 +871,11 @@
 		"showTranslation": "Onyesha tafsiri",
 		"searchLanguages": "Tafuta lugha",
 		"back": "Rudi",
-		"noLanguages": "Hakuna lugha inayolingana"
+		"noLanguages": "Hakuna lugha inayolingana",
+		"titleRecord": "Tafsiri rekodi hii",
+		"runRecord": "Tafsiri rekodi hii",
+		"translatingRecord": "Inatafsiri",
+		"showOriginal": "Onyesha asili"
 	},
 	"semantic": {
 		"similarMeaning": "Maana inayofanana",

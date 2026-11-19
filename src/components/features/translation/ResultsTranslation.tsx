@@ -10,7 +10,7 @@ import { IoArrowUndo, IoCheckmark, IoCheckmarkCircle, IoChevronBack, IoChevronFo
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import { Switch } from "@/components/nextui/Switch";
-import type { ListItem } from "@/app/api/item/types";
+import { abstractIn, saveAbstracts, saveTitles, titleIn, useTranslationStore, type TranslationStore } from "./translation-store";
 
 /** Languages results can be translated into: the world's most spoken, and the languages of the regions the libraries cover. */
 const TRANSLATION_LANGUAGE_CODES = [
@@ -32,22 +32,33 @@ function languageNames(code: string, pageLocale: string) {
 	return { code, own: capitalise(own, code), inPage: capitalise(inPage, pageLocale) };
 }
 
+/** A language code's name in the page's language; the code itself when the model sent one Intl doesn't know. */
+function languageName(code: string, pageLocale: string) {
+	try {
+		return new Intl.DisplayNames([pageLocale === "cn" ? "zh" : pageLocale], { type: "language" }).of(code) ?? code;
+	} catch {
+		return code;
+	}
+}
+
 const fold = (text: string) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
-type TitleTranslation = { title: string; source: string; same: boolean };
-
 type ResultsTranslation = {
+	/** "results" for a list, "record" for one record's own page. */
+	scope: "results" | "record";
 	target: string;
 	choice: string;
 	setChoice: (choice: string) => void;
 	auto: boolean;
 	setAuto: (auto: boolean) => void;
-	titles: Record<string, TitleTranslation> | undefined;
-	abstracts: Record<string, string>;
-	/** Records whose abstract batch is still being translated. */
-	abstractsPending: Set<string>;
+	/** This browser's stored translations; null through hydration. */
+	store: TranslationStore | null;
+	/** Records whose title or abstract is being translated right now. */
 	titlesPending: boolean;
+	abstractsPending: Set<string>;
 	isTranslating: boolean;
+	/** Every listed record has its title stored in the target language. */
+	allTranslated: boolean;
 	listedCount: number;
 	active: boolean;
 	run: () => void;
@@ -70,26 +81,44 @@ async function translatePart([, part, target, items]: [string, "titles" | "abstr
 		body: JSON.stringify({ part, target, items }),
 	});
 	if (!response.ok) throw new Error(await response.text());
-	return (await response.json())[part];
+	const translated = (await response.json())[part];
+	if (part === "titles") saveTitles(target, translated);
+	else saveAbstracts(target, translated);
+	return translated;
 }
 
 const swrOptions = { revalidateOnFocus: false, revalidateOnReconnect: false, keepPreviousData: false };
 
-function useAbstractBatch(active: boolean, target: string, batch: Listed[]) {
-	return useSWR<Record<string, string>>(
-		active && batch.length > 0
-			? ["mock-translate", "abstracts", target, batch.map(({ key, abstract }) => ({ key, abstract }))]
+/** One batch of abstracts, asking only for those this browser hasn't stored yet. */
+function useAbstractBatch(active: boolean, store: TranslationStore | null, target: string, batch: Listed[]) {
+	const missing = store ? batch.filter(({ key }) => abstractIn(store, target, key) === undefined) : [];
+	const query = useSWR(
+		active && missing.length > 0
+			? ["mock-translate", "abstracts", target, missing.map(({ key, abstract }) => ({ key, abstract }))]
 			: null,
 		translatePart,
 		swrOptions,
 	);
+	return { keys: missing.map(({ key }) => key), isLoading: active && query.isLoading };
 }
 
 const plain = (markup: string | undefined) => (markup ?? "").replace(/<[^>]+>/g, "");
 
-export function ResultsTranslationProvider({ items, children }: { items: ListItem[] | undefined; children: ReactNode }) {
+type Translatable = { key: string; title?: string | null; abstractNote?: string | null };
+
+/** Settings and stored translations are the browser's, so results and item pages share them. */
+export function ResultsTranslationProvider({
+	items,
+	scope = "results",
+	children,
+}: {
+	items: Translatable[] | undefined;
+	scope?: "results" | "record";
+	children: ReactNode;
+}) {
 	const locale = useLocale();
 	const localeLanguage = LOCALE_LANGUAGE[locale] ?? locale;
+	const store = useTranslationStore();
 	const [choice, setChoice] = useLocalStorage("results-translation-language", CURRENT_LOCALE);
 	const [auto, setAutoStored] = useLocalStorage("results-translation-auto", false);
 	const [ranFor, setRanFor] = useState<string | null>(null);
@@ -106,29 +135,31 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 		[items],
 	);
 	const signature = `${target}:${listed.map(({ key }) => key).join(",")}`;
-	const active = listed.length > 0 && (auto || ranFor === signature);
+	const active = store !== null && listed.length > 0 && (auto || ranFor === signature);
 
-	const titlesQuery = useSWR<Record<string, TitleTranslation>>(
-		active ? ["mock-translate", "titles", target, listed.map(({ key, title }) => ({ key, title }))] : null,
+	const missingTitles = store ? listed.filter(({ key }) => titleIn(store, target, key) === undefined) : [];
+	const titlesQuery = useSWR(
+		active && missingTitles.length > 0
+			? ["mock-translate", "titles", target, missingTitles.map(({ key, title }) => ({ key, title }))]
+			: null,
 		translatePart,
 		swrOptions,
 	);
-	// A results page holds 20 records: four batches of five, one hook each.
+	// A results page holds 20 records: four batches of five, one hook each, fixed by the list's order.
 	const withAbstracts = listed.filter(({ abstract }) => abstract);
 	const batches = [0, 1, 2, 3].map((i) => withAbstracts.slice(i * ABSTRACT_BATCH, (i + 1) * ABSTRACT_BATCH));
 	const batchQueries = [
-		useAbstractBatch(active, target, batches[0]),
-		useAbstractBatch(active, target, batches[1]),
-		useAbstractBatch(active, target, batches[2]),
-		useAbstractBatch(active, target, batches[3]),
+		useAbstractBatch(active, store, target, batches[0]),
+		useAbstractBatch(active, store, target, batches[1]),
+		useAbstractBatch(active, store, target, batches[2]),
+		useAbstractBatch(active, store, target, batches[3]),
 	];
-	const abstracts = Object.assign({}, ...batchQueries.map(({ data }) => data ?? {})) as Record<string, string>;
-	const abstractsPending = new Set(
-		batchQueries.flatMap(({ isLoading }, i) => (active && isLoading ? batches[i].map(({ key }) => key) : [])),
-	);
+	const abstractsPending = new Set(batchQueries.flatMap(({ keys, isLoading }) => (isLoading ? keys : [])));
 	const titlesPending = active && titlesQuery.isLoading;
+	const isTranslating = titlesPending || abstractsPending.size > 0;
 
 	const value: ResultsTranslation = {
+		scope,
 		target,
 		choice,
 		setChoice: (next) => {
@@ -141,11 +172,11 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 			if (!next) setRanFor(null);
 			setOriginals(new Set());
 		},
-		titles: active ? titlesQuery.data : undefined,
-		abstracts: active ? abstracts : {},
-		abstractsPending,
+		store,
 		titlesPending,
-		isTranslating: titlesPending || abstractsPending.size > 0,
+		abstractsPending,
+		isTranslating,
+		allTranslated: active && !isTranslating && missingTitles.length === 0,
 		listedCount: listed.length,
 		active,
 		run: () => {
@@ -174,16 +205,16 @@ export function ResultsTranslationProvider({ items, children }: { items: ListIte
 export function useItemTranslation(key: string | undefined) {
 	const context = use(ResultsTranslationContext);
 	const locale = useLocale();
-	if (!context || !key) return null;
-	const title = context.titles?.[key];
+	if (!context || !key || !context.active) return null;
+	const title = titleIn(context.store, context.target, key);
 	if (!title) return context.titlesPending ? { pending: true as const } : null;
 	if (title.same) return null;
 	return {
 		pending: false as const,
 		title: title.title,
-		abstract: context.abstracts[key] as string | undefined,
+		abstract: abstractIn(context.store, context.target, key),
 		abstractPending: context.abstractsPending.has(key),
-		sourceName: new Intl.DisplayNames([locale], { type: "language" }).of(title.source) ?? title.source,
+		sourceName: languageName(title.source, locale),
 		showingOriginal: context.originals.has(key),
 		toggle: () => context.toggleOriginal(key),
 	};
@@ -224,10 +255,11 @@ export function ResultsTranslationControl() {
 	);
 	if (!context) return null;
 
-	const { target, choice, auto, isTranslating, active, titles, listedCount } = context;
+	const { target, choice, auto, isTranslating, allTranslated, listedCount, scope } = context;
+	const record = scope === "record";
 	const pageLanguage = languageNames(LOCALE_LANGUAGE[locale] ?? locale, locale);
 	const targetLanguage = languageNames(target, locale);
-	const done = active && !isTranslating && !!titles;
+	const done = allTranslated;
 	const matches = languages.filter(({ code, own, inPage }) =>
 		[code, own, inPage].some((name) => fold(name).includes(fold(query.trim()))),
 	);
@@ -255,23 +287,24 @@ export function ResultsTranslationControl() {
 			<PopoverTrigger>
 				<Button
 					aria-label={t("buttonLabel", { language: targetLanguage.inPage })}
+					size={record ? "sm" : undefined}
 					className={twMerge(
-						"h-full shrink-0 gap-2 px-4 xl:px-4",
+						record ? "shrink-0" : "h-full shrink-0 gap-2 px-4 xl:px-4",
 						done && "border-accent text-accent dark:text-accent",
 						isOpen && "outline outline-2 outline-focus",
 					)}
 					startContent={
 						isTranslating ? (
-							<Spinner size="sm" color="current" classNames={{ wrapper: "size-5" }} />
+							<Spinner size="sm" color="current" classNames={{ wrapper: record ? "size-4" : "size-5" }} />
 						) : done ? (
-							<IoCheckmarkCircle className="size-5 shrink-0" />
+							<IoCheckmarkCircle className={twMerge("shrink-0", record ? "size-4" : "size-5")} />
 						) : (
-							<MdTranslate className="size-5 shrink-0" />
+							<MdTranslate className={twMerge("shrink-0", record ? "size-4" : "size-5")} />
 						)
 					}
 				>
 					{/* Both labels share one cell so the button keeps the longer one's width when it switches. */}
-					<span className="hidden xl:inline-grid justify-items-start">
+					<span className={twMerge("justify-items-start", record ? "inline-grid" : "hidden xl:inline-grid")}>
 						<span className={twMerge("col-start-1 row-start-1", done && "invisible")}>{t("translate")}</span>
 						<span className={twMerge("col-start-1 row-start-1", !done && "invisible")}>{t("translated")}</span>
 					</span>
@@ -285,7 +318,7 @@ export function ResultsTranslationControl() {
 					<AnimatedHeight>
 						{view === "main" ? (
 							<div className="flex flex-col gap-5 p-5">
-								<p className="text-lg font-semibold text-black/80 dark:text-white/90">{t("title")}</p>
+								<p className="text-lg font-semibold text-black/80 dark:text-white/90">{record ? t("titleRecord") : t("title")}</p>
 
 								<div className="divide-y divide-black/[8%] overflow-hidden rounded-xl border-small border-black/[8%] dark:divide-white/10 dark:border-white/10">
 									<button
@@ -329,10 +362,16 @@ export function ResultsTranslationControl() {
 									onPress={done ? context.undo : context.run}
 								>
 									{isTranslating
-										? t("translating", { count: listedCount })
+										? record
+											? t("translatingRecord")
+											: t("translating", { count: listedCount })
 										: done
-											? t("showOriginals")
-											: t("run", { count: listedCount })}
+											? record
+												? t("showOriginal")
+												: t("showOriginals")
+											: record
+												? t("runRecord")
+												: t("run", { count: listedCount })}
 								</Button>
 							</div>
 						) : (
@@ -442,7 +481,9 @@ export function ItemTranslationToggle({ itemKey }: { itemKey: string | undefined
 			<MdTranslate className="size-3.5 shrink-0" />
 			{translation.showingOriginal
 				? t("showTranslation")
-				: t("translatedFrom", { language: translation.sourceName })}
+				: translation.sourceName
+					? t("translatedFrom", { language: translation.sourceName })
+					: t("translated")}
 		</button>
 	);
 }

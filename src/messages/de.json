@@ -870,7 +870,11 @@
 		"showTranslation": "Show translation",
 		"searchLanguages": "Search languages",
 		"back": "Back",
-		"noLanguages": "No language matches"
+		"noLanguages": "No language matches",
+		"titleRecord": "Translate this record",
+		"runRecord": "Translate this record",
+		"translatingRecord": "Translating",
+		"showOriginal": "Show original"
 	},
 	"semantic": {
 		"similarMeaning": "Similar meaning",
