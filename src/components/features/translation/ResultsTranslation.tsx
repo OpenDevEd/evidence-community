@@ -1,9 +1,8 @@
 "use client";
 
-import { createContext, ReactNode, use, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, ReactNode, use, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { useLocalStorage } from "usehooks-ts";
 import { Popover, PopoverContent, PopoverTrigger, Spinner } from "@nextui-org/react";
 import { MdTranslate } from "react-icons/md";
 import { IoArrowUndo, IoCheckmark, IoCheckmarkCircle, IoChevronBack, IoChevronForward, IoSearch } from "react-icons/io5";
@@ -32,8 +31,46 @@ import {
 
 const LOCALE_LANGUAGE: Record<string, string> = { "en-GB": "en", "en-US": "en", cn: "zh" };
 const CURRENT_LOCALE = "locale";
-/** The settings start at their defaults on the first frame, as on the server, and read the browser's after it. */
-const STORED_SETTING = { initializeWithValue: false } as const;
+/*
+ * Both settings are read on the same render, so auto never starts in a language the reader didn't choose.
+ * The language is kept in localStorage. Auto lasts the visit: a cookie with no expiry, which every tab sees and the browser drops when it quits.
+ */
+const LANGUAGE_KEY = "results-translation-language";
+const AUTO_COOKIE = "results-translation-auto";
+const settingListeners = new Set<() => void>();
+function subscribeSettings(onChange: () => void) {
+	settingListeners.add(onChange);
+	// Other tabs' changes. Browsers before Safari 18.4 and Firefox 140 have no cookieStore and pick up auto on the next page.
+	const cookieStore = (globalThis as { cookieStore?: EventTarget }).cookieStore;
+	cookieStore?.addEventListener("change", onChange);
+	window.addEventListener("storage", onChange);
+	return () => {
+		settingListeners.delete(onChange);
+		cookieStore?.removeEventListener("change", onChange);
+		window.removeEventListener("storage", onChange);
+	};
+}
+const notifySettings = () => settingListeners.forEach((listener) => listener());
+function readChoice(): string {
+	try {
+		return JSON.parse(localStorage.getItem(LANGUAGE_KEY) ?? "null") ?? CURRENT_LOCALE;
+	} catch {
+		return CURRENT_LOCALE;
+	}
+}
+function writeChoice(choice: string) {
+	try {
+		localStorage.setItem(LANGUAGE_KEY, JSON.stringify(choice));
+	} catch {
+		// Storage blocked: the choice still holds until the page changes.
+	}
+	notifySettings();
+}
+const readAuto = () => document.cookie.split("; ").includes(`${AUTO_COOKIE}=1`);
+function writeAuto(on: boolean) {
+	document.cookie = `${AUTO_COOKIE}=${on ? "1" : ""}; path=/; SameSite=Lax${on ? "" : "; max-age=0"}`;
+	notifySettings();
+}
 
 const capitalise = (name: string, code: string) => name.charAt(0).toLocaleUpperCase(code) + name.slice(1);
 
@@ -140,8 +177,8 @@ function EnabledProvider({ items, scope = "results", children }: ProviderProps) 
 	const locale = useLocale();
 	const localeLanguage = LOCALE_LANGUAGE[locale] ?? locale;
 	const store = useTranslationStore();
-	const [choice, setChoice] = useLocalStorage("results-translation-language", CURRENT_LOCALE, STORED_SETTING);
-	const [auto, setAutoStored] = useLocalStorage("results-translation-auto", false, STORED_SETTING);
+	const choice = useSyncExternalStore(subscribeSettings, readChoice, () => CURRENT_LOCALE);
+	const auto = useSyncExternalStore(subscribeSettings, readAuto, () => false);
 	const [attempt, setAttempt] = useState(0);
 	const [originals, setOriginals] = useState<Set<string>>(new Set());
 	const target = choice === CURRENT_LOCALE ? localeLanguage : choice;
@@ -185,12 +222,12 @@ function EnabledProvider({ items, scope = "results", children }: ProviderProps) 
 		target,
 		choice,
 		setChoice: (next) => {
-			setChoice(next);
+			writeChoice(next);
 			setOriginals(new Set());
 		},
 		auto,
 		setAuto: (next) => {
-			setAutoStored(next);
+			writeAuto(next);
 			if (!next) setShown(target, listedKeys, false);
 			setOriginals(new Set());
 		},
@@ -212,7 +249,7 @@ function EnabledProvider({ items, scope = "results", children }: ProviderProps) 
 		},
 		// Off as well, or the next page would translate itself straight away.
 		undo: () => {
-			setAutoStored(false);
+			writeAuto(false);
 			setShown(target, listedKeys, false);
 		},
 		originals,
