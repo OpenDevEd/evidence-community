@@ -85,7 +85,8 @@ function optionsForColumn(
 			}));
 		case "itemType":
 			return definitions.map(({ itemType }) => ({
-				key: itemType,
+				// Zotero names a type "report"; a saved record holds the library's name for it, "Report".
+				key: itemType[0]!.toUpperCase() + itemType.slice(1),
 				label: humanizeAdminField(itemType),
 			}));
 		case "source":
