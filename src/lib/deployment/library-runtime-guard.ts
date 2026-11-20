@@ -12,8 +12,8 @@ import { isCoolifyApplicationUuid } from "./coolify-application";
 import { LIBRARY_RELEASED_PAGE_PATH } from "./library-maintenance-http";
 
 /**
- * The runtime image at an exact digest. Releases moved from OpenDevEd's registry to Openscholar-ai's with the
- * repository, and communities set up before then keep their OpenDevEd image.
+ * The runtime image at an exact digest. Releases are published under OpenDevEd; from 18 to 20 November 2026 the
+ * repository sat in Openscholar-ai and published there, and communities set up then keep that image.
  */
 export const runtimeImagePattern =
 	/^ghcr\.io\/(?:opendeved|openscholar-ai)\/evidence-library-runtime@sha256:[a-f0-9]{64}$/u;

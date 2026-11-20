@@ -9,7 +9,7 @@ JSON document.
 | Input           | Required contract                                                                                                                        |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                      |
-| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/openscholar-ai/evidence-library-runtime@sha256:<64 lowercase hex characters>`                                 |
+| Image           | Set `RUNTIME_IMAGE` to `ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>`                                 |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated seed document; Compose initializes the writable `LIBRARY_CONFIG_PATH` volume from it |
 | Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                                |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                   |
@@ -46,7 +46,7 @@ Run Compose from the repository root with the immutable image reference:
 MEILISEARCH_MASTER_KEY=example-meilisearch-key \
 LIBRARY_CONFIG_JSON="$(jq -c '.services.search = {engine: "meilisearch", meilisearch: {host: "http://meilisearch:7700", key: "example-meilisearch-key", index: "example_library"}}' config/library.example.json)" \
 SOURCE_COMMIT="$(git rev-parse HEAD)" \
-RUNTIME_IMAGE="ghcr.io/openscholar-ai/evidence-library-runtime@sha256:<digest>" \
+RUNTIME_IMAGE="ghcr.io/opendeved/evidence-library-runtime@sha256:<digest>" \
   docker compose --project-directory . \
   -f docker/compose.library.yaml config
 ```
@@ -154,7 +154,7 @@ POST /v1/library-runtime/readiness
 Authorization: Bearer <EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN>
 Content-Type: application/json
 
-{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>","runtimeImage":"ghcr.io/openscholar-ai/evidence-library-runtime@sha256:<64 lowercase hex characters>"}
+{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>","runtimeImage":"ghcr.io/opendeved/evidence-library-runtime@sha256:<64 lowercase hex characters>"}
 ```
 
 It asks Docker for containers whose `com.docker.compose.project` label exactly
