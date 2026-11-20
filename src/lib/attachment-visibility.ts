@@ -142,3 +142,16 @@ export function filterPublicAttachments<T extends { deleted?: number | null; ite
 		// Only published notes show their text; a note kept on a file is never shown.
 		.map(attachment => attachment.itemType === "Note" || attachment.note == null ? attachment : { ...attachment, note: null });
 }
+
+/**
+ * A PDF its record keeps from readers for now, which its page names in place of the file: the day an embargo opens
+ * it, or null while only editors open it. Null when readers get the record's PDFs, or it has none they would see.
+ */
+export function heldPdf<T extends Parameters<typeof filterPublicAttachments>[0]>(record: T, rules: PublicTagRules, today = utcDay()): { until: string | null } | null {
+	if (!filesHiddenFor(record, today)) return null;
+	// The files readers would see were the record's open: the same rules, without its licence and access.
+	const files = filterPublicAttachments({ ...record, licence: undefined, fileAccess: undefined }, rules);
+	if (!files?.some((file) => storedFile(file) && isVisiblePdfAttachment(file))) return null;
+	const access = fileAccessOf(recordLicenceSchema.safeParse(record.licence).data, fileAccessSchema.safeParse(record.fileAccess).data);
+	return { until: access.mode === "embargo" ? access.until : null };
+}

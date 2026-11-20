@@ -1,14 +1,14 @@
 "use client";
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
-import { Download01Icon, LinkSquare01Icon, ViewIcon } from "@hugeicons/core-free-icons";
+import { Download01Icon, LinkSquare01Icon, LockKeyholeIcon, ViewIcon } from "@hugeicons/core-free-icons";
 import { useRef, useState, useEffect, type RefObject } from "react";
 import type { Item, ListAttachment } from "@/app/api/item/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
-import { OnlinePdf, PdfCover } from "./PdfCover";
+import { OnlinePdf, PdfCover, TitlePage } from "./PdfCover";
 import { Button } from "@/components/nextui/Button";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import { trackAttachmentInteraction } from "@/lib/analytics";
 import { useReaderSession } from "@/components/layout/navbar/ReaderSession";
@@ -249,6 +249,32 @@ function FileAttachment({ data, item }: { data: Item; item: Item }) {
 				)}
 			>
 				<AttachmentDetails data={data} item={item} />
+			</div>
+		</Card>
+	);
+}
+
+/**
+ * A PDF its record keeps from readers for now, shown where the file would be: a page with a lock, whether it opens
+ * on a day or stays with the community's editors, and that the record and its DOI are public meanwhile.
+ */
+export function HeldPdf({ until, title }: { until: string | null; title?: string }) {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+	const day = until ? format.dateTime(new Date(`${until}T00:00:00Z`), { dateStyle: "long", timeZone: "UTC" }) : null;
+	return (
+		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
+			<span className="@container/pdf relative block w-16 shrink-0 overflow-hidden rounded-md shadow-sm">
+				<TitlePage title={title} className="rounded-none opacity-60 dark:brightness-[0.94]" />
+				<span className="absolute inset-0 flex items-center justify-center">
+					<span className="flex size-[max(22px,40cqw)] items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
+						<HugeiconsIcon icon={LockKeyholeIcon} className="size-[55%]" />
+					</span>
+				</span>
+			</span>
+			<div className="flex min-w-0 flex-col gap-1">
+				<h4 className="text-lg font-medium text-wrap-anywhere">{day ? t("pdfPrivateUntil", { date: day }) : t("pdfPrivate")}</h4>
+				<p className="text-sm text-black/60 dark:text-white/60">{t(day ? "pdfOpensOnItsDay" : "pdfEditorsOnly")}</p>
 			</div>
 		</Card>
 	);

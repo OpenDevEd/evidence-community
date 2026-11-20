@@ -32,7 +32,7 @@ import { Collection } from "@/app/api/collections/types";
 import type { FacetsGetResponse } from "@/app/api/facets/types";
 import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
-import Attachment from "@/components/features/items/Attachment";
+import Attachment, { HeldPdf } from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
 import {
 	fetcher,
@@ -1196,7 +1196,15 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 		isVisiblePdfAttachment,
 	);
 
-	if (!validAttachments?.length) return null;
+	if (!validAttachments?.length) {
+		// Its PDF kept from readers for now: said where the file would be, with the day it opens.
+		if (!item?.heldPdf) return null;
+		return (
+			<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
+				<HeldPdf until={item.heldPdf.until} title={item.title ?? undefined} />
+			</ItemPropertyRowWrapper>
+		);
+	}
 
 	return (
 		<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>

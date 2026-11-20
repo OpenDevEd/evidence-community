@@ -33,7 +33,7 @@ import { getSourceCitationMetricsForKeys } from "@/lib/links/citation-metrics";
 import { readOpenAccess } from "./open-access";
 import { readItemSources } from "./item-sources";
 import { getPublicItemLinksForKeys } from "@/lib/links/item-links";
-import { filterPublicAttachments, filesHiddenFor, ownOpenAccess, shownFile } from "@/lib/attachment-visibility";
+import { filterPublicAttachments, filesHiddenFor, heldPdf, ownOpenAccess, shownFile } from "@/lib/attachment-visibility";
 import { hasAnyTag, publicTagRules } from "@/lib/tags";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { PDF_PRESENCE_ATTRIBUTE, SOURCES_FIELD } from "@/lib/search-filter-constants";
@@ -791,7 +791,10 @@ export async function projectPublicItems(
 export function publicItemFrom(document: Pick<ItemSearchDocument, "tags">, config: LibraryServerConfig): Item | null {
 	if (hasAnyTag(document.tags, config.content.tags.hidden)) return null;
 	const result = document as unknown as Item;
-	result.attachmentsData = filterPublicAttachments(result, publicTagRules(config));
+	const rules = publicTagRules(config);
+	// Read before the files readers can't have are taken out.
+	result.heldPdf = heldPdf(result, rules);
+	result.attachmentsData = filterPublicAttachments(result, rules);
 	const attachmentKeys = new Set(
 		result.attachmentsData?.map((attachment) => attachment.key),
 	);
