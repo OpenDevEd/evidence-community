@@ -57,6 +57,9 @@ export function FileAccessInput({
 	const modes = licence ? [...(access.mode === "open" && access.asDeposited && !licenceOpen(licence) ? (["open"] as const) : []), ...fileAccessModes(licence)] : (["open", "private", "embargo"] as const);
 	// The first day an embargo can end on, taken when the field opens.
 	const [tomorrow] = useState(() => utcDay(new Date(Date.now() + 24 * 60 * 60 * 1000)));
+	// Each day typed before tomorrow is refused: the box goes back to the saved day and says why, until that day changes.
+	const [refused, setRefused] = useState<{ from: string | undefined; count: number } | null>(null);
+	const saidNo = !!refused && access.mode === "embargo" && refused.from === access.until;
 	return (
 		<section aria-label="Who gets the file" className="overflow-hidden rounded-2xl border border-black/[0.07] bg-black/[0.025] dark:border-white/[0.07] dark:bg-white/[0.025]">
 			<div className="space-y-2 p-2">
@@ -64,7 +67,10 @@ export function FileAccessInput({
 					label="Who gets the file"
 					value={access.mode}
 					disabled={disabled}
-					onChange={(mode) => onChange(mode === "embargo" ? { mode, until: aYearOn() } : { mode })}
+					onChange={(mode) => {
+						setRefused(null);
+						onChange(mode === "embargo" ? { mode, until: aYearOn() } : { mode });
+					}}
 					options={modes.map((mode) => ({ key: mode, label: LABELS[mode], content: LABELS[mode] }))}
 					variant="inset"
 				/>
@@ -75,13 +81,18 @@ export function FileAccessInput({
 						type="date"
 						classNames={inspectorInputClassNames}
 						isDisabled={disabled}
+						isInvalid={saidNo}
+						errorMessage={saidNo ? "Pick a day after today." : undefined}
 						min={tomorrow}
-						// A new value from outside (a revert, another tab) starts the box again from it.
-						key={access.until}
+						// A new value from outside (a revert, another tab), or a day refused, starts the box again from the saved day.
+						key={`${access.until}:${refused?.count ?? 0}`}
 						defaultValue={access.until}
 						onBlur={(event) => {
 							const until = event.currentTarget.value;
-							if (until && until !== access.until && until >= tomorrow) onChange({ mode: "embargo", until });
+							if (!until) return;
+							if (until < tomorrow) return setRefused((was) => ({ from: access.until, count: (was?.count ?? 0) + 1 }));
+							setRefused(null);
+							if (until !== access.until) onChange({ mode: "embargo", until });
 						}}
 					/>
 				) : null}
