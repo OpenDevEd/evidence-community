@@ -1201,7 +1201,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 		if (!item?.heldPdf) return null;
 		return (
 			<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
-				<HeldPdf until={item.heldPdf.until} title={item.title ?? undefined} />
+				<HeldPdf until={item.heldPdf.until} />
 			</ItemPropertyRowWrapper>
 		);
 	}

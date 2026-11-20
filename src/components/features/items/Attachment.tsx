@@ -258,14 +258,14 @@ function FileAttachment({ data, item }: { data: Item; item: Item }) {
  * A PDF its record keeps from readers for now, shown where the file would be: a page with a lock, whether it opens
  * on a day or stays with the community's editors, and that the record and its DOI are public meanwhile.
  */
-export function HeldPdf({ until, title }: { until: string | null; title?: string }) {
+export function HeldPdf({ until }: { until: string | null }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const day = until ? format.dateTime(new Date(`${until}T00:00:00Z`), { dateStyle: "long", timeZone: "UTC" }) : null;
 	return (
 		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
 			<span className="@container/pdf relative block w-16 shrink-0 overflow-hidden rounded-md shadow-sm">
-				<TitlePage title={title} className="rounded-none opacity-60 dark:brightness-[0.94]" />
+				<TitlePage className="rounded-none opacity-60 dark:brightness-[0.94]" />
 				<span className="absolute inset-0 flex items-center justify-center">
 					<span className="flex size-[max(22px,40cqw)] items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
 						<HugeiconsIcon icon={LockKeyholeIcon} className="size-[55%]" />
