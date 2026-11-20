@@ -305,7 +305,7 @@ describe("library runtime verifier HTTP contract", () => {
 		);
 	});
 
-	// Images from before and after the repositories moved from OpenDevEd to Openscholar-ai.
+	// Images published under OpenDevEd and, from 18 to 20 November 2026, under Openscholar-ai.
 	it.each([runtimeImage, movedRuntimeImage])("returns validated container facts for the requested application on %s", async (image) => {
 		let receivedApplicationUuid: string | undefined;
 		await withServer(

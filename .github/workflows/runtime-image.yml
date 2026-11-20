@@ -156,7 +156,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$RUNTIME_COMMIT"
-          image="ghcr.io/openscholar-ai/evidence-library-runtime:$RUNTIME_COMMIT"
+          image="ghcr.io/opendeved/evidence-library-runtime:$RUNTIME_COMMIT"
           inspection="$RUNNER_TEMP/runtime-image-inspection.json"
           metadata="$RUNNER_TEMP/runtime-image-metadata.json"
 
@@ -173,7 +173,7 @@ jobs:
               --target library-runtime \
               --platform linux/amd64 \
               --build-arg SKIP_BUILD_TYPECHECK=1 \
-              --label org.opencontainers.image.source=https://github.com/Openscholar-ai/evidence-community \
+              --label org.opencontainers.image.source=https://github.com/OpenDevEd/evidence-community \
               --label "org.opencontainers.image.revision=$RUNTIME_COMMIT" \
               --tag "$image" \
               --metadata-file "$metadata" \
@@ -186,7 +186,7 @@ jobs:
             exit 1
           fi
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-          echo "reference=ghcr.io/openscholar-ai/evidence-library-runtime@$digest" >> "$GITHUB_OUTPUT"
+          echo "reference=ghcr.io/opendeved/evidence-library-runtime@$digest" >> "$GITHUB_OUTPUT"
 
       - name: Record the published image
         env:

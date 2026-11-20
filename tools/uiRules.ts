@@ -26,7 +26,7 @@ import tailwindConfig from "../tailwind.config";
  * stay centred, and so may one in a row of a set height.
  *
  * OpenScholar runs the same rules (scripts/check-ui-rules.mjs in
- * Openscholar-ai/openscholar); keep the two in step.
+ * OpenDevEd/openscholar); keep the two in step.
  */
 
 type Rule = "animation-clash" | "uppercase" | "native-title" | "dot-separator" | "loading-text" | "icon-top" | "grid-scroll";

@@ -5,12 +5,12 @@ Library-specific facts, commands, and deployment boundaries.
 
 ## Product and repository boundary
 
-- Repository: `Openscholar-ai/evidence-community` (formerly `OpenDevEd/new-el`).
+- Repository: `OpenDevEd/evidence-community` (formerly `OpenDevEd/new-el`).
 - Active branch: `main`.
 - This repository owns the public library, `/admin`, records, drafts,
   revisions, collections, files, runtime configuration, search indexing,
   source imports, Zotero sync and writeback, and runtime workers.
-- `Openscholar-ai/openscholar` on `dev` owns Openscholar research features,
+- `OpenDevEd/openscholar` on `dev` owns Openscholar research features,
   accounts, billing, and Evidence Library setup and management.
 - Cross-repository calls use an authenticated, versioned, retry-safe API. Do
   not rebuild Openscholar research tools here.

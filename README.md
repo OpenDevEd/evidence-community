@@ -2,7 +2,7 @@
 
 The public site of an [Openscholar](https://openscholar.ai) Evidence Community: a research library a team curates, with search, filters, maps, answers linked to their sources, record pages with DOIs, and an admin for its editors.
 
-Teams set a community up from [Openscholar](https://github.com/Openscholar-ai/openscholar), which publishes it as this runtime. A single runtime image can run any validated community configuration.
+Teams set a community up from [Openscholar](https://github.com/OpenDevEd/openscholar), which publishes it as this runtime. A single runtime image can run any validated community configuration.
 Identity, theme, navigation, localization, search, features, integrations, and
 service connections are loaded from one server-side JSON document at runtime.
 Changing a community does not require rebuilding the application.
@@ -68,7 +68,7 @@ the full run on `main` after it.
 
 ## Contributing
 
-See the [contributing guide](https://github.com/Openscholar-ai/.github/blob/main/CONTRIBUTING.md). To report a security problem, see the [security policy](https://github.com/Openscholar-ai/.github/blob/main/SECURITY.md).
+See the [contributing guide](CONTRIBUTING.md). To report a security problem, see the [security policy](SECURITY.md).
 
 ## Licence
 
