@@ -175,7 +175,8 @@ export function toLightweightItem(item: ListItem, rules: PublicTagRules): ListIt
 	return {
 		...item,
 		// Read before the files readers can't have are taken out, so a page drawn from this copy names its held PDF at once.
-		heldPdf: heldPdf(item, rules),
+		// A record read for readers already (`publicItemFrom`: browse pages, digest editions) has lost them, and keeps its own.
+		heldPdf: item.heldPdf ?? heldPdf(item, rules),
 		attachmentsData: itemPageAttachments(
 			filterPublicAttachments(item, rules),
 			recordPublishTags(rules.publishBySource, item.sourceConnectionKey),
