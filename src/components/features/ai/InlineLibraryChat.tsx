@@ -887,7 +887,7 @@ export default function InlineLibraryChat({
 								placeholder={t("askMeAnythingPublications")}
 								value={input}
 								onChange={(e) => setInput(e.target.value)}
-								className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+								className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 max-lg:text-base text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
 							/>
 							<div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-black/[0.06] px-1 pt-1.5 dark:border-white/[0.08]">
 								<div className="flex min-w-0 items-center gap-1">
