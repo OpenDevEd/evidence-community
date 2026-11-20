@@ -1196,29 +1196,26 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 		isVisiblePdfAttachment,
 	);
 
-	if (!validAttachments?.length) {
-		// Its PDF kept from readers for now: said where the file would be, with the day it opens.
-		if (!item?.heldPdf) return null;
-		return (
-			<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
-				<HeldPdf until={item.heldPdf.until} />
-			</ItemPropertyRowWrapper>
-		);
-	}
+	// A PDF kept from readers for now is named where the file would be, with the day it opens, beside any they can open.
+	const held = item?.heldPdf;
+	if (!validAttachments?.length && !held) return null;
 
 	return (
 		<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
-			<p className="text-black/60 dark:text-white/60">
-				{t("itemAttachmentsDescription")}
-			</p>
+			{validAttachments?.length ? (
+				<p className="text-black/60 dark:text-white/60">
+					{t("itemAttachmentsDescription")}
+				</p>
+			) : null}
 			<div className="flex flex-col gap-4">
-				{validAttachments.map((attachment) => (
+				{validAttachments?.map((attachment) => (
 					<Attachment
 						key={attachment.key}
 						data={attachment}
 						item={item!}
 					/>
 				))}
+				{held ? <HeldPdf until={held.until} /> : null}
 			</div>
 		</ItemPropertyRowWrapper>
 	);
