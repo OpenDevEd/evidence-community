@@ -15,12 +15,16 @@ describe("the licence a rights statement names", () => {
 		["CC BY 4.0 International", "cc-by-4.0"],
 		["CC BY-SA 4.0 or later", "cc-by-sa-4.0"],
 		["Mozilla Public License 2.0 (no copyleft exception)", "mpl-2.0-no-copyleft-exception"],
+		// Every right kept and no licence named: the closed licence, so the files stay out of public view. A licence named
+		// beside it still wins.
+		["© World Bank. All rights reserved.", "other-closed"],
+		["© 2026 Ministry of Health. All rights reserved. Licensed under CC BY 4.0.", "cc-by-4.0"],
 	])("reads %s as %s", (rights, id) => {
 		expect(licenceFromRights(rights)).toBe(id);
 	});
 
 	// A licence without its version, or a statement that names none, is left for a person to pick, never guessed.
-	it.each(["CC BY", "https://creativecommons.org/licenses/by/3.0/de/", "https://creativecommons.org/licenses/by/2.5/scotland/", "CC BY 3.0 DE", "© World Bank. All rights reserved.", ""])("finds none in %j", (rights) => {
+	it.each(["CC BY", "https://creativecommons.org/licenses/by/3.0/de/", "https://creativecommons.org/licenses/by/2.5/scotland/", "CC BY 3.0 DE", "© 2026 Turkana Water Trust", ""])("finds none in %j", (rights) => {
 		expect(licenceFromRights(rights)).toBeNull();
 	});
 });
