@@ -485,7 +485,7 @@ export function ResultsTranslationControl() {
 											value={query}
 											onChange={(event) => setQuery(event.target.value)}
 											placeholder={t("searchLanguages")}
-											className="min-w-0 flex-1 bg-transparent text-sm text-black/80 outline-none placeholder:text-black/40 dark:text-white/80 dark:placeholder:text-white/40"
+											className="min-w-0 flex-1 bg-transparent text-sm text-black/80 max-lg:text-base outline-none placeholder:text-black/40 dark:text-white/80 dark:placeholder:text-white/40"
 										/>
 									</label>
 								</div>
