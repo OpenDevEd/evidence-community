@@ -34,6 +34,8 @@ export type Item = InferSelectModel<typeof item> & {
 	tags?: string[];
 	collections?: string[];
 	attachmentsData?: Item[];
+	/** A PDF the record keeps from readers for now (`heldPdf`): the day it opens, or null while only editors open it. */
+	heldPdf?: { until: string | null } | null;
 	collectionsData?: Collection[];
 	collectionsAncestry?: string[];
 	year?: string;

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { filesHiddenFor, filterPublicAttachments, isVisiblePdfAttachment } from "@/lib/attachment-visibility";
+import { filesHiddenFor, filterPublicAttachments, heldPdf, isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 
 const pdfLink = {
 	linkMode: "linked_url",
@@ -34,4 +34,18 @@ it("keeps a record's own files from readers while it keeps them private, and its
 	expect(filesHiddenFor(embargoed, "2027-06-01")).toBe(false);
 	// A record from elsewhere, with no licence of its own, keeps its files as before.
 	expect(filesHiddenFor({}, "2026-11-19")).toBe(false);
+});
+
+// The QA of 20 November found an embargoed record's page silent about its PDF: nothing said there was one, or when it opens.
+it("names a PDF its record keeps from readers, and the day an embargo opens it", () => {
+	const stored = { key: "PDF00001", deleted: 0, itemType: "Attachment", linkMode: "imported_file", PDFCoverPageImage: "https://files.example/cover.png", tags: [] };
+	const rules = { hidden: [], publishBySource: {} };
+	const record = { licence: { kind: "zenodo", id: "cc-by-4.0" }, attachmentsData: [stored], sourceConnectionKey: "native" };
+	expect(heldPdf({ ...record, fileAccess: { mode: "private" } }, rules, "2026-11-20")).toEqual({ until: null });
+	expect(heldPdf({ ...record, fileAccess: { mode: "embargo", until: "2027-06-01" } }, rules, "2026-11-20")).toEqual({ until: "2027-06-01" });
+	// Open, an ended embargo, no PDF, or a PDF hidden by tag: nothing held to name.
+	expect(heldPdf({ ...record, fileAccess: { mode: "open" } }, rules, "2026-11-20")).toBeNull();
+	expect(heldPdf({ ...record, fileAccess: { mode: "embargo", until: "2027-06-01" } }, rules, "2027-06-01")).toBeNull();
+	expect(heldPdf({ ...record, attachmentsData: [], fileAccess: { mode: "private" } }, rules, "2026-11-20")).toBeNull();
+	expect(heldPdf({ ...record, attachmentsData: [{ ...stored, tags: ["hide"] }], fileAccess: { mode: "private" } }, { ...rules, hidden: ["hide"] }, "2026-11-20")).toBeNull();
 });

@@ -32,7 +32,7 @@ import { Collection } from "@/app/api/collections/types";
 import type { FacetsGetResponse } from "@/app/api/facets/types";
 import { twMerge } from "@/lib/tw-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
-import Attachment from "@/components/features/items/Attachment";
+import Attachment, { HeldPdf } from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
 import {
 	fetcher,
@@ -1196,21 +1196,26 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 		isVisiblePdfAttachment,
 	);
 
-	if (!validAttachments?.length) return null;
+	// A PDF kept from readers for now is named where the file would be, with the day it opens, beside any they can open.
+	const held = item?.heldPdf;
+	if (!validAttachments?.length && !held) return null;
 
 	return (
 		<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
-			<p className="text-black/60 dark:text-white/60">
-				{t("itemAttachmentsDescription")}
-			</p>
+			{validAttachments?.length ? (
+				<p className="text-black/60 dark:text-white/60">
+					{t("itemAttachmentsDescription")}
+				</p>
+			) : null}
 			<div className="flex flex-col gap-4">
-				{validAttachments.map((attachment) => (
+				{validAttachments?.map((attachment) => (
 					<Attachment
 						key={attachment.key}
 						data={attachment}
 						item={item!}
 					/>
 				))}
+				{held ? <HeldPdf until={held.until} /> : null}
 			</div>
 		</ItemPropertyRowWrapper>
 	);

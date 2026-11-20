@@ -1,6 +1,6 @@
 "use server";
 
-import { filterPublicAttachments } from "./attachment-visibility";
+import { filterPublicAttachments, heldPdf } from "./attachment-visibility";
 import { publicTagRules } from "./tags";
 
 import { Item, ItemGetResponse } from "@/app/api/item/types";
@@ -168,7 +168,9 @@ async function searchIndex(
 					) as Collection[];
 			}
 
-			item.attachmentsData = filterPublicAttachments(item, publicTagRules(libraryConfig));
+			const rules = publicTagRules(libraryConfig);
+			item.heldPdf = heldPdf(item, rules);
+			item.attachmentsData = filterPublicAttachments(item, rules);
 
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,
