@@ -37,6 +37,11 @@ it("refuses a day before tomorrow at the field and keeps the saved day", async (
 	expect(box().value).toBe("2099-06-01");
 	expect(box().getAttribute("aria-invalid")).toBe("true");
 
+	// A day saved from outside (a revert, another tab) ends the refusal: it was about the day before.
+	await act(async () => root.render(<NextUIProvider disableAnimation><FileAccessInput licence={{ kind: "zenodo", id: "cc-by-4.0" }} value={{ mode: "embargo", until: "2099-06-02" }} onChange={onChange} /></NextUIProvider>));
+	expect(box().value).toBe("2099-06-02");
+	expect(box().getAttribute("aria-invalid")).not.toBe("true");
+
 	await act(async () => {
 		box().focus();
 		box().value = "2099-07-01";
