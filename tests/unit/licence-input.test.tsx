@@ -33,5 +33,6 @@ async function pressUse(rights: string) {
 // A record whose rights were edited to name CC BY-NC 4.0 offered the community's CC BY 4.0, a licence its rights refuse.
 it("offers the licence a record's rights name before the community's default", async () => {
 	expect(await pressUse("This work is licensed under CC BY-NC 4.0.")).toEqual({ kind: "zenodo", id: "cc-by-nc-4.0" });
-	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.")).toEqual({ kind: "zenodo", id: "cc-by-4.0" });
+	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.")).toEqual({ kind: "zenodo", id: "other-closed" });
+	expect(await pressUse("© 2024 Ministry of Education.")).toEqual({ kind: "zenodo", id: "cc-by-4.0" });
 });

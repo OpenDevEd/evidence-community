@@ -486,8 +486,8 @@ function creativeCommons([, terms, version, after]: RegExpExecArray) {
 
 /**
  * The licence a record's rights statement names, when it names one Zenodo takes: a Creative Commons licence by its
- * link or short name with its version ("CC BY-NC 4.0"), or any licence by its full title. Null when it names none, or
- * one without its version or in a jurisdiction Zenodo doesn't list, which is left for a person to pick, not guessed.
+ * link or short name with its version ("CC BY-NC 4.0"), or any licence by its full title, or "All rights reserved" alone, which is Zenodo's closed licence. Null when it
+ * names none, or one without its version or in a jurisdiction Zenodo doesn't list, which is left for a person to pick.
  */
 export function licenceFromRights(rights: string | null | undefined): string | null {
 	const text = rights?.toLowerCase().replace(/\s+/gu, " ") ?? "";
@@ -495,7 +495,10 @@ export function licenceFromRights(rights: string | null | undefined): string | n
 	if (CC_ZERO.test(text)) return "cc0-1.0";
 	const cc = CC_URL.exec(text) ?? CC_NAME.exec(text);
 	if (cc) return creativeCommons(cc);
-	return BY_TITLE.find(([, title]) => text.includes(title.toLowerCase()))?.[0] ?? null;
+	const titled = BY_TITLE.find(([, title]) => text.includes(title.toLowerCase()))?.[0];
+	if (titled) return titled;
+	// Every right kept, and no licence named: Zenodo's closed licence, so its files stay with readers here or editors.
+	return /\ball rights reserved\b/u.test(text) ? "other-closed" : null;
 }
 
 /** A Creative Commons licence's short name, as people write it ("CC BY-NC 4.0"); null for other licences. */
