@@ -22,11 +22,12 @@ afterEach(() => {
 	container.remove();
 });
 
-async function pressUse(rights: string) {
+/** The licence the field's "Use" button gives, or undefined when it has none. */
+async function pressUse(rights: string, value: RecordLicence | null = null) {
 	const onChange = vi.fn<(licence: RecordLicence) => void>();
-	await act(async () => root.render(<NextUIProvider disableAnimation><LicenceInput value={null} rights={rights} defaultLicence="cc-by-4.0" needed={false} onChange={onChange} /></NextUIProvider>));
-	const use = [...container.querySelectorAll("button")].find((button) => button.textContent?.startsWith("Use "))!;
-	await act(async () => use.click());
+	await act(async () => root.render(<NextUIProvider disableAnimation><LicenceInput value={value} rights={rights} defaultLicence="cc-by-4.0" needed={false} onChange={onChange} /></NextUIProvider>));
+	const use = [...container.querySelectorAll("button")].find((button) => button.textContent?.startsWith("Use "));
+	await act(async () => use?.click());
 	return onChange.mock.calls[0]?.[0];
 }
 
@@ -35,4 +36,12 @@ it("offers the licence a record's rights name before the community's default", a
 	expect(await pressUse("This work is licensed under CC BY-NC 4.0.")).toEqual({ kind: "zenodo", id: "cc-by-nc-4.0" });
 	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.")).toEqual({ kind: "zenodo", id: "other-closed" });
 	expect(await pressUse("© 2024 Ministry of Education.")).toEqual({ kind: "zenodo", id: "cc-by-4.0" });
+});
+
+// A hand-made record kept the default CC BY 4.0 after its rights were changed to "All rights reserved", with nothing to say so.
+it("offers the licence a record's rights name when it has another", async () => {
+	const ccBy = { kind: "zenodo", id: "cc-by-4.0" } as const;
+	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.", ccBy)).toEqual({ kind: "zenodo", id: "other-closed" });
+	expect(await pressUse("This work is licensed under CC BY 4.0.", ccBy)).toBeUndefined();
+	expect(await pressUse("© 2024 Ministry of Education.", ccBy)).toBeUndefined();
 });
