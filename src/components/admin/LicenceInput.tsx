@@ -39,10 +39,16 @@ function offerOf(rights: string, defaultLicence: string) {
 	return found ? { id: found, name: nameOf(found) } : { id: defaultLicence, name: licenceShortName(defaultLicence) ?? "the default" };
 }
 
-/** The licence a record's rights name, when its own is another of Zenodo's: rights edited to "All rights reserved" after it started with CC BY 4.0. */
+/**
+ * The licence a record's rights name, when its own says otherwise: rights edited to "All rights reserved" after it started
+ * with CC BY 4.0. A licence of the record's own goes against rights that name one of Zenodo's, or that keep every right
+ * while it is open; a closed one of its own under "All rights reserved" agrees with them.
+ */
 function contradicted(licence: RecordLicence | null, rights: string) {
 	const found = licenceFromRights(rights);
-	return licence?.kind === "zenodo" && found && found !== licence.id ? { found, own: licence.id } : null;
+	if (!licence || !found) return null;
+	if (licence.kind === "zenodo") return found === licence.id ? null : { found, own: nameOf(licence.id) };
+	return licenceComplete(licence) && (found !== "other-closed" || licence.open) ? { found, own: licence.title } : null;
 }
 
 /**
@@ -61,7 +67,7 @@ function originNote(licence: RecordLicence | null, rights: string, defaultLicenc
 /** The note under the field: the licence its rights name when it has another, or else where its licence came from. */
 function noteOf(licence: RecordLicence | null, rights: string, defaultLicence: string) {
 	const other = contradicted(licence, rights);
-	return other ? `Its rights name ${nameOf(other.found)}, not ${nameOf(other.own)}.` : originNote(licence, rights, defaultLicence);
+	return other ? `Its rights name ${nameOf(other.found)}, not ${other.own}.` : originNote(licence, rights, defaultLicence);
 }
 
 /**

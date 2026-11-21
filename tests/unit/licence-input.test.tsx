@@ -44,4 +44,7 @@ it("offers the licence a record's rights name when it has another", async () => 
 	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.", ccBy)).toEqual({ kind: "zenodo", id: "other-closed" });
 	expect(await pressUse("This work is licensed under CC BY 4.0.", ccBy)).toBeUndefined();
 	expect(await pressUse("© 2024 Ministry of Education.", ccBy)).toBeUndefined();
+	const own = { kind: "custom", title: "Ministry licence", url: "https://example.org/terms", open: true } as const;
+	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.", own)).toEqual({ kind: "zenodo", id: "other-closed" });
+	expect(await pressUse("© 2024 Ministry of Education. All rights reserved.", { ...own, open: false })).toBeUndefined();
 });
