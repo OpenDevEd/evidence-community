@@ -40,6 +40,18 @@ function offerOf(rights: string, defaultLicence: string) {
 }
 
 /**
+ * The licence a record's rights name, when its own says otherwise: rights edited to "All rights reserved" after it started
+ * with CC BY 4.0. A licence of the record's own goes against rights that name one of Zenodo's, or that keep every right
+ * while it is open; a closed one of its own under "All rights reserved" agrees with them.
+ */
+function contradicted(licence: RecordLicence | null, rights: string) {
+	const found = licenceFromRights(rights);
+	if (!licence || !found) return null;
+	if (licence.kind === "zenodo") return found === licence.id ? null : { found, own: nameOf(licence.id) };
+	return licenceComplete(licence) && (found !== "other-closed" || licence.open) ? { found, own: licence.title } : null;
+}
+
+/**
  * Where the licence came from, said under the field: its rights, the community's default, or a person. "Its rights"
  * never says "above": the import review has no Rights field to point at.
  */
@@ -50,6 +62,12 @@ function originNote(licence: RecordLicence | null, rights: string, defaultLicenc
 	if (licence.id === found) return "Read from its rights.";
 	if (licence.id === defaultLicence) return `The community's default licence, ${licenceShortName(defaultLicence) ?? zenodoLicenceTitle(defaultLicence)}. Records made here start with it.`;
 	return "Chosen for this record.";
+}
+
+/** The note under the field: the licence its rights name when it has another, or else where its licence came from. */
+function noteOf(licence: RecordLicence | null, rights: string, defaultLicence: string) {
+	const other = contradicted(licence, rights);
+	return other ? `Its rights name ${nameOf(other.found)}, not ${other.own}.` : originNote(licence, rights, defaultLicence);
 }
 
 /**
@@ -130,10 +148,10 @@ export function LicenceInput({
 			</div>
 			<div className="flex items-start gap-3 px-3.5 pb-3.5 pt-1" aria-live="polite">
 				<p className={`min-w-0 flex-1 text-xs leading-relaxed ${missing ? "text-danger" : "text-black/50 dark:text-white/50"}`}>
-					{originNote(licence, rights, defaultLicence)}
+					{noteOf(licence, rights, defaultLicence)}
 					{missing ? " A DOI needs one." : null}
 				</p>
-				{!licenceComplete(licence) && !disabled ? (
+				{(!licenceComplete(licence) || contradicted(licence, rights)) && !disabled ? (
 					// A licence without a short name, such as CC BY-NC-ND 3.0 IGO, goes by its full title, which the note above names
 					// whole: the button keeps to half the row and cuts it.
 					<Button size="xs" variant="muted" className="min-w-0 max-w-[50%]" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
