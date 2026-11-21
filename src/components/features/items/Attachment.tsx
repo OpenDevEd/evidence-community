@@ -2,7 +2,7 @@
 
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import { Download01Icon, LinkSquare01Icon, LockKeyholeIcon, ViewIcon } from "@hugeicons/core-free-icons";
-import { useRef, useState, useEffect, type RefObject } from "react";
+import { useRef, useState, useEffect, type ReactNode, type RefObject } from "react";
 import type { Item, ListAttachment } from "@/app/api/item/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "@/lib/tw-merge";
@@ -201,12 +201,12 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 function OnlineAttachment({ data, item, url }: { data: Item; item: Item; url: string }) {
 	const trackAttachment = useTrackAttachment(item.itemType);
 	return (
-		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
+		<SideCard>
 			<OnlinePdf url={url} title={item.title ?? undefined} onOpen={() => trackAttachment("open", "external")} className="w-16 shrink-0 rounded-md shadow-sm" />
 			<div className="flex min-w-0 flex-col gap-2">
 				<AttachmentDetails data={data} item={item} />
 			</div>
-		</Card>
+		</SideCard>
 	);
 }
 
@@ -263,7 +263,7 @@ export function HeldPdf({ until }: { until: string | null }) {
 	const format = useFormatter();
 	const day = until ? format.dateTime(new Date(`${until}T00:00:00Z`), { dateStyle: "long", timeZone: "UTC" }) : null;
 	return (
-		<Card className="flex w-full flex-row items-center gap-4 rounded-2xl p-4 dark:bg-background" color="card">
+		<SideCard>
 			<span className="@container/pdf relative block w-16 shrink-0 overflow-hidden rounded-md shadow-sm">
 				<TitlePage className="rounded-none opacity-60 dark:brightness-[0.94]" />
 				<span className="absolute inset-0 flex items-center justify-center">
@@ -276,6 +276,20 @@ export function HeldPdf({ until }: { until: string | null }) {
 				<h4 className="text-lg font-medium text-wrap-anywhere">{day ? t("pdfPrivateUntil", { date: day }) : t("pdfPrivate")}</h4>
 				<p className="text-sm text-black/60 dark:text-white/60">{t(day ? "pdfOpensOnItsDay" : "pdfEditorsOnly")}</p>
 			</div>
+		</SideCard>
+	);
+}
+
+/**
+ * A card with a page beside its words: a PDF on another site, or one its record keeps from readers. Under 12rem (a
+ * phone at 150% text or more; at normal text a phone's card is 16rem or wider) the words go under the page: beside it
+ * they had a column of 30 to 100px at 200% text, and a word like "community's" ran out of the card. From `sm` up the
+ * words stay beside the page at any text size: large-text layouts change on phones only.
+ */
+function SideCard({ children }: { children: ReactNode }) {
+	return (
+		<Card className="@container/side w-full rounded-2xl p-4 dark:bg-background" color="card">
+			<div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center @[12rem]/side:flex-row @[12rem]/side:items-center">{children}</div>
 		</Card>
 	);
 }
