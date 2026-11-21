@@ -533,6 +533,12 @@ export function licenceComplete(licence: RecordLicence | null | undefined): lice
 	return licence.kind === "zenodo" || (Boolean(licence.title) && /^https?:\/\//u.test(licence.url) && URL.canParse(licence.url));
 }
 
+/** A record's saved licence as its DOI carries it: only a whole one, so a half-written custom licence never shows. */
+export const completeRecordLicence = (value: unknown) => {
+	const licence = recordLicenceSchema.safeParse(value).data;
+	return licence && licenceComplete(licence) ? licence : null;
+};
+
 /** A licence as one line: its short name where it has one, else its title. */
 export function licenceLabel(licence: RecordLicence) {
 	return licence.kind === "custom" ? licence.title : (licenceShortName(licence.id) ?? zenodoLicenceTitle(licence.id));
