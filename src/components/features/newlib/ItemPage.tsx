@@ -11,7 +11,7 @@ import {
 	ArrowUpRight01Icon,
 	LicenseIcon,
 } from "@hugeicons/core-free-icons";
-import { licenceComplete, licenceLabel, licenceTermsUrl, recordLicenceSchema, type RecordLicence } from "@/lib/licences";
+import { completeRecordLicence, licenceLabel, licenceTermsUrl, type RecordLicence } from "@/lib/licences";
 import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
 import { escapeHtml } from "@/lib/escape-html";
@@ -931,7 +931,7 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 		return [...doiLinks, canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
 	}, [faviconUrl, identity.baseUrl, item, openScholar]);
 
-	const licence = item ? recordLicence(item.licence) : null;
+	const licence = item ? completeRecordLicence(item.licence) : null;
 	if (!links.length && !licence) return null;
 
 	return (
@@ -946,12 +946,6 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 		</SidebarCard>
 	);
 }
-
-/** A record's licence as its DOI carries it: only a whole one, so a half-written custom licence never shows. */
-const recordLicence = (value: unknown) => {
-	const licence = recordLicenceSchema.safeParse(value).data;
-	return licence && licenceComplete(licence) ? licence : null;
-};
 
 /** The licence the record is shared under, beside its DOI, linked to its terms where they have a link. */
 function ItemLicenceRow({ licence }: { licence: RecordLicence }) {

@@ -31,4 +31,17 @@ describe("record structured data", () => {
 		expect(data.author).toEqual([{ "@type": "Person", name: "UNESCO" }]);
 		expect(recordStructuredData(record({ date: "2021-05" }), "https://aied.openscholar.ai").datePublished).toBe("2021-05");
 	});
+
+	// Google's Dataset rich result needs a description and reads its people from creator (Search Console, 21 November 2026).
+	it("gives a dataset the description and creator Google reads", () => {
+		const data = recordStructuredData(record({ itemType: "Dataset", abstractNote: "Transcripts of fifteen interviews.", creators: [{ creatorType: "author", name: "Irina Zlotnikova" }] }), "https://aied.openscholar.ai");
+		expect(data).toMatchObject({ "@type": "Dataset", description: "Transcripts of fifteen interviews.", creator: [{ "@type": "Person", name: "Irina Zlotnikova" }] });
+	});
+
+	it("links the record's licence to its terms", () => {
+		const data = recordStructuredData(record({ licence: { kind: "zenodo", id: "cc-by-4.0" } }), "https://aied.openscholar.ai");
+		expect(data.license).toMatch(/creativecommons\.org\/licenses\/by\/4\.0/);
+		// Zenodo has no terms address for a closed licence, so it goes by its name.
+		expect(recordStructuredData(record({ licence: { kind: "zenodo", id: "other-closed" } }), "https://aied.openscholar.ai").license).toEqual({ "@type": "CreativeWork", name: "Other (Not Open)" });
+	});
 });

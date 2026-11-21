@@ -3,6 +3,7 @@ import { creatorDisplayName } from "@/lib/creator-display-name";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import { completeRecordLicence, licenceLabel, licenceTermsUrl } from "@/lib/licences";
 
 /** The schema.org type for a Zotero item type; anything else is a plain creative work. */
 const TYPES: Partial<Record<NonNullable<Item["itemType"]>, string>> = {
@@ -44,9 +45,11 @@ export function recordStructuredData(item: Item, baseUrl: string) {
 	const cover = item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage;
 	// Authors are people: records from OpenAlex keep a person's whole name in one field, so the field's shape can't tell an organisation apart.
 	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named("Person", creatorDisplayName(creator)));
+	const licence = completeRecordLicence(item.licence);
+	const type = (item.itemType && TYPES[item.itemType]) ?? "CreativeWork";
 	const data: Record<string, unknown> = {
 		"@context": "https://schema.org",
-		"@type": (item.itemType && TYPES[item.itemType]) ?? "CreativeWork",
+		"@type": type,
 		"@id": url,
 		url,
 		name: item.title,
@@ -61,6 +64,10 @@ export function recordStructuredData(item: Item, baseUrl: string) {
 		keywords: item.tags?.join(", "),
 		sameAs: doiAddressOf(item),
 		image: cover && convertToImageURL(cover),
+		// A licence without a terms address goes by its name, as the page shows it.
+		license: licence && (licenceTermsUrl(licence) ?? named("CreativeWork", licenceLabel(licence))),
+		// Google reads a dataset by its description and creator, not an article's abstract and author.
+		...(type === "Dataset" && { description: item.abstractNote, creator: authors }),
 	};
 	// Empty values say nothing, so they're left out.
 	return Object.fromEntries(Object.entries(data).filter(([, value]) => value != null && value !== "" && !(Array.isArray(value) && !value.length)));
