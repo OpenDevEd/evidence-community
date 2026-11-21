@@ -283,12 +283,13 @@ export function HeldPdf({ until }: { until: string | null }) {
 /**
  * A card with a page beside its words: a PDF on another site, or one its record keeps from readers. Under 12rem (a
  * phone at 150% text or more; at normal text a phone's card is 16rem or wider) the words go under the page: beside it
- * they had a column of 30 to 100px at 200% text, and a word like "community's" ran out of the card.
+ * they had a column of 30 to 100px at 200% text, and a word like "community's" ran out of the card. From `sm` up the
+ * words stay beside the page at any text size: large-text layouts change on phones only.
  */
 function SideCard({ children }: { children: ReactNode }) {
 	return (
 		<Card className="@container/side w-full rounded-2xl p-4 dark:bg-background" color="card">
-			<div className="flex flex-col items-start gap-4 @[12rem]/side:flex-row @[12rem]/side:items-center">{children}</div>
+			<div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center @[12rem]/side:flex-row @[12rem]/side:items-center">{children}</div>
 		</Card>
 	);
 }
