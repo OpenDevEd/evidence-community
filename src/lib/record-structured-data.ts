@@ -3,7 +3,7 @@ import { creatorDisplayName } from "@/lib/creator-display-name";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
-import { completeRecordLicence, licenceTermsUrl } from "@/lib/licences";
+import { completeRecordLicence, licenceLabel, licenceTermsUrl } from "@/lib/licences";
 
 /** The schema.org type for a Zotero item type; anything else is a plain creative work. */
 const TYPES: Partial<Record<NonNullable<Item["itemType"]>, string>> = {
@@ -64,7 +64,8 @@ export function recordStructuredData(item: Item, baseUrl: string) {
 		keywords: item.tags?.join(", "),
 		sameAs: doiAddressOf(item),
 		image: cover && convertToImageURL(cover),
-		license: licence && licenceTermsUrl(licence),
+		// A licence without a terms address goes by its name, as the page shows it.
+		license: licence && (licenceTermsUrl(licence) ?? named("CreativeWork", licenceLabel(licence))),
 		// Google reads a dataset by its description and creator, not an article's abstract and author.
 		...(type === "Dataset" && { description: item.abstractNote, creator: authors }),
 	};

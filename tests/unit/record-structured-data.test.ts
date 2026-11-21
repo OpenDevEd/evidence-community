@@ -41,5 +41,7 @@ describe("record structured data", () => {
 	it("links the record's licence to its terms", () => {
 		const data = recordStructuredData(record({ licence: { kind: "zenodo", id: "cc-by-4.0" } }), "https://aied.openscholar.ai");
 		expect(data.license).toMatch(/creativecommons\.org\/licenses\/by\/4\.0/);
+		// Zenodo has no terms address for a closed licence, so it goes by its name.
+		expect(recordStructuredData(record({ licence: { kind: "zenodo", id: "other-closed" } }), "https://aied.openscholar.ai").license).toEqual({ "@type": "CreativeWork", name: "Other (Not Open)" });
 	});
 });
