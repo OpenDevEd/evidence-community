@@ -152,10 +152,10 @@ export function LicenceInput({
 					{missing ? " A DOI needs one." : null}
 				</p>
 				{(!licenceComplete(licence) || contradicted(licence, rights)) && !disabled ? (
-					// A licence without a short name, such as CC BY-NC-ND 3.0 IGO, goes by its full title, which the note above names
-					// whole: the button keeps to half the row and cuts it.
-					<Button size="xs" variant="muted" className="min-w-0 max-w-[50%]" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
-						<span className="min-w-0 truncate">Use {offer.name}</span>
+					// The button keeps to half the row and its label wraps there, never cut: "Use Other (Not Open)" lost its end in
+					// Safari's inspector at normal text, and was "Us…" on a phone at 200%. One line stays the button's usual height.
+					<Button size="xs" variant="muted" className="h-auto min-h-9 min-w-0 max-w-[50%] whitespace-normal py-1.5" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
+						<span className="min-w-0 break-words text-center">Use {offer.name}</span>
 					</Button>
 				) : null}
 			</div>

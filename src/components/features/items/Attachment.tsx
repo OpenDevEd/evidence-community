@@ -273,7 +273,8 @@ export function HeldPdf({ until }: { until: string | null }) {
 				</span>
 			</span>
 			<div className="flex min-w-0 flex-col gap-1">
-				<h4 className="text-lg font-medium text-wrap-anywhere">{day ? t("pdfPrivateUntil", { date: day }) : t("pdfPrivate")}</h4>
+				{/* Under the page (a card under 12rem, a phone at large text) the title is a size smaller: at 320px and 200% a month like "November" didn't fit its line and broke inside. */}
+				<h4 className="text-base font-medium text-wrap-anywhere sm:text-lg @[12rem]/side:text-lg">{day ? t("pdfPrivateUntil", { date: day }) : t("pdfPrivate")}</h4>
 				<p className="text-sm text-black/60 dark:text-white/60">{t(day ? "pdfOpensOnItsDay" : "pdfEditorsOnly")}</p>
 			</div>
 		</SideCard>
