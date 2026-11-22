@@ -8,9 +8,9 @@ function creatorIdentity(creator: AdminCreator) {
 }
 
 /**
- * True when a source would see the same creators. Profile links and
- * affiliations belong to the library, so a change to those alone is not a
- * reason to write the record back.
+ * True when a source would see the same creators. Profile links,
+ * affiliations and an organisation's mark belong to the library, so a change
+ * to those alone is not a reason to write the record back.
  */
 export function sameBibliographicCreators(left: unknown, right: unknown) {
 	if (!Array.isArray(left) || !Array.isArray(right)) return false;
@@ -24,7 +24,7 @@ export function sameBibliographicCreators(left: unknown, right: unknown) {
 	);
 }
 
-/** Profile links are library-owned. Providers that supply affiliations can refresh them. */
+/** Profile links and an organisation's mark are library-owned. Providers that supply affiliations can refresh them. */
 export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	incoming: T[] | null | undefined,
 	previous: readonly AdminCreator[] | null | undefined,
@@ -47,6 +47,7 @@ export function preserveCreatorProfileLinks<T extends AdminCreator>(
 	return incoming.map((creator, index) => {
 		const next = {...creator};
 		delete next.authorProfileId;
+		delete next.organization;
 		if (!options.sourceAffiliations) delete next.institutions;
 		const identity = creatorIdentity(creator);
 		const matches = unchangedOrder ? [previous![index]!] : previousByIdentity.get(identity);
@@ -57,5 +58,6 @@ export function preserveCreatorProfileLinks<T extends AdminCreator>(
 
 function keepLibraryFields(next: AdminCreator, match: AdminCreator, sourceAffiliations?: boolean) {
 	if (match.authorProfileId) next.authorProfileId = match.authorProfileId;
+	if (match.organization) next.organization = true;
 	if (!sourceAffiliations && match.institutions?.length) next.institutions = match.institutions;
 }

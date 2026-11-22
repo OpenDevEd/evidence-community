@@ -584,7 +584,7 @@ it("keeps a creator edit submittable on an item type without an institution fiel
 	const dataset = {
 		itemType: "Dataset",
 		title: "Rainfall records",
-		creators: [{ creatorType: "author", name: "Learning Lab" }],
+		creators: [{ creatorType: "author", name: "Learning Lab", organization: true }],
 		tags: [],
 		collections: [],
 	};
@@ -631,6 +631,29 @@ it("keeps a creator edit submittable on an item type without an institution fiel
 	});
 	expect(requirements()).not.toContain("Institution");
 	expect(requirements()).toContain("Ready for review");
+});
+
+// OpenAlex and Openscholar keep a person's whole name in one field, and the card called every one of them an organisation.
+it("shows an author with a one-field name as a person until an editor picks Organisation", async () => {
+	const report = { itemType: "Report", title: "Teacher pay", creators: [{ creatorType: "author", name: "Ana Ruiz" }], tags: [], collections: [] };
+	await act(async () =>
+		root.render(
+			<Inspector
+				role="creator"
+				initial={report}
+				overrides={{
+					detail: { ...submitted, itemType: "Report", title: report.title, editable: true, draft: { ...submitted.draft!, patch: report, payload: report } },
+					definitions: [{ itemType: "Report", fields: [{ field: "title" }], creatorTypes: [{ creatorType: "author", primary: true }] }],
+				}}
+			/>,
+		),
+	);
+	const input = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+	expect(container.querySelector('[aria-label="Person"]')?.getAttribute("aria-pressed")).toBe("true");
+	expect(input("Name")?.value).toBe("Ana Ruiz");
+	expect(input("Organisation name")).toBeNull();
+	await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Organisation"]')!.click());
+	expect(input("Organisation name")?.value).toBe("Ana Ruiz");
 });
 
 it("leads the requirements panel with the requested changes until the draft is resubmitted", async () => {

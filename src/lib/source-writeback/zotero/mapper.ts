@@ -96,6 +96,7 @@ function creatorPayload(value: unknown, definition: ZoteroItemTypeDefinition) {
 		const {
 			authorProfileId: _authorProfileId,
 			institutions: _institutions,
+			organization: _organization,
 			...bibliographicCreator
 		} = creator as Record<string, unknown>;
 		return bibliographicCreator;

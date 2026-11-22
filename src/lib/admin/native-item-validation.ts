@@ -61,6 +61,7 @@ function creatorSchema(allowIncomplete: boolean) {
 			firstName: z.string().optional(),
 			lastName: z.string().optional(),
 			name: z.string().optional(),
+			organization: z.literal(true).optional(),
 		})
 		.strict()
 		.superRefine((creator, context) => {

@@ -29,6 +29,8 @@ type Creator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
+	/** Picked as an organisation in the creator card. Anyone else is a person: OpenAlex, Openscholar and Zotero keep a person's whole name in `name` too. */
+	organization?: true;
 	institution?: string;
 	institutions?: Array<{
 		id?: string;

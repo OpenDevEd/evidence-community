@@ -24,6 +24,13 @@ it("carries an author's affiliations across a source update, like the profile li
 	expect(preserveCreatorProfileLinks([{...caitlin, lastName: "Miller"}], [{...caitlin, institutions}])).toEqual([{...caitlin, lastName: "Miller"}]);
 });
 
+// Zotero has no field for it, so an update from Zotero would turn an organisation an editor picked back into a person.
+it("carries an organisation's mark across a source update", () => {
+	const unesco = {creatorType: "author", name: "UNESCO"};
+	expect(preserveCreatorProfileLinks([unesco], [{...unesco, organization: true as const}])).toEqual([{...unesco, organization: true}]);
+	expect(preserveCreatorProfileLinks([{...unesco, name: "UNICEF"}], [{...unesco, organization: true as const}])).toEqual([{...unesco, name: "UNICEF"}]);
+});
+
 it("sees no source change when only a profile link or an affiliation changes", () => {
 	const caitlin = {creatorType: "author", firstName: "Caitlin", lastName: "Mills"};
 	expect(sameBibliographicCreators([caitlin], [{...caitlin, authorProfileId: "p1", institutions: [{display_name: "University of Nairobi"}]}])).toBe(true);

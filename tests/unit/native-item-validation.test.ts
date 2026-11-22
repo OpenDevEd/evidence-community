@@ -545,6 +545,12 @@ describe("native item draft validation", () => {
 		});
 	});
 
+	// The creator card marks an organisation, since a person's whole name comes in one field from OpenAlex too.
+	it("keeps an organisation's mark", () => {
+		const organisation = { creatorType: "author", name: "UNESCO", organization: true };
+		expect(validateNativeItemDraft({ itemType: "report", creators: [organisation] }).payload.creators).toEqual([organisation]);
+	});
+
 	it("returns field errors for malformed names and collection keys", () => {
 		try {
 			validateNativeItemDraft({
