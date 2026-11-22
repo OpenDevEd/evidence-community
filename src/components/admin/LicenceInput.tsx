@@ -104,7 +104,7 @@ export function LicenceInput({
 	return (
 		<section
 			aria-label="Licence"
-			className={`overflow-hidden rounded-2xl border bg-black/[0.025] dark:bg-white/[0.025] ${missing ? "border-danger/40" : "border-black/[0.07] dark:border-white/[0.07]"}`}
+			className={`@container/licence overflow-hidden rounded-2xl border bg-black/[0.025] dark:bg-white/[0.025] ${missing ? "border-danger/40" : "border-black/[0.07] dark:border-white/[0.07]"}`}
 		>
 			<div className="space-y-2 p-2">
 				<Autocomplete
@@ -146,15 +146,17 @@ export function LicenceInput({
 				{selectedKey === OTHER ? <CustomLicenceFields custom={custom} disabled={disabled} onChange={onChange} /> : null}
 				<LicenceSummary licence={licence} />
 			</div>
-			<div className="flex items-start gap-3 px-3.5 pb-3.5 pt-1" aria-live="polite">
+			{/* On a phone at large text (under 14rem of field; a phone's field is 20rem at normal text) the offer goes under the note
+			    and takes the row: beside it, half the row left its label "Us…", or a column too narrow for "Other". */}
+			<div className="flex flex-col items-start gap-2 px-3.5 pb-3.5 pt-1 sm:flex-row sm:gap-3 @[14rem]/licence:flex-row @[14rem]/licence:gap-3" aria-live="polite">
 				<p className={`min-w-0 flex-1 text-xs leading-relaxed ${missing ? "text-danger" : "text-black/50 dark:text-white/50"}`}>
 					{noteOf(licence, rights, defaultLicence)}
 					{missing ? " A DOI needs one." : null}
 				</p>
 				{(!licenceComplete(licence) || contradicted(licence, rights)) && !disabled ? (
-					// The button keeps to half the row and its label wraps there, never cut: "Use Other (Not Open)" lost its end in
-					// Safari's inspector at normal text, and was "Us…" on a phone at 200%. One line stays the button's usual height.
-					<Button size="xs" variant="muted" className="h-auto min-h-9 min-w-0 max-w-[50%] whitespace-normal py-1.5" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
+					// Beside the note the button keeps to half the row, and its label wraps there, never cut: "Use Other (Not Open)" lost
+					// its end in Safari's inspector at normal text. One line stays the button's usual height.
+					<Button size="xs" variant="muted" className="h-auto min-h-9 min-w-0 max-w-full whitespace-normal py-1.5 sm:max-w-[50%] @[14rem]/licence:max-w-[50%]" onPress={() => onChange({ kind: "zenodo", id: offer.id })}>
 						<span className="min-w-0 break-words text-center">Use {offer.name}</span>
 					</Button>
 				) : null}
