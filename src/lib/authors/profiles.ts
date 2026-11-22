@@ -28,10 +28,12 @@ export function creatorFromProfile<T extends AdminCreator>(
 	creator: T,
 	profile: Pick<AuthorProfile, "id" | "name">,
 ) {
-	if (typeof creator.name === "string")
-		return { ...creator, name: profile.name, authorProfileId: profile.id };
+	// An author profile is a person's.
+	const { organization: _organization, ...person } = creator;
+	if (typeof person.name === "string")
+		return { ...person, name: profile.name, authorProfileId: profile.id };
 	return {
-		...creator,
+		...person,
 		firstName: "",
 		lastName: profile.name,
 		authorProfileId: profile.id,

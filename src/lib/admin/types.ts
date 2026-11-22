@@ -16,6 +16,8 @@ export type AdminCreator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
+	/** Picked as an organisation in the creator card. Anyone else is a person, whatever the shape of their name. */
+	organization?: true;
 };
 
 export type AdminItemSummary = {

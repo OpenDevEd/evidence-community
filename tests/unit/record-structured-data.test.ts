@@ -38,6 +38,11 @@ describe("record structured data", () => {
 		expect(data).toMatchObject({ "@type": "Dataset", description: "Transcripts of fifteen interviews.", creator: [{ "@type": "Person", name: "Irina Zlotnikova" }] });
 	});
 
+	it("names an author an editor picked as an organisation an organisation", () => {
+		const data = recordStructuredData(record({ itemType: "Dataset", creators: [{ creatorType: "author", name: "Kenya Bureau of Statistics", organization: true }, { creatorType: "author", name: "Ana Ruiz" }] }), "https://aied.openscholar.ai");
+		expect(data.creator).toEqual([{ "@type": "Organization", name: "Kenya Bureau of Statistics" }, { "@type": "Person", name: "Ana Ruiz" }]);
+	});
+
 	it("links the record's licence to its terms", () => {
 		const data = recordStructuredData(record({ licence: { kind: "zenodo", id: "cc-by-4.0" } }), "https://aied.openscholar.ai");
 		expect(data.license).toMatch(/creativecommons\.org\/licenses\/by\/4\.0/);

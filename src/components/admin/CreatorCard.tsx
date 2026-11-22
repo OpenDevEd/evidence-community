@@ -402,8 +402,16 @@ function ManualCreatorFields({
 	"creator" | "readOnly" | "errors" | "index" | "onChange"
 >) {
 	const fieldId = useId();
-	const organization = typeof creator.name === "string";
+	const organization = creator.organization === true;
 	const fieldError = (field: string) => errors[`creators.${index}.${field}`];
+	// A person whose whole name came in one field, as OpenAlex and Openscholar give it, keeps it in one.
+	const personFields =
+		typeof creator.name === "string"
+			? ([["name", "Name", "e.g. Maya Chen"]] as const)
+			: ([
+					["firstName", "First name", "e.g. Maya"],
+					["lastName", "Last name", "e.g. Chen"],
+				] as const);
 	return (
 		<div className="space-y-3">
 			<InspectorChoices
@@ -416,12 +424,16 @@ function ManualCreatorFields({
 					if (nextOrganization === organization) return;
 					const next = { ...creator };
 					if (nextOrganization) {
-						next.name = [creator.firstName, creator.lastName]
-							.filter(Boolean)
-							.join(" ");
+						next.name =
+							creator.name ??
+							[creator.firstName, creator.lastName]
+								.filter(Boolean)
+								.join(" ");
 						delete next.firstName;
 						delete next.lastName;
+						next.organization = true;
 					} else {
+						delete next.organization;
 						delete next.name;
 						next.firstName = "";
 						next.lastName = creator.name ?? "";
@@ -472,13 +484,10 @@ function ManualCreatorFields({
 					}}
 				/>
 			) : (
-				<div className="grid grid-cols-2 gap-2.5">
-					{(
-						[
-							["firstName", "First name", "e.g. Maya"],
-							["lastName", "Last name", "e.g. Chen"],
-						] as const
-					).map(([field, label, placeholder]) => (
+				<div
+					className={`grid gap-2.5 ${personFields.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+				>
+					{personFields.map(([field, label, placeholder]) => (
 						<div key={field} className="space-y-1.5">
 							<label
 								htmlFor={`${fieldId}-${field}`}

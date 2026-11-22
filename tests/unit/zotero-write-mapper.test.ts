@@ -27,6 +27,12 @@ describe("Zotero writeback mapping", () => {
 		expect(result.creators).toEqual([
 			{ creatorType: "author", firstName: "Caitlin", lastName: "Mills" },
 		]);
+		expect(
+			createZoteroItemPayload(
+				{ itemType: "Report", creators: [{ creatorType: "author", name: "UNESCO", organization: true }] },
+				"ABCD2345",
+			).creators,
+		).toEqual([{ creatorType: "author", name: "UNESCO" }]);
 		expect(creator.authorProfileId).toBe(
 			"rs70m0zm30n946czwg6ek8z8j98e3j1p",
 		);

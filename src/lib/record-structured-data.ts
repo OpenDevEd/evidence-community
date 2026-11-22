@@ -43,8 +43,8 @@ const named = (type: string, name: string | null | undefined) => (name ? { "@typ
 export function recordStructuredData(item: Item, baseUrl: string) {
 	const url = buildSiteUrl(`/lib/${item.key}`, baseUrl);
 	const cover = item.attachmentsData?.find((attachment) => attachment.PDFCoverPageImage)?.PDFCoverPageImage;
-	// Authors are people: records from OpenAlex keep a person's whole name in one field, so the field's shape can't tell an organisation apart.
-	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named("Person", creatorDisplayName(creator)));
+	// Authors are people unless an editor picked Organisation for one: OpenAlex, Openscholar and Zotero keep a person's whole name in one field too.
+	const authors = (item.creators ?? []).filter((creator) => creator.creatorType === "author" && creatorDisplayName(creator)).map((creator) => named(creator.organization ? "Organization" : "Person", creatorDisplayName(creator)));
 	const licence = completeRecordLicence(item.licence);
 	const type = (item.itemType && TYPES[item.itemType]) ?? "CreativeWork";
 	const data: Record<string, unknown> = {

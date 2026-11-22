@@ -93,6 +93,7 @@ function normalizeCreators(value: unknown) {
 			firstName: textValue(creator.firstName).trim(),
 			lastName: textValue(creator.lastName).trim(),
 			name: textValue(creator.name).trim(),
+			organization: creator.organization === true,
 		}))
 		.filter(
 			(creator) =>
