@@ -48,7 +48,7 @@ export function EvidenceVerdict({ item }: { item: { key?: string } | undefined }
 	if (!record.chain) return <VerdictChip verdict={record.verdict} />;
 	const label = t("openItsChain", { verdict: t(VERDICT[VERDICTS[record.verdict] as keyof typeof VERDICT].label) });
 	return (
-		<Link href={`/evidence?paper=${itemKey}`} aria-label={label} className={CHIP_CONTROL}>
+		<Link href={`/evidence?paper=${itemKey}`} rel="nofollow" aria-label={label} className={CHIP_CONTROL}>
 			<VerdictChip verdict={record.verdict} className={CHIP_HOVER} />
 		</Link>
 	);
@@ -74,6 +74,7 @@ export function VisualizeButton({ item, compact = false }: { item: Parameters<ty
 		<Button
 			as={Link}
 			href={`/evidence?paper=${item!.key}`}
+			rel="nofollow"
 			size="sm"
 			aria-label={t("visualize")}
 			startContent={<HugeiconsIcon icon={FlowchartIcon} className="size-4" />}
