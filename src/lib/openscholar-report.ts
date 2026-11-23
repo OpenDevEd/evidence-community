@@ -1,6 +1,7 @@
 import { MAX_CREATOR_INSTITUTION_NAME_LENGTH, MAX_CREATOR_INSTITUTIONS } from "@/lib/admin/native-item-validation";
 import { countryFocusNames } from "@/lib/country-focus";
 import type { LiveOpenscholarReport } from "@/lib/openscholar-service";
+import { docidLine, normalizeDocid } from "@/lib/docid";
 
 /**
  * A live Openscholar Report as the item a DOI lookup gives for a report, from Openscholar's own details. Its address
@@ -24,6 +25,8 @@ export function reportZoteroItem(report: LiveOpenscholarReport): Record<string, 
 		seriesTitle: report.series,
 		reportType: "Report",
 		tags: report.keywords.map((tag) => ({ tag })),
+		// Its DOCiD, kept as Zotero keeps identifiers it has no field for (src/lib/docid.ts).
+		...(normalizeDocid(report.docid) && { extra: docidLine(normalizeDocid(report.docid)!) }),
 	};
 }
 

@@ -1,4 +1,6 @@
 "use client";
+import { DocidFact } from "./DocidFact";
+import { docidOf } from "@/lib/docid";
 import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag, recordPublishTags } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
@@ -1879,6 +1881,8 @@ export function AdminInspector({
 	);
 	const isAttachment = detail.itemType.toLowerCase() === "attachment";
 	const removalDoi = detail.removalDoi ?? "none";
+	// The DOCiD the record came with, as its Extra or address has it.
+	const recordDocid = docidOf({ extra: typeof payload.extra === "string" ? payload.extra : null, url: typeof payload.url === "string" ? payload.url : null });
 	const unrestored = isUnrestoredRecord(detail);
 	// Only a record made here can get a DOI, and a DOI needs a licence: Zenodo and Crossref both take it.
 	const doiChosen = Boolean(readOnlyVersion ? publishingChoice : publishing?.saved.data?.choice);
@@ -2395,6 +2399,8 @@ export function AdminInspector({
 								zenodoDoi={zenodoVersionDoi(publication.publication)}
 							/>
 						)}
+						{/* A DOCiD the record came with, kept in its Extra (src/lib/docid.ts). */}
+						{recordDocid ? <DocidFact handle={recordDocid} /> : null}
 					</Section>
 				) : null}
 				<Section
