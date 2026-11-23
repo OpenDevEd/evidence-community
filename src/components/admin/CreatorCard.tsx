@@ -435,8 +435,10 @@ function ManualCreatorFields({
 					} else {
 						delete next.organization;
 						delete next.name;
-						next.firstName = "";
-						next.lastName = creator.name ?? "";
+						// As Zotero splits a one-field name when it gets two: the last word is the last name, the rest the first.
+						const words = (creator.name ?? "").trim().split(/\s+/);
+						next.lastName = words.pop() ?? "";
+						next.firstName = words.join(" ");
 					}
 
 					onChange(next);
