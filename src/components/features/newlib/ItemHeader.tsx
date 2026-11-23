@@ -64,6 +64,8 @@ function ItemCitationButton({
 		<Button
 			as={Link}
 			href={href}
+			// /citation/ is closed to crawlers (robots.ts), so they are told not to follow it, as a card's counts are.
+			rel="nofollow"
 			size="sm"
 			color={isCitationPage ? "accent" : "secondary"}
 			startContent={

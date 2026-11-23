@@ -1247,7 +1247,7 @@ function OpenScholarTotal({ item, tab }: { item: Item | undefined; tab: string }
 	const list = openScholarList(item, TAB_LIST[tab]);
 	if (!list?.total) return null;
 	return (
-		<a href={openScholar(list.path)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+		<a href={openScholar(list.path)} target="_blank" rel="nofollow noreferrer" className="inline-flex items-center gap-1 font-medium text-accent hover:underline">
 			{t("onOpenAlex", { count: list.total.toLocaleString(locale) })}
 			<HugeiconsIcon icon={ArrowUpRight01Icon} aria-hidden size={14} />
 		</a>
@@ -1263,7 +1263,7 @@ function AnalysedStudies({ itemKey }: { itemKey: string | undefined }) {
 	return (
 		<p className="text-black/80 dark:text-white/80">
 			{tLabels("ofTheWorksItCitesAre", { analysed: evidence.analysed ?? 0, analysedHere: evidence.analysedHere ?? 0, others })}{" "}
-			<Link href={`/evidence?paper=${itemKey}`} className="font-medium text-accent hover:underline">{tLabels("seeTheStudiesItAnalysed")}</Link>
+			<Link href={`/evidence?paper=${itemKey}`} rel="nofollow" className="font-medium text-accent hover:underline">{tLabels("seeTheStudiesItAnalysed")}</Link>
 		</p>
 	);
 }
