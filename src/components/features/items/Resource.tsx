@@ -182,6 +182,8 @@ type CountRow = {
 const COUNT_LABEL = "sr-only @[400px]:not-sr-only @[400px]:whitespace-nowrap";
 const COUNT_NUMBER = "rounded font-semibold tabular-nums outline-offset-2 hover:underline";
 const NEW_TAB = { target: "_blank", rel: "noopener noreferrer" } as const;
+// Every count opens a list robots.txt closes (an address with a query, /citation/, or Openscholar's search), so crawlers are told not to follow it.
+const CLOSED_LIST = "nofollow";
 
 /** One direction: how many the library holds, linked to its list, and of how many in OpenScholar. */
 function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: CountRow; locale: string; of: string; onOpenAlex: (all: string) => string; linksInNewTab: boolean }) {
@@ -192,7 +194,7 @@ function CountItem({ count, locale, of, onOpenAlex, linksInNewTab }: { count: Co
 		<CountTooltip tone={tone} icon={icon} text={words(held, all)}>
 			<span className={twMerge("inline-flex h-8 shrink-0 items-center gap-1.5 text-xs font-medium", colour)}>
 				<HugeiconsIcon icon={icon} className="size-3.5" />
-				{held > 0 && <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link>}
+				{held > 0 && <Link href={here} {...(linksInNewTab ? NEW_TAB : {})} rel={linksInNewTab ? `${CLOSED_LIST} ${NEW_TAB.rel}` : CLOSED_LIST} aria-label={words(held, null)} className={COUNT_NUMBER}>{held}</Link>}
 				{all !== null && <CountTotal all={all} count={count} locale={locale} of={held > 0 ? of : null} onOpenAlex={onOpenAlex} />}
 				<span data-count-label className={twMerge("opacity-70", COUNT_LABEL)}>{label(all ?? held)}</span>
 			</span>
@@ -207,9 +209,9 @@ function CountTotal({ all, count, locale, of, onOpenAlex }: { all: number; count
 	return <>
 		{of && <span className="opacity-60">{of}</span>}
 		{count.there && count.thereInside ? (
-			<Link href={count.there} aria-label={tLabels("label3", { text, count: count.label(all) })} className={COUNT_NUMBER}>{text}</Link>
+			<Link href={count.there} rel={CLOSED_LIST} aria-label={tLabels("label3", { text, count: count.label(all) })} className={COUNT_NUMBER}>{text}</Link>
 		) : count.there ? (
-			<a href={count.there} target="_blank" rel="noreferrer" aria-label={tLabels("label4", { text, count: count.label(all), value: onOpenAlex(text) })} className={COUNT_NUMBER}>{text}</a>
+			<a href={count.there} target="_blank" rel={`${CLOSED_LIST} noreferrer`} aria-label={tLabels("label4", { text, count: count.label(all), value: onOpenAlex(text) })} className={COUNT_NUMBER}>{text}</a>
 		) : (
 			<span className="font-semibold tabular-nums">{text}</span>
 		)}
