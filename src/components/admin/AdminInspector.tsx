@@ -1,4 +1,5 @@
 "use client";
+import { DocidPanel } from "./DocidPanel";
 import { ordinaryItemTags } from "@/lib/item-display";
 import { hasTag, recordPublishTags } from "@/lib/tags";
 import { AdminItemDisplay, AttachmentDisplay } from "./AdminItemDisplay";
@@ -2395,6 +2396,8 @@ export function AdminInspector({
 								zenodoDoi={zenodoVersionDoi(publication.publication)}
 							/>
 						)}
+						{/* MOCK (mock/identifier-services): a DOCiD the record came with, shown as one of its identifiers. */}
+						<DocidPanel recordKey={detail.key} />
 					</Section>
 				) : null}
 				<Section

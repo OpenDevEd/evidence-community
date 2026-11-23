@@ -1,5 +1,6 @@
 "use client";
 
+import { mockDocidOf } from "@/components/admin/DocidPanel";
 import { useEvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
@@ -799,7 +800,15 @@ type CanonicalWebsiteLink = {
 	iconUrl: string;
 };
 
-type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink;
+// MOCK (mock/identifier-services): a record's DOCiD, the Africa PID Alliance's Handle, beside its DOI.
+type DocidLink = { provider: "docid"; kind: "handle"; label: string; value: string; url: string };
+type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink | DocidLink;
+
+/** MOCK: the DOCiD a record came with (`?docid=1` in the address); the build reads it from its identifiers. */
+function mockDocidLink(key: string): DocidLink | null {
+	const value = mockDocidOf(key);
+	return value ? { provider: "docid", kind: "handle", label: "DOCiD", value, url: `https://hdl.handle.net/${value}` } : null;
+}
 
 function buildCanonicalWebsiteLink(
 	item: Item,
@@ -830,7 +839,9 @@ function buildOpenScholarPaperLink(item: Item, openScholar: (path: string) => st
 function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 	return (
 		<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white">
-			{link.provider === "website" ? (
+			{link.provider === "docid" ? (
+				<img src="/brands/docid.png" alt="DOCiD" className="h-3 w-auto max-w-7" />
+			) : link.provider === "website" ? (
 				<span
 					role="img"
 					aria-label={link.label}
@@ -859,6 +870,7 @@ function getIdentifierDisplayTitle(
 	link: IdentifierDisplayLink,
 	t: ReturnType<typeof useTranslations>,
 ) {
+	if (link.provider === "docid") return link.label;
 	if (link.provider === "website") return link.kind === "openscholar" ? link.label : t("itemIdentifierEvidenceLibrary");
 	if (link.provider !== "zenodo") return link.label;
 	if (link.kind === "record") return t("itemIdentifierArchiveRecord");
@@ -928,7 +940,7 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 			faviconUrl,
 			identity.baseUrl,
 		);
-		return [...doiLinks, canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
+		return [...doiLinks, mockDocidLink(item.key), canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
 	}, [faviconUrl, identity.baseUrl, item, openScholar]);
 
 	const licence = item ? completeRecordLicence(item.licence) : null;
