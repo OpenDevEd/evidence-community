@@ -1,5 +1,6 @@
 "use client";
 
+import { docidOf, docidUrl } from "@/lib/docid";
 import { useEvidenceRecord } from "@/components/pages/evidence/record-evidence";
 import { HugeiconsIcon } from "@/components/icons/Hugeicon";
 import {
@@ -799,7 +800,14 @@ type CanonicalWebsiteLink = {
 	iconUrl: string;
 };
 
-type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink;
+/** A record's DOCiD, the Africa PID Alliance's Handle, beside its DOI (src/lib/docid.ts). */
+type DocidLink = { provider: "docid"; kind: "handle"; label: string; value: string; url: string };
+type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink | DocidLink;
+
+function docidLinkOf(item: Item): DocidLink | null {
+	const value = docidOf({ extra: item.extra, url: item.url });
+	return value ? { provider: "docid", kind: "handle", label: "DOCiD", value, url: docidUrl(value) } : null;
+}
 
 function buildCanonicalWebsiteLink(
 	item: Item,
@@ -830,7 +838,9 @@ function buildOpenScholarPaperLink(item: Item, openScholar: (path: string) => st
 function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 	return (
 		<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white">
-			{link.provider === "website" ? (
+			{link.provider === "docid" ? (
+				<Image src="/brands/docid.png" alt="DOCiD" width={28} height={8} className="h-auto w-7" />
+			) : link.provider === "website" ? (
 				<span
 					role="img"
 					aria-label={link.label}
@@ -859,6 +869,7 @@ function getIdentifierDisplayTitle(
 	link: IdentifierDisplayLink,
 	t: ReturnType<typeof useTranslations>,
 ) {
+	if (link.provider === "docid") return link.label;
 	if (link.provider === "website") return link.kind === "openscholar" ? link.label : t("itemIdentifierEvidenceLibrary");
 	if (link.provider !== "zenodo") return link.label;
 	if (link.kind === "record") return t("itemIdentifierArchiveRecord");
@@ -928,7 +939,7 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 			faviconUrl,
 			identity.baseUrl,
 		);
-		return [...doiLinks, canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
+		return [...doiLinks, docidLinkOf(item), canonicalLink, buildOpenScholarPaperLink(item, openScholar)].filter((link) => link !== null);
 	}, [faviconUrl, identity.baseUrl, item, openScholar]);
 
 	const licence = item ? completeRecordLicence(item.licence) : null;

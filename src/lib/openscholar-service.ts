@@ -106,6 +106,8 @@ const liveReportSchema = z.object({
 	state: z.literal("live"),
 	key: z.string().min(1).max(64),
 	doi: z.string().min(1).max(512),
+	/** Its DOCiD, the Africa PID Alliance's Handle, when Openscholar registered one. An Openscholar older than these sends none. */
+	docid: z.string().max(256).optional(),
 	/** When the report's details were last set, as an ISO time. */
 	version: z.string().min(1).max(64),
 	title: z.string(),
