@@ -654,6 +654,10 @@ it("shows an author with a one-field name as a person until an editor picks Orga
 	expect(input("Organisation name")).toBeNull();
 	await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Organisation"]')!.click());
 	expect(input("Organisation name")?.value).toBe("Ana Ruiz");
+	// Back to Person, the name splits as Zotero splits it; it used to land whole in Last name with First name empty.
+	await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Person"]')!.click());
+	expect(input("First name")?.value).toBe("Ana");
+	expect(input("Last name")?.value).toBe("Ruiz");
 });
 
 it("leads the requirements panel with the requested changes until the draft is resubmitted", async () => {
