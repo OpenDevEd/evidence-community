@@ -70,6 +70,8 @@ type ProcessorOptions = {
 	database: Database;
 	storage: EvidenceFileStorage;
 	maxPdfBytes: number;
+	/** A link to Openscholar's stored copy of a paper's PDF, or null: the full search reads it before looking elsewhere. */
+	storedCopy?: (paper: { openalexId?: string | undefined; url: string }) => Promise<string | null>;
 };
 type PdfPhase = "download" | "read" | "upload";
 type RunOptions = ProcessorOptions & { timings: ReturnType<typeof phaseTimings>; memory: ReturnType<typeof pdfSearchMemory> };
@@ -271,6 +273,7 @@ async function publishPdf(
 			// An OpenAlex work's PDF record is keyed by the work. An Openscholar Report's has no OpenAlex ID.
 			openalexId: /^W\d+$/u.test(record.parentSourceRecordKey ?? "") ? record.parentSourceRecordKey! : undefined,
 			quick,
+			stored: options.storedCopy,
 		}),
 	);
 	const sha256 = createHash("sha256").update(bytes).digest("hex");

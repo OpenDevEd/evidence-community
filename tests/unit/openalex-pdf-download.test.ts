@@ -12,6 +12,13 @@ vi.mock("@/lib/public-fetch", () => ({
 		requested.push(url);
 		return answers.get(url)?.() ?? new Response("Not found", { status: 404 });
 	}),
+	// What reads a stored copy by its signed link.
+	fetchPublicFile: vi.fn(async (url: URL) => {
+		requested.push(url.href);
+		const answer = answers.get(url.href)?.();
+		if (!answer?.ok) throw new Error("Download returned 404");
+		return { data: new Uint8Array(await answer.arrayBuffer()), contentType: "application/pdf", url };
+	}),
 }));
 const { PdfNotFound, downloadPaperPdf } = await import("@/lib/source-ingestion/openalex/pdf-download");
 
@@ -71,4 +78,26 @@ it("asks nothing for a paper a full search already failed to find, until its tim
 
 	expect(again).toMatchObject({ miss: { remembered: true }, message: "No link returned the paper's PDF, as an earlier search found" });
 	expect(requested).toEqual([]);
+});
+
+it("reads Openscholar's stored copy first in the full search, and never asks for it in the quick one", async () => {
+	const signed = "https://store.example/openalex/W1.pdf?signature=1";
+	answers.set(signed, file);
+	const stored = vi.fn(async () => signed);
+
+	const bytes = await downloadPaperPdf("https://publisher.example/e.pdf", { doi: "10.1/e" }, { ...search(false), stored });
+
+	expect(Buffer.from(bytes).equals(pdf)).toBe(true);
+	expect(stored).toHaveBeenCalledWith({ openalexId: "W1", url: "https://publisher.example/e.pdf" });
+	expect(requested).toEqual([signed]);
+
+	// A store that fails, or has no copy, leaves the search to go on.
+	answers.set("https://publisher.example/e.pdf", file);
+	const failing = vi.fn(async () => Promise.reject(new Error("Openscholar did not answer")));
+	vi.spyOn(console, "warn").mockImplementation(() => {});
+	expect(Buffer.from(await downloadPaperPdf("https://publisher.example/e.pdf", {}, { ...search(false), stored: failing })).equals(pdf)).toBe(true);
+
+	stored.mockClear();
+	await downloadPaperPdf("https://publisher.example/e.pdf", {}, { ...search(true), stored });
+	expect(stored).not.toHaveBeenCalled();
 });

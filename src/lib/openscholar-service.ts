@@ -68,6 +68,18 @@ export async function postToOpenScholar(
 	return JSON.parse(text) as unknown;
 }
 
+const STORED_PDF_PATH = "/api/v1/evidence-libraries/papers/stored-pdf";
+const storedPdfSchema = z.object({ link: z.string().url().nullable() });
+
+/**
+ * A link to Openscholar's stored copy of a paper's PDF, good for an hour, by the paper's OpenAlex work or the address
+ * a copy was fetched from. Null when its store has none. A community reads a stored copy for nothing.
+ */
+export async function storedPdfLink(service: OpenScholarService, paper: { openalexId?: string | undefined; url: string }): Promise<string | null> {
+	const { openalexId, url } = paper;
+	return storedPdfSchema.parse(await postToOpenScholar(service, STORED_PDF_PATH, { contractVersion: 1, ...(openalexId ? { openalexId } : {}), url })).link;
+}
+
 const RESOLVE_PATH = "/api/v1/evidence-libraries/papers/resolve";
 const resolvedSchema = z.object({ papers: z.array(z.object({ openalexId: z.string().nullable(), doi: z.string().nullable() }).nullable()) });
 

@@ -2,6 +2,7 @@ import { paperLookupFor } from "@/lib/admin/added-papers-service";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { createSupabaseFileStorage } from "@/lib/admin/file-storage";
+import { storedPdfLink } from "@/lib/openscholar-service";
 
 import { createOpenAlexAttachmentProcessor } from "./openalex/attachment-processor";
 import { createManifestSourceCredentialResolver } from "./credentials";
@@ -29,6 +30,7 @@ export function createSourceSyncRuntime(
 			database,
 			storage,
 			maxPdfBytes: config.services.storage.maxPdfBytes,
+			storedCopy: (paper) => storedPdfLink(config.authentication.openScholar, paper),
 		}),
 	};
 
