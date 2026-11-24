@@ -57,6 +57,9 @@ const publicOnly = new Agent({
 	// Springer Nature's Fastly answers undici's HTTP/1.1 requests with a JavaScript challenge, but not HTTP/2 ones.
 	allowH2: true,
 	connect: {
+		// Node tries a host's addresses in turn and gives each 250 ms by default. A journal's server on another
+		// continent, or a busy connection, takes longer to answer, and the request then failed as a timeout.
+		autoSelectFamilyAttemptTimeout: 2_000,
 		lookup(hostname, options, callback) {
 			lookupCallback(hostname, { all: true }, (error, addresses) => {
 				if (error) return callback(error, "", 0);
@@ -69,6 +72,13 @@ const publicOnly = new Agent({
 		},
 	},
 });
+
+/**
+ * One request over `publicOnly`, with no redirect followed. For the PDF search (@opendeved/paper-pdf), which follows
+ * redirects itself and checks each address, written-out ones included, before it asks.
+ */
+export const publicTransport = ((input: Parameters<typeof undiciFetch>[0], init?: RequestInit) =>
+	undiciFetch(input, { ...init, redirect: "manual", dispatcher: publicOnly })) as unknown as typeof fetch;
 
 /**
  * An address from stored data or settings may only reach the public internet, never this network. A name is

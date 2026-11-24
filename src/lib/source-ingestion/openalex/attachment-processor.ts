@@ -19,7 +19,7 @@ import {
 	type SourceItemUpsert,
 } from "../batch-schema";
 import { PDF_RECORD } from "../openscholar/report-record";
-import { downloadAnyCopy } from "./pdf-download";
+import { PdfNotFound, downloadPaperPdf, pdfSearchMemory, pdfSearchQueue } from "./pdf-download";
 
 /** The address a record's PDF came from: an OpenAlex location's, or an Openscholar Report's own (report-record.ts). */
 function originalPdfUrl(raw: Record<string, unknown>) {
@@ -72,7 +72,7 @@ type ProcessorOptions = {
 	maxPdfBytes: number;
 };
 type PdfPhase = "download" | "read" | "upload";
-type RunOptions = ProcessorOptions & { timings: ReturnType<typeof phaseTimings> };
+type RunOptions = ProcessorOptions & { timings: ReturnType<typeof phaseTimings>; memory: ReturnType<typeof pdfSearchMemory> };
 
 /**
  * Time spent in each step of publishing PDFs, per source, taken and reset by
@@ -241,6 +241,7 @@ async function publishPdf(
 	record: PdfRecord,
 	sourceConnectionKey: string,
 	attempt: Attempt,
+	quick: boolean,
 ) {
 	assertPublicationIdentity(record, sourceConnectionKey);
 	const existing = await readSourceFilePublication(
@@ -263,7 +264,15 @@ async function publishPdf(
 		return withPublishedFile(record, reusable);
 	}
 	attempt.issueCode = "openalex_pdf_download_failed";
-	const bytes = await options.timings.time(sourceConnectionKey, "download", () => downloadAnyCopy(record.file.url, record.raw, options.maxPdfBytes));
+	const bytes = await options.timings.time(sourceConnectionKey, "download", () =>
+		downloadPaperPdf(record.file.url, record.raw, {
+			maxBytes: options.maxPdfBytes,
+			memory: options.memory,
+			// An OpenAlex work's PDF record is keyed by the work. An Openscholar Report's has no OpenAlex ID.
+			openalexId: /^W\d+$/u.test(record.parentSourceRecordKey ?? "") ? record.parentSourceRecordKey! : undefined,
+			quick,
+		}),
+	);
 	const sha256 = createHash("sha256").update(bytes).digest("hex");
 	if (reusable?.managedPublication?.sha256 === sha256)
 		return withPublishedFile(record, reusable);
@@ -301,11 +310,9 @@ export function createOpenAlexAttachmentProcessor(processorOptions: ProcessorOpt
 	if (!Number.isSafeInteger(processorOptions.maxPdfBytes) || processorOptions.maxPdfBytes < 1) {
 		throw new Error("OpenAlex maxPdfBytes must be a positive integer");
 	}
-	const options: RunOptions = { ...processorOptions, timings: phaseTimings() };
-	const processor = async (
-		record: SourceItemUpsert,
-		sourceConnectionKey: string,
-	): Promise<SourceItemUpsert> => {
+	const options: RunOptions = { ...processorOptions, timings: phaseTimings(), memory: pdfSearchMemory(processorOptions.database) };
+	const queue = pdfSearchQueue(processorOptions.database);
+	const publish = async (record: SourceItemUpsert, sourceConnectionKey: string, quick: boolean): Promise<SourceItemUpsert> => {
 		if (!isUnpublishedPdf(record)) return record;
 		const attempt: Attempt = {
 			issueCode: "openalex_pdf_storage_failed",
@@ -317,11 +324,24 @@ export function createOpenAlexAttachmentProcessor(processorOptions: ProcessorOpt
 				record,
 				sourceConnectionKey,
 				attempt,
+				quick,
 			);
 		} catch (error) {
+			// The quick search's miss waits for the full search, unless an earlier full search remembered there is no copy.
+			if (error instanceof PdfNotFound && !error.full && !error.miss.remembered) await queue.add(sourceConnectionKey, record);
 			return failedPdf(record, attempt, error);
 		}
 	};
+	/** Publishes a record's PDF after the full search: its own links, then Crossref and the Internet Archive. */
+	const processor = (record: SourceItemUpsert, sourceConnectionKey: string) => publish(record, sourceConnectionKey, false);
+	/**
+	 * Publishes a record's PDF after the quick search: its own links and what their pages lead to. For an import of
+	 * many, whose pages should not wait on services that answer at their own pace. A record it misses is given by
+	 * `pending` until `searched` says the full search has been run on it.
+	 */
+	processor.quick = (record: SourceItemUpsert, sourceConnectionKey: string) => publish(record, sourceConnectionKey, true);
+	processor.pending = queue.take;
+	processor.searched = queue.done;
 	/** Keeps a PDF already published for the record, without downloading anything. */
 	processor.reuse = async (
 		record: SourceItemUpsert,

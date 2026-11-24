@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq, like, sql } from "drizzle-orm";
 import { fetch as transport, Response } from "undici";
+import { forgetHosts } from "@opendeved/paper-pdf";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -10,6 +11,7 @@ vi.mock("undici", async (importOriginal) => ({
 }));
 
 import type { Database } from "@/db/database-schema";
+import { computedCache } from "@/db/schema/tables/computedCache";
 import { item } from "@/db/schema/tables/item";
 import {
 	itemFilePublication,
@@ -76,6 +78,8 @@ async function firstPublicationValue<
 
 beforeEach(() => {
 	vi.mocked(transport).mockReset();
+	// What the PDF search learned about a host in one test says nothing in the next.
+	forgetHosts();
 });
 
 describe("OpenAlex PDF processing", () => {
@@ -236,10 +240,34 @@ describe("OpenAlex PDF processing", () => {
 			const [, untyped] = mapped(`${externalUrl}?untyped`, "2026-09-24T01:02:03Z", 126);
 			expect((await processor(untyped!, "openalex-pdf-a")).processingIssue).toBeNull();
 
-			// A landing page that names no PDF still fails as an invalid PDF.
+			// A landing page that names no PDF is a PDF that is not available, not one that cannot be read.
 			vi.mocked(transport).mockResolvedValueOnce(landing('<meta name="citation_title" content="Research">'));
 			const [, other] = mapped(`${externalUrl}?landing`, "2026-09-24T01:02:03Z", 124);
-			expect((await processor(other!, "openalex-pdf-a")).processingIssue?.code).toBe("openalex_pdf_invalid");
+			expect((await processor(other!, "openalex-pdf-a")).processingIssue?.code).toBe("openalex_pdf_download_failed");
+		});
+	});
+
+	it("keeps a PDF the quick search missed for the full search, across restarts", async () => {
+		await withIsolatedPublicationDatabase(async (database) => {
+			await sources(database);
+			const processor = createOpenAlexAttachmentProcessor({ database, storage: new MemoryFileStorage(), maxPdfBytes: 1_000_000 });
+			const [, attachment] = mapped();
+			vi.mocked(transport).mockResolvedValueOnce(new Response("Forbidden", { status: 403 }));
+
+			const missed = await processor.quick(attachment!, "openalex-pdf-a");
+
+			expect(missed.processingIssue).toMatchObject({ code: "openalex_pdf_download_failed", message: expect.stringContaining("refuses automated requests (HTTP 403)") });
+			// The quick search asked the record's own link and nothing else.
+			expect(transport).toHaveBeenCalledTimes(1);
+
+			// Another processor, as after a restart, finds the record waiting for its own source and no other.
+			const later = createOpenAlexAttachmentProcessor({ database, storage: new MemoryFileStorage(), maxPdfBytes: 1_000_000 });
+			const pending = await later.pending("openalex-pdf-a", 10);
+			expect(pending.map(({ record }) => record?.sourceRecordKey)).toEqual(["W123:pdf"]);
+			expect(await later.pending("openalex-pdf-b", 10)).toEqual([]);
+
+			await later.searched(pending.map(({ key }) => key));
+			expect(await later.pending("openalex-pdf-a", 10)).toEqual([]);
 		});
 	});
 
@@ -303,6 +331,9 @@ describe("OpenAlex PDF processing", () => {
 			await write("openalex-pdf-a", [next[0], failed]);
 			await processor.flushCleanup("openalex-pdf-a");
 			expect(storage.publicFiles.size).toBe(2);
+			// The search remembers the miss and asks nothing until its time comes, here as if it had.
+			expect((await processor(next[1]!, "openalex-pdf-a")).processingIssue?.message).toContain("as an earlier search found");
+			await database.delete(computedCache).where(like(computedCache.key, "pdf-search:paper:%"));
 			vi.mocked(transport).mockResolvedValueOnce(
 				new Response(await createPdf("UPDATED PDF")),
 			);
@@ -683,7 +714,7 @@ describe("OpenAlex PDF processing", () => {
 			);
 			expect(transport).not.toHaveBeenCalled();
 			vi.mocked(transport).mockResolvedValueOnce(
-				new Response("x".repeat(21)),
+				new Response(await createPdf("LARGER THAN TWENTY BYTES")),
 			);
 			const original = mapped()[1]!;
 			const oversized = await processor(original, "openalex-pdf-a");
@@ -692,11 +723,14 @@ describe("OpenAlex PDF processing", () => {
 				code: "openalex_pdf_download_failed",
 			});
 			expect(oversized.processingIssue!.message).toContain("too large");
-			vi.mocked(transport).mockResolvedValueOnce(
-				new Response("Not a PDF"),
-			);
-			const invalid = await processor(original, "openalex-pdf-a");
-			expect(invalid.file).toEqual(original.file);
+			// A file that starts and ends as a PDF and holds no document is downloaded, and then cannot be read.
+			const hollow = Buffer.from("%PDF-1.7\n1 0 obj\n<<>>\nendobj\n");
+			const unreadable = Buffer.concat([hollow, Buffer.from(`xref\n0 1\n0000000000 65535 f \ntrailer\n<<>>\nstartxref\n${hollow.byteLength}\n%%EOF\n`)]);
+			vi.mocked(transport).mockResolvedValueOnce(new Response(unreadable));
+			const roomy = createOpenAlexAttachmentProcessor({ database, storage, maxPdfBytes: 1_000_000 });
+			const [, another] = mapped(`${externalUrl}?hollow`, "2026-09-24T01:02:03Z", 127);
+			const invalid = await roomy(another!, "openalex-pdf-a");
+			expect(invalid.file).toEqual(another!.file);
 			expect(invalid.processingIssue?.code).toBe("openalex_pdf_invalid");
 			expect(storage.publicFiles.size).toBe(0);
 			expect(

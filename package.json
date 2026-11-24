@@ -112,6 +112,7 @@
 		"@nextui-org/shared-icons": "^2.1.1",
 		"@opendeved/doi-sync-core": "github:OpenDevEd/doi-sync-core#da496674602e556d726d55ed640e57997ebfa061",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
+		"@opendeved/paper-pdf": "github:OpenDevEd/paper-pdf#42678c32b78850c6638aa2a6734c2a91c49d87e7",
 		"@openrouter/ai-sdk-provider": "^3.1.0",
 		"@radix-ui/react-collapsible": "^1.1.20",
 		"@radix-ui/react-hover-card": "^1.1.23",
