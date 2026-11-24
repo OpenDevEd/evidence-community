@@ -85,7 +85,9 @@ export class PdfNotFound extends Error {
 		// What the record's own link did, so the issue says what went wrong with the link it shows. Other copies are
 		// tried beside it and may answer first.
 		const first = miss.attempts.find((attempt) => attempt.url === link) ?? miss.attempts.find((attempt) => attempt.outcome !== "lookup");
-		const detail = first ? ` (${first.note ?? first.outcome}${first.status && !first.note?.includes(String(first.status)) ? `, HTTP ${first.status}` : ""})` : "";
+		// A link that was not asked, because its site refused another paper a moment before, says what that site answered.
+		const note = first?.note?.replace(/^Host left alone: /u, "");
+		const detail = first ? ` (${note ?? first.outcome}${first.status && !note?.includes(String(first.status)) ? `, HTTP ${first.status}` : ""})` : "";
 		const why = first?.outcome === "too_large" ? "The PDF is too large" : WHY[miss.reason];
 		super(`${why}${detail}${miss.remembered ? ", as an earlier search found" : ""}`);
 	}
