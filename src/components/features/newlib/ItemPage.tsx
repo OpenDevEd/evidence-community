@@ -839,7 +839,7 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 	return (
 		<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white">
 			{link.provider === "docid" ? (
-				<Image src="/brands/docid.png" alt="DOCiD" width={28} height={8} className="h-auto w-7" />
+				<Image unoptimized src="/brands/docid.png" alt="DOCiD" width={28} height={8} className="h-auto w-7" />
 			) : link.provider === "website" ? (
 				<span
 					role="img"
