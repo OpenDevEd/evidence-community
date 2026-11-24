@@ -32,6 +32,7 @@ import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { slicedQuery, type SliceDates } from "@/lib/source-ingestion/openalex/slices";
 import type { SourceIngestionBatch, SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
@@ -578,6 +579,68 @@ it("imports every record before downloading a PDF, then adds the PDFs and resume
 		// The PDF that could not be downloaded is a record issue.
 		const issueRows = await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "oa-first"));
 		expect(issueRows.map((row) => row.code)).toEqual(["openalex_pdf_download_failed"]);
+	});
+}, 120_000);
+
+it("takes a quick look for each PDF while the pages are written, then runs the full search on the ones that missed", async () => {
+	await withIsolatedPublicationDatabase(async (db) => {
+		await db.insert(sourceConnection).values({ key: "oa-search", provider: "openalex", scopeKind: "query", config: { ...settings, downloadPdfs: true } });
+		const [run] = await db.insert(sourceSyncRun).values({ sourceConnectionKey: "oa-search", workerId: "test" }).returning({ id: sourceSyncRun.id });
+		const results = [1, 2, 3].map((id) => ({ ...work(id), best_oa_location: { is_oa: true, pdf_url: `https://example.org/W${id}.pdf`, license: "cc-by" } }));
+		const steps: string[] = [];
+		const waiting = new Map<string, SourceItemUpsert>();
+		const issue = (record: SourceItemUpsert, message: string) => ({ ...record, processingIssue: { code: "openalex_pdf_download_failed", message } });
+		const processor = Object.assign(
+			// The full search finds W2's PDF on another site and finds none for W3.
+			async (record: SourceItemUpsert) => {
+				steps.push(`full ${record.sourceRecordKey}`);
+				return record.sourceRecordKey === "W3:pdf" ? issue(record, "No link returned the paper's PDF") : record;
+			},
+			{
+				// The quick look finds only W1's PDF.
+				quick: async (record: SourceItemUpsert) => {
+					steps.push(`quick ${record.sourceRecordKey}`);
+					if (record.sourceRecordKey === "W1:pdf") return record;
+					waiting.set(record.sourceRecordKey, record);
+					return issue(record, "The site that holds the PDF refuses automated requests");
+				},
+				pending: async () => [...waiting].map(([key, record]) => ({ key, record })),
+				searched: async (keys: string[]) => keys.forEach((key) => waiting.delete(key)),
+				reuse: async (record: SourceItemUpsert) => record,
+				flushCleanup: async () => {},
+			},
+		);
+		const report = vi.fn(async () => {});
+		const [current] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-search"));
+
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: current!, credentialResolver: async () => "test-key", heartbeat: async () => {}, run: { id: run!.id, report } },
+			{ attachmentProcessor: processor, fetch: worksOnly(async () => Response.json({ meta: { count: results.length, next_cursor: null }, results })) },
+		);
+
+		// Every quick look comes before the first full search, and only the two misses are searched in full.
+		expect(steps.slice(0, 3).toSorted()).toEqual(["quick W1:pdf", "quick W2:pdf", "quick W3:pdf"]);
+		expect(steps.slice(3).toSorted()).toEqual(["full W2:pdf", "full W3:pdf"]);
+		// The PDF the full search found is no longer missed, in the progress shown and in the saved state.
+		expect(report).toHaveBeenLastCalledWith(3, 3, { missed: 1 });
+		const [saved] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-search"));
+		expect(saved!.syncCursor).toMatchObject({ stage: "pdfs", pdfs: { done: 3, missed: 1, total: 3 } });
+		// Its record issue is gone, and the one PDF nobody holds says what the full search met.
+		const issues = await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "oa-search"));
+		expect(issues.map((row) => [row.sourceRecordKey, row.message])).toEqual([["W3:pdf", "No link returned the paper's PDF"]]);
+		expect(waiting.size).toBe(0);
+
+		// A record still waiting from an earlier query, whose work this source no longer holds, is dropped, and the
+		// PDF waiting beside it is written all the same.
+		const [, attachment] = mapOpenAlexWork({ ...results[1]!, id: "https://openalex.org/W99" } as Parameters<typeof mapOpenAlexWork>[0]).items;
+		waiting.set("W99:pdf", attachment!);
+		waiting.set("W3:pdf", { ...attachment!, sourceRecordKey: "W3:pdf", parentSourceRecordKey: "W3" });
+		const [again] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-search"));
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: again!, credentialResolver: async () => "test-key", heartbeat: async () => {}, run: { id: run!.id, report } },
+			{ attachmentProcessor: processor, fetch: worksOnly(async () => Response.json({ meta: { count: 0, next_cursor: null }, results: [] })) },
+		);
+		expect(waiting.size).toBe(0);
 	});
 }, 120_000);
 

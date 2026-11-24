@@ -13,7 +13,7 @@ import {
 	type JsonValue,
 	type SourceItemUpsert,
 } from "../batch-schema";
-import { writeSourceIngestionBatch } from "../transactional-writer";
+import { SourceReferenceNotFoundError, writeSourceIngestionBatch } from "../transactional-writer";
 import { failureText, OpenAlexApiError, OpenAlexClient } from "./client";
 import { locateInstitutions } from "./institution-locations";
 import { findDuplicateRecords, skipRepeats, storedWorks } from "./duplicates";
@@ -75,6 +75,11 @@ export type OpenAlexSourceOptions = {
 		flushCleanup: (sourceConnectionKey: string) => Promise<void>;
 		/** Time spent per publishing step since the last call, for the page log. */
 		takeTimings?: (sourceConnectionKey: string) => unknown;
+		/** Looks only at a record's own links, so a page of many PDFs does not wait on services that answer at their own pace. */
+		quick?: RecordProcessor;
+		/** Records `quick` missed that still wait for the full search, saved across runs, and the rows to hand back to `searched`. */
+		pending?: (sourceConnectionKey: string, limit: number) => Promise<{ key: string; record: SourceItemUpsert | null }[]>;
+		searched?: (keys: string[]) => Promise<void>;
 	};
 };
 
@@ -137,6 +142,10 @@ const PDF_PER_HOST = 4;
 // A page is written once its slowest PDF is done, which in production can take a
 // minute or two. With three pages in flight such waits left most lanes idle.
 const PDF_PAGES_IN_FLIGHT = 8;
+// The full search waits on Crossref and the Internet Archive, which are asked at a steady pace, so few run at once.
+const FULL_SEARCH_CONCURRENCY = 8;
+// How many full searches are written at a time.
+const FULL_SEARCH_WRITE = 100;
 // Leaves room for the batch envelope and institution facts.
 const WRITE_BUDGET_BYTES = MAX_SOURCE_BATCH_BYTES - 4 * 1024 * 1024;
 
@@ -638,6 +647,8 @@ type PdfPipeline = {
 	scan: Scan;
 	lane: ReturnType<typeof downloadLanes>;
 	stop: PdfStop;
+	/** What publishes a page's PDFs, so pages do not wait on the full search. */
+	look: RecordProcessor | undefined;
 	/** A page that could not be fetched; the pages before it are still written. */
 	fetchError?: unknown;
 	inFlight: PdfPage[];
@@ -657,9 +668,8 @@ async function fetchPdfPage(scan: Scan, cursor: Cursor) {
 
 /** Fetches pages ahead until enough are in flight. False when incremental access was refused. */
 async function fillPdfPages(pipeline: PdfPipeline) {
-	const { scan, lane, stop, inFlight } = pipeline;
+	const { scan, lane, stop, inFlight, look } = pipeline;
 	const { context } = scan;
-	const processor = scan.options.attachmentProcessor;
 	while (pipeline.fetchCursor.nextCursor && inFlight.length < PDF_PAGES_IN_FLIGHT && !stop.failed && !pipeline.fetchError) {
 		let fetched: Awaited<ReturnType<typeof fetchPdfPage>>;
 		try {
@@ -676,7 +686,7 @@ async function fillPdfPages(pipeline: PdfPipeline) {
 		pipeline.fetchCursor = pastPage(pipeline.fetchCursor, slice, page.meta.next_cursor);
 		const mapped = await mapPage(scan, page.results);
 		const items = mapped.flatMap((work) => work.items);
-		const processed = processor ? processWithLanes(context, items, processor, lane, stop) : Promise.resolve();
+		const processed = look ? processWithLanes(context, items, look, lane, stop) : Promise.resolve();
 		// A failure is handled when its page is written; this keeps it from going unobserved first.
 		processed.catch(() => (stop.failed = true));
 		inFlight.push({ page, slice, mapped, items, processed, links: new Set(items.filter(isPdfLink).map((record) => record.sourceRecordKey)), startedAt: performance.now() });
@@ -693,6 +703,67 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 	const writeStarted = performance.now();
 	await writeScannedPage(scan, next.page, next.mapped, next.items, false, next.slice);
 	logPdfPage(scan, { works: next.page.results.length, items: next.items, startedAt: next.startedAt, writeSeconds: (performance.now() - writeStarted) / 1000 });
+}
+
+/** What publishes a page's PDFs: the quick search where the processor has one. */
+const pageLook = (processor: OpenAlexSourceOptions["attachmentProcessor"]) => processor?.quick ?? processor;
+
+/**
+ * Writes records the full search is done with. One that belongs to a work the source no longer holds, as after its
+ * query changed, is refused with its whole write. The records are then written one by one and that one is dropped,
+ * or it would fail the same write on every import.
+ */
+async function writeSearched(scan: Scan, records: SourceItemUpsert[]) {
+	const unlessGone = (error: unknown) => {
+		if (!(error instanceof SourceReferenceNotFoundError)) throw error;
+	};
+	try {
+		await writeFound(scan, records);
+	} catch (error) {
+		unlessGone(error);
+		for (const record of records) await writeFound(scan, [record]).catch(unlessGone);
+	}
+}
+
+/** One write of searched records, taking the PDFs found off the stage's count of missed ones. */
+async function writeFound(scan: Scan, records: SourceItemUpsert[]) {
+	const pdfs = scan.cursor.pdfs!;
+	const found = records.filter((record) => !record.processingIssue).length;
+	// A new cursor: the saved one is still what the write expects.
+	const cursor = { ...scan.cursor, pdfs: { ...pdfs, missed: Math.max(0, pdfs.missed - found) } };
+	await writePage(scan.context, scan.expectedCursor, cursor, { items: records, institutionCountries: [] }, "pdfs");
+	scan.cursor = cursor;
+	scan.expectedCursor = cursor;
+}
+
+/**
+ * The PDFs the pages' quick search missed get the full search: Crossref's links and the Internet Archive's copy. It
+ * runs after the pages, so they did not wait on those services. What it finds is written like a page's, and so is
+ * what it fails on, whose issue then says what the full search met. The cursor stays where the pages left it. The
+ * records wait in the database, so a run that stops here carries on in the next one.
+ */
+async function searchInFull(scan: Scan) {
+	const { context } = scan;
+	const processor = scan.options.attachmentProcessor;
+	// Not after a fall back to a full scan, which starts over from the records.
+	if (scan.cursor.stage !== "pdfs" || !processor?.pending || !processor.searched) return;
+	const sourceConnectionKey = context.sourceConnection.key;
+	for (;;) {
+		const pending = await processor.pending(sourceConnectionKey, FULL_SEARCH_WRITE);
+		if (!pending.length) return;
+		const searched = await mapWithConcurrency(pending.flatMap(({ record }) => record ?? []), FULL_SEARCH_CONCURRENCY, async (record) => {
+			await context.heartbeat();
+			return processor(record, sourceConnectionKey);
+		});
+		if (searched.length) {
+			// The searches took a while, and another worker may hold the lease by now.
+			await context.heartbeat();
+			await writeSearched(scan, searched);
+			await reportProgress(scan, 0);
+		}
+		// Only once written: a run that stops before this searches them again.
+		await processor.searched(pending.map(({ key }) => key));
+	}
 }
 
 /**
@@ -731,6 +802,7 @@ async function scanPdfPages(scan: Scan) {
 		scan,
 		lane: downloadLanes(PDF_CONCURRENCY, PDF_PER_HOST),
 		stop: { failed: false },
+		look: pageLook(scan.options.attachmentProcessor),
 		inFlight: [],
 		fetchCursor: scan.cursor,
 	};
@@ -754,6 +826,7 @@ async function scanPdfPages(scan: Scan) {
 			}
 			await writePdfPage(pipeline, next);
 		}
+		await searchInFull(scan);
 	} catch (error) {
 		failed = true;
 		throw error;

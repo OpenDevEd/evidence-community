@@ -107,7 +107,7 @@ const ISSUE_TYPES: IssueType[] = [
 		key: "pdf-unavailable",
 		kind: "pdf",
 		title: "PDF not available",
-		next: "OpenAlex lists an open-access copy, but its link did not return a PDF. The record was imported without it, and the next import tries the link again.",
+		next: "OpenAlex lists an open-access copy, but no copy could be downloaded from its link, from another site that holds it or from the Internet Archive. The record was imported without it, and a later import looks again.",
 		codes: ["openalex_pdf_download_failed"],
 	},
 	{
