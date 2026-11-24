@@ -2,7 +2,7 @@ import { findPdf, isPdf, type Memory, type Missed } from "@opendeved/paper-pdf";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { computedCache } from "@/db/schema/tables/computedCache";
-import { publicTransport } from "@/lib/public-fetch";
+import { fetchPublicFile, publicTransport } from "@/lib/public-fetch";
 import { itemUpsertSchema, type SourceItemUpsert } from "../batch-schema";
 
 export { isPdf };
@@ -85,7 +85,9 @@ export class PdfNotFound extends Error {
 		// What the record's own link did, so the issue says what went wrong with the link it shows. Other copies are
 		// tried beside it and may answer first.
 		const first = miss.attempts.find((attempt) => attempt.url === link) ?? miss.attempts.find((attempt) => attempt.outcome !== "lookup");
-		const detail = first ? ` (${first.note ?? first.outcome}${first.status && !first.note?.includes(String(first.status)) ? `, HTTP ${first.status}` : ""})` : "";
+		// A link that was not asked, because its site refused another paper a moment before, says what that site answered.
+		const note = first?.note?.replace(/^Host left alone: /u, "");
+		const detail = first ? ` (${note ?? first.outcome}${first.status && !note?.includes(String(first.status)) ? `, HTTP ${first.status}` : ""})` : "";
 		const why = first?.outcome === "too_large" ? "The PDF is too large" : WHY[miss.reason];
 		super(`${why}${detail}${miss.remembered ? ", as an earlier search found" : ""}`);
 	}
@@ -101,13 +103,31 @@ type Search = {
 	 * asks Crossref and the Internet Archive, which answer at a steady pace however many searches are waiting.
 	 */
 	quick: boolean;
+	/** A link to Openscholar's stored copy of the paper, or null. The full search reads it first. */
+	stored?: ((paper: { openalexId?: string | undefined; url: string }) => Promise<string | null>) | undefined;
 };
 
+/** Openscholar's stored copy of a paper, or null when it has none or it can't be read just now: the search then goes on. */
+async function storedCopy(search: Search, link: string) {
+	try {
+		const stored = await search.stored?.({ openalexId: search.openalexId, url: link });
+		if (!stored) return null;
+		const { data } = await fetchPublicFile(new URL(stored), { accept: "application/pdf", timeoutMs: 120_000, idleTimeoutMs: 30_000, maxBytes: search.maxBytes });
+		return isPdf(data) ? data : null;
+	} catch (error) {
+		console.warn("Openscholar's stored copy could not be read", { link, error: error instanceof Error ? error.message : String(error) });
+		return null;
+	}
+}
+
 /**
- * The work's PDF from its chosen link, else from its other open copies, else, in the full search, from a copy
- * Crossref or the Internet Archive knows. Throws `PdfNotFound` when there is none.
+ * The work's PDF. The quick search tries its chosen link and its other open copies. The full search first reads the
+ * copy Openscholar's store holds, which costs a community nothing, then tries those links, then a copy Crossref or
+ * the Internet Archive knows. Throws `PdfNotFound` when there is none.
  */
 export async function downloadPaperPdf(link: string, raw: Record<string, unknown>, search: Search): Promise<Uint8Array> {
+	const kept = search.quick ? null : await storedCopy(search, link);
+	if (kept) return kept;
 	const otherCopies = Array.isArray(raw.otherCopies) ? raw.otherCopies.filter((copy): copy is string => typeof copy === "string") : [];
 	// A remembered miss stands for the link it was found with: a record whose link changed is searched afresh.
 	const paper = (key: string) => (key.startsWith("paper:") ? `${key} ${link}` : key);
