@@ -32,6 +32,7 @@ import { itemFilePublication, sourceSnapshot } from "@/db/schema/source";
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import { reconcileConfiguredSources } from "@/lib/source-ingestion/configuration";
 import { syncOpenAlexSource } from "@/lib/source-ingestion/openalex/sync";
+import { mapOpenAlexWork } from "@/lib/source-ingestion/openalex/mapper";
 import { slicedQuery, type SliceDates } from "@/lib/source-ingestion/openalex/slices";
 import type { SourceIngestionBatch, SourceItemUpsert } from "@/lib/source-ingestion/batch-schema";
 import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
@@ -627,6 +628,18 @@ it("takes a quick look for each PDF while the pages are written, then runs the f
 		// Its record issue is gone, and the one PDF nobody holds says what the full search met.
 		const issues = await db.select().from(sourceRecordIssue).where(eq(sourceRecordIssue.sourceConnectionKey, "oa-search"));
 		expect(issues.map((row) => [row.sourceRecordKey, row.message])).toEqual([["W3:pdf", "No link returned the paper's PDF"]]);
+		expect(waiting.size).toBe(0);
+
+		// A record still waiting from an earlier query, whose work this source no longer holds, is dropped, and the
+		// PDF waiting beside it is written all the same.
+		const [, attachment] = mapOpenAlexWork({ ...results[1]!, id: "https://openalex.org/W99" } as Parameters<typeof mapOpenAlexWork>[0]).items;
+		waiting.set("W99:pdf", attachment!);
+		waiting.set("W3:pdf", { ...attachment!, sourceRecordKey: "W3:pdf", parentSourceRecordKey: "W3" });
+		const [again] = await db.select().from(sourceConnection).where(eq(sourceConnection.key, "oa-search"));
+		await syncOpenAlexSource(
+			{ database: db, sourceConnection: again!, credentialResolver: async () => "test-key", heartbeat: async () => {}, run: { id: run!.id, report } },
+			{ attachmentProcessor: processor, fetch: worksOnly(async () => Response.json({ meta: { count: 0, next_cursor: null }, results: [] })) },
+		);
 		expect(waiting.size).toBe(0);
 	});
 }, 120_000);

@@ -13,7 +13,7 @@ import {
 	type JsonValue,
 	type SourceItemUpsert,
 } from "../batch-schema";
-import { writeSourceIngestionBatch } from "../transactional-writer";
+import { SourceReferenceNotFoundError, writeSourceIngestionBatch } from "../transactional-writer";
 import { failureText, OpenAlexApiError, OpenAlexClient } from "./client";
 import { locateInstitutions } from "./institution-locations";
 import { findDuplicateRecords, skipRepeats, storedWorks } from "./duplicates";
@@ -708,6 +708,17 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 /** What publishes a page's PDFs: the quick search where the processor has one. */
 const pageLook = (processor: OpenAlexSourceOptions["attachmentProcessor"]) => processor?.quick ?? processor;
 
+/** Writes records the full search is done with, taking the PDFs it found off the stage's count of missed ones. */
+async function writeSearched(scan: Scan, records: SourceItemUpsert[]) {
+	const pdfs = scan.cursor.pdfs!;
+	const found = records.filter((record) => !record.processingIssue).length;
+	// A new cursor: the saved one is still what the write expects.
+	const cursor = { ...scan.cursor, pdfs: { ...pdfs, missed: Math.max(0, pdfs.missed - found) } };
+	await writePage(scan.context, scan.expectedCursor, cursor, { items: records, institutionCountries: [] }, "pdfs");
+	scan.cursor = cursor;
+	scan.expectedCursor = cursor;
+}
+
 /**
  * The PDFs the pages' quick search missed get the full search: Crossref's links and the Internet Archive's copy. It
  * runs after the pages, so they did not wait on those services. What it finds is written like a page's, and so is
@@ -728,14 +739,20 @@ async function searchInFull(scan: Scan) {
 			return processor(record, sourceConnectionKey);
 		});
 		if (searched.length) {
-			const pdfs = scan.cursor.pdfs!;
-			const found = searched.filter((record) => !record.processingIssue).length;
-			// A new cursor: the saved one is still what the write expects.
-			scan.cursor = { ...scan.cursor, pdfs: { ...pdfs, missed: Math.max(0, pdfs.missed - found) } };
 			// The searches took a while, and another worker may hold the lease by now.
 			await context.heartbeat();
-			await writePage(context, scan.expectedCursor, scan.cursor, { items: searched, institutionCountries: [] }, "pdfs");
-			scan.expectedCursor = scan.cursor;
+			try {
+				await writeSearched(scan, searched);
+			} catch (error) {
+				if (!(error instanceof SourceReferenceNotFoundError)) throw error;
+				// One of them belongs to a work the source no longer holds, as after its query changed. The others are
+				// written one by one and that one is dropped, or it would fail this write on every import.
+				for (const record of searched) {
+					await writeSearched(scan, [record]).catch((refused: unknown) => {
+						if (!(refused instanceof SourceReferenceNotFoundError)) throw refused;
+					});
+				}
+			}
 			await reportProgress(scan, 0);
 		}
 		// Only once written: a run that stops before this searches them again.
