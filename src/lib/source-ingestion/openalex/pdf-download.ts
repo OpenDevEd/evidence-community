@@ -94,7 +94,7 @@ export class PdfNotFound extends Error {
 type Search = {
 	maxBytes: number;
 	memory: Memory;
-	/** The paper's OpenAlex ID, which says its links are OpenAlex's. */
+	/** The paper's OpenAlex ID, which a remembered miss is filed under when the paper has no DOI. */
 	openalexId?: string | undefined;
 	/**
 	 * Only the record's own links and the PDFs their pages lead to, at the speed of those sites. The full search also
@@ -113,7 +113,8 @@ export async function downloadPaperPdf(link: string, raw: Record<string, unknown
 	const paper = (key: string) => (key.startsWith("paper:") ? `${key} ${link}` : key);
 	const memory: Memory = { get: (key) => search.memory.get(paper(key)), set: (key, value) => search.memory.set(paper(key), value) };
 	const result = await findPdf(
-		{ ...(typeof raw.doi === "string" ? { doi: raw.doi } : {}), openalexId: search.openalexId, urls: [link, ...otherCopies], openAccess: true },
+		// The record carries every copy OpenAlex lists, so Unpaywall, whose copies are the same, is not asked.
+		{ ...(typeof raw.doi === "string" ? { doi: raw.doi } : {}), openalexId: search.openalexId, urls: [link, ...otherCopies], openAlexLinks: true, openAccess: true },
 		{
 			fetch: publicTransport,
 			userAgent: "Evidence-Library/1.0",
