@@ -708,8 +708,25 @@ async function writePdfPage(pipeline: PdfPipeline, next: PdfPage) {
 /** What publishes a page's PDFs: the quick search where the processor has one. */
 const pageLook = (processor: OpenAlexSourceOptions["attachmentProcessor"]) => processor?.quick ?? processor;
 
-/** Writes records the full search is done with, taking the PDFs it found off the stage's count of missed ones. */
+/**
+ * Writes records the full search is done with. One that belongs to a work the source no longer holds, as after its
+ * query changed, is refused with its whole write. The records are then written one by one and that one is dropped,
+ * or it would fail the same write on every import.
+ */
 async function writeSearched(scan: Scan, records: SourceItemUpsert[]) {
+	const unlessGone = (error: unknown) => {
+		if (!(error instanceof SourceReferenceNotFoundError)) throw error;
+	};
+	try {
+		await writeFound(scan, records);
+	} catch (error) {
+		unlessGone(error);
+		for (const record of records) await writeFound(scan, [record]).catch(unlessGone);
+	}
+}
+
+/** One write of searched records, taking the PDFs found off the stage's count of missed ones. */
+async function writeFound(scan: Scan, records: SourceItemUpsert[]) {
 	const pdfs = scan.cursor.pdfs!;
 	const found = records.filter((record) => !record.processingIssue).length;
 	// A new cursor: the saved one is still what the write expects.
@@ -741,18 +758,7 @@ async function searchInFull(scan: Scan) {
 		if (searched.length) {
 			// The searches took a while, and another worker may hold the lease by now.
 			await context.heartbeat();
-			try {
-				await writeSearched(scan, searched);
-			} catch (error) {
-				if (!(error instanceof SourceReferenceNotFoundError)) throw error;
-				// One of them belongs to a work the source no longer holds, as after its query changed. The others are
-				// written one by one and that one is dropped, or it would fail this write on every import.
-				for (const record of searched) {
-					await writeSearched(scan, [record]).catch((refused: unknown) => {
-						if (!(refused instanceof SourceReferenceNotFoundError)) throw refused;
-					});
-				}
-			}
+			await writeSearched(scan, searched);
 			await reportProgress(scan, 0);
 		}
 		// Only once written: a run that stops before this searches them again.
