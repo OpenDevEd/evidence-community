@@ -250,4 +250,32 @@ h6 {
 			hyphens: auto;
 		}
 	}
+
+	/* A record's, a review's or a digest's actions side by side (Send to queue and Publish, Publish version and Decline)
+	   need about 17rem of admin, so under 17.5rem each takes a line of its own, the full width, rather than cutting its
+	   label. At normal text a phone's admin is wider: 20rem at 320px, the narrowest. Where even the full width is too
+	   narrow (320px at 200%), a label wraps between its words beside its icon, which stays on the first line. */
+	@container admin (width < 17.5rem) {
+		.admin-action-row {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.admin-action-row > * {
+			flex: none;
+		}
+
+		/* As tall as before on one line: 0.625rem above and below a 1rem line is the 2.25rem the buttons set. */
+		.admin-action-row button {
+			height: auto;
+			padding-block: 0.625rem;
+			white-space: normal;
+			text-align: start;
+		}
+
+		.admin-action-row svg {
+			align-self: flex-start;
+			margin-block: calc((1lh - 14px) / 2);
+		}
+	}
 }

@@ -65,7 +65,7 @@ export function ReviewActions({
 	return (
 		<>
 			{canPublish ? (
-				<div className="flex w-full items-center gap-2">
+				<div className="admin-action-row flex w-full items-center gap-2">
 					<Button
 						size="xs"
 						color="accent"

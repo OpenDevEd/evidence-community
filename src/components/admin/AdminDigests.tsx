@@ -420,7 +420,7 @@ function Actions({ digest, session, busy }: { digest: AdminDigest; session: Dige
 	const offers = offersFor(digest, canPublish);
 	return <div className={`shrink-0 space-y-2 border-t p-3 ${line}`}>
 		{standing(digest, canPublish).map(({ icon, text }) => <p key={text} className={`flex items-center gap-2 px-1 py-0.5 text-xs ${muted}`}><HugeiconsIcon icon={icon} aria-hidden size={14} />{text}</p>)}
-		{offers.length > 0 && <div className="flex gap-2">
+		{offers.length > 0 && <div className="admin-action-row flex gap-2">
 			{offers.map((offer) => <Button key={offer.action} size="xs" color={offer.primary ? "accent" : undefined} variant={offer.primary ? undefined : "muted"} className={offer.wide ? wide : narrow} isLoading={busy === offer.action} isDisabled={busy !== null}
 				startContent={busy === offer.action ? null : <HugeiconsIcon icon={offer.icon} size={14} />} onPress={() => void session.move(offer.action)}>{offer.label}</Button>)}
 		</div>}
