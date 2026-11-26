@@ -971,11 +971,11 @@ function Heading({ children, note }: { children: React.ReactNode; note?: React.R
 }
 
 /**
- * A sentence whose figures and names carry the weight: wrap those in <strong>, the rest recedes. A word wider than the
- * card breaks rather than being cut: at 200% text on a phone, "publications" is wider than Explore the data's card.
+ * A sentence whose figures and names carry the weight: wrap those in <strong>, the rest recedes. On a phone, a word
+ * wider than the card breaks rather than being cut: at 200% text, "publications" is wider than Explore the data's card.
  */
 function Reading({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-	return <div className={`break-words font-heading font-semibold tracking-tight text-[rgb(var(--ink-rgb)/0.55)] [&_strong]:font-semibold [&_strong]:text-[rgb(var(--ink-rgb))] ${className}`}>{children}</div>;
+	return <div className={`max-sm:break-words font-heading font-semibold tracking-tight text-[rgb(var(--ink-rgb)/0.55)] [&_strong]:font-semibold [&_strong]:text-[rgb(var(--ink-rgb))] ${className}`}>{children}</div>;
 }
 
 
