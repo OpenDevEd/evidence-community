@@ -273,6 +273,11 @@ h6 {
 			text-align: start;
 		}
 
+		/* A bordered one (Publish version) gives its border back from the padding, so it is as tall as the others. */
+		.admin-action-row .border-small {
+			padding-block: calc(0.625rem - var(--nextui-border-width-small));
+		}
+
 		.admin-action-row svg {
 			align-self: flex-start;
 			margin-block: calc((1lh - 14px) / 2);
