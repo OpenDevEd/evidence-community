@@ -2289,7 +2289,8 @@ export function AdminInspector({
 
 				actions={
 					actionsReady && (
-					<div className="flex min-w-0 flex-1 animate-fade-in items-center gap-2">
+					// On a phone at large text the actions take a line each (admin-action-row in globals.css).
+					<div className="admin-action-row flex min-w-0 flex-1 animate-fade-in items-center gap-2">
 						{versionActions ??
 							(showPrimaryAction && (
 								<LicenceHold missing={licenceMissing}>
